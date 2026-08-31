@@ -9,6 +9,11 @@ import { portalSession, profile } from "../state";
 import type { NotificationPreferences, PortalSession } from "../types";
 import { toast } from "../ui";
 import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
+import {
+  identitiesListResponseSchema,
+  identityMutationResponseSchema,
+  type ActingIdentity,
+} from "../../../../shared/schemas/identity";
 
 const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
   workingGroupUpdates: "Working group updates",
@@ -16,6 +21,67 @@ const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
   generalAnnouncements: "General consortium announcements",
   wgChairMembershipDigest: "Working group roster change digest (chairs & vice-chairs only, weekly)",
 };
+
+function IdentityInvitationsCard() {
+  const [invitations, setInvitations] = useState<ActingIdentity[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState<string | null>(null);
+
+  useEffect(() => {
+    getJson("/api/v1/users/current/identities?active=false&limit=100", identitiesListResponseSchema)
+      .then((response) => setInvitations(response.identities.filter((identity) => identity.state === "pending")))
+      .catch((reason: unknown) =>
+        setError(reason instanceof ApiClientError ? reason.message : "Could not load identity invitations."),
+      );
+  }, []);
+
+  async function accept(identity: ActingIdentity): Promise<void> {
+    setAccepting(identity.id);
+    try {
+      await patchJson(
+        `/api/v1/users/current/identities/${encodeURIComponent(identity.id)}`,
+        { transition: { state: "active" } },
+        identityMutationResponseSchema,
+      );
+      toast(`Identity for ${identity.organizationName ?? "the organization"} accepted`, "success");
+      window.location.reload();
+    } catch (reason) {
+      toast(reason instanceof ApiClientError ? reason.message : "Could not accept the identity invitation.", "error");
+      setAccepting(null);
+    }
+  }
+
+  return (
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">Identity invitations</div>
+      <div class="card-body">
+        {error && <ErrorAlert error={error} />}
+        {!invitations && !error && <Spinner />}
+        {invitations?.length === 0 && <p class="text-muted small mb-0">No pending identity invitations.</p>}
+        {invitations && invitations.length > 0 && (
+          <div class="d-flex flex-column gap-3">
+            {invitations.map((identity) => (
+              <div class="d-flex justify-content-between align-items-center gap-3" key={identity.id}>
+                <div>
+                  <strong>{identity.organizationName}</strong>
+                  <div class="small text-muted">Accept to receive Member and group access in this exact capacity.</div>
+                </div>
+                <button
+                  class="btn btn-sm btn-success"
+                  type="button"
+                  disabled={accepting !== null}
+                  onClick={() => void accept(identity)}
+                >
+                  {accepting === identity.id ? "Accepting…" : "Accept identity"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function NotificationPreferencesCard() {
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
@@ -90,7 +156,7 @@ function grantScopeLabel(grant: { contextType: string | null; contextId: string 
  * the menu navigates, while this view explains what the account may do.
  */
 function AccessSummaryCard({ session }: { session: PortalSession }) {
-  const memberships = session.member ? (profile.value?.activeMemberships ?? []) : [];
+  const memberships = session.member ? (profile.value?.activeIdentities ?? []) : [];
   const staff = session.staff;
 
   return (
@@ -102,7 +168,7 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
             <h6 class="small fw-semibold text-muted text-uppercase">Member capacities</h6>
             <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
               {memberships.map((membership) => (
-                <li key={membership.memberId} class="small">
+                <li key={membership.identityId} class="small">
                   {membership.organizationId ? (
                     <Link href={`/organizations/${encodeURIComponent(membership.organizationId)}`}>
                       {membership.organizationName ?? "Organization"}
@@ -160,10 +226,12 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
 export function AccountSettings() {
   const session = portalSession.value;
   const hasMemberCapacity = Boolean(session?.member);
+  const hasAccountSecurityCapacity = Boolean(session?.member || session?.staff);
   const email = profile.value?.email || session?.identity.email || "";
 
   return (
     <div class="d-flex flex-column gap-3 content-width-md">
+      {session?.pendingIdentityCount ? <IdentityInvitationsCard /> : null}
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-white fw-semibold">Email</div>
         <div class="card-body">
@@ -177,7 +245,7 @@ export function AccountSettings() {
       </div>
 
       {session && <AccessSummaryCard session={session} />}
-      <PasskeySettings toastTargetId="portal-toast-area" />
+      {hasAccountSecurityCapacity && <PasskeySettings toastTargetId="portal-toast-area" />}
       {hasMemberCapacity && <NotificationPreferencesCard />}
     </div>
   );

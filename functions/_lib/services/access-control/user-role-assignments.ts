@@ -25,9 +25,9 @@ import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
 import { buildAssignRepresentativeRoleStatements, isRepresentativeRoleId } from "../membership/representative-roles";
 import {
-  prepareOrganizationRepresentativeManagementGuard,
-  requireOrganizationRepresentativeManagement,
-} from "../organization-representations/authorization";
+  prepareOrganizationIdentityManagementGuard,
+  requireOrganizationIdentityManagement,
+} from "../identities/authorization";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 
 interface UserRoleRow {
@@ -123,8 +123,8 @@ async function prepareSemanticRoleManagementGuards(
     databaseUserId: adminDatabaseUserId(actor),
     staffAuthorized: true,
   } as const;
-  await requireOrganizationRepresentativeManagement(db, authorization);
-  return [prepareOrganizationRepresentativeManagementGuard(db, authorization)];
+  await requireOrganizationIdentityManagement(db, authorization);
+  return [prepareOrganizationIdentityManagementGuard(db, authorization)];
 }
 
 export async function listUserRoleAssignments(

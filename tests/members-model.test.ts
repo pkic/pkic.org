@@ -10,7 +10,7 @@ beforeEach(async () => {
 });
 
 describe("members model", () => {
-  it("one aggregate row per organization, with N representatives attached via organization_representatives", async () => {
+  it("keeps one aggregate row per organization with multiple active identities", async () => {
     const primaryUserId = await insertUser(env.DB, "primary@example.test");
     const secondaryUserId = await insertUser(env.DB, "secondary@example.test");
     const organizationId = await insertOrganization(env.DB, "PKI Org");
@@ -30,12 +30,14 @@ describe("members model", () => {
     )[0];
     expect(Number(aggregateCount.total)).toBe(1);
 
-    // Two representatives from the same organization — organization_representatives
-    // is what allows this, not members.
+    // Two acting identities from the same organization attach to that one aggregate.
     const repCount = (
       await queryAll<{ total: number }>(
         env.DB,
-        "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
+        `SELECT COUNT(*) AS total
+           FROM identities identity
+           JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+          WHERE capacity.member_id = ? AND identity.ended_at IS NULL AND identity.blocked_at IS NULL`,
         memberId,
       )
     )[0];

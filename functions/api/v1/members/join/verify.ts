@@ -27,7 +27,7 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
     return jsonPrivate(memberJoinVerifyResponseSchema.parse(result));
   }
 
-  const member = await findEligibleMemberById(http.db, result.userId, result.memberId);
+  const member = await findEligibleMemberById(http.db, result.userId, result.identityId);
   if (!member) throw new AppError(500, "MEMBER_JOIN_SESSION_FAILED", "Member portal access could not be established");
   const body = memberJoinVerifyResponseSchema.parse({
     status: "organization_access_ready",
@@ -38,7 +38,7 @@ export const MembersJoinVerifyPost = openApiRoute(memberJoinVerifyRouteSchema, a
     sub: result.userId,
     sid: result.sessionId,
     exp: sessionExpiresAtToExp(result.expiresAt),
-    memberId: result.memberId,
+    identityId: result.identityId,
   });
   return createSessionEstablishedResponse(body, serializeUserSessionCookie(token, c.req.raw));
 });

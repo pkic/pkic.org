@@ -9,7 +9,7 @@ export interface PublicRoleProfileRow {
   org_name: string | null;
   org_logo_r2_key: string | null;
   org_website: string | null;
-  member_id: string | null;
+  identity_id: string | null;
   headshot_r2_key: string | null;
   links_json: string | null;
 }
@@ -32,7 +32,7 @@ export function toPublicRoleProfile(row: PublicRoleProfileRow): PublicRoleProfil
     organizationName: row.org_name,
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
     organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
-    photoUrl: row.headshot_r2_key && row.member_id ? `/api/v1/members/${row.member_id}/logo` : null,
+    photoUrl: row.headshot_r2_key && row.identity_id ? `/api/v1/members/${row.identity_id}/logo` : null,
     linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
   };
 }

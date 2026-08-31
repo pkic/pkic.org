@@ -29,7 +29,7 @@ unproved rather than assumed.
 | Narrow mobile navigation: toggle, backdrop, Escape, focus restoration                      | `tests/e2e/portal-mobile-navigation.spec.ts`      |
 | Narrow and desktop navigation expose the same authorized destinations                      | `tests/e2e/portal-mobile-navigation.spec.ts`      |
 | Known sponsorship tier submits and renders both messages                                   | `tests/e2e/sponsor-application.spec.ts`           |
-| Organization contact adds, blocks, and explicitly restores a representative                | `tests/e2e/portal-system-organizations.spec.ts`   |
+| Organization contact invites an identity; the user accepts it; later lifecycle periods use successors | `tests/e2e/portal-system-organizations.spec.ts`   |
 
 ## Member self-service journeys
 

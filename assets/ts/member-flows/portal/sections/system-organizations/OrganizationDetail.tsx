@@ -9,18 +9,18 @@ import { Spinner } from "../../../../components/Spinner";
 import { getJson } from "../../../../shared/api-client";
 import { OrganizationLogo } from "./OrganizationLogo";
 import { OrganizationProfile } from "./OrganizationProfile";
-import { RepresentativeRoster } from "./RepresentativeRoster";
+import { IdentityRoster } from "./IdentityRoster";
 
 export function OrganizationDetail({
   organizationId,
   canRead,
   canWrite,
-  canManageRepresentatives,
+  canManageIdentities,
 }: {
   organizationId: string;
   canRead: boolean;
   canWrite: boolean;
-  canManageRepresentatives: boolean;
+  canManageIdentities: boolean;
 }) {
   const [, navigate] = usePortalHashLocation();
   const [organization, setOrganization] = useState<OrganizationDetailModel | null>(null);
@@ -65,7 +65,7 @@ export function OrganizationDetail({
           {organization.name}
         </h5>
         <span class="text-muted small">
-          {organization.memberCount} representative{organization.memberCount === 1 ? "" : "s"}
+          {organization.activeIdentityCount} active {organization.activeIdentityCount === 1 ? "identity" : "identities"}
         </span>
       </div>
 
@@ -78,11 +78,7 @@ export function OrganizationDetail({
         </div>
       </div>
 
-      <RepresentativeRoster
-        organization={organization}
-        canManageRepresentatives={canManageRepresentatives}
-        onChanged={load}
-      />
+      <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />
     </section>
   );
 }

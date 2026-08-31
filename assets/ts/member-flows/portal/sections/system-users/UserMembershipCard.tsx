@@ -9,18 +9,16 @@ import {
 import { MEMBER_STATUSES } from "../../../../../shared/schemas/membership-categories";
 import { deleteJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
-import { representativeMutationResponseSchema } from "../../../../../shared/schemas/organization-representation";
+import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { fmtDate, toast } from "../../ui";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import type { UserMembership } from "./model";
 
 export function UserMembershipCard({
-  userId,
   membership,
   onChanged,
   canManage,
 }: {
-  userId: string;
   membership: UserMembership;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
@@ -48,22 +46,30 @@ export function UserMembershipCard({
     }
   }
 
-  async function removeMembership() {
-    const target = membership.organizationName ?? "this individual membership";
+  async function endIdentity() {
+    const target = membership.organizationName ?? "this individual identity";
     const confirmed = await confirmAction({
-      title: `Remove the membership for ${target}?`,
-      body: "Their user account is kept.",
-      consequences: [
-        "This membership capacity and its group memberships are removed",
-        "Their user account and sign-in remain",
-      ],
-      confirmLabel: "Remove membership",
+      title: `End the identity for ${target}?`,
+      body: "Their user account and other identities are kept.",
+      consequences: ["This acting identity and its group participation end", "Their user account and sign-in remain"],
+      confirmLabel: "End identity",
     });
     if (!confirmed) return;
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/members/capacities/${encodeURIComponent(membership.memberId)}`, successResponseSchema);
-      toast("Membership removed", "success");
+      if (membership.organizationId) {
+        await patchJson(
+          `/api/v1/organizations/${encodeURIComponent(membership.organizationId)}/identities/${encodeURIComponent(membership.identityId)}`,
+          { transition: { state: "ended", reason: "Ended from System Users" } },
+          identityMutationResponseSchema,
+        );
+      } else {
+        await deleteJson(
+          `/api/v1/members/capacities/${encodeURIComponent(membership.memberId)}`,
+          successResponseSchema,
+        );
+      }
+      toast("Identity ended", "success");
       await onChanged();
     } catch (error) {
       toast((error as Error).message, "error");
@@ -72,20 +78,16 @@ export function UserMembershipCard({
     }
   }
 
-  async function saveRepresentationProfile() {
+  async function saveIdentityProfile() {
     if (!membership.organizationId) return;
     setBusy(true);
     try {
       await patchJson(
-        `/api/v1/organizations/${encodeURIComponent(membership.organizationId)}/representatives/${encodeURIComponent(userId)}`,
-        {
-          jobTitle: jobTitle.trim() || null,
-          biography: biography.trim() || null,
-          links,
-        },
-        representativeMutationResponseSchema,
+        `/api/v1/organizations/${encodeURIComponent(membership.organizationId)}/identities/${encodeURIComponent(membership.identityId)}`,
+        { profile: { jobTitle: jobTitle.trim() || null, biography: biography.trim() || null, links } },
+        identityMutationResponseSchema,
       );
-      toast("Representation profile updated", "success");
+      toast("Identity profile updated", "success");
       setEditingProfile(false);
       await onChanged();
     } catch (error) {
@@ -95,7 +97,7 @@ export function UserMembershipCard({
     }
   }
 
-  function toggleRepresentationEditor() {
+  function toggleIdentityEditor() {
     if (!editingProfile) {
       setJobTitle(membership.jobTitle ?? "");
       setBiography(membership.biography ?? "");
@@ -114,7 +116,7 @@ export function UserMembershipCard({
           </tr>
           {membership.organizationId && (
             <tr>
-              <th class="text-muted small adm-user-info-label">Representation email</th>
+              <th class="text-muted small adm-user-info-label">Identity email</th>
               <td>{membership.email}</td>
             </tr>
           )}
@@ -124,13 +126,13 @@ export function UserMembershipCard({
               <td>{membership.jobTitle || "—"}</td>
             </tr>
           )}
-          {membership.organizationId && membership.biography && (
+          {membership.biography && (
             <tr>
               <th class="text-muted small adm-user-info-label">Biography</th>
               <td>{membership.biography}</td>
             </tr>
           )}
-          {membership.organizationId && membership.links.length > 0 && (
+          {membership.links.length > 0 && (
             <tr>
               <th class="text-muted small adm-user-info-label">Links</th>
               <td>
@@ -198,7 +200,16 @@ export function UserMembershipCard({
                   checked={membership.showOnOrgProfile}
                   disabled={busy || !canManage}
                   onChange={(event) =>
-                    void patchMember({ showOnOrgProfile: (event.target as HTMLInputElement).checked })
+                    void patchJson(
+                      `/api/v1/organizations/${encodeURIComponent(membership.organizationId!)}/identities/${encodeURIComponent(membership.identityId)}`,
+                      { profile: { showOnOrganizationProfile: (event.target as HTMLInputElement).checked } },
+                      identityMutationResponseSchema,
+                    )
+                      .then(async () => {
+                        toast("Identity visibility updated", "success");
+                        await onChanged();
+                      })
+                      .catch((error) => toast((error as Error).message, "error"))
                   }
                 />
               </td>
@@ -218,11 +229,11 @@ export function UserMembershipCard({
         <div class="border-top pt-3 mb-3">
           <div class="row g-2">
             <div class="col-md-6">
-              <label class="form-label small" for={`representation-job-title-${membership.memberId}`}>
+              <label class="form-label small" for={`identity-job-title-${membership.identityId}`}>
                 Job title for {membership.organizationName ?? "this organization"}
               </label>
               <input
-                id={`representation-job-title-${membership.memberId}`}
+                id={`identity-job-title-${membership.identityId}`}
                 class="form-control form-control-sm"
                 value={jobTitle}
                 onInput={(event) => setJobTitle(event.currentTarget.value)}
@@ -234,17 +245,17 @@ export function UserMembershipCard({
                 Profile links for {membership.organizationName ?? "this organization"}
               </label>
               <ProfileLinksInput
-                fieldName={`representation.${membership.memberId}.links`}
+                fieldName={`identity.${membership.identityId}.links`}
                 value={links}
                 onChange={setLinks}
               />
             </div>
             <div class="col-12">
-              <label class="form-label small" for={`representation-biography-${membership.memberId}`}>
+              <label class="form-label small" for={`identity-biography-${membership.identityId}`}>
                 Biography for {membership.organizationName ?? "this organization"}
               </label>
               <textarea
-                id={`representation-biography-${membership.memberId}`}
+                id={`identity-biography-${membership.identityId}`}
                 class="form-control form-control-sm"
                 rows={3}
                 value={biography}
@@ -254,8 +265,8 @@ export function UserMembershipCard({
             </div>
           </div>
           <div class="d-flex gap-2 mt-2">
-            <button class="btn btn-sm btn-primary" type="button" disabled={busy} onClick={saveRepresentationProfile}>
-              {busy ? "Saving…" : "Save representation profile"}
+            <button class="btn btn-sm btn-primary" type="button" disabled={busy} onClick={saveIdentityProfile}>
+              {busy ? "Saving…" : "Save identity profile"}
             </button>
             <button
               class="btn btn-sm btn-outline-secondary"
@@ -271,17 +282,12 @@ export function UserMembershipCard({
       {canManage && (
         <div class="d-flex gap-2">
           {membership.organizationId && (
-            <button
-              class="btn btn-sm btn-outline-primary"
-              type="button"
-              disabled={busy}
-              onClick={toggleRepresentationEditor}
-            >
-              {editingProfile ? "Close representation editor" : "Edit representation profile"}
+            <button class="btn btn-sm btn-outline-primary" type="button" disabled={busy} onClick={toggleIdentityEditor}>
+              {editingProfile ? "Close identity editor" : "Edit identity profile"}
             </button>
           )}
-          <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={removeMembership}>
-            Remove membership
+          <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={endIdentity}>
+            End identity
           </button>
         </div>
       )}

@@ -3,16 +3,16 @@
  *
  * Phase 1 §1.4 corrected design — membership category lives once per
  * membership aggregate (member_category_assignments), not on
- * `organizations` and not per-representative. Covers:
+ * `organizations` and not per identity. Covers:
  *   - GET org detail surfaces membershipCategory once at the top level, not
- *     per representative.
+ *     per identity.
  *   - PATCH org membershipCategory updates the aggregate's single category
- *     assignment (no "cascade to every representative" — there's only ever
+ *     assignment (no "cascade to every identity" — there's only ever
  *     one category per aggregate now).
- *   - POST .../organizations/:organizationId/representatives inherits the
+ *   - POST .../organizations/:organizationId/identities inherits the
  *     org's category and rejects when the org has none set yet.
  *   - PATCH .../members/:id rejects membershipCategory/status for a
- *     representative id (those live on the aggregate now) but still allows
+ *     organization identity id (those live on the aggregate now) but still allows
  *     showOnOrgProfile, and still allows membershipCategory for an org-less
  *     individual (H5/H6/H7) member id.
  *   - Reusing an existing organization with a *different* category is a
@@ -49,8 +49,9 @@ function orgMemberBody(overrides: Record<string, unknown> = {}) {
     name: "Acme Corp",
     membershipCategory: "F",
     memberSince: "2026-01-15",
-    representatives: [{ name: "Jane Doe", email: "jane@acme.test" }],
+    identities: [{ name: "Jane Doe", email: "jane@acme.test" }],
     workingGroupSlugs: [],
+    activationReason: "Verified staff provisioning fixture",
     ...overrides,
   };
 }
@@ -59,7 +60,7 @@ describe("Organization management — membership category on the aggregate (Phas
   let adminToken: string;
   let adminId: string;
 
-  /** memberId is the representative's organization_representatives primary key. */
+  /** memberId is the acting identity primary key returned by the management response. */
   async function createOrg(overrides: Record<string, unknown> = {}): Promise<{
     organizationId: string;
     memberId: string;
@@ -70,32 +71,37 @@ describe("Organization management — membership category on the aggregate (Phas
       method: "POST",
       body: JSON.stringify(orgMemberBody(overrides)),
     });
-    expect(response.status).toBe(201);
+    expect(response.status, await response.clone().text()).toBe(201);
     const body = (await response.json()) as {
       organization: {
         id: string;
         updatedAt: string;
-        representatives: Array<{ representativeId: string; userId: string }>;
+        identities: Array<{ identityId: string; userId: string }>;
       };
     };
     return {
       organizationId: body.organization.id,
-      memberId: body.organization.representatives[0].representativeId,
-      userId: body.organization.representatives[0].userId,
+      memberId: body.organization.identities[0].identityId,
+      userId: body.organization.identities[0].userId,
       revision: body.organization.updatedAt,
     };
   }
 
-  async function addRepresentative(
+  async function addIdentity(
     organizationId: string,
     input: { name: string; email: string; jobTitle?: string; links?: string[] },
   ): Promise<string> {
-    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/representatives`, {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/identities`, {
       method: "POST",
-      body: JSON.stringify({ kind: "email", ...input, showOnOrganizationProfile: true }),
+      body: JSON.stringify({
+        userReference: "email",
+        ...input,
+        showOnOrganizationProfile: true,
+        activation: { mode: "immediate", reason: "Verified staff test fixture" },
+      }),
     });
     expect(response.status).toBe(201);
-    return ((await response.json()) as { representativeId: string }).representativeId;
+    return ((await response.json()) as { identityId: string }).identityId;
   }
 
   async function aggregateIdFor(organizationId: string): Promise<string> {
@@ -147,26 +153,23 @@ describe("Organization management — membership category on the aggregate (Phas
     ).toEqual([{ actor_id: adminId }]);
   });
 
-  it("GET org detail surfaces membershipCategory once at the top level, not per representative", async () => {
+  it("GET org detail surfaces membershipCategory once at the top level, not per identity", async () => {
     const { organizationId } = await createOrg();
 
     const response = await call(adminToken, `/api/v1/organizations/${organizationId}`);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      organization: { membershipCategory: string | null; representatives: Array<Record<string, unknown>> };
+      organization: { membershipCategory: string | null; identities: Array<Record<string, unknown>> };
     };
     expect(body.organization.membershipCategory).toBe("F");
-    expect(body.organization.representatives).toHaveLength(1);
-    expect(body.organization.representatives[0]).not.toHaveProperty("membershipCategory");
+    expect(body.organization.identities).toHaveLength(1);
+    expect(body.organization.identities[0]).not.toHaveProperty("membershipCategory");
   });
 
-  it("does not surface a stale primary-contact grant after the representative leaves", async () => {
+  it("does not surface a stale primary-contact grant after the identity ends", async () => {
     const { organizationId, userId } = await createOrg();
-    const aggregateId = await aggregateIdFor(organizationId);
-    await env.DB.prepare(
-      "UPDATE organization_representatives SET left_at = joined_at WHERE member_id = ? AND user_id = ?",
-    )
-      .bind(aggregateId, userId)
+    await env.DB.prepare("UPDATE identities SET ended_at = started_at WHERE organization_id = ? AND user_id = ?")
+      .bind(organizationId, userId)
       .run();
 
     const detailResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`);
@@ -175,7 +178,7 @@ describe("Organization management — membership category on the aggregate (Phas
       organization: {
         primaryContactEmail: null,
         primaryContactUserId: null,
-        representatives: [],
+        identities: [],
       },
     });
 
@@ -234,9 +237,9 @@ describe("Organization management — membership category on the aggregate (Phas
 
     await env.DB.prepare("UPDATE users SET active = 1 WHERE id = ?").bind(userId).run();
     await env.DB.prepare(
-      "UPDATE organization_representatives SET left_at = joined_at WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+      "UPDATE identities SET ended_at = started_at WHERE organization_id = ? AND user_id = ? AND ended_at IS NULL",
     )
-      .bind(aggregateId, userId)
+      .bind(organizationId, userId)
       .run();
     await expectPrimaryContact(null, null);
   });
@@ -246,7 +249,7 @@ describe("Organization management — membership category on the aggregate (Phas
     const beta = await createOrg({
       name: "Beta Inc",
       membershipCategory: "A",
-      representatives: [{ name: "Bob Beta", email: "bob@beta.test" }],
+      identities: [{ name: "Bob Beta", email: "bob@beta.test" }],
     });
 
     const listResponse = await call(adminToken, "/api/v1/organizations");
@@ -334,10 +337,9 @@ describe("Organization management — membership category on the aggregate (Phas
   it("PATCH org membershipCategory updates the aggregate's single category assignment", async () => {
     const { organizationId, revision } = await createOrg();
 
-    // Add a second representative under the original category first — both
-    // representatives share the same aggregate, so there's nothing
-    // per-representative to cascade to.
-    await addRepresentative(organizationId, { name: "Second Rep", email: "second@acme.test" });
+    // Both active identities share the same Member aggregate, so there is no
+    // identity-specific category to cascade.
+    await addIdentity(organizationId, { name: "Second Rep", email: "second@acme.test" });
 
     const patchResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`, {
       method: "PATCH",
@@ -347,43 +349,44 @@ describe("Organization management — membership category on the aggregate (Phas
     const patched = (await patchResponse.json()) as { organization: { membershipCategory: string | null } };
     expect(patched.organization.membershipCategory).toBe("G");
 
-    const aggregateId = await aggregateIdFor(organizationId);
-    expect(await categoryFor(aggregateId)).toBe("G");
+    expect(await categoryFor(await aggregateIdFor(organizationId))).toBe("G");
 
-    const repCount = await queryAll<{ total: number }>(
+    const identityCount = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
-      aggregateId,
+      "SELECT COUNT(*) AS total FROM identities WHERE organization_id = ? AND ended_at IS NULL",
+      organizationId,
     );
-    expect(Number(repCount[0].total)).toBe(2);
+    expect(Number(identityCount[0].total)).toBe(2);
   });
 
-  it("adding a representative inherits the organization's current category", async () => {
+  it("adding an identity inherits the organization's current category", async () => {
     const { organizationId } = await createOrg({ membershipCategory: "B" });
 
     const links = ["https://github.com/newrep", "https://orcid.org/0000-0001-2345-6789"];
-    const representativeId = await addRepresentative(organizationId, {
+    const identityId = await addIdentity(organizationId, {
       name: "New Rep",
       email: "newrep@acme.test",
       jobTitle: "Engineer",
       links,
     });
 
-    const repRows = await queryAll<{ member_id: string }>(
+    const capacityRows = await queryAll<{ member_id: string }>(
       env.DB,
-      "SELECT member_id FROM organization_representatives WHERE id = ?",
-      representativeId,
+      "SELECT member_id FROM identity_member_capacities WHERE identity_id = ?",
+      identityId,
     );
-    expect(await categoryFor(repRows[0].member_id)).toBe("B");
+    expect(await categoryFor(capacityRows[0].member_id)).toBe("B");
 
     const detailResponse = await call(adminToken, `/api/v1/organizations/${organizationId}`);
     const detail = (await detailResponse.json()) as {
-      organization: { representatives: Array<{ email: string; links: string[] }> };
+      organization: { identities: Array<{ email: string; links: string[] }> };
     };
-    expect(detail.organization.representatives.find((rep) => rep.email === "newrep@acme.test")?.links).toEqual(links);
+    expect(detail.organization.identities.find((identity) => identity.email === "newrep@acme.test")?.links).toEqual(
+      links,
+    );
   });
 
-  it("rejects adding a representative when the organization has no category set yet", async () => {
+  it("rejects adding an identity when the organization has no category set yet", async () => {
     // A bare organization row created outside the membership provisioning flow —
     // no members aggregate, and therefore no category, exists for it yet.
     const organizationId = crypto.randomUUID();
@@ -393,13 +396,14 @@ describe("Organization management — membership category on the aggregate (Phas
       .bind(organizationId, "No Category Org", "no category org")
       .run();
 
-    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/representatives`, {
+    const response = await call(adminToken, `/api/v1/organizations/${organizationId}/identities`, {
       method: "POST",
       body: JSON.stringify({
-        kind: "email",
+        userReference: "email",
         name: "No Category Rep",
         email: "nocategory@acme.test",
         showOnOrganizationProfile: true,
+        activation: { mode: "immediate", reason: "Verified staff test fixture" },
       }),
     });
     expect(response.status).toBe(422);
@@ -407,7 +411,7 @@ describe("Organization management — membership category on the aggregate (Phas
     expect(body.error.code).toBe("ORG_CATEGORY_NOT_SET");
   });
 
-  it("rejects membershipCategory and status on PATCH .../members/:id for a representative id — those live on the aggregate", async () => {
+  it("rejects membershipCategory and status on an organization identity — those live on the aggregate", async () => {
     const { memberId } = await createOrg();
 
     const categoryResponse = await call(adminToken, `/api/v1/members/capacities/${memberId}`, {
@@ -416,7 +420,7 @@ describe("Organization management — membership category on the aggregate (Phas
     });
     expect(categoryResponse.status).toBe(422);
     expect(((await categoryResponse.json()) as { error: { code: string } }).error.code).toBe(
-      "REPRESENTATIVE_FIELD_NOT_EDITABLE",
+      "IDENTITY_AGGREGATE_FIELD_NOT_EDITABLE",
     );
 
     const statusResponse = await call(adminToken, `/api/v1/members/capacities/${memberId}`, {
@@ -425,11 +429,11 @@ describe("Organization management — membership category on the aggregate (Phas
     });
     expect(statusResponse.status).toBe(422);
     expect(((await statusResponse.json()) as { error: { code: string } }).error.code).toBe(
-      "REPRESENTATIVE_FIELD_NOT_EDITABLE",
+      "IDENTITY_AGGREGATE_FIELD_NOT_EDITABLE",
     );
   });
 
-  it("still allows showOnOrgProfile to be edited on a representative id", async () => {
+  it("still allows showOnOrgProfile to be edited on an organization identity", async () => {
     const { memberId } = await createOrg();
 
     const response = await call(adminToken, `/api/v1/members/capacities/${memberId}`, {
@@ -438,24 +442,24 @@ describe("Organization management — membership category on the aggregate (Phas
     });
     expect(response.status).toBe(200);
 
-    const repRows = await queryAll<{ show_on_org_profile: number }>(
+    const identityRows = await queryAll<{ show_on_organization_profile: number }>(
       env.DB,
-      "SELECT show_on_org_profile FROM organization_representatives WHERE id = ?",
+      "SELECT show_on_organization_profile FROM identities WHERE id = ?",
       memberId,
     );
-    expect(repRows[0].show_on_org_profile).toBe(0);
+    expect(identityRows[0].show_on_organization_profile).toBe(0);
   });
 
   it("org-less individual (H5/H6/H7) category remains independently editable via PATCH .../members/:id", async () => {
     const response = await call(adminToken, "/api/v1/members", {
       method: "POST",
-      body: JSON.stringify(
-        orgMemberBody({
-          organizationName: undefined,
-          membershipCategory: "H6",
-          representatives: [{ name: "Solo Consultant", email: "solo-cat@example.test" }],
-        }),
-      ),
+      body: JSON.stringify({
+        membershipCategory: "H6",
+        memberSince: "2026-01-15",
+        identities: [{ name: "Solo Consultant", email: "solo-cat@example.test" }],
+        workingGroupSlugs: [],
+        activationReason: "Verified staff provisioning fixture",
+      }),
     });
     expect(response.status).toBe(201);
     const created = (await response.json()) as { members: Array<{ id: string; organizationId: string | null }> };
@@ -467,14 +471,17 @@ describe("Organization management — membership category on the aggregate (Phas
     });
     expect(patchResponse.status).toBe(200);
 
-    const memberRows = await queryAll<{ member_type: string; organization_id: string | null }>(
+    const memberRows = await queryAll<{ id: string; member_type: string; organization_id: string | null }>(
       env.DB,
-      "SELECT member_type, organization_id FROM members WHERE id = ?",
+      `SELECT member.id, member.member_type, member.organization_id
+         FROM identity_member_capacities capacity
+         JOIN members member ON member.id = capacity.member_id
+        WHERE capacity.identity_id = ?`,
       created.members[0].id,
     );
     expect(memberRows[0].member_type).toBe("individual");
     expect(memberRows[0].organization_id).toBeNull();
-    expect(await categoryFor(created.members[0].id)).toBe("H7");
+    expect(await categoryFor(memberRows[0].id)).toBe("H7");
   });
 
   it("reusing an existing organization with a different category is a 409 conflict, not a silent cascade", async () => {
@@ -486,7 +493,7 @@ describe("Organization management — membership category on the aggregate (Phas
       body: JSON.stringify(
         orgMemberBody({
           membershipCategory: "D",
-          representatives: [{ name: "Later Rep", email: "later@acme.test" }],
+          identities: [{ name: "Later Rep", email: "later@acme.test" }],
         }),
       ),
     });
@@ -497,7 +504,7 @@ describe("Organization management — membership category on the aggregate (Phas
     expect(await categoryFor(aggregateId)).toBe("C");
   });
 
-  it("reusing an existing organization with the SAME category succeeds and adds the new representative", async () => {
+  it("reusing an existing organization with the SAME category succeeds and adds the new identity", async () => {
     const { organizationId } = await createOrg({ membershipCategory: "C" });
 
     const secondResponse = await call(adminToken, "/api/v1/organizations", {
@@ -505,7 +512,7 @@ describe("Organization management — membership category on the aggregate (Phas
       body: JSON.stringify(
         orgMemberBody({
           membershipCategory: "C",
-          representatives: [{ name: "Later Rep", email: "later@acme.test" }],
+          identities: [{ name: "Later Rep", email: "later@acme.test" }],
         }),
       ),
     });
@@ -513,12 +520,11 @@ describe("Organization management — membership category on the aggregate (Phas
     const secondBody = (await secondResponse.json()) as { organization: { id: string } };
     expect(secondBody.organization.id).toBe(organizationId);
 
-    const aggregateId = await aggregateIdFor(organizationId);
-    const repCount = await queryAll<{ total: number }>(
+    const identityCount = await queryAll<{ total: number }>(
       env.DB,
-      "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
-      aggregateId,
+      "SELECT COUNT(*) AS total FROM identities WHERE organization_id = ? AND ended_at IS NULL",
+      organizationId,
     );
-    expect(Number(repCount[0].total)).toBe(2);
+    expect(Number(identityCount[0].total)).toBe(2);
   });
 });

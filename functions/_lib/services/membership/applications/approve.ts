@@ -157,8 +157,9 @@ export async function approveApplication(
     organizationDomain: isIndividual ? null : application.organization_domain,
     domainClaimApplicationId: isIndividual ? null : application.id,
     membershipCategory: application.membership_category,
-    representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
-    representationSource: "staff",
+    identities: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
+    identitySource: "membership_approval",
+    activateIdentities: true,
     workingGroupSlugs: requestedWorkingGroupSlugs,
     allowManagedGroupEnrollment: false,
     ineligibleGroupPolicy: "omit",
@@ -167,8 +168,8 @@ export async function approveApplication(
   // Pure/synchronous — safe to call before the batch below commits, since
   // every id and decision it reports was already resolved by a pre-batch
   // read while building `provisioning.statements`.
-  const { organizationId, organizationWasCreated, representatives, groups } = provisioning.buildResult();
-  const member = representatives[0];
+  const { organizationId, organizationWasCreated, identities, groups } = provisioning.buildResult();
+  const member = identities[0];
   const workingGroupSlugs = groups.map((group) => group.slug);
   const workingGroupNames = groups.map((group) => group.name);
 

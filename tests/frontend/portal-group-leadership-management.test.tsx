@@ -15,6 +15,7 @@ vi.mock("wouter/use-hash-location", () => ({
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ROLE_ID = "30000000-0000-4000-8000-000000000001";
 const MEMBER_ID = "20000000-0000-4000-8000-000000000001";
+const IDENTITY_ID = "20000000-0000-4000-8000-000000000011";
 const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
@@ -84,6 +85,7 @@ function membershipsPage(userId: string, email: string) {
         id: MEMBER_ID,
         groupId: GROUP_ID,
         userId,
+        identityId: IDENTITY_ID,
         memberId: MEMBER_ID,
         memberType: "organization",
         userName: "Selected Person",
@@ -127,6 +129,7 @@ describe("portal group leadership management", () => {
         {
           userRoleId: USER_ROLE_ID,
           userId: "40000000-0000-4000-8000-000000000001",
+          identityId: IDENTITY_ID,
           memberId: MEMBER_ID,
           memberType: "organization",
           organizationName: "Local Member Organization",
@@ -147,6 +150,7 @@ describe("portal group leadership management", () => {
         {
           userRoleId: "30000000-0000-4000-8000-000000000002",
           userId: "40000000-0000-4000-8000-000000000002",
+          identityId: "20000000-0000-4000-8000-000000000012",
           memberId: "20000000-0000-4000-8000-000000000002",
           memberType: "organization",
           organizationName: "Parent Member Organization",
@@ -259,7 +263,7 @@ describe("portal group leadership management", () => {
     );
     expect(request?.body).toMatchObject({
       userId,
-      memberId: MEMBER_ID,
+      identityId: IDENTITY_ID,
       roleId: "role-group_deputy_lead",
     });
     expect((request?.body as { expiresAt: string }).expiresAt).toBe(new Date("2026-10-01T12:30").toISOString());

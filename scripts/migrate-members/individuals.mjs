@@ -8,14 +8,14 @@
 import path from "node:path";
 import { splitName, activeRepresentatives } from "./parsers.mjs";
 import { sentinelEmailForSlug } from "./reconciliation.mjs";
-import { buildIndividualMemberAggregateStatements } from "./sql-renderer.mjs";
+import { buildIndividualMemberAggregateStatements, buildLinksJson } from "./sql-renderer.mjs";
 import { findLogoFile } from "./r2-adapter.mjs";
 import { upsertMemberUser } from "./user-upsert.mjs";
 
 /**
  * Individuals have no organization row at all.
  *
- * Unlike org-tied representatives (where an unmatched email means "we
+ * Unlike organization identities (where an unmatched email means "we
  * don't know which real person this is" and the row is left for the
  * Interim Admin Tool), an org-less individual's YAML file *is* their whole
  * record — every field needed to create them is already known except a
@@ -57,19 +57,25 @@ export function processIndividualRecord(ctx, { filename, slug, doc, name, member
   const rep = reps[0] ?? { name, role: null, social: {}, description: null };
   const { firstName, lastName } = splitName(rep.name ?? name);
   const links = [rep.social?.linkedin, rep.social?.x].filter(Boolean);
+  const linksJson = buildLinksJson(links, (url) =>
+    ctx.report.invalidLinks.push({ file: filename, name, url }),
+  );
   const normalizedEmail = upsertMemberUser(ctx, {
     email,
     firstName,
     lastName,
-    jobTitle: rep.role ?? null,
-    biography: rep.description ?? null,
-    links,
+    jobTitle: null,
+    biography: null,
+    links: [],
     headshotR2Key,
     sourceFile: filename,
     sourceName: name,
   });
   ctx.statements.push(
-    ...buildIndividualMemberAggregateStatements(normalizedEmail, memberType || null, doc.memberSince),
+    ...buildIndividualMemberAggregateStatements(normalizedEmail, memberType || null, doc.memberSince, {
+      biography: rep.description ?? null,
+      linksJson,
+    }),
   );
   if (needsEmail) ctx.report.totals.sentinelIndividuals += 1;
   else ctx.report.totals.matchedOrgs += 1;

@@ -12,12 +12,14 @@ import { voteCategoryEligibilitySql, voteMemberNotExcludedSql } from "./electora
 import { loadConsultationForm } from "./question";
 
 export interface EligibleCapacity {
+  identityId: string;
   memberId: string;
   membershipCategory: string;
 }
 
 export interface BallotActor {
   userId: string;
+  identityId: string;
 }
 
 async function assertBallotChoiceValid(db: DatabaseLike, vote: VoteRow, choice: string): Promise<void> {
@@ -69,22 +71,24 @@ export async function resolvePerMemberCapacity(
     throw new AppError(422, "MEMBER_ID_REQUIRED", "Select the represented Member whose ballot you are submitting");
   }
   const context = exactVoteGroupMembership(throughGroupId);
-  const capacity = await first<{ member_id: string; category_code: string }>(
+  const capacity = await first<{ identity_id: string; member_id: string; category_code: string }>(
     db,
-    `SELECT membership.member_id, category.category_code
+    `SELECT membership.identity_id, membership.member_id, category.category_code
      FROM votes current_vote
      JOIN group_memberships membership ON membership.user_id = ?
      JOIN members represented_member ON represented_member.id = membership.member_id
      JOIN member_category_assignments category ON category.member_id = represented_member.id
-     JOIN organization_representatives representative
-       ON representative.member_id = represented_member.id
-      AND representative.user_id = membership.user_id
-      AND representative.left_at IS NULL
-      AND representative.blocked_at IS NULL
+     JOIN identities identity
+       ON identity.id = membership.identity_id
+      AND identity.user_id = membership.user_id
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL
+      AND identity.blocked_at IS NULL
      JOIN users representative_user ON representative_user.id = membership.user_id AND representative_user.active = 1
      WHERE current_vote.id = ?
        AND ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
        ${context.sql}
+       AND membership.identity_id = ?
        AND membership.member_id = ?
        AND membership.left_at IS NULL
        AND represented_member.status = 'active'
@@ -92,7 +96,7 @@ export async function resolvePerMemberCapacity(
        AND ${votingMembershipCategoryExistsSql("category.category_code")}
        AND ${voteMemberNotExcludedSql("current_vote", "represented_member.id")}
      LIMIT 1`,
-    [member.userId, vote.id, ...context.bindings, requestedMemberId],
+    [member.userId, vote.id, ...context.bindings, member.identityId, requestedMemberId],
   );
   if (!capacity) {
     throw new AppError(403, "MEMBER_BALLOT_NOT_AUTHORIZED", "You cannot submit a ballot for this Member in this group");
@@ -100,7 +104,11 @@ export async function resolvePerMemberCapacity(
   if (!categoryAllowed(vote, capacity.category_code)) {
     throw new AppError(403, "CATEGORY_NOT_ELIGIBLE", "This Member's category is not eligible for the vote");
   }
-  return { memberId: capacity.member_id, membershipCategory: capacity.category_code };
+  return {
+    identityId: capacity.identity_id,
+    memberId: capacity.member_id,
+    membershipCategory: capacity.category_code,
+  };
 }
 
 export async function resolvePerPersonCapacity(
@@ -112,9 +120,9 @@ export async function resolvePerPersonCapacity(
   const restriction = eligibleCategoriesOf(vote);
   const restrictionJson = restriction ? JSON.stringify(restriction) : null;
   const context = exactVoteGroupMembership(throughGroupId);
-  const capacity = await first<{ member_id: string; category_code: string }>(
+  const capacity = await first<{ identity_id: string; member_id: string; category_code: string }>(
     db,
-    `SELECT membership.member_id, category.category_code
+    `SELECT membership.identity_id, membership.member_id, category.category_code
      FROM votes current_vote
      JOIN group_memberships membership ON membership.user_id = ?
      JOIN members represented_member ON represented_member.id = membership.member_id
@@ -123,6 +131,7 @@ export async function resolvePerPersonCapacity(
      WHERE current_vote.id = ?
        AND ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
        ${context.sql}
+       AND membership.identity_id = ?
        AND membership.left_at IS NULL
        AND represented_member.status = 'active'
        AND ${votingMembershipCategoryExistsSql("category.category_code")}
@@ -131,12 +140,16 @@ export async function resolvePerPersonCapacity(
        ))
      ORDER BY membership.joined_at ASC, membership.id ASC
      LIMIT 1`,
-    [member.userId, vote.id, ...context.bindings, restrictionJson, restrictionJson],
+    [member.userId, vote.id, ...context.bindings, member.identityId, restrictionJson, restrictionJson],
   );
   if (!capacity) {
     throw new AppError(403, "PERSON_BALLOT_NOT_AUTHORIZED", "You are not eligible to vote through this group");
   }
-  return { memberId: capacity.member_id, membershipCategory: capacity.category_code };
+  return {
+    identityId: capacity.identity_id,
+    memberId: capacity.member_id,
+    membershipCategory: capacity.category_code,
+  };
 }
 
 function preparePerMemberBallotUpsert(
@@ -153,8 +166,8 @@ function preparePerMemberBallotUpsert(
   return db
     .prepare(
       `INSERT INTO vote_ballots
-         (id, vote_id, user_id, member_id, choice, round, submitted_at, updated_at, ip_hash)
-       SELECT ?, current_vote.id, ?, ?, ?, current_vote.current_round, ?, ?, ?
+         (id, vote_id, user_id, identity_id, member_id, choice, round, submitted_at, updated_at, ip_hash)
+       SELECT ?, current_vote.id, ?, ?, ?, ?, current_vote.current_round, ?, ?, ?
        FROM votes current_vote
        WHERE current_vote.id = ?
          AND current_vote.electorate_mode = 'per_member'
@@ -170,17 +183,19 @@ function preparePerMemberBallotUpsert(
            FROM group_memberships membership
            JOIN members represented_member ON represented_member.id = membership.member_id
            JOIN member_category_assignments category ON category.member_id = represented_member.id
-           JOIN organization_representatives representative
-             ON representative.member_id = represented_member.id
-            AND representative.user_id = membership.user_id
-            AND representative.left_at IS NULL
-            AND representative.blocked_at IS NULL
+           JOIN identities identity
+             ON identity.id = membership.identity_id
+            AND identity.user_id = membership.user_id
+            AND identity.started_at IS NOT NULL
+            AND identity.ended_at IS NULL
+            AND identity.blocked_at IS NULL
            JOIN users representative_user
              ON representative_user.id = membership.user_id
             AND representative_user.active = 1
            WHERE ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
              AND membership.user_id = ?
              ${context.sql}
+             AND membership.identity_id = ?
              AND membership.member_id = ?
              AND membership.left_at IS NULL
              AND represented_member.status = 'active'
@@ -191,6 +206,7 @@ function preparePerMemberBallotUpsert(
          )
        ON CONFLICT(vote_id, member_id, round) WHERE member_id IS NOT NULL DO UPDATE SET
          user_id = excluded.user_id,
+         identity_id = excluded.identity_id,
          choice = excluded.choice,
          updated_at = excluded.updated_at,
          ip_hash = excluded.ip_hash`,
@@ -198,6 +214,7 @@ function preparePerMemberBallotUpsert(
     .bind(
       uuid(),
       member.userId,
+      capacity.identityId,
       capacity.memberId,
       choice,
       now,
@@ -210,6 +227,7 @@ function preparePerMemberBallotUpsert(
       now,
       member.userId,
       ...context.bindings,
+      capacity.identityId,
       capacity.memberId,
       capacity.membershipCategory,
     );
@@ -228,8 +246,8 @@ function preparePerPersonBallotUpsert(
   return db
     .prepare(
       `INSERT INTO vote_ballots
-         (id, vote_id, user_id, member_id, choice, round, submitted_at, updated_at, ip_hash)
-       SELECT ?, current_vote.id, ?, NULL, ?, current_vote.current_round, ?, ?, ?
+         (id, vote_id, user_id, identity_id, member_id, choice, round, submitted_at, updated_at, ip_hash)
+       SELECT ?, current_vote.id, ?, ?, NULL, ?, current_vote.current_round, ?, ?, ?
        FROM votes current_vote
        WHERE current_vote.id = ?
          AND current_vote.electorate_mode = 'per_person'
@@ -249,11 +267,13 @@ function preparePerPersonBallotUpsert(
            WHERE ${voteParticipationGroupPredicate("current_vote", "membership.group_id")}
              AND membership.user_id = ?
              ${context.sql}
+             AND membership.identity_id = ?
              AND membership.left_at IS NULL
              AND represented_member.status = 'active'
              AND ${voteCategoryEligibilitySql("current_vote", "category.category_code")}
          )
        ON CONFLICT(vote_id, user_id, round) WHERE member_id IS NULL DO UPDATE SET
+         identity_id = excluded.identity_id,
          choice = excluded.choice,
          updated_at = excluded.updated_at,
          ip_hash = excluded.ip_hash`,
@@ -261,6 +281,7 @@ function preparePerPersonBallotUpsert(
     .bind(
       uuid(),
       member.userId,
+      member.identityId,
       choice,
       now,
       now,
@@ -272,6 +293,7 @@ function preparePerPersonBallotUpsert(
       now,
       member.userId,
       ...context.bindings,
+      member.identityId,
     );
 }
 

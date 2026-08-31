@@ -39,7 +39,7 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
-import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
+import { activeIdentityIdForMember, ensureGroupMembershipCapacity } from "./helpers/group-leadership";
 
 async function insertActor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
@@ -50,14 +50,15 @@ async function insertActor(email: string, role = "user"): Promise<UserBackedAuth
 async function grantGroupLeadership(groupId: string, actor: AuthAdmin, roleId = "role-group_lead"): Promise<string> {
   if (actor.identityType !== "user") throw new Error("Test group leadership requires a user-backed actor");
   const memberId = await ensureGroupMembershipCapacity(env.DB, groupId, actor.id);
+  const identityId = await activeIdentityIdForMember(env.DB, actor.id, memberId);
   actor.memberId = memberId;
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO user_roles
-       (id, user_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, ?, ?, 'group', ?, 0, datetime('now'))`,
+       (id, user_id, identity_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
+     VALUES (?, ?, ?, ?, ?, 'group', ?, 0, datetime('now'))`,
   )
-    .bind(id, actor.id, memberId, roleId, groupId)
+    .bind(id, actor.id, identityId, memberId, roleId, groupId)
     .run();
   return id;
 }
@@ -733,21 +734,24 @@ describe("group leadership inheritance", () => {
     const orgBId = await insertOrganization(env.DB, "Leadership Org B");
     const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
     const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
-    await addRepresentative(env.DB, memberAId, representative.id);
-    await addRepresentative(env.DB, memberBId, representative.id);
+    const identityAId = await addRepresentative(env.DB, memberAId, representative.id);
+    const identityBId = await addRepresentative(env.DB, memberBId, representative.id);
     await env.DB.batch(
-      [memberAId, memberBId].map((memberId) =>
+      [
+        { memberId: memberAId, identityId: identityAId },
+        { memberId: memberBId, identityId: identityBId },
+      ].map(({ memberId, identityId }) =>
         env.DB.prepare(
           `INSERT INTO group_memberships
-               (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
-        ).bind(crypto.randomUUID(), group.id, representative.id, memberId),
+               (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+        ).bind(crypto.randomUUID(), group.id, representative.id, identityId, memberId),
       ),
     );
 
     await assignLocalGroupLeadership(env.DB, globalAdmin, group.id, {
       userId: representative.id,
-      memberId: memberAId,
+      identityId: identityAId,
       roleId: "role-group_lead",
     });
 
@@ -836,7 +840,7 @@ describe("group leadership inheritance", () => {
     localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, parentLeader, child.id, {
       userId: localLeader.id,
-      memberId: localLeader.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, parentLeader, child.id, { governanceInheritanceMode: "local_only" });
@@ -926,7 +930,7 @@ describe("group leadership inheritance", () => {
     localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, localOnly.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, globalAdmin, localOnly.id, {
       userId: localLeader.id,
-      memberId: localLeader.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, globalAdmin, localOnly.id, { governanceInheritanceMode: "local_only" });
@@ -988,7 +992,7 @@ describe("group leadership inheritance", () => {
     await expect(
       assignLocalGroupLeadership(mutateBeforeNextBatch(env.DB, revokeManagement), parentLeader, child.id, {
         userId: candidate.id,
-        memberId: candidate.memberId,
+        identityId: await activeIdentityIdForMember(env.DB, candidate.id, candidate.memberId!),
         roleId: "role-group_lead",
       }),
     ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_CHANGED" });
@@ -1019,7 +1023,7 @@ describe("group leadership inheritance", () => {
 
     await assignLocalGroupLeadership(env.DB, serviceActor, group.id, {
       userId: candidate.id,
-      memberId: candidate.memberId,
+      identityId: await activeIdentityIdForMember(env.DB, candidate.id, candidate.memberId!),
       roleId: "role-group_lead",
     });
     expect(

@@ -41,12 +41,12 @@ export async function getPublicGroupDirectory(db: DatabaseLike, idOrSlug: string
           db,
           `${EFFECTIVE_GROUP_LINEAGE_CTE}
            SELECT ur.role_id, u.first_name, u.last_name,
-                  CASE WHEN represented_member.organization_id IS NULL THEN u.job_title ELSE rep.job_title END AS job_title,
+                  CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
                   o.id AS org_id, o.name AS org_name,
                   o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-                  COALESCE(rep.id, represented_member.id) AS member_id,
+                  identity.id AS identity_id,
                   u.headshot_r2_key,
-                  CASE WHEN represented_member.organization_id IS NULL THEN u.links_json ELSE rep.links_json END AS links_json,
+                  identity.links_json,
                   source_group.id AS source_group_id,
                   source_group.slug AS source_group_slug,
                   source_group.name AS source_group_name,
@@ -72,13 +72,16 @@ export async function getPublicGroupDirectory(db: DatabaseLike, idOrSlug: string
               AND membership.left_at IS NULL
              JOIN members represented_member ON represented_member.id = membership.member_id
               AND represented_member.status = 'active'
-             LEFT JOIN organization_representatives rep
-               ON rep.member_id = represented_member.id
-              AND rep.user_id = ur.user_id
-              AND rep.left_at IS NULL
-              AND rep.blocked_at IS NULL
+             JOIN identities identity ON identity.id = membership.identity_id
+              AND identity.user_id = ur.user_id
+              AND identity.started_at IS NOT NULL
+              AND identity.ended_at IS NULL
+              AND identity.blocked_at IS NULL
+             JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+              AND capacity.member_id = represented_member.id
+             JOIN membership_categories category ON category.code = capacity.membership_category
              LEFT JOIN organizations o ON o.id = represented_member.organization_id
-            WHERE represented_member.organization_id IS NULL OR rep.id IS NOT NULL
+            WHERE identity.id IS NOT NULL
             ORDER BY lineage.depth,
                      CASE ur.role_id WHEN 'role-group_lead' THEN 0 ELSE 1 END,
                      LOWER(COALESCE(u.last_name, '')),

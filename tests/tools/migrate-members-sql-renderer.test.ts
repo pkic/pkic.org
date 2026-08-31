@@ -5,7 +5,7 @@ import {
   buildUpsertOrganizationStatement,
   buildOrganizationDomainStatements,
   buildOrganizationMemberAggregateStatements,
-  buildOrganizationRepresentativeStatement,
+  buildActingIdentityStatement,
   buildRepresentativeRoleGrantStatement,
   buildUpsertUserStatement,
   buildIndividualMemberAggregateStatements,
@@ -100,20 +100,20 @@ describe("buildOrganizationMemberAggregateStatements", () => {
   });
 });
 
-describe("buildOrganizationRepresentativeStatement / buildRepresentativeRoleGrantStatement", () => {
-  it("targets organization_representatives with the given visibility flag", () => {
-    const shown = buildOrganizationRepresentativeStatement("acme corp", "alice@acme.example", true, {
+describe("buildActingIdentityStatement / buildRepresentativeRoleGrantStatement", () => {
+  it("targets identities with the given visibility flag", () => {
+    const shown = buildActingIdentityStatement("acme corp", "alice@acme.example", true, {
       jobTitle: "Policy lead",
       biography: "Organization-specific biography",
       linksJson: '["https://acme.example/alice"]',
     });
-    expect(shown).toContain("INSERT INTO organization_representatives");
+    expect(shown).toContain("INSERT INTO identities");
     expect(shown).toContain("'Policy lead'");
     expect(shown).toContain("'Organization-specific biography'");
     expect(shown).toContain(sqlString('["https://acme.example/alice"]'));
     expect(shown).toMatch(/'migration', 1,/);
 
-    const hidden = buildOrganizationRepresentativeStatement("acme corp", "bare@acme.example", false);
+    const hidden = buildActingIdentityStatement("acme corp", "bare@acme.example", false);
     expect(hidden).toMatch(/'migration', 0,/);
   });
 
@@ -169,7 +169,9 @@ describe("buildIndividualMemberAggregateStatements", () => {
     const statements = buildIndividualMemberAggregateStatements("bob@members.invalid", "H5", null);
     expect(statements[0]).toContain("'individual'");
     expect(statements[0]).toContain("FROM users u WHERE u.normalized_email");
-    expect(statements).toHaveLength(3);
+    expect(statements).toHaveLength(4);
+    expect(statements[3]).toContain("INSERT INTO identities");
+    expect(statements[3]).toContain("organization_id IS NULL");
   });
 });
 

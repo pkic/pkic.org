@@ -1,8 +1,8 @@
 /**
  * me-organization-members.test.ts
  *
- * POST /api/v1/organizations/:organizationId/representatives — member self-service
- * coworker enrollment (see functions/_lib/services/member-organization.ts).
+ * POST /api/v1/organizations/:organizationId/identities — organization-contact
+ * identity invitations (see functions/_lib/services/member-organization.ts).
  * Mirrors me-endpoints.test.ts's setup/imports pattern for
  * member-session-authenticated requests.
  */
@@ -50,11 +50,11 @@ async function seedOrgWithContact(
   email: string,
   category: string,
   { contactSlot = "primary" }: SeedOrgOptions = {},
-): Promise<{ organizationId: string; userId: string; memberId: string }> {
+): Promise<{ organizationId: string; userId: string; memberId: string; identityId: string }> {
   const organizationId = await insertOrganization(env.DB, `Org for ${email}`);
   const userId = await insertUser(env.DB, email);
   const memberId = await seedOrganizationAggregate(env.DB, organizationId, category);
-  await addRepresentative(env.DB, memberId, userId);
+  const identityId = await addRepresentative(env.DB, memberId, userId);
 
   if (contactSlot === "primary") {
     await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
@@ -67,30 +67,32 @@ async function seedOrgWithContact(
     await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.secondaryContact);
   }
 
-  return { organizationId, userId, memberId };
+  return { organizationId, userId, memberId, identityId };
 }
 
-describe("POST organization representatives — self-service coworker enrollment", () => {
+describe("POST organization identities — self-service coworker invitations", () => {
   beforeEach(async () => {
     await resetDb();
   });
 
-  it("lets the primary contact add a coworker as a new representative of the same organization", async () => {
-    const { organizationId, memberId, userId } = await seedOrgWithContact("primary@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "coworker-happy-token");
+  it("lets the primary contact invite a coworker into the same organization identity", async () => {
+    const { organizationId, userId, identityId } = await seedOrgWithContact("primary@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "coworker-happy-token", undefined, identityId);
 
-    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/identities`, {
       method: "POST",
       body: JSON.stringify({
-        kind: "email",
+        userReference: "email",
         name: "New Coworker",
         email: "coworker@example.test",
+        activation: { mode: "invitation" },
         showOnOrganizationProfile: true,
       }),
     });
 
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { representativeId: string };
+    const body = (await response.json()) as { identityId: string; state: string };
+    expect(body.state).toBe("pending");
     const [createdUser] = await queryAll<{ id: string; email: string }>(
       env.DB,
       "SELECT id, email FROM users WHERE normalized_email = ?",
@@ -98,17 +100,19 @@ describe("POST organization representatives — self-service coworker enrollment
     );
     expect(createdUser.email).toBe("coworker@example.test");
 
-    // The coworker gets an organization_representatives row against the
-    // SAME aggregate, not a new members row.
-    const repRows = await queryAll<{ id: string; member_id: string; left_at: string | null }>(
-      env.DB,
-      "SELECT id, member_id, left_at FROM organization_representatives WHERE user_id = ?",
-      createdUser.id,
-    );
-    expect(repRows).toHaveLength(1);
-    expect(body.representativeId).toBe(repRows[0].id);
-    expect(repRows[0].member_id).toBe(memberId);
-    expect(repRows[0].left_at).toBeNull();
+    // The coworker gets a pending identity against the same organization.
+    // It does not become an active Member capacity before accepting.
+    const identityRows = await queryAll<{
+      id: string;
+      organization_id: string;
+      started_at: string | null;
+      ended_at: string | null;
+    }>(env.DB, "SELECT id, organization_id, started_at, ended_at FROM identities WHERE user_id = ?", createdUser.id);
+    expect(identityRows).toHaveLength(1);
+    expect(body.identityId).toBe(identityRows[0].id);
+    expect(identityRows[0].organization_id).toBe(organizationId);
+    expect(identityRows[0].started_at).toBeNull();
+    expect(identityRows[0].ended_at).toBeNull();
 
     const memberRows = await queryAll<{ total: number }>(
       env.DB,
@@ -119,17 +123,18 @@ describe("POST organization representatives — self-service coworker enrollment
   });
 
   it("lets the secondary contact add a coworker too", async () => {
-    const { organizationId, userId } = await seedOrgWithContact("secondary@example.test", "A", {
+    const { organizationId, userId, identityId } = await seedOrgWithContact("secondary@example.test", "A", {
       contactSlot: "secondary",
     });
-    const token = await createMemberSession(env.DB, userId, "coworker-secondary-token");
+    const token = await createMemberSession(env.DB, userId, "coworker-secondary-token", undefined, identityId);
 
-    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/identities`, {
       method: "POST",
       body: JSON.stringify({
-        kind: "email",
+        userReference: "email",
         name: "Another Coworker",
         email: "another-coworker@example.test",
+        activation: { mode: "invitation" },
         showOnOrganizationProfile: true,
       }),
     });
@@ -142,33 +147,46 @@ describe("POST organization representatives — self-service coworker enrollment
     // A second representative of the same org who is neither primary nor secondary contact.
     const nonContactUserId = await insertUser(env.DB, "non-contact@example.test");
     await addRepresentative(env.DB, memberId, nonContactUserId);
-    const token = await createMemberSession(env.DB, nonContactUserId, "non-contact-token");
+    const nonContactIdentityId = await env.DB.prepare(
+      "SELECT id FROM identities WHERE user_id = ? AND organization_id = ?",
+    )
+      .bind(nonContactUserId, organizationId)
+      .first<{ id: string }>();
+    const token = await createMemberSession(
+      env.DB,
+      nonContactUserId,
+      "non-contact-token",
+      undefined,
+      nonContactIdentityId!.id,
+    );
 
-    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/identities`, {
       method: "POST",
       body: JSON.stringify({
-        kind: "email",
+        userReference: "email",
         name: "Should Fail",
         email: "should-fail@example.test",
+        activation: { mode: "invitation" },
         showOnOrganizationProfile: true,
       }),
     });
 
     expect(response.status).toBe(403);
     const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("NOT_ORG_CONTACT");
+    expect(body.error.code).toBe("ORGANIZATION_CONTACT_REQUIRED");
   });
 
   it("rejects an org-less individual member with 403", async () => {
-    const { userId } = await insertIndividualMember(env.DB, "H6", "individual@example.test");
-    const token = await createMemberSession(env.DB, userId, "individual-token");
+    const { userId, identityId } = await insertIndividualMember(env.DB, "H6", "individual@example.test");
+    const token = await createMemberSession(env.DB, userId, "individual-token", undefined, identityId);
 
-    const response = await call(token, `/api/v1/organizations/${crypto.randomUUID()}/representatives`, {
+    const response = await call(token, `/api/v1/organizations/${crypto.randomUUID()}/identities`, {
       method: "POST",
       body: JSON.stringify({
-        kind: "email",
+        userReference: "email",
         name: "Should Fail",
         email: "should-fail-2@example.test",
+        activation: { mode: "invitation" },
         showOnOrganizationProfile: true,
       }),
     });
@@ -179,36 +197,38 @@ describe("POST organization representatives — self-service coworker enrollment
   });
 
   it("rejects an email that is already an active representative of this same organization with 409", async () => {
-    const { organizationId, memberId, userId } = await seedOrgWithContact("primary3@example.test", "F");
-    const token = await createMemberSession(env.DB, userId, "already-member-token");
+    const { organizationId, memberId, userId, identityId } = await seedOrgWithContact("primary3@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "already-member-token", undefined, identityId);
     // Someone already an active representative of this exact organization.
     const existingRepUserId = await insertUser(env.DB, "existing-rep@example.test");
     await addRepresentative(env.DB, memberId, existingRepUserId);
 
-    const response = await call(token, `/api/v1/organizations/${organizationId}/representatives`, {
+    const response = await call(token, `/api/v1/organizations/${organizationId}/identities`, {
       method: "POST",
       body: JSON.stringify({
-        kind: "email",
+        userReference: "email",
         name: "Existing Rep",
         email: "existing-rep@example.test",
+        activation: { mode: "invitation" },
         showOnOrganizationProfile: true,
       }),
     });
 
     expect(response.status).toBe(409);
     const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("ALREADY_MEMBER");
+    expect(body.error.code).toBe("IDENTITY_ALREADY_ACTIVE");
   });
 
   it("rejects unauthenticated requests with 401", async () => {
     const response = await app.fetch(
-      new Request(`https://app.test/api/v1/organizations/${crypto.randomUUID()}/representatives`, {
+      new Request(`https://app.test/api/v1/organizations/${crypto.randomUUID()}/identities`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          kind: "email",
+          userReference: "email",
           name: "Nobody",
           email: "nobody@example.test",
+          activation: { mode: "invitation" },
           showOnOrganizationProfile: true,
         }),
       }),
@@ -220,18 +240,19 @@ describe("POST organization representatives — self-service coworker enrollment
 
   it("rolls back both user and representative creation when contact authority changes before commit", async () => {
     const email = `racing-contact-${crypto.randomUUID()}@example.test`;
-    const { memberId, userId, organizationId } = await seedOrgWithContact(
+    const { memberId, userId, organizationId, identityId } = await seedOrgWithContact(
       `racing-primary-${crypto.randomUUID()}@example.test`,
       "F",
     );
     const member: AuthMember = {
       userId,
+      identityId,
       email: `racing-primary-${crypto.randomUUID()}@example.test`,
       memberId,
       organizationId,
       membershipCategory: "F",
       isEcMember: false,
-      activeMemberships: [{ memberId, organizationId, organizationName: null, membershipCategory: "F" }],
+      activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(
@@ -244,7 +265,7 @@ describe("POST organization representatives — self-service coworker enrollment
 
     await expect(addCoworker(racingDb, member, { name: "Racing Coworker", email })).rejects.toMatchObject({
       status: 409,
-      code: "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
+      code: "IDENTITY_AUTHORIZATION_CHANGED",
     });
     expect(
       await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM users WHERE normalized_email = ?", [

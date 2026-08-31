@@ -4,7 +4,7 @@ import { signInToPortal } from "./helpers/portal-auth";
 
 test("permitted staff manage users through the canonical domain API", async ({ page }) => {
   const staffEmail = e2eAdminEmail("portal-users");
-  const updatedJobTitle = `E2E Portal User ${crypto.randomUUID().slice(0, 8)}`;
+  const updatedPreferredName = `E2E Portal User ${crypto.randomUUID().slice(0, 8)}`;
   const canonicalRequests: string[] = [];
   const legacyRequests: string[] = [];
 
@@ -29,18 +29,18 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   await expect(page.locator(".page-heading")).toHaveText(staffEmail);
 
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
-  const jobTitle = page.getByLabel("Job title");
+  const preferredName = page.getByLabel("Preferred name");
   const saveResponse = page.waitForResponse(
     (response) =>
       /^\/api\/v1\/users\/[^/]+$/.test(new URL(response.url()).pathname) && response.request().method() === "PATCH",
   );
-  await jobTitle.fill(updatedJobTitle);
+  await preferredName.fill(updatedPreferredName);
   await page.getByRole("button", { name: "Save", exact: true }).click();
   expect((await saveResponse).status()).toBe(200);
-  await expect(page.getByText(updatedJobTitle, { exact: true })).toBeVisible();
+  await expect(page.getByText(updatedPreferredName, { exact: true })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText(updatedJobTitle, { exact: true })).toBeVisible();
+  await expect(page.getByText(updatedPreferredName, { exact: true })).toBeVisible();
 
   await page.goto("/portal/#/users");
   await expect(page).toHaveURL(/\/portal\/#\/users$/);

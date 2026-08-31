@@ -8,35 +8,34 @@ import { FormActions } from "../../../../components/FormActions";
 import { postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 
-interface RepresentativeDraft {
+interface IdentityDraft {
   name: string;
   email: string;
   jobTitle: string;
   links: string[];
 }
 
-function emptyRepresentative(): RepresentativeDraft {
+function emptyIdentity(): IdentityDraft {
   return { name: "", email: "", jobTitle: "", links: [] };
 }
 
 const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
 
-/** Creates one organization aggregate with its initial representatives. */
+/** Creates one organization aggregate with its initial approved identities. */
 export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
   const [description, setDescription] = useState("");
   const [membershipCategory, setMembershipCategory] = useState(ORG_TIED_MEMBERSHIP_CATEGORIES[0]);
   const [memberSince, setMemberSince] = useState(() => new Date().toISOString().slice(0, 10));
-  const [representatives, setRepresentatives] = useState<RepresentativeDraft[]>([emptyRepresentative()]);
+  const [identities, setIdentities] = useState<IdentityDraft[]>([emptyIdentity()]);
+  const [activationReason, setActivationReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  function updateRepresentative(index: number, patch: Partial<RepresentativeDraft>) {
-    setRepresentatives((current) =>
-      current.map((representative, position) =>
-        position === index ? { ...representative, ...patch } : representative,
-      ),
+  function updateIdentity(index: number, patch: Partial<IdentityDraft>) {
+    setIdentities((current) =>
+      current.map((identity, position) => (position === index ? { ...identity, ...patch } : identity)),
     );
   }
 
@@ -53,13 +52,14 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
           ...(description.trim() ? { description: description.trim() } : {}),
           membershipCategory,
           memberSince,
-          representatives: representatives.map((representative) => ({
-            name: representative.name.trim(),
-            email: representative.email.trim(),
-            ...(representative.jobTitle.trim() ? { jobTitle: representative.jobTitle.trim() } : {}),
-            ...(representative.links.length > 0 ? { links: representative.links } : {}),
+          identities: identities.map((identity) => ({
+            name: identity.name.trim(),
+            email: identity.email.trim(),
+            ...(identity.jobTitle.trim() ? { jobTitle: identity.jobTitle.trim() } : {}),
+            ...(identity.links.length > 0 ? { links: identity.links } : {}),
           })),
           workingGroupSlugs: [],
+          activationReason: activationReason.trim(),
         },
         organizationCreateResponseSchema,
       );
@@ -152,66 +152,67 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
         </div>
 
         <fieldset class="mb-3">
-          <legend class="form-label small fw-semibold">Initial representatives</legend>
-          {representatives.map((representative, index) => (
+          <legend class="form-label small fw-semibold">Initial identities</legend>
+          <div class="form-text mb-2">
+            Creating an organization activates these identities immediately and requires identities:activate.
+          </div>
+          {identities.map((identity, index) => (
             <div class="row g-2 mb-2 align-items-end" key={index}>
               <div class="col-md-3">
-                <label class="form-label small" for={`organization-create-representative-name-${index}`}>
+                <label class="form-label small" for={`organization-create-identity-name-${index}`}>
                   Name
                 </label>
                 <input
-                  id={`organization-create-representative-name-${index}`}
+                  id={`organization-create-identity-name-${index}`}
                   class="form-control form-control-sm"
-                  value={representative.name}
-                  onInput={(event) => updateRepresentative(index, { name: (event.target as HTMLInputElement).value })}
+                  value={identity.name}
+                  onInput={(event) => updateIdentity(index, { name: (event.target as HTMLInputElement).value })}
                   required
                   disabled={busy}
                 />
               </div>
               <div class="col-md-3">
-                <label class="form-label small" for={`organization-create-representative-email-${index}`}>
+                <label class="form-label small" for={`organization-create-identity-email-${index}`}>
                   Email
                 </label>
                 <input
-                  id={`organization-create-representative-email-${index}`}
+                  id={`organization-create-identity-email-${index}`}
                   class="form-control form-control-sm"
                   type="email"
-                  value={representative.email}
-                  onInput={(event) => updateRepresentative(index, { email: (event.target as HTMLInputElement).value })}
+                  value={identity.email}
+                  onInput={(event) => updateIdentity(index, { email: (event.target as HTMLInputElement).value })}
                   required
                   disabled={busy}
                 />
               </div>
               <div class="col-md-2">
-                <label class="form-label small" for={`organization-create-representative-title-${index}`}>
+                <label class="form-label small" for={`organization-create-identity-title-${index}`}>
                   Job title
                 </label>
                 <input
-                  id={`organization-create-representative-title-${index}`}
+                  id={`organization-create-identity-title-${index}`}
                   class="form-control form-control-sm"
-                  value={representative.jobTitle}
-                  onInput={(event) =>
-                    updateRepresentative(index, { jobTitle: (event.target as HTMLInputElement).value })
-                  }
+                  value={identity.jobTitle}
+                  onInput={(event) => updateIdentity(index, { jobTitle: (event.target as HTMLInputElement).value })}
                   disabled={busy}
                 />
               </div>
               <div class="col-md-3">
                 <label class="form-label small">Profile links</label>
                 <ProfileLinksInput
-                  fieldName={`representatives.${index}.links`}
-                  value={representative.links}
-                  onChange={(links) => updateRepresentative(index, { links })}
+                  fieldName={`identities.${index}.links`}
+                  value={identity.links}
+                  onChange={(links) => updateIdentity(index, { links })}
                 />
               </div>
               <div class="col-md-1">
-                {representatives.length > 1 && (
+                {identities.length > 1 && (
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-danger w-100"
                     disabled={busy}
-                    onClick={() => setRepresentatives((current) => current.filter((_, position) => position !== index))}
-                    aria-label={`Remove representative ${index + 1}`}
+                    onClick={() => setIdentities((current) => current.filter((_, position) => position !== index))}
+                    aria-label={`Remove identity ${index + 1}`}
                   >
                     ×
                   </button>
@@ -222,12 +223,26 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
           <button
             type="button"
             class="btn btn-sm btn-outline-secondary"
-            disabled={busy || representatives.length >= 10}
-            onClick={() => setRepresentatives((current) => [...current, emptyRepresentative()])}
+            disabled={busy || identities.length >= 10}
+            onClick={() => setIdentities((current) => [...current, emptyIdentity()])}
           >
-            Add representative
+            Add identity
           </button>
         </fieldset>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="organization-create-activation-reason">
+            Immediate activation reason
+          </label>
+          <input
+            id="organization-create-activation-reason"
+            class="form-control form-control-sm"
+            value={activationReason}
+            onInput={(event) => setActivationReason(event.currentTarget.value)}
+            required
+            disabled={busy}
+          />
+        </div>
 
         <FormActions
           submitLabel="Create organization"

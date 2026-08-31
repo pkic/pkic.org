@@ -35,6 +35,7 @@ export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async 
       ...(result.session.staff ? { staff: result.session.staff } : {}),
       ...(result.session.member ? { member: result.session.member } : {}),
       sponsors: result.session.sponsors,
+      pendingIdentityCount: result.session.pendingIdentityCount,
     }),
     serializeUserSessionCookie(result.token, c.req.raw),
   );

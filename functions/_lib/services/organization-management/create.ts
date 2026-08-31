@@ -8,21 +8,22 @@ import { getOrganization } from "./read-model";
 
 /** Creates one organization aggregate through the same provisioner used by YAML import and application approval. */
 export async function createOrganization(db: DatabaseLike, actor: UserBackedAuthAdmin, input: OrganizationCreateInput) {
-  const authorizedDb = authorizedOrganizationMutationDb(db, actor, "membership:write");
+  const authorizedDb = authorizedOrganizationMutationDb(db, actor, ["membership:write", "identities:activate"]);
   const provision = await buildProvisionOrganizationMembership(authorizedDb, {
     organizationName: input.name,
     website: input.website,
     description: input.description,
     membershipCategory: input.membershipCategory,
     memberSince: input.memberSince,
-    representatives: input.representatives.map((representative) => ({
-      name: representative.name,
-      email: representative.email,
-      jobTitle: representative.jobTitle,
-      biography: representative.biography,
-      links: representative.links,
+    identities: input.identities.map((identity) => ({
+      name: identity.name,
+      email: identity.email,
+      jobTitle: identity.jobTitle,
+      biography: identity.biography,
+      links: identity.links,
     })),
-    representationSource: "staff",
+    identitySource: "staff",
+    activateIdentities: true,
     workingGroupSlugs: input.workingGroupSlugs,
     grantedByUserId: adminDatabaseUserId(actor),
   });
@@ -31,7 +32,8 @@ export async function createOrganization(db: DatabaseLike, actor: UserBackedAuth
     prepareAuditLog(authorizedDb, "admin", actor.id, "organization_created", "organization", result.organizationId, {
       membershipCategory: input.membershipCategory,
       organizationName: input.name,
-      representativeEmails: input.representatives.map((representative) => representative.email),
+      identityEmails: input.identities.map((identity) => identity.email),
+      activationReason: input.activationReason,
     }),
   );
   await authorizedDb.batch(provision.statements);

@@ -152,14 +152,14 @@ describe("secondary user emails", () => {
     const added = await addUserEmail(env.DB, actor, userId, "rollback-remove@example.test");
     const organizationId = await insertOrganization(env.DB, "Rollback Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    await addRepresentative(env.DB, memberId, userId);
+    const identityId = await addRepresentative(env.DB, memberId, userId);
     await env.DB.batch([
       env.DB.prepare(
         "UPDATE user_emails SET verified_at = datetime('now'), verification_method = 'staff' WHERE id = ?",
       ).bind(added.id),
-      env.DB.prepare("UPDATE organization_representatives SET email_id = ? WHERE member_id = ? AND user_id = ?").bind(
+      env.DB.prepare("UPDATE identities SET email_id = ? WHERE id = ? AND user_id = ?").bind(
         added.id,
-        memberId,
+        identityId,
         userId,
       ),
     ]);
@@ -174,9 +174,9 @@ describe("secondary user emails", () => {
     try {
       await expect(removeUserEmail(env.DB, actor, userId, added.id)).rejects.toThrow("forced user email audit failure");
       expect(await queryAll(env.DB, "SELECT id FROM user_emails WHERE id = ?", added.id)).toHaveLength(1);
-      expect(
-        await queryAll(env.DB, "SELECT email_id FROM organization_representatives WHERE member_id = ?", memberId),
-      ).toEqual([{ email_id: added.id }]);
+      expect(await queryAll(env.DB, "SELECT email_id FROM identities WHERE id = ?", identityId)).toEqual([
+        { email_id: added.id },
+      ]);
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_user_email_audit").run();
     }
@@ -188,8 +188,8 @@ describe("secondary user emails", () => {
     const organizationBId = await insertOrganization(env.DB, "Capacity Email B");
     const memberAId = await seedOrganizationAggregate(env.DB, organizationAId, "A");
     const memberBId = await seedOrganizationAggregate(env.DB, organizationBId, "B");
-    await addRepresentative(env.DB, memberAId, userId);
-    await addRepresentative(env.DB, memberBId, userId);
+    const identityAId = await addRepresentative(env.DB, memberAId, userId);
+    const identityBId = await addRepresentative(env.DB, memberBId, userId);
     const emailId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
@@ -197,9 +197,12 @@ describe("secondary user emails", () => {
            (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
          VALUES (?, ?, 'capacity-alias@example.test', 'capacity-alias@example.test', datetime('now'), 'staff', datetime('now'))`,
       ).bind(emailId, userId),
-      env.DB.prepare(
-        "UPDATE organization_representatives SET email_id = ? WHERE user_id = ? AND member_id IN (?, ?)",
-      ).bind(emailId, userId, memberAId, memberBId),
+      env.DB.prepare("UPDATE identities SET email_id = ? WHERE user_id = ? AND id IN (?, ?)").bind(
+        emailId,
+        userId,
+        identityAId,
+        identityBId,
+      ),
     ]);
     expect((await findEligibleMemberById(env.DB, userId, memberAId))?.email).toBe("capacity-alias@example.test");
     expect((await findEligibleMemberById(env.DB, userId, memberBId))?.email).toBe("capacity-alias@example.test");
@@ -207,12 +210,12 @@ describe("secondary user emails", () => {
     const response = await call(adminToken, `/api/v1/users/${userId}/emails/${emailId}`, { method: "DELETE" });
     expect(response.status).toBe(200);
     expect(
-      await queryAll<{ member_id: string; email_id: string | null }>(
+      await queryAll<{ identity_id: string; email_id: string | null }>(
         env.DB,
-        "SELECT member_id, email_id FROM organization_representatives WHERE user_id = ? ORDER BY member_id",
+        "SELECT id AS identity_id, email_id FROM identities WHERE user_id = ? ORDER BY id",
         userId,
       ),
-    ).toEqual([memberAId, memberBId].sort().map((member_id) => ({ member_id, email_id: null })));
+    ).toEqual([identityAId, identityBId].sort().map((identity_id) => ({ identity_id, email_id: null })));
     expect((await findEligibleMemberById(env.DB, userId, memberAId))?.email).toBe("capacity-primary@example.test");
     expect((await findEligibleMemberById(env.DB, userId, memberBId))?.email).toBe("capacity-primary@example.test");
     await expect(
@@ -229,7 +232,7 @@ describe("secondary user emails", () => {
     const userId = await insertUser("database-fallback@example.test");
     const organizationId = await insertOrganization(env.DB, "Database Fallback Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    await addRepresentative(env.DB, memberId, userId);
+    const identityId = await addRepresentative(env.DB, memberId, userId);
     const emailId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
@@ -237,18 +240,18 @@ describe("secondary user emails", () => {
            (id, user_id, email, normalized_email, verified_at, verification_method, created_at)
          VALUES (?, ?, 'database-alias@example.test', 'database-alias@example.test', datetime('now'), 'staff', datetime('now'))`,
       ).bind(emailId, userId),
-      env.DB.prepare("UPDATE organization_representatives SET email_id = ? WHERE member_id = ? AND user_id = ?").bind(
+      env.DB.prepare("UPDATE identities SET email_id = ? WHERE id = ? AND user_id = ?").bind(
         emailId,
-        memberId,
+        identityId,
         userId,
       ),
     ]);
 
     await env.DB.prepare("DELETE FROM user_emails WHERE id = ?").bind(emailId).run();
 
-    expect(
-      await queryAll(env.DB, "SELECT email_id FROM organization_representatives WHERE member_id = ?", memberId),
-    ).toEqual([{ email_id: null }]);
+    expect(await queryAll(env.DB, "SELECT email_id FROM identities WHERE id = ?", identityId)).toEqual([
+      { email_id: null },
+    ]);
   });
 
   it("rolls back alias removal when the actor loses users:write before the batch commits", async () => {

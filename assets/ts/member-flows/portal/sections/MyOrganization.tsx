@@ -33,7 +33,7 @@ import {
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
 import { Badge } from "../../../components/Badge";
 
-export { RepresentativeSelect } from "./MyOrganizationGovernance";
+export { IdentitySelect } from "./MyOrganizationGovernance";
 
 const organizationPath = (organizationId: string) => `/api/v1/organizations/${encodeURIComponent(organizationId)}`;
 

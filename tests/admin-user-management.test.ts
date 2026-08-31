@@ -8,6 +8,7 @@ import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { signCapabilityToken, verifyDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { confirmRegistrationByToken, getRegistrationByManageToken } from "../functions/_lib/services/registrations";
@@ -244,7 +245,7 @@ describe("admin user deactivation", () => {
     );
   });
 
-  it("preserves users:write profile updates without access:grant", async () => {
+  it("preserves users:write name updates without access:grant", async () => {
     await setup();
     const staffId = await seedUser(env.DB, "profile-editor@example.test");
     const targetId = await seedUser(env.DB, "email-before@example.test");
@@ -260,12 +261,7 @@ describe("admin user deactivation", () => {
     const staffToken = await createAdminSession(env.DB, staffId, "profile-editor-session");
 
     const response = await app.fetch(
-      adminRequest(
-        `/api/v1/users/${targetId}`,
-        "PATCH",
-        { biography: "Still editable by users:write staff." },
-        staffToken,
-      ),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { preferredName: "Still editable" }, staffToken),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -273,13 +269,13 @@ describe("admin user deactivation", () => {
     expect(response.status).toBe(200);
     expect(
       (
-        await queryAll<{ email: string; biography: string | null }>(
+        await queryAll<{ email: string; preferred_name: string | null }>(
           env.DB,
-          "SELECT email, biography FROM users WHERE id = ?",
+          "SELECT email, preferred_name FROM users WHERE id = ?",
           targetId,
         )
       )[0],
-    ).toEqual({ email: "email-before@example.test", biography: "Still editable by users:write staff." });
+    ).toEqual({ email: "email-before@example.test", preferred_name: "Still editable" });
   });
 
   it("requires access:grant for a direct primary-email correction", async () => {
@@ -437,7 +433,7 @@ describe("admin user deactivation", () => {
     );
   });
 
-  it("updates profile biography and links", async () => {
+  it("updates the user-wide preferred name without copying identity profile fields", async () => {
     await setup();
     const userId = await seedUser(env.DB, "profile@example.test");
 
@@ -445,8 +441,7 @@ describe("admin user deactivation", () => {
       createContext(
         env,
         adminRequest(`/api/v1/users/${userId}`, "PATCH", {
-          biography: "Admin maintained speaker biography.",
-          links: ["https://example.test/profile", "https://github.com/profile"],
+          preferredName: "Speaker",
         }),
         { userId },
       ),
@@ -454,14 +449,13 @@ describe("admin user deactivation", () => {
 
     expect(response.status).toBe(200);
     const row = (
-      await queryAll<{ biography: string | null; links_json: string | null }>(
+      await queryAll<{ preferred_name: string | null; biography: string | null; links_json: string | null }>(
         env.DB,
-        "SELECT biography, links_json FROM users WHERE id = ?",
+        "SELECT preferred_name, biography, links_json FROM users WHERE id = ?",
         [userId],
       )
     )[0];
-    expect(row.biography).toBe("Admin maintained speaker biography.");
-    expect(JSON.parse(row.links_json ?? "[]")).toEqual(["https://example.test/profile", "https://github.com/profile"]);
+    expect(row).toEqual({ preferred_name: "Speaker", biography: null, links_json: null });
   });
 
   it("persists profile edits through the full router pipeline (regression: a stale duplicate PATCH route previously shadowed this handler)", async () => {
@@ -472,8 +466,7 @@ describe("admin user deactivation", () => {
       adminRequest(`/api/v1/users/${userId}`, "PATCH", {
         firstName: "Router",
         lastName: "Tested",
-        jobTitle: "QA Lead",
-        biography: "Persisted via the real HTTP router, not a direct handler call.",
+        preferredName: "QA",
       }),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -484,14 +477,12 @@ describe("admin user deactivation", () => {
       await queryAll<{
         first_name: string | null;
         last_name: string | null;
-        job_title: string | null;
-        biography: string | null;
-      }>(env.DB, "SELECT first_name, last_name, job_title, biography FROM users WHERE id = ?", [userId])
+        preferred_name: string | null;
+      }>(env.DB, "SELECT first_name, last_name, preferred_name FROM users WHERE id = ?", [userId])
     )[0];
     expect(row.first_name).toBe("Router");
     expect(row.last_name).toBe("Tested");
-    expect(row.job_title).toBe("QA Lead");
-    expect(row.biography).toBe("Persisted via the real HTTP router, not a direct handler call.");
+    expect(row.preferred_name).toBe("QA");
   });
 
   it("refuses to deactivate the calling admin's own account", async () => {
@@ -533,8 +524,7 @@ describe("admin user deactivation", () => {
         env,
         adminRequest(`/api/v1/users/${userId}`, "PATCH", {
           email: "new-private@example.test",
-          biography: "Sensitive private biography",
-          links: ["https://private.example.test/profile"],
+          preferredName: "Private preferred name",
         }),
         { userId },
       ),
@@ -547,10 +537,9 @@ describe("admin user deactivation", () => {
     );
     expect(detailsJson).not.toContain("private-update@example.test");
     expect(detailsJson).not.toContain("new-private@example.test");
-    expect(detailsJson).not.toContain("Sensitive private biography");
-    expect(detailsJson).not.toContain("private.example.test");
+    expect(detailsJson).not.toContain("Private preferred name");
     expect(JSON.parse(detailsJson)).toMatchObject({
-      changedFields: { to: expect.arrayContaining(["email", "biography", "links"]) },
+      changedFields: { to: expect.arrayContaining(["email", "preferredName"]) },
     });
   });
 
@@ -604,11 +593,11 @@ describe("admin user deactivation", () => {
             WHERE id = ?`,
       ).bind(userId),
       env.DB.prepare(
-        `UPDATE organization_representatives
+        `UPDATE identities
               SET job_title = 'Capacity Title', biography = 'Capacity biography',
                   links_json = '["https://capacity.example.test"]'
-            WHERE member_id = ? AND user_id = ?`,
-      ).bind(memberId, userId),
+            WHERE organization_id = ? AND user_id = ?`,
+      ).bind(organizationId, userId),
     ]);
 
     const response = await app.fetch(
@@ -618,7 +607,7 @@ describe("admin user deactivation", () => {
     );
     expect(response.status).toBe(200);
     const body = userDetailResponseSchema.parse(await response.json());
-    expect(body.user.memberships).toEqual([
+    expect(body.user.identities).toEqual([
       expect.objectContaining({
         organizationId,
         organizationName: "Canonical Capacity Organization",
@@ -689,15 +678,15 @@ describe("admin user anonymization", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT left_at IS NOT NULL AS closed FROM organization_representatives WHERE member_id = ? AND user_id = ?",
-        [memberId, userId],
+        "SELECT ended_at IS NOT NULL AS closed FROM identities WHERE organization_id = ? AND user_id = ?",
+        [organizationId, userId],
       ),
     ).toEqual([{ closed: 1 }]);
     expect(
       await queryAll(
         env.DB,
-        "SELECT COUNT(*) AS total FROM organization_representatives WHERE member_id = ? AND left_at IS NULL",
-        memberId,
+        "SELECT COUNT(*) AS total FROM identities WHERE organization_id = ? AND ended_at IS NULL",
+        organizationId,
       ),
     ).toEqual([{ total: 0 }]);
   });
@@ -853,7 +842,7 @@ describe("admin user anonymization", () => {
   it("rolls back a stale admin update that loses to anonymization", async () => {
     const { adminId } = await setup();
     const userId = await seedUser(env.DB, "race-update@example.test");
-    await env.DB.prepare("UPDATE users SET biography = ? WHERE id = ?").bind("Private biography", userId).run();
+    await env.DB.prepare("UPDATE users SET first_name = ? WHERE id = ?").bind("Private", userId).run();
 
     const gate = gateNextBatch(env.DB);
     const staleUpdate = updateUser(
@@ -862,7 +851,7 @@ describe("admin user anonymization", () => {
       userId,
       {
         email: "restored@example.test",
-        biography: "Stale restored biography",
+        firstName: "Stale restored name",
         active: false,
       },
     );
@@ -878,13 +867,13 @@ describe("admin user anonymization", () => {
     await expect(staleUpdate).rejects.toMatchObject({ code: "ALREADY_ANONYMIZED" });
     const [user] = await queryAll<{
       email: string;
-      biography: string | null;
+      first_name: string | null;
       pending_email: string | null;
       active: number;
       pii_redacted_at: string | null;
-    }>(env.DB, "SELECT email, biography, pending_email, active, pii_redacted_at FROM users WHERE id = ?", userId);
+    }>(env.DB, "SELECT email, first_name, pending_email, active, pii_redacted_at FROM users WHERE id = ?", userId);
     expect(user.email).toBe(`redacted-${userId}@anonymized.invalid`);
-    expect(user.biography).toBeNull();
+    expect(user.first_name).toBeNull();
     expect(user.pending_email).toBeNull();
     expect(user.active).toBe(0);
     expect(user.pii_redacted_at).toBeTruthy();
@@ -906,20 +895,20 @@ describe("admin user anonymization", () => {
 
     await updateUser(env.DB, { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
       email: "race-winner@example.test",
-      biography: "Winner biography",
+      firstName: "Winner",
     });
     gate.release();
 
     await expect(staleAnonymization).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });
     const [user] = await queryAll<{
       email: string;
-      biography: string | null;
+      first_name: string | null;
       active: number;
       pii_redacted_at: string | null;
-    }>(env.DB, "SELECT email, biography, active, pii_redacted_at FROM users WHERE id = ?", userId);
+    }>(env.DB, "SELECT email, first_name, active, pii_redacted_at FROM users WHERE id = ?", userId);
     expect(user).toEqual({
       email: "race-winner@example.test",
-      biography: "Winner biography",
+      first_name: "Winner",
       active: 1,
       pii_redacted_at: null,
     });
@@ -945,7 +934,7 @@ describe("admin user anonymization", () => {
       gate.db,
       { identityType: "user", id: actorId, email: "revoked-user-write@example.test", role: "user" },
       targetUserId,
-      { biography: "This update must not commit" },
+      { firstName: "This update must not commit" },
     );
     await gate.reached;
     await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?").bind(grantId).run();
@@ -956,8 +945,8 @@ describe("admin user anonymization", () => {
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_updated'", targetUserId),
     ).toEqual([]);
     expect(
-      await queryAll<{ biography: string | null }>(env.DB, "SELECT biography FROM users WHERE id = ?", targetUserId),
-    ).toEqual([{ biography: null }]);
+      await queryAll<{ first_name: string | null }>(env.DB, "SELECT first_name FROM users WHERE id = ?", targetUserId),
+    ).toEqual([{ first_name: "Test" }]);
   });
 
   it("refuses to anonymize the calling admin's own account", async () => {
@@ -1022,7 +1011,13 @@ describe("users list — type filter", () => {
   async function seedMember(email: string): Promise<string> {
     const userId = await seedUser(env.DB, email);
     const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
-    await env.DB.batch(statements);
+    const { statement: identityStatement } = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: null,
+      source: "staff",
+      startImmediately: true,
+    });
+    await env.DB.batch([...statements, identityStatement]);
     return userId;
   }
 
@@ -1145,7 +1140,7 @@ describe("users list — type filter", () => {
     expect(byEmail["type-all-contact@example.test"]).toBe("contact_only");
   });
 
-  it("lists a user representing two organizations exactly once, and the total count matches (regression: unscoped organization_representatives join previously fanned out one row per represented organization)", async () => {
+  it("lists a user with two identities exactly once, and the total count matches without identity-join fan-out", async () => {
     await setup();
     const userId = await seedUser(env.DB, "type-multi-org@example.test");
     const orgAId = crypto.randomUUID();
@@ -1160,20 +1155,22 @@ describe("users list — type filter", () => {
     ]);
     const { getOrCreateOrganizationMemberAggregate } =
       await import("../functions/_lib/services/membership/memberships");
-    const { buildAddRepresentativeStatement } = await import("../functions/_lib/services/membership/representatives");
+    const { buildCreateIdentityStatement } = await import("../functions/_lib/services/membership/identities");
     const now = new Date().toISOString();
-    const memberA = await getOrCreateOrganizationMemberAggregate(env.DB, orgAId, "A", now);
-    const memberB = await getOrCreateOrganizationMemberAggregate(env.DB, orgBId, "B", now);
-    const { statement: repA } = await buildAddRepresentativeStatement(env.DB, {
-      memberId: memberA.id,
+    await getOrCreateOrganizationMemberAggregate(env.DB, orgAId, "A", now);
+    await getOrCreateOrganizationMemberAggregate(env.DB, orgBId, "B", now);
+    const { statement: repA } = await buildCreateIdentityStatement(env.DB, {
       userId,
+      organizationId: orgAId,
       source: "staff",
+      startImmediately: true,
       now,
     });
-    const { statement: repB } = await buildAddRepresentativeStatement(env.DB, {
-      memberId: memberB.id,
+    const { statement: repB } = await buildCreateIdentityStatement(env.DB, {
       userId,
+      organizationId: orgBId,
       source: "staff",
+      startImmediately: true,
       now,
     });
     await env.DB.batch([repA, repB]);
@@ -1182,7 +1179,7 @@ describe("users list — type filter", () => {
     expect(data.users.filter((u) => u.email === "type-multi-org@example.test")).toHaveLength(1);
   });
 
-  it("tolerates a malformed links_json row instead of 500ing the whole list (P10-01)", async () => {
+  it("does not leak legacy user-wide links into the user list", async () => {
     await setup();
     const userId = await seedUser(env.DB, "type-malformed-links@example.test");
     await env.DB.prepare("UPDATE users SET links_json = ? WHERE id = ?").bind("{not valid json", userId).run();
@@ -1194,9 +1191,10 @@ describe("users list — type filter", () => {
     );
 
     expect(response.status).toBe(200);
-    const data = (await response.json()) as { users: Array<{ email: string; links: string[] }> };
+    const data = (await response.json()) as { users: Array<{ email: string; links?: string[] }> };
     const user = data.users.find((u) => u.email === "type-malformed-links@example.test");
-    expect(user?.links).toEqual([]);
+    expect(user).toBeTruthy();
+    expect(user).not.toHaveProperty("links");
   });
 
   it("rejects an unrecognized sort value through the shared list contract", async () => {

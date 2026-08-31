@@ -11,7 +11,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
-import { approveMemberThroughReview, readActiveMemberships, uniqueSuffix } from "./helpers/membership";
+import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./helpers/membership";
 
 /** Every approved member is automatically enrolled here, so it is the natural electorate. */
 const ALL_MEMBERS_GROUP = "20000000-0000-4000-8000-000000000001";
@@ -91,6 +91,19 @@ async function castBallot(page: Page, voteId: string, choice: string, memberId?:
   );
 }
 
+async function switchIdentity(page: Page, identityId: string): Promise<void> {
+  const status = await page.evaluate(async (selectedIdentityId) => {
+    const response = await fetch("/api/v1/users/current/identities/active", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ identityId: selectedIdentityId }),
+    });
+    return response.status;
+  }, identityId);
+  expect(status).toBe(200);
+}
+
 function inAnHour(): string {
   return new Date(Date.now() + 3_600_000).toISOString();
 }
@@ -121,7 +134,8 @@ test("a person representing two organizations casts a separate ballot for each",
           name: organizationName,
           membershipCategory: "F",
           memberSince: "2026-01-15",
-          representatives: [{ name: "Two Ballot Voter", email, jobTitle: "Delegate" }],
+          identities: [{ name: "Two Ballot Voter", email, jobTitle: "Delegate" }],
+          activationReason: "E2E multi-identity voting coverage",
         }),
       });
       return { status: response.status, body: await response.json() };
@@ -140,28 +154,38 @@ test("a person representing two organizations casts a separate ballot for each",
   await signInToPortal(page, email);
   await page.goto(`/portal/#/groups/${ALL_MEMBERS_GROUP}/votes/${vote.id}`);
 
-  // The UI must present one ballot per represented Member, named so the voter
-  // knows which organization each ballot speaks for.
-  const before = await readMemberVote(page, vote.id);
-  expect(before.memberBallots?.length, JSON.stringify(before.memberBallots)).toBe(2);
-  const names = (before.memberBallots ?? []).map((ballot) => ballot.organizationName);
+  // Each action is authorized through one exact acting identity. The same user
+  // can switch identities and submit the independent ballot of each Member.
+  const identities = await readActiveIdentities(page);
+  expect(identities).toHaveLength(2);
+  const names = identities.map((identity) => identity.organizationName);
   expect(names).toContain(firstOrganization);
   expect(names).toContain(secondOrganization);
-  await expect(page.getByText(firstOrganization, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(secondOrganization, { exact: false }).first()).toBeVisible();
 
-  const [first, second] = before.memberBallots!;
+  const first = identities.find((identity) => identity.organizationName === firstOrganization)!;
+  const second = identities.find((identity) => identity.organizationName === secondOrganization)!;
+  await switchIdentity(page, first.identityId);
+  const firstBallot = await readMemberVote(page, vote.id);
+  expect(firstBallot.memberBallots).toEqual([
+    expect.objectContaining({ memberId: first.memberId, organizationName: firstOrganization, hasCastBallot: false }),
+  ]);
   expect(await castBallot(page, vote.id, "in_favor", first.memberId)).toBe(200);
 
-  // One organization having voted must not mark the other as voted.
-  const midway = await readMemberVote(page, vote.id);
-  const midwayByMember = new Map(midway.memberBallots!.map((b) => [b.memberId, b.hasCastBallot]));
-  expect(midwayByMember.get(first.memberId)).toBe(true);
-  expect(midwayByMember.get(second.memberId), "the other Member's ballot must still be outstanding").toBe(false);
-
+  await switchIdentity(page, second.identityId);
+  const secondBallot = await readMemberVote(page, vote.id);
+  expect(secondBallot.memberBallots).toEqual([
+    expect.objectContaining({ memberId: second.memberId, organizationName: secondOrganization, hasCastBallot: false }),
+  ]);
   expect(await castBallot(page, vote.id, "opposed", second.memberId)).toBe(200);
-  const after = await readMemberVote(page, vote.id);
-  expect(after.memberBallots!.every((ballot) => ballot.hasCastBallot)).toBe(true);
+
+  await switchIdentity(page, first.identityId);
+  expect((await readMemberVote(page, vote.id)).memberBallots).toEqual([
+    expect.objectContaining({ memberId: first.memberId, hasCastBallot: true }),
+  ]);
+  await switchIdentity(page, second.identityId);
+  expect((await readMemberVote(page, vote.id)).memberBallots).toEqual([
+    expect.objectContaining({ memberId: second.memberId, hasCastBallot: true }),
+  ]);
 });
 
 test("changing your mind replaces your ballot instead of adding one", async ({ page }) => {
@@ -183,7 +207,7 @@ test("changing your mind replaces your ballot instead of adding one", async ({ p
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  const memberships = await readActiveMemberships(page);
+  const memberships = await readActiveIdentities(page);
   const memberId = memberships[0].memberId;
 
   expect(await castBallot(page, vote.id, "in_favor", memberId)).toBe(200);
@@ -256,7 +280,7 @@ test("an election is decided by choosing from the candidate list", async ({ page
   await expect(page.getByText(`Candidate Ada ${suffix}`, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
   // A motion answer is meaningless for an election and must be refused.
-  const memberships = await readActiveMemberships(page);
+  const memberships = await readActiveIdentities(page);
   const memberId = memberships[0].memberId;
   expect(await castBallot(page, vote.id, "in_favor", memberId), "a motion choice is not a candidate").toBe(422);
 
@@ -305,7 +329,7 @@ test("the ballot box is shut before the window opens and after it closes", async
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  const memberships = await readActiveMemberships(page);
+  const memberships = await readActiveIdentities(page);
   const memberId = memberships[0].memberId;
 
   await page.goto(`/portal/#/groups/${ALL_MEMBERS_GROUP}/votes/${scheduled.id}`);

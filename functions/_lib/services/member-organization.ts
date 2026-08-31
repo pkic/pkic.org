@@ -9,22 +9,18 @@
  */
 import { first } from "../db/queries";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
-import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { AppError } from "../errors";
 import { prepareAuditLogAfterOneChange } from "./audit";
-import { buildFindOrCreateUserStatement } from "./users";
-import { isActiveRepresentative, buildAddRepresentativeStatement } from "./membership/representatives";
+import { isActiveIdentityForMember } from "./membership/identities";
+import { createOrganizationIdentityByEmail } from "./identities";
 import { resolveRepresentativeRoleHolders } from "./membership/representative-roles";
-import {
-  prepareOrganizationPrimaryContactGuard,
-  prepareOrganizationRepresentativeManagementGuard,
-} from "./organization-representations/authorization";
+import { prepareOrganizationPrimaryContactGuard } from "./identities/authorization";
 import type { AuthMember, DatabaseLike } from "../types";
 
 export interface AddedCoworker {
-  representativeId: string;
+  identityId: string;
   membershipId: string;
   userId: string;
   name: string;
@@ -52,72 +48,43 @@ export async function addCoworker(
   input: { name: string; email: string },
 ): Promise<AddedCoworker> {
   await requireOrgContact(db, member);
+  const organizationId = member.organizationId!;
 
-  const normalizedEmail = normalizeEmail(input.email);
-  const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
-    normalizedEmail,
-  ]);
-  if (existingUser) {
-    const alreadyRepresenting = await isActiveRepresentative(db, member.memberId, existingUser.id);
-    if (alreadyRepresenting) {
-      throw new AppError(409, "ALREADY_MEMBER", `${input.email} already represents this organization`);
-    }
-  }
-
-  const nameParts = input.name.trim().split(/\s+/);
-  const firstName = nameParts[0] ?? undefined;
-  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
-
-  // User creation and the representative-row insert used to be two
-  // separate commits (findOrCreateUser executes immediately) — a failure
-  // between them could leave a bare user row with no representative
-  // relationship to show for it. Both now build (not execute) and commit
-  // together in one db.batch() (PR #1 review blocker 4).
-  const { user, statement: userStatement } = await buildFindOrCreateUserStatement(db, {
-    email: input.email,
-    firstName,
-    lastName,
-    // Public/self-service enrollment must not clobber an existing user's
-    // profile — same rationale as every other allowProfileUpdate:false
-    // call site in this codebase.
-    allowProfileUpdate: false,
-  });
-
-  const now = nowIso();
-  const { representativeId, statement: representativeStatement } = await buildAddRepresentativeStatement(db, {
-    memberId: member.memberId,
-    userId: user.id,
-    source: "organization_contact",
-    now,
-  });
-  const statements = [
-    prepareOrganizationRepresentativeManagementGuard(db, {
-      memberId: member.memberId,
-      actorUserId: member.userId,
+  const created = await createOrganizationIdentityByEmail(
+    db,
+    {
+      userId: member.userId,
+      databaseUserId: member.userId,
+      actorType: "member",
       staffAuthorized: false,
-    }),
-    ...(userStatement ? [userStatement] : []),
-    representativeStatement,
-  ];
-  try {
-    await db.batch(statements);
-  } catch (error) {
-    if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(
-        409,
-        "ORGANIZATION_REPRESENTATION_MANAGEMENT_CHANGED",
-        "Representative-management access changed while the coworker was being saved",
-      );
-    }
-    throw error;
-  }
+      immediateActivationAuthorized: false,
+    },
+    {
+      organizationId,
+      email: input.email,
+      name: input.name,
+      showOnOrganizationProfile: true,
+      activation: { mode: "invitation" },
+    },
+  );
+  const invited = await first<{ user_id: string; name: string; email: string }>(
+    db,
+    `SELECT identity.user_id,
+            trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')) AS name,
+            user.email
+       FROM identities identity
+       JOIN users user ON user.id = identity.user_id
+      WHERE identity.id = ?`,
+    [created.identityId],
+  );
+  if (!invited) throw new AppError(409, "IDENTITY_CHANGED", "The identity invitation could not be reloaded");
 
   return {
-    representativeId,
+    identityId: created.identityId,
     membershipId: member.memberId,
-    userId: user.id,
-    name: input.name.trim(),
-    email: user.email,
+    userId: invited.user_id,
+    name: invited.name || input.name.trim(),
+    email: invited.email,
   };
 }
 
@@ -192,7 +159,7 @@ export async function nominateSecondaryContact(
     );
   }
 
-  const isEligible = await isActiveRepresentative(db, member.memberId, nomineeUserId);
+  const isEligible = await isActiveIdentityForMember(db, member.memberId, nomineeUserId);
   if (!isEligible) {
     throw new AppError(422, "NOT_ELIGIBLE", "The nominee must be an active representative of your organization");
   }

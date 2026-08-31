@@ -52,13 +52,16 @@ const JOIN_CONTEXT_SELECT = `SELECT occurrence.id AS occurrence_id, occurrence.s
     (SELECT GROUP_CONCAT(affiliation.name, ', ')
        FROM (
          SELECT DISTINCT organization.id, organization.name
-           FROM organization_representatives representative
-           JOIN members member ON member.id = representative.member_id AND member.status = 'active'
-           JOIN organizations organization ON organization.id = member.organization_id
-          WHERE representative.user_id = user.id AND representative.left_at IS NULL
+           FROM identities identity
+           JOIN organizations organization ON organization.id = identity.organization_id
+           JOIN members member ON member.organization_id = organization.id AND member.status = 'active'
+          WHERE identity.user_id = user.id
+            AND identity.started_at IS NOT NULL
+            AND identity.ended_at IS NULL
+            AND identity.blocked_at IS NULL
           ORDER BY organization.name COLLATE NOCASE, organization.id
        ) affiliation),
-    user.organization_name
+    NULL
   ) AS user_affiliation,
   guest.name AS guest_name, guest.affiliation AS guest_affiliation
   FROM event_occurrences occurrence

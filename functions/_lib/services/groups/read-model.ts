@@ -335,6 +335,7 @@ interface MembershipRow {
   id: string;
   group_id: string;
   user_id: string;
+  identity_id: string;
   member_id: string;
   member_type: "individual" | "organization";
   first_name: string | null;
@@ -353,6 +354,7 @@ function mapMembership(row: MembershipRow): GroupMembership {
     id: row.id,
     groupId: row.group_id,
     userId: row.user_id,
+    identityId: row.identity_id,
     memberId: row.member_id,
     memberType: row.member_type,
     userName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
@@ -407,7 +409,7 @@ export function buildGroupMembershipsPageQuery(groupId: string, query: GroupMemb
   const fromSql = `${MEMBERSHIP_FROM} WHERE ${conditions.join(" AND ")}`;
   return {
     source: {
-      selectSql: `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+      selectSql: `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
         u.first_name, u.last_name, u.email, o.name AS organization_name,
         mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
         gm.joined_at, gm.left_at`,
@@ -510,7 +512,7 @@ export async function listActiveGroupMembershipsForUser(
 ): Promise<GroupMembership[]> {
   const rows = await all<MembershipRow>(
     db,
-    `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+    `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
             u.first_name, u.last_name, u.email, o.name AS organization_name,
             mca.category_code AS membership_category, gm.source,
             gm.created_by_user_id, gm.joined_at, gm.left_at
@@ -531,7 +533,7 @@ export async function listActiveGroupMembershipsForGroupsForUser(
   if (groupIds.length === 0) return byGroup;
   const rows = await all<MembershipRow>(
     db,
-    `SELECT gm.id, gm.group_id, gm.user_id, gm.member_id, m.member_type,
+    `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
             u.first_name, u.last_name, u.email, o.name AS organization_name,
             mca.category_code AS membership_category, gm.source,
             gm.created_by_user_id, gm.joined_at, gm.left_at

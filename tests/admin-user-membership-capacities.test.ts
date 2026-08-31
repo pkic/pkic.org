@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { userDetailSchema } from "../assets/shared/schemas/user-management";
 import { getUserDetail } from "../functions/_lib/services/user-management-detail";
-import { addOrganizationRepresentative } from "../functions/_lib/services/organization-management/representative-provisioning";
+import { createOrganizationIdentity } from "../functions/_lib/services/identities";
 import { grantIndividualMembership, updateMembershipCapacity } from "../functions/_lib/services/membership/capacities";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";
@@ -17,12 +17,18 @@ import {
 
 async function joinGroup(groupId: string, userId: string, memberId: string): Promise<void> {
   const at = new Date().toISOString();
+  const identity = await env.DB.prepare(
+    "SELECT identity_id FROM identity_member_capacities WHERE user_id = ? AND member_id = ?",
+  )
+    .bind(userId, memberId)
+    .first<{ identity_id: string }>();
+  if (!identity) throw new Error("Active identity fixture required");
   await env.DB.prepare(
     `INSERT INTO group_memberships
-       (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'staff', ?, ?, ?)`,
+       (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?)`,
   )
-    .bind(crypto.randomUUID(), groupId, userId, memberId, at, at, at)
+    .bind(crypto.randomUUID(), groupId, userId, identity.identity_id, memberId, at, at, at)
     .run();
 }
 
@@ -38,24 +44,24 @@ describe("admin user membership capacities", () => {
     await addRepresentative(env.DB, memberA, userId);
     await addRepresentative(env.DB, memberB, userId);
     await env.DB.prepare(
-      `UPDATE organization_representatives
-          SET job_title = CASE member_id WHEN ? THEN 'Organization A role' ELSE 'Organization B role' END,
-              biography = CASE member_id WHEN ? THEN 'Organization A bio' ELSE 'Organization B bio' END,
-              links_json = CASE member_id
+      `UPDATE identities
+          SET job_title = CASE organization_id WHEN ? THEN 'Organization A role' ELSE 'Organization B role' END,
+              biography = CASE organization_id WHEN ? THEN 'Organization A bio' ELSE 'Organization B bio' END,
+              links_json = CASE organization_id
                 WHEN ? THEN '["https://a.example.test/profile"]'
                 ELSE '["https://b.example.test/profile"]'
               END
         WHERE user_id = ?`,
     )
-      .bind(memberA, memberA, memberA, userId)
+      .bind(organizationA, organizationA, organizationA, userId)
       .run();
     await joinGroup("20000000-0000-4000-8000-000000000003", userId, memberA);
     await joinGroup("20000000-0000-4000-8000-000000000004", userId, memberB);
 
     const detail = userDetailSchema.parse(await getUserDetail(env.DB, userId));
 
-    expect(detail.memberships).toHaveLength(2);
-    const byOrganization = new Map(detail.memberships.map((membership) => [membership.organizationName, membership]));
+    expect(detail.identities).toHaveLength(2);
+    const byOrganization = new Map(detail.identities.map((identity) => [identity.organizationName, identity]));
     expect(byOrganization.get("Capacity Organization A")?.groups.map((group) => group.slug)).toEqual(["pqc"]);
     expect(byOrganization.get("Capacity Organization B")?.groups.map((group) => group.slug)).toEqual(["cm"]);
     expect(byOrganization.get("Capacity Organization A")).toMatchObject({
@@ -72,7 +78,7 @@ describe("admin user membership capacities", () => {
     });
   });
 
-  it("rejects granting an individual membership to an active organization representative", async () => {
+  it("rejects granting an individual membership to an active organization identity", async () => {
     const userId = await insertUser(env.DB, "representative-conflict@example.test");
     const organizationId = await insertOrganization(env.DB, "Representative Conflict Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -84,9 +90,15 @@ describe("admin user membership capacities", () => {
       email: "representative-conflict@example.test",
       role: "admin",
     };
-    await expect(grantIndividualMembership(env.DB, actor, userId, "H6")).rejects.toMatchObject({
+    await expect(
+      grantIndividualMembership(env.DB, actor, {
+        userId,
+        membershipCategory: "H6",
+        activationReason: "Test individual activation",
+      }),
+    ).rejects.toMatchObject({
       status: 409,
-      code: "ORGANIZATION_CAPACITY_CONFLICT",
+      code: "IDENTITY_CONFLICT",
     });
     await expect(
       env.DB.prepare(
@@ -95,7 +107,7 @@ describe("admin user membership capacities", () => {
       )
         .bind(crypto.randomUUID(), userId)
         .run(),
-    ).rejects.toThrow("individual and organization representative capacities are mutually exclusive");
+    ).rejects.toThrow("individual and organization identities are mutually exclusive");
   });
 
   it("rejects adding an organization representation to an active individual member", async () => {
@@ -106,30 +118,39 @@ describe("admin user membership capacities", () => {
       email: "capacity-admin@example.test",
       role: "admin",
     };
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorUserId).run();
     const individual = await insertIndividualMember(env.DB, "H6", "individual-conflict@example.test");
     const organizationId = await insertOrganization(env.DB, "Individual Conflict Organization");
     await seedOrganizationAggregate(env.DB, organizationId, "A");
 
     await expect(
-      addOrganizationRepresentative(env.DB, actor, organizationId, {
-        name: "Individual Conflict",
-        email: "individual-conflict@example.test",
-      }),
-    ).rejects.toMatchObject({ status: 409, code: "INDIVIDUAL_CAPACITY_CONFLICT" });
-    const organizationMemberId = (
-      await env.DB.prepare("SELECT id FROM members WHERE organization_id = ?")
-        .bind(organizationId)
-        .first<{ id: string }>()
-    )?.id;
+      createOrganizationIdentity(
+        env.DB,
+        {
+          userId: actorUserId,
+          databaseUserId: actorUserId,
+          actorType: "admin",
+          staffAuthorized: true,
+          immediateActivationAuthorized: true,
+          permissionActor: actor,
+        },
+        {
+          organizationId,
+          userId: individual.userId,
+          showOnOrganizationProfile: true,
+          activation: { mode: "immediate", reason: "Test organization activation" },
+        },
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "IDENTITY_CONFLICT" });
     await expect(
       env.DB.prepare(
-        `INSERT INTO organization_representatives
-           (id, member_id, user_id, source, joined_at, created_at, updated_at)
-         VALUES (?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+        `INSERT INTO identities
+           (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
       )
-        .bind(crypto.randomUUID(), organizationMemberId, individual.userId)
+        .bind(crypto.randomUUID(), individual.userId, organizationId)
         .run(),
-    ).rejects.toThrow("individual and organization representative capacities are mutually exclusive");
+    ).rejects.toThrow("individual and organization identities are mutually exclusive");
     expect(individual.userId).toBeTruthy();
   });
 
@@ -144,7 +165,11 @@ describe("admin user membership capacities", () => {
       role: "admin",
     };
     const gate = gateNextBatch(env.DB);
-    const mutation = grantIndividualMembership(gate.db, actor, targetUserId, "H6");
+    const mutation = grantIndividualMembership(gate.db, actor, {
+      userId: targetUserId,
+      membershipCategory: "H6",
+      activationReason: "Test race activation",
+    });
     await gate.reached;
     await env.DB.prepare(
       "UPDATE users SET pii_redacted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
@@ -170,14 +195,14 @@ describe("admin user membership capacities", () => {
       role: "admin",
     };
     const gate = gateNextBatch(env.DB);
-    const mutation = updateMembershipCapacity(gate.db, actor, target.memberId, { membershipCategory: "H7" });
+    const mutation = updateMembershipCapacity(gate.db, actor, target.identityId, { membershipCategory: "H7" });
     await gate.reached;
     await env.DB.prepare("UPDATE members SET status = 'inactive', updated_at = datetime('now') WHERE id = ?")
       .bind(target.memberId)
       .run();
     gate.release();
 
-    await expect(mutation).rejects.toMatchObject({ status: 409, code: "MEMBERSHIP_CAPACITY_CHANGED" });
+    await expect(mutation).rejects.toMatchObject({ status: 409, code: "IDENTITY_CHANGED" });
     expect(
       await env.DB.prepare("SELECT category_code FROM member_category_assignments WHERE member_id = ?")
         .bind(target.memberId)
@@ -207,9 +232,11 @@ describe("admin user membership capacities", () => {
       role: "admin",
     };
 
-    await expect(updateMembershipCapacity(env.DB, actor, target.memberId, { status: "active" })).rejects.toMatchObject({
+    await expect(
+      updateMembershipCapacity(env.DB, actor, target.identityId, { status: "active" }),
+    ).rejects.toMatchObject({
       status: 404,
-      code: "NOT_FOUND",
+      code: "IDENTITY_NOT_FOUND",
     });
     await expect(
       env.DB.prepare("SELECT status FROM members WHERE id = ?").bind(target.memberId).first(),
@@ -233,9 +260,9 @@ describe("admin user membership capacities", () => {
     };
 
     await expect(
-      updateMembershipCapacity(env.DB, actor, target.memberId, { status: "inactive" }),
+      updateMembershipCapacity(env.DB, actor, target.identityId, { status: "inactive" }),
     ).resolves.toMatchObject({
-      id: target.memberId,
+      id: target.identityId,
       membershipCategory: "H6",
       status: "inactive",
     });
@@ -247,7 +274,7 @@ describe("admin user membership capacities", () => {
     const representedUserId = await insertUser(env.DB, "representative-response-target@example.test");
     const organizationId = await insertOrganization(env.DB, "Representative Response Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    const representativeId = await addRepresentative(env.DB, memberId, representedUserId);
+    const identityId = await addRepresentative(env.DB, memberId, representedUserId);
     const actor: UserBackedAuthAdmin = {
       identityType: "user",
       id: actorId,
@@ -256,9 +283,9 @@ describe("admin user membership capacities", () => {
     };
 
     await expect(
-      updateMembershipCapacity(env.DB, actor, representativeId, { showOnOrgProfile: false }),
+      updateMembershipCapacity(env.DB, actor, identityId, { showOnOrgProfile: false }),
     ).resolves.toMatchObject({
-      id: representativeId,
+      id: identityId,
       organizationId,
       membershipCategory: "A",
       status: "active",

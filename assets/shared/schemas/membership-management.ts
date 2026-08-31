@@ -1,7 +1,7 @@
 /**
  * Staff membership capacity contracts. `POST /api/v1/members` provisions a
  * member aggregate, while `GET /api/v1/members/capacities` lists the
- * staff-managed individual and organization-representative capacities. Both use the same organization/representative shape
+ * staff-managed individual and organization identity capacities. Both use the same organization/identity shape
  * as the YAML importer.
  */
 import { z } from "zod";
@@ -25,7 +25,7 @@ export const INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST = MEMBERSHIP_CATEGORIES.filte
 ) as [string, ...string[]];
 export const individualMembershipCategorySchema = z.enum(INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST);
 
-export const memberProvisionRepresentativeSchema = z.object({
+export const memberProvisionIdentitySchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   role: trimmedString(0, 200).optional(),
@@ -39,8 +39,9 @@ export const memberProvisionSchema = z
     description: trimmedString(0, 2000).optional(),
     membershipCategory: membershipCategorySchema,
     memberSince: z.iso.date(),
-    representatives: z.array(memberProvisionRepresentativeSchema).min(1).max(10),
+    identities: z.array(memberProvisionIdentitySchema).min(1).max(10),
     workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
+    activationReason: trimmedString(1, 500),
   })
   .superRefine((value, ctx) => {
     const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
@@ -53,11 +54,11 @@ export const memberProvisionSchema = z
           path: ["organizationName"],
         });
       }
-      if (value.representatives.length !== 1) {
+      if (value.identities.length !== 1) {
         ctx.addIssue({
           code: "custom",
-          message: "Individual categories (H5/H6/H7) must have exactly one representative",
-          path: ["representatives"],
+          message: "Individual categories (H5/H6/H7) must have exactly one identity",
+          path: ["identities"],
         });
       }
     } else if (!value.organizationName) {
@@ -112,6 +113,7 @@ export type MemberCapacityUpdateInput = z.infer<typeof memberCapacityUpdateSchem
 export const individualMembershipGrantSchema = z.object({
   userId: databaseIdSchema,
   membershipCategory: individualMembershipCategorySchema,
+  activationReason: trimmedString(1, 500),
 });
 
 export const MEMBER_CAPACITY_SORT_COLUMNS = [
@@ -134,7 +136,7 @@ export const memberCapacityListRouteSchema = {
   tags: ["Membership"],
   summary: "List membership capacities",
   description:
-    "Searchable, sortable, filterable staff listing of every membership capacity, one row per organizational representative or individual member.",
+    "Searchable, sortable, filterable staff listing of every membership capacity, one row per organizational identity or individual Member.",
   "x-pkic-auth": { required: true, scopes: ["membership:read"] },
   request: {
     query: memberCapacityListQuerySchema,
@@ -157,7 +159,7 @@ export const memberProvisionRouteSchema = {
   summary: "Provision a member",
   description:
     "Creates active organizations, users, memberships, and selected group memberships immediately. No email is sent.",
-  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
+  "x-pkic-auth": { required: true, scopes: ["membership:write", "identities:activate"] },
   request: {
     body: { content: { "application/json": { schema: memberProvisionSchema } }, required: true },
   },
@@ -169,14 +171,14 @@ export const memberProvisionRouteSchema = {
     "400": { description: "Invalid membership provision request." },
     "401": { description: "Staff authorization required." },
     "403": { description: "Membership write permission required." },
-    "409": { description: "A listed representative already holds a membership." },
+    "409": { description: "A listed identity already holds a membership." },
   },
 };
 
 export const memberCapacityUpdateRouteSchema = {
   tags: ["Membership"],
   summary: "Update a membership capacity",
-  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
+  "x-pkic-auth": { required: true, scopes: ["membership:write", "identities:activate"] },
   request: {
     params: memberCapacityIdParamsSchema,
     body: { content: { "application/json": { schema: memberCapacityUpdateSchema } }, required: true },
@@ -199,7 +201,7 @@ export const memberCapacityDeleteRouteSchema = {
   tags: ["Membership"],
   summary: "Remove a membership capacity",
   description:
-    "Ends an individual membership or removes an organization representative. The user account and organization aggregate remain intact.",
+    "Ends an individual membership or an organization identity. The user account and organization aggregate remain intact.",
   "x-pkic-auth": { required: true, scopes: ["membership:write"] },
   request: { params: memberCapacityIdParamsSchema },
   responses: {
@@ -216,7 +218,7 @@ export const individualMembershipGrantRouteSchema = {
   tags: ["Membership"],
   summary: "Grant an individual membership to an existing user",
   description:
-    "For organization-tied categories, associate the user through the canonical organization representative route instead.",
+    "For organization-tied categories, invite the user through the canonical organization identity route instead.",
   "x-pkic-auth": { required: true, scopes: ["membership:write"] },
   request: {
     body: { content: { "application/json": { schema: individualMembershipGrantSchema } }, required: true },

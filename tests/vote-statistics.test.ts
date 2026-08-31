@@ -36,7 +36,7 @@ describe("group vote statistics", () => {
     const capacity = await createMultiOrganizationUser(env.DB);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.defaultMemberId, capacity.groupMemberId]);
     const vote = await createCanonicalVote(env.DB, admin);
-    const member = await resolveAuthMember(env.DB, capacity.userId);
+    const member = await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.groupIdentityId);
     await submitBallot(env.DB, member, vote.id, capacity.groupMemberId, "in_favor", null, TEST_GROUPS.pqc);
 
     const response = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/statistics`);
@@ -82,12 +82,12 @@ describe("group vote statistics", () => {
       TEST_GROUPS.pqc,
     );
     await env.DB.prepare(
-      `UPDATE organization_representatives
-          SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second'),
+      `UPDATE identities
+          SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second'),
               blocked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second')
-        WHERE member_id = ? AND user_id = ?`,
+        WHERE id = ? AND user_id = ?`,
     )
-      .bind(second.memberId, second.userId)
+      .bind(second.identityId, second.userId)
       .run();
 
     const response = groupVoteStatisticsResponseSchema.parse(
@@ -108,7 +108,7 @@ describe("group vote statistics", () => {
     const vote = await createCanonicalVote(env.DB, admin, { electorateMode: "per_person" });
     await submitBallot(
       env.DB,
-      await resolveAuthMember(env.DB, capacity.userId),
+      await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.defaultIdentityId),
       vote.id,
       null,
       "abstain",

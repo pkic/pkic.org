@@ -47,11 +47,7 @@ interface RequestedGroupsEvidence {
   knownIds?: readonly string[];
 }
 
-/**
- * Canonical group-management policy as executable SQL evidence. The same
- * evidence is used for request preflight and for a transient guard inside the
- * protected D1 batch, avoiding a second trigger-owned policy model.
- */
+/** Canonical group-management policy used for preflight and the D1 guard. */
 function groupAuthorizationEvidence(
   actor: AuthAdmin,
   requestedGroups: RequestedGroupsEvidence,
@@ -144,12 +140,14 @@ function groupAuthorizationEvidence(
                     AND (
                       actor_role.member_id IS NULL
                       OR (
-                        actor_role.member_id = ?
+                      actor_role.member_id = ?
+                        AND actor_role.identity_id IS NOT NULL
                         AND actor_role.context_type = 'group'
                         AND EXISTS (
                           SELECT 1 FROM group_memberships active_capacity
                            WHERE active_capacity.group_id = actor_role.context_id
                              AND active_capacity.user_id = actor_role.user_id
+                             AND active_capacity.identity_id = actor_role.identity_id
                              AND active_capacity.member_id = actor_role.member_id
                              AND active_capacity.left_at IS NULL
                         )
@@ -282,6 +280,7 @@ export async function requireEffectiveGroupPermission(
 interface LeadershipRow {
   user_role_id: string;
   user_id: string;
+  identity_id: string;
   member_id: string;
   member_type: "individual" | "organization";
   organization_name: string | null;
@@ -305,6 +304,7 @@ function mapLeadership(row: LeadershipRow): GroupLeadershipAssignment {
   return {
     userRoleId: row.user_role_id,
     userId: row.user_id,
+    identityId: row.identity_id,
     memberId: row.member_id,
     memberType: row.member_type,
     organizationName: row.organization_name,
@@ -337,12 +337,12 @@ export async function listEffectiveGroupLeadership(
   const rows = await all<LeadershipRow>(
     db,
     `${EFFECTIVE_GROUP_LINEAGE_CTE}
-     SELECT ur.id AS user_role_id, ur.user_id, ur.member_id,
+     SELECT ur.id AS user_role_id, ur.user_id, ur.identity_id, ur.member_id,
             CASE WHEN member.organization_id IS NULL THEN 'individual' ELSE 'organization' END AS member_type,
             organization.name AS organization_name,
             u.first_name, u.last_name,
-            CASE WHEN member.organization_id IS NULL THEN u.email ELSE COALESCE(selected_email.email, u.email) END AS email,
-            CASE WHEN member.organization_id IS NULL THEN u.job_title ELSE representative.job_title END AS job_title,
+            COALESCE(selected_email.email, u.email) AS email,
+            identity.job_title,
             ur.role_id, source_group.id AS source_group_id,
             source_group.slug AS source_group_slug, source_group.name AS source_group_name,
             source_group.type_key AS source_group_type_key,
@@ -361,16 +361,21 @@ export async function listEffectiveGroupLeadership(
        JOIN group_memberships membership
          ON membership.group_id = source_group.id
         AND membership.user_id = ur.user_id
+        AND membership.identity_id = ur.identity_id
         AND membership.member_id = ur.member_id
         AND membership.left_at IS NULL
        JOIN members member ON member.id = membership.member_id AND member.status = 'active'
        LEFT JOIN organizations organization ON organization.id = member.organization_id
-       LEFT JOIN organization_representatives representative
-         ON representative.member_id = member.id
-        AND representative.user_id = ur.user_id
-        AND representative.left_at IS NULL
-        AND representative.blocked_at IS NULL
-       LEFT JOIN user_emails selected_email ON selected_email.id = representative.email_id
+       JOIN identities identity
+         ON identity.id = ur.identity_id
+        AND identity.user_id = ur.user_id
+        AND identity.started_at IS NOT NULL
+        AND identity.ended_at IS NULL
+        AND identity.blocked_at IS NULL
+       JOIN identity_member_capacities capacity
+         ON capacity.identity_id = identity.id
+        AND capacity.member_id = member.id
+       LEFT JOIN user_emails selected_email ON selected_email.id = identity.email_id
       ORDER BY lineage.depth, CASE ur.role_id WHEN 'role-group_lead' THEN 0 ELSE 1 END,
                LOWER(COALESCE(u.last_name, '')), LOWER(COALESCE(u.first_name, '')), u.id`,
     [group.id],
@@ -430,17 +435,17 @@ export async function assignLocalGroupLeadership(
   await requireGroupManagement(db, actor, groupId);
   const roleId = GROUP_LEADERSHIP_ROLE_IDS.find((candidate) => candidate === input.roleId);
   if (!roleId) throw new AppError(400, "GROUP_ROLE_INVALID", "Unsupported group leadership role");
-  const capacity = await first<{ member_id: string }>(
+  const capacity = await first<{ identity_id: string; member_id: string }>(
     db,
-    `SELECT membership.member_id
+    `SELECT membership.identity_id, membership.member_id
        FROM group_memberships membership
        JOIN users user ON user.id = membership.user_id AND user.active = 1
        JOIN members member ON member.id = membership.member_id AND member.status = 'active'
       WHERE membership.group_id = ?
         AND membership.user_id = ?
-        AND membership.member_id = ?
+        AND membership.identity_id = ?
         AND membership.left_at IS NULL`,
-    [groupId, input.userId, input.memberId],
+    [groupId, input.userId, input.identityId],
   );
   if (!capacity) {
     throw new AppError(
@@ -453,9 +458,9 @@ export async function assignLocalGroupLeadership(
     await first(
       db,
       `SELECT id FROM user_roles
-        WHERE user_id = ? AND member_id = ? AND role_id = ? AND context_type = 'group' AND context_id = ?
+        WHERE user_id = ? AND identity_id = ? AND role_id = ? AND context_type = 'group' AND context_id = ?
           AND revoked_at IS NULL`,
-      [input.userId, input.memberId, roleId, groupId],
+      [input.userId, input.identityId, roleId, groupId],
     )
   ) {
     throw new AppError(409, "GROUP_LEADERSHIP_EXISTS", "This active group leadership assignment already exists");
@@ -468,14 +473,15 @@ export async function assignLocalGroupLeadership(
       db
         .prepare(
           `INSERT INTO user_roles
-             (id, user_id, member_id, role_id, context_type, context_id, granted_by_user_id,
+             (id, user_id, identity_id, member_id, role_id, context_type, context_id, granted_by_user_id,
               single_holder_per_context, expires_at, created_at)
-           VALUES (?, ?, ?, ?, 'group', ?, ?, 0, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, 'group', ?, ?, 0, ?, ?)`,
         )
         .bind(
           userRoleId,
           input.userId,
-          input.memberId,
+          capacity.identity_id,
+          capacity.member_id,
           roleId,
           groupId,
           adminDatabaseUserId(actor),
@@ -492,7 +498,8 @@ export async function assignLocalGroupLeadership(
         userRoleId,
         {
           userId: input.userId,
-          memberId: input.memberId,
+          identityId: capacity.identity_id,
+          memberId: capacity.member_id,
           roleId,
           expiresAt: input.expiresAt ?? null,
         },

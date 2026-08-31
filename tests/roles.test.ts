@@ -1165,7 +1165,7 @@ describe("roles (Built-in and custom roles)", () => {
       });
       expect(denied.status).toBe(403);
       expect((await denied.json()) as { error: { code: string } }).toMatchObject({
-        error: { code: "ORGANIZATION_REPRESENTATION_MANAGEMENT_REQUIRED" },
+        error: { code: "ORGANIZATION_IDENTITY_MANAGEMENT_REQUIRED" },
       });
 
       await env.DB.prepare(

@@ -32,7 +32,7 @@ export const organizationSummarySchema = z
     name: z.string(),
     membershipCategory: z.string().nullable(),
     memberSince: z.string(),
-    memberCount: z.number(),
+    activeIdentityCount: z.number(),
     primaryContactName: z.string().nullable(),
     primaryContactEmail: z.string().nullable(),
     createdAt: z.string(),
@@ -42,18 +42,12 @@ export const organizationSummarySchema = z
 
 // membershipCategory is deliberately absent here — category lives once per
 // aggregate (member_category_assignments, consolidated migration 0035), surfaced once at
-// the top-level organization detail rather than repeated per
-// representative.
-//
-// Two distinct identities, both explicit rather than one polymorphic
-// `memberId` (PR #1 review): `representativeId` is this person's own
-// organization_representatives.id — the id PATCH/DELETE
-// the canonical representative route updates/removes *this* representative.
-// `membershipId` is the shared members.id aggregate every representative of
-// this organization has in common — never representative-specific, and
-// never the id to pass to edit/remove a single representative.
-export const organizationRepresentativeManagementSchema = z.object({
-  representativeId: databaseIdSchema,
+// the top-level organization detail rather than repeated per identity.
+// `identityId` is this exact acting capacity's identities.id. `membershipId`
+// is the shared members.id aggregate every identity for the organization has
+// in common; it is never the id used to update an identity.
+export const organizationIdentityManagementSchema = z.object({
+  identityId: databaseIdSchema,
   membershipId: databaseIdSchema.nullable(),
   userId: databaseIdSchema,
   name: z.string(),
@@ -63,7 +57,7 @@ export const organizationRepresentativeManagementSchema = z.object({
   jobTitle: z.string().nullable(),
   biography: z.string().nullable(),
   links: linksSchema,
-  status: memberStatusSchema,
+  state: z.literal("active"),
   showOnOrgProfile: z.boolean(),
   isPrimaryContact: z.boolean(),
   isSecondaryContact: z.boolean(),
@@ -75,7 +69,7 @@ export const organizationDetailSchema = organizationSummarySchema
   .extend({
     primaryContactUserId: databaseIdSchema.nullable(),
     secondaryContactUserId: databaseIdSchema.nullable(),
-    representatives: z.array(organizationRepresentativeManagementSchema),
+    identities: z.array(organizationIdentityManagementSchema),
   });
 export const organizationDetailResponseSchema = z.object({ organization: organizationDetailSchema });
 
@@ -83,7 +77,7 @@ export type OrganizationSummary = z.infer<typeof organizationSummarySchema>;
 export type OrganizationDetail = z.infer<typeof organizationDetailSchema>;
 
 /** Allowlisted sort columns for GET /api/v1/organizations — see listOrganizations. */
-export const ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "member_count"] as const;
+export const ORGANIZATIONS_SORT_COLUMNS = ["name", "membership_category", "created_at", "identity_count"] as const;
 
 export const organizationsListQuerySchema = listQuerySchema(ORGANIZATIONS_SORT_COLUMNS);
 export type OrganizationsListQuery = z.infer<typeof organizationsListQuerySchema>;
@@ -94,24 +88,22 @@ export const organizationsListResponseSchema = paginatedResponseSchema("organiza
 export const organizationEditableUpdateSchema = organizationEditableContentSchema.extend({
   name: trimmedString(1, 200).optional(),
   // Category is now an organization-level property (consolidated migration 0035). Setting
-  // it here cascades to every existing org-tied representative's
-  // members.member_type (see updateOrganization) so the two stay in
-  // sync — member_type is a mirror for org-tied members, not an
-  // independent value.
+  // it here updates the organization's one Member aggregate; identities
+  // derive the category through identity_member_capacities.
   membershipCategory: orgTiedMembershipCategorySchema.optional(),
   memberSince: z.iso.date().nullable().optional(),
   primaryContactUserId: databaseIdSchema.nullable().optional(),
   secondaryContactUserId: databaseIdSchema.nullable().optional(),
 });
 
-// ── Add representative to an existing organization ─────────────────────────
+// ── Add an identity to an existing organization ────────────────────────────
 
 // ── Canonical domain routes ────────────────────────────────────────────────
 
 /** Domain-route parameter name. */
 export const organizationManagementParamsSchema = z.object({ organizationId: databaseIdSchema });
 
-export const organizationRepresentativeCreateSchema = z.object({
+export const organizationIdentityProvisionSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   jobTitle: trimmedString(0, 200).optional(),
@@ -126,8 +118,9 @@ export const organizationCreateSchema = z.object({
   description: trimmedString(0, 2000).optional(),
   membershipCategory: orgTiedMembershipCategorySchema,
   memberSince: z.iso.date(),
-  representatives: z.array(organizationRepresentativeCreateSchema).min(1).max(10),
+  identities: z.array(organizationIdentityProvisionSchema).min(1).max(10),
   workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
+  activationReason: trimmedString(1, 500),
 });
 
 export const organizationCreateResponseSchema = organizationDetailResponseSchema;
@@ -157,8 +150,8 @@ export const organizationManagementListRouteSchema = {
 
 export const organizationCreateRouteSchema = {
   tags: ["Organizations"],
-  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
-  summary: "Create an organization and its initial representatives",
+  "x-pkic-auth": { required: true, scopes: ["membership:write", "identities:activate"] },
+  summary: "Create an organization and its initial acting identities",
   request: { body: { required: true, content: { "application/json": { schema: organizationCreateSchema } } } },
   responses: {
     "201": {
@@ -166,7 +159,7 @@ export const organizationCreateRouteSchema = {
       content: { "application/json": { schema: organizationCreateResponseSchema } },
     },
     "403": { description: "membership:write permission required." },
-    "409": { description: "An organization or representative already exists." },
+    "409": { description: "An organization or active identity already exists." },
   },
 };
 
@@ -201,7 +194,7 @@ export const organizationManagementUpdateRouteSchema = {
     "403": { description: "organizations:write permission required." },
     "404": { description: "Organization not found." },
     "409": { description: "Another organization already uses that name or authorization changed." },
-    "422": { description: "An organization contact must be an active representative." },
+    "422": { description: "An organization contact must hold an active identity." },
   },
 };
 

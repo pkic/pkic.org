@@ -31,7 +31,7 @@ Confirm the source data is in place:
 
 ## Step 1 — Apply schema migrations
 
-The script writes to the final organization, Member-capacity, representative,
+The script writes to the final organization, Member-capacity, acting-identity,
 domain, category-assignment, and group-membership schema consolidated in the
 unreleased `migrations/0035_membership_portal_governance.sql`. Apply the
 complete local migration set before running it:
@@ -117,37 +117,30 @@ SQL. `--upload-logos` is still accepted as a no-op for old muscle memory.
 
 Sources images from `assets/images/members/<slug>/`; sets
 `organizations.logo_r2_key` for the org's own logo file (`<slug>.*`),
-`users.headshot_r2_key` for org-less individuals (H5/H6/H7, same
+`users.headshot_r2_key` for H5/H6/H7 individual identities (same
 `<slug>/<slug>.*` file), **and** `users.headshot_r2_key` for each matched
-representative's own photo — every other image file in that same directory,
-keyed by the representative's urlized name (or their YAML `representatives[].id`
+organization identity's own photo — every other image file in that same directory,
+keyed by the source representative's urlized name (or their YAML `representatives[].id`
 when one is set, for names the urlizer can't reproduce exactly, e.g. explicit
-nicknames). Representative photos surface via `GET /api/v1/members/:id` →
-`representatives[].photoUrl`, served by the same `GET /api/v1/members/:id/logo`
-endpoint — keyed on that representative's own `organization_representatives.id`
+nicknames). Identity photos surface via `GET /api/v1/members/:id` →
+`identities[].photoUrl`, served by the same `GET /api/v1/members/:id/logo`
+endpoint — keyed on that identity's own `identities.id`
 (`functions/_lib/services/membership/directory.ts`'s `getMemberLogoR2Key`),
-not a `members.id` — representatives don't have their own `members` row under
-the current schema (one `members` aggregate row per organization, N
-`organization_representatives` rows attached to it).
+not a `members.id`. There is one `members` aggregate per organization and N
+identity rows derive that shared capacity through `identity_member_capacities`.
 
 ## Step 6 — Verify
 
 ```bash
 pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM organizations"
 pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM members"
-pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM organization_representatives"
+pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM identities"
 pnpm exec wrangler d1 execute DB --env local --local --command "SELECT COUNT(*) FROM group_memberships"
 ```
 
-`members` is now one aggregate row per organization plus one per org-less
-individual, **not** one row per representative — representatives live in
-`organization_representatives` instead. Verified end to end against the
-full real dataset (2026-08-17, after the `SQLITE_TOOBIG` fix above):
-The historical 2026-08-17 pre-consolidation run reported `organizations` 374,
-`members` 417, `organization_representatives` 731, `organization_domains` 392,
-`member_category_assignments` 417, `user_roles` 503, and `users` 844. Its
-working-group row count came from the deleted intermediate table and is not a
-current-schema acceptance criterion. All counts drift as
+`members` is one aggregate row per organization plus one per approved H5/H6/H7
+individual, not one row per person acting for an organization. Those exact
+capacities live in `identities`. All counts drift as
 `data/members/*.yaml` and the roster CSVs change — don't trust this
 snapshot for a different run; cross-check against the generated `.sql`
 file's own statement tallies (`grep -oE "INSERT( OR IGNORE)? INTO [a-z_]+"
@@ -155,7 +148,7 @@ ignore/member-migration-*.sql | sort | uniq -c`) and `ignore/member-migration-
 report-*.json`'s `totals`/`workingGroupCounts` instead, which are always
 accurate for that specific run. Actual row counts can land at or slightly
 below the `.sql` file's statement counts for `organizations`/`members`/
-`organization_representatives`/`users` (never above) — `INSERT OR
+`identities`/`users` (never above) — `INSERT OR
 IGNORE`/`ON CONFLICT` collapse a duplicate `normalized_name`,
 `organization_id`, active `(member_id, user_id)` pair, or
 `normalized_email` into one row (e.g. the 2026-08-17 run's 418
@@ -180,8 +173,8 @@ instead:
   (`member_type='organization'`) or per org-less individual
   (`member_type='individual'`), each with a `member_category_assignments`
   row for its category — never one `members` row per representative.
-- Representatives become `organization_representatives` rows (not
-  `members` rows), and the org's primary/secondary contact become
+- Organization participants become `identities` rows (not `members` rows),
+  H5/H6/H7 records receive one organization-less identity, and the org's primary/secondary contact become
   `role-primary_contact`/`role-secondary_contact` grants in `user_roles`
   (context-scoped to the org's aggregate `members.id`) instead of
   `organizations.primary_contact_user_id`/`secondary_contact_user_id`
@@ -250,7 +243,7 @@ noted:
 
 1. **Membership category** was never set by the migration for org-tied
    members — only the per-member mirror was. Every migrated org ended up
-   uncategorized, blocking `addOrganizationRepresentative`'s
+   uncategorized, blocking `addActingIdentity`'s
    `422 ORG_CATEGORY_NOT_SET` guard until staff manually set it. Now sourced
    from the YAML `memberType` key on every org upsert (never overwrites a
    category staff already set by hand — since the 2026-08-16/17 rewrite this

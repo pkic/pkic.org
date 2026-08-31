@@ -99,11 +99,11 @@ describe("durable vote representative notifications", () => {
     const vote = await createCanonicalVote(env.DB, admin);
     const revokedAt = new Date(Date.now() + 1_000).toISOString();
     await env.DB.prepare(
-      `UPDATE organization_representatives
-       SET left_at = ?, blocked_at = ?
-       WHERE member_id = ? AND user_id = ?`,
+      `UPDATE identities
+       SET ended_at = ?, blocked_at = ?
+       WHERE id = ? AND user_id = ?`,
     )
-      .bind(revokedAt, revokedAt, capacity.memberId, capacity.userId)
+      .bind(revokedAt, revokedAt, capacity.identityId, capacity.userId)
       .run();
     expect(
       await queryAll<{ representative_user_id: string }>(

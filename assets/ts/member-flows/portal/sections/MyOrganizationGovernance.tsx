@@ -23,8 +23,8 @@ function SecondaryContactSection({
   org: MyOrganizationProfile;
   reload: () => Promise<void>;
 }) {
-  const representatives = (profileSignal.value?.organizationRepresentatives ?? []).filter(
-    (representative) => !representative.isPrimaryContact,
+  const identities = (profileSignal.value?.organizationIdentities ?? []).filter(
+    (identity) => !identity.isPrimaryContact,
   );
   const [value, setValue] = useState(org.pendingSecondaryContactUserId ?? "");
   const [saving, setSaving] = useState(false);
@@ -51,26 +51,27 @@ function SecondaryContactSection({
     }
   }
 
-  const nominee = representatives.find((representative) => representative.userId === org.pendingSecondaryContactUserId);
+  const nominee = identities.find((identity) => identity.userId === org.pendingSecondaryContactUserId);
   return (
     <div>
       <h3 class="h6">Secondary contact</h3>
       <p class="text-muted small">
-        A second representative who can manage the organization profile. Nominations are held until confirmed by staff.
+        A second organization identity that can manage the organization profile. Nominations are held until confirmed by
+        staff.
       </p>
       {org.isPrimaryContact ? (
-        <RepresentativeSelect
-          className="portal-representative-select"
+        <IdentitySelect
+          className="portal-identity-select"
           value={value}
           disabled={saving}
           emptyLabel="None"
-          representatives={representatives}
+          identities={identities}
           onChange={(event) => void handleChange((event.target as HTMLSelectElement).value)}
         />
       ) : (
         <p class="mb-0 small">
           {org.pendingSecondaryContactUserId
-            ? `Pending: ${nominee?.name ?? nominee?.email ?? "a representative"}`
+            ? `Pending: ${nominee?.name ?? nominee?.email ?? "an identity"}`
             : "None pending"}
         </p>
       )}
@@ -78,27 +79,27 @@ function SecondaryContactSection({
   );
 }
 
-export function RepresentativeSelect({
+export function IdentitySelect({
   className,
   value,
   disabled,
   emptyLabel,
-  representatives,
+  identities,
   onChange,
 }: {
   className: string;
   value: string;
   disabled: boolean;
   emptyLabel: string;
-  representatives: Array<{ userId: string; name: string | null; email: string }>;
+  identities: Array<{ userId: string; name: string | null; email: string }>;
   onChange: (event: Event) => void;
 }) {
   return (
     <select class={`form-select form-select-sm ${className}`} value={value} disabled={disabled} onChange={onChange}>
       <option value="">{emptyLabel}</option>
-      {representatives.map((representative) => (
-        <option key={representative.userId} value={representative.userId}>
-          {representative.name ?? representative.email}
+      {identities.map((identity) => (
+        <option key={identity.userId} value={identity.userId}>
+          {identity.name ?? identity.email}
         </option>
       ))}
     </select>

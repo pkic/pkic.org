@@ -5,7 +5,6 @@ import { confirmAction } from "../../../../components/ConfirmDialog";
 import { deleteJson, getJson, postJson, requestJson } from "../../../../shared/api-client";
 import { confirmHeadshotUsage } from "../../../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
-import { normalizeProfileLinks } from "../../../../shared/widgets/profile-links";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { userAnonymizeResponseSchema, userDetailResponseSchema } from "../../../../../shared/schemas/user-management";
 import { userGravatarImportResponseSchema } from "../../../../../shared/schemas/route-contracts-headshots";
@@ -22,6 +21,7 @@ export interface UserPermissions {
   canGrantAccess: boolean;
   canAnonymize: boolean;
   canManageMembership: boolean;
+  canActivateIdentity: boolean;
 }
 
 export function UserDetail({
@@ -120,8 +120,6 @@ export function UserDetail({
   if (!user) return null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
-  const hasOrganizationCapacity = user.memberships.some((membership) => membership.organizationId !== null);
-  const profileLinks = normalizeProfileLinks(user.links);
   const editable = permissions.canWrite && !user.pii_redacted_at;
 
   return (
@@ -168,12 +166,6 @@ export function UserDetail({
                       ["First name", user.first_name],
                       ["Last name", user.last_name],
                       ["Preferred name", user.preferred_name],
-                      ...(!hasOrganizationCapacity
-                        ? [
-                            ["Organization", user.organization_name],
-                            ["Job title", user.job_title],
-                          ]
-                        : []),
                     ] as Array<[string, string | null | undefined]>
                   ).map(([label, value]) => (
                     <tr key={label}>
@@ -195,24 +187,6 @@ export function UserDetail({
                     <th class="text-muted small adm-user-info-label">Created</th>
                     <td>{new Date(user.created_at).toLocaleString("en-US")}</td>
                   </tr>
-                  {!hasOrganizationCapacity && user.biography && (
-                    <tr>
-                      <th class="text-muted small adm-user-info-label">Biography</th>
-                      <td class="small">{user.biography}</td>
-                    </tr>
-                  )}
-                  {!hasOrganizationCapacity && profileLinks.length > 0 && (
-                    <tr>
-                      <th class="text-muted small adm-user-info-label">Links</th>
-                      <td>
-                        {profileLinks.map((url) => (
-                          <a class="d-block small" key={url} href={url} target="_blank" rel="noreferrer">
-                            {url}
-                          </a>
-                        ))}
-                      </td>
-                    </tr>
-                  )}
                   {user.pii_redacted_at && (
                     <tr>
                       <th class="text-muted small adm-user-info-label">PII redacted</th>
@@ -235,7 +209,12 @@ export function UserDetail({
           </div>
         </div>
       </div>
-      <UserMembershipPanel user={user} onChanged={load} canManage={permissions.canManageMembership} />
+      <UserMembershipPanel
+        user={user}
+        onChanged={load}
+        canManage={permissions.canManageMembership}
+        canActivate={permissions.canActivateIdentity}
+      />
       <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
     </div>
   );

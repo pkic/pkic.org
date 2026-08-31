@@ -31,6 +31,8 @@ interface GroupIdRow {
 
 export interface GroupResourceViewer {
   userId: string;
+  /** Exact selected acting identity when the viewer has a Member capacity. */
+  identityId?: string;
   admin?: AuthAdmin;
 }
 

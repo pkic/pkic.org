@@ -11,6 +11,7 @@ import {
 } from "../membership/capacity-query";
 
 export interface EligibleGroupCapacity {
+  identityId: string;
   memberId: string;
   memberType: "individual" | "organization";
   organizationName: string | null;
@@ -18,6 +19,7 @@ export interface EligibleGroupCapacity {
 }
 
 interface CapacityRow {
+  identity_id: string;
   member_id: string;
   member_type: "individual" | "organization";
   organization_name: string | null;
@@ -82,7 +84,7 @@ export async function listEligibleGroupCapacities(
   const rows = await all<CapacityRow>(
     db,
     `${ACTIVE_USER_CAPACITIES_CTE}
-     SELECT capacity.member_id, capacity.member_type, capacity.organization_name,
+     SELECT capacity.identity_id, capacity.member_id, capacity.member_type, capacity.organization_name,
             capacity.membership_category
      FROM active_user_capacities capacity
      JOIN groups g ON g.id = ? AND g.active = 1
@@ -95,6 +97,7 @@ export async function listEligibleGroupCapacities(
     [userId, groupId, options.allowManaged ? 1 : 0, userId],
   );
   return rows.map((row) => ({
+    identityId: row.identity_id,
     memberId: row.member_id,
     memberType: row.member_type,
     organizationName: row.organization_name,
@@ -114,7 +117,7 @@ export async function listEligibleGroupCapacitiesForGroups(
   const rows = await all<CapacityRow & { group_id: string }>(
     db,
     `${ACTIVE_USER_CAPACITIES_CTE}
-     SELECT g.id AS group_id, capacity.member_id, capacity.member_type,
+     SELECT g.id AS group_id, capacity.identity_id, capacity.member_id, capacity.member_type,
             capacity.organization_name, capacity.membership_category
        FROM json_each(?) requested_group
        JOIN groups g ON g.id = requested_group.value AND g.active = 1
@@ -135,6 +138,7 @@ export async function listEligibleGroupCapacitiesForGroups(
   for (const row of rows) {
     const capacities = byGroup.get(row.group_id) ?? [];
     capacities.push({
+      identityId: row.identity_id,
       memberId: row.member_id,
       memberType: row.member_type,
       organizationName: row.organization_name,

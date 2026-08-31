@@ -1,176 +1,160 @@
-/**
- * Membership-capacity commands shared by the canonical membership routes.
- *
- * An identifier can represent either an individual `members` row or an active
- * `organization_representatives` row. The command resolves that explicitly so
- * callers do not need to know the storage representation of a capacity.
- */
+/** Staff commands over exact Member acting identities. */
 import type { MemberCapacityUpdateInput } from "../../../../assets/shared/schemas/membership-management";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
-import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { authorizedMembershipMutationDb } from "../membership-authorization";
+import { buildCreateIdentityStatement } from "./identities";
 import { buildCreateIndividualMemberStatements } from "./memberships";
 import { buildMembershipAccessOffboardingStatements } from "./offboarding";
 import { REPRESENTATIVE_ROLE_IDS, buildRevokeRepresentativeRoleStatement } from "./representative-roles";
 
-interface IndividualMemberRow {
+interface IdentityCapacityRow {
   id: string;
   user_id: string;
+  member_id: string;
+  organization_id: string | null;
   status: string;
   category_code: string;
-  updated_at: string;
-  user_updated_at: string;
+  show_on_organization_profile: number;
+  identity_updated_at: string;
+  member_updated_at: string;
+}
+
+async function requireActiveIdentityCapacity(db: DatabaseLike, identityId: string): Promise<IdentityCapacityRow> {
+  const identity = await first<IdentityCapacityRow>(
+    db,
+    `SELECT identity.id, identity.user_id, capacity.member_id, identity.organization_id,
+            member.status, category.category_code, identity.show_on_organization_profile,
+            identity.updated_at AS identity_updated_at, member.updated_at AS member_updated_at
+       FROM identities identity
+       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+       JOIN members member ON member.id = capacity.member_id
+       JOIN member_category_assignments category ON category.member_id = member.id
+       JOIN users user ON user.id = identity.user_id
+      WHERE identity.id = ?
+        AND identity.started_at IS NOT NULL
+        AND identity.ended_at IS NULL
+        AND identity.blocked_at IS NULL
+        AND user.active = 1
+        AND user.pii_redacted_at IS NULL
+        AND user.merged_into_user_id IS NULL`,
+    [identityId],
+  );
+  if (!identity) throw new AppError(404, "IDENTITY_NOT_FOUND", "Active identity not found");
+  return identity;
+}
+
+function capacityResponse(identity: IdentityCapacityRow, input: MemberCapacityUpdateInput) {
+  return {
+    id: identity.id,
+    userId: identity.user_id,
+    organizationId: identity.organization_id,
+    membershipCategory: input.membershipCategory ?? identity.category_code,
+    status: input.status ?? identity.status,
+    showOnOrgProfile:
+      input.showOnOrgProfile ?? (identity.organization_id !== null && identity.show_on_organization_profile === 1),
+  };
 }
 
 export async function updateMembershipCapacity(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
-  id: string,
+  identityId: string,
   input: MemberCapacityUpdateInput,
 ) {
-  const representative = await first<{
-    id: string;
-    member_id: string;
-    user_id: string;
-    show_on_org_profile: number;
-    updated_at: string;
-  }>(
-    db,
-    "SELECT id, member_id, user_id, show_on_org_profile, updated_at FROM organization_representatives WHERE id = ? AND left_at IS NULL",
-    [id],
-  );
-
-  if (representative) {
-    if (input.membershipCategory !== undefined || input.status !== undefined) {
-      throw new AppError(
-        422,
-        "REPRESENTATIVE_FIELD_NOT_EDITABLE",
-        "A representative's category/status follow their organization's aggregate — edit those on the organization instead",
-      );
-    }
-    if (input.showOnOrgProfile !== undefined) {
-      const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
-      try {
-        await authorizedDb.batch([
-          authorizedDb
-            .prepare(
-              "UPDATE organization_representatives SET show_on_org_profile = ?, updated_at = ? WHERE id = ? AND left_at IS NULL AND updated_at = ?",
-            )
-            .bind(input.showOnOrgProfile ? 1 : 0, nowIso(), id, representative.updated_at),
-          prepareAuditLogAfterOneChange(authorizedDb, "admin", actor.id, "member_updated", "member", id, input),
-        ]);
-      } catch (error) {
-        if (isAuditChangeGuardFailure(error)) {
-          throw new AppError(
-            409,
-            "MEMBERSHIP_CAPACITY_CHANGED",
-            "The membership capacity changed while it was being updated",
-          );
-        }
-        throw error;
-      }
-    }
-    const orgRow = await first<{ organization_id: string; status: string; category_code: string }>(
-      db,
-      `SELECT member.organization_id, member.status, category.category_code
-         FROM members member
-         JOIN member_category_assignments category ON category.member_id = member.id
-        WHERE member.id = ?`,
-      [representative.member_id],
+  const identity = await requireActiveIdentityCapacity(db, identityId);
+  if (identity.organization_id && (input.membershipCategory !== undefined || input.status !== undefined)) {
+    throw new AppError(
+      422,
+      "IDENTITY_AGGREGATE_FIELD_NOT_EDITABLE",
+      "An organization identity inherits category and status from its organization Member aggregate",
     );
-    if (!orgRow) {
-      throw new AppError(
-        409,
-        "MEMBERSHIP_CAPACITY_CHANGED",
-        "The membership capacity changed while it was being updated",
-      );
-    }
-    return {
-      id,
-      userId: representative.user_id,
-      organizationId: orgRow.organization_id,
-      membershipCategory: orgRow.category_code,
-      status: orgRow.status,
-      showOnOrgProfile: input.showOnOrgProfile ?? representative.show_on_org_profile === 1,
-    };
+  }
+  if (!identity.organization_id && input.showOnOrgProfile !== undefined) {
+    throw new AppError(
+      422,
+      "INDIVIDUAL_PROFILE_VISIBILITY_FORBIDDEN",
+      "Individual identities have no organization profile",
+    );
   }
 
-  const member = await first<IndividualMemberRow>(
-    db,
-    `SELECT member.id, member.user_id, member.status, category.category_code, member.updated_at,
-            user.updated_at AS user_updated_at
-       FROM members member
-       JOIN users user ON user.id = member.user_id
-       JOIN member_category_assignments category ON category.member_id = member.id
-      WHERE member.id = ?
-        AND member.organization_id IS NULL
-        AND user.active = 1
-        AND user.pii_redacted_at IS NULL
-        AND user.merged_into_user_id IS NULL`,
-    [id],
-  );
-  if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
-
+  const at = nowIso();
   const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
   const statements: StatementLike[] = [
+    // Establish the exact identity/member/user snapshot inside the transaction.
+    // The immediately following audit guard turns a zero-row sentinel into a
+    // SQL failure, rolling back the complete D1 batch.
     authorizedDb
       .prepare(
-        `UPDATE members SET updated_at = updated_at
-          WHERE id = ? AND organization_id IS NULL AND status = ? AND updated_at = ?
+        `UPDATE identities SET updated_at = updated_at
+          WHERE id = ? AND user_id = ? AND updated_at = ?
+            AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL
             AND EXISTS (
-              SELECT 1
-                FROM users
-               WHERE id = ?
-                 AND active = 1
-                 AND pii_redacted_at IS NULL
-                 AND merged_into_user_id IS NULL
-                 AND updated_at = ?
+              SELECT 1 FROM members member
+               WHERE member.id = ? AND member.updated_at = ?
+            )
+            AND EXISTS (
+              SELECT 1 FROM users user
+               WHERE user.id = ? AND user.active = 1
+                 AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
             )`,
       )
-      .bind(id, member.status, member.updated_at, member.user_id, member.user_updated_at),
-    prepareAuditLogAfterOneChange(authorizedDb, "admin", actor.id, "member_updated", "member", id, input),
+      .bind(
+        identity.id,
+        identity.user_id,
+        identity.identity_updated_at,
+        identity.member_id,
+        identity.member_updated_at,
+        identity.user_id,
+      ),
+    prepareAuditLogAfterOneChange(
+      authorizedDb,
+      "admin",
+      actor.id,
+      "identity_updated",
+      "identity",
+      identity.id,
+      input,
+      at,
+    ),
   ];
-  const setClauses: string[] = [];
-  const values: unknown[] = [];
-  if (input.status !== undefined) {
-    setClauses.push("status = ?");
-    values.push(input.status);
-  }
-  if (setClauses.length > 0) {
-    setClauses.push("updated_at = ?");
-    values.push(nowIso());
-    values.push(id, member.status, member.updated_at);
+
+  if (input.showOnOrgProfile !== undefined) {
     statements.push(
       authorizedDb
-        .prepare(`UPDATE members SET ${setClauses.join(", ")} WHERE id = ? AND status = ? AND updated_at = ?`)
-        .bind(...values),
+        .prepare("UPDATE identities SET show_on_organization_profile = ?, updated_at = ? WHERE id = ?")
+        .bind(input.showOnOrgProfile ? 1 : 0, at, identity.id),
     );
   }
-  if (input.membershipCategory !== undefined) {
+
+  if (!identity.organization_id && input.membershipCategory !== undefined) {
     statements.push(
       authorizedDb
-        .prepare(
-          `UPDATE member_category_assignments SET category_code = ?, updated_at = ?
-            WHERE member_id = ?
-              AND EXISTS (SELECT 1 FROM members WHERE id = ? AND organization_id IS NULL AND status = ? AND updated_at = ?)`,
-        )
-        .bind(input.membershipCategory, nowIso(), id, id, member.status, member.updated_at),
+        .prepare("UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?")
+        .bind(input.membershipCategory, at, identity.member_id),
+    );
+  }
+  if (!identity.organization_id && input.status !== undefined) {
+    statements.push(
+      authorizedDb
+        .prepare("UPDATE members SET status = ?, updated_at = ? WHERE id = ?")
+        .bind(input.status, at, identity.member_id),
     );
   }
   if (input.membershipCategory !== undefined || input.status !== undefined) {
-    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, member.user_id, nowIso()));
+    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, identity.user_id, at));
   }
-  if (member.status === "active" && input.status !== undefined && input.status !== "active") {
+  if (!identity.organization_id && identity.status === "active" && input.status && input.status !== "active") {
     statements.push(
       ...(await buildMembershipAccessOffboardingStatements(authorizedDb, {
-        userId: member.user_id,
-        memberId: member.id,
-        causeKey: `member:${member.id}:status:${member.status}->${input.status}`,
-        at: nowIso(),
+        userId: identity.user_id,
+        memberId: identity.member_id,
+        causeKey: `identity:${identity.id}:member-status:${identity.status}->${input.status}`,
+        at,
       })),
     );
   }
@@ -178,191 +162,186 @@ export async function updateMembershipCapacity(
     await authorizedDb.batch(statements);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {
-      throw new AppError(
-        409,
-        "MEMBERSHIP_CAPACITY_CHANGED",
-        "The membership capacity changed while it was being updated",
-      );
+      throw new AppError(409, "IDENTITY_CHANGED", "The identity changed while it was being updated");
     }
     throw error;
   }
-
-  return {
-    id,
-    userId: member.user_id,
-    organizationId: null,
-    membershipCategory: input.membershipCategory ?? member.category_code,
-    status: input.status ?? member.status,
-    showOnOrgProfile: true,
-  };
+  return capacityResponse(identity, input);
 }
 
-/** Grants an org-less individual membership (H5/H6/H7) to an existing user. */
+/** Grants one active individual H5/H6/H7 identity to an existing user. */
 export async function grantIndividualMembership(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
-  userId: string,
-  membershipCategory: string,
+  input: { userId: string; membershipCategory: string; activationReason: string },
 ) {
   const user = await first<{ id: string; updated_at: string }>(
     db,
-    "SELECT id, updated_at FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
-    [userId],
+    `SELECT id, updated_at FROM users
+      WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL`,
+    [input.userId],
   );
-  if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
-
-  const existingMember = await first<{ id: string }>(db, "SELECT id FROM members WHERE user_id = ?", [userId]);
-  if (existingMember) throw new AppError(409, "ALREADY_MEMBER", "This user already holds a membership");
-  const activeRepresentation = await first<{ id: string }>(
-    db,
-    "SELECT id FROM organization_representatives WHERE user_id = ? AND left_at IS NULL AND blocked_at IS NULL",
-    [userId],
-  );
-  if (activeRepresentation) {
-    throw new AppError(
-      409,
-      "ORGANIZATION_CAPACITY_CONFLICT",
-      "A user who represents an organization cannot also hold an individual membership",
-    );
+  if (!user) throw new AppError(404, "USER_NOT_FOUND", "User not found");
+  if (await first<{ id: string }>(db, "SELECT id FROM members WHERE user_id = ?", [input.userId])) {
+    throw new AppError(409, "MEMBERSHIP_CONFLICT", "This user already holds an individual membership");
+  }
+  if (
+    await first<{ id: string }>(
+      db,
+      `SELECT id FROM identities
+        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+      [input.userId],
+    )
+  ) {
+    throw new AppError(409, "IDENTITY_CONFLICT", "This user already has an active acting identity");
   }
 
-  const now = nowIso();
-  const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
+  const at = nowIso();
+  const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write", "identities:activate"]);
   const targetEligibility = {
-    sql: `SELECT 1
-            FROM users target
-           WHERE target.id = ?
-             AND target.active = 1
-             AND target.pii_redacted_at IS NULL
-             AND target.merged_into_user_id IS NULL
+    sql: `SELECT 1 FROM users target
+           WHERE target.id = ? AND target.active = 1
+             AND target.pii_redacted_at IS NULL AND target.merged_into_user_id IS NULL
              AND target.updated_at = ?
              AND NOT EXISTS (SELECT 1 FROM members WHERE user_id = target.id)
              AND NOT EXISTS (
-               SELECT 1
-                 FROM organization_representatives representative
-                WHERE representative.user_id = target.id
-                  AND representative.left_at IS NULL
-                  AND representative.blocked_at IS NULL
+               SELECT 1 FROM identities identity
+                WHERE identity.user_id = target.id
+                  AND identity.started_at IS NOT NULL
+                  AND identity.ended_at IS NULL
+                  AND identity.blocked_at IS NULL
              )`,
-    bindings: [userId, user.updated_at],
+    bindings: [input.userId, user.updated_at],
   };
   const {
     memberId,
     statements: [memberInsert, categoryAssignment],
-  } = buildCreateIndividualMemberStatements(authorizedDb, userId, membershipCategory, now, targetEligibility);
-  const statements = [
-    memberInsert,
-    prepareAuditLogAfterOneChange(authorizedDb, "admin", actor.id, "member_created", "member", memberId, {
-      userId,
-      membershipCategory,
-    }),
-    categoryAssignment,
-    ...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, userId, now),
-  ];
+  } = buildCreateIndividualMemberStatements(
+    authorizedDb,
+    input.userId,
+    input.membershipCategory,
+    at,
+    targetEligibility,
+  );
+  const identity = await buildCreateIdentityStatement(authorizedDb, {
+    userId: input.userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+    now: at,
+    condition: {
+      sql: `SELECT 1
+              FROM members member
+              JOIN users target ON target.id = member.user_id
+             WHERE member.id = ? AND member.user_id = ?
+               AND member.organization_id IS NULL AND member.status = 'active'
+               AND target.active = 1 AND target.pii_redacted_at IS NULL
+               AND target.merged_into_user_id IS NULL`,
+      bindings: [memberId, input.userId],
+    },
+  });
   try {
-    await authorizedDb.batch(statements);
+    await authorizedDb.batch([
+      memberInsert,
+      categoryAssignment,
+      identity.statement,
+      prepareAuditLogAfterOneChange(
+        authorizedDb,
+        "admin",
+        actor.id,
+        "individual_identity_activated",
+        "identity",
+        identity.identityId,
+        {
+          userId: input.userId,
+          memberId,
+          membershipCategory: input.membershipCategory,
+          activationReason: input.activationReason,
+        },
+        at,
+      ),
+      ...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, input.userId, at),
+    ]);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {
-      throw new AppError(
-        409,
-        "MEMBERSHIP_TARGET_CHANGED",
-        "The user or membership capacity changed while it was being granted",
-      );
+      throw new AppError(409, "MEMBERSHIP_TARGET_CHANGED", "The target user changed while being activated");
     }
     throw error;
   }
-
   return {
-    id: memberId,
-    userId,
+    id: identity.identityId,
+    userId: input.userId,
     organizationId: null,
-    membershipCategory,
+    membershipCategory: input.membershipCategory,
     status: "active" as const,
-    showOnOrgProfile: true,
-    createdAt: now,
+    showOnOrgProfile: false,
+    createdAt: at,
   };
 }
 
 export async function removeMembershipCapacity(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
-  id: string,
+  identityId: string,
 ): Promise<{ user_id: string; organization_id: string | null }> {
-  const representative = await first<{ id: string; member_id: string; user_id: string }>(
-    db,
-    "SELECT id, member_id, user_id FROM organization_representatives WHERE id = ? AND left_at IS NULL",
-    [id],
-  );
-
-  if (representative) {
-    const orgRow = await first<{ organization_id: string }>(db, "SELECT organization_id FROM members WHERE id = ?", [
-      representative.member_id,
-    ]);
-    const databaseActor = await first<{ id: string }>(db, "SELECT id FROM users WHERE id = ?", [actor.id]);
-    const now = nowIso();
-    const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
-    const statements: StatementLike[] = [
-      authorizedDb
-        .prepare(
-          `UPDATE organization_representatives
-              SET left_at = ?, blocked_at = ?, blocked_by_user_id = ?, updated_at = ?
-            WHERE id = ? AND left_at IS NULL AND blocked_at IS NULL`,
-        )
-        .bind(now, now, databaseActor?.id ?? null, now, representative.id),
-      buildRevokeRepresentativeRoleStatement(authorizedDb, {
-        memberId: representative.member_id,
-        roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
-        userId: representative.user_id,
-        now,
-      }),
-      buildRevokeRepresentativeRoleStatement(authorizedDb, {
-        memberId: representative.member_id,
-        roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
-        userId: representative.user_id,
-        now,
-      }),
-      authorizedDb
-        .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
-        .bind(representative.member_id, representative.user_id),
-      ...(await buildMembershipAccessOffboardingStatements(authorizedDb, {
-        userId: representative.user_id,
-        memberId: representative.member_id,
-        causeKey: `representative:${representative.id}:removed`,
-        at: now,
-      })),
-      ...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, representative.user_id, now),
-      prepareAuditLog(authorizedDb, "admin", actor.id, "member_removed", "member", id, {
-        userId: representative.user_id,
-        organizationId: orgRow?.organization_id ?? null,
-      }),
-    ];
-    await authorizedDb.batch(statements);
-    return { user_id: representative.user_id, organization_id: orgRow?.organization_id ?? null };
-  }
-
-  const member = await first<{ id: string; user_id: string }>(
-    db,
-    "SELECT id, user_id FROM members WHERE id = ? AND organization_id IS NULL",
-    [id],
-  );
-  if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
-
+  const identity = await requireActiveIdentityCapacity(db, identityId);
   const at = nowIso();
   const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
-  await authorizedDb.batch([
+  const statements: StatementLike[] = [
+    authorizedDb
+      .prepare(
+        `UPDATE identities SET ended_at = ?, updated_at = ?
+          WHERE id = ? AND updated_at = ?
+            AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+      )
+      .bind(at, at, identity.id, identity.identity_updated_at),
+    prepareAuditLogAfterOneChange(
+      authorizedDb,
+      "admin",
+      actor.id,
+      "identity_ended",
+      "identity",
+      identity.id,
+      { userId: identity.user_id, organizationId: identity.organization_id },
+      at,
+    ),
+    buildRevokeRepresentativeRoleStatement(authorizedDb, {
+      memberId: identity.member_id,
+      roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
+      userId: identity.user_id,
+      now: at,
+    }),
+    buildRevokeRepresentativeRoleStatement(authorizedDb, {
+      memberId: identity.member_id,
+      roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      userId: identity.user_id,
+      now: at,
+    }),
+    authorizedDb
+      .prepare("DELETE FROM organization_secondary_contact_nominations WHERE member_id = ? AND nominated_user_id = ?")
+      .bind(identity.member_id, identity.user_id),
     ...(await buildMembershipAccessOffboardingStatements(authorizedDb, {
-      userId: member.user_id,
-      memberId: member.id,
-      causeKey: `member:${member.id}:removed`,
+      userId: identity.user_id,
+      memberId: identity.member_id,
+      causeKey: `identity:${identity.id}:ended`,
       at,
     })),
-    authorizedDb.prepare("UPDATE members SET status = 'inactive', updated_at = ? WHERE id = ?").bind(at, id),
-    ...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, member.user_id, at),
-    prepareAuditLog(authorizedDb, "admin", actor.id, "member_removed", "member", id, {
-      userId: member.user_id,
-      organizationId: null,
-    }),
-  ]);
-
-  return { user_id: member.user_id, organization_id: null };
+    ...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, identity.user_id, at),
+  ];
+  if (!identity.organization_id) {
+    statements.push(
+      authorizedDb
+        .prepare("UPDATE members SET status = 'inactive', updated_at = ? WHERE id = ?")
+        .bind(at, identity.member_id),
+    );
+  }
+  try {
+    await authorizedDb.batch(statements);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "IDENTITY_CHANGED", "The identity changed while it was being ended");
+    }
+    throw error;
+  }
+  return { user_id: identity.user_id, organization_id: identity.organization_id };
 }

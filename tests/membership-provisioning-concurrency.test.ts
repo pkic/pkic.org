@@ -28,15 +28,17 @@ describe("provisionOrganizationMembership concurrency", () => {
       provisionOrganizationMembership(env.DB, {
         organizationName: orgName,
         membershipCategory: "A",
-        representatives: [{ name: "Alice Anderson", email: emailA }],
-        representationSource: "staff",
+        identities: [{ name: "Alice Anderson", email: emailA }],
+        identitySource: "staff",
+        activateIdentities: true,
         workingGroupSlugs: [],
       }),
       provisionOrganizationMembership(env.DB, {
         organizationName: orgName,
         membershipCategory: "A",
-        representatives: [{ name: "Bob Builder", email: emailB }],
-        representationSource: "staff",
+        identities: [{ name: "Bob Builder", email: emailB }],
+        identitySource: "staff",
+        activateIdentities: true,
         workingGroupSlugs: [],
       }),
     ]);
@@ -81,12 +83,12 @@ describe("provisionOrganizationMembership concurrency", () => {
         (r) => (r as PromiseFulfilledResult<Awaited<ReturnType<typeof provisionOrganizationMembership>>>).value,
       );
       expect(values[0]!.organizationId).toBe(values[1]!.organizationId);
-      const reps = await queryAll(
+      const identities = await queryAll(
         env.DB,
-        "SELECT id FROM organization_representatives WHERE member_id = ?",
-        values[0]!.representatives[0]!.membershipId,
+        "SELECT id FROM identities WHERE organization_id = ?",
+        values[0]!.identities[0]!.organizationId,
       );
-      expect(reps.length).toBe(2);
+      expect(identities.length).toBe(2);
     } else {
       // One rejected: acceptable outcome too, as long as no orphaned data
       // was left by the loser (checked above via orgs/aggregates counts)

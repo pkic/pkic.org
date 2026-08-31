@@ -10,6 +10,7 @@ import { profile } from "../../assets/ts/member-flows/portal/state";
 const organizationId = "00000000-0000-4000-8000-000000000210";
 const userId = "00000000-0000-4000-8000-000000000211";
 const memberId = "00000000-0000-4000-8000-000000000212";
+const identityId = "00000000-0000-4000-8000-000000000213";
 
 let container: HTMLDivElement;
 
@@ -53,9 +54,9 @@ beforeEach(() => {
     headshotUrl: null,
     canEditOrganizationName: false,
     isOrgContact: true,
-    organizationRepresentatives: [],
-    activeMemberships: [
-      { memberId, organizationId, organizationName: "Example Organization", membershipCategory: "F" },
+    organizationIdentities: [],
+    activeIdentities: [
+      { identityId, memberId, organizationId, organizationName: "Example Organization", membershipCategory: "F" },
     ],
   });
 });

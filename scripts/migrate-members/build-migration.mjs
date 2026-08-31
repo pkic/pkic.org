@@ -102,7 +102,7 @@ export function buildMigration({
     },
   };
 
-  // ── Step 2: organizations + representatives, or org-less individuals ───
+  // ── Step 2: organizations + identities, or org-less individuals ────────
   for (const { filename, slug, doc } of yamlRecords) {
     const name = String(doc.name ?? slug).trim();
     const memberType = String(doc.memberType ?? "").trim();

@@ -138,6 +138,8 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(affiliations.affiliations.map((item) => item.memberId).sort()).toEqual(
       [firstMemberId, secondMemberId].sort(),
     );
+    const secondIdentityId = affiliations.affiliations.find((item) => item.memberId === secondMemberId)?.identityId;
+    expect(secondIdentityId).toBeTruthy();
 
     const ambiguous = await call(adminToken, "/api/v1/leadership/positions", {
       method: "POST",
@@ -151,14 +153,14 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
       body: JSON.stringify({
         body: "board",
         userId,
-        memberId: secondMemberId,
+        identityId: secondIdentityId,
         title: "Board Member",
         startsAt: "2026-01-01",
       }),
     });
     expect(createdResponse.status).toBe(201);
     const created = leadershipPositionResponseSchema.parse(await createdResponse.json());
-    expect(created.memberId).toBe(secondMemberId);
+    expect(created.identityId).toBe(secondIdentityId);
     expect(created.organizationName).toBe("Second Organization");
 
     const publicResponse = await call(null, "/api/v1/leadership/board");
@@ -374,8 +376,11 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const orgId = await insertOrganization("Digitorus", "https://digitorus.com");
     const chairUserId = await insertUser("paul@example.test", ["Paul", "van Brouwershaven"]);
     const memberId = await insertMember(chairUserId, orgId);
-    await env.DB.prepare("UPDATE organization_representatives SET job_title = ? WHERE member_id = ? AND user_id = ?")
-      .bind("Deputy PKI Officer", memberId, chairUserId)
+    await env.DB.prepare(
+      `UPDATE identities SET job_title = ?
+        WHERE user_id = ? AND organization_id = (SELECT organization_id FROM members WHERE id = ?)`,
+    )
+      .bind("Deputy PKI Officer", chairUserId, memberId)
       .run();
     const pastUserId = await insertUser("kirk@example.test", ["Kirk", "Hall"]);
 

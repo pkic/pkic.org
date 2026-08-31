@@ -16,7 +16,6 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 import { prepareVerifyPrimaryEmailStatement } from "../email-verification";
-import { prepareVerifiedDomainAssociationStatements } from "../organization-representations";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 
 export interface PreparedRegistrationConfirmation {
@@ -182,12 +181,6 @@ export async function prepareConfirmRegistrationByToken(
   });
   const newStatus = "registered";
   const verifiedEmail = inviteEmail ?? user.normalized_email;
-  const representationStatements = await prepareVerifiedDomainAssociationStatements(db, {
-    userId: registration.user_id,
-    normalizedEmail: verifiedEmail,
-    at: now,
-  });
-
   const updateStatements: StatementLike[] = [
     prepareRegistrationTransitionGuard(db, registration),
     ...emailFinalizeStatements,
@@ -197,7 +190,6 @@ export async function prepareConfirmRegistrationByToken(
       method: ownsPendingEmailChange ? "email_change_confirmation" : "registration_confirmation",
       verifiedAt: now,
     }),
-    ...representationStatements,
     db
       .prepare(
         `UPDATE registrations

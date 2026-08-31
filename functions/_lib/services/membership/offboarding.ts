@@ -17,10 +17,10 @@ export async function buildUserAccessOffboardingStatements(
       .bind(input.at, input.at, input.at, input.at, input.userId),
     db
       .prepare(
-        `UPDATE organization_representatives
-            SET left_at = CASE WHEN joined_at > ? THEN joined_at ELSE ? END,
-                updated_at = CASE WHEN joined_at > ? THEN joined_at ELSE ? END
-          WHERE user_id = ? AND left_at IS NULL`,
+        `UPDATE identities
+            SET ended_at = CASE WHEN started_at IS NOT NULL AND started_at > ? THEN started_at ELSE ? END,
+                updated_at = CASE WHEN started_at IS NOT NULL AND started_at > ? THEN started_at ELSE ? END
+          WHERE user_id = ? AND ended_at IS NULL`,
       )
       .bind(input.at, input.at, input.at, input.at, input.userId),
     prepareReconcileMailingListSubscriptionsStatement(db, input.userId, input.at),

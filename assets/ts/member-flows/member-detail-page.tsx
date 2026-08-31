@@ -36,7 +36,7 @@ function slugFromPathname(pathname: string): string | null {
   return match[1] === "profile" ? null : match[1];
 }
 
-type Representative = MemberDetail["representatives"][number];
+type PublicIdentity = MemberDetail["identities"][number];
 
 function LinkedInIcon() {
   return (
@@ -74,22 +74,24 @@ function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | n
   );
 }
 
-function RepresentativeCard({ rep }: { rep: Representative }) {
+function IdentityCard({ identity }: { identity: PublicIdentity }) {
   return (
     <div class="row mb-5">
       <div class="col-lg-9 order-lg-2">
         <h2 class="featurette-heading">
-          {rep.name} <SocialLinks linkedin={rep.linkedin} />
+          {identity.name} <SocialLinks linkedin={identity.linkedin} />
         </h2>
-        {rep.jobTitle && <h5>{rep.jobTitle}</h5>}
-        {rep.bio && <Markdown markdown={rep.bio} />}
+        {identity.jobTitle && <h5>{identity.jobTitle}</h5>}
+        {identity.bio && <Markdown markdown={identity.bio} />}
       </div>
       <div class="col-lg-3 order-lg-1">
-        {rep.photoUrl ? (
-          <img class="img-thumbnail" alt={rep.name} title={rep.name} src={rep.photoUrl} />
+        {identity.photoUrl ? (
+          <img class="img-thumbnail" alt={identity.name} title={identity.name} src={identity.photoUrl} />
         ) : (
-          <div class={`standalone-initials standalone-initials--representative initial-color-${rep.name.length % 6}`}>
-            {memberInitials(rep.name)}
+          <div
+            class={`standalone-initials standalone-initials--representative initial-color-${identity.name.length % 6}`}
+          >
+            {memberInitials(identity.name)}
           </div>
         )}
       </div>
@@ -182,11 +184,11 @@ function MemberDetailView({ member, directoryHref }: { member: MemberDetail; dir
         </div>
       </div>
 
-      {member.representatives.length > 0 && (
+      {member.identities.length > 0 && (
         <div class="py-5 bg-light">
           <div class="container">
-            {member.representatives.map((rep) => (
-              <RepresentativeCard key={rep.name} rep={rep} />
+            {member.identities.map((identity) => (
+              <IdentityCard key={identity.name} identity={identity} />
             ))}
           </div>
         </div>

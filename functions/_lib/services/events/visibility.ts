@@ -33,19 +33,17 @@ export function buildEventAudiencePredicate(
         ${eventAlias}.visibility = 'all_members'
         AND (
           EXISTS (
-            SELECT 1 FROM members audience_individual_member
-             WHERE audience_individual_member.user_id = ?
-               AND audience_individual_member.status = 'active'
-          )
-          OR EXISTS (
             SELECT 1
-              FROM organization_representatives audience_representative
-              JOIN members audience_organization_member
-                ON audience_organization_member.id = audience_representative.member_id
-               AND audience_organization_member.status = 'active'
-             WHERE audience_representative.user_id = ?
-               AND audience_representative.left_at IS NULL
-               AND audience_representative.blocked_at IS NULL
+              FROM identities audience_identity
+              JOIN identity_member_capacities audience_capacity
+                ON audience_capacity.identity_id = audience_identity.id
+              JOIN members audience_member
+                ON audience_member.id = audience_capacity.member_id
+               AND audience_member.status = 'active'
+             WHERE audience_identity.user_id = ?
+               AND audience_identity.started_at IS NOT NULL
+               AND audience_identity.ended_at IS NULL
+               AND audience_identity.blocked_at IS NULL
           )
         )
       )
@@ -128,7 +126,6 @@ export function buildEventAudiencePredicate(
       )
     )`,
     bindings: [
-      viewer.userId,
       viewer.userId,
       viewer.userId,
       viewer.userId,

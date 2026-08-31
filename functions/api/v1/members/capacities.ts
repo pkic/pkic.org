@@ -17,6 +17,7 @@ import {
 } from "../../../_lib/services/membership/capacities";
 import { listMemberCapacities } from "../../../_lib/services/membership-management-list";
 import { requireMembershipStaffPermission } from "./authorization";
+import { requirePermission } from "../../../_lib/auth/permissions";
 
 export const MemberCapacitiesList = openApiRoute(memberCapacityListRouteSchema, async (c: AdminContext, data) => {
   const { db } = await requireMembershipStaffPermission(c, "membership:read");
@@ -43,6 +44,7 @@ export const MemberCapacityDelete = openApiRoute(memberCapacityDeleteRouteSchema
 
 export const MemberCapacityGrant = openApiRoute(individualMembershipGrantRouteSchema, async (c: AdminContext, data) => {
   const { db, staff } = await requireMembershipStaffPermission(c, "membership:write");
-  const member = await grantIndividualMembership(db, staff, data.body.userId, data.body.membershipCategory);
+  requirePermission(staff, "identities:activate");
+  const member = await grantIndividualMembership(db, staff, data.body);
   return json(memberCapacityMutationResponseSchema.parse({ member }), 201);
 });

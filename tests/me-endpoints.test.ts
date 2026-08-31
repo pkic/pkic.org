@@ -12,6 +12,7 @@ import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { myApplicationsListResponseSchema, myProfileSchema } from "../assets/shared/schemas/me";
 import {
@@ -49,8 +50,16 @@ async function insertActiveMember(email: string, category: string): Promise<stri
     .run();
 
   if (INDIVIDUAL_CATEGORIES.has(category)) {
-    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
-    await env.DB.batch(statements);
+    const now = new Date().toISOString();
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, now);
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: null,
+      source: "staff",
+      startImmediately: true,
+      now,
+    });
+    await env.DB.batch([...statements, identity.statement]);
     return userId;
   }
 
@@ -76,14 +85,10 @@ describe("Current-user and application self-service", () => {
 
     const response = await call(token, "/api/v1/users/current");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      email: string;
-      membershipCategory: string;
-      canEditOrganizationName: boolean;
-    };
+    const body = myProfileSchema.parse(await response.json());
     expect(body.email).toBe("me@example.test");
     expect(body.membershipCategory).toBe("F");
-    expect(body.canEditOrganizationName).toBe(false);
+    expect(body.organizationId).not.toBeNull();
   });
 
   it("PATCH /api/v1/users/current updates editable fields", async () => {
@@ -100,7 +105,7 @@ describe("Current-user and application self-service", () => {
     expect(body.biography).toBe("New bio");
   });
 
-  it("only org-less (H5/H6/H7) members may set organizationName", async () => {
+  it("does not allow users to invent an organization affiliation on any identity", async () => {
     const orgTiedUserId = await insertActiveMember("org-tied@example.test", "F");
     const orgTiedToken = await createMemberSession(env.DB, orgTiedUserId, "org-tied-token");
     const orgTiedResponse = await call(orgTiedToken, "/api/v1/users/current", {
@@ -116,15 +121,12 @@ describe("Current-user and application self-service", () => {
       method: "PATCH",
       body: JSON.stringify({ organizationName: "My Consultancy" }),
     });
-    const individualBody = (await individualResponse.json()) as {
-      organizationName: string | null;
-      canEditOrganizationName: boolean;
-    };
-    expect(individualBody.canEditOrganizationName).toBe(true);
-    expect(individualBody.organizationName).toBe("My Consultancy");
+    const individualBody = myProfileSchema.parse(await individualResponse.json());
+    expect(individualBody.organizationId).toBeNull();
+    expect(individualBody.organizationName).toBeNull();
   });
 
-  it("PATCH /api/v1/users/current updates organization representative visibility with the profile", async () => {
+  it("PATCH /api/v1/users/current updates organization identity visibility with the profile", async () => {
     const userId = await insertActiveMember("visibility@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "visibility-token");
 
@@ -135,12 +137,13 @@ describe("Current-user and application self-service", () => {
     expect(response.status).toBe(200);
     expect(myProfileSchema.parse(await response.json()).showOnOrgProfile).toBe(false);
 
-    const rows = await queryAll<{ show_on_org_profile: number }>(
+    const rows = await queryAll<{ show_on_organization_profile: number }>(
       env.DB,
-      "SELECT show_on_org_profile FROM organization_representatives WHERE user_id = ? AND left_at IS NULL",
+      `SELECT show_on_organization_profile FROM identities
+        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
       userId,
     );
-    expect(rows[0].show_on_org_profile).toBe(0);
+    expect(rows[0].show_on_organization_profile).toBe(0);
   });
 
   it("rolls back profile changes when the exact user session is revoked before the D1 batch", async () => {
@@ -161,12 +164,12 @@ describe("Current-user and application self-service", () => {
       }),
     ).rejects.toMatchObject({ status: 409, code: "AUTHORIZATION_CONTEXT_CHANGED" });
 
-    const [user] = await queryAll<{ job_title: string | null }>(
+    const [identity] = await queryAll<{ job_title: string | null }>(
       env.DB,
-      "SELECT job_title FROM users WHERE id = ?",
+      "SELECT job_title FROM identities WHERE user_id = ? AND ended_at IS NULL",
       userId,
     );
-    expect(user.job_title).toBeNull();
+    expect(identity.job_title).toBeNull();
     await expect(
       queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_profile_updated'", userId),
     ).resolves.toHaveLength(0);

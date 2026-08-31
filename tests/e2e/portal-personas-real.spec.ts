@@ -54,7 +54,9 @@ async function jsonResponse(
   return payload;
 }
 
-async function createMember(page: Page): Promise<{ email: string; userId: string; memberId: string }> {
+async function createMember(
+  page: Page,
+): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
   const identity = crypto.randomUUID();
   const email = `e2e-persona-${identity}@persona-${identity}.example.test`;
   const startSince = await capturedEmailCount();
@@ -118,10 +120,15 @@ async function createMember(page: Page): Promise<{ email: string; userId: string
     "POST",
     `/api/v1/members/applications/${stringProperty(application, "applicationId")}/approve`,
   );
+  const userId = stringProperty(approved, "userId");
+  const userDetail = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${userId}`), "user");
+  const identities = arrayProperty(userDetail, "identities");
+  expect(identities).toHaveLength(1);
   return {
     email,
-    userId: stringProperty(approved, "userId"),
+    userId,
     memberId: stringProperty(approved, "memberId"),
+    identityId: stringProperty(identities[0] as JsonRecord, "identityId"),
   };
 }
 
@@ -151,7 +158,8 @@ async function createStaffOnly(page: Page, groupIds: string[], stamp: string): P
     organizationName: `Staff Persona Organization ${stamp}`,
     membershipCategory: "A",
     memberSince: "2026-08-01",
-    representatives: [{ name: "E2E Staff Persona", email }],
+    identities: [{ name: "E2E Staff Persona", email }],
+    activationReason: "E2E staff persona setup",
     workingGroupSlugs: [],
   });
   const members = arrayProperty(created, "members");
@@ -235,7 +243,7 @@ test("real Worker/D1 sessions resolve member, inherited, local-only, staff, and 
   }
   await jsonResponse(adminPage.request, "POST", `/api/v1/groups/${stringProperty(localOnlyChild, "id")}/leadership`, {
     userId: localLeader.userId,
-    memberId: localLeader.memberId,
+    identityId: localLeader.identityId,
     roleId: "role-group_lead",
   });
   const scopedStaffEmail = await createStaffOnly(
@@ -259,7 +267,7 @@ test("real Worker/D1 sessions resolve member, inherited, local-only, staff, and 
   }
   await jsonResponse(adminPage.request, "POST", `/api/v1/groups/${stringProperty(parent, "id")}/leadership`, {
     userId: member.userId,
-    memberId: member.memberId,
+    identityId: member.identityId,
     roleId: "role-group_lead",
   });
 

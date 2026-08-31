@@ -152,11 +152,12 @@ describe("verified-email-first membership join", () => {
     expect(
       await queryAll(
         testEnv.DB,
-        `SELECT representative.id
-           FROM organization_representatives representative
-           JOIN users user ON user.id = representative.user_id
-          WHERE representative.member_id = ? AND representative.left_at IS NULL
-            AND representative.blocked_at IS NULL AND user.normalized_email = ?
+        `SELECT identity.id
+           FROM identities identity
+           JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+           JOIN users user ON user.id = identity.user_id
+          WHERE capacity.member_id = ? AND identity.started_at IS NOT NULL
+            AND identity.ended_at IS NULL AND identity.blocked_at IS NULL AND user.normalized_email = ?
             AND user.email_verified_at IS NOT NULL`,
         [memberId, "new-person@claimed.example"],
       ),
@@ -193,7 +194,7 @@ describe("verified-email-first membership join", () => {
     const organizationId = await insertOrganization(testEnv.DB, "Blocking Organization");
     const memberId = await seedOrganizationAggregate(testEnv.DB, organizationId, "A");
     const userId = await insertUser(testEnv.DB, "removed@blocked.example");
-    const representativeId = await addRepresentative(testEnv.DB, memberId, userId);
+    const identityId = await addRepresentative(testEnv.DB, memberId, userId);
     await testEnv.DB.batch([
       testEnv.DB.prepare(
         `INSERT INTO organization_domain_claims
@@ -201,10 +202,10 @@ describe("verified-email-first membership join", () => {
          VALUES (?, 'blocked.example', NULL, ?, datetime('now'), datetime('now'))`,
       ).bind(crypto.randomUUID(), organizationId),
       testEnv.DB.prepare(
-        `UPDATE organization_representatives
-            SET left_at = joined_at, blocked_at = datetime('now'), blocked_by_user_id = ?
+        `UPDATE identities
+            SET ended_at = started_at, blocked_at = started_at, blocked_by_user_id = ?
           WHERE id = ?`,
-      ).bind(userId, representativeId),
+      ).bind(userId, identityId),
     ]);
 
     const token = await startAndMaterializeVerification(testEnv, "removed@blocked.example");
@@ -240,9 +241,7 @@ describe("verified-email-first membership join", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ status: "support_required" });
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(0);
-    expect(
-      await queryAll(testEnv.DB, "SELECT id FROM organization_representatives WHERE user_id = ?", [userId]),
-    ).toHaveLength(0);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM identities WHERE user_id = ?", [userId])).toHaveLength(0);
     const [alias] = await queryAll<{ verified_at: string | null }>(
       testEnv.DB,
       "SELECT verified_at FROM user_emails WHERE user_id = ?",

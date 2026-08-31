@@ -15,7 +15,7 @@ export async function createAdminSession(
   adminUserId: string,
   rawToken: string,
   signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
-  memberId?: string | null,
+  identityId?: string | null,
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -35,7 +35,7 @@ export async function createAdminSession(
     sub: adminUserId,
     sid: sessionId,
     exp: Math.floor(new Date(expiresAt).getTime() / 1000),
-    memberId,
+    identityId,
   });
 }
 
@@ -75,8 +75,24 @@ export async function createMemberSession(
   userId: string,
   rawToken: string,
   signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
-  memberId?: string | null,
+  identityId?: string | null,
 ): Promise<string> {
+  let selectedIdentityId = identityId;
+  if (selectedIdentityId === undefined) {
+    const activeIdentities = await db
+      .prepare(
+        `SELECT id FROM identities
+          WHERE user_id = ? AND started_at IS NOT NULL
+            AND ended_at IS NULL AND blocked_at IS NULL
+          ORDER BY id`,
+      )
+      .bind(userId)
+      .all<{ id: string }>();
+    if (activeIdentities.results.length > 1) {
+      throw new Error("createMemberSession requires an explicit identityId when the user has multiple identities");
+    }
+    selectedIdentityId = activeIdentities.results[0]?.id ?? null;
+  }
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
   const now = nowIso();
@@ -92,6 +108,6 @@ export async function createMemberSession(
     sub: userId,
     sid: sessionId,
     exp: Math.floor(new Date(expiresAt).getTime() / 1000),
-    memberId,
+    identityId: selectedIdentityId,
   });
 }
