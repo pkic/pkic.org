@@ -101,7 +101,7 @@
     --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 12%, #fff);
     --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 72%, #000);
     --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 80%, #fff);
-    --pk-grad-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 45%);
+    --pk-grad-sheen: linear-gradient(160deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 45%);
     --pk-shadow-1: 0 1px 2px rgba(16, 24, 32, 0.06);
     --pk-shadow-2: 0 2px 8px rgba(16, 24, 32, 0.08), 0 1px 2px rgba(16, 24, 32, 0.04);
     --pk-shadow-3: 0 12px 32px rgba(16, 24, 32, 0.14), 0 2px 8px rgba(16, 24, 32, 0.06);
@@ -141,10 +141,10 @@
       --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
       --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
       --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);
-      --pk-grad-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 45%);
-      --pk-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --pk-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
-      --pk-shadow-3: 0 12px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+      --pk-grad-sheen: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 45%);
+      --pk-shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+      --pk-shadow-2: 0 2px 8px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3);
+      --pk-shadow-3: 0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
     }
   }
 
@@ -179,10 +179,10 @@
     --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
     --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
     --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);
-    --pk-grad-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 45%);
-    --pk-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --pk-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
-    --pk-shadow-3: 0 12px 32px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --pk-grad-sheen: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 45%);
+    --pk-shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+    --pk-shadow-2: 0 2px 8px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3);
+    --pk-shadow-3: 0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
   }
 
   [data-density="compact"] {
