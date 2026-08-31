@@ -35,6 +35,7 @@
     "build:tokens": "node --experimental-strip-types scripts/build-design-tokens.mjs",
     "check:tokens": "node --experimental-strip-types scripts/build-design-tokens.mjs --check",
     "check:design-isolation": "node scripts/check-design-isolation.mjs",
+    "report:bootstrap": "node scripts/check-design-isolation.mjs --report",
     "generate:public": "node scripts/build-frontend.mjs --dev && HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo --configDir='' --baseURL=/ -e development",
     "lint": "eslint . --max-warnings 0",
     "lint:sql": "node scripts/check-sql-projections.mjs",

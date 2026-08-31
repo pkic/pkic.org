@@ -20,11 +20,38 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const root = process.cwd();
+
+/**
+ * Surfaces that have adopted the design system and must stay free of
+ * Bootstrap. This list is the ratchet for the framework removal: a surface
+ * joins it once it is clean, and can then never regress. Nothing is ever
+ * removed from it.
+ *
+ * Deliberately NOT a baseline of tolerated violations — a surface is added
+ * only after its violations are gone, so the gate always demands zero.
+ */
 const scanned = ["assets/ts/ui", "assets/design"];
 
-/** Bootstrap utilities and components, as whole class tokens. */
+/** Everything still on Bootstrap, measured by `--report` so the remaining
+ *  distance is visible without pretending it is acceptable. */
+const remaining = ["assets/ts", "assets/js", "assets/scss", "layouts"];
+
+/**
+ * Bootstrap utilities and components, matched as WHOLE class tokens.
+ *
+ * Whole-token matching matters: a substring test flags our own `pk-table` for
+ * containing "table", and a gate that cries wolf gets switched off.
+ */
 const BOOTSTRAP_CLASS =
-  /\b(btn|btn-[a-z0-9-]+|card|card-[a-z]+|row|col(-[a-z0-9]+)*|d-(none|block|flex|inline|inline-block|grid)|form-(control|select|check|label|text)|input-group|alert|alert-[a-z]+|badge|table|table-[a-z]+|nav|navbar|nav-[a-z]+|modal|modal-[a-z]+|dropdown|dropdown-[a-z]+|spinner-border|visually-hidden|text-(muted|center|start|end|bg-[a-z]+)|fw-[a-z]+|[mp][xytbse]?-[0-5]|g-[0-5]|w-100|h-100|justify-content-[a-z]+|align-items-[a-z]+|border|border-[a-z0-9]+|bg-[a-z]+|rounded|rounded-[a-z0-9]+|small|lead|container|container-fluid)\b/;
+  /^(btn|btn-[a-z0-9-]+|card|card-[a-z]+|row|col(-[a-z0-9]+)*|d-(none|block|flex|inline|inline-block|grid)|form-(control|select|check|label|text)|input-group|alert|alert-[a-z]+|badge|table|table-[a-z]+|nav|navbar|nav-[a-z]+|modal|modal-[a-z]+|dropdown|dropdown-[a-z]+|spinner-border|visually-hidden|text-(muted|center|start|end)|bg-[a-z]+|fw-[a-z]+|[mp][xytbse]?-[0-5]|g-[0-5]|w-100|h-100|justify-content-[a-z]+|align-items-[a-z]+|border|border-[a-z0-9]+|rounded|rounded-[a-z0-9]+|small|lead|container|container-fluid)$/;
+
+/** Our own classes are never a violation, whatever word they contain. */
+function isBootstrapClassList(value) {
+  return value
+    .split(/\s+/)
+    .filter((token) => token.length > 0 && !token.startsWith("pk-"))
+    .some((token) => BOOTSTRAP_CLASS.test(token));
+}
 
 /** A colour literal in any of the forms a stylesheet accepts. */
 const COLOUR_LITERAL = /(#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(|\blab\()/;
@@ -64,7 +91,7 @@ function inspect(file) {
       }
 
       const classAttr = code.match(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/);
-      if (classAttr && BOOTSTRAP_CLASS.test(classAttr[1])) {
+      if (classAttr && isBootstrapClassList(classAttr[1])) {
         report(file, lineNumber, line, "uses a Bootstrap class name");
       }
 
@@ -107,6 +134,47 @@ for (const dir of scanned) {
   } catch {
     // A directory that does not exist yet is not a failure.
   }
+}
+
+if (process.argv.includes("--report")) {
+  const counts = remaining
+    .map((dir) => {
+      let hits = 0;
+      const visit = (current) => {
+        for (const entry of readdirSync(current)) {
+          const full = join(current, entry);
+          if (statSync(full).isDirectory()) {
+            visit(full);
+            continue;
+          }
+          if (!/\.(css|scss|tsx?|js|html)$/.test(entry)) continue;
+          if (scanned.some((adopted) => relative(root, full).startsWith(`${adopted}/`))) continue;
+          const text = readFileSync(full, "utf8");
+          for (const match of text.matchAll(/class(?:Name)?\s*=\s*["'`]([^"'`]*)["'`]/g)) {
+            hits += match[1]
+              .split(/\s+/)
+              .filter((token) => token.length > 0 && !token.startsWith("pk-"))
+              .filter((token) => BOOTSTRAP_CLASS.test(token)).length;
+          }
+          hits += (text.match(/--bs-/g) ?? []).length;
+        }
+      };
+      try {
+        visit(resolve(root, dir));
+      } catch {
+        // Absent directories contribute nothing.
+      }
+      return { dir, hits };
+    })
+    .sort((left, right) => right.hits - left.hits);
+
+  const total = counts.reduce((sum, entry) => sum + entry.hits, 0);
+  console.log("[design-isolation] Bootstrap footprint still to remove (phase 5):");
+  for (const { dir, hits } of counts) {
+    console.log(`  ${String(hits).padStart(6)}  ${dir}`);
+  }
+  console.log(`  ${String(total).padStart(6)}  total`);
+  console.log(`\n  Adopted and held at zero: ${scanned.join(", ")}`);
 }
 
 if (failures.length > 0) {

@@ -161,6 +161,9 @@ export const constants = {
 
   // A spinner turns at its own pace, unrelated to a transition's duration.
   "dur-spin": "700ms",
+  // A skeleton shimmer is slower than a spinner; it should read as waiting,
+  // not as urgency.
+  "dur-shimmer": "1400ms",
   // The reduced-motion clamp. Named rather than inlined so the one place that
   // is allowed to shorten motion is visible in the token list.
   "dur-instant": "1ms",

@@ -1,0 +1,87 @@
+/*
+ * Pager.
+ *
+ * Offset pagination for lists. Shows a summary of the displayed range,
+ * previous/next buttons, and a window of page numbers. When the page
+ * count exceeds 7, an ellipsis marks omitted pages.
+ */
+
+@layer components {
+  .pk-pager {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    align-items: center;
+  }
+
+  .pk-pager__summary {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-pager__list {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  .pk-pager__item {
+    display: flex;
+    align-items: center;
+  }
+
+  .pk-pager__item--gap {
+    padding: 0 0.25rem;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-pager__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 var(--pk-1);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color var(--pk-dur-fast),
+      border-color var(--pk-dur-fast),
+      color var(--pk-dur-fast);
+  }
+
+  .pk-pager__button:hover:not(:disabled) {
+    background: var(--pk-surface-sunk);
+    border-color: var(--pk-line-strong);
+  }
+
+  .pk-pager__button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .pk-pager__button[aria-current="page"] {
+    background: var(--pk-accent);
+    color: var(--pk-accent-on);
+    border-color: var(--pk-accent);
+  }
+
+  .pk-pager__button[aria-current="page"]:hover {
+    filter: brightness(1.08);
+  }
+
+  .pk-pager__button--prev,
+  .pk-pager__button--next {
+    min-width: auto;
+    padding: 0 0.5rem;
+  }
+}

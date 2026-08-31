@@ -1,0 +1,84 @@
+/*
+ * Menu.
+ *
+ * The popup is `fixed` so an ancestor with `overflow: auto` — every scrollable
+ * table wrapper in the portal — cannot clip it. Its top/left are written by the
+ * component from the trigger's viewport rect.
+ */
+
+@layer components {
+  .pk-menu {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .pk-menu__trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--pk-control-y);
+    aspect-ratio: 1;
+    background: transparent;
+    color: var(--pk-ink-muted);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius-sm);
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  .pk-menu__trigger:hover,
+  .pk-menu__trigger[aria-expanded="true"] {
+    background: var(--pk-surface-sunk);
+    border-color: var(--pk-line);
+    color: var(--pk-ink);
+  }
+
+  .pk-menu__popup {
+    position: fixed;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+    padding: 0.25rem;
+    background: var(--pk-surface-raise);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    box-shadow: var(--pk-shadow-3);
+  }
+
+  .pk-menu__heading {
+    margin: 0;
+    padding: 0.35rem 0.6rem 0.15rem;
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+    color: var(--pk-ink-faint);
+  }
+
+  .pk-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    background: none;
+    border: 0;
+    border-radius: var(--pk-radius-sm);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-sm);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .pk-menu__item:hover {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-menu__item--danger {
+    color: var(--pk-danger-ink);
+  }
+
+  .pk-menu__item--danger:hover {
+    background: var(--pk-danger-soft);
+  }
+}
