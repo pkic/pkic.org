@@ -14,6 +14,7 @@ import { confirmRegistrationByToken, getRegistrationByManageToken } from "../fun
 import { updateUser } from "../functions/_lib/services/user-management-update";
 import { anonymizeUser as anonymizeUserService } from "../functions/_lib/services/user-anonymization";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
 
 let adminToken: string;
 
@@ -587,6 +588,46 @@ describe("admin user deactivation", () => {
       await queryAll<{ is_ec_member: number }>(env.DB, "SELECT is_ec_member FROM users WHERE id = ?", [userId])
     )[0];
     expect(rowAfterClear.is_ec_member).toBe(0);
+  });
+
+  it("returns the canonical organization representation profile instead of the stale user-wide profile", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "capacity-profile@example.test");
+    const organizationId = await insertOrganization(env.DB, "Canonical Capacity Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, userId);
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE users
+              SET organization_name = 'Stale Organization', job_title = 'Stale Title',
+                  biography = 'Stale biography', links_json = '["https://stale.example.test"]'
+            WHERE id = ?`,
+      ).bind(userId),
+      env.DB.prepare(
+        `UPDATE organization_representatives
+              SET job_title = 'Capacity Title', biography = 'Capacity biography',
+                  links_json = '["https://capacity.example.test"]'
+            WHERE member_id = ? AND user_id = ?`,
+      ).bind(memberId, userId),
+    ]);
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/users/${userId}`, "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(200);
+    const body = userDetailResponseSchema.parse(await response.json());
+    expect(body.user.memberships).toEqual([
+      expect.objectContaining({
+        organizationId,
+        organizationName: "Canonical Capacity Organization",
+        email: "capacity-profile@example.test",
+        jobTitle: "Capacity Title",
+        biography: "Capacity biography",
+        links: ["https://capacity.example.test"],
+      }),
+    ]);
   });
 
   it("rejects an empty patch body (no fields provided)", async () => {

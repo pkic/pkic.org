@@ -56,6 +56,23 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
   await expect(page.getByText("Program Manager", { exact: true })).toBeVisible();
 
+  // The System Users view must read the canonical representation capacity,
+  // not the legacy user-wide organization/job-title columns.
+  await page.goto("/portal/#/users");
+  const userSearch = page.getByPlaceholder("email or name");
+  await userSearch.fill(secondaryEmail);
+  await userSearch.press("Enter");
+  const secondaryUserRow = page.locator("tr").filter({ hasText: secondaryEmail });
+  await expect(secondaryUserRow).toContainText(organizationName);
+  await secondaryUserRow.click();
+  await expect(page.locator(".page-heading")).toHaveText("Secondary Representative");
+  const capacityCard = page.locator(".border.rounded.p-3").filter({ hasText: organizationName });
+  await expect(capacityCard).toContainText(secondaryEmail);
+  await expect(capacityCard).toContainText("Program Manager");
+  await page.getByRole("button", { name: "Edit profile", exact: true }).click();
+  await expect(page.locator("#user-organizationName")).toHaveCount(0);
+  await expect(page.locator("#user-jobTitle")).toHaveCount(0);
+
   await page.goto("/portal/#/organizations");
   await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
   await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();

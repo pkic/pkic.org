@@ -31,6 +31,11 @@ interface MembershipRow {
   show_on_org_profile: number;
   organization_id: string | null;
   organization_name: string | null;
+  email_id: string | null;
+  capacity_email: string;
+  job_title: string | null;
+  biography: string | null;
+  links_json: string | null;
   created_at: string;
 }
 
@@ -58,20 +63,30 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     db
       .prepare(
         `SELECT m.id, m.id AS capacity_member_id, mca.category_code, m.status, 1 AS show_on_org_profile,
-                NULL AS organization_id, NULL AS organization_name, m.created_at,
+                NULL AS organization_id, NULL AS organization_name,
+                NULL AS email_id, u.email AS capacity_email,
+                u.job_title, u.biography, u.links_json, m.created_at,
                 '0_' || m.created_at AS sort_key
          FROM members m
+         JOIN users u ON u.id = m.user_id
          JOIN member_category_assignments mca ON mca.member_id = m.id
          WHERE m.user_id = ?
 
          UNION ALL
 
          SELECT r.id, m.id AS capacity_member_id, mca.category_code, m.status, r.show_on_org_profile,
-                m.organization_id, o.name AS organization_name, r.created_at,
+                m.organization_id, o.name AS organization_name,
+                r.email_id, COALESCE(selected_email.email, u.email) AS capacity_email,
+                r.job_title, r.biography, r.links_json, r.created_at,
                 '1_' || r.joined_at AS sort_key
          FROM organization_representatives r
          JOIN members m ON m.id = r.member_id
          JOIN organizations o ON o.id = m.organization_id
+         JOIN users u ON u.id = r.user_id
+         LEFT JOIN user_emails selected_email
+           ON selected_email.id = r.email_id
+          AND selected_email.user_id = r.user_id
+          AND selected_email.verified_at IS NOT NULL
          JOIN member_category_assignments mca ON mca.member_id = m.id
          WHERE r.user_id = ? AND r.left_at IS NULL
          ORDER BY sort_key ASC`,
@@ -105,6 +120,11 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     showOnOrgProfile: membership.show_on_org_profile === 1,
     organizationId: membership.organization_id,
     organizationName: membership.organization_name,
+    emailId: membership.email_id,
+    email: membership.capacity_email,
+    jobTitle: membership.job_title,
+    biography: membership.biography,
+    links: parseLinksJson(membership.links_json),
     createdAt: membership.created_at,
     groups: (groupsByMemberId.get(membership.capacity_member_id) ?? []).map((group) => ({
       id: group.id,

@@ -98,6 +98,11 @@ export const userMembershipDetailSchema = z.object({
   showOnOrgProfile: z.boolean(),
   organizationId: z.string().nullable(),
   organizationName: z.string().nullable(),
+  emailId: z.string().nullable(),
+  email: z.string().email(),
+  jobTitle: z.string().nullable(),
+  biography: z.string().nullable(),
+  links: linksSchema,
   createdAt: z.string(),
   groups: z.array(groupLabelSchema),
 });
