@@ -37,6 +37,7 @@ const scanned = [
   // Individual files, so a directory can be locked in one surface at a time
   // rather than waiting for every file in it to be migrated at once.
   "layouts/wg/wg-sub.html",
+  "layouts/wg/section.html",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

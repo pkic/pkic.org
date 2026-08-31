@@ -69,7 +69,7 @@
 {{- end -}}
 {{- if .Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ .Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
-  <div class="container d-flex gap-1">
+  <div class="pk-container pk-cluster">
     {{ if or .Params.intro .Content }}
     <a class="wg-nav-link is-active" href="{{ .RelPermalink }}">About</a>
     {{ end }}
@@ -184,16 +184,16 @@
 
 {{/* Intro + CTA — only when there's something meaningful to show */}}
 {{ if or .Params.intro .Content }}
-<section class="pt-4 pb-5" id="wg-about">
-  <div class="container">
-    <div class="row align-items-start g-4">
-      <div class="col-lg-8">
+<section class="pk-section" id="wg-about">
+  <div class="pk-container pk-stack">
+    <div class="pk-grid">
+      <div>
         {{ with .Params.intro }}
-          <p class="lead fs-5">{{ . | markdownify }}</p>
+          <p>{{ . | markdownify }}</p>
         {{ end }}
         {{ .Content }}
       </div>
-      <div class="col-lg-4">
+      <div>
         {{/* Chair/vice-chair are admin-assigned (Access Control → Working
              Groups/Chairs, backed by user_roles) and fetched client-side
              from the generic public group directory — no more chair:/viceChair:
@@ -201,13 +201,13 @@
         {{ with .Params.wgID }}
         {{ partial "wg/chairs-app.html" (dict "slug" (. | lower) "label" $wgID "color" $color) }}
         {{ end }}
-        <div class="mt-3 text-center">
+        <div class="pk-center">
         {{ with $.Param "heroButton" }}
-        <a href="{{ $.Param "heroButton.link" }}" class="btn btn-page-accent btn-lg rounded-pill px-4">
+        <a href="{{ $.Param "heroButton.link" }}" class="pk-btn pk-btn--primary pk-btn--lg">
           {{ $.Param "heroButton.label" }}
         </a>
         {{ else }}
-        <a href="/join/" class="btn btn-page-accent btn-lg rounded-pill px-4">Join this Working Group</a>
+        <a href="/join/" class="pk-btn pk-btn--primary pk-btn--lg">Join this Working Group</a>
         {{ end }}
         </div>
       </div>
@@ -218,16 +218,16 @@
 
 {{/* ── Key Deliverables — prominently featured primary WG outputs ──── */}}
 {{ with .Params.keyDeliverables }}
-<section class="wg-key-deliverables py-5" id="wg-key-deliverables">
-  <div class="container">
-    <div class="text-center mb-5">
+<section class="wg-key-deliverables pk-section" id="wg-key-deliverables">
+  <div class="pk-container pk-center">
+    <div>
       <p class="wg-key-eyebrow">Key Deliverables</p>
     </div>
-    <div class="row g-4 justify-content-center">
+    <div class="pk-grid pk-grid--roomy">
       {{ range . }}
-      <div class="col-md-6 col-lg-5">
+      <div>
         <div class="wg-key-card wg-key-card--{{ $color }}">
-          {{ with .badge }}<span class="badge wg-key-badge">{{ . }}</span>{{ end }}
+          {{ with .badge }}<span class="wg-key-badge">{{ . }}</span>{{ end }}
           <div class="wg-key-icon">
             {{ partial "wg/icon.html" (dict "id" .icon "class" "wg-key-svg") }}
           </div>
@@ -246,50 +246,50 @@
 {{ if or $focusPage $delivPage $membersSubPage $resourcesPage }}
 
 {{/* Sub-page preview grid */}}
-<section class="py-5 wg-alt-section" id="wg-explore">
-  <div class="container">
-    <h2 class="fw-bold mb-1">Explore this Working Group</h2>
-    <p class="text-muted mb-4">Select a section to dive deeper</p>
-    <div class="row g-3">
+<section class="pk-section wg-alt-section" id="wg-explore">
+  <div class="pk-container pk-stack">
+    <h2 class="pk-strong">Explore this Working Group</h2>
+    <p class="pk-muted">Select a section to dive deeper</p>
+    <div class="pk-grid">
       {{ if and $focusPage .Params.focus }}
-      <div class="col-sm-6 col-lg-3">
-        <a href="{{ $focusPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+      <div>
+        <a href="{{ $focusPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }}">
           <div class="wg-explore-icon">🎯</div>
           <div class="wg-explore-title">Focus Areas</div>
           <div class="wg-explore-desc">{{ len .Params.focus }} active focus areas</div>
-          <div class="wg-explore-arrow mt-auto">Explore →</div>
+          <div class="wg-explore-arrow pk-push-block">Explore →</div>
         </a>
       </div>
       {{ end }}
       {{ if and $delivPage .Params.deliverables }}
-      <div class="col-sm-6 col-lg-3">
-        <a href="{{ $delivPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+      <div>
+        <a href="{{ $delivPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }}">
           <div class="wg-explore-icon">📦</div>
           <div class="wg-explore-title">Deliverables</div>
           <div class="wg-explore-desc">{{ len .Params.deliverables }} deliverables and work items</div>
-          <div class="wg-explore-arrow mt-auto">Explore →</div>
+          <div class="wg-explore-arrow pk-push-block">Explore →</div>
         </a>
       </div>
       {{ end }}
       {{ if $membersSubPage }}
       {{- $wgMemberCount := 0 -}}
       {{- range hugo.Data.members -}}{{- if in .workingGroups $wgID -}}{{- $wgMemberCount = add $wgMemberCount 1 -}}{{- end -}}{{- end -}}
-      <div class="col-sm-6 col-lg-3">
-        <a href="{{ $membersSubPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+      <div>
+        <a href="{{ $membersSubPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }}">
           <div class="wg-explore-icon">🏢</div>
           <div class="wg-explore-title">Members</div>
           <div class="wg-explore-desc">{{ $wgMemberCount }} participating organizations</div>
-          <div class="wg-explore-arrow mt-auto">Explore →</div>
+          <div class="wg-explore-arrow pk-push-block">Explore →</div>
         </a>
       </div>
       {{ end }}
       {{ if and $resourcesPage .Params.resources }}
-      <div class="col-sm-6 col-lg-3">
-        <a href="{{ $resourcesPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+      <div>
+        <a href="{{ $resourcesPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }}">
           <div class="wg-explore-icon">📚</div>
           <div class="wg-explore-title">Resources</div>
           <div class="wg-explore-desc">{{ len .Params.resources }} curated resources</div>
-          <div class="wg-explore-arrow mt-auto">Explore →</div>
+          <div class="wg-explore-arrow pk-push-block">Explore →</div>
         </a>
       </div>
       {{ end }}
@@ -303,14 +303,14 @@
 
 {{/* Focus Areas */}}
 {{ with .Params.focus }}
-<section class="py-5 wg-alt-section" id="wg-focus">
-  <div class="container">
-    <h2 class="fw-bold mb-1">Focus Areas</h2>
-    <p class="text-muted mb-4">What this working group focuses on</p>
+<section class="pk-section wg-alt-section" id="wg-focus">
+  <div class="pk-container pk-stack">
+    <h2 class="pk-strong">Focus Areas</h2>
+    <p class="pk-muted">What this working group focuses on</p>
     <div class="bento-grid">
       {{ range . }}
       <div class="bento-card bento-{{ $color }}-pale">
-        <div class="d-flex align-items-flex-start gap-2 mb-2">
+        <div class="pk-cluster pk-cluster--start">
           {{ with .icon }}<span class="bento-icon flex-shrink-0">{{ . }}</span>{{ end }}
           <div class="bento-title">{{ .title }}</div>
         </div>
@@ -324,10 +324,10 @@
 
 {{/* Current Deliverables / Work items */}}
 {{ with .Params.deliverables }}
-<section class="py-5" id="wg-deliverables">
-  <div class="container">
-    <h2 class="fw-bold mb-1">What We're Working On</h2>
-    <p class="text-muted mb-4">Current and planned deliverables of this working group</p>
+<section class="pk-section" id="wg-deliverables">
+  <div class="pk-container pk-stack">
+    <h2 class="pk-strong">What We're Working On</h2>
+    <p class="pk-muted">Current and planned deliverables of this working group</p>
     <div class="bento-grid">
       {{ range . }}
       <div class="bento-card">
@@ -338,7 +338,7 @@
         <div class="bento-text">{{ .description }}</div>
         {{ with .url }}
         <div class="bento-footer">
-          <a href="{{ . }}" class="stretched-link text-decoration-none text-success fw-semibold">Explore →</a>
+          <a href="{{ . }}" class="pk-stretched pk-strong">Explore →</a>
         </div>
         {{ end }}
       </div>
@@ -350,10 +350,10 @@
 
 {{/* Members in this WG */}}
 {{ with $wgID }}
-<section class="py-5" id="wg-members">
-  <div class="container">
-    <h2 class="fw-bold mb-1">Working Group Members</h2>
-    <p class="text-muted mb-4">Organizations actively participating in the {{ $.Title }}</p>
+<section class="pk-section" id="wg-members">
+  <div class="pk-container pk-stack">
+    <h2 class="pk-strong">Working Group Members</h2>
+    <p class="pk-muted">Organizations actively participating in the {{ $.Title }}</p>
     <div class="members-grid">
       {{- $wgMembers := slice -}}
       {{- range hugo.Data.members -}}
@@ -365,8 +365,8 @@
         {{- partial "members/card.html" (dict "member" . "site" $.Site "showDescription" false "showWorkingGroups" false "showSocialHover" true) -}}
       {{- end -}}
     </div>
-    <div class="text-center mt-4">
-      <a href="/members/" class="btn btn-outline-success rounded-pill">View All Members</a>
+    <div class="pk-center">
+      <a href="/members/" class="pk-btn pk-btn--secondary">View All Members</a>
     </div>
   </div>
 </section>
@@ -374,16 +374,16 @@
 
 {{/* Resources */}}
 {{ with .Params.resources }}
-<section class="py-5" id="wg-resources">
-  <div class="container">
-    <h2 class="fw-bold mb-1">Industry Resources</h2>
-    <p class="text-muted mb-4">Useful references and external resources</p>
+<section class="pk-section" id="wg-resources">
+  <div class="pk-container pk-stack">
+    <h2 class="pk-strong">Industry Resources</h2>
+    <p class="pk-muted">Useful references and external resources</p>
     <div class="bento-grid">
       {{ range . }}
-      <a class="bento-card bento-card-link text-decoration-none" href="{{ .url }}" target="_blank" rel="noopener noreferrer">
+      <a class="bento-card bento-card-link" href="{{ .url }}" target="_blank" rel="noopener noreferrer">
         <div class="bento-title">{{ .title }}</div>
         <div class="bento-text">{{ .description }}</div>
-        <div class="bento-footer text-success">Visit ↗</div>
+        <div class="bento-footer">Visit ↗</div>
       </a>
       {{ end }}
     </div>
@@ -404,18 +404,18 @@
   {{ end }}
 {{ end }}
 {{ if gt (len $relatedPosts) 0 }}
-<section class="py-5 wg-alt-section" id="wg-blog">
-  <div class="container">
-    <h2 class="fw-bold mb-4">From the Blog</h2>
-    <div class="row g-3">
+<section class="pk-section wg-alt-section" id="wg-blog">
+  <div class="pk-container pk-stack">
+    <h2 class="pk-strong">From the Blog</h2>
+    <div class="pk-grid">
       {{ range first 3 (sort $relatedPosts "Date" "desc") }}
-      <div class="col-md-4">
+      <div>
         {{ partial "pagelisting.html" . }}
       </div>
       {{ end }}
     </div>
-    <div class="text-center mt-3">
-      <a href="/blog/" class="btn btn-outline-success rounded-pill">More on the Blog</a>
+    <div class="pk-center">
+      <a href="/blog/" class="pk-btn pk-btn--secondary">More on the Blog</a>
     </div>
   </div>
 </section>
@@ -434,13 +434,13 @@
   {{ end }}
 {{ end }}
 {{ if $otherSubPages }}
-<section class="py-4">
-  <div class="container">
-    <h3 class="fw-bold mb-3">More from this Working Group</h3>
-    <div class="row g-3">
+<section class="pk-section">
+  <div class="pk-container pk-stack">
+    <h3 class="pk-strong">More from this Working Group</h3>
+    <div class="pk-grid">
       {{ range $otherSubPages }}
-      <div class="col-sm-6 col-md-4">
-        <a href="{{ .RelPermalink }}" class="bento-card bento-card-link d-block text-decoration-none" style="min-height:120px;">
+      <div>
+        <a href="{{ .RelPermalink }}" class="bento-card bento-card-link" style="min-height:120px;">
           <div class="bento-title">{{ .Title }}</div>
           <div class="bento-text">{{ .Summary }}</div>
         </a>
@@ -450,8 +450,8 @@
   </div>
 </section>
 {{ end }}{{/* Join CTA */}}
-<section class="py-5">
-  <div class="container">
+<section class="pk-section">
+  <div class="pk-container pk-center">
     <div class="pkic-cta-block bento-{{ $color }} text-white">
       <div class="pkic-cta-title">Join the {{ .Title }}</div>
       <p class="pkic-cta-text">
@@ -462,8 +462,8 @@
         {{- end -}}
         Collaborate with industry leaders, shape standards, and drive meaningful change.
       </p>
-      <a href="/join/" class="btn btn-light btn-lg rounded-pill px-5 fw-bold">Become a Member</a>
-      <a href="/discussions/" class="btn btn-outline-light btn-lg rounded-pill px-4 ms-2">Join Discussions</a>
+      <a href="/join/" class="pk-btn pk-btn--primary pk-btn--lg">Become a Member</a>
+      <a href="/discussions/" class="pk-btn pk-btn--secondary pk-btn--lg">Join Discussions</a>
     </div>
   </div>
 </section>
