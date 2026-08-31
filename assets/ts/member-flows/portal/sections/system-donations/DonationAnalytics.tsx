@@ -1,5 +1,5 @@
 import { Badge } from "../../../../components/Badge";
-import { fmtMoney, svgBarChart, svgStackedBarChart } from "../../../../components/analytics/charts";
+import { fmtMoney, svgBarChart, svgStackedBarChart } from "../../../../ui/chart";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { DataTable, type Column } from "../../../../components/Table";
@@ -13,20 +13,20 @@ interface LabeledDonationPeriod extends DonationPeriod {
   month?: string;
 }
 
-function amountChart(labels: string[], periods: DonationPeriod[]): string {
+function amountChart(labels: string[], periods: DonationPeriod[], caption: string): string {
   const grossValues = periods.map((period) => period.grossUsd);
   if (!grossValues.some((value) => value > 0)) return "";
   return svgStackedBarChart(
     labels,
     [
-      { label: "Net (USD)", values: periods.map((period) => period.netUsd), color: "#198754" },
+      { label: "Net (USD)", values: periods.map((period) => period.netUsd), color: "var(--pk-ok)" },
       {
         label: "Fees",
         values: periods.map((period) => Math.max(0, period.grossUsd - period.netUsd)),
-        color: "#dee2e6",
+        color: "var(--pk-line-strong)",
       },
     ],
-    { valueFormatter: (value) => fmtMoney(value, "usd") },
+    { caption, valueFormatter: (value: number) => fmtMoney(value, "usd") },
   );
 }
 
@@ -68,19 +68,22 @@ export function DonationAnalytics() {
   const monthlyCountChart = svgBarChart(
     donations.monthly.map((period) => period.month),
     donations.monthly.map((period) => period.completed),
-    { color: "#0d6efd" },
+    { caption: "Completed donations per month", valueHeader: "Donations", color: "var(--pk-info)" },
   );
   const dailyAmountChart = amountChart(
     donations.daily.map((period) => period.date.slice(5)),
     donations.daily,
+    "Donation amounts per day",
   );
   const weeklyAmountChart = amountChart(
     donations.weekly.map((period) => period.week),
     donations.weekly,
+    "Donation amounts per week",
   );
   const monthlyAmountChart = amountChart(
     donations.monthly.map((period) => period.month),
     donations.monthly,
+    "Donation amounts per month",
   );
 
   return (

@@ -858,27 +858,11 @@ $adm-danger: #dc3545;
     word-break: break-all;
   }
 
-  // ── SVG chart legends ────────────────────────────────────────────────────────
-
-  svg.adm-chart-svg {
-    display: block;
-    max-width: 700px;
-  }
-
-  .adm-chart-legend {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-top: 0.4rem;
-  }
-
-  .adm-chart-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.72rem;
-    color: $adm-muted;
-  }
+  // The SVG chart styles are gone: the renderers moved into the design system
+  // as assets/ts/ui/chart.ts, and their CSS travels with them in Chart.css.
+  // The charts here were aria-hidden with their numbers inside the hidden
+  // subtree, so they said nothing at all to a screen reader; they now emit a
+  // visually hidden data table alongside the picture.
 
   // ── Common utility classes ──────────────────────────────────────────────────
 

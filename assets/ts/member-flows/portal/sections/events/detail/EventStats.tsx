@@ -12,7 +12,8 @@ import { friendlyErrorMessage } from "../../../../../components/ErrorAlert";
 import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
-import { svgStackedBarChart, isoDateRange } from "../../../../../components/analytics/charts";
+import { svgStackedBarChart } from "../../../../../ui/chart";
+import { isoDateRange } from "../../../../../components/analytics/date-range";
 import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
@@ -324,7 +325,7 @@ export function EventStats({ slug }: { slug: string }) {
                 __html: svgStackedBarChart(
                   growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`),
                   growthSeries,
-                  { isoLabels: growthDates },
+                  { caption: "Registrations received by day", isoLabels: growthDates },
                 ),
               }}
             />
@@ -346,7 +347,11 @@ export function EventStats({ slug }: { slug: string }) {
               <Badge tone="neutral">light = pending/waitlisted</Badge>
             </div>
             {daySeries.length > 0 ? (
-              <div dangerouslySetInnerHTML={{ __html: svgStackedBarChart(dayLabels, daySeries) }} />
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: svgStackedBarChart(dayLabels, daySeries, { caption: "Registrations by event day" }),
+                }}
+              />
             ) : (
               <EmptyState title="No registrations on any event day yet." />
             )}

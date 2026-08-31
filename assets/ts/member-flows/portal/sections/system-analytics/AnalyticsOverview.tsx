@@ -1,5 +1,5 @@
 import { ActivityChartCard } from "../../../../components/analytics/ActivityChartCard";
-import { fmtMoney, recentActivityChart, statusBars } from "../../../../components/analytics/charts";
+import { fmtMoney, recentActivityChart, statusBars } from "../../../../ui/chart";
 import { DataTable } from "../../../../components/Table";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";

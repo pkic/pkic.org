@@ -1,4 +1,4 @@
-import { svgBarChart } from "../../../../components/analytics/charts";
+import { svgBarChart } from "../../../../ui/chart";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -23,10 +23,12 @@ export function RegistrationAnalytics() {
   const weeklyChart = svgBarChart(
     registrations.weekly.map((period) => period.week.slice(5)),
     registrations.weekly.map((period) => period.count),
+    { caption: "Registrations per week", valueHeader: "Registrations" },
   );
   const monthlyChart = svgBarChart(
     registrations.monthly.map((period) => period.month),
     registrations.monthly.map((period) => period.count),
+    { caption: "Registrations per month", valueHeader: "Registrations" },
   );
 
   return (
