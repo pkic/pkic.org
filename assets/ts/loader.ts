@@ -23,6 +23,7 @@ import "./design-system";
 // import() into a separate chunk. Only the chunk requested by the page is
 // ever fetched by the browser.
 const modules: Record<string, () => Promise<unknown>> = {
+  "ui/preview/preview-page": () => import("./ui/preview/preview-page"),
   "invite-decline": () => import("./invite-decline"),
   "event-flows/registration-page": () => import("./event-flows/registration-page"),
   "event-flows/registration-confirm-page": () => import("./event-flows/registration-confirm-page"),

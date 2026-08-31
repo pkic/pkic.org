@@ -190,4 +190,16 @@
     --pk-row-y: 0.32rem;
     --pk-stack: 0.75rem;
   }
+
+  [data-radius="sharp"] {
+    --pk-radius-sm: 2px;
+    --pk-radius: 3px;
+    --pk-radius-lg: 4px;
+  }
+
+  [data-radius="round"] {
+    --pk-radius-sm: 8px;
+    --pk-radius: 12px;
+    --pk-radius-lg: 18px;
+  }
 }

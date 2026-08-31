@@ -1,0 +1,207 @@
+/*
+ * The preview's own chrome.
+ *
+ * It reads the same tokens as everything it displays, which is the point: if
+ * the controls look wrong in a theme, so does the system.
+ */
+
+@layer components {
+  .pk-preview {
+    min-height: 100vh;
+    background: var(--pk-canvas);
+    color: var(--pk-ink);
+  }
+
+  .pk-preview__bar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-4);
+    padding: var(--pk-2) var(--pk-5);
+    background: color-mix(in srgb, var(--pk-canvas) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--pk-line);
+  }
+
+  .pk-preview__brand {
+    margin: 0 auto 0 0;
+    font-weight: 900;
+    font-size: var(--pk-text-md);
+    letter-spacing: -0.01em;
+  }
+
+  .pk-preview__brand span {
+    display: block;
+    font-weight: 400;
+    font-size: var(--pk-text-2xs);
+    color: var(--pk-ink-muted);
+    letter-spacing: 0;
+  }
+
+  .pk-preview__control {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-preview__label {
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+    color: var(--pk-ink-faint);
+  }
+
+  .pk-preview__segmented {
+    display: inline-flex;
+    overflow: hidden;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-pill);
+  }
+
+  .pk-preview__segmented button {
+    padding: 0.22rem 0.7rem;
+    background: transparent;
+    border: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .pk-preview__segmented button[aria-pressed="true"] {
+    background: var(--pk-accent-strong);
+    color: var(--pk-accent-on);
+  }
+
+  .pk-preview__hues {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: 15rem;
+  }
+
+  .pk-preview__hue {
+    width: 1rem;
+    height: 1rem;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background-clip: padding-box;
+    cursor: pointer;
+  }
+
+  .pk-preview__hue[aria-pressed="true"] {
+    border-color: var(--pk-ink);
+  }
+
+  .pk-preview__hue--green {
+    background: var(--pk-palette-green);
+  }
+  .pk-preview__hue--emerald {
+    background: var(--pk-palette-emerald);
+  }
+  .pk-preview__hue--teal {
+    background: var(--pk-palette-teal);
+  }
+  .pk-preview__hue--cyan {
+    background: var(--pk-palette-cyan);
+  }
+  .pk-preview__hue--blue {
+    background: var(--pk-palette-blue);
+  }
+  .pk-preview__hue--indigo {
+    background: var(--pk-palette-indigo);
+  }
+  .pk-preview__hue--purple {
+    background: var(--pk-palette-purple);
+  }
+  .pk-preview__hue--violet {
+    background: var(--pk-palette-violet);
+  }
+  .pk-preview__hue--rose {
+    background: var(--pk-palette-rose);
+  }
+  .pk-preview__hue--coral {
+    background: var(--pk-palette-coral);
+  }
+  .pk-preview__hue--orange {
+    background: var(--pk-palette-orange);
+  }
+  .pk-preview__hue--amber {
+    background: var(--pk-palette-amber);
+  }
+  .pk-preview__hue--yellow {
+    background: var(--pk-palette-yellow);
+  }
+
+  .pk-preview__toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2) var(--pk-3);
+    padding: var(--pk-3) var(--pk-5);
+    border-bottom: 1px solid var(--pk-line);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-preview__toc a {
+    color: var(--pk-ink-muted);
+    text-decoration: none;
+  }
+
+  .pk-preview__toc a:hover {
+    color: var(--pk-accent-ink);
+    text-decoration: underline;
+  }
+
+  .pk-preview__main {
+    max-width: 66rem;
+    margin: 0 auto;
+    padding: 0 var(--pk-5) var(--pk-8);
+  }
+
+  .pk-preview__section {
+    padding-top: var(--pk-7);
+    scroll-margin-top: 7rem;
+  }
+
+  .pk-preview__note {
+    margin: var(--pk-1) 0 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    max-width: 46rem;
+  }
+
+  .pk-preview__specimens {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-4);
+    margin-top: var(--pk-4);
+  }
+
+  .pk-preview__shelf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-3);
+    padding: var(--pk-4);
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+  }
+
+  .pk-preview__shelf--stack {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pk-preview__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--pk-4);
+  }
+}

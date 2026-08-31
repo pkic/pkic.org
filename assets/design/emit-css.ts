@@ -11,7 +11,7 @@
  */
 
 import { accentNeighbour, palette, type AccentHue } from "./palette.ts";
-import { constants, cssVar, density, layers, themes } from "./tokens.ts";
+import { constants, cssVar, density, layers, radiusModes, themes } from "./tokens.ts";
 
 function block(entries: Record<string, string>, indent: string): string {
   return Object.entries(entries)
@@ -66,6 +66,14 @@ ${block(themes.dark, "    ")}
 
   [data-density="compact"] {
 ${block(density.compact, "    ")}
+  }
+
+  [data-radius="sharp"] {
+${block(radiusModes.sharp, "    ")}
+  }
+
+  [data-radius="round"] {
+${block(radiusModes.round, "    ")}
   }
 }
 `;

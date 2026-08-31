@@ -180,6 +180,16 @@ export const constants = {
   stripe: `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
 } as const;
 
+/**
+ * Corner radius as a mode. Shape is one of the strongest signals of a product's
+ * character, and it is the thing most likely to be retuned after seeing real
+ * screens, so it is switchable rather than hard-coded into components.
+ */
+export const radiusModes = {
+  sharp: { "radius-sm": "2px", radius: "3px", "radius-lg": "4px" },
+  round: { "radius-sm": "8px", radius: "12px", "radius-lg": "18px" },
+} as const;
+
 /** Density is a surface decision, not a user preference, so it is a mode. */
 export const density = {
   comfortable: {
