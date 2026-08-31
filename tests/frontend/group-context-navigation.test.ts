@@ -5,6 +5,7 @@ describe("selected-group capability navigation", () => {
   it("exposes collaboration without management controls to participants", () => {
     expect(groupContextNavigation(["view", "participate"]).map((item) => item.key)).toEqual([
       "overview",
+      "members",
       "events",
       "meetings",
       "votes",

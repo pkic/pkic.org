@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import {
   groupMembershipMutationResponseSchema,
-  groupMembershipsListResponseSchema,
+  groupMembershipsManagementListResponseSchema,
   type GroupMembership,
 } from "../../../../../shared/schemas/groups";
 import { confirmAction } from "../../../../components/ConfirmDialog";
@@ -12,13 +12,32 @@ import { Spinner } from "../../../../components/Spinner";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { ApiClientError, deleteJson } from "../../../../shared/api-client";
 import { GroupMemberAddForm } from "./GroupMemberAddForm";
+import { GroupMembersRoster } from "./GroupMembersRoster";
 
 function capacityLabel(membership: GroupMembership): string {
   if (membership.memberType === "organization") return membership.organizationName ?? "Organization";
   return `Individual membership${membership.membershipCategory ? ` (${membership.membershipCategory})` : ""}`;
 }
 
-export function GroupMembers({ groupId, onChanged }: { groupId: string; onChanged: () => Promise<void> }) {
+/**
+ * The Members tab. A caller who cannot manage the group (only `participate`)
+ * delegates to the read-only roster: no add-person action, no row menus, no
+ * email or other management-only fields ever reach that request.
+ */
+export function GroupMembers({
+  groupId,
+  canManage,
+  onChanged,
+}: {
+  groupId: string;
+  canManage: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  if (!canManage) return <GroupMembersRoster groupId={groupId} />;
+  return <GroupMembersManager groupId={groupId} onChanged={onChanged} />;
+}
+
+function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChanged: () => Promise<void> }) {
   const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [endingId, setEndingId] = useState<string | null>(null);
@@ -27,7 +46,7 @@ export function GroupMembers({ groupId, onChanged }: { groupId: string; onChange
   const page = useApiPage(
     `/api/v1/groups/${encodeURIComponent(groupId)}/memberships`,
     { active: "true", sort: "user_name", ...(search ? { q: search } : {}) },
-    groupMembershipsListResponseSchema,
+    groupMembershipsManagementListResponseSchema,
     (data) => data.memberships,
     25,
   );

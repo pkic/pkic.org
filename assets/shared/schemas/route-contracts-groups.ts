@@ -118,13 +118,18 @@ export const groupMembershipsListRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
   summary: "List group membership capacities",
-  description: "One row is one user participating for one Member; a user may appear more than once.",
+  description:
+    "One row is one user participating for one Member; a user may appear more than once. An effective group " +
+    "manager receives the full capacity roster; a caller with only the participate capability receives the " +
+    "privacy-reduced roster (name, headshot, and organization only — no email, category, source, or " +
+    "membership-capacity identifier).",
   request: { params: groupReferenceParamsSchema, query: groupMembershipsListQuerySchema },
   responses: {
     "200": {
-      description: "A bounded membership-capacity page.",
+      description: "A bounded membership-capacity page, shaped by the caller's own capabilities.",
       content: { "application/json": { schema: groupMembershipsListResponseSchema } },
     },
+    "403": jsonErrorResponse("The caller holds neither the participate nor the manage capability for this group."),
     "404": jsonErrorResponse("Group not found or not visible."),
   },
 };

@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   groupMembershipsListQuerySchema,
+  groupMembershipsManagementListResponseSchema,
+  groupMembershipsParticipantListResponseSchema,
   groupCategoryRulesResponseSchema,
   groupJoinSchema,
   authenticatedGroupDetailResponseSchema,
@@ -13,6 +15,7 @@ import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../functions/_lib/type
 import {
   assignLocalGroupLeadership,
   buildGroupMembershipsPageQuery,
+  buildGroupParticipantsPageQuery,
   buildGroupsPageQuery,
   canManageGroup,
   createGroup,
@@ -114,6 +117,23 @@ describe("group visibility", () => {
       .join("\n");
     expect(membershipDetails).toMatch(/idx_group_memberships_group_active/);
     expect(membershipDetails).not.toMatch(/SCAN group_memberships\b/);
+
+    const participantsQuery = buildGroupParticipantsPageQuery(
+      "10000000-0000-4000-8000-000000000001",
+      groupMembershipsListQuerySchema.parse({ active: true, limit: 25 }),
+    );
+    const participantsSql = buildOffsetPageSql(participantsQuery);
+    const participantsPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${participantsSql.pageSql}`)
+      .bind(...participantsSql.bindings, participantsQuery.limit, participantsQuery.offset)
+      .all<{ detail: string }>();
+    const participantsCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${participantsSql.countSql}`)
+      .bind(...participantsSql.countBindings)
+      .all<{ detail: string }>();
+    const participantsDetails = [...participantsPagePlan.results, ...participantsCountPlan.results]
+      .map((row) => row.detail)
+      .join("\n");
+    expect(participantsDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(participantsDetails).not.toMatch(/SCAN group_memberships\b/);
   });
 });
 
@@ -1177,6 +1197,83 @@ describe("group route contracts", () => {
       headers: { authorization: `Bearer ${leaderToken}` },
     });
     expect(retiredContext.status).toBe(404);
+  });
+
+  it("shapes the membership listing by capability: reduced roster for a participant, full roster for a manager, none for neither", async () => {
+    const globalAdmin = await insertActor("membership-shape-admin@example.test", "admin");
+    const group = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Membership Shape Group",
+      eligibilityMode: "open",
+    });
+
+    const manager = await insertActor("membership-shape-manager@example.test");
+    await grantGroupLeadership(group.id, manager);
+    const managerToken = await createAdminSession(env.DB, manager.id, "membership-shape-manager-token");
+
+    const participantEmail = "membership-shape-participant@example.test";
+    const participantUserId = await insertUser(env.DB, participantEmail);
+    const participantMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Membership Shape Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, participantMemberId, participantUserId);
+    await joinGroup(env.DB, group.id, {
+      actorUserId: participantUserId,
+      targetUserId: participantUserId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const participantToken = await createMemberSession(env.DB, participantUserId, "membership-shape-participant-token");
+
+    const outsiderUserId = await insertUser(env.DB, "membership-shape-outsider@example.test");
+    const outsiderMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Membership Shape Outsider Organization"),
+      "B",
+    );
+    await addRepresentative(env.DB, outsiderMemberId, outsiderUserId);
+    const outsiderToken = await createMemberSession(env.DB, outsiderUserId, "membership-shape-outsider-token");
+
+    // (a) A participant (not a manager) receives the reduced roster: exactly
+    // identity and affiliation fields, no email address and no
+    // capacity/membership identifier anywhere in the raw payload.
+    const participantResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${participantToken}` },
+    });
+    expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
+    const participantRaw = (await participantResponse.json()) as { memberships: Record<string, unknown>[] };
+    const participantPayload = groupMembershipsParticipantListResponseSchema.parse(participantRaw);
+    const participantRow = participantRaw.memberships.find(
+      (row) => row.organizationName === "Membership Shape Organization",
+    );
+    expect(participantRow).toBeDefined();
+    expect(Object.keys(participantRow!).sort()).toEqual(["headshotUrl", "name", "organizationName", "userId"].sort());
+    expect(JSON.stringify(participantRaw)).not.toContain(participantEmail);
+    expect(
+      participantPayload.memberships.find((row) => row.organizationName === "Membership Shape Organization"),
+    ).toMatchObject({ userId: participantUserId, organizationName: "Membership Shape Organization" });
+
+    // (c) An effective group manager keeps the full capacity roster, email included.
+    const managerResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(managerResponse.status, await managerResponse.clone().text()).toBe(200);
+    const managerPayload = groupMembershipsManagementListResponseSchema.parse(await managerResponse.json());
+    expect(managerPayload.memberships).toContainEqual(
+      expect.objectContaining({ userId: participantUserId, email: participantEmail }),
+    );
+
+    // (b) A caller with neither capability is refused outright.
+    const outsiderResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${outsiderToken}` },
+    });
+    expect([403, 404]).toContain(outsiderResponse.status);
+
+    const unauthenticatedResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`);
+    expect(unauthenticatedResponse.status).toBe(401);
   });
 
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {

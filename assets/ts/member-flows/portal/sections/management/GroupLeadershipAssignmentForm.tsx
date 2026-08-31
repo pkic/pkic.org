@@ -3,7 +3,7 @@ import {
   GROUP_LEADERSHIP_ROLE_IDS,
   groupLeadershipAssignSchema,
   groupLeadershipListResponseSchema,
-  groupMembershipsListResponseSchema,
+  groupMembershipsManagementListResponseSchema,
   type GroupLeadershipAssignment,
   type GroupMembership,
 } from "../../../../../shared/schemas/groups";
@@ -26,9 +26,9 @@ function leadershipCapacityCatalog(groupId: string): ServerCatalog<GroupMembersh
     endpoint: `/api/v1/groups/${encodeURIComponent(groupId)}/memberships`,
     params: { active: "true" },
     sort: "user_name",
-    responseSchema: groupMembershipsListResponseSchema,
-    resolveItems: (response) => groupMembershipsListResponseSchema.parse(response).memberships,
-    resolvePage: (response) => groupMembershipsListResponseSchema.parse(response).page,
+    responseSchema: groupMembershipsManagementListResponseSchema,
+    resolveItems: (response) => groupMembershipsManagementListResponseSchema.parse(response).memberships,
+    resolvePage: (response) => groupMembershipsManagementListResponseSchema.parse(response).page,
     itemKey: (membership) => membership.id,
     itemLabel: capacityLabel,
   };
