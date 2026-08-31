@@ -56,18 +56,9 @@ export function Menu({ label, buttonContent, buttonClass, align = "start", actio
         setOpen(false);
       }
     };
-    // Reposition-on-scroll is not worth the jitter; the menu simply closes.
-    const onScroll = (event: Event) => {
-      if (event.target instanceof Node && rootRef.current?.contains(event.target)) return;
-      setOpen(false);
-    };
     document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
     return () => {
       document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
     };
   }, [open]);
 
@@ -78,20 +69,33 @@ export function Menu({ label, buttonContent, buttonClass, align = "start", actio
   const popupRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!open) return;
-    const trigger = buttonRef.current;
-    const popup = popupRef.current;
-    if (!trigger || !popup) return;
-    const triggerRect = trigger.getBoundingClientRect();
-    const popupRect = popup.getBoundingClientRect();
-    const gap = 4;
-    const openUpward =
-      triggerRect.bottom + gap + popupRect.height > window.innerHeight && triggerRect.top - gap - popupRect.height > 0;
-    const top = openUpward ? triggerRect.top - gap - popupRect.height : triggerRect.bottom + gap;
-    let left = align === "end" ? triggerRect.right - popupRect.width : triggerRect.left;
-    left = Math.max(8, Math.min(left, window.innerWidth - popupRect.width - 8));
-    popup.style.top = `${Math.max(8, top)}px`;
-    popup.style.left = `${left}px`;
-    popup.style.minWidth = `${Math.max(triggerRect.width, popupRect.width)}px`;
+    const position = () => {
+      const trigger = buttonRef.current;
+      const popup = popupRef.current;
+      if (!trigger || !popup) return;
+      const triggerRect = trigger.getBoundingClientRect();
+      const popupRect = popup.getBoundingClientRect();
+      const gap = 4;
+      const openUpward =
+        triggerRect.bottom + gap + popupRect.height > window.innerHeight &&
+        triggerRect.top - gap - popupRect.height > 0;
+      const top = openUpward ? triggerRect.top - gap - popupRect.height : triggerRect.bottom + gap;
+      let left = align === "end" ? triggerRect.right - popupRect.width : triggerRect.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - popupRect.width - 8));
+      popup.style.top = `${Math.max(8, top)}px`;
+      popup.style.left = `${left}px`;
+      popup.style.minWidth = `${Math.max(triggerRect.width, popupRect.width)}px`;
+    };
+    position();
+    // The popup is fixed-positioned, so scrolling moves its trigger out from
+    // under it; follow the trigger instead of dismissing (closing on scroll
+    // makes a trackpad twitch eat the menu).
+    document.addEventListener("scroll", position, true);
+    window.addEventListener("resize", position);
+    return () => {
+      document.removeEventListener("scroll", position, true);
+      window.removeEventListener("resize", position);
+    };
   }, [open, align, actions.length]);
 
   function onButtonKeyDown(event: KeyboardEvent): void {

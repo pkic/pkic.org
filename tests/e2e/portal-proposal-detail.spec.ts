@@ -91,6 +91,43 @@ test("renders the portal proposal detail workflow with submission answers and op
     });
   });
 
+  // The standalone event views now resolve the owning group before
+  // rendering; this mocked event has none, so the standalone surface stays.
+  await page.route("**/api/v1/events/pqc-2026", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        event: {
+          id: "pqc-2026-event-id",
+          slug: "pqc-2026",
+          name: "PQC 2026",
+          timezone: "UTC",
+          startsAt: null,
+          endsAt: null,
+          profileKey: null,
+          sourceMode: null,
+          registrationPolicy: "no_registration",
+          visibility: "public",
+          inviteLimitAttendee: 0,
+          updatedAt: "2026-08-01T00:00:00.000Z",
+          ownerGroupId: null,
+          seriesId: null,
+          basePath: null,
+          userRetentionDays: null,
+          venue: null,
+          virtualUrl: null,
+          heroImageUrl: null,
+          location: null,
+          sessionTypes: null,
+          links: [],
+          settings: {},
+          capabilities: ["read", "write", "manage"],
+        },
+      }),
+    });
+  });
+
   await page.route(`**/api/v1/proposals/${proposalId}/access-links`, async (route) => {
     await route.fulfill({
       status: 200,
