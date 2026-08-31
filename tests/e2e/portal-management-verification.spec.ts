@@ -302,7 +302,7 @@ test.describe("Portal management browser-verification pass", () => {
     await acceptConfirmDialog(page, "Approve and create vote");
     await expect(proposalRow).toContainText(/converted to vote/i);
 
-    await page.getByRole("button", { name: "Votes", exact: true }).click();
+    await page.getByRole("button", { name: "All votes", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible();
   });
 
@@ -355,7 +355,7 @@ test.describe("Portal management browser-verification pass", () => {
     await detail.getByRole("button", { name: "Advance" }).click();
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
     await expect(detail.locator("span.badge", { hasText: "contacted" })).toBeVisible();
-    await expect(detail.getByText(/new inquiry\s*→\s*contacted/)).toBeVisible();
+    await expect(detail.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
     expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsors/companies"]));
     expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsors"))).toBe(true);
     expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsors/"))).toBe(true);
@@ -743,14 +743,27 @@ test.describe("Portal management browser-verification pass", () => {
     const usersLookup = await page.evaluate(async (q) => {
       const res = await fetch(`/api/v1/users?q=${encodeURIComponent(q)}`, { credentials: "same-origin" });
       const body = (await res.json()) as {
-        users: Array<{ email: string; membership: { organizationName: string | null } | null }>;
+        users: Array<{ id: string; email: string; type: string }>;
       };
       return { status: res.status, body };
     }, email);
     expect(usersLookup.status).toBe(200);
     const provisionedUser = usersLookup.body.users.find((u) => u.email === email);
     expect(provisionedUser, JSON.stringify(usersLookup.body)).toBeTruthy();
-    expect(provisionedUser?.membership?.organizationName).toBe(orgName);
+    expect(provisionedUser?.type).toBe("member");
+
+    const detailLookup = await page.evaluate(async (id) => {
+      const res = await fetch(`/api/v1/users/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+      const body = (await res.json()) as {
+        user: { identities: Array<{ organizationName: string | null }> };
+      };
+      return { status: res.status, body };
+    }, provisionedUser!.id);
+    expect(detailLookup.status).toBe(200);
+    expect(
+      detailLookup.body.user.identities.some((identity) => identity.organizationName === orgName),
+      JSON.stringify(detailLookup.body),
+    ).toBe(true);
 
     expect(canonicalRequests).toContain(`GET /api/v1/members/applications`);
     expect(canonicalRequests).toContain(`GET /api/v1/members/applications/${applicationId}`);
