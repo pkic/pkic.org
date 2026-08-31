@@ -93,85 +93,102 @@ describe("Badge", () => {
 });
 
 describe("Chip", () => {
-  function buttonIn(container: HTMLElement): HTMLButtonElement {
-    const button = container.querySelector("button");
-    if (!button) throw new Error("no button rendered");
-    return button as HTMLButtonElement;
+  function chipIn(container: HTMLElement): HTMLElement {
+    const chip = container.querySelector<HTMLElement>(".pk-chip");
+    if (!chip) throw new Error("no chip rendered");
+    return chip;
+  }
+
+  function toggleIn(container: HTMLElement): HTMLElement {
+    const toggle = container.querySelector<HTMLElement>(".pk-chip__toggle");
+    if (!toggle) throw new Error("no chip toggle rendered");
+    return toggle;
   }
 
   function removeButtonIn(container: HTMLElement): HTMLButtonElement {
-    const buttons = container.querySelectorAll("button");
-    if (buttons.length < 2) throw new Error("no remove button rendered");
-    return buttons[1] as HTMLButtonElement;
+    const remove = container.querySelector<HTMLButtonElement>("button.pk-chip__remove");
+    if (!remove) throw new Error("no remove button rendered");
+    return remove;
   }
 
-  it("renders as a button with type button", () => {
-    const button = buttonIn(mount(<Chip>Filter</Chip>));
-    expect(button.type).toBe("button");
+  it("wraps its controls rather than being one, so remove can be a sibling", () => {
+    const chip = chipIn(mount(<Chip>Filter</Chip>));
+    expect(chip.tagName).toBe("SPAN");
+    expect(chip.className).toContain("pk-chip");
   });
 
-  it("applies the base class", () => {
-    const button = buttonIn(mount(<Chip>Filter</Chip>));
-    expect(button.className).toContain("pk-chip");
-  });
-
-  it("omits aria-pressed by default", () => {
-    const button = buttonIn(mount(<Chip>Filter</Chip>));
-    expect(button.getAttribute("aria-pressed")).toBeNull();
-  });
-
-  it("sets aria-pressed to true when pressed is true", () => {
-    const button = buttonIn(mount(<Chip pressed>Filter</Chip>));
-    expect(button.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("sets aria-pressed to false when pressed is false", () => {
-    const button = buttonIn(mount(<Chip pressed={false}>Filter</Chip>));
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("renders a remove button when onRemove is provided", () => {
-    mount(<Chip onRemove={() => {}}>Filter</Chip>);
-    const container = mounted[mounted.length - 1];
-    const removeButton = removeButtonIn(container);
-    expect(removeButton.type).toBe("button");
-  });
-
-  it("does not render a remove button when onRemove is not provided", () => {
+  it("omits aria-pressed when the chip does not toggle", () => {
     const container = mount(<Chip>Filter</Chip>);
-    const buttons = container.querySelectorAll("button");
-    expect(buttons.length).toBe(1);
+    expect(toggleIn(container).getAttribute("aria-pressed")).toBeNull();
   });
 
-  it("gives the remove button an accessible label", () => {
-    mount(<Chip onRemove={() => {}}>Filter</Chip>);
-    const container = mounted[mounted.length - 1];
-    const removeButton = removeButtonIn(container);
-    expect(removeButton.getAttribute("aria-label")).toBe("Remove filter");
+  it("reports the pressed state in both directions", () => {
+    expect(toggleIn(mount(<Chip pressed>Filter</Chip>)).getAttribute("aria-pressed")).toBe("true");
+    expect(toggleIn(mount(<Chip pressed={false}>Filter</Chip>)).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("renders a remove button only when it can be removed", () => {
+    expect(mount(<Chip>Filter</Chip>).querySelector("button.pk-chip__remove")).toBeNull();
+    const removable = mount(<Chip onRemove={() => undefined}>Filter</Chip>);
+    expect(removeButtonIn(removable).type).toBe("button");
+  });
+
+  it("names the remove control, and names what it removes when told", () => {
+    const generic = mount(<Chip onRemove={() => undefined}>Filter</Chip>);
+    expect(removeButtonIn(generic).getAttribute("aria-label")).toBe("Remove filter");
+
+    const specific = mount(
+      <Chip onRemove={() => undefined} removeLabel="Status: Active">
+        Status: Active
+      </Chip>,
+    );
+    expect(removeButtonIn(specific).getAttribute("aria-label")).toBe("Remove Status: Active");
   });
 
   it("calls onRemove when the remove button is clicked", () => {
     const onRemove = vi.fn();
-    mount(<Chip onRemove={onRemove}>Filter</Chip>);
-    const container = mounted[mounted.length - 1];
-    const removeButton = removeButtonIn(container);
-    void act(() => removeButton.click());
+    const container = mount(<Chip onRemove={onRemove}>Filter</Chip>);
+    void act(() => removeButtonIn(container).click());
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
-  it("prevents the remove button click from bubbling to the chip", () => {
+  it("keeps remove separate from toggle — they are siblings, not nested controls", () => {
+    // Nesting a button inside a button is invalid HTML: the inner control is
+    // unreachable by keyboard in some browsers and assistive technology cannot
+    // report which of the two it is on. axe caught this; the structure is now
+    // a plain wrapper holding two independent buttons.
     const onRemove = vi.fn();
-    const onClick = vi.fn();
-    mount(
-      <Chip onClick={onClick} onRemove={onRemove}>
+    const onToggle = vi.fn();
+    const container = mount(
+      <Chip onToggle={onToggle} onRemove={onRemove}>
         Filter
       </Chip>,
     );
-    const container = mounted[mounted.length - 1];
     const removeButton = removeButtonIn(container);
+    expect(removeButton.closest("button")).toBe(removeButton);
+    expect(container.querySelector("button button")).toBeNull();
+
     void act(() => removeButton.click());
-    expect(onClick).not.toHaveBeenCalled();
+    expect(onToggle).not.toHaveBeenCalled();
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a static chip when nothing happens on activation", () => {
+    const container = mount(<Chip>Applied filter</Chip>);
+    expect(container.querySelector(".pk-chip__toggle")?.tagName).toBe("SPAN");
+  });
+
+  it("toggles when given a handler", () => {
+    const onToggle = vi.fn();
+    const container = mount(
+      <Chip pressed onToggle={onToggle}>
+        Status: Active
+      </Chip>,
+    );
+    const toggle = container.querySelector<HTMLButtonElement>("button.pk-chip__toggle");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
+    void act(() => toggle?.click());
+    expect(onToggle).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -82,7 +82,7 @@
   }
 
   .pk-btn--danger {
-    background: var(--pk-danger);
+    background: var(--pk-danger-strong);
     color: var(--pk-on-solid);
   }
   .pk-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {

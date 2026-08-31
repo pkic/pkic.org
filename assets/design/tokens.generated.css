@@ -60,6 +60,7 @@
     --pk-dur-instant: 1ms;
     --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent);
     --pk-on-solid: #ffffff;
+    --pk-danger-strong: color-mix(in oklab, var(--pk-danger) 62%, #000);
     --pk-accent-on: var(--pk-on-solid);
     --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
     --pk-grad-duo: linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%);
@@ -77,7 +78,7 @@
     --pk-surface-raise: #ffffff;
     --pk-ink: #212529;
     --pk-ink-muted: #6c757d;
-    --pk-ink-faint: #adb5bd;
+    --pk-ink-faint: #868e96;
     --pk-ink-inverse: #ffffff;
     --pk-line: #dee2e6;
     --pk-line-soft: #e9ecef;
@@ -95,8 +96,8 @@
     --pk-info: #2b6cb0;
     --pk-info-ink: #1f4f83;
     --pk-info-soft: #e8f0f9;
-    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 80%, #000);
-    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 72%, #000);
+    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 62%, #000);
     --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 12%, #fff);
     --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 72%, #000);
     --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 80%, #fff);
@@ -135,8 +136,8 @@
       --pk-info: #7cb0f5;
       --pk-info-ink: #a0c7f8;
       --pk-info-soft: #16202e;
-      --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 92%, #000);
-      --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 62%, #fff);
+      --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+      --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
       --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
       --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
       --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);
@@ -173,8 +174,8 @@
     --pk-info: #7cb0f5;
     --pk-info-ink: #a0c7f8;
     --pk-info-soft: #16202e;
-    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 92%, #000);
-    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 62%, #fff);
+    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
     --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
     --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
     --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);

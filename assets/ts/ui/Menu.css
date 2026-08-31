@@ -53,7 +53,7 @@
     font-weight: 700;
     letter-spacing: var(--pk-tracking-label);
     text-transform: uppercase;
-    color: var(--pk-ink-faint);
+    color: var(--pk-ink-muted);
   }
 
   .pk-menu__item {

@@ -16,6 +16,13 @@
     border-bottom: 1px solid var(--pk-line);
   }
 
+  @media (max-width: 48rem) {
+    .pk-tabs__list {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+  }
+
   .pk-tabs__link {
     position: relative;
     display: inline-flex;

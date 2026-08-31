@@ -11,11 +11,12 @@ import { render } from "preact";
 import { PreviewShell } from "./PreviewShell";
 import { basicSections } from "./sections-basics";
 import { dataSections } from "./sections-data";
+import { overlaySections } from "./sections-overlays";
 
 function main(): void {
   const mount = document.getElementById("pk-preview");
   if (!mount) return;
-  render(<PreviewShell sections={[...basicSections, ...dataSections]} />, mount);
+  render(<PreviewShell sections={[...basicSections, ...dataSections, ...overlaySections]} />, mount);
 }
 
 main();

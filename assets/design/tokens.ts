@@ -32,7 +32,7 @@ const surfacesLight = {
   "surface-raise": neutral.white,
   ink: neutral[800],
   "ink-muted": neutral[500],
-  "ink-faint": neutral[400],
+  "ink-faint": "#868e96",
   "ink-inverse": neutral.white,
   line: neutral[300],
   "line-soft": neutral[200],
@@ -91,13 +91,22 @@ const statesDark: Record<keyof typeof statesLight, string> = {
 };
 
 /**
- * Accent derivations. The percentages differ per theme because "darken toward
- * legible" and "lighten toward legible" are opposite operations on opposite
- * grounds. `strong` is the only value guaranteed to carry white text.
+ * Accent derivations.
+ *
+ * The percentages are not chosen by eye. Yellow and purple differ enormously
+ * in luminance, so a mix that darkens purple enough leaves yellow far too
+ * bright — the first attempt here used 80%/92% and failed WCAG AA on four
+ * hues in light and nine in dark. tests/frontend/design-contrast.test.ts
+ * measures every derived pair against the real values; the ceilings it proves
+ * are 67% for a fill carrying white text, 67% for ink on a light surface, and
+ * 74% for ink on a dark one. These sit below those with margin.
+ *
+ * `accent-strong` uses the SAME mix in both themes: a filled control needs the
+ * same contrast whichever theme the page is in.
  */
 const accentLight = {
-  "accent-strong": "color-mix(in oklab, var(--pk-accent) 80%, #000)",
-  "accent-ink": "color-mix(in oklab, var(--pk-accent) 72%, #000)",
+  "accent-strong": "color-mix(in oklab, var(--pk-accent) 62%, #000)",
+  "accent-ink": "color-mix(in oklab, var(--pk-accent) 62%, #000)",
   "accent-soft": "color-mix(in oklab, var(--pk-accent) 12%, #fff)",
   "accent-deep": "color-mix(in oklab, var(--pk-accent) 72%, #000)",
   "accent-lift": "color-mix(in oklab, var(--pk-accent) 80%, #fff)",
@@ -105,8 +114,8 @@ const accentLight = {
 } as const;
 
 const accentDark: Record<keyof typeof accentLight, string> = {
-  "accent-strong": "color-mix(in oklab, var(--pk-accent) 92%, #000)",
-  "accent-ink": "color-mix(in oklab, var(--pk-accent) 62%, #fff)",
+  "accent-strong": "color-mix(in oklab, var(--pk-accent) 62%, #000)",
+  "accent-ink": "color-mix(in oklab, var(--pk-accent) 70%, #fff)",
   "accent-soft": "color-mix(in oklab, var(--pk-accent) 20%, #000)",
   "accent-deep": "color-mix(in oklab, var(--pk-accent) 82%, #000)",
   "accent-lift": "color-mix(in oklab, var(--pk-accent) 62%, #fff)",
@@ -173,6 +182,10 @@ export const constants = {
   // Text on any saturated solid fill — an accent button, a danger button.
   // Constant across themes: a filled control keeps its own contrast.
   "on-solid": "#ffffff",
+  // The dark theme's --pk-danger is a light red meant for ink. Filling a
+  // button with it and writing in white gave 2.6:1. A destructive fill gets
+  // the same darkening an accent fill does.
+  "danger-strong": "color-mix(in oklab, var(--pk-danger) 62%, #000)",
   "accent-on": "var(--pk-on-solid)",
   "grad-tonal": "linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift))",
   "grad-duo": "linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%)",

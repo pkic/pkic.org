@@ -8,7 +8,7 @@
     font-size: var(--pk-text-2xs);
     font-weight: 600;
     letter-spacing: var(--pk-tracking-label);
-    color: var(--pk-ink-faint);
+    color: var(--pk-ink-muted);
     text-transform: uppercase;
     margin-bottom: var(--pk-2);
   }
@@ -20,6 +20,12 @@
     color: var(--pk-ink);
     line-height: 1.2;
     margin-bottom: var(--pk-2);
+  }
+
+  @media (max-width: 30rem) {
+    .pk-stat-card__value {
+      font-size: var(--pk-text-2xl);
+    }
   }
 
   .pk-stat-card__note {

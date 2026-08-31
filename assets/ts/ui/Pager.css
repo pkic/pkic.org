@@ -28,6 +28,18 @@
     margin: 0;
   }
 
+  @media (max-width: 48rem) {
+    .pk-pager {
+      gap: var(--pk-1);
+    }
+
+    .pk-pager__list {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.15rem;
+    }
+  }
+
   .pk-pager__item {
     display: flex;
     align-items: center;

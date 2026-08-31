@@ -1,68 +1,65 @@
 /*
  * Chip.
  *
- * A removable filter chip.
+ * The wrapper carries the shape; the two controls inside it are independently
+ * focusable, so each gets its own focus treatment rather than one ring around
+ * the pair.
  */
 
 @layer components {
   .pk-chip {
     display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: var(--pk-control-y) var(--pk-control-x);
+    align-items: stretch;
+    overflow: hidden;
     background: var(--pk-surface);
-    color: var(--pk-ink);
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius-pill);
-    font-size: var(--pk-text-xs);
-    line-height: 1.35;
-    white-space: nowrap;
-    cursor: pointer;
-    transition:
-      background-color var(--pk-dur-fast),
-      border-color var(--pk-dur-fast),
-      color var(--pk-dur-fast);
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink);
   }
 
-  .pk-chip:hover:not(:disabled, [aria-disabled="true"]) {
-    background: var(--pk-surface-sunk);
-    border-color: var(--pk-line-strong);
-  }
-
-  .pk-chip[aria-pressed="true"] {
+  .pk-chip--pressed {
     background: var(--pk-accent-soft);
-    color: var(--pk-accent-ink);
     border-color: var(--pk-accent);
+    color: var(--pk-accent-ink);
   }
 
-  .pk-chip__label {
-    display: inline;
+  .pk-chip__toggle {
+    padding: 0.15rem 0.7rem;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .pk-chip__toggle--static {
+    cursor: default;
   }
 
   .pk-chip__remove {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1em;
-    height: 1em;
-    padding: 0;
-    margin: 0;
-    background: transparent;
-    border: none;
-    color: inherit;
+    /* A 44px target is the accessible minimum for touch; the chip is smaller
+       than that by design, so the hit area is widened with padding rather than
+       by growing the visible control. */
+    min-width: 1.9rem;
+    padding: 0 0.5rem 0 0.25rem;
+    background: none;
+    border: 0;
+    color: var(--pk-ink-faint);
+    font: inherit;
+    line-height: 1;
     cursor: pointer;
-    flex: none;
-    transition: opacity var(--pk-dur-fast);
   }
 
   .pk-chip__remove:hover {
-    opacity: 0.7;
+    color: var(--pk-ink);
+    background: var(--pk-surface-sunk);
   }
 
-  .pk-chip__remove::before {
-    content: "✕";
-    font-size: 0.75em;
-    font-weight: 700;
-    line-height: 1;
+  .pk-chip--pressed .pk-chip__remove:hover {
+    background: color-mix(in oklab, var(--pk-accent) 18%, var(--pk-surface));
   }
 }

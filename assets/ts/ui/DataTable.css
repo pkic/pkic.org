@@ -9,6 +9,12 @@
 @layer components {
   .pk-table__scroll {
     overflow-x: auto;
+    /* A grid or flex item defaults to `min-width: auto`, which means "as wide
+       as my content" — so without this the scroll container grows to the
+       table's full width and pushes the whole page sideways instead of
+       scrolling within itself. */
+    min-width: 0;
+    max-width: 100%;
   }
 
   .pk-table {
@@ -48,7 +54,7 @@
     font-weight: 700;
     letter-spacing: var(--pk-tracking-label);
     text-transform: uppercase;
-    color: var(--pk-ink-faint);
+    color: var(--pk-ink-muted);
   }
 
   .pk-table td {
@@ -154,12 +160,7 @@
     display: block;
     height: 0.7rem;
     border-radius: var(--pk-radius-sm);
-    background: linear-gradient(
-      90deg,
-      var(--pk-line-soft) 25%,
-      var(--pk-line) 37%,
-      var(--pk-line-soft) 63%
-    );
+    background: linear-gradient(90deg, var(--pk-line-soft) 25%, var(--pk-line) 37%, var(--pk-line-soft) 63%);
     background-size: 400% 100%;
     animation: pk-table-shimmer var(--pk-dur-shimmer) ease infinite;
   }
