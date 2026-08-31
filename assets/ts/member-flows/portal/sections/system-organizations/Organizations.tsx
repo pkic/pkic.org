@@ -107,11 +107,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         columns={columns}
         empty={
           canCreate ? (
-            <EmptyState
-              title="No organizations yet"
-              body="Add an organization to get started."
-              action={{ label: "Add organization", onSelect: () => setShowCreate(true) }}
-            />
+            <EmptyState title="No organizations yet" body="Add an organization to get started." />
           ) : (
             "No organizations found"
           )

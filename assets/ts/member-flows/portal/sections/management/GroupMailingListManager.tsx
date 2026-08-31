@@ -222,7 +222,6 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             <EmptyState
               title="No mailing lists yet"
               body="Create a mailing list to start managing this group's lists."
-              action={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
             />
           }
         />

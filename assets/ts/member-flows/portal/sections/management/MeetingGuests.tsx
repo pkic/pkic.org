@@ -224,13 +224,7 @@ export function MeetingGuests({
               ),
           },
         ]}
-        empty={
-          <EmptyState
-            title="No guests yet"
-            body="Add a guest to get started."
-            action={{ label: "Add guest", onSelect: () => setShowAddForm(true) }}
-          />
-        }
+        empty={<EmptyState title="No guests yet" body="Add a guest to get started." />}
         rowKey={(guest) => guest.id}
       />
     </div>

@@ -129,11 +129,7 @@ export function GroupVotes({
               ]}
               empty={
                 canManage ? (
-                  <EmptyState
-                    title="No votes yet"
-                    body="Create a vote to get started."
-                    action={{ label: "Create vote", onSelect: () => setShowCreate(true) }}
-                  />
+                  <EmptyState title="No votes yet" body="Create a vote to get started." />
                 ) : (
                   "No votes are available through this group."
                 )

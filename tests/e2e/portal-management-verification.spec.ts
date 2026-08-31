@@ -31,6 +31,7 @@ import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { membershipApplicationDetailSchema } from "../../assets/shared/schemas/membership-application-management";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
@@ -297,8 +298,8 @@ test.describe("Portal management browser-verification pass", () => {
 
     const reject = detail.getByRole("button", { name: "Reject proposal" });
     await expect(reject).toBeDisabled();
-    page.once("dialog", (dialog) => dialog.accept());
     await detail.getByRole("button", { name: "Approve and create vote" }).click();
+    await acceptConfirmDialog(page, "Approve and create vote");
     await expect(proposalRow).toContainText(/converted to vote/i);
 
     await page.getByRole("button", { name: "Votes", exact: true }).click();
@@ -405,7 +406,8 @@ test.describe("Portal management browser-verification pass", () => {
     });
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);
-    await expect(page.getByText("Add team member", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Add team member" })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Add team member" }).click();
 
     const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Add", exact: true }) });
     await form.getByLabel("Email").fill(email);
@@ -429,8 +431,9 @@ test.describe("Portal management browser-verification pass", () => {
         new URL(response.url()).pathname.startsWith(`/api/v1/events/${EVENT_SLUG}/roles/`) &&
         response.request().method() === "DELETE",
     );
-    page.once("dialog", (dialog) => dialog.accept());
-    await reloadedRow.getByRole("button", { name: "Revoke" }).click();
+    await reloadedRow.getByRole("button", { name: `Actions for ${email}` }).click();
+    await page.getByRole("menuitem", { name: "Revoke" }).click();
+    await acceptConfirmDialog(page, "Revoke role");
     expect((await revoked).status()).toBe(200);
     await expect(page.getByRole("row").filter({ hasText: email })).toHaveCount(0);
     expect(legacyRequests).toEqual([]);
@@ -709,12 +712,12 @@ test.describe("Portal management browser-verification pass", () => {
     const approveButton = page.getByRole("button", { name: "Approve & run onboarding" });
     await expect(approveButton).toBeVisible();
     await approveButton.click();
+    await acceptConfirmDialog(page, "Approve & run onboarding");
     await expect(page.locator(".my-toast", { hasText: "Application approved" })).toBeVisible({ timeout: 15_000 });
 
-    // The click-through's own UI state: the confirm() dialog was accepted
-    // (test would otherwise hang on it), the approve call landed (toast
-    // above), and the reloaded detail view now shows the post-approval
-    // stage with no further transitions available.
+    // The click-through's own UI state: the confirmation dialog was accepted,
+    // the approve call landed (toast above), and the reloaded detail view now
+    // shows the post-approval stage with no further transitions available.
     await expect(header.locator("span.badge", { hasText: "Approved" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
     await expect(page.getByText("No further transitions from this stage.")).toBeVisible();

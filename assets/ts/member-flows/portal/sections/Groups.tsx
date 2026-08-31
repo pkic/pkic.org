@@ -101,11 +101,7 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
           ]}
           empty={
             onCreate ? (
-              <EmptyState
-                title="No groups yet"
-                body="Create a group to get started."
-                action={{ label: "New group", onSelect: onCreate }}
-              />
+              <EmptyState title="No groups yet" body="Create a group to get started." />
             ) : (
               "No groups are visible to your identity."
             )

@@ -215,11 +215,7 @@ export function Sponsorships({
           onRowClick={selectCompany}
           empty={
             canWrite ? (
-              <EmptyState
-                title="No sponsorships found"
-                body="Create a sponsorship, or adjust the filters above."
-                action={{ label: "Create sponsorship", onSelect: () => setShowCreate(true) }}
-              />
+              <EmptyState title="No sponsorships found" body="Create a sponsorship, or adjust the filters above." />
             ) : (
               "No sponsorships match these filters."
             )

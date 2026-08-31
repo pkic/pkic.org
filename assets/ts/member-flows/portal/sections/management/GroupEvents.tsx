@@ -131,11 +131,7 @@ export function GroupEvents({
           ]}
           empty={
             canManage ? (
-              <EmptyState
-                title="No events yet"
-                body="Create an event to get started."
-                action={{ label: "Create event", onSelect: () => setShowCreate(true) }}
-              />
+              <EmptyState title="No events yet" body="Create an event to get started." />
             ) : (
               "No events are available through this group."
             )
