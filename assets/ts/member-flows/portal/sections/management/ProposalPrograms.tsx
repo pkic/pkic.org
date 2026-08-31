@@ -1,4 +1,4 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import {
   proposalProgramSchema,
   proposalProgramsListResponseSchema,
@@ -19,7 +19,7 @@ function capabilityLabel(program: ProposalProgram): string {
 
 /** Server-derived catalog for program committee work not tied to generic group membership or management. */
 export function ProposalPrograms() {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
 
   return (
     <div class="card border-0 shadow-sm">

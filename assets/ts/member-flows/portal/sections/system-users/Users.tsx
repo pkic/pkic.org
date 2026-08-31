@@ -1,9 +1,9 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { UserDetail, type UserPermissions } from "./UserDetail";
 import { UsersList } from "./UsersList";
 
 export function Users({ userId, permissions }: { userId?: string; permissions: UserPermissions }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
 
   if (userId) {
     return <UserDetail userId={userId} permissions={permissions} onBack={() => navigate("/users")} />;

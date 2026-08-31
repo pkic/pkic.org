@@ -1,7 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { Menu } from "../../../components/Menu";
@@ -27,7 +27,7 @@ import { personInitials } from "../../../components/PersonCell";
 export const portalAvatarInitials = personInitials;
 
 export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
-  const [location, navigate] = useHashLocation();
+  const [location, navigate] = usePortalHashLocation();
   const [navigationOpen, setNavigationOpen] = useState(false);
   // The identity's organizations live in the account menu, not the sidebar:
   // each one deep-links into its organization workspace.

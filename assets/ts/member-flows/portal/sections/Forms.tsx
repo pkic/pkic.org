@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import {
   FormManagementCreate,
   FormManagementDetail,
@@ -11,14 +11,14 @@ import { toast } from "../ui";
 const NEW_FORM_KEY = "new";
 
 function FormsRedirect({ to }: { to: string }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   useEffect(() => navigate(to), [navigate, to]);
   return null;
 }
 
 /** Portal route adapter for the canonical global form-management surface. */
 export function Forms({ formKey, canWrite }: { formKey?: string; canWrite: boolean }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const notify = (message: string, kind: "success" | "error") => toast(message, kind);
 
   if (formKey === NEW_FORM_KEY) {

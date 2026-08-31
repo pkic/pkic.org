@@ -1,5 +1,5 @@
 import { useState, useRef } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
 import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
@@ -58,7 +58,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
   const [consentFilter, setConsentFilter] = useState("");
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
 
   async function runWaitlistPromotions() {
@@ -324,7 +324,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 // ─── Registrations compositor ─────────────────────────────────────────────────
 
 export function Registrations({ slug, subTab }: { slug: string; subTab?: string }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const tab = subTab === "responses" || subTab === "email" ? subTab : "overview";
 
   return (

@@ -5,7 +5,7 @@
  * own slice of the same domain.
  */
 import type { z } from "zod";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
@@ -13,7 +13,7 @@ import { Badge } from "../../../components/Badge";
 type UserOrganization = z.infer<typeof userOrganizationsListResponseSchema>["organizations"][number];
 
 export function RepresentedOrganizations() {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
 
   return (
     <div class="card border-0 shadow-sm">

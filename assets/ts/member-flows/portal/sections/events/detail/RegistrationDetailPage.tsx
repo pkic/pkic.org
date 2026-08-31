@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
@@ -33,7 +33,7 @@ function attendanceTypeLabel(t: string): string {
 // ─── Main detail page ─────────────────────────────────────────────────────────
 
 export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: string }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [resendStatus, setResendStatus] = useState("");
   const [openingManage, setOpeningManage] = useState(false);
   const [regenerating, setRegenerating] = useState(false);

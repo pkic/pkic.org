@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type MutableRef } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import {
   organizationRepresentativesListResponseSchema,
   representativeMutationResponseSchema,
@@ -70,7 +70,7 @@ function statusLabel(representative: OrganizationRepresentative): Representative
 
 /** Navigates rows into user administration only when the viewer can actually see that page. */
 function useRepresentativeRowNavigation() {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const canNavigate = portalHasGlobalPermission(portalSession.value, "users:read");
   return canNavigate ? (userId: string) => navigate(`/users/${encodeURIComponent(userId)}`) : undefined;
 }

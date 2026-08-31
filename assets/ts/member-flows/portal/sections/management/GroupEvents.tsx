@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
@@ -27,7 +27,7 @@ export function GroupEvents({
   initialEventId?: string;
   initialEventTab?: string;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
   const [showCreate, setShowCreate] = useState(false);
   const tableActions = useRef<ApiTableActions | null>(null);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import {
   organizationDetailResponseSchema,
   type OrganizationDetail as OrganizationDetailModel,
@@ -22,7 +22,7 @@ export function OrganizationDetail({
   canWrite: boolean;
   canManageRepresentatives: boolean;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [organization, setOrganization] = useState<OrganizationDetailModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

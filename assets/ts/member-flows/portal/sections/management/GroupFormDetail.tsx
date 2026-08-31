@@ -1,4 +1,4 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import {
   groupFormDefinitionResponseSchema,
   groupFormSubmissionResponseSchema,
@@ -32,7 +32,7 @@ export function GroupFormDetail({
   initialTab?: string;
   onChanged: () => void | Promise<void>;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`;
   const requestedTab = (initialTab as GroupFormTab | undefined) ?? DEFAULT_TAB;
   const detail = useData(() => getJson(base, groupFormDefinitionResponseSchema), [base]);

@@ -10,7 +10,7 @@
  */
 import { signal } from "@preact/signals";
 import { Link } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import type { Group } from "../../../../shared/schemas/groups";
 import { groupsListResponseSchema } from "../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema, type SelfGroup } from "../../../../shared/schemas/group-participation";
@@ -107,7 +107,7 @@ export function buildSidebarGroupForest(entries: readonly SidebarGroupEntry[]): 
 }
 
 export function SidebarGroups({ session, onNavigate }: { session: PortalSession | null; onNavigate: () => void }) {
-  const [location] = useHashLocation();
+  const [location] = usePortalHashLocation();
   const version = portalGroupsVersion.value;
   const joined = useData(
     () =>

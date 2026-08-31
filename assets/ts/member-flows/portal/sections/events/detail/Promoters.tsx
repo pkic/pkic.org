@@ -1,4 +1,4 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../../hash-location";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Badge } from "../../../../../components/Badge";
@@ -121,7 +121,7 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
 }
 
 export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const tab = subTab === "codes" ? "codes" : "promoters";
   const pager = useOffsetPager();
   const { offset, pageSize } = pager;

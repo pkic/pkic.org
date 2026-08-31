@@ -3,7 +3,7 @@ import { type ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
 import { useEffect } from "preact/hooks";
 import { Router, Route, Switch } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import { clearAuth, portalSession, profile } from "../state";
 import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
 import { Spinner } from "../../../components/Spinner";
@@ -86,7 +86,7 @@ function SectionWrapper({ title, children }: { title?: string; children: Compone
 }
 
 function PortalRouteFallback({ session }: { session: PortalSession | null }) {
-  const [location, navigate] = useHashLocation();
+  const [location, navigate] = usePortalHashLocation();
   const fallbackPath = portalCapacityFallbackPath(session, location);
 
   useEffect(() => {
@@ -98,7 +98,7 @@ function PortalRouteFallback({ session }: { session: PortalSession | null }) {
 }
 
 function PortalRouteRedirect({ to }: { to: string }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   useEffect(() => navigate(to), [navigate, to]);
   return null;
 }
@@ -126,7 +126,7 @@ export function PortalShell() {
     session?.identity.email ||
     "";
   return (
-    <Router hook={useHashLocation}>
+    <Router hook={usePortalHashLocation}>
       <PortalNavigationShell
         session={session}
         displayName={displayName}

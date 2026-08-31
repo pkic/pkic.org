@@ -22,7 +22,7 @@
  * rendered as complete (PR #1 review, Phase 7.2).
  */
 import { useState, useRef } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../../hash-location";
 import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../../components/EmptyState";
@@ -54,7 +54,7 @@ function SponsorshipDetailPage({
   canRead: boolean;
   canWrite: boolean;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   if (!canRead) {
     return (
       <div class="alert alert-warning" role="alert">

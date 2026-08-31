@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
@@ -20,7 +20,7 @@ export function GroupForms({
   /** The URL-addressed tab segment for `initialPlacementId`'s detail view. */
   initialPlacementTab?: string;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(initialPlacementId ?? null);
   const tableActions = useRef<ApiTableActions | null>(null);

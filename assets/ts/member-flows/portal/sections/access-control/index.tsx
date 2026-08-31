@@ -1,4 +1,4 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { Tabs } from "../../../../components/Tabs";
 import { Grants } from "./Grants";
 import { Roles } from "./Roles";
@@ -45,7 +45,7 @@ export function AccessControl({
   canRevoke?: boolean;
   resourceId?: string;
 } = {}) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const { tab, roleSegment } = resolveAccessControlTab(resourceId);
 
   return (

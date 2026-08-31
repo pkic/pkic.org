@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { lazy, Suspense } from "preact/compat";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../../hash-location";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Tabs } from "../../../../../components/Tabs";
@@ -34,7 +34,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const requestedTab = TABS.find((candidate) => candidate.key === tabProp)?.key;
 
   const load = useCallback(async () => {

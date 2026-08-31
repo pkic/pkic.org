@@ -1,7 +1,7 @@
 /** Generic self-service participation view shared by every configured group type. */
 import { useState } from "preact/hooks";
 import type { z } from "zod";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema } from "../../../../shared/schemas/group-participation";
 import { ApiDataTable } from "../../../components/ApiDataTable";
@@ -61,7 +61,7 @@ function MemberGroupCatalog() {
 }
 
 function AllGroups({ onCreate }: { onCreate?: () => void }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
 
   return (
     <div class="card border-0 shadow-sm">
@@ -119,7 +119,7 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
 }
 
 export function Groups() {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [creating, setCreating] = useState(false);
   const session = portalSession.value;
   const canCreateGroups = portalHasGlobalPermission(session, "groups:write");

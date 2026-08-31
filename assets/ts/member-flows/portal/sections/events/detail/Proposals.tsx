@@ -1,4 +1,4 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../../hash-location";
 import { Tabs } from "../../../../../components/Tabs";
 import { EventProposalsTable } from "../../../../../components/proposals/EventProposalsTable";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
@@ -7,7 +7,7 @@ import { toast } from "../../../ui";
 import { eventProposalDetailViewPath } from "./proposal-paths";
 
 function ProposalsList({ slug }: { slug: string }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
 
   return (
     <EventProposalsTable
@@ -40,7 +40,7 @@ function ProposalsList({ slug }: { slug: string }) {
 
 /** Portal adapter for the shared event-proposal catalogue. */
 export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: string; canWrite: boolean }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const tab = subTab === "responses" || (canWrite && subTab === "email") ? subTab : "proposals";
 
   return (

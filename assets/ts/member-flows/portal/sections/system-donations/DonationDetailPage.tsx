@@ -1,5 +1,5 @@
 import { useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -42,7 +42,7 @@ export function DonationDetailPage({
 }
 
 function DonationDetailView({ donationId, canSync }: { donationId: string; canSync: boolean }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [syncing, setSyncing] = useState(false);
 
   const { data, loading, error, reload } = useData(

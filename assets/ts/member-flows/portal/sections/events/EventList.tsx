@@ -2,7 +2,7 @@ import { useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { eventsManagementListResponseSchema } from "../../../../../shared/schemas/event-management";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 
 // ────────────────────────────────────────────────────────
 // Event list
@@ -13,7 +13,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 // ────────────────────────────────────────────────────────
 
 export function EventList() {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
 
   return (

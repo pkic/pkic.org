@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * URL-addressed list state: a namespaced query string initializes the table,
- * state changes mirror back into the URL, and unmount removes only the
- * namespace's own keys so parameters never leak onto the next page.
+ * URL-addressed list state carried inside the hash (`#/users?users.q=…`): a
+ * namespaced query segment initializes the table, state changes mirror back
+ * into the hash, and unmount removes only the namespace's own keys so
+ * parameters never leak onto the next page.
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -74,7 +75,7 @@ function table() {
 
 describe("URL-addressed table state", () => {
   it("initializes search, sort, and page from the namespaced query string", async () => {
-    history.replaceState(null, "", "/portal/?things.q=alpha&things.sort=-name&things.offset=50#/things");
+    history.replaceState(null, "", "/portal/#/things?things.q=alpha&things.sort=-name&things.offset=50");
     const urls: string[] = [];
     stubList(urls);
     mount(table());
@@ -100,19 +101,19 @@ describe("URL-addressed table state", () => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     await settle();
-    expect(new URLSearchParams(location.search).get("things.q")).toBe("beta");
+    expect(new URLSearchParams(location.hash.split("?")[1] ?? "").get("things.q")).toBe("beta");
 
     await act(() => render(null, container));
-    expect(new URLSearchParams(location.search).get("things.q")).toBeNull();
+    expect(new URLSearchParams(location.hash.split("?")[1] ?? "").get("things.q")).toBeNull();
   });
 
   it("leaves other namespaces' parameters untouched", async () => {
-    history.replaceState(null, "", "/portal/?other.q=keep#/things");
+    history.replaceState(null, "", "/portal/#/things?other.q=keep");
     const urls: string[] = [];
     stubList(urls);
     const container = mount(table());
     await settle();
     await act(() => render(null, container));
-    expect(new URLSearchParams(location.search).get("other.q")).toBe("keep");
+    expect(new URLSearchParams(location.hash.split("?")[1] ?? "").get("other.q")).toBe("keep");
   });
 });

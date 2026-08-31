@@ -1,5 +1,5 @@
 import { useState, useRef } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -255,7 +255,7 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
   const tab = subTab === "promoters" ? "promoters" : subTab === "stats" && canReadAnalytics ? "stats" : "list";
   const [statusFilter, setStatusFilter] = useState("");
   const [summary, setSummary] = useState<DonationManagementListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const actionsRef = useRef<ApiTableActions | null>(null);
 
   const total = Object.values(summary.byStatus).reduce((sum, value) => sum + value, 0);

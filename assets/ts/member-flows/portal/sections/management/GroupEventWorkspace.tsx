@@ -5,7 +5,7 @@
  * event previously stacked into one long detail row.
  */
 import { useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { getLinkLabel } from "../../../../../shared/schemas/links";
 import { Badge } from "../../../../components/Badge";
@@ -71,7 +71,7 @@ export function GroupEventWorkspace({
   tab?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [editing, setEditing] = useState(false);
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");

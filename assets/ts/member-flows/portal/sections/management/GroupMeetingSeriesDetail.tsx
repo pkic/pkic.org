@@ -1,4 +1,4 @@
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import type { GroupEventSeries } from "../../../../../shared/schemas/event-series";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
 import { MeetingOccurrences } from "./MeetingOccurrences";
@@ -20,7 +20,7 @@ export function GroupMeetingSeriesDetail({
   initialTab?: string;
   onChanged: () => void | Promise<void>;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const canManage = series.capabilities.includes("manage");
   const idPrefix = `meeting-series-tabs-${series.id}`;
   const tabs: TabItem[] = [

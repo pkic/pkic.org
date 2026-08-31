@@ -1,5 +1,5 @@
 import { useRef, useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
 import type { Column } from "../../../../components/Table";
@@ -11,7 +11,7 @@ import { fmt } from "../../ui";
 import { OrganizationCreateForm } from "./OrganizationCreateForm";
 
 export function Organizations({ canRead, canCreate }: { canRead: boolean; canCreate: boolean }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [showCreate, setShowCreate] = useState(false);
   const actionsRef = useRef<ApiTableActions | null>(null);
 

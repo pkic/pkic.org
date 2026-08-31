@@ -1,5 +1,5 @@
 import { useRef, useState, type MutableRef } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
@@ -22,7 +22,7 @@ export function GroupMeetingSeriesList({
   initialSeriesTab?: string;
   createAction?: { label: string; onSelect: () => void; disabled?: boolean };
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(initialSeriesId ?? null);
   const localActions = useRef<ApiTableActions | null>(null);
   const effectiveActions = actionsRef ?? localActions;
