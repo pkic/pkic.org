@@ -7,6 +7,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
 import { GroupLeadershipAssignmentForm } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm";
 import { buttonNamed, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
 
@@ -37,20 +38,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-async function openRowMenu(container: HTMLElement, ariaLabel: string): Promise<void> {
-  const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`);
-  if (!trigger) throw new Error(`missing row menu trigger: ${ariaLabel}`);
-  await act(() => trigger.click());
-}
-
-function menuItem(container: HTMLElement, label: string): HTMLButtonElement {
-  const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (candidate) => candidate.textContent === label,
-  );
-  if (!item) throw new Error(`missing menu item: ${label}`);
-  return item;
 }
 
 function confirmDialogButton(label: string): HTMLButtonElement {
@@ -196,10 +183,10 @@ describe("portal group leadership management", () => {
     // the row's missing menu.
     expect(container.textContent).toContain("Inherited from Parent Group");
     expect(container.textContent).toContain("Local");
-    const rowMenus = container.querySelectorAll('[aria-haspopup="menu"]');
-    expect(rowMenus).toHaveLength(1);
-    await openRowMenu(container, "Actions for Local Leader");
-    await act(async () => menuItem(container, "Remove").click());
+    // Only the local assignment can be removed, and the control that removes
+    // it names the person rather than reading "Remove" like any other row's.
+    expect(rowActionControlNames(container)).toEqual(["Remove, Local Leader"]);
+    await runRowAction(container, "Local Leader", "Remove");
     await act(async () => confirmDialogButton("Remove from role").click());
     await settle();
     expect(
@@ -254,8 +241,7 @@ describe("portal group leadership management", () => {
     );
     await settle();
 
-    await openRowMenu(container, "Actions for Local Leader");
-    await act(async () => menuItem(container, "Remove").click());
+    await runRowAction(container, "Local Leader", "Remove");
     await act(async () => confirmDialogButton("Remove from role").click());
     await settle();
 

@@ -138,6 +138,7 @@ export function UserEmailAddressesPanel({
                     header: "Actions",
                     cell: (email: UserEmailRecord) => (
                       <RowActions
+                        subject={email.email}
                         actions={[
                           {
                             id: "remove",

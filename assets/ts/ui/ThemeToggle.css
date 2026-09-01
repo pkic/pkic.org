@@ -24,8 +24,16 @@
     cursor: pointer;
   }
 
-  .pk-theme-toggle:hover {
-    border-color: currentColor;
+  /*
+   * The hover wash is mixed from the control's own ink, so it works on any
+   * ground without knowing which one it is on: light on the dark navbar,
+   * dark on a light page. A fixed colour here would need a second rule per
+   * surface, and a rule in the legacy layer could not supply one — this layer
+   * wins over that one.
+   */
+  .pk-theme-toggle:hover,
+  .pk-theme-toggle:focus-visible {
+    background: color-mix(in srgb, currentColor 12%, transparent);
   }
 
   .pk-theme-toggle svg {

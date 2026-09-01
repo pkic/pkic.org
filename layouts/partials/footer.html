@@ -18,8 +18,15 @@
              `_footer-and-edit.scss`, which is in the legacy layer, and
              `.pk { background: var(--pk-canvas) }` in the base layer beats it
              at any specificity — the bar came out pale grey. The utilities are
-             unscoped, so `pk-section` and `pk-container` work without it. */}}
-        <div id="participate" class="pk-section">
+             unscoped, so `pk-container` works without it.
+
+             No `pk-section` either. That utility is the rhythm BETWEEN page
+             sections, and at 3rem it is twice what this bar was carrying; the
+             swap left the sentence floating well clear of the gradient rule
+             above it. A one-line strip of footer chrome sets its own
+             padding-block in `_footer-and-edit.scss`, beside its ground and
+             its rule. */}}
+        <div id="participate">
             <div class="pk-container">
                 Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions, <a href="/join/">join</a> the consortium, and <a href="/donate/" class="footer-cta-donate">support us with a donation</a>
             </div>

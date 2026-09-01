@@ -221,7 +221,7 @@ export function ResourceSharingEditor({
               className: "pk-end",
               cell: (grant) => (
                 <RowActions
-                  label={`Actions for ${grant.granteeGroup.name}`}
+                  subject={grant.granteeGroup.name}
                   actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revokeGrant(grant) }]}
                 />
               ),

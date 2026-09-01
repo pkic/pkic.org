@@ -1,8 +1,14 @@
 // Unified portal navigation shell, scoped under the portal mount.
 
-$portal-bg: #f4f5f7;
-$portal-surface: #fff;
-$portal-border: #dee2e6;
+// The portal's chrome, from the tokens rather than from fixed colours.
+//
+// These were three hexes, so the portal stayed light while the components
+// inside it followed the reader's theme: a white sidebar and a grey page
+// around dark tables and inputs. `$portal-green` keeps its literal because
+// Sass reads it through `rgba()`, which a custom property cannot pass through.
+$portal-bg: var(--pk-canvas);
+$portal-surface: var(--pk-surface);
+$portal-border: var(--pk-line);
 $portal-green: #198754;
 $portal-sidebar-width: 240px;
 
@@ -57,7 +63,7 @@ $portal-sidebar-width: 240px;
   button {
     background: none;
     border: none;
-    color: #495057;
+    color: var(--pk-ink-muted);
     display: flex;
     align-items: center;
   }
@@ -104,7 +110,7 @@ $portal-sidebar-width: 240px;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--pk-ink-muted);
   border-radius: 0.375rem;
   text-decoration: none;
   margin-bottom: 1px;
@@ -114,7 +120,7 @@ $portal-sidebar-width: 240px;
     color 0.12s;
 
   &:hover {
-    background: #f0f7f4;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
     color: $portal-green;
     text-decoration: none;
   }
@@ -140,7 +146,7 @@ $portal-sidebar-width: 240px;
 .portal-sidebar-groups {
   margin: 0 0 0.25rem 0.75rem;
   padding-left: 0.5rem;
-  border-left: 1px solid #e3e8e5;
+  border-left: 1px solid var(--pk-line);
   list-style: none;
 }
 
@@ -148,7 +154,7 @@ $portal-sidebar-width: 240px;
   display: block;
   padding: 0.3rem 0.75rem;
   font-size: 0.8125rem;
-  color: #495057;
+  color: var(--pk-ink-muted);
   border-radius: 0.375rem;
   text-decoration: none;
   transition:
@@ -156,7 +162,7 @@ $portal-sidebar-width: 240px;
     color 0.12s;
 
   &:hover {
-    background: #f0f7f4;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
     color: $portal-green;
     text-decoration: none;
   }
@@ -178,7 +184,7 @@ $portal-sidebar-width: 240px;
 .portal-sidebar-group-context {
   display: block;
   font-size: 0.6875rem;
-  color: #6c757d;
+  color: var(--pk-ink-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -191,7 +197,7 @@ $portal-sidebar-width: 240px;
 }
 
 .portal-sidebar-group-more {
-  color: #6c757d;
+  color: var(--pk-ink-muted);
   font-style: italic;
 }
 
@@ -223,15 +229,15 @@ $portal-sidebar-width: 240px;
   padding: 0.4rem 0.6rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--pk-ink-muted);
   text-align: left;
   background: none;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--pk-line);
   border-radius: 0.375rem;
 
   &:hover,
   &:focus-visible {
-    background: #f0f7f4;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
     color: $portal-green;
   }
 }
@@ -302,14 +308,14 @@ $portal-sidebar-width: 240px;
 .pkic-empty-state-title {
   margin-bottom: 0.25rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--pk-ink-muted);
 }
 
 .pkic-empty-state-body {
   max-width: 34rem;
   margin: 0 auto 0.75rem;
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--pk-ink-muted);
 }
 
 .portal-section-title {
@@ -321,7 +327,7 @@ $portal-sidebar-width: 240px;
 .portal-context-title {
   font-size: 1.35rem;
   font-weight: 600;
-  color: #212529;
+  color: var(--pk-ink);
 }
 
 .portal-management-picker {

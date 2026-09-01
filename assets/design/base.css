@@ -88,6 +88,23 @@
     color: var(--pk-ink);
   }
 
+  /*
+   * No image wider than the box that holds it — globally, like `box-sizing`.
+   *
+   * The cap existed twice and nowhere else: once inside `.pk`, once inside
+   * `[data-pagefind-body]` in the prose stylesheet. A page that had adopted
+   * neither had nothing holding its images, and a source with no intrinsic
+   * width — an SVG carrying only a `viewBox` — resolved against whatever
+   * contained it and drew itself the full width of the column. Stating it once
+   * here means a surface cannot lose the guarantee by not opting in.
+   *
+   * `:where()` keeps the specificity at zero, so a component that genuinely
+   * wants a wider image only has to name it.
+   */
+  :where(img, svg, video, canvas) {
+    max-width: 100%;
+  }
+
   .pk h1,
   .pk h2,
   .pk h3,

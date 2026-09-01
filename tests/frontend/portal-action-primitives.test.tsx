@@ -122,7 +122,7 @@ describe("ConfirmDialog", () => {
 });
 
 describe("RowActions", () => {
-  it("shows status text and a labeled actions menu, and never bubbles clicks into row navigation", async () => {
+  it("shows a lone action as a button rather than hiding it behind a menu", async () => {
     let rowClicked = 0;
     let selected = 0;
     const container = mount(
@@ -134,6 +134,33 @@ describe("RowActions", () => {
       </div>,
     );
     expect(container.textContent).toContain("Invited");
+    // No `…` to open: two clicks and a guess to reach something there was
+    // room to show is worse than showing it.
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+
+    const action = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (candidate) => candidate.textContent === "Revoke invitation",
+    );
+    if (!action) throw new Error("missing action button");
+    await act(() => action.click());
+    expect(selected).toBe(1);
+    expect(rowClicked).toBe(0);
+  });
+
+  it("collapses into a menu as soon as there is a second action", async () => {
+    let rowClicked = 0;
+    let selected = 0;
+    const container = mount(
+      <div onClick={() => (rowClicked += 1)}>
+        <RowActions
+          status="Invited"
+          actions={[
+            { id: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) },
+            { id: "resend", label: "Resend invitation", onSelect: () => {} },
+          ]}
+        />
+      </div>,
+    );
     const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
     if (!trigger) throw new Error("missing menu trigger");
     await act(() => trigger.click());
@@ -144,6 +171,35 @@ describe("RowActions", () => {
     await act(() => item.click());
     expect(selected).toBe(1);
     expect(rowClicked).toBe(0);
+  });
+
+  it("names both forms of row control after the row they act on", async () => {
+    const inline = mount(
+      <RowActions subject="custom_reviewer" actions={[{ id: "delete", label: "Delete role", onSelect: () => {} }]} />,
+    );
+    const button = inline.querySelector("button");
+    // The reader still chooses "Delete role"; assistive technology is told
+    // which role, so a page of these is not a page of one name.
+    expect(button?.textContent).toBe("Delete role");
+    expect(button?.getAttribute("aria-label")).toBe("Delete role, custom_reviewer");
+
+    const menu = mount(
+      <RowActions
+        subject="custom_reviewer"
+        actions={[
+          { id: "delete", label: "Delete role", onSelect: () => {} },
+          { id: "duplicate", label: "Duplicate role", onSelect: () => {} },
+        ]}
+      />,
+    );
+    expect(menu.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe(
+      "Actions for custom_reviewer",
+    );
+
+    // No subject is still a named control, just a worse one: the button falls
+    // back to its own visible text rather than being labelled with nothing.
+    const anonymous = mount(<RowActions actions={[{ id: "delete", label: "Delete role", onSelect: () => {} }]} />);
+    expect(anonymous.querySelector("button")?.hasAttribute("aria-label")).toBe(false);
   });
 
   it("renders status alone when there are no actions", () => {

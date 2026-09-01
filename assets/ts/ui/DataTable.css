@@ -1,5 +1,12 @@
 /*
- * DataTable.
+ * DataTable — what a data table does, on top of the skin it shares.
+ *
+ * The static skin (`pk-table`, `pk-table__scroll`, the cells and their rules)
+ * lives in `Table.css`, because the Markdown table render hook draws the same
+ * table on server-rendered pages and the two must not drift. Here is the part
+ * only a data table needs: its denser type, hover, sorting, selection,
+ * checkboxes, loading skeletons and row activation. It rides this component's
+ * chunk, so a content page never downloads any of it.
  *
  * Selection is a 6% accent tint rather than a full wash: on a green-accented
  * product a strong selection colour competes with the status badges, which are
@@ -7,32 +14,44 @@
  */
 
 @layer components {
-  .pk-table__scroll {
-    overflow-x: auto;
-    /* A grid or flex item defaults to `min-width: auto`, which means "as wide
-       as my content" — so without this the scroll container grows to the
-       table's full width and pushes the whole page sideways instead of
-       scrolling within itself. */
-    min-width: 0;
-    max-width: 100%;
-    /*
-     * And this is why it needs to be positioned. `overflow` does not clip an
-     * absolutely positioned descendant unless the scroller is also that
-     * descendant's containing block. The visually hidden header spans are
-     * absolutely positioned, so on a phone one of them sat 600px from the
-     * viewport's left edge, outside this container, and stretched the DOCUMENT
-     * by 222px — a page that scrolled sideways with nothing visible out there
-     * to explain it. The table itself was clipped correctly the whole time,
-     * which is what made it hard to see.
-     */
-    position: relative;
-  }
-
+  /*
+   * A data table is denser and quieter than a table in prose: more rows on a
+   * screen, headers that read as column labels rather than sentences, and a
+   * ground it can rely on because it is always drawn inside a `Panel`.
+   */
   .pk-table {
-    width: 100%;
-    border-collapse: collapse;
     font-size: var(--pk-text-sm);
     color: var(--pk-ink);
+  }
+
+  .pk-table th {
+    border-bottom-color: var(--pk-line);
+    white-space: nowrap;
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-table td {
+    border-bottom-color: var(--pk-line-soft);
+    vertical-align: middle;
+  }
+
+  .pk-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /*
+   * `overflow` does not clip an absolutely positioned descendant unless the
+   * scroller is also that descendant's containing block. The visually hidden
+   * header spans are absolutely positioned, so on a phone one of them sat
+   * 600px from the viewport's left edge, outside this container, and stretched
+   * the DOCUMENT by 222px — a page that scrolled sideways with nothing visible
+   * out there to explain it. The table itself was clipped correctly the whole
+   * time, which is what made it hard to see.
+   */
+  .pk-table__scroll {
+    position: relative;
   }
 
   .pk-table__caption {
@@ -55,29 +74,6 @@
     border: 0;
   }
 
-  .pk-table th {
-    padding: var(--pk-2) var(--pk-4);
-    background: var(--pk-surface-sunk);
-    border-bottom: 1px solid var(--pk-line);
-    text-align: left;
-    white-space: nowrap;
-    font-size: var(--pk-text-2xs);
-    font-weight: 700;
-    letter-spacing: var(--pk-tracking-label);
-    text-transform: uppercase;
-    color: var(--pk-ink-muted);
-  }
-
-  .pk-table td {
-    padding: var(--pk-row-y) var(--pk-4);
-    border-bottom: 1px solid var(--pk-line-soft);
-    vertical-align: middle;
-  }
-
-  .pk-table tbody tr:last-child td {
-    border-bottom: 0;
-  }
-
   .pk-table tbody tr:hover {
     background: var(--pk-surface-sunk);
   }
@@ -88,14 +84,6 @@
 
   .pk-table tbody tr[aria-selected="true"]:hover {
     background: color-mix(in oklab, var(--pk-accent) 10%, var(--pk-surface));
-  }
-
-  .pk-table__cell--center {
-    text-align: center;
-  }
-
-  .pk-table__cell--end {
-    text-align: right;
   }
 
   .pk-table__sort {

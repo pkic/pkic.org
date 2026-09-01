@@ -160,12 +160,17 @@ export function ApiDataTable<T, Response = unknown>({
           }}
         >
           {toolbar?.(actions)}
+          {/* Default size, not `sm`: these sit on the same row as the search
+              field, which is a full-size control, and a button that is eight
+              pixels shorter than the input beside it reads as shrunken rather
+              than as quiet. `sm` belongs inside a dense row, not next to a
+              full-size control. */}
           {createAction && (
-            <Button size="sm" onClick={createAction.onSelect} disabled={createAction.disabled}>
+            <Button onClick={createAction.onSelect} disabled={createAction.disabled}>
               {createAction.label}
             </Button>
           )}
-          <Button size="sm" variant="secondary" onClick={() => void collection.reload()}>
+          <Button variant="secondary" onClick={() => void collection.reload()}>
             Refresh
           </Button>
         </Toolbar>

@@ -9,6 +9,7 @@ import { GroupForms } from "../../assets/ts/member-flows/portal/sections/managem
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
@@ -250,18 +251,10 @@ describe("portal selected-group collections", () => {
     expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
 
     await settle();
-    const rowMenu = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(rowMenu).not.toBeNull();
-    await act(async () => {
-      rowMenu?.click();
-    });
-    const archiveItem = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
-      (candidate) => candidate.textContent?.trim() === "Archive",
-    );
-    expect(archiveItem).not.toBeUndefined();
-    await act(async () => {
-      archiveItem?.click();
-    });
+    // The row already carries "Manage"; its one remaining action sits beside
+    // it as a button naming the list, not behind a `…` holding one item.
+    expect(rowActionControlNames(container)).toEqual(["Archive, Architecture discussion"]);
+    await runRowAction(container, "Architecture discussion", "Archive");
     await settle();
     const archiveDialog = container.querySelector('[role="alertdialog"]');
     expect(archiveDialog).not.toBeNull();

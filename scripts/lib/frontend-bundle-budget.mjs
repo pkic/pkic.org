@@ -31,8 +31,23 @@ export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 340 * 1024, gzipByt
  * about what a visitor downloads.
  *
  * The headroom is small on purpose. This is a ceiling, not a budget to spend.
+ *
+ * Raised once, on 2026-09-01, from 20/5 KiB. Three primitives joined the entry
+ * that day, and each for the reason this list exists to allow: a
+ * server-rendered page writes its class names and cannot wait for a lazy chunk
+ * without showing unstyled markup first.
+ *
+ *   Pager        the list pages' pagination, which had been rendering as a
+ *                bulleted list since Bootstrap's markup stopped being styled
+ *   ThemeToggle  the navbar control on every page; lazily loaded, all three of
+ *                its icons show until the chunk lands
+ *   Table        content tables authored in Markdown, which had been
+ *                unreadable in the dark theme
+ *
+ * That is the whole justification. A fourth addition needs its own, in this
+ * comment, or it does not belong in the entry.
  */
-export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 20 * 1024, gzipBytes: 5 * 1024 });
+export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 24 * 1024, gzipBytes: 6 * 1024 });
 
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;

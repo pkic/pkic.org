@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { runRowAction } from "./helpers/data-table";
 
 const LEADERSHIP_API = "/api/v1/leadership/positions";
 const REMOVED_SYSTEM_LEADERSHIP_API = "/api/v1/system/leadership-positions";
@@ -57,10 +58,10 @@ test("permitted staff manage the public leadership roster through the System por
     (response) =>
       new URL(response.url()).pathname.startsWith(`${LEADERSHIP_API}/`) && response.request().method() === "DELETE",
   );
-  // The row's menu is named after the person it acts on; the row is already
-  // narrowed to this position, so the prefix is enough to address it.
-  await position.getByRole("button", { name: /^Actions for / }).click();
-  await page.getByRole("menuitem", { name: "Remove position" }).click();
+  // Whether removal is a button or an item in the row's menu depends on
+  // whether this operator may also edit the position, so the helper resolves
+  // it rather than this spec assuming one shape.
+  await runRowAction(page, position, "Remove position");
   await acceptConfirmDialog(page, "Remove position");
   expect((await deleteResponse).status()).toBe(200);
   await expect(position).toHaveCount(0);

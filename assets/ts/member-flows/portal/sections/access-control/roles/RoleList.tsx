@@ -127,7 +127,7 @@ export function RoleList({
               </Button>
               {canRevoke && (
                 <RowActions
-                  label={`Actions for ${r.name}`}
+                  subject={r.name}
                   actions={[
                     {
                       id: "delete",

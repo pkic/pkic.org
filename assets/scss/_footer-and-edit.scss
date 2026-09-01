@@ -1,5 +1,10 @@
 // ── CTA participation bar ──────────────────────────────────────────────────
 #participate {
+  // One line of text under the gradient rule, so it takes the tighter step of
+  // the spacing scale rather than `pk-section`'s between-sections rhythm —
+  // which is 3rem, and left the sentence stranded in the middle of a band
+  // twice as tall as the one it replaced.
+  padding-block: var(--pk-5);
   background: #000;
   border-top: 3px solid transparent;
   border-image: linear-gradient(

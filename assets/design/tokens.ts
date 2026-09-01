@@ -182,6 +182,20 @@ export const constants = {
   // Text on any saturated solid fill — an accent button, a danger button.
   // Constant across themes: a filled control keeps its own contrast.
   "on-solid": "#ffffff",
+  /*
+   * Controls sitting ON such a fill, rather than text written on it.
+   *
+   * A CTA banner paints its own saturated ground — a blue block, a green
+   * band — and the page accent has nothing to do with that ground: an accent
+   * fill inside one reads as a second, competing color, and in the dark theme
+   * the quiet button's surface arrives near-black on it. So on that ground the
+   * filled control becomes the white one and takes its ink from the ground it
+   * covers, and the quiet one becomes a full-strength white outline over that
+   * same ground — a softened outline cannot reach a 3:1 boundary against the
+   * lighter banner colors, where white itself only just does. The ink is
+   * constant across themes, because the banner's ground is.
+   */
+  "on-solid-ink": neutral[800],
   // The dark theme's --pk-danger is a light red meant for ink. Filling a
   // button with it and writing in white gave 2.6:1. A destructive fill gets
   // the same darkening an accent fill does.

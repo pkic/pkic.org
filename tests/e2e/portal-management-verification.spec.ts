@@ -26,6 +26,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
@@ -451,8 +452,7 @@ test.describe("Portal management browser-verification pass", () => {
         new URL(response.url()).pathname.startsWith(`/api/v1/events/${EVENT_SLUG}/roles/`) &&
         response.request().method() === "DELETE",
     );
-    await reloadedRow.getByRole("button", { name: `Actions for ${email}` }).click();
-    await page.getByRole("menuitem", { name: "Revoke" }).click();
+    await runRowAction(page, reloadedRow, "Revoke");
     await acceptConfirmDialog(page, "Revoke role");
     expect((await revoked).status()).toBe(200);
     await expect(page.getByRole("row").filter({ hasText: email })).toHaveCount(0);

@@ -402,3 +402,114 @@
     color: $green;
   }
 }
+
+// ── Past positions timeline ───────────────────────────────────────────────────
+// The "Past positions" list under the Board and Executive Council rosters,
+// rendered by person-card.html in `mode: "timeline"` and by the leadership
+// widget's TimelineItem. Both have named these classes since the cards were
+// introduced and no rule ever answered to them: the row was an uncapped
+// headshot the full width of the column, with the name, role, dates and
+// organisation run together as one line of text underneath it.
+//
+// A past position is a fact, not a card. It gets one line: a small avatar, the
+// name, and the rest of the row in the quiet greys the past role arc uses.
+
+.consortium-past-leadership {
+  margin: 2rem 0;
+}
+
+.consortium-past-heading {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: $gray-500;
+  margin: 0 0 0.75rem;
+}
+
+.consortium-past-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.person-tl-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border: 1px solid $gray-200;
+  border-radius: 0.65rem;
+}
+
+.person-tl-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.person-tl-avatar {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  // Grey ring, the same differentiator the past role arc uses on a full card.
+  border: 2px solid $gray-300;
+
+  &--initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+    border: none;
+    background: var(--page-accent, var(--wg-color, #{$green}));
+  }
+}
+
+// One row that wraps to a second line on a phone rather than truncating a name.
+.person-tl-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+  min-width: 0;
+}
+
+.person-tl-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.person-tl-role {
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #fff;
+  background: $gray-400;
+  border-radius: 99px;
+  padding: 0.1em 0.5em;
+  line-height: 1.5;
+}
+
+.person-tl-dates {
+  font-size: 0.72rem;
+  color: $gray-500;
+}
+
+.person-tl-org {
+  font-size: 0.72rem;
+  color: $gray-500;
+}
+
+.person-tl-org-link {
+  color: inherit;
+  text-decoration: none;
+  &:hover {
+    color: $green;
+  }
+}

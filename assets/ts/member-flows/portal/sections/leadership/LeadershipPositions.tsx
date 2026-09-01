@@ -383,7 +383,7 @@ function PositionMenu({
   ];
   if (actions.length === 0) return null;
 
-  return <RowActions label={`Actions for ${position.name}`} actions={actions} />;
+  return <RowActions subject={position.name} actions={actions} />;
 }
 
 function positionColumns(

@@ -194,7 +194,7 @@ export function RoleDetail({
                     cell: (assignment) =>
                       canRevoke ? (
                         <RowActions
-                          label={`Actions for ${assignment.name}`}
+                          subject={assignment.name}
                           actions={[
                             {
                               id: "unassign",

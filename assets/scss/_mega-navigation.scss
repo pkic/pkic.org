@@ -164,6 +164,33 @@ $pkic-nav-expand: 992px;
   justify-content: space-between;
 }
 
+// Site controls, pinned to the right of the bar.
+//
+// Not a nav link and not inside the collapsing list: these act on the site
+// rather than lead anywhere, so they read as chrome and stay reachable on a
+// phone, where the link list is behind the toggler. An account control belongs
+// here too when there is one.
+.pkic-navbar-utilities {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  // The ink is set here and inherited by the controls inside, which is the
+  // only way a legacy rule can reach them: their own styles are in the
+  // components layer, which beats this one. It also matches the nav links, so
+  // a preference nobody sets twice does not outrank the navigation.
+  color: rgba(255, 255, 255, 0.72);
+  order: 3;
+  margin-left: auto;
+
+  @media (min-width: $pkic-nav-expand) {
+    margin-left: 0.35rem;
+    // A hairline, not a gap: it separates a control from the last link without
+    // adding another thing to look at.
+    padding-left: 0.5rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
+  }
+}
+
 // Centre search widget — margin:auto splits free space equally left & right.
 // Hidden below the expand breakpoint, where .pkic-navbar-mobile-search takes
 // over inside the collapsed menu.

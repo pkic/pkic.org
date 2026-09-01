@@ -5,7 +5,7 @@
  *
  * What is asserted here is deliberately what a visual review cannot see and
  * the isolation gate cannot either — the label/control pairs, the table
- * captions, the accessible names on the icon-only row menus, the live region
+ * captions, the accessible names on the row's own controls, the live region
  * a rejected submission lands in — plus the failure paths, which is where a
  * migrated form most easily loses the only thing that told the reader what
  * went wrong.
@@ -20,6 +20,7 @@ import { RoleList } from "../../assets/ts/member-flows/portal/sections/access-co
 import { PermissionCheckboxes } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RolePermissions";
 import { PERMISSIONS, type Permission } from "../../assets/shared/schemas/permissions";
 import { accessGrantCreateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
+import { rowActionControlNames } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
@@ -185,9 +186,13 @@ describe("Grants on the design system", () => {
     // announce several anonymous ones.
     expect(container.querySelector("caption")?.textContent).toBe("Permission grants");
 
-    // The icon-only row menu says which row it belongs to.
-    const rowMenu = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(rowMenu?.getAttribute("aria-label")).toBe(`Actions for the ${GRANT.permission} grant to ${GRANT.userEmail}`);
+    // The row's one action is shown, not hidden behind a `…`, and it says
+    // which grant it would revoke rather than being one "Revoke grant" among
+    // a page of them.
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+    expect(rowActionControlNames(container)).toEqual([
+      `Revoke grant, ${GRANT.permission} granted to ${GRANT.userEmail}`,
+    ]);
 
     void act(() => buttonNamed(container, "New grant").click());
 
@@ -300,9 +305,7 @@ describe("RoleDetail on the design system", () => {
       "Assignees",
     ]);
     expect(container.querySelector("caption")?.textContent).toBe(`${ROLE.name} assignees`);
-    expect(container.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe(
-      `Actions for ${ASSIGNMENT.name}`,
-    );
+    expect(rowActionControlNames(container)).toEqual([`Unassign role, ${ASSIGNMENT.name}`]);
     expect(container.textContent).toContain(ASSIGNMENT.name);
     expect(container.textContent).toContain(ASSIGNMENT.email);
 
@@ -509,7 +512,7 @@ describe("the roles list on the design system", () => {
     // a column of menus all called "Row actions".
     expect(container.querySelector("caption")?.textContent).toBe("Roles");
     expect(container.querySelector('button[aria-label="Open custom_reviewer"]')).toBeTruthy();
-    expect(container.querySelector('button[aria-label="Actions for custom_reviewer"]')).toBeTruthy();
+    expect(rowActionControlNames(container)).toEqual(["Delete role, custom_reviewer"]);
   });
 
   it("offers exactly one way out of an empty roles list to a caller who can create one", async () => {

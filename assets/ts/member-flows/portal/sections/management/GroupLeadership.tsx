@@ -59,7 +59,7 @@ function leadershipColumns(
       cell: (assignment) =>
         assignment.inherited ? null : (
           <RowActions
-            label={`Actions for ${assignment.userName}`}
+            subject={assignment.userName}
             actions={[
               {
                 id: "remove",

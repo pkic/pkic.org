@@ -181,13 +181,17 @@
      attribute; `pkic-page-hero--<theme>` re-points `--pk-canvas`, which the
      design system's base layer already paints. `page-theme-gradient.html`
      still resolves the same choice as a string for the OG-card generator,
-     which builds a custom property instead of rendering page markup. */}}
+     which builds a custom property instead of rendering page markup.
+
+     `pk-on-solid` marks it as a surface that owns its own ground, so the hero
+     button reads its colors from that ground rather than from the page's
+     theme — see the button itself, below. */}}
 {{- $themeColors := slice "blue" "green" "orange" "purple" "teal" "red" -}}
 {{- $themeSections := slice "blog" "members" "about" "events" "resources" "pqcc" "activities" -}}
 {{- $heroTheme := "default" -}}
 {{- if in $themeSections ($.Section | default "") -}}{{- $heroTheme = $.Section -}}{{- end -}}
 {{- if in $themeColors ($.Params.color | default "") -}}{{- $heroTheme = $.Params.color -}}{{- end -}}
-<div class="pk pkic-page-hero pkic-page-hero--{{ $heroTheme }}{{ with $.Params.wgID }} wg-{{ lower (index $.Params "wgID") }}{{ end }}">{{ with $.Params.wgID }}
+<div class="pk pk-on-solid pkic-page-hero pkic-page-hero--{{ $heroTheme }}{{ with $.Params.wgID }} wg-{{ lower (index $.Params "wgID") }}{{ end }}">{{ with $.Params.wgID }}
   {{ partial "wg/icon.html" (dict "id" ($.Params.card.icon | default (lower .)) "class" "pkic-page-hero-watermark") }}{{ end }}
   <div class="pk-container pk-stack pk-center pkic-page-hero__body">
     {{ with $.Params.wgID }}
@@ -208,8 +212,13 @@
     {{ end }}
     {{ with $.Param "heroButton" }}
     <div class="pk-cluster pk-cluster--center">
+      {{/* Primary, as on the image hero above: it is the page's one call to
+           action, and on `pk-on-solid` that is the solid white button. As a
+           secondary it was the theme's own surface — white in the light theme
+           by luck, and near-black on the same near-black gradient in the
+           dark one. */}}
       <a href="{{ $.Param "heroButton.link" }}"
-         class="pk-btn pk-btn--secondary pk-btn--lg"
+         class="pk-btn pk-btn--primary pk-btn--lg"
          title="{{ $.Param "heroButton.label" }}">{{ $.Param "heroButton.label" }}</a>
     </div>
     {{ end }}

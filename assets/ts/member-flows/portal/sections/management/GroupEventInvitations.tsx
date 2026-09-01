@@ -238,7 +238,7 @@ export function GroupEventInvitations({
                       disabled: busy,
                     });
                   }
-                  return <RowActions label={`Actions for ${inviteeLabel(invite)}`} actions={actions} />;
+                  return <RowActions subject={inviteeLabel(invite)} actions={actions} />;
                 },
               },
             ]}

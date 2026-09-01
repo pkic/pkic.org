@@ -121,7 +121,7 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
                       {label} <span class="pk-small">since {fmtDate(membership.joinedAt)}</span>
                     </span>
                     <RowActions
-                      label={`Actions for ${label}`}
+                      subject={label}
                       actions={[
                         {
                           id: "remove",

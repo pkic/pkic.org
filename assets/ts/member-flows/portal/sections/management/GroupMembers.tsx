@@ -63,7 +63,7 @@ function membershipColumns(
       align: "end",
       cell: (membership) => (
         <RowActions
-          label={`Actions for ${membership.userName}`}
+          subject={membership.userName}
           actions={[
             {
               id: "remove",

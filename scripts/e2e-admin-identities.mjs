@@ -29,6 +29,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-identity-history",
   "portal-identity-logout",
   "portal-mobile-navigation",
+  "portal-dark-theme",
   "portal-dual-capacity",
   "portal-dual-capacity-guard",
   "portal-vote-participation",

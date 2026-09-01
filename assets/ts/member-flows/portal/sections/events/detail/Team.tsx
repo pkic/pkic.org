@@ -205,7 +205,7 @@ export function Team({ slug }: { slug: string }) {
             className: "pk-end",
             cell: (role) => (
               <RowActions
-                label={`Actions for ${role.userEmail}`}
+                subject={role.userEmail}
                 actions={[
                   {
                     id: "revoke",

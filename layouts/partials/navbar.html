@@ -25,6 +25,14 @@
       </div>
     </div>
 
+    {{/* Controls that act on the site rather than navigate it: the theme
+         choice today, an account menu when there is one. Outside the link list
+         and outside the collapse, so it reads as a control rather than a
+         destination and stays reachable on a phone. */}}
+    <div class="pkic-navbar-utilities">
+      {{ partial "theme-toggle.html" . }}
+    </div>
+
     <button class="pkic-navbar-toggler" type="button" id="pkicNavToggle" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 30 30" aria-hidden="true" focusable="false">
         <path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"/>
@@ -72,28 +80,6 @@
         {{ end }}
         {{ end }}
 
-        {{/* Three icons, one shown per theme state by `ui/ThemeToggle.css`, so
-             the control is right on the first paint and the module that
-             handles the click never writes markup. `assets/ts/theme.ts` owns
-             the choice. */}}
-        <button
-          type="button"
-          class="pk-theme-toggle"
-          data-theme-toggle
-          aria-label="Theme: matching your system. Activate for the light theme."
-          title="Theme: matching your system. Activate for the light theme."
-        >
-          <svg data-theme-icon="system" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
-            <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 9.5zm1.5-.5a.5.5 0 0 0-.5.5v6a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-6a.5.5 0 0 0-.5-.5zM5 13h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1 0-1" />
-          </svg>
-          <svg data-theme-icon="light" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
-            <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0-1a2 2 0 1 0 0-4 2 2 0 0 0 0 4M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708" />
-          </svg>
-          <svg data-theme-icon="dark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
-            <path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278" />
-          </svg>
-          <span class="pk-sr-only" data-theme-label>Theme: matching your system. Activate for the light theme.</span>
-        </button>
       </div>
     </div>
   </div>

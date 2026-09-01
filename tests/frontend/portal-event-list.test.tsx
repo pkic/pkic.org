@@ -3,6 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventList } from "../../assets/ts/member-flows/portal/sections/events/EventList";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
@@ -207,15 +208,10 @@ describe("portal event list", () => {
     await settle();
     await settle();
 
-    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for PQC Conference 2026"]');
-    expect(trigger).not.toBeNull();
-    void act(() => trigger!.click());
-
-    const menuItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((button) =>
-      button.textContent?.includes("Open in Post-Quantum Cryptography workspace"),
-    );
-    expect(menuItem).toBeTruthy();
-    void act(() => menuItem!.click());
+    expect(rowActionControlNames(container)).toEqual([
+      "Open in Post-Quantum Cryptography workspace, PQC Conference 2026",
+    ]);
+    await runRowAction(container, "PQC Conference 2026", "Open in Post-Quantum Cryptography workspace");
 
     expect(navigateMock).toHaveBeenCalledWith(
       "/groups/20000000-0000-4000-8000-000000000001/events/e0000000-0000-4000-8000-000000000009",
@@ -237,10 +233,9 @@ describe("portal event list", () => {
     await settle();
     await settle();
 
-    expect(container.querySelector('[aria-label="Actions for PQC Conference 2026"] ~ [role="menu"]')).toBeNull();
-    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for PQC Conference 2026"]');
-    // The trigger itself is only rendered by Menu when there is at least one action.
-    expect(trigger).toBeNull();
+    // An audience entry can do nothing to the event, so its row offers no
+    // control at all — neither an inline button nor a menu.
+    expect(rowActionControlNames(container)).toEqual([]);
   });
 
   it("shows an empty state with no create action when there are no upcoming events", async () => {

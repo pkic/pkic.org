@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { signInToPortal } from "./helpers/portal-auth";
 
 /**
  * The dark theme has to reach the page, not only the components.
@@ -32,7 +34,7 @@ async function unreadableSurfaces(page: Page): Promise<string[]> {
   return page.evaluate(`(() => {
     const luminance = ${LUMINANCE};
     const found = new Set();
-    for (const element of document.querySelectorAll("main *, footer *")) {
+    for (const element of document.querySelectorAll("main *, footer *, #portal-root *")) {
       const box = element.getBoundingClientRect();
       // Something big enough to read text on. A 20px chip that borrows its
       // ground from a parent is not what this is looking for.
@@ -69,6 +71,22 @@ test.describe("the dark theme", () => {
       expect(await unreadableSurfaces(page)).toEqual([]);
     });
   }
+
+  test("reaches the portal's own chrome, not only the components in it", async ({ page }) => {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("pk-theme", "dark");
+      } catch {
+        // A browser that refuses storage still honours the OS preference.
+      }
+    });
+    await signInToPortal(page, e2eAdminEmail("portal-dark-theme"));
+
+    // The sidebar and the page around it were three fixed colours, so the
+    // portal stayed light while the tables and inputs inside it went dark.
+    await expect(page.locator("#portal-root")).toBeVisible();
+    expect(await unreadableSurfaces(page)).toEqual([]);
+  });
 
   test("remembers the reader's choice and hands it back", async ({ page }) => {
     await page.goto("/");

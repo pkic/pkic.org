@@ -182,7 +182,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
                     {selectedListId === list.id ? "Close" : "Manage"}
                   </Button>
                   <RowActions
-                    label={`Actions for ${list.label}`}
+                    subject={list.label}
                     actions={[
                       {
                         id: "archive",

@@ -283,7 +283,7 @@ export function ActingIdentityDirectory({
           cell: (identity) => {
             const actions = rowActions(identity);
             if (actions.length === 0) return null;
-            return <RowActions label={`Actions for ${identity.userName}`} actions={actions} />;
+            return <RowActions subject={identity.userName} actions={actions} />;
           },
         },
       ]}

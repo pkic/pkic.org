@@ -11,6 +11,7 @@ import {
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ResourceSharingEditor } from "../../assets/ts/member-flows/portal/sections/management/ResourceSharingEditor";
 import { buttonNamed, chooseOption, controlFor } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const OWNER_GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const GRANTEE_GROUP_ID = "10000000-0000-4000-8000-000000000002";
@@ -45,14 +46,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function menuItem(container: HTMLElement, label: string): HTMLButtonElement {
-  const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (candidate) => candidate.textContent === label,
-  );
-  if (!item) throw new Error(`missing menu item: ${label}`);
-  return item;
 }
 
 function confirmDialogButton(label: string): HTMLButtonElement {
@@ -192,10 +185,10 @@ describe("portal resource sharing editor", () => {
     // unnamed tables on the page.
     expect(container.querySelector("caption")?.textContent).toContain("shared with");
 
-    const rowMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Working Group"]');
-    expect(rowMenu).toBeDefined();
-    await act(async () => rowMenu!.click());
-    await act(async () => menuItem(container, "Revoke").click());
+    // Each shared group's control names that group, so a table of "Revoke"
+    // buttons still says what each one revokes.
+    expect(rowActionControlNames(container)).toEqual(["Revoke, Working Group"]);
+    await runRowAction(container, "Working Group", "Revoke");
     await act(async () => confirmDialogButton("Revoke access").click());
     await settle();
     expect(requests.find(({ method }) => method === "DELETE")).toMatchObject({

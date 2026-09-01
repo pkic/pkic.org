@@ -266,7 +266,10 @@ async function expectParticipantRoster(page: Page): Promise<void> {
   const roster = page.getByRole("region", { name: "Members" });
   await expect(roster.getByRole("listitem").filter({ hasText: "Synthetic Persona" })).toBeVisible();
   await expect(roster.getByLabel("Search members")).toBeVisible();
+  // No row commands at all: neither the menu a multi-action row would show nor
+  // the inline button a single-action row would.
   await expect(roster.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  await expect(roster.getByRole("button", { name: /^(Remove|End identity|Change role)/ })).toHaveCount(0);
   await expect(roster.getByRole("button", { name: /Add member/i })).toHaveCount(0);
   await expect(roster.getByRole("columnheader", { name: "Participation capacity" })).toHaveCount(0);
 }

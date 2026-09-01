@@ -204,45 +204,11 @@ main {
                     // so position:sticky inside <main> still works correctly.
 }
 
-// Tables written in authored markdown. These used to `@extend` four Bootstrap
-// classes; the declarations are stated here instead, reading the design
-// system's tokens so a content table matches the tables the app renders.
-//
-// This is the legacy layer, so it applies to bare `<table>` in prose and loses
-// to `.pk-table` wherever a component draws one.
-table {
-  width: 100%;
-  margin-top: 1.6em;
-  text-align: left;
-  border-collapse: collapse;
-  color: var(--pk-ink);
-  font-variant-numeric: tabular-nums;
-}
-
-table th,
-table td {
-  padding: var(--pk-2) var(--pk-3);
-  border: 1px solid var(--pk-line);
-  vertical-align: top;
-}
-
-table tbody tr:nth-of-type(odd) {
-  background: var(--pk-surface-sunk);
-}
-
-table tbody tr:hover {
-  background: var(--pk-surface-raise);
-}
-
-thead {
-  background: var(--pk-ink);
-  color: var(--pk-ink-inverse);
-}
-
-thead th {
-  border-color: var(--pk-ink);
-  font-weight: 600;
-}
+// Tables written in authored markdown are drawn by the design system now:
+// `layouts/_default/_markup/render-table.html` renders `pk-table`, and
+// `assets/ts/ui/Table.css` is the one stylesheet that dresses both a content
+// table and a portal list. Element rules for `table` used to live here; they
+// are gone rather than left as a second opinion the cascade has to settle.
 
 main {
   flex: 1;

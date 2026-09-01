@@ -13,6 +13,10 @@
 
 import { Fragment, type ComponentChildren } from "preact";
 
+// The skin is shared with the Markdown table render hook and ships in the
+// entry stylesheet; importing it here states the dependency rather than
+// relying on the entry having happened to load first.
+import "./Table.css";
 import "./DataTable.css";
 import "./Content.css";
 
@@ -105,9 +109,17 @@ function RowActionControl({ action }: { action: DataTableRowAction }) {
   );
 }
 
+/*
+ * Alignment is the utilities' `pk-center`/`pk-end`, not a pair of table-only
+ * classes. The table used to define its own, which meant two names for one
+ * declaration and — once the Markdown render hook started drawing tables too —
+ * a second copy of them in the entry stylesheet, which has no room for one.
+ * The utilities layer also beats the components layer, so an aligned column
+ * needs no extra specificity to hold.
+ */
 function alignClass(align: DataTableColumn<unknown>["align"]): string | undefined {
-  if (align === "end") return "pk-table__cell--end";
-  if (align === "center") return "pk-table__cell--center";
+  if (align === "end") return "pk-end";
+  if (align === "center") return "pk-center";
   return undefined;
 }
 

@@ -10,7 +10,9 @@ import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-c
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
+import { confirmationButton } from "./helpers/confirm-dialog";
 import { buttonNamed, controlFor } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
@@ -107,10 +109,9 @@ describe("portal system access control", () => {
     await settle();
     expect(revokeOnly.textContent).not.toContain("New grant");
     expect(revokeOnly.textContent).not.toContain("Grant a permission");
-    const revokeTrigger = revokeOnly.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(revokeTrigger).toBeTruthy();
-    void act(() => revokeTrigger!.click());
-    expect(revokeOnly.textContent).toContain("Revoke grant");
+    // Revoking is the row's only action, so it is offered as a button that
+    // says which grant it would revoke.
+    expect(rowActionControlNames(revokeOnly)).toEqual(["Revoke grant, access:grant granted to staff@example.test"]);
 
     // A grant-authorized caller sees the action, not an always-open form.
     void act(() => render(null, revokeOnly));
@@ -559,22 +560,18 @@ describe("portal system access control", () => {
     );
     await settle();
 
-    function openRowMenuAndSelectDelete() {
-      const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
-      void act(() => trigger.click());
-      void act(() => buttonNamed(container, "Delete role").click());
-    }
-
     // Cancel: the confirm dialog names the role, but dismissing it must not delete it.
-    openRowMenuAndSelectDelete();
+    await runRowAction(container, "custom_reviewer", "Delete role");
     expect(container.textContent).toContain('Delete the role "custom_reviewer"?');
     void act(() => buttonNamed(container, "Cancel").click());
     await settle();
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
 
-    // Confirm: the dialog's own "Delete role" button deletes it through the canonical route.
-    openRowMenuAndSelectDelete();
-    void act(() => buttonNamed(container, "Delete role").click());
+    // Confirm: the dialog's own "Delete role" button deletes it through the
+    // canonical route. It is looked up inside the dialog, because the row's
+    // control now reads "Delete role" too.
+    await runRowAction(container, "custom_reviewer", "Delete role");
+    await act(() => confirmationButton("Delete role", container)?.click());
     await settle();
     const deleteRequest = requests.find((r) => r.method === "DELETE");
     expect(deleteRequest?.pathname).toBe(`/api/v1/roles/${ROLE.id}`);

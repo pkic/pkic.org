@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
 import { UserEmailAddressesPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAccountPanels";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { confirmationButton } from "./helpers/confirm-dialog";
 import { buttonNamed, controlFor, labelNames } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 import { toast } from "../../assets/ts/member-flows/portal/ui";
 
 // The toast area is mounted by the portal shell, not by a panel under test,
@@ -305,23 +307,21 @@ describe("portal access-control collection pagination", () => {
     );
     await settle();
 
-    function dialogButton(label: string): HTMLButtonElement {
-      const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-      if (!button) throw new Error(`missing button: ${label}`);
-      return button;
-    }
+    // The row's lone action is shown rather than hidden behind a `…`, and it
+    // names the address it would remove: a list of aliases must not be a list
+    // of identically named "Remove email" buttons.
+    expect(rowActionControlNames(container)).toEqual(["Remove email, alias@example.test"]);
 
-    const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
-    void act(() => trigger.click());
-    void act(() => dialogButton("Remove email").click());
+    await runRowAction(container, "alias@example.test", "Remove email");
     expect(container.textContent).toContain("Remove alias@example.test from this account?");
-    void act(() => dialogButton("Cancel").click());
+    // The confirmation's buttons are looked up inside the dialog, so the row's
+    // own "Remove email" cannot stand in for the one that commits.
+    await act(() => confirmationButton("Cancel", container)?.click());
     await settle();
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
 
-    void act(() => trigger.click());
-    void act(() => dialogButton("Remove email").click());
-    void act(() => dialogButton("Remove email").click());
+    await runRowAction(container, "alias@example.test", "Remove email");
+    await act(() => confirmationButton("Remove email", container)?.click());
     await settle();
     const deleteRequest = requests.find((r) => r.method === "DELETE");
     expect(deleteRequest?.pathname).toBe(`/api/v1/users/${USER_ID}/emails/${EMAIL_ID}`);

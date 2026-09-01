@@ -9,6 +9,7 @@ import { GroupParticipationCard } from "../../assets/ts/member-flows/portal/sect
 import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["/groups", vi.fn()],
@@ -256,14 +257,10 @@ describe("generic group participation card", () => {
       },
     });
 
-    const rowActionsTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for Organization A"]');
-    if (!rowActionsTrigger) throw new Error("missing row actions trigger");
-    void act(() => rowActionsTrigger.click());
-    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "Remove",
-    );
-    if (!removeItem) throw new Error("missing Remove menu item");
-    void act(() => removeItem.click());
+    // Each capacity's control names the capacity, so two affiliations do not
+    // leave the reader with two controls both called "Remove".
+    expect(rowActionControlNames(container)).toEqual(["Remove, Organization A"]);
+    await runRowAction(container, "Organization A", "Remove");
 
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Stop participating in Architecture Group on behalf of Organization A?");
@@ -296,14 +293,10 @@ describe("generic group participation card", () => {
       }),
     );
 
-    const rowActionsTrigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for Organization A"]');
-    if (!rowActionsTrigger) throw new Error("missing row actions trigger");
-    void act(() => rowActionsTrigger.click());
-    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "Remove",
-    );
-    if (!removeItem) throw new Error("missing Remove menu item");
-    void act(() => removeItem.click());
+    // Each capacity's control names the capacity, so two affiliations do not
+    // leave the reader with two controls both called "Remove".
+    expect(rowActionControlNames(container)).toEqual(["Remove, Organization A"]);
+    await runRowAction(container, "Organization A", "Remove");
 
     void act(() => dialogButton(container, "Cancel").click());
     await settle();

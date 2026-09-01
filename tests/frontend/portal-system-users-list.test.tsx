@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UsersList } from "../../assets/ts/member-flows/portal/sections/system-users/UsersList";
+import { rowActionControlNames } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
@@ -67,18 +68,16 @@ describe("portal System Users list permissions", () => {
   it("hides the role actions for users:write without access:grant", async () => {
     const container = mount(false);
     await settle();
-    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+    // Not a menu holding nothing, and not a button either: no row command at all.
+    expect(rowActionControlNames(container)).toEqual([]);
   });
 
   it("offers the administrator-role action only when both permissions are present", async () => {
     const container = mount(true);
     await settle();
-    const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(trigger).not.toBeNull();
-    trigger!.click();
-    await settle();
-    const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(["Grant administrator role"]);
+    // The one action a user's row offers is shown, and it names the person it
+    // would promote rather than every row reading "Grant administrator role".
+    expect(rowActionControlNames(container)).toEqual(["Grant administrator role, Ada Lovelace"]);
   });
 
   it("renders initials when a user has no headshot, and an image when one is set", async () => {

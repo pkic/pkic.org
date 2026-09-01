@@ -188,30 +188,27 @@ function LevelMode({
   if (!display || display.groups.length === 0) return null;
 
   /*
-   * The tier band — a rule with its name sitting on it — was built out of
-   * Bootstrap's grid and position utilities in the markup. It is now two class
-   * names whose rules live in `assets/scss/sponsors.scss`, beside the rest of
-   * this surface's appearance: the surface is still styled from the legacy
-   * sheet, so moving the layout there keeps one owner rather than splitting it
-   * between a stylesheet and a row of utility classes. The wrapper the logos
-   * each sat in is gone with the grid — the row is a flex container now, so a
-   * logo needs nothing around it to be centered.
+   * The tier band — a captioned rule with the tier's logos beneath it — was
+   * built out of Bootstrap's grid and position utilities in the markup. It is
+   * now a few class names whose rules live in `assets/scss/sponsors.scss`,
+   * beside the rest of this surface's appearance: the surface is still styled
+   * from the legacy sheet, so moving the layout there keeps one owner rather
+   * than splitting it between a stylesheet and a row of utility classes. The
+   * wrapper the logos each sat in is gone with the grid — the row is a flex
+   * container now, so a logo needs nothing around it to be centered.
+   *
+   * The weight class sits on the band rather than on each image: a tier's rank
+   * sets one logo box that every sponsor in the tier is contained by, which is
+   * a property of the band and not of the images inside it.
    */
   return (
     <div class="sponsors pk-stack pk-center">
       {display.groups.map((group) => (
-        <div key={group.weight} data-weight={group.weight} class="sponsors-tier">
+        <div key={group.weight} data-weight={group.weight} class={`sponsors-tier ${sponsorWeightClass(group.weight)}`}>
           <span class="sponsor-level">{group.tierName}</span>
           <div class="sponsors-tier-logos">
             {group.sponsors.map((s) => (
-              <SponsorLogo
-                key={s.id}
-                s={s}
-                level={group.tierName}
-                eventName={eventName}
-                logoClass="sponsor-logo"
-                sizeClass={sponsorWeightClass(group.weight)}
-              />
+              <SponsorLogo key={s.id} s={s} level={group.tierName} eventName={eventName} logoClass="sponsor-logo" />
             ))}
           </div>
         </div>

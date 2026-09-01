@@ -1,3 +1,4 @@
+import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -120,14 +121,15 @@ test("permitted staff manage organizations through the canonical domain API", as
       /\/api\/v1\/organizations\/[^/]+\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "PATCH",
   );
-  await representativeRow.getByRole("button", { name: "Actions for Secondary Representative" }).click();
-  await page.getByRole("menuitem", { name: "End identity" }).click();
+  await runRowAction(page, representativeRow, "End identity");
   await acceptConfirmDialog(page, "End identity");
   expect((await removeResponse).status()).toBe(200);
 
   representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
   await expect(representativeRow).toContainText("Ended");
-  await expect(representativeRow.getByRole("button", { name: "Actions for Secondary Representative" })).toHaveCount(0);
+  // An ended identity offers nothing to do — neither an inline action nor a menu.
+  await expect(representativeRow.getByRole("button", { name: "End identity" })).toHaveCount(0);
+  await expect(representativeRow.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
 
   expect(canonicalRequests).toEqual(
     expect.arrayContaining([

@@ -1,3 +1,4 @@
+import { rowActionIsDisabled, runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { acceptConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
@@ -61,17 +62,16 @@ test("a portal group manager creates, edits, and archives a mailing list", async
 
   const editedRow = management.getByRole("row").filter({ hasText: email });
   await expect(editedRow).toContainText(editedLabel);
-  // Archiving now lives in the row's actions menu behind the portal's own
-  // confirmation, not an inline button behind `window.confirm`.
-  const rowActions = editedRow.getByRole("button", { name: `Actions for ${editedLabel}` });
-  await rowActions.click();
-  await page.getByRole("menuitem", { name: "Archive" }).click();
+  // Archiving goes through the portal's own confirmation, not `window.confirm`.
+  // Whether it is reached as a button or through the row's menu depends on how
+  // many actions that row offers, which is the helper's problem, not this
+  // test's.
+  await runRowAction(page, editedRow, "Archive");
   await expect(confirmDialog(page)).toContainText(editedLabel);
   await acceptConfirmDialog(page, "Archive mailing list");
   await expect(editedRow).toContainText("Archived");
   // An archived list offers the action still, disabled, rather than hiding it.
-  await rowActions.click();
-  await expect(page.getByRole("menuitem", { name: "Archive" })).toBeDisabled();
+  expect(await rowActionIsDisabled(page, editedRow, "Archive")).toBe(true);
 
   expect(adminRequests, "portal group management must not fall back to admin APIs").toEqual([]);
   expect(groupMailingListRequests).toEqual(

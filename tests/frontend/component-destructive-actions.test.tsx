@@ -8,6 +8,7 @@ import { PasskeySettings } from "../../assets/ts/components/passkey-settings";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import type { ProposalSpeaker } from "../../assets/shared/schemas/proposal-speakers";
 import { controlFor, labelNames } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
@@ -202,14 +203,10 @@ describe("PasskeySettings confirmation and row actions", () => {
     );
     await settle();
 
-    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for Work laptop"]');
-    if (!trigger) throw new Error("missing row actions trigger");
-    await act(() => trigger.click());
-    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "Remove",
-    );
-    if (!removeItem) throw new Error("missing Remove menu item");
-    await act(() => removeItem.click());
+    // A passkey list is a column of "Remove" controls, so each one says which
+    // key it would remove rather than leaving that to the row it sits in.
+    expect(rowActionControlNames(container)).toEqual(["Remove, Work laptop"]);
+    await runRowAction(container, "Work laptop", "Remove");
 
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain('Remove passkey "Work laptop"?');

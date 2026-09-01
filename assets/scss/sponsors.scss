@@ -4,28 +4,52 @@
   }
 
   // ── One tier band ─────────────────────────────────────────────────────────
-  // A rule separating this tier from the one above, with the tier's name
-  // sitting on it. The markup used to build this out of Bootstrap's grid and
-  // position utilities; it lives here instead, because this surface's other
-  // styling does, and because a page being taken off the framework cannot keep
-  // depending on `position-absolute top-0 start-50` to place a label.
+  // A captioned rule with the tier's logos in a row beneath it. The markup
+  // used to build this out of Bootstrap's grid and position utilities; it
+  // lives here instead, because this surface's other styling does, and because
+  // a page being taken off the framework cannot keep depending on
+  // `position-absolute top-0 start-50` to place a label.
+  //
+  // The band carries its own weight class, so the sizes below are declared
+  // once for the tier rather than repeated onto every logo in it.
   .sponsors-tier {
-    position: relative;
-    border-top: 1px solid var(--pk-line-soft);
-    margin: var(--pk-2);
-    padding-top: var(--pk-4);
+    // Rank is expressed as how tall a tier's logos are allowed to be. Each
+    // step up the catalog's display weight adds the same amount, so the whole
+    // catalog sits on one ramp rather than on a table of hand-set sizes.
+    --sponsors-logo-height: calc(1.25rem + 0.375rem * (var(--sponsor-weight, 1) - 1));
+    // One box for every logo in the band, because logos disagree wildly about
+    // their aspect ratio: contained in a shared rectangle, a wide wordmark and
+    // a square glyph read as members of the same row instead of each claiming
+    // whatever width its own drawing happens to want. The viewport share keeps
+    // a phone from dropping to a single logo per line.
+    --sponsors-logo-width: min(var(--sponsors-logo-height) * 3.6, 34vw);
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-4);
   }
 
+  // The tier's name, read as a caption sitting in a gap in the rule. The rule
+  // is drawn as the two lines flanking the name rather than as a border the
+  // name is knocked out of with a solid background: a knockout has to repaint
+  // whatever the page is painted on, so it renders a chip of the wrong colour
+  // the moment the caption sits on anything but the plain page surface.
   .sponsor-level {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
     color: var(--pk-ink-muted);
-    font-size: 0.7em;
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    // The ground the rule is drawn on, so the label reads as a gap in it.
-    background: var(--pk-surface);
-    padding-inline: var(--pk-2);
+    font-size: var(--pk-text-2xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+
+    &::before,
+    &::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--pk-line-soft);
+    }
   }
 
   // The logos in a tier, centered and wrapping. Each one's own spacing comes
@@ -35,17 +59,25 @@
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
-    gap: var(--pk-5);
+    gap: var(--pk-4) var(--pk-5);
+  }
+
+  // The box. `img-fluid` used to cap a logo's width at its container and leave
+  // its intrinsic size alone; the rule that replaced it set `width: 100%`,
+  // which is the opposite — every logo inflated to its permitted maximum
+  // regardless of how large it was drawn.
+  .sponsor-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: var(--sponsors-logo-height);
+    inline-size: var(--sponsors-logo-width);
   }
 
   .sponsor-logo {
-    width: 100%;
-    height: auto;
+    max-block-size: 100%;
+    max-inline-size: 100%;
     object-fit: contain;
-    max-height: calc(15px + (15px * (var(--sponsor-weight) - 1)));
-    max-width: calc(100px + (50px * (var(--sponsor-weight) - 1)));
-    min-height: 15px;
-    min-width: 75px;
   }
 }
 

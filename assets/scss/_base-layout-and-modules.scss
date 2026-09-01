@@ -609,7 +609,11 @@ main :is(h2, h3, h4):hover .header-link {
 // On hover: the stroke sweeps to full width and brightens, then a light glint races across it.
 :is(#content, .wg-main-content, .wg-prose, .wg-data-body) a:not([class]):not(:has(img)) {
   position: relative;
-  color: color-mix(in srgb, var(--page-accent) 55%, #1a2332);
+  // Mixed toward the page's ink, not toward a fixed near-black. The accent is
+  // darkened for a light ground and lightened for a dark one by the same
+  // declaration; against the hex it stayed dark on the dark theme and prose
+  // links measured 3.02:1.
+  color: color-mix(in srgb, var(--page-accent) 55%, var(--pk-ink));
   text-decoration: none;
   padding-bottom: 4px;
   background-image: linear-gradient(

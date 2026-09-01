@@ -60,6 +60,7 @@
     --pk-dur-instant: 1ms;
     --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent);
     --pk-on-solid: #ffffff;
+    --pk-on-solid-ink: #212529;
     --pk-danger-strong: color-mix(in oklab, var(--pk-danger) 62%, #000);
     --pk-accent-on: var(--pk-on-solid);
     --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));

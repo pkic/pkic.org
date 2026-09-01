@@ -161,7 +161,7 @@ export function PasskeySettings({
                 header: "Actions",
                 cell: (passkey: PasskeySummary) => (
                   <RowActions
-                    label={`Actions for ${passkeyName(passkey)}`}
+                    subject={passkeyName(passkey)}
                     actions={[{ id: "remove", label: "Remove", onSelect: () => void handleRemove(passkey) }]}
                   />
                 ),

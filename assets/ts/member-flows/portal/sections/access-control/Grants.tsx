@@ -223,7 +223,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
             cell: (g) =>
               canRevoke ? (
                 <RowActions
-                  label={`Actions for the ${g.permission} grant to ${g.userEmail}`}
+                  subject={`${g.permission} granted to ${g.userEmail}`}
                   actions={[{ id: "revoke", label: "Revoke grant", onSelect: () => void handleRevoke(g) }]}
                 />
               ) : null,

@@ -15,6 +15,7 @@ import {
   namedGroup,
   typeInto,
 } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
 
@@ -50,20 +51,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-async function openRowMenu(container: HTMLElement, ariaLabel: string): Promise<void> {
-  const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`);
-  if (!trigger) throw new Error(`missing row menu trigger: ${ariaLabel}`);
-  await act(() => trigger.click());
-}
-
-function menuItem(container: HTMLElement, label: string): HTMLButtonElement {
-  const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (candidate) => candidate.textContent === label,
-  );
-  if (!item) throw new Error(`missing menu item: ${label}`);
-  return item;
 }
 
 function confirmDialogButton(label: string): HTMLButtonElement {
@@ -395,8 +382,9 @@ describe("portal group management resources", () => {
     // page that holds several of them rather than announced as "table".
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Membership capacities");
     expect(container.querySelector("caption")?.textContent).toBe("Active membership capacities in this group");
-    // The actions column names each row's subject instead of the control.
-    expect(container.querySelector('button[aria-label="Actions for Member Person"]')).not.toBeNull();
+    // The actions column names each row's subject instead of the control, so
+    // a roster of "Remove" buttons is still a roster of distinct controls.
+    expect(rowActionControlNames(container)).toEqual(["Remove, Member Person"]);
 
     // The search box is reached through its own `for`/`id` pair, so this
     // lookup fails exactly when the labelling does.
@@ -409,8 +397,7 @@ describe("portal group management resources", () => {
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("q")).toBe("member@example.test");
 
-    await openRowMenu(container, "Actions for Member Person");
-    await act(async () => menuItem(container, "Remove").click());
+    await runRowAction(container, "Member Person", "Remove");
     await act(async () => confirmDialogButton("End participation").click());
     await settle();
     expect(
@@ -558,8 +545,9 @@ describe("portal group management resources", () => {
 
     expect(container.textContent).toContain("Roster Person");
     expect(container.textContent).toContain("Roster Organization");
-    // No management affordances: no add-person action and no per-row menu.
+    // No management affordances: no add-person action and no row commands at
+    // all — neither inline buttons nor menus.
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Add person")).toBe(false);
-    expect(container.querySelector('button[aria-label^="Actions for"]')).toBeNull();
+    expect(rowActionControlNames(container)).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -88,10 +89,9 @@ test("permitted staff manage a custom role through the Settings portal", async (
     (response) =>
       new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) && response.request().method() === "DELETE",
   );
-  // Each row's menu names the role it acts on, so a page of rows no longer
-  // offers a column of menus all called "Row actions".
-  await roleRow.getByRole("button", { name: `Actions for ${roleName}` }).click();
-  await page.getByRole("menuitem", { name: "Delete role" }).click();
+  // A row's action names the role it acts on, so a page of rows no longer
+  // offers a column of controls all called "Row actions".
+  await runRowAction(page, roleRow, "Delete role");
   await acceptConfirmDialog(page, "Delete role");
   expect((await deleteResponse).status()).toBe(200);
   await expect(roleRow).toHaveCount(0);

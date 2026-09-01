@@ -27,9 +27,16 @@
   assets/scss/_homepage.scss), so the base layer paints the gradient instead of
   winning against it. Its only link is a Button, whose own layer sits after
   base, so nothing here is recoloured by adopting the root.
+
+  It also carries `pk-on-solid`: the band's ground is its own gradient, and the
+  root re-points `--pk-ink` to white, so a secondary button was painting white
+  text on its own white surface — the label was invisible. On this ground the
+  buttons read from the `on-solid` tokens instead. A link marked `primary` in
+  the shortcode's data gets the filled treatment, the same flag the support
+  variant below already reads.
 */}}
 {{- if eq $style "join" -}}
-<section class="pk pkic-join-cta">
+<section class="pk pkic-join-cta pk-on-solid">
   <div class="pk-container pk-stack pk-center">
     {{- if $heading }}
     <h2>{{ $heading }}</h2>
@@ -40,7 +47,8 @@
     {{- if $links }}
     <div class="pk-cluster pk-cluster--center">
       {{- range $links }}
-      <a href="{{ .url }}" class="pk-btn pk-btn--secondary pk-btn--lg">{{ .text }}</a>
+      {{- $variant := cond (.primary | default false) "pk-btn--primary" "pk-btn--secondary" }}
+      <a href="{{ .url }}" class="pk-btn {{ $variant }} pk-btn--lg">{{ .text }}</a>
       {{- end }}
     </div>
     {{- end }}
@@ -52,10 +60,13 @@
   are still coloured by `assets/scss`, and the base layer beats that sheet, so
   adopting the root would recolour the link on a dark card. The measured
   column is a utility, which carries no such opinion.
+
+  The card itself is `pk-on-solid`: it paints its own dark gradient, on which
+  the accent-filled primary button was a dark green on a dark green ground.
 */}}
 <div class="support-cta support-cta--{{ $style }}" data-reveal>
   <div class="{{ if eq $style "banner" }}pk-container{{ else }}support-cta-card{{ end }}">
-    <div class="support-cta-inner">
+    <div class="support-cta-inner pk-on-solid">
       {{- if $stat }}
       <div class="support-cta-stat-col">
         <span class="support-cta-stat">{{ $stat }}</span>

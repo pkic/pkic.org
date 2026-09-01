@@ -139,7 +139,7 @@ export function EventList() {
           },
           {
             header: "",
-            cell: (e) => <RowActions label={`Actions for ${e.name}`} actions={workspaceActions(e, navigate)} />,
+            cell: (e) => <RowActions subject={e.name} actions={workspaceActions(e, navigate)} />,
           },
         ]}
         rowAction={(e) => (e.basePath ? { label: `Open ${e.name}`, href: e.basePath } : undefined)}

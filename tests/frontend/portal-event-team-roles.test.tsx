@@ -9,6 +9,7 @@ import {
 } from "../../assets/shared/schemas/event-team";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { Team } from "../../assets/ts/member-flows/portal/sections/events/detail/Team";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const ROLE_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "10000000-0000-4000-8000-000000000002";
@@ -151,14 +152,10 @@ describe("event team role management", () => {
     expect(container.textContent).toContain("Moderator");
     expect(requests.some(({ path }) => path.includes("/api/v1/admin/"))).toBe(false);
 
-    const menuTrigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(menuTrigger).not.toBeNull();
-    await act(async () => menuTrigger!.click());
-    const revoke = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (button) => button.textContent === "Revoke",
-    );
-    expect(revoke).toBeDefined();
-    await act(async () => revoke!.click());
+    // One action, so the row shows it — named after the team member it would
+    // remove, since every row's action reads "Revoke".
+    expect(rowActionControlNames(container)).toEqual(["Revoke, moderator@example.test"]);
+    await runRowAction(container, "moderator@example.test", "Revoke");
 
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Revoke the Moderator role from moderator@example.test?");

@@ -212,7 +212,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                     cell: (assignment) =>
                       canRevoke ? (
                         <RowActions
-                          label={`Actions for the ${assignment.roleName} role`}
+                          subject={assignment.roleName}
                           actions={[
                             { id: "revoke", label: "Revoke role", onSelect: () => void handleRevoke(assignment) },
                           ]}

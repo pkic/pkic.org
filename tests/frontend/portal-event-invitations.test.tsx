@@ -8,6 +8,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { controlFor } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -128,21 +129,6 @@ async function waitForElement<T extends Element>(find: () => T | null): Promise<
   throw new Error("Expected element was not rendered.");
 }
 
-async function openRowMenu(container: HTMLElement, ariaLabel: string): Promise<void> {
-  const trigger = await waitForElement(() =>
-    container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`),
-  );
-  await act(() => trigger.click());
-}
-
-function menuItem(container: HTMLElement, label: string): HTMLButtonElement | null {
-  return (
-    [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === label,
-    ) ?? null
-  );
-}
-
 function confirmDialogButton(label: string): HTMLButtonElement {
   const dialog = document.querySelector('[role="alertdialog"]');
   if (!dialog) throw new Error("no confirm dialog is open");
@@ -228,8 +214,9 @@ describe("portal event invitations", () => {
     expect(requests.at(-1)?.url.searchParams.get("limit")).toBe("50");
     expect(requests.at(-1)?.url.searchParams.get("offset")).toBe("0");
 
-    await openRowMenu(container, "Actions for Ada Lovelace");
-    await act(async () => menuItem(container, "Resend invitation")!.click());
+    // Two actions, so this row collapses into its menu; the helper finds it
+    // there without the test having to know that.
+    await runRowAction(container, "Ada Lovelace", "Resend invitation");
     await settle();
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -243,8 +230,7 @@ describe("portal event invitations", () => {
     expect(resendRequest?.body).toBe("{}");
     expect(container.textContent).toContain("Invitation resent to Ada Lovelace.");
 
-    await openRowMenu(container, "Actions for Ada Lovelace");
-    await act(async () => menuItem(container, "Revoke invitation")!.click());
+    await runRowAction(container, "Ada Lovelace", "Revoke invitation");
     await act(async () => confirmDialogButton("Revoke invitation").click());
     await settle();
     expect(requests).toContainEqual(
@@ -271,10 +257,12 @@ describe("portal event invitations", () => {
 
     const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
     await settle();
-    await openRowMenu(container, "Actions for Ada Lovelace");
-    expect(menuItem(container, "Revoke invitation")).toBeNull();
+    // Revoke is not authorized here, so resend is the row's only action and
+    // it is shown inline — named after the invitee, not just "Resend
+    // invitation" like every other row's.
+    expect(rowActionControlNames(container)).toEqual(["Resend invitation, Ada Lovelace"]);
 
-    await act(async () => menuItem(container, "Resend invitation")!.click());
+    await runRowAction(container, "Ada Lovelace", "Resend invitation");
     await settle();
     expect(resend).toBe(true);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Invitation is no longer pending.");

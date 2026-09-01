@@ -452,18 +452,27 @@
 {{ end }}{{/* Join CTA */}}
 <section class="pk-section">
   <div class="pk-container pk-center">
-    <div class="pkic-cta-block bento-{{ $color }} text-white">
+    {{/* `pk-on-solid`: the block paints its own saturated ground, so the two
+         buttons take their colors from that ground rather than from the page
+         accent, which put a dark green fill on a blue banner. `text-white`
+         was a Bootstrap class and no longer resolves to anything. */}}
+    <div class="pkic-cta-block pk-on-solid bento-{{ $color }}">
       <div class="pkic-cta-title">Join the {{ .Title }}</div>
       <p class="pkic-cta-text">
         {{- if eq .Params.wgID "CA" -}}
         Membership in the CA Working Group is currently limited to publicly trusted CAs only (Category A members).
         {{- else -}}
         Membership in the PKI Consortium working groups is open to all member types.
-        {{- end -}}
+        {{- end }}
         Collaborate with industry leaders, shape standards, and drive meaningful change.
       </p>
-      <a href="/join/" class="pk-btn pk-btn--primary pk-btn--lg">Become a Member</a>
-      <a href="/discussions/" class="pk-btn pk-btn--secondary pk-btn--lg">Join Discussions</a>
+      {{/* A cluster, so the pair keeps a gap and wraps as a pair on a phone
+           rather than depending on the whitespace between two inline-flex
+           anchors, which collapsed them into a stack with no space at all. */}}
+      <div class="pk-cluster pk-cluster--center">
+        <a href="/join/" class="pk-btn pk-btn--primary pk-btn--lg">Become a Member</a>
+        <a href="/discussions/" class="pk-btn pk-btn--secondary pk-btn--lg">Join Discussions</a>
+      </div>
     </div>
   </div>
 </section>

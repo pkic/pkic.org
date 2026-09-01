@@ -96,6 +96,37 @@
     text-decoration: underline;
   }
 
+  /*
+   * Controls on a surface that paints its own saturated ground.
+   *
+   * A CTA banner, a gradient hero: the ground is the surface's own color and
+   * owes nothing to the page accent, so an accent-filled button inside one
+   * arrives as a second competing color (dark green on blue), and the quiet
+   * button arrives as the theme's own surface — near-black, in the dark
+   * theme, on a mid-blue banner. Marking the surface `pk-on-solid` re-dresses
+   * the controls inside it from the `on-solid` tokens instead: the filled one
+   * becomes white with dark ink, the quiet one a white outline over the
+   * ground, and both hover to the same white fill. Primary and secondary are
+   * the two variants banners use; a ghost or a link button on such a ground
+   * would need the same treatment adding here rather than locally.
+   */
+  .pk-on-solid .pk-btn--primary {
+    background: var(--pk-on-solid);
+    color: var(--pk-on-solid-ink);
+  }
+  .pk-on-solid .pk-btn--secondary {
+    background: transparent;
+    color: var(--pk-on-solid);
+    border-color: var(--pk-on-solid);
+  }
+  /* One hover for both: `brightness` is what gives the already-white fill
+     somewhere to go, since brightening white does nothing. */
+  .pk-on-solid .pk-btn:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-on-solid);
+    color: var(--pk-on-solid-ink);
+    filter: brightness(0.94);
+  }
+
   .pk-btn--sm {
     font-size: var(--pk-text-sm);
     padding: calc(var(--pk-control-y) * 0.7) calc(var(--pk-control-x) * 0.8);

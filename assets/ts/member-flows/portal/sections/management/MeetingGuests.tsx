@@ -226,7 +226,7 @@ export function MeetingGuests({
             cell: (guest) =>
               !guest.active ? null : (
                 <RowActions
-                  label={`Actions for ${guest.name}`}
+                  subject={guest.name}
                   actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revoke(guest) }]}
                 />
               ),

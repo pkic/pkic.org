@@ -8,6 +8,7 @@
  * group, and choosing whether to receive its mail, are the same story: real
  * self-service, previously only exercised as staff or not at all.
  */
+import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -95,10 +96,9 @@ test("an organization contact adds a colleague and can take the access away agai
   await page.context().clearCookies();
   await signInToPortal(page, contactEmail);
   await page.goto("/portal/#/profile");
-  const actionsButton = page.getByRole("button", { name: new RegExp(`Actions for Colleague ${suffix}`) });
-  await expect(actionsButton).toBeVisible({ timeout: 15_000 });
-  await actionsButton.click();
-  await page.getByRole("menuitem", { name: "End identity" }).click();
+  const identityRow = page.getByRole("row").filter({ hasText: `Colleague ${suffix}` });
+  await expect(identityRow).toBeVisible({ timeout: 15_000 });
+  await runRowAction(page, identityRow, "End identity");
   await acceptConfirmDialog(page, "End identity");
   await expect(page.locator(".my-toast", { hasText: "Identity ended" })).toBeVisible({ timeout: 15_000 });
 

@@ -158,7 +158,7 @@ export function UsersList({
           header: "",
           cell: (user) => (
             <RowActions
-              label={`Actions for ${personDisplayName(user.first_name, user.last_name, user.email)}`}
+              subject={personDisplayName(user.first_name, user.last_name, user.email)}
               status={roleStatus(user.role)}
               actions={
                 canWrite && canGrantAccess
