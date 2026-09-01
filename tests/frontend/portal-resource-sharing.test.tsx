@@ -2,9 +2,15 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  eventGroupGrantSchemas,
+  formGroupGrantSchemas,
+  mailingListGroupGrantSchemas,
+  voteGroupGrantSchemas,
+} from "../../assets/shared/schemas/resource-grants";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ResourceSharingEditor } from "../../assets/ts/member-flows/portal/sections/management/ResourceSharingEditor";
-import { controlFor } from "./helpers/labelled-control";
+import { buttonNamed, chooseOption, controlFor } from "./helpers/labelled-control";
 
 const OWNER_GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const GRANTEE_GROUP_ID = "10000000-0000-4000-8000-000000000002";
@@ -95,11 +101,11 @@ afterEach(() => {
 
 describe("portal resource sharing editor", () => {
   it.each([
-    ["event", "events", "attend"],
-    ["formPlacement", "forms", "view_responses"],
-    ["vote", "votes", "participate"],
-    ["mailingList", "mailing-lists", "post"],
-  ] as const)("uses the canonical %s grant contract", async (kind, resourcePath, selectedCapability) => {
+    ["event", "events", "attend", eventGroupGrantSchemas.createSchema],
+    ["formPlacement", "forms", "view_responses", formGroupGrantSchemas.createSchema],
+    ["vote", "votes", "participate", voteGroupGrantSchemas.createSchema],
+    ["mailingList", "mailing-lists", "post", mailingListGroupGrantSchemas.createSchema],
+  ] as const)("uses the canonical %s grant contract", async (kind, resourcePath, selectedCapability, createSchema) => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     let grantActive = false;
     vi.stubGlobal(
@@ -158,31 +164,33 @@ describe("portal resource sharing editor", () => {
       "true",
     );
 
-    const capabilitySelect = container.querySelector<HTMLSelectElement>(`select[aria-label="Capability"]`)!;
+    // Both selects are resolved through the `for`/`id` pair that names them,
+    // so the lookup fails exactly when the labelling is broken.
+    const capabilitySelect = controlFor<HTMLSelectElement>(container, "Capability");
     expect([...capabilitySelect.options].map((option) => option.value)).toContain(selectedCapability);
     const groupSelect = controlFor<HTMLSelectElement>(container, "Group");
-    groupSelect.value = GRANTEE_GROUP_ID;
-    await act(async () => {
-      groupSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => {
-      capabilitySelect.value = selectedCapability;
-      capabilitySelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const share = [...container.querySelectorAll("button")].find((button) => button.textContent === "Share");
-    expect(share).toBeDefined();
-    await act(async () => share!.click());
+    await chooseOption(groupSelect, GRANTEE_GROUP_ID);
+    await chooseOption(capabilitySelect, selectedCapability);
+    await act(async () => buttonNamed(container, "Share").click());
     await settle();
     await settle();
 
     const grantPath = `/api/v1/groups/${OWNER_GROUP_ID}/${resourcePath}/${
       kind === "event" ? "architecture-workshop" : "80000000-0000-4000-8000-000000000001"
     }/grants`;
-    expect(requests.find(({ method }) => method === "POST")).toMatchObject({
-      url: expect.objectContaining({ pathname: grantPath }),
-      body: { granteeGroupId: GRANTEE_GROUP_ID, capability: selectedCapability },
+    const posted = requests.find(({ method }) => method === "POST");
+    expect(posted?.url.pathname).toBe(grantPath);
+    // The body is checked against the shared create contract rather than a
+    // literal, so a field this surface stops sending fails here.
+    expect(createSchema.parse(posted?.body)).toEqual({
+      granteeGroupId: GRANTEE_GROUP_ID,
+      capability: selectedCapability,
     });
     expect(container.textContent).toContain("Working Group");
+
+    // The grants table announces itself by name rather than as one of several
+    // unnamed tables on the page.
+    expect(container.querySelector("caption")?.textContent).toContain("shared with");
 
     const rowMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Actions for Working Group"]');
     expect(rowMenu).toBeDefined();
@@ -193,5 +201,45 @@ describe("portal resource sharing editor", () => {
     expect(requests.find(({ method }) => method === "DELETE")).toMatchObject({
       url: expect.objectContaining({ pathname: `${grantPath}/${GRANTEE_GROUP_ID}/${selectedCapability}` }),
     });
+  });
+
+  it("states a rejected grant in an alert, claims nothing was saved, and stays retryable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/groups") {
+          return json({ groups: [managedGroup], page: { limit: 25, offset: 0, total: 1, hasMore: false } });
+        }
+        if ((init.method ?? "GET") === "POST") {
+          return new Response(
+            JSON.stringify({ error: { code: "CONFLICT", message: "That group already holds this capability." } }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          );
+        }
+        return json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount("event");
+    await settle();
+    await settle();
+
+    await chooseOption(controlFor<HTMLSelectElement>(container, "Group"), GRANTEE_GROUP_ID);
+    await act(async () => buttonNamed(container, "Share").click());
+    await settle();
+
+    // The failure interrupts rather than sitting silently beside the form.
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("That group already holds this capability.");
+    // A rejected request must never leave the success line standing.
+    expect(container.textContent).not.toContain("Sharing grant saved.");
+    // The submit button is live again, so the reader can correct and retry.
+    const share = buttonNamed(container, "Share");
+    expect(share.disabled).toBe(false);
+    expect(share.getAttribute("aria-busy")).toBeNull();
   });
 });

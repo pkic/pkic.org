@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventFormsResponse } from "../../assets/shared/schemas/forms";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventRegistrationPanel } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrationPanel";
+import { groupNames, namedGroup } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -251,6 +252,68 @@ describe("portal group event registration", () => {
 
     expect(container.textContent).toContain("Registration access changed");
     expect(container.querySelector("form")).toBeNull();
+  });
+
+  it("names the attendance choice as a group and gives each radio a real label", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(config())),
+    );
+
+    const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
+    await settle();
+
+    // A `legend` names the set of radios; a `label` could only name one of
+    // them, which is how a radio group ends up announced as three loose
+    // controls with no question attached.
+    expect(groupNames(container)).toContain("How will you attend?");
+    const attendance = namedGroup(container, "How will you attend?");
+    const radios = [...attendance.querySelectorAll<HTMLInputElement>("input[type='radio']")];
+    expect(radios).toHaveLength(3);
+    for (const radio of radios) {
+      // All three parts of the checkbox/radio pattern, or the browser draws
+      // its own control and the styling is silently absent.
+      expect(radio.classList.contains("pk-check__input")).toBe(true);
+      const label = radio.closest("label")!;
+      expect(label.classList.contains("pk-check")).toBe(true);
+      expect(label.querySelector(".pk-check__label")?.textContent).toBeTruthy();
+    }
+    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual(["In person", "Virtual", "On demand"]);
+
+    // The whole panel is a named region, so the registration form is
+    // reachable without reading the page from the top.
+    expect(container.querySelector(`[aria-label="Register for ${event.name}"]`)).not.toBeNull();
+  });
+
+  it("announces a rejected submission and keeps the form on screen to retry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) =>
+        (init.method ?? "GET") === "POST"
+          ? json({ error: { code: "EVENT_REGISTRATION_CLOSED", message: "Registration has closed." } }, 409)
+          : json(config()),
+      ),
+    );
+
+    const container = mount(<GroupEventRegistrationPanel groupId={GROUP_ID} event={event} />);
+    await settle();
+
+    const form = container.querySelector("form")!;
+    const attendance = form.querySelector<HTMLInputElement>("input[name='attendanceType'][value='virtual']")!;
+    attendance.checked = true;
+    attendance.dispatchEvent(new Event("change", { bubbles: true }));
+    form.querySelector<HTMLInputElement>("input[name='consents']")?.click();
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    // The failure interrupts rather than sitting silently beside the button.
+    const alerts = [...container.querySelectorAll('[role="alert"]')].map((node) => node.textContent);
+    expect(alerts.some((text) => text?.includes("Registration has closed."))).toBe(true);
+    expect(container.textContent).not.toContain("Registration submitted.");
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
   });
 
   it("does not fetch or render a panel without register capability", async () => {

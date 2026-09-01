@@ -12,15 +12,23 @@ import {
   type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
-import { Badge } from "../../../../components/Badge";
+import { Badge as StatusBadge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { Tabs } from "../../../../components/Tabs";
+import { Badge } from "../../../../ui/Badge";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { usePortalHashLocation } from "../../hash-location";
 import { portalSession } from "../../state";
 import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
 import { GroupParticipationCard } from "../GroupParticipationCard";
 import { groupContextNavigation } from "./group-context-navigation";
+// `pk-datalist` on the group's headline counts is defined in Content.css, which
+// ships in a lazy chunk rather than the entry stylesheet, so the surface that
+// writes the class name has to pull the stylesheet in itself.
+import "../../../../ui/Content.css";
 
 const GroupSettingsForm = lazy(() =>
   import("./GroupSettingsForm").then((module) => ({ default: module.GroupSettingsForm })),
@@ -45,32 +53,29 @@ const OVERVIEW_VIEW = "overview";
 
 function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
-    <div class="portal-management-context card border-0 shadow-sm">
-      <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
-        <div>
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <h4 class="portal-context-title mb-0">{group.name}</h4>
-            <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
-            {!group.active && <Badge status="inactive" />}
-          </div>
-          {group.parentGroup && <p class="text-muted small mb-0 mt-1">Part of {group.parentGroup.name}</p>}
-        </div>
-        <dl class="d-flex flex-wrap gap-4 mb-0 small">
-          <div>
-            <dt>People</dt>
-            <dd class="mb-0">{group.participantCount}</dd>
-          </div>
-          <div>
-            <dt>Members represented</dt>
-            <dd class="mb-0">{group.representedMemberCount}</dd>
-          </div>
-          <div>
-            <dt>Subgroups</dt>
-            <dd class="mb-0">{group.childCount}</dd>
-          </div>
+    // A named region, so the context a reader lands in is announced and can be
+    // jumped to by landmark rather than being one more unlabelled section.
+    <Panel aria-label="Group context">
+      {/* The group names the whole workspace, so its heading is the section's
+          own level rather than the panel default. The type is a plain tone
+          badge; only the inactive state carries the product's status
+          vocabulary, and it says the word as well as showing the tone. */}
+      <PanelHeader title={group.name} headingLevel={2}>
+        <Badge tone="neutral">{group.type.singularLabel}</Badge>
+        {!group.active && <StatusBadge status="inactive" />}
+      </PanelHeader>
+      <PanelBody class="pk-stack pk-stack--snug">
+        {group.parentGroup && <p class="pk-small">Part of {group.parentGroup.name}</p>}
+        <dl class="pk-datalist pk-small">
+          <dt>People</dt>
+          <dd>{group.participantCount}</dd>
+          <dt>Members represented</dt>
+          <dd>{group.representedMemberCount}</dd>
+          <dt>Subgroups</dt>
+          <dd>{group.childCount}</dd>
         </dl>
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -117,6 +122,7 @@ export function GroupWorkspace({
   /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
   resourceDetailId?: string;
 }) {
+  const [, navigate] = usePortalHashLocation();
   const detail = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
     [groupId],
@@ -132,27 +138,27 @@ export function GroupWorkspace({
   const settingsGroup: GroupSettingsDetail | null =
     group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
 
+  // Tab targets derive from the route's groupId, never from fetched data:
+  // while another group's data is in flight, links must not point back into
+  // the group being left.
+  function viewPath(nextView: string): string {
+    return `/groups/${encodeURIComponent(groupId)}/${nextView}`;
+  }
+
   return (
-    <div class="d-flex flex-column gap-3">
+    <div class="pk pk-stack">
       {detail.loading && !group && <Spinner label="Loading group…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {group && (
         <>
           <GroupContextHeader group={group} />
-          {/* Tab targets derive from the route's groupId, never from fetched
-              data: while another group's data is in flight, links must not
-              point back into the group being left. */}
-          <nav class="nav nav-tabs" aria-label={`${group.name} sections`}>
-            {views.map((item) => (
-              <Link
-                key={item.key}
-                href={`/groups/${encodeURIComponent(groupId)}/${item.key}`}
-                class={`nav-link${view === item.key ? " active" : ""}`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <Tabs
+            items={views.map((item) => ({ key: item.key, label: item.label }))}
+            active={view}
+            label={`${group.name} sections`}
+            onChange={(nextView) => navigate(viewPath(nextView))}
+            hrefFor={viewPath}
+          />
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
               <>
@@ -161,14 +167,14 @@ export function GroupWorkspace({
                 )}
                 <GroupOverview groupId={group.id} description={group.description} />
                 {canParticipate && (
-                  <p class="text-muted small mb-0">
+                  <p class="pk-small">
                     You participate in this group. <Link href="/groups">Manage your participation</Link>
                   </p>
                 )}
               </>
             )}
             {view === "settings" && canManage && settingsGroup && (
-              <div class="d-flex flex-column gap-3">
+              <div class="pk-stack">
                 <GroupSettingsForm group={settingsGroup} onUpdated={detail.reload} />
                 <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
               </div>

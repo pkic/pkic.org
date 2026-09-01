@@ -3,7 +3,10 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserProfileEditor } from "../../assets/ts/member-flows/portal/sections/system-users/UserProfileEditor";
-import { UserDetail as UserDetailView } from "../../assets/ts/member-flows/portal/sections/system-users/UserDetail";
+import {
+  UserDetail as UserDetailView,
+  type UserPermissions,
+} from "../../assets/ts/member-flows/portal/sections/system-users/UserDetail";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
 import { typedConfirmationInput } from "./helpers/confirm-dialog";
@@ -294,5 +297,131 @@ describe("portal System Users anonymize confirmation", () => {
     expect(apiClient.postJson).toHaveBeenCalledWith(`/api/v1/users/${userId}/anonymize`, {}, expect.anything());
 
     document.body.removeChild(container);
+  });
+});
+
+/**
+ * The record itself, after the surface moved off Bootstrap.
+ *
+ * What is worth asserting here is not that the markup changed but that the
+ * things a visual review cannot see are right: the record has a heading, each
+ * field is paired with its value, a failed load says so out loud, and the
+ * anonymized state is carried by words rather than by a red date.
+ */
+describe("portal System Users detail record", () => {
+  const READ_ONLY: UserPermissions = {
+    canRead: true,
+    canWrite: false,
+    canGrantAccess: false,
+    canAnonymize: false,
+    canManageMembership: false,
+    canActivateIdentity: false,
+  };
+
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  function stubDetail(record: UserDetail): void {
+    apiClient.getJson.mockReset();
+    apiClient.getJson.mockImplementation(async (url: string) => {
+      if (url === `/api/v1/users/${record.id}`) return { user: record };
+      if (url.startsWith(`/api/v1/users/${record.id}/emails`)) {
+        return { emails: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } };
+      }
+      throw new Error(`Unexpected getJson call: ${url}`);
+    });
+  }
+
+  async function mountDetail(permissions: UserPermissions, onBack: () => void = () => undefined): Promise<HTMLElement> {
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(() => render(<UserDetailView userId={user.id} onBack={onBack} permissions={permissions} />, container));
+    await settle();
+    return container;
+  }
+
+  function terms(list: Element): string[] {
+    return [...list.querySelectorAll(":scope > dt")].map((term) => term.textContent ?? "");
+  }
+
+  it("heads the record with a real heading and pairs every field with its value", async () => {
+    stubDetail(user);
+    const container = await mountDetail(READ_ONLY);
+
+    // The name used to be a `<span>` with a legacy class, so the page had no
+    // entry in the document outline at all.
+    expect(container.querySelector("h2")?.textContent).toBe("Ada Lovelace");
+
+    // One record's fields are a term/value list, not an unnamed `<table>`
+    // announced alongside the other tables further down the page.
+    const list = container.querySelector("dl.pk-datalist");
+    expect(list).not.toBeNull();
+    expect(terms(list!)).toEqual(["Email", "First name", "Last name", "Preferred name", "Role", "Active", "Created"]);
+    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(7);
+    expect(list!.textContent).toContain("member@example.test");
+    // An absent value is still a value, so the pairing never goes out of step.
+    expect([...list!.querySelectorAll(":scope > dd")][3]?.textContent).toBe("—");
+  });
+
+  it("returns to the list through a real button rather than a click handler on text", async () => {
+    stubDetail(user);
+    const onBack = vi.fn();
+    const container = await mountDetail(READ_ONLY, onBack);
+
+    const back = buttonNamed(container, "← Back to list");
+    expect(back.tagName).toBe("BUTTON");
+    expect(back.type).toBe("button");
+    await act(() => back.click());
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("reports a failed load as an alert instead of an empty record", async () => {
+    apiClient.getJson.mockReset();
+    apiClient.getJson.mockRejectedValue(new Error("HTTP 503"));
+
+    const container = await mountDetail(READ_ONLY);
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(container.querySelector("dl.pk-datalist")).toBeNull();
+  });
+
+  it("refuses the record without read permission, and does not ask the server for it", async () => {
+    apiClient.getJson.mockReset();
+
+    const container = await mountDetail({ ...READ_ONLY, canRead: false });
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "You need Users read permission to open a user record.",
+    );
+    expect(apiClient.getJson).not.toHaveBeenCalled();
+  });
+
+  it("says an account is anonymized in words, not only in a colour, and withdraws its controls", async () => {
+    const redacted: UserDetail = { ...user, pii_redacted_at: "2026-02-02T10:00:00.000Z" };
+    stubDetail(redacted);
+
+    const container = await mountDetail({
+      ...READ_ONLY,
+      canWrite: true,
+      canAnonymize: true,
+    });
+
+    const notice = [...container.querySelectorAll('[role="alert"]')].find((node) =>
+      node.textContent?.includes("This account has been anonymized"),
+    );
+    expect(notice).toBeTruthy();
+    expect(notice?.textContent).toContain("cannot be restored");
+
+    // Editing and anonymizing are both off the table once the record is
+    // redacted, so neither control is offered.
+    const buttonText = [...container.querySelectorAll("button")].map((button) => button.textContent);
+    expect(buttonText).not.toContain("Anonymize user");
+    expect(buttonText).not.toContain("Edit profile");
   });
 });

@@ -26,7 +26,9 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   const staffRow = page.locator("tr").filter({ hasText: staffEmail });
   await expect(staffRow).toBeVisible();
   await staffRow.click();
-  await expect(page.locator(".page-heading")).toHaveText(staffEmail);
+  // Located by role, not by the class the record used to carry: the name is a
+  // real heading now, and a role locator survives the next restyle too.
+  await expect(page.getByRole("heading", { name: staffEmail, level: 2 })).toBeVisible();
 
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   const preferredName = page.getByLabel("Preferred name");

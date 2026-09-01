@@ -162,6 +162,23 @@ const scanned = [
   "assets/ts/shared/donation/widget.tsx",
   "assets/ts/shared/donation/form.tsx",
   "layouts/partials/footer.html",
+  "assets/ts/member-flows/vote-detail-page.tsx",
+  "assets/ts/member-flows/portal/sections/Votes/VoteDetails.tsx",
+  "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceFields.tsx",
+  "assets/ts/member-flows/portal/sections/management/ResourceSharingEditor.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/Team.tsx",
+  "assets/ts/member-flows/portal/sections/sponsors/Attendees.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupWorkspace.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupEventRegistrationPanel.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupFormPlacementEditor.tsx",
+  "assets/ts/member-flows/portal/sections/membership-applications/ApplicationTransitionCard.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupMembers.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupMemberAddForm.tsx",
+  "assets/ts/event-flows/registration-confirm-page.tsx",
+  "assets/ts/shared/donation/thank-you.tsx",
+  "assets/ts/member-flows/portal/sections/system-users/UserDetail.tsx",
+  "assets/ts/member-flows/member-detail-page.tsx",
+  "layouts/shortcodes/event-registration-confirm.html",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

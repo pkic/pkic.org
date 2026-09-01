@@ -53,7 +53,11 @@ function showSuccessPanel(
   eventSlug: string,
   days?: number,
 ): void {
-  form.classList.add("d-none");
+  // The form's markup (layouts/shortcodes/event-registration.html) no longer
+  // carries Bootstrap, so `d-none` would stop hiding it the moment that page
+  // drops `main.scss`. The stepper below already uses the platform attribute;
+  // the form now does too.
+  form.hidden = true;
   const stepper = root.querySelector<HTMLElement>(".event-flow-stepper");
   if (stepper) {
     stepper.hidden = true;

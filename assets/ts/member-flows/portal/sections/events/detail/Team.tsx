@@ -2,8 +2,14 @@ import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
+import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { RowActions } from "../../../../../ui/RowActions";
-import { Badge } from "../../../../../components/Badge";
+import { Badge as StatusBadge } from "../../../../../components/Badge";
+import { Badge } from "../../../../../ui/Badge";
+import { Button } from "../../../../../ui/Button";
+import { Field } from "../../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { Select, TextInput } from "../../../../../ui/TextControl";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
@@ -15,6 +21,9 @@ import {
 } from "../../../../../../shared/schemas/event-team";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { performAction } from "../../../actions";
+// The "Added" column asks for `pk-mono`, which lives in Content.css rather than
+// the entry stylesheet, so this surface has to pull that chunk in itself.
+import "../../../../../ui/Content.css";
 
 const ROLE_LABELS: Record<EventTeamRole, string> = {
   organizer: "Organizer",
@@ -30,7 +39,7 @@ export function Team({ slug }: { slug: string }) {
   const [newRole, setNewRole] = useState<EventTeamRole>("organizer");
   const [newExpiresAt, setNewExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
-  const [addStatus, setAddStatus] = useState("");
+  const [addError, setAddError] = useState("");
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   async function handleRevoke(assignment: EventTeamRoleAssignment) {
@@ -55,7 +64,7 @@ export function Team({ slug }: { slug: string }) {
   async function handleAdd(e: Event) {
     e.preventDefault();
     if (!newEmail.trim()) return;
-    setAddStatus("Adding…");
+    setAddError("");
     await performAction({
       setBusy: setAdding,
       request: () =>
@@ -72,83 +81,82 @@ export function Team({ slug }: { slug: string }) {
       afterSuccess: async () => {
         setNewEmail("");
         setNewExpiresAt("");
-        setAddStatus("");
+        setAddError("");
         setShowAddForm(false);
         await tableRef.current?.reload();
       },
-      onError: setAddStatus,
+      onError: setAddError,
     });
   }
 
   return (
-    <div>
+    <div class="pk pk-stack">
       {showAddForm && (
-        <div class="card border-0 shadow-sm mb-3">
-          <div class="card-header bg-white d-flex align-items-center justify-content-between">
-            <span class="fw-semibold">Add team member</span>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
+        <Panel>
+          <PanelHeader title="Add team member" headingLevel={4}>
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => {
                 setShowAddForm(false);
-                setAddStatus("");
+                setAddError("");
               }}
             >
               Cancel
-            </button>
-          </div>
-          <div class="card-body">
-            <form onSubmit={handleAdd} class="d-flex gap-2 align-items-end flex-wrap">
-              <div>
-                <label class="form-label small fw-semibold" for="event-team-email">
-                  Email
-                </label>
-                <input
-                  id="event-team-email"
-                  class="form-control form-control-sm"
-                  type="email"
-                  value={newEmail}
-                  onInput={(e) => setNewEmail((e.target as HTMLInputElement).value)}
-                  placeholder="user@example.com"
-                  required
-                />
+            </Button>
+          </PanelHeader>
+          <PanelBody>
+            <form class="pk-stack" aria-label="Add team member" onSubmit={(e) => void handleAdd(e)}>
+              {/* One `disabled` on the group rather than one per control: the
+                  controls are rendered by a child component that takes no
+                  disabled prop of its own. */}
+              <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={adding}>
+                <Field label="Email" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="email"
+                      value={newEmail}
+                      placeholder="user@example.com"
+                      onInput={(e) => setNewEmail(e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Role">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.currentTarget.value as EventTeamRole)}
+                    >
+                      {EVENT_TEAM_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {ROLE_LABELS[role]}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Expires" help="Leave empty for an assignment that never expires.">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="datetime-local"
+                      value={newExpiresAt}
+                      onInput={(e) => setNewExpiresAt(e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              </fieldset>
+              {addError && <ErrorAlert error={addError} />}
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" size="sm" loading={adding}>
+                  {adding ? "Adding…" : "Add"}
+                </Button>
               </div>
-              <div>
-                <label class="form-label small fw-semibold" for="event-team-role">
-                  Role
-                </label>
-                <select
-                  id="event-team-role"
-                  class="form-select form-select-sm"
-                  value={newRole}
-                  onChange={(e) => setNewRole((e.target as HTMLSelectElement).value as EventTeamRole)}
-                >
-                  {EVENT_TEAM_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {ROLE_LABELS[role]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label class="form-label small fw-semibold" for="event-team-expires-at">
-                  Expires (optional)
-                </label>
-                <input
-                  id="event-team-expires-at"
-                  class="form-control form-control-sm"
-                  type="datetime-local"
-                  value={newExpiresAt}
-                  onInput={(e) => setNewExpiresAt((e.target as HTMLInputElement).value)}
-                />
-              </div>
-              <button type="submit" class="btn btn-sm btn-success" disabled={adding}>
-                Add
-              </button>
-              {addStatus && <span class="small text-danger">{addStatus}</span>}
             </form>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
 
       <ApiDataTable
@@ -165,31 +173,36 @@ export function Team({ slug }: { slug: string }) {
           { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },
           {
             header: "Role",
-            cell: (assignment) => <Badge status={assignment.role} label={ROLE_LABELS[assignment.role]} />,
+            cell: (assignment) => <StatusBadge status={assignment.role} label={ROLE_LABELS[assignment.role]} />,
             sort: { asc: "role", desc: "-role" },
           },
-          { header: "Added by", cell: (role) => role.granterEmail ?? "—", className: "small text-muted" },
+          { header: "Added by", cell: (role) => role.granterEmail ?? "—", className: "pk-small pk-muted" },
           {
             header: "Added",
             cell: (role) => role.createdAt.substring(0, 10),
-            className: "mono small",
+            className: "pk-mono pk-small pk-nowrap",
             sort: { asc: "createdAt", desc: "-createdAt", defaultDirection: "desc" },
           },
           {
             header: "Expires",
+            // An assignment that has run out says so in a word. The cell this
+            // replaces turned the date red and left the reader to infer the
+            // rest, which is the one signal a colour cannot carry alone.
             cell: (role) =>
               role.expiresAt ? (
-                <span class={new Date(role.expiresAt).getTime() < Date.now() ? "text-danger" : ""}>
-                  {fmt(role.expiresAt)}
+                <span class="pk-cluster">
+                  <span>{fmt(role.expiresAt)}</span>
+                  {new Date(role.expiresAt).getTime() < Date.now() && <Badge tone="danger">Expired</Badge>}
                 </span>
               ) : (
-                <span class="text-muted">Never</span>
+                <span class="pk-muted">Never</span>
               ),
-            className: "small",
+            className: "pk-small",
             sort: { asc: "expiresAt", desc: "-expiresAt" },
           },
           {
             header: "",
+            className: "pk-end",
             cell: (role) => (
               <RowActions
                 label={`Actions for ${role.userEmail}`}

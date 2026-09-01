@@ -7,8 +7,15 @@ import {
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
+import { Button } from "../../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
 import { Spinner } from "../../../../components/Spinner";
+import { TextInput } from "../../../../ui/TextControl";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { ApiClientError, deleteJson } from "../../../../shared/api-client";
 import { GroupMemberAddForm } from "./GroupMemberAddForm";
@@ -17,6 +24,60 @@ import { GroupMembersRoster } from "./GroupMembersRoster";
 function capacityLabel(membership: GroupMembership): string {
   if (membership.memberType === "organization") return membership.organizationName ?? "Organization";
   return `Individual membership${membership.membershipCategory ? ` (${membership.membershipCategory})` : ""}`;
+}
+
+function membershipColumns(
+  endingId: string | null,
+  onEnd: (membership: GroupMembership) => void,
+): ReadonlyArray<DataTableColumn<GroupMembership>> {
+  return [
+    {
+      id: "person",
+      header: "Person",
+      cell: (membership) => <PersonCell name={membership.userName} email={membership.email} size="sm" />,
+    },
+    {
+      id: "capacity",
+      header: "Participation capacity",
+      cell: (membership) => (
+        <span class="pk-stack pk-stack--tight">
+          <span>{capacityLabel(membership)}</span>
+          {membership.membershipCategory && <span class="pk-small">Category {membership.membershipCategory}</span>}
+        </span>
+      ),
+    },
+    {
+      id: "source",
+      header: "Source",
+      cellClass: "pk-nowrap",
+      cell: (membership) => membership.source.replaceAll("_", " "),
+    },
+    {
+      // The header used to read "Action" and was rendered visibly above a
+      // column of menus, which names the column after the control rather than
+      // after what the column holds. It names the row's subject for assistive
+      // technology now and shows nothing.
+      id: "actions",
+      header: "Actions",
+      headerHidden: true,
+      align: "end",
+      cell: (membership) => (
+        <RowActions
+          label={`Actions for ${membership.userName}`}
+          actions={[
+            {
+              id: "remove",
+              label: endingId === membership.id ? "Removing…" : "Remove",
+              onSelect: () => {
+                onEnd(membership);
+              },
+              disabled: endingId !== null,
+            },
+          ]}
+        />
+      ),
+    },
+  ];
 }
 
 /**
@@ -83,10 +144,16 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
   if (!page.data && page.loading) return <Spinner label="Loading membership capacities…" />;
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Membership capacities</div>
-      <div class="card-body d-flex flex-column gap-3">
-        <p class="text-muted small mb-0">
+    // The panel names itself: the group workspace stacks several of these, and
+    // an unnamed <section> is announced as nothing at all.
+    <Panel class="pk" aria-label="Membership capacities">
+      <PanelHeader title="Membership capacities">
+        <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
+          Add person
+        </Button>
+      </PanelHeader>
+      <PanelBody class="pk-stack">
+        <p class="pk-muted pk-small">
           Each row is one person participating through one Member. A person representing multiple organizations may
           therefore appear more than once.
         </p>
@@ -100,86 +167,62 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
             onCancel={() => setShowAddForm(false)}
           />
         )}
-        <div class="d-flex gap-2 align-items-center flex-wrap portal-management-search">
-          <form
-            class="d-flex gap-2 flex-grow-1"
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setSearch(pendingSearch.trim());
-            }}
+        {/* The search runs on submit rather than on every keystroke, so the
+            field and its button are stacked rather than clustered: the label
+            sits above the control, which no cluster can align a button to
+            without guessing at the label's height. */}
+        <form
+          class="pk-stack pk-stack--snug"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSearch(pendingSearch.trim());
+          }}
+        >
+          <Field
+            label="Search membership capacities"
+            help="Matches a person's name or email, the organization they represent, or the membership category."
           >
-            <label class="visually-hidden" for="managed-group-member-search">
-              Search membership capacities
-            </label>
-            <input
-              id="managed-group-member-search"
-              type="search"
-              class="form-control"
-              placeholder="Search name, email, organization, or category…"
-              value={pendingSearch}
-              onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-            />
-            <button type="submit" class="btn btn-outline-secondary">
+            {(control) => (
+              <TextInput
+                {...control}
+                type="search"
+                placeholder="Search name, email, organization, or category…"
+                value={pendingSearch}
+                onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
+          <div class="pk-cluster">
+            <Button type="submit" size="sm">
               Search
-            </button>
-          </form>
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setShowAddForm(true)}>
-            Add person
-          </button>
-        </div>
-        {page.error && <ErrorAlert error={page.error.message} />}
-        {mutationError && <ErrorAlert error={mutationError} />}
-        {page.data && page.data.memberships.length === 0 ? (
-          <p class="text-muted mb-0">No matching active membership capacities.</p>
-        ) : (
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead>
-                <tr>
-                  <th scope="col">Person</th>
-                  <th scope="col">Participation capacity</th>
-                  <th scope="col">Source</th>
-                  <th scope="col" class="text-end">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {page.data?.memberships.map((membership) => (
-                  <tr key={membership.id}>
-                    <td>
-                      <div class="fw-semibold">{membership.userName}</div>
-                      <div class="small text-muted">{membership.email}</div>
-                    </td>
-                    <td>
-                      <div>{capacityLabel(membership)}</div>
-                      {membership.membershipCategory && (
-                        <div class="small text-muted">Category {membership.membershipCategory}</div>
-                      )}
-                    </td>
-                    <td>{membership.source.replaceAll("_", " ")}</td>
-                    <td class="text-end">
-                      <RowActions
-                        label={`Actions for ${membership.userName}`}
-                        actions={[
-                          {
-                            id: "remove",
-                            label: endingId === membership.id ? "Removing…" : "Remove",
-                            onSelect: () => void endMembership(membership),
-                            disabled: endingId !== null,
-                          },
-                        ]}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            </Button>
           </div>
+        </form>
+        {mutationError && <ErrorAlert error={mutationError} />}
+        {/* A failed load replaces the table rather than sitting above an empty
+            one: "No matching active membership capacities" is a claim about
+            the group, and the surface does not know that when the request did
+            not arrive. */}
+        {page.error ? (
+          <ErrorAlert error={page.error.message} />
+        ) : (
+          <DataTable
+            caption="Active membership capacities in this group"
+            columns={membershipColumns(endingId, (membership) => void endMembership(membership))}
+            rows={page.data?.memberships ?? []}
+            rowKey={(membership) => membership.id}
+            loading={page.loading}
+            empty={
+              <EmptyState
+                title="No matching active membership capacities."
+                body="Nobody participates in this group through a Member capacity that matches this search."
+              />
+            }
+          />
         )}
         {page.pagerProps && <Pager {...page.pagerProps} />}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

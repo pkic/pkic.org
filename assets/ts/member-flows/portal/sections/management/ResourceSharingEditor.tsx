@@ -19,7 +19,12 @@ import type { Group } from "../../../../../shared/schemas/groups";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
+import { Select } from "../../../../ui/TextControl";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { postJson, deleteJson } from "../../../../shared/api-client";
 import { managedGroupCatalog } from "./catalog";
@@ -148,54 +153,51 @@ export function ResourceSharingEditor({
   }
 
   return (
-    <section class="card border-0 shadow-sm mt-3" aria-label={`${resourceLabel} sharing`}>
-      <div class="card-header bg-white fw-semibold">Sharing</div>
-      <div class="card-body">
-        <p class="small text-muted">
+    <Panel class="pk" aria-label={`${resourceLabel} sharing`}>
+      <PanelHeader title="Sharing" headingLevel={4} />
+      <PanelBody class="pk-stack">
+        <p class="pk-small">
           Share this {resourceLabel} with another managed group. The owning group retains management access.
         </p>
-        <form class="row g-2 align-items-end mb-3" onSubmit={addGrant}>
-          <div class="col-lg-6">
+        <form class="pk-stack" aria-label={`Share this ${resourceLabel}`} onSubmit={addGrant}>
+          {/* One `disabled` on the group rather than one per control: the
+              group picker is a child component that takes the flag itself, and
+              the submit button stays outside so it can keep focus while the
+              request is in flight. */}
+          <fieldset class="pk-fieldset pk-grid pk-grid--roomy" disabled={saving}>
             <ServerSearchSelect
               catalog={managedGroupCatalog}
               label="Group"
               value={selectedGroup?.id ?? null}
               selectedLabel={selectedGroup?.name}
               placeholder="Select a group…"
+              disabled={saving}
               excludeValues={[ownerGroupId]}
               onChange={(group) => setSelectedGroup(group)}
             />
-          </div>
-          <div class="col-sm-6 col-lg-4">
-            <label class="form-label small fw-semibold mb-1" htmlFor={`${kind}-${resourceId}-capability`}>
-              Capability
-            </label>
-            <select
-              id={`${kind}-${resourceId}-capability`}
-              aria-label="Capability"
-              class="form-select form-select-sm"
-              value={capability}
-              disabled={saving}
-              onChange={(event) => setCapability((event.target as HTMLSelectElement).value)}
-            >
-              {config.capabilities.map((value) => (
-                <option key={value} value={value}>
-                  {capabilityLabel(value)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-sm-6 col-lg-2">
-            <button type="submit" class="btn btn-sm btn-primary w-100" disabled={saving || !selectedGroup}>
+            <Field label="Capability">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={capability}
+                  onChange={(event) => setCapability((event.target as HTMLSelectElement).value)}
+                >
+                  {config.capabilities.map((value) => (
+                    <option key={value} value={value}>
+                      {capabilityLabel(value)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </fieldset>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!selectedGroup}>
               {saving ? "Saving…" : "Share"}
-            </button>
+            </Button>
           </div>
         </form>
-        {saved && (
-          <div class="alert alert-success py-2" role="status">
-            Sharing grant saved.
-          </div>
-        )}
+        {saved && <Alert tone="ok">Sharing grant saved.</Alert>}
         <ErrorAlert error={error} />
         <ApiDataTable
           caption={`Groups this ${resourceLabel} is shared with`}
@@ -216,7 +218,7 @@ export function ResourceSharingEditor({
             },
             {
               header: "",
-              className: "text-end",
+              className: "pk-end",
               cell: (grant) => (
                 <RowActions
                   label={`Actions for ${grant.granteeGroup.name}`}
@@ -228,7 +230,7 @@ export function ResourceSharingEditor({
           empty="This resource is not shared with any other group."
           rowKey={(grant) => `${grant.granteeGroup.id}:${grant.capability}`}
         />
-      </div>
-    </section>
+      </PanelBody>
+    </Panel>
   );
 }

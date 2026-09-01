@@ -90,7 +90,9 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(secondaryUserRow).toContainText("Member · 1 active identity");
   await expect(secondaryUserRow).not.toContainText(organizationName);
   await secondaryUserRow.click();
-  await expect(page.locator(".page-heading")).toHaveText("Secondary Representative");
+  // Located by role rather than by the class the record used to carry: the
+  // user's name is a real heading now.
+  await expect(page.getByRole("heading", { name: "Secondary Representative", level: 2 })).toBeVisible();
   const capacityCard = page.locator(".border.rounded.p-3").filter({ hasText: organizationName });
   await expect(capacityCard).toContainText(secondaryEmail);
   await expect(capacityCard).toContainText("Program Manager");

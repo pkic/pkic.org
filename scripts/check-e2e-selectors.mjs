@@ -15,23 +15,47 @@
  *   node scripts/check-e2e-selectors.mjs card btn   # only these classes
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const root = process.cwd();
 const specDir = resolve(root, "tests", "e2e");
 const wanted = process.argv.slice(2);
 
-// Bootstrap families a spec is likely to reach for. Deliberately broader than
-// an exact class match: `form-control-sm` matters as much as `form-control`.
+/*
+ * Bootstrap families a spec is likely to reach for. Deliberately broader than
+ * an exact class match: `form-control-sm` matters as much as `form-control`.
+ *
+ * `page-` covers the whole family, not just `page-item`. The isolation gate
+ * already treats every `page-*` class as Bootstrap, and the two lists
+ * disagreeing is how `page-heading` slipped through: two Playwright specs
+ * selected on it, this reported nothing, and only a hand grep found them.
+ */
 const FAMILIES =
-  /\.(btn|card|row|col|alert|badge|nav|navbar|modal|dropdown|form-control|form-select|form-check|form-label|form-text|input-group|invalid-feedback|valid-feedback|list-group|table|spinner-border|visually-hidden|text-muted|d-none|d-flex|page-item|pagination|accordion|offcanvas|toast|progress)[a-z0-9-]*\b/g;
+  /\.(btn|card|row|col|alert|badge|nav|navbar|modal|dropdown|form-control|form-select|form-check|form-label|form-text|input-group|invalid-feedback|valid-feedback|list-group|table|spinner-border|visually-hidden|text-muted|text-danger|text-success|fw-|fst-|d-none|d-flex|page-|pagination|accordion|offcanvas|toast|progress)[a-z0-9-]*\b/g;
 
 const found = new Map();
 
-for (const entry of readdirSync(specDir)) {
-  if (!entry.endsWith(".spec.ts")) continue;
-  const file = join(specDir, entry);
+/*
+ * Every spec AND every helper they share.
+ *
+ * This used to read `*.spec.ts` in the top directory only, which missed
+ * `tests/e2e/helpers/`. Those files hold the locators the most specs depend
+ * on — the sign-in flow, the membership fixtures — so a class buried there
+ * breaks more suites than one in any single spec, and this reported none of
+ * them.
+ */
+function specFiles(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) files.push(...specFiles(full));
+    else if (/\.ts$/.test(entry) && !entry.startsWith("._")) files.push(full);
+  }
+  return files;
+}
+
+for (const file of specFiles(specDir)) {
   readFileSync(file, "utf8")
     .split("\n")
     .forEach((line, index) => {

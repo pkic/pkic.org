@@ -2,6 +2,59 @@
 // Events listing page — /events
 // ============================================================
 
+// ── Page scaffolding ──────────────────────────────────────────────────────────
+//
+// The two column splits this surface needs. Bootstrap expressed them as
+// `row`/`col-lg-9`/`col-lg-3` triplets in the markup; the design system has no
+// column-span utility on purpose ("`row`, `col-*`, `g-*` → CSS grid or flex on
+// the surface, with `--pk-*` gaps"), so the arrangement lives here, once, and
+// the templates carry no breakpoint classes at all.
+
+// Event microsite sub-pages: section menu beside the page content.
+.events-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-5);
+  align-items: start;
+}
+
+// The menu is hidden below md, as `d-md-block collapse` used to make it. There
+// is no toggle anywhere on the page, so this preserves the existing behaviour
+// rather than introducing a control the surface never had.
+.events-page-menu {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .events-page-layout {
+    grid-template-columns: minmax(11rem, 0.3fr) minmax(0, 1fr);
+  }
+
+  .events-page-menu {
+    display: block;
+  }
+}
+
+// Replaces `position-sticky` on the inner wrapper.
+.events-page-menu-sticky {
+  position: sticky;
+  top: 5rem; // offset below fixed navbar
+}
+
+// The /events index: event list beside the sponsored-webinar rail.
+.events-listing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-7);
+  align-items: start;
+}
+
+@media (min-width: 992px) {
+  .events-listing-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(16rem, 1fr);
+  }
+}
+
 // ── Section headings ──────────────────────────────────────────────────────────
 
 .events-section-header {
@@ -131,8 +184,16 @@
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
+// `position` used to arrive from Bootstrap's `sticky-lg-top`, leaving only the
+// offset here; both halves of the same decision now live together.
 .events-sidebar {
   top: 5rem; // offset below fixed navbar
+}
+
+@media (min-width: 992px) {
+  .events-sidebar {
+    position: sticky;
+  }
 }
 
 .events-sidebar-header {
@@ -368,10 +429,7 @@
   }
 }
 
-// ── Sidebar CTA ───────────────────────────────────────────────────────────────
-
-.events-sidebar-cta {
-  .btn-outline-secondary {
-    font-size: 0.78rem;
-  }
-}
+// The sidebar CTA used to re-size Bootstrap's `.btn-outline-secondary` here.
+// Its button is now `pk-btn pk-btn--secondary pk-btn--sm`, which reads its size
+// from the type scale, so the local override has been removed rather than
+// translated.

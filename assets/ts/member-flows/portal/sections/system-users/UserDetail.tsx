@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -8,12 +9,19 @@ import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../sha
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { userAnonymizeResponseSchema, userDetailResponseSchema } from "../../../../../shared/schemas/user-management";
 import { userGravatarImportResponseSchema } from "../../../../../shared/schemas/route-contracts-headshots";
-import { toast } from "../../ui";
+import { fmt, toast } from "../../ui";
 import { UserEmailAddressesPanel } from "./UserAccountPanels";
 import { UserMembershipPanel } from "./UserMembershipPanel";
 import { UserProfileEditor } from "./UserProfileEditor";
 import type { UserDetail as UserDetailModel } from "./model";
 import { Badge } from "../../../../components/Badge";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody } from "../../../../ui/Panel";
+// `pk-datalist`, `pk-break` and `pk-nowrap`'s neighbours ship in a component
+// chunk rather than the entry stylesheet, so the module that writes those
+// class names is the one that has to pull the sheet in.
+import "../../../../ui/Content.css";
 
 export interface UserPermissions {
   canRead: boolean;
@@ -121,94 +129,101 @@ export function UserDetail({
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
   const editable = permissions.canWrite && !user.pii_redacted_at;
+  const nameFields: Array<[string, string | null | undefined]> = [
+    ["Email", user.email],
+    ["First name", user.first_name],
+    ["Last name", user.last_name],
+    ["Preferred name", user.preferred_name],
+  ];
 
   return (
     <div class="pk pk-stack">
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={onBack}>
+      {/* The name heads the record, so it is a real heading. It used to be a
+          `<span>` carrying a legacy `page-heading` class, which left the page
+          with no entry in the document outline at all. */}
+      <div class="pk-cluster">
+        <Button size="sm" onClick={onBack}>
           ← Back to list
-        </button>
-        <span class="page-heading mb-0">{displayName}</span>
+        </Button>
+        <h2>{displayName}</h2>
       </div>
-      <div class="row g-4">
-        <div class="col-md-4 text-center">
-          <AdminHeadshotManager
-            initialUrl={user.headshotUrl}
-            alt="Headshot"
-            emptyLabel="User"
-            statusText={headshotStatus}
-            readOnly={!editable}
-            uploadHeadshot={uploadHeadshot}
-            deleteHeadshot={async () => {
-              await deleteJson(`/api/v1/users/${encodeURIComponent(user.id)}/headshot`, successResponseSchema);
-            }}
-            onFetchGravatar={editable ? fetchGravatar : undefined}
-            onUploaded={async () => {
-              toast("Headshot uploaded", "success");
-              await load();
-            }}
-            onDeleted={async () => {
-              toast("Headshot removed", "success");
-              await load();
-            }}
-            onError={(message) => toast(message, "error")}
-            confirmDeleteMessage="Remove this user's headshot?"
-          />
-        </div>
-        <div class="col-md-8">
-          <div class="card border-0 shadow-sm">
-            <div class="card-body p-3">
-              <table class="table table-sm table-borderless mb-0">
-                <tbody>
-                  {(
-                    [
-                      ["Email", user.email],
-                      ["First name", user.first_name],
-                      ["Last name", user.last_name],
-                      ["Preferred name", user.preferred_name],
-                    ] as Array<[string, string | null | undefined]>
-                  ).map(([label, value]) => (
-                    <tr key={label}>
-                      <th class="text-muted small adm-user-info-label">{label}</th>
-                      <td>{value || "—"}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <th class="text-muted small adm-user-info-label">Role</th>
-                    <td>
-                      <Badge status={user.role} />
-                    </td>
-                  </tr>
-                  <tr>
-                    <th class="text-muted small adm-user-info-label">Active</th>
-                    <td>{user.active ? "Yes" : "No"}</td>
-                  </tr>
-                  <tr>
-                    <th class="text-muted small adm-user-info-label">Created</th>
-                    <td>{new Date(user.created_at).toLocaleString("en-US")}</td>
-                  </tr>
-                  {user.pii_redacted_at && (
-                    <tr>
-                      <th class="text-muted small adm-user-info-label">PII redacted</th>
-                      <td class="text-danger">{new Date(user.pii_redacted_at).toLocaleString("en-US")}</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              {editable && <UserProfileEditor user={user} canGrantAccess={permissions.canGrantAccess} onSaved={load} />}
-              {permissions.canAnonymize && !user.pii_redacted_at && (
-                <button
-                  class="btn btn-sm btn-outline-danger mt-3"
-                  onClick={() => void anonymize()}
-                  disabled={anonymizing}
-                >
+
+      {user.pii_redacted_at && (
+        /* The redaction used to be a red date in the table, which is a state
+           told by colour alone. The words carry it now and the tone only
+           reinforces them. */
+        <Alert tone="danger" title="This account has been anonymized">
+          Personal details were erased on {fmt(user.pii_redacted_at)} and cannot be restored. The membership and event
+          records that remain no longer identify this person.
+        </Alert>
+      )}
+
+      <div class="pk-grid pk-grid--roomy">
+        <Panel>
+          <PanelBody>
+            <AdminHeadshotManager
+              initialUrl={user.headshotUrl}
+              alt="Headshot"
+              emptyLabel="User"
+              statusText={headshotStatus}
+              readOnly={!editable}
+              uploadHeadshot={uploadHeadshot}
+              deleteHeadshot={async () => {
+                await deleteJson(`/api/v1/users/${encodeURIComponent(user.id)}/headshot`, successResponseSchema);
+              }}
+              onFetchGravatar={editable ? fetchGravatar : undefined}
+              onUploaded={async () => {
+                toast("Headshot uploaded", "success");
+                await load();
+              }}
+              onDeleted={async () => {
+                toast("Headshot removed", "success");
+                await load();
+              }}
+              onError={(message) => toast(message, "error")}
+              confirmDeleteMessage="Remove this user's headshot?"
+            />
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelBody class="pk-stack">
+            {/* A description list, not a borderless two-column table: this is
+                one record's fields, and an unnamed table is announced as a
+                table on a page that already has several. */}
+            <dl class="pk-datalist pk-small">
+              {nameFields.map(([label, value]) => (
+                <Fragment key={label}>
+                  <dt>{label}</dt>
+                  <dd class="pk-break">{value || "—"}</dd>
+                </Fragment>
+              ))}
+              <dt>Role</dt>
+              <dd>
+                <Badge status={user.role} />
+              </dd>
+              <dt>Active</dt>
+              <dd>{user.active ? "Yes" : "No"}</dd>
+              <dt>Created</dt>
+              <dd class="pk-nowrap">{fmt(user.created_at)}</dd>
+            </dl>
+
+            {editable && <UserProfileEditor user={user} canGrantAccess={permissions.canGrantAccess} onSaved={load} />}
+
+            {permissions.canAnonymize && !user.pii_redacted_at && (
+              <div class="pk-cluster">
+                {/* `loading` rather than `disabled`: a disabled control loses
+                    focus, which throws a screen-reader user out of the record
+                    they were working on mid-request. */}
+                <Button variant="danger-quiet" size="sm" loading={anonymizing} onClick={() => void anonymize()}>
                   {anonymizing ? "Anonymizing…" : "Anonymize user"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+                </Button>
+              </div>
+            )}
+          </PanelBody>
+        </Panel>
       </div>
+
       <UserMembershipPanel
         user={user}
         onChanged={load}

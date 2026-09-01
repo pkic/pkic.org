@@ -17,7 +17,19 @@ export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 640 * 1024, gzipByt
 // pressure on it is one-directional, because adding "just one more" component
 // is always locally convenient. This ceiling is what makes that a decision
 // rather than a drift.
-export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 32 * 1024, gzipBytes: 9 * 1024 });
+//
+// Raised from 32 KiB / 9 KiB once, deliberately, in 2026-09. The gate had done
+// its job twice by then: it caught the syntax-highlight editor and the content
+// shapes sitting in this sheet, and both moved out to component chunks. What
+// remained and kept growing is what genuinely belongs here — Field in
+// particular, which now draws the checkboxes, radios and switches Bootstrap
+// used to draw, and the layout utilities the Hugo templates write directly.
+// Verified before raising: no component stylesheet is present in the built
+// entry (no pk-table, pk-menu, pk-dialog, pk-chart, pk-toast, pk-tabs,
+// pk-stat-card, pk-empty-state, pk-datalist or pk-overlay-editor).
+//
+// The headroom is small on purpose. This is a ceiling, not a budget to spend.
+export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 34 * 1024, gzipBytes: 9.5 * 1024 });
 
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;
