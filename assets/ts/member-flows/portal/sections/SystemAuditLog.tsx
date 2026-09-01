@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
+import { formatDateTime } from "../../../shared/ui";
 import { DetailsSummary } from "../../../components/DetailsSummary";
 import { EntityLink } from "../../../components/EntityLink";
 import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
@@ -102,8 +103,7 @@ export function SystemAuditLog() {
           // wearing `pk-nowrap` while still claiming a share of a wide
           // screen, and keeps the table's own ink and size.
           header: "When",
-          cell: (entry) =>
-            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
+          cell: (entry) => formatDateTime(entry.created_at, { seconds: true }),
           width: "fit",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },

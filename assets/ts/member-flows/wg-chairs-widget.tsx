@@ -6,7 +6,7 @@
  * the admin portal (Access Control → Working Groups / Chairs, backed by
  * user_roles) and this widget fetches them client-side from the public
  * generic GET /api/v1/groups/:slug/directory endpoint, with public
- * photo/LinkedIn/organization enrichment.
+ * photo/profile-link/organization enrichment.
  *
  * Two render modes, chosen via the mount's `data-mode` attribute — both use
  * the same person-card.html-style ring card, differing only in avatar size

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import {
   buildCollectionResetKey,
   useCollectionResetPending,
@@ -8,10 +8,18 @@ import {
 import { getJson } from "../shared/api-client";
 import type { ServerCatalog } from "../shared/server-catalog";
 import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
-import { Select, TextInput } from "../ui/TextControl";
+import { TextInput } from "../ui/TextControl";
+import { applyPopupPosition, measurePopupPosition, type PopupPosition } from "../ui/popup-placement";
+// The matches float over whatever follows the field, so they borrow the
+// design system's popup surface rather than growing a second one. Nothing
+// renders a `Menu` here, so the stylesheet has to be imported by name:
+// component CSS ships in each component's own lazy chunk.
+import "../ui/Menu.css";
 
 const SELECTOR_PAGE_SIZE = 25;
+/** Below this many characters a query is noise, so the full first page shows instead. */
+const MINIMUM_QUERY_LENGTH = 2;
+const SEARCH_DEBOUNCE_MS = 300;
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
 export interface ServerSearchSelectProps<Item, Response> {
@@ -29,7 +37,27 @@ export interface ServerSearchSelectProps<Item, Response> {
   load?: CollectionLoader;
 }
 
-/** Shared paginated selector; filtering, sorting, and paging stay on the server. */
+/**
+ * Shared type-ahead selector; filtering, sorting, and paging stay on the
+ * server.
+ *
+ * The interaction is the WAI-ARIA combobox pattern, honoured rather than
+ * approximated: one text input carries `role="combobox"` with
+ * `aria-expanded`, `aria-controls`, and `aria-activedescendant`; the matches
+ * are a named listbox of options that never take focus themselves. Typing
+ * queries the server after a pause — there is no separate "Search" button to
+ * find — ArrowDown/ArrowUp move through the matches, Enter selects, Escape
+ * closes and restores the chosen value's label.
+ *
+ * A newer keystroke's request invalidates any slower earlier one through the
+ * collection hook's latest-request gate, so a stale response can never
+ * overwrite fresher matches.
+ *
+ * The popup follows `Menu`'s placement discipline: `position: fixed` so an
+ * `overflow: auto` ancestor cannot clip it, flipped above the field when
+ * below does not fit, clamped into the viewport horizontally, and re-placed
+ * rather than closed as the page scrolls underneath it.
+ */
 export function ServerSearchSelect<Item, Response>({
   catalog,
   label,
@@ -44,28 +72,54 @@ export function ServerSearchSelect<Item, Response>({
   onChange,
   load = loadCollection,
 }: ServerSearchSelectProps<Item, Response>) {
-  const [pendingSearch, setPendingSearch] = useState("");
+  // `query` is the reader's in-progress text; null means "not editing", where
+  // the input shows the chosen value's label instead. `search` is the
+  // debounced, length-gated term the server actually receives.
+  const [query, setQuery] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [offset, setOffset] = useState(0);
-  const selectId = useId();
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [position, setPosition] = useState<PopupPosition | null>(null);
+  const inputId = useId();
+  const listboxId = useId();
   const valueRef = useRef(value);
   valueRef.current = value;
+  // The label of whatever was picked here, so the closed input can read it
+  // back even when the current server page no longer contains the item.
+  const pickedRef = useRef<{ key: string; label: string } | null>(null);
+  const debounceRef = useRef<number | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<(HTMLElement | null)[]>([]);
   const excluded = new Set(excludeValues);
   const resetKey = buildCollectionResetKey(catalog.endpoint, catalog.params);
-  const resetOffset = useCallback(() => setOffset(0), []);
-  const resetPending = useCollectionResetPending(resetKey, resetOffset);
 
-  useEffect(() => {
-    setPendingSearch("");
+  const cancelDebounce = useCallback(() => {
+    if (debounceRef.current !== null) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+  }, []);
+  useEffect(() => cancelDebounce, [cancelDebounce]);
+
+  // A different catalog identity is a different conversation: the old term
+  // must not filter the new collection, not even for the one render before
+  // the reset effect lands — `resetPending` blanks it synchronously.
+  const resetSelection = useCallback(() => {
+    cancelDebounce();
+    setQuery(null);
     setSearch("");
-  }, [resetKey]);
+    setOpen(false);
+    setActiveIndex(-1);
+  }, [cancelDebounce]);
+  const resetPending = useCollectionResetPending(resetKey, resetSelection);
 
   const collection = useServerCollection({
     endpoint: catalog.endpoint,
     params: {
       ...catalog.params,
       limit: String(SELECTOR_PAGE_SIZE),
-      offset: String(resetPending ? 0 : offset),
+      offset: "0",
       sort: catalog.sort,
       ...(!resetPending && search ? { q: search } : {}),
     },
@@ -75,107 +129,240 @@ export function ServerSearchSelect<Item, Response>({
   const page = collection.data ? catalog.resolvePage(collection.data) : null;
   const rawItems = collection.data ? catalog.resolveItems(collection.data) : [];
   const items = rawItems.filter((item) => !excluded.has(catalog.itemKey(item)));
-  const hasSelectedOption = items.some((item) => catalog.itemKey(item) === value);
+  // The pick-nothing option keeps the old empty `<option>`'s place: choosing
+  // it is choosing the placeholder's meaning ("Top-level group", "No form").
+  const optionCount = (allowEmpty ? 1 : 0) + items.length;
+  const itemAt = (index: number): Item | null => (allowEmpty ? (index === 0 ? null : items[index - 1]) : items[index]);
+  const optionId = (index: number): string => `${listboxId}-option-${index}`;
 
   useEffect(() => {
     if (!valueRef.current && autoSelectFirst && items[0]) {
       const first = items[0];
       valueRef.current = catalog.itemKey(first);
+      pickedRef.current = { key: catalog.itemKey(first), label: catalog.itemLabel(first) };
       onChange(first);
     }
   }, [autoSelectFirst, items, onChange, catalog]);
 
-  function applySearch(): void {
-    setOffset(0);
-    setSearch(pendingSearch.trim());
+  // A shrinking result set must not leave the highlight past the end.
+  useEffect(() => {
+    setActiveIndex((current) => (current >= optionCount ? optionCount - 1 : current));
+  }, [optionCount]);
+
+  /** One placement policy for every popup — see `ui/popup-placement.ts`. */
+  const measure = useCallback((): PopupPosition | null => {
+    const anchor = anchorRef.current;
+    const popup = popupRef.current;
+    if (!anchor || !popup) return null;
+    return measurePopupPosition(anchor.getBoundingClientRect(), popup.getBoundingClientRect());
+  }, []);
+
+  // Why imperative rather than a style attribute: see popup-placement.ts.
+  useLayoutEffect(() => {
+    const popup = popupRef.current;
+    if (!popup || !position) return;
+    applyPopupPosition(popup, position);
+  }, [position]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    setPosition(measure());
+  }, [open, measure, optionCount, collection.loading]);
+
+  // The highlight can sit past the listbox's scroll window; focus never
+  // leaves the input, so the option is brought into view directly.
+  useLayoutEffect(() => {
+    if (!open || activeIndex < 0) return;
+    optionRefs.current[activeIndex]?.scrollIntoView?.({ block: "nearest" });
+  }, [open, activeIndex]);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setActiveIndex(-1);
+    setQuery(null);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (popupRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
+      close();
+    };
+    // A fixed popup does not move with its anchor, so it is re-placed as the
+    // page moves. Closing instead would mean any scroll momentum eats the
+    // list the moment it opens.
+    const onReflow = () => setPosition(measure());
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [open, close, measure]);
+
+  function choose(index: number): void {
+    const item = itemAt(index);
+    valueRef.current = item ? catalog.itemKey(item) : null;
+    pickedRef.current = item ? { key: catalog.itemKey(item), label: catalog.itemLabel(item) } : null;
+    onChange(item);
+    close();
   }
+
+  function handleInput(next: string): void {
+    setQuery(next);
+    setOpen(true);
+    setActiveIndex(-1);
+    cancelDebounce();
+    debounceRef.current = window.setTimeout(() => {
+      debounceRef.current = null;
+      const term = next.trim();
+      setSearch(term.length >= MINIMUM_QUERY_LENGTH ? term : "");
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  function handleKeyDown(event: KeyboardEvent): void {
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        if (!open) {
+          setOpen(true);
+          setActiveIndex(optionCount > 0 ? 0 : -1);
+        } else if (optionCount > 0) {
+          setActiveIndex((current) => (current + 1 + optionCount) % optionCount);
+        }
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        if (!open) {
+          setOpen(true);
+          setActiveIndex(optionCount - 1);
+        } else if (optionCount > 0) {
+          setActiveIndex((current) => (current - 1 + optionCount) % optionCount);
+        }
+        break;
+      case "Enter":
+        if (!open) break;
+        event.preventDefault();
+        if (activeIndex >= 0 && activeIndex < optionCount) choose(activeIndex);
+        else close();
+        break;
+      case "Escape":
+        if (!open) break;
+        event.preventDefault();
+        close();
+        break;
+      case "Tab":
+        if (open) close();
+        break;
+      default:
+        break;
+    }
+  }
+
+  const picked = pickedRef.current;
+  const displayLabel = value ? (picked?.key === value ? picked.label : (selectedLabel ?? value)) : "";
+  const status = collection.loading
+    ? "Loading…"
+    : collection.error
+      ? "Could not load matches."
+      : items.length === 0
+        ? search
+          ? `No matches for “${search}”.`
+          : "No matches."
+        : page?.hasMore
+          ? `Showing ${rawItems.length} of ${page.total} matches. Keep typing to narrow the list.`
+          : "";
 
   return (
     <div class="pk-stack pk-stack--tight">
-      {/* The name, the box that narrows the list and the box that holds the
-          choice are one field: a `pk-field__control` outside a `pk-field` has
-          no group to take its state from, and the label above it names a
-          control it is not grouped with. The page count and a failed load are
-          not part of the field, so they stay outside it. */}
       <div class="pk-field">
-        {/* The visible name now points at the control it names. It used to be a
-            bare `<label>` with no `for`, while the select carried a duplicate
-            copy of the same word in `aria-label`. */}
-        <label class="pk-field__label" for={selectId}>
+        <label class="pk-field__label" for={inputId}>
           {label}
         </label>
-        {/* One flex row, the way the Bootstrap input group was: `pk-input`'s
-            `min-width: 0` lets the search field absorb the shrinking so the
-            button keeps its text on one line. */}
-        <div class="pk-field__control">
+        <div class="pk-field__control" ref={anchorRef}>
           <TextInput
-            type="search"
-            aria-label={`${label} search`}
+            id={inputId}
+            type="text"
+            role="combobox"
+            autocomplete="off"
+            aria-haspopup="listbox"
+            aria-expanded={open ? "true" : "false"}
+            aria-controls={open ? listboxId : undefined}
+            aria-autocomplete="list"
+            aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
             placeholder={searchPlaceholder ?? `Search ${label.toLowerCase()}…`}
-            value={pendingSearch}
+            value={query ?? displayLabel}
             disabled={disabled}
-            onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                applySearch();
-              }
-            }}
+            onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
+            onKeyDown={handleKeyDown}
+            onClick={() => !disabled && !open && setOpen(true)}
+            onBlur={close}
           />
-          <Button size="sm" disabled={disabled} onClick={applySearch}>
-            Search
-          </Button>
-        </div>
-        <div class="pk-field__control">
-          <Select
-            id={selectId}
-            value={value ?? ""}
-            disabled={disabled || collection.loading}
-            onChange={(event) => {
-              const next = (event.target as HTMLSelectElement).value;
-              const selected = items.find((item) => catalog.itemKey(item) === next) ?? null;
-              valueRef.current = selected ? catalog.itemKey(selected) : null;
-              onChange(selected);
-            }}
-          >
-            {allowEmpty && <option value="">{placeholder}</option>}
-            {value && !hasSelectedOption && <option value={value}>{selectedLabel ?? value}</option>}
-            {items.map((item) => (
-              <option key={catalog.itemKey(item)} value={catalog.itemKey(item)}>
-                {catalog.itemLabel(item)}
-              </option>
-            ))}
-          </Select>
         </div>
       </div>
-      <div class="pk-cluster">
-        {/* The count and a failed load used to be the same sentence in two
-            colours, which is a status nobody who cannot separate red from grey
-            can read. A failure is now its own block, with its own role. */}
-        <span class="pk-small" aria-live="polite">
-          {collection.loading
-            ? "Loading…"
-            : page && page.total > 0
-              ? `${page.offset + 1}–${page.offset + rawItems.length} of ${page.total}`
-              : "No matches"}
-        </span>
-        <div class="pk-cluster pk-push" role="group" aria-label={`${label} result pages`}>
-          <Button
-            size="sm"
-            disabled={disabled || collection.loading || offset === 0}
-            onClick={() => setOffset((current) => Math.max(0, current - SELECTOR_PAGE_SIZE))}
-          >
-            Previous
-          </Button>
-          <Button
-            size="sm"
-            disabled={disabled || collection.loading || !page?.hasMore}
-            onClick={() => setOffset((current) => current + SELECTOR_PAGE_SIZE)}
-          >
-            Next
-          </Button>
+      {open && (
+        // Pressing anywhere in the popup — an option, the scrollbar — must
+        // not steal focus from the input, or the blur would close the list
+        // under the pointer.
+        <div ref={popupRef} class="pk-menu__popup" onMouseDown={(event) => event.preventDefault()}>
+          <div id={listboxId} role="listbox" aria-label={label} class="pk-menu__options">
+            {allowEmpty && (
+              <div
+                id={optionId(0)}
+                ref={(element) => {
+                  optionRefs.current[0] = element;
+                }}
+                role="option"
+                aria-selected={!value ? "true" : "false"}
+                data-key=""
+                class={["pk-menu__item", activeIndex === 0 ? "pk-menu__item--active" : null].filter(Boolean).join(" ")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(0)}
+              >
+                {placeholder}
+              </div>
+            )}
+            {items.map((item, itemIndex) => {
+              const index = (allowEmpty ? 1 : 0) + itemIndex;
+              const key = catalog.itemKey(item);
+              return (
+                <div
+                  key={key}
+                  id={optionId(index)}
+                  ref={(element) => {
+                    optionRefs.current[index] = element;
+                  }}
+                  role="option"
+                  aria-selected={key === value ? "true" : "false"}
+                  data-key={key}
+                  class={["pk-menu__item", activeIndex === index ? "pk-menu__item--active" : null]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => choose(index)}
+                >
+                  {catalog.itemLabel(item)}
+                </div>
+              );
+            })}
+          </div>
+          {/* Empty and truncated result sets say so in words rather than
+              leaving a silent, shorter list. */}
+          {status && (
+            <p class="pk-menu__status" role="status">
+              {status}
+            </p>
+          )}
         </div>
-      </div>
+      )}
       {collection.error && <Alert tone="danger">{collection.error.message}</Alert>}
     </div>
   );

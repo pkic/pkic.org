@@ -27,6 +27,7 @@ import { render, type ComponentChildren } from "preact";
 import type { z } from "zod";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { getJson, postJson } from "../api-client";
+import { formatDateTime } from "../ui";
 import { currencyInfo, toMajorUnit } from "../../../shared/constants/currencies";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
 import { classifyDonationPollResult, type DonationSession, type DonationSessionResponse } from "./session-poll";
@@ -232,9 +233,7 @@ function DonationBadge({
 
 function AsyncPending({ methodType, expiresAt }: { methodType?: string | null; expiresAt?: number | null }) {
   const info = asyncPaymentWindow(methodType ?? null);
-  const deadline = expiresAt
-    ? new Date(expiresAt * 1000).toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })
-    : null;
+  const deadline = expiresAt ? formatDateTime(new Date(expiresAt * 1000).toISOString()) : null;
 
   return (
     <div class="pk">

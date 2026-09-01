@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { deleteJson, getJson, patchJson, postJson, requestJson } from "../shared/api-client";
+import { formatDateTime } from "../shared/ui";
 import type { ProposalAccessResponse } from "../shared/types";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
@@ -94,9 +95,7 @@ export function ProposalManageSpeakerCard({
     setJobTitle(speaker.jobTitle ?? "");
     setBiography(speaker.bio ?? "");
     setRole(speaker.role);
-    setHeadshotStatus(
-      speaker.headshotUpdatedAt ? `Updated: ${new Date(speaker.headshotUpdatedAt).toLocaleString("en-US")}` : "",
-    );
+    setHeadshotStatus(speaker.headshotUpdatedAt ? `Updated: ${formatDateTime(speaker.headshotUpdatedAt)}` : "");
     linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
   }, [speaker]);
 

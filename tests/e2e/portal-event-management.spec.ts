@@ -117,7 +117,9 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   );
   await formEditor.getByRole("button", { name: "Create form" }).click();
   expect((await formCreated).status()).toBe(201);
-  await expect(policySection.getByLabel("Registration questions", { exact: true })).toContainText(
+  // The picker is a combobox now: the attached form's title reads back from
+  // the input's value rather than from a selected <option>'s text.
+  await expect(policySection.getByLabel("Registration questions", { exact: true })).toHaveValue(
     "Workshop registration questions",
   );
 

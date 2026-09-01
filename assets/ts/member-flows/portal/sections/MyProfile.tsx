@@ -20,6 +20,7 @@ import { Spinner } from "../../../ui/Spinner";
 import { Select, Textarea, TextInput } from "../../../ui/TextControl";
 import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
+import { formatCalendarDate } from "../../../shared/ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
 import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
@@ -262,7 +263,7 @@ export function MyProfile() {
                 <dt>Membership category</dt>
                 <dd>{current.membershipCategory}</dd>
                 <dt>Member since</dt>
-                <dd>{new Date(current.memberSince).toLocaleDateString()}</dd>
+                <dd>{formatCalendarDate(current.memberSince)}</dd>
               </dl>
             </PanelBody>
           </Panel>

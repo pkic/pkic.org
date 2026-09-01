@@ -535,7 +535,8 @@ describe("portal event management", () => {
         },
       },
     });
-    expect(container.textContent).toContain("Workshop registration");
+    // The chosen form's title reads back from the closed combobox itself.
+    expect(controlFor(container, "Registration questions").value).toBe("Workshop registration");
     expect(onUpdated).toHaveBeenCalledTimes(2);
   });
 });

@@ -2,7 +2,7 @@ import { all, first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { parseJsonSafe } from "../../utils/json";
-import { parseLinksJson, findLinkedinUrl } from "../../../../assets/shared/schemas/links";
+import { parseLinksJson, getFeaturedLink } from "../../../../assets/shared/schemas/links";
 import { sanitizeLegacyHttpOrSameOriginUrl, sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
@@ -39,7 +39,7 @@ export interface PublicMemberIdentity {
   name: string;
   jobTitle: string | null;
   bio: string | null;
-  linkedin: string | null;
+  featuredLink: string | null;
   photoUrl: string | null;
 }
 
@@ -196,7 +196,7 @@ async function loadPublicIdentities(db: DatabaseLike, organizationId: string): P
     name: [r.first_name, r.last_name].filter(Boolean).join(" ") || "Unknown",
     jobTitle: r.job_title,
     bio: r.biography,
-    linkedin: findLinkedinUrl(parseLinksJson(r.links_json)),
+    featuredLink: getFeaturedLink(parseLinksJson(r.links_json)),
     photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.identity_id}/logo` : null,
   }));
 }
@@ -233,6 +233,10 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
       )
     : null;
 
+  // An organization's public links belong to the organization row; an org-less
+  // individual's belong to their own user record.
+  const links = row.organization_id ? parseLinksJson(orgRow?.links_json ?? null) : userLinks;
+
   return {
     ...summary,
     content: orgRow?.content_markdown ?? null,
@@ -241,10 +245,10 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
     pressUrl: sanitizeLegacyHttpUrl(orgRow?.press_url),
     pressFeedUrl: sanitizeLegacyHttpUrl(orgRow?.press_feed_url),
     careersUrl: sanitizeLegacyHttpUrl(orgRow?.careers_url),
-    links: row.organization_id ? parseLinksJson(orgRow?.links_json ?? null) : userLinks,
+    links,
     identities,
     jobTitle: row.organization_id ? null : row.job_title,
-    linkedin: row.organization_id ? null : findLinkedinUrl(userLinks),
+    featuredLink: getFeaturedLink(links),
   };
 }
 

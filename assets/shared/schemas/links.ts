@@ -5,7 +5,7 @@
  * scripts/migrate-members/sql-renderer.mjs.
  */
 import { z } from "zod";
-import { hasUrlHostname, httpUrlSchema, sanitizeLegacyHttpUrl } from "./urls.ts";
+import { httpUrlSchema, sanitizeLegacyHttpUrl } from "./urls.ts";
 
 function uniqueStringList(values: string[]): boolean {
   return new Set(values.map((value) => value.toLowerCase())).size === values.length;
@@ -144,7 +144,13 @@ export function serializeLinks(links: string[]): string {
   return JSON.stringify(linksSchema.parse(links));
 }
 
-/** Picks the LinkedIn URL out of a canonical links list, for display surfaces that show LinkedIn specifically. */
-export function findLinkedinUrl(links: string[]): string | null {
-  return links.find((url) => hasUrlHostname(url, "linkedin.com")) ?? null;
+/**
+ * The owner-ordered featured link: the first entry of a canonical links list,
+ * whatever its platform. The links schema deliberately hardcodes no platform —
+ * the owner expresses preference by ordering the list, and display surfaces
+ * with room for one highlighted profile link show this one, labeled by
+ * `getLinkLabel`.
+ */
+export function getFeaturedLink(links: readonly string[]): string | null {
+  return links[0] ?? null;
 }

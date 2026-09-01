@@ -59,6 +59,34 @@
     box-shadow: var(--pk-shadow-3);
   }
 
+  /*
+   * A combobox listbox borrows the menu surface. Unlike a menu it can hold a
+   * whole server page, so the options scroll inside the popup instead of
+   * growing it past the viewport.
+   */
+  .pk-menu__options {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: min(18rem, 50vh);
+  }
+
+  /*
+   * The combobox highlight: focus stays on the input, so the active option
+   * carries the same surface a hovered menu item gets.
+   */
+  .pk-menu__item--active {
+    background: var(--pk-surface-sunk);
+  }
+
+  /* The words under a listbox: "No matches.", "Showing 25 of 201 matches." */
+  .pk-menu__status {
+    margin: 0;
+    padding: 0.35rem 0.6rem;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
   .pk-menu__heading {
     margin: 0;
     padding: 0.35rem 0.6rem 0.15rem;

@@ -24,6 +24,7 @@ import {
   eventRegistrationStatusLabel,
 } from "../../../../shared/schemas/event-registrations";
 import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-client";
+import { formatDateTime } from "../../../shared/ui";
 import { ApiDataTable } from "../../ApiDataTable";
 import { confirmAction } from "../../ConfirmDialog";
 import { ErrorAlert } from "../../ErrorAlert";
@@ -87,8 +88,10 @@ function statusOptions(purpose: EventFormsPurpose): ReadonlyArray<FilterOption> 
 }
 
 function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  // A non-instant stays visible as raw text instead of collapsing to the
+  // formatter's em dash.
+  const formatted = formatDateTime(value);
+  return formatted === "—" ? value : formatted;
 }
 
 function FormDefinitionManagementEditor({
