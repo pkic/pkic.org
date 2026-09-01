@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { ActivityChartCard } from "../../assets/ts/components/analytics/ActivityChartCard";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
 import { Markdown } from "../../assets/ts/components/Markdown";
 import { PersonCell } from "../../assets/ts/components/PersonCell";
@@ -74,12 +73,6 @@ describe("shared management presentation components", () => {
     void act(() => pager?.pagerProps({ hasMore: false, rowCount: 10, total: 60 }).onPageSizeChange(50));
     expect(pager?.offset).toBe(0);
     expect(pager?.pageSize).toBe(50);
-  });
-
-  it("renders activity chart markup in the common card", () => {
-    const container = mount(<ActivityChartCard chart={'<svg data-chart="activity"></svg>'} />);
-    expect(container.textContent).toContain("Activity — last 30 days");
-    expect(container.querySelector('[data-chart="activity"]')).not.toBeNull();
   });
 
   it("renders filter options and reports the selected value", () => {

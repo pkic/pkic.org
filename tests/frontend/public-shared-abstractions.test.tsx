@@ -228,7 +228,10 @@ describe("public shared frontend abstractions", () => {
 
     const panel = replaceFormWithSuccess(root, form, <p>Saved successfully</p>);
 
-    expect(form.classList.contains("d-none")).toBe(true);
+    // Hidden with the platform's attribute, not a class: the helper runs on
+    // ten public flows, and a Bootstrap class there put the framework back
+    // into markup those surfaces had already migrated away from.
+    expect(form.hidden).toBe(true);
     expect(panel.textContent).toBe("Saved successfully");
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });

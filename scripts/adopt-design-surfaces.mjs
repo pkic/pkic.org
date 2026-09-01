@@ -9,7 +9,9 @@
  *   node scripts/adopt-design-surfaces.mjs <path>...
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 
 const GATE = "scripts/check-design-isolation.mjs";
@@ -23,12 +25,35 @@ if (paths.length === 0) {
 const source = readFileSync(GATE, "utf8");
 const already = new Set([...source.matchAll(/^\s*"([^"]+)",$/gm)].map((match) => match[1]));
 
-const report = execFileSync("node", [GATE, "--by-file"], { encoding: "utf8" });
-const dirty = paths.filter((path) => report.includes(path));
-if (dirty.length > 0) {
-  console.error("still reference Bootstrap, refusing to adopt:");
-  for (const path of dirty) console.error(`  ${path}`);
+/*
+ * Run the real gate against the candidates, not the ranked report.
+ *
+ * `--by-file` prints only the twenty-five heaviest files, so a path that was
+ * merely small looked clean and got adopted. It also checks less: the ranked
+ * count is Bootstrap references alone, while the gate additionally rejects
+ * undefined `pk-` classes, inline styles, colour and size literals, and
+ * classes assigned at runtime. Adopting on the weaker signal is how
+ * `event-registration-confirm.html` entered the list with nine Bootstrap
+ * classes still in it.
+ */
+const probe = readFileSync(GATE, "utf8").replace(
+  /const scanned = \[[\s\S]*?\n\];/,
+  `const scanned = ${JSON.stringify(paths)};`,
+);
+if (!probe.includes("const scanned = [")) {
+  console.error("could not build a probe: the scanned list is not shaped as expected");
   process.exit(1);
+}
+const probePath = join(tmpdir(), `adopt-probe-${String(process.pid)}.mjs`);
+writeFileSync(probePath, probe);
+try {
+  execFileSync("node", [probePath], { encoding: "utf8", cwd: process.cwd() });
+} catch (error) {
+  console.error("the gate rejects these as they stand, refusing to adopt:\n");
+  console.error(String(error.stdout ?? "") + String(error.stderr ?? ""));
+  process.exit(1);
+} finally {
+  rmSync(probePath, { force: true });
 }
 
 const fresh = paths.filter((path) => !already.has(path));

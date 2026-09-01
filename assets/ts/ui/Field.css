@@ -54,7 +54,17 @@
     align-items: flex-start;
     gap: 0.3rem;
     font-size: var(--pk-text-xs);
-    color: var(--state-ink);
+    /*
+     * The fallback matters more than the variable. `--state-ink` is only set
+     * by a `pk-field--*` modifier, which the Field component applies but a
+     * Hugo template and the runtime validators do not — they write the
+     * message element into a field that carries no modifier at all. Without a
+     * fallback those messages rendered in ordinary ink, on every server-side
+     * form, where Bootstrap's `invalid-feedback` had been red. A message
+     * element only exists to say something is wrong, so danger is the right
+     * default and the modifiers refine it.
+     */
+    color: var(--state-ink, var(--pk-danger-ink));
   }
 
   .pk-field__message-icon {

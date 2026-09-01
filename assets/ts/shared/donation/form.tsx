@@ -14,6 +14,8 @@
  * pre-filled via data attributes or URL query parameters.
  */
 import { render } from "preact";
+
+import "./donation-presets.css";
 import { postJson, getJson } from "../api-client";
 import { donationCheckoutSchema } from "../../../shared/schemas/donation";
 import { donationCheckoutEmbeddedResponseSchema } from "../../../shared/schemas/donation";
@@ -376,17 +378,12 @@ function renderPresets(container: HTMLElement, currencyCode: string): void {
 function activatePreset(container: HTMLElement, amount: number): void {
   container.querySelectorAll<HTMLButtonElement>("[data-preset-amount]").forEach((btn) => {
     const isMatch = Number(btn.dataset.presetAmount) === amount;
-    // `is-selected` rather than Bootstrap's `active`: the preset buttons are
-    // `pk-btn` now, which lives in `@layer components`, and a legacy `.active`
-    // rule in `@layer legacy` loses to it however specific it is.
-    btn.classList.toggle("is-selected", isMatch);
     btn.setAttribute("aria-pressed", String(isMatch));
   });
 }
 
 function clearPresetSelection(container: HTMLElement): void {
   container.querySelectorAll<HTMLButtonElement>("[data-preset-amount]").forEach((btn) => {
-    btn.classList.remove("is-selected");
     btn.setAttribute("aria-pressed", "false");
   });
 }

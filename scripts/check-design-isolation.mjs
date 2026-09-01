@@ -179,6 +179,12 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/system-users/UserDetail.tsx",
   "assets/ts/member-flows/member-detail-page.tsx",
   "layouts/shortcodes/event-registration-confirm.html",
+  "layouts/events/list.html",
+  "layouts/shortcodes/sponsorform.html",
+  "layouts/shortcodes/event-registration.html",
+  "layouts/partials/donations/form-widget.html",
+  "assets/ts/shared/form/button-loading.tsx",
+  "assets/ts/shared/form/success-panel.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */
@@ -231,7 +237,10 @@ function definedClasses() {
       }
     }
   };
-  for (const dir of ["assets/ts/ui", "assets/design"]) {
+  // Every stylesheet under assets/ts, not only the primitives'. A component
+  // keeps its CSS beside itself wherever it lives — `shared/form` has one —
+  // and scanning only `ui` reported those classes as undefined.
+  for (const dir of ["assets/ts", "assets/design"]) {
     try {
       collect(resolve(root, dir));
     } catch {

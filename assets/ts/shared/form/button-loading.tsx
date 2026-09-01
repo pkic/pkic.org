@@ -8,6 +8,9 @@
  */
 import { render } from "preact";
 
+import "../../ui/Spinner.css";
+import "./button-loading.css";
+
 const savedNodes = new WeakMap<HTMLButtonElement, Node[]>();
 
 export function setButtonLoading(btn: HTMLButtonElement): void {
@@ -19,7 +22,14 @@ export function setButtonLoading(btn: HTMLButtonElement): void {
   const label = btn.textContent?.trim() ?? "";
   render(
     <>
-      <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+      {/* The design system's spinner. This ran on ten public flows, so a
+          Bootstrap spinner here put the framework back into markup those
+          surfaces had already migrated away from — after render, where no
+          source-level check could see it. `role="status"` stays on the
+          button's own text, which is what actually changes. */}
+      <span class="pk-spinner pk-spinner--sm pk-button-spinner" aria-hidden="true">
+        <span class="pk-spinner__circle" />
+      </span>
       {label}
     </>,
     btn,
