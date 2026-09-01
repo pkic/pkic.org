@@ -27,16 +27,26 @@ async function setupAdmin(): Promise<string> {
   return createAdminSession(env.DB, id, `admin-logo-token-${crypto.randomUUID()}`);
 }
 
-function imageRequest(path: string, token: string, method: "PUT" | "DELETE"): Request {
+function imageRequest(
+  path: string,
+  token: string,
+  method: "PUT" | "DELETE",
+  body: BodyInit = JPEG_BYTES,
+  contentType = "image/jpeg",
+): Request {
   return new Request(`https://app.test${path}`, {
     method,
     headers: {
       authorization: `Bearer ${token}`,
-      ...(method === "PUT" ? { "content-type": "image/jpeg" } : {}),
+      ...(method === "PUT" ? { "content-type": contentType } : {}),
     },
-    ...(method === "PUT" ? { body: JPEG_BYTES } : {}),
+    ...(method === "PUT" ? { body } : {}),
   });
 }
+
+const VALID_LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">' +
+  '<circle cx="100" cy="50" r="20" fill="#175"/></svg>';
 
 async function callLogoRoute(
   handler: (context: any) => Promise<Response>,
@@ -83,7 +93,7 @@ describe("shared organization logo route transport", () => {
 
     const putResponse = await callLogoRoute(
       organizationLogoRequest,
-      imageRequest(`/api/v1/organizations/${id}/logo`, token, "PUT"),
+      imageRequest(`/api/v1/organizations/${id}/logo`, token, "PUT", VALID_LOGO_SVG, "image/svg+xml"),
       id,
       "organizationId",
     );
@@ -123,7 +133,9 @@ describe("shared organization logo route transport", () => {
       .bind(id)
       .run();
 
-    const putResponse = await callMountedLogoRoute(imageRequest(`/api/v1/sponsors/${id}/logo`, token, "PUT"));
+    const putResponse = await callMountedLogoRoute(
+      imageRequest(`/api/v1/sponsors/${id}/logo`, token, "PUT", VALID_LOGO_SVG, "image/svg+xml"),
+    );
     expect(putResponse.status).toBe(200);
     const putBody = (await putResponse.json()) as { logoUrl: string; r2Key: string };
     expect(putBody.logoUrl).toBe(`/api/v1/sponsors/${id}/logo`);
@@ -160,7 +172,9 @@ describe("shared organization logo route transport", () => {
       ).bind(sponsorshipId, organizationId),
     ]);
 
-    const response = await callMountedLogoRoute(imageRequest(`/api/v1/sponsors/${sponsorshipId}/logo`, token, "PUT"));
+    const response = await callMountedLogoRoute(
+      imageRequest(`/api/v1/sponsors/${sponsorshipId}/logo`, token, "PUT", VALID_LOGO_SVG, "image/svg+xml"),
+    );
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "SPONSORSHIP_IS_ORG_LINKED" } });
   });

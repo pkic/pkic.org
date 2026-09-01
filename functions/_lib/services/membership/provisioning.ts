@@ -52,11 +52,7 @@ import {
   readOrganizationMemberAggregate,
   assertNoAggregateCategoryConflict,
 } from "./memberships";
-import {
-  buildAddRepresentativeStatement,
-  isActiveRepresentative,
-  type OrganizationRepresentationSource,
-} from "./representatives";
+import { buildCreateIdentityStatement, isActiveIdentityForMember, type IdentitySource } from "./identities";
 import {
   REPRESENTATIVE_ROLE_IDS,
   buildAssignRepresentativeRoleStatementsForNewRepresentative,
@@ -67,10 +63,11 @@ import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/sche
 import { prepareClaimDomainForOrganization, prepareTransferApplicationDomainClaim } from "./organization-domain-claims";
 import type { DatabaseLike, StatementLike } from "../../types";
 
-export interface ProvisionRepresentativeInput {
+export interface ProvisionIdentityInput {
   name: string;
   email: string;
   jobTitle?: string | null;
+  biography?: string | null;
   links?: string[] | null;
 }
 
@@ -78,15 +75,19 @@ export interface ProvisionMembershipInput {
   organizationName?: string | null;
   website?: string | null;
   description?: string | null;
+  /** The organization's own profile links (canonical links contract). Only applied when the organization is created here. */
+  links?: string[] | null;
   organizationDomain?: string | null;
   /** Set when approval transfers the application's existing domain claim. */
   domainClaimApplicationId?: string | null;
   membershipCategory: string;
   /** Only applied when given; the organization-tied path never overwrites an already-set member_since. */
   memberSince?: string | null;
-  representatives: ProvisionRepresentativeInput[];
-  /** Provenance for organization representation rows. Required for org-tied provisioning. */
-  representationSource: OrganizationRepresentationSource;
+  identities: ProvisionIdentityInput[];
+  /** Provenance for the approved identity rows. */
+  identitySource: IdentitySource;
+  /** True only for an approved membership or a separately authorized staff activation. */
+  activateIdentities: boolean;
   workingGroupSlugs: string[];
   /** Staff provisioning may enter managed groups; application approval may only honor self-service-eligible requests. */
   allowManagedGroupEnrollment?: boolean;
@@ -100,25 +101,25 @@ export interface ProvisionMembershipInput {
   onlyAssignContactRolesIfVacant?: boolean;
 }
 
-export interface ProvisionedRepresentative {
+export interface ProvisionedIdentity {
   userId: string;
   email: string;
   name: string;
   organizationId: string | null;
   /** members.id — the shared aggregate for an organization, or this person's own individual aggregate. */
   membershipId: string;
-  /** organization_representatives.id — null for an individual (org-less) membership. */
-  representativeId: string | null;
+  /** identities.id for the exact acting capacity created by this command. */
+  identityId: string;
   /** True only when this call just assigned this person as primary/secondary contact (not on an already-contacted org). */
   assignedContactRole: "primary" | "secondary" | null;
-  /** The timestamp actually written to this representative's row(s), for callers that echo it back without a re-read. */
+  /** The timestamp actually written to this identity, for callers that echo it back without a re-read. */
   createdAt: string;
 }
 
 export interface ProvisionMembershipResult {
   organizationId: string | null;
   organizationWasCreated: boolean;
-  representatives: ProvisionedRepresentative[];
+  identities: ProvisionedIdentity[];
   groups: ProvisionedGroup[];
 }
 
@@ -172,15 +173,12 @@ async function resolveProvisioningGroups(
   return eligible.map(({ id, slug, name }) => ({ id, slug, name }));
 }
 
-async function buildRepresentativeUserStatement(db: DatabaseLike, rep: ProvisionRepresentativeInput) {
-  const { firstName, lastName } = splitPersonName(rep.name);
+async function buildIdentityUserStatement(db: DatabaseLike, identityInput: ProvisionIdentityInput) {
+  const { firstName, lastName } = splitPersonName(identityInput.name);
   return buildFindOrCreateUserStatement(db, {
-    email: rep.email,
+    email: identityInput.email,
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
-    jobTitle: rep.jobTitle ?? undefined,
-    linksJson: rep.links && rep.links.length > 0 ? serializeLinks(rep.links) : null,
-    allowProfileUpdate: true,
   });
 }
 
@@ -204,9 +202,9 @@ async function buildProvisionIndividualMemberships(
 ): Promise<BuiltProvisioning> {
   const rejectExisting = input.rejectExistingMembership ?? true;
   const statements: StatementLike[] = [];
-  const representatives: ProvisionedRepresentative[] = [];
+  const identities: ProvisionedIdentity[] = [];
 
-  for (const rep of input.representatives) {
+  for (const rep of input.identities) {
     if (rejectExisting) {
       const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
         normalizeEmail(rep.email),
@@ -221,7 +219,7 @@ async function buildProvisionIndividualMemberships(
       }
     }
 
-    const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep);
+    const { user, statement: userStatement } = await buildIdentityUserStatement(db, rep);
     if (userStatement) statements.push(userStatement);
 
     const { memberId, statements: memberStatements } = buildCreateIndividualMemberStatements(
@@ -235,29 +233,42 @@ async function buildProvisionIndividualMemberships(
       statements.push(db.prepare("UPDATE members SET member_since = ? WHERE id = ?").bind(input.memberSince, memberId));
     }
 
-    for (const group of groups) {
-      statements.push(
-        ...buildGroupCapacityJoinStatements(db, {
-          groupId: group.id,
-          targetUserId: user.id,
-          memberIds: [memberId],
-          source: "staff",
-          actorUserId: input.grantedByUserId ?? null,
-          actorDatabaseUserId: input.grantedByUserId ?? null,
-          allowManaged: input.allowManagedGroupEnrollment ?? true,
-          at: now,
-        }),
-      );
-    }
-    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
+    const { identityId, statement: identityStatement } = await buildCreateIdentityStatement(db, {
+      userId: user.id,
+      organizationId: null,
+      biography: rep.biography ?? null,
+      linksJson: rep.links ? serializeLinks(rep.links) : null,
+      source: input.identitySource,
+      startImmediately: input.activateIdentities,
+      now,
+    });
+    statements.push(identityStatement);
 
-    representatives.push({
+    if (input.activateIdentities) {
+      for (const group of groups) {
+        statements.push(
+          ...buildGroupCapacityJoinStatements(db, {
+            groupId: group.id,
+            targetUserId: user.id,
+            memberIds: [memberId],
+            source: "staff",
+            actorUserId: input.grantedByUserId ?? null,
+            actorDatabaseUserId: input.grantedByUserId ?? null,
+            allowManaged: input.allowManagedGroupEnrollment ?? true,
+            at: now,
+          }),
+        );
+      }
+      statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
+    }
+
+    identities.push({
       userId: user.id,
       email: user.email,
       name: rep.name,
       organizationId: null,
       membershipId: memberId,
-      representativeId: null,
+      identityId,
       assignedContactRole: null,
       createdAt: now,
     });
@@ -265,7 +276,7 @@ async function buildProvisionIndividualMemberships(
 
   return {
     statements,
-    buildResult: () => ({ organizationId: null, organizationWasCreated: false, representatives, groups: [...groups] }),
+    buildResult: () => ({ organizationId: null, organizationWasCreated: false, identities, groups: [...groups] }),
   };
 }
 
@@ -273,10 +284,10 @@ async function buildProvisionIndividualMemberships(
  * Resolves (via a pre-batch read, not a write) whether the organization
  * already exists, and builds — without executing — the statements needed
  * to create it if not. The caller folds these into one final `db.batch()`
- * alongside the aggregate/representative/role statements, so organization
+ * alongside the aggregate, identity, and role statements, so organization
  * creation is no longer its own separate commit (PR #1 review blocker 4:
  * "Organization creation commits... member aggregate creation commits
- * separately... representatives/roles commit later").
+ * separately while identity and role statements commit later").
  */
 async function buildResolveOrganizationStatements(
   db: DatabaseLike,
@@ -295,8 +306,8 @@ async function buildResolveOrganizationStatements(
   const statements: StatementLike[] = [
     db
       .prepare(
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, links_json, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
       )
       .bind(
         organizationId,
@@ -304,6 +315,7 @@ async function buildResolveOrganizationStatements(
         normalizedOrgName,
         input.description ?? null,
         input.website ?? null,
+        input.links && input.links.length > 0 ? serializeLinks(input.links) : null,
         now,
         now,
       ),
@@ -413,12 +425,12 @@ async function buildProvisionOrganizationTiedMemberships(
   }
 
   if (rejectExisting) {
-    for (const rep of input.representatives) {
+    for (const rep of input.identities) {
       const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
         normalizeEmail(rep.email),
       ]);
       if (existingUser) {
-        const alreadyRepresenting = await isActiveRepresentative(db, aggregateId, existingUser.id);
+        const alreadyRepresenting = await isActiveIdentityForMember(db, aggregateId, existingUser.id);
         if (alreadyRepresenting) {
           throw new AppError(409, "ALREADY_MEMBER", `${rep.email} already represents this organization`);
         }
@@ -430,44 +442,51 @@ async function buildProvisionOrganizationTiedMemberships(
     ? await resolveRepresentativeRoleHolders(db, aggregateId)
     : { primaryContactUserId: null, secondaryContactUserId: null };
 
-  const pending: { rep: ProvisionRepresentativeInput; user: UserRecord; representativeId: string }[] = [];
+  const pending: { rep: ProvisionIdentityInput; user: UserRecord; identityId: string }[] = [];
 
-  for (const rep of input.representatives) {
-    const { user, statement: userStatement } = await buildRepresentativeUserStatement(db, rep);
+  for (const rep of input.identities) {
+    const { user, statement: userStatement } = await buildIdentityUserStatement(db, rep);
     if (userStatement) statements.push(userStatement);
 
-    const { representativeId, statement: repStatement } = await buildAddRepresentativeStatement(db, {
-      memberId: aggregateId,
+    const { identityId, statement: repStatement } = await buildCreateIdentityStatement(db, {
       userId: user.id,
-      source: input.representationSource,
+      organizationId,
+      jobTitle: rep.jobTitle ?? null,
+      biography: rep.biography ?? null,
+      linksJson: rep.links ? serializeLinks(rep.links) : null,
+      source: input.identitySource,
+      startImmediately: input.activateIdentities,
       now,
     });
     statements.push(repStatement);
 
-    for (const group of groups) {
-      statements.push(
-        ...buildGroupCapacityJoinStatements(db, {
-          groupId: group.id,
-          targetUserId: user.id,
-          memberIds: [aggregateId],
-          source: "staff",
-          actorUserId: input.grantedByUserId ?? null,
-          actorDatabaseUserId: input.grantedByUserId ?? null,
-          allowManaged: input.allowManagedGroupEnrollment ?? true,
-          at: now,
-        }),
-      );
+    if (input.activateIdentities) {
+      for (const group of groups) {
+        statements.push(
+          ...buildGroupCapacityJoinStatements(db, {
+            groupId: group.id,
+            targetUserId: user.id,
+            memberIds: [aggregateId],
+            source: "staff",
+            actorUserId: input.grantedByUserId ?? null,
+            actorDatabaseUserId: input.grantedByUserId ?? null,
+            allowManaged: input.allowManagedGroupEnrollment ?? true,
+            at: now,
+          }),
+        );
+      }
+      statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
     }
-    statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
 
-    pending.push({ rep, user, representativeId });
+    pending.push({ rep, user, identityId });
   }
 
   const assignedContactRoles: ("primary" | "secondary" | null)[] = pending.map(() => null);
-  if (!existingHolders.primaryContactUserId && pending.length >= 1) {
+  if (input.activateIdentities && !existingHolders.primaryContactUserId && pending.length >= 1) {
     statements.push(
       ...buildAssignRepresentativeRoleStatementsForNewRepresentative(db, {
         memberId: aggregateId,
+        identityId: pending[0].identityId,
         userId: pending[0].user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.primaryContact,
         grantedByUserId: input.grantedByUserId,
@@ -476,10 +495,11 @@ async function buildProvisionOrganizationTiedMemberships(
     );
     assignedContactRoles[0] = "primary";
   }
-  if (!existingHolders.secondaryContactUserId && pending.length >= 2) {
+  if (input.activateIdentities && !existingHolders.secondaryContactUserId && pending.length >= 2) {
     statements.push(
       ...buildAssignRepresentativeRoleStatementsForNewRepresentative(db, {
         memberId: aggregateId,
+        identityId: pending[1].identityId,
         userId: pending[1].user.id,
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,
         grantedByUserId: input.grantedByUserId,
@@ -495,13 +515,13 @@ async function buildProvisionOrganizationTiedMemberships(
       organizationId,
       organizationWasCreated,
       groups: [...groups],
-      representatives: pending.map(({ rep, user, representativeId }, index) => ({
+      identities: pending.map(({ rep, user, identityId }, index) => ({
         userId: user.id,
         email: user.email,
         name: rep.name,
         organizationId,
         membershipId: aggregateId,
-        representativeId,
+        identityId,
         assignedContactRole: assignedContactRoles[index],
         createdAt: now,
       })),

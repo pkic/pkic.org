@@ -23,37 +23,41 @@
 
 {{- /* ── Render ───────────────────────────────────────────────────── */}}
 
-{{ if $spotlight }}
-<section class="news-spotlight mb-5">
-  <h2 class="news-section-heading">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-         fill="currentColor" aria-hidden="true"><path d="M12 2l2.09 6.26L21 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
-    Sponsor Highlights
-  </h2>
-  <div class="row g-4">
-    {{- range $spotlight -}}
-    <div class="col-sm-6 col-lg-4">
-      {{ partial "news/card.html" . }}
-    </div>
-    {{- end -}}
-  </div>
-</section>
-{{ end }}
-
-<section class="news-main">
+{{/*
+  Each card is now the grid item itself rather than sitting inside a
+  `col-*` wrapper. That is what makes the gradient cycling in
+  `.blog-card:nth-child(6n + N)` resolve: with a wrapper, every card was the
+  sole child of its column and always came out as variant one.
+*/}}
+<div class="pk-stack pk-stack--loose">
   {{ if $spotlight }}
-  <h2 class="news-section-heading news-section-heading--plain">
-    Latest Member News
-  </h2>
-  {{ end }}
-  <div class="row g-4 align-items-start">
-    {{- range $mainItems -}}
-    <div class="col-sm-6 col-lg-4">
+  <section class="news-spotlight">
+    <h2 class="news-section-heading">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+           fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 2l2.09 6.26L21 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+      Sponsor Highlights
+    </h2>
+    <div class="pk-grid pk-grid--roomy">
+      {{- range $spotlight -}}
       {{ partial "news/card.html" . }}
+      {{- end -}}
     </div>
-    {{- end -}}
-  </div>
-  {{ if not $mainItems }}
-  <p class="text-center text-muted py-5">No news items available at this time.</p>
+  </section>
   {{ end }}
-</section>
+
+  <section class="news-main">
+    {{ if $spotlight }}
+    <h2 class="news-section-heading news-section-heading--plain">
+      Latest Member News
+    </h2>
+    {{ end }}
+    <div class="pk-grid pk-grid--roomy">
+      {{- range $mainItems -}}
+      {{ partial "news/card.html" . }}
+      {{- end -}}
+    </div>
+    {{ if not $mainItems }}
+    <p class="pk-center pk-muted pk-section">No news items available at this time.</p>
+    {{ end }}
+  </section>
+</div>

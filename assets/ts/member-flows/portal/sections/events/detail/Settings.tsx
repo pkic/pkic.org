@@ -33,6 +33,7 @@ export function Settings({
         onChange={(key) => {
           location.hash = `/events/${event.slug}/settings/${key}`;
         }}
+        hrefFor={(key) => `/events/${event.slug}/settings/${key}`}
       />
 
       {tab === "general" &&

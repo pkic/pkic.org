@@ -1,5 +1,9 @@
 import { useState } from "preact/hooks";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Select, TextInput, Textarea } from "../../ui/TextControl";
 import type { FormFieldDefinition, FormFieldOptionSource } from "../../../shared/schemas/forms";
+import "../../ui/Content.css";
 
 export type FieldType = FormFieldDefinition["fieldType"];
 export type VisualizationConfig = "auto" | "bar" | "pie" | "wordcloud" | "list";
@@ -262,28 +266,36 @@ export function FieldConfigEditor({
     }
   }
 
+  /*
+   * Two toggle buttons rather than a segmented control of our own: `aria-pressed`
+   * is what tells assistive technology which editor is showing, and the primary
+   * variant is what shows it to everyone else. The old markup carried neither —
+   * it painted an `.active` class and announced two identical plain buttons.
+   */
   const modeSwitch = (
-    <div class="d-flex align-items-center gap-2 mb-3">
-      <span class="small text-muted fst-italic">Field configuration</span>
-      <div class="adm-field-mode-toggle ms-auto" role="group" aria-label="Edit mode">
-        <button
-          type="button"
-          class={`adm-field-mode-btn${!field.rawMode ? " active" : ""}`}
+    <div class="pk-cluster pk-cluster--between">
+      <span class="pk-small">Field configuration</span>
+      <div class="pk-cluster" role="group" aria-label="Edit mode">
+        <Button
+          size="sm"
+          variant={field.rawMode ? "secondary" : "primary"}
+          aria-pressed={field.rawMode ? "false" : "true"}
           onClick={() => {
             if (field.rawMode) toggleMode();
           }}
         >
           Visual
-        </button>
-        <button
-          type="button"
-          class={`adm-field-mode-btn${field.rawMode ? " active" : ""}`}
+        </Button>
+        <Button
+          size="sm"
+          variant={field.rawMode ? "primary" : "secondary"}
+          aria-pressed={field.rawMode ? "true" : "false"}
           onClick={() => {
             if (!field.rawMode) toggleMode();
           }}
         >
           JSON
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -291,276 +303,294 @@ export function FieldConfigEditor({
   // ── Raw JSON mode ────────────────────────────────────────────────────────────
   if (field.rawMode) {
     return (
-      <div class="mt-3 pt-3 border-top">
+      <div class="pk pk-stack pk-stack--snug">
         {modeSwitch}
-        {rawError && <div class="alert alert-danger small py-1 px-2 mb-2">{rawError}</div>}
-        <textarea
-          class="form-control form-control-sm mono adm-field-raw-json"
-          rows={7}
-          value={field.rawValidationText}
-          placeholder="{}"
-          onInput={(e) => updateField(index, { rawValidationText: (e.target as HTMLTextAreaElement).value })}
-        />
-        <p class="small text-muted mt-1 mb-0">
-          Edit the full validation/display config as JSON. Switch to Visual to parse the settings back into structured
-          fields.
-        </p>
+        {/*
+         * The parse failure belongs on the control that caused it, so it arrives
+         * as the Field's invalid state — `aria-invalid` plus a `role="alert"`
+         * message the textarea is described by — rather than as a detached
+         * banner above it.
+         */}
+        <Field
+          label="Validation JSON"
+          help="The full validation and display config. Switch to Visual to parse these settings back into structured fields."
+          state={rawError ? "invalid" : undefined}
+          message={rawError || undefined}
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              class="pk-mono"
+              rows={7}
+              value={field.rawValidationText}
+              placeholder="{}"
+              onInput={(e) => updateField(index, { rawValidationText: (e.target as HTMLTextAreaElement).value })}
+            />
+          )}
+        </Field>
       </div>
     );
   }
 
   // ── Visual mode ──────────────────────────────────────────────────────────────
   return (
-    <div class="mt-3 pt-3 border-top">
+    <div class="pk pk-stack pk-stack--snug">
       {modeSwitch}
-      <div class="row g-2">
-        {/* Options textarea — choice fields only */}
-        {c.options && (
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold">
-              Options <span class="fw-normal text-muted">(one per line)</span>
-            </label>
-            <textarea
-              class="form-control form-control-sm mono"
+
+      {/* Options textarea — choice fields only */}
+      {c.options && (
+        <Field label="Options" help="One per line.">
+          {(control) => (
+            <Textarea
+              {...control}
+              class="pk-mono"
               rows={5}
               value={field.optionsText}
               placeholder={"Option A\nOption B"}
               onInput={(e) => updateField(index, { optionsText: (e.target as HTMLTextAreaElement).value })}
             />
-          </div>
+          )}
+        </Field>
+      )}
+
+      <div class="pk-grid pk-grid--tight">
+        {/* Placeholder — not for choice / boolean */}
+        {c.placeholder && (
+          <Field label="Placeholder">
+            {(control) => (
+              <TextInput
+                {...control}
+                value={field.placeholder}
+                onInput={(e) => updateField(index, { placeholder: (e.target as HTMLInputElement).value })}
+              />
+            )}
+          </Field>
         )}
 
-        <div class={c.options ? "col-md-8" : "col-12"}>
-          <div class="row g-2">
-            {/* Placeholder — not for choice / boolean */}
-            {c.placeholder && (
-              <div class="col-md-4">
-                <label class="form-label small fw-semibold">Placeholder</label>
-                <input
-                  class="form-control form-control-sm"
-                  value={field.placeholder}
-                  onInput={(e) => updateField(index, { placeholder: (e.target as HTMLInputElement).value })}
-                />
-              </div>
-            )}
+        {/* Help text — always visible */}
+        <Field label="Help text">
+          {(control) => (
+            <TextInput
+              {...control}
+              value={field.helpText}
+              onInput={(e) => updateField(index, { helpText: (e.target as HTMLInputElement).value })}
+            />
+          )}
+        </Field>
 
-            {/* Help text — always visible */}
-            <div class={c.placeholder ? "col-md-4" : "col-md-5"}>
-              <label class="form-label small fw-semibold">Help text</label>
-              <input
-                class="form-control form-control-sm"
-                value={field.helpText}
-                onInput={(e) => updateField(index, { helpText: (e.target as HTMLInputElement).value })}
-              />
-            </div>
+        {/* Stats view — always visible */}
+        <Field label="Stats view">
+          {(control) => (
+            <Select
+              {...control}
+              value={field.adminVisualization}
+              onChange={(e) =>
+                updateField(index, {
+                  adminVisualization: (e.target as HTMLSelectElement).value as VisualizationConfig,
+                })
+              }
+            >
+              {VIZ_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
 
-            {/* Stats view — always visible */}
-            <div class="col-md-3">
-              <label class="form-label small fw-semibold">Stats view</label>
-              <select
-                class="form-select form-select-sm"
-                value={field.adminVisualization}
-                onChange={(e) =>
-                  updateField(index, {
-                    adminVisualization: (e.target as HTMLSelectElement).value as VisualizationConfig,
-                  })
-                }
-              >
-                {VIZ_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Length limits — text / textarea / email / url */}
-            {c.lengthLimits && (
-              <>
-                <div class="col-md-3">
-                  <label class="form-label small fw-semibold">Min length</label>
-                  <input
-                    type="number"
-                    min="0"
-                    class="form-control form-control-sm"
-                    value={field.minLength}
-                    onInput={(e) => updateField(index, { minLength: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label small fw-semibold">Max length</label>
-                  <input
-                    type="number"
-                    min="0"
-                    class="form-control form-control-sm"
-                    value={field.maxLength}
-                    onInput={(e) => updateField(index, { maxLength: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Numeric range — number / date */}
-            {c.numericRange && (
-              <>
-                <div class="col-md-3">
-                  <label class="form-label small fw-semibold">Min</label>
-                  <input
-                    type="number"
-                    class="form-control form-control-sm"
-                    value={field.min}
-                    onInput={(e) => updateField(index, { min: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label small fw-semibold">Max</label>
-                  <input
-                    type="number"
-                    class="form-control form-control-sm"
-                    value={field.max}
-                    onInput={(e) => updateField(index, { max: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Step — number only */}
-            {c.step && (
-              <div class="col-md-3">
-                <label class="form-label small fw-semibold">Step</label>
-                <input
+        {/* Length limits — text / textarea / email / url */}
+        {c.lengthLimits && (
+          <>
+            <Field label="Min length">
+              {(control) => (
+                <TextInput
+                  {...control}
                   type="number"
-                  class="form-control form-control-sm"
-                  value={field.step}
-                  onInput={(e) => updateField(index, { step: (e.target as HTMLInputElement).value })}
+                  min="0"
+                  value={field.minLength}
+                  onInput={(e) => updateField(index, { minLength: (e.target as HTMLInputElement).value })}
                 />
-              </div>
-            )}
-
-            {/* Selection range — multi_select only */}
-            {c.selectionLimits && (
-              <>
-                <div class="col-md-3">
-                  <label class="form-label small fw-semibold">Min selections</label>
-                  <input
-                    type="number"
-                    min="0"
-                    class="form-control form-control-sm"
-                    value={field.minItems}
-                    onInput={(e) => updateField(index, { minItems: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label small fw-semibold">Max selections</label>
-                  <input
-                    type="number"
-                    min="0"
-                    class="form-control form-control-sm"
-                    value={field.maxItems}
-                    onInput={(e) => updateField(index, { maxItems: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Allow custom answers — select / multi_select */}
-            {c.allowCustom && (
-              <div class="col-auto d-flex align-items-end pb-1">
-                <div class="form-check">
-                  <input
-                    id={`fce-custom-${index}`}
-                    type="checkbox"
-                    class="form-check-input"
-                    checked={field.allowCustom}
-                    onChange={(e) => updateField(index, { allowCustom: (e.target as HTMLInputElement).checked })}
-                  />
-                  <label class="form-check-label small" for={`fce-custom-${index}`}>
-                    Allow custom answers
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Regex pattern + error message — text only */}
-            {c.pattern && (
-              <>
-                <div class="col-md-4">
-                  <label class="form-label small fw-semibold">
-                    Pattern <span class="fw-normal text-muted">(regex)</span>
-                  </label>
-                  <input
-                    class="form-control form-control-sm mono"
-                    value={field.pattern}
-                    onInput={(e) => updateField(index, { pattern: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label small fw-semibold">Pattern error message</label>
-                  <input
-                    class="form-control form-control-sm"
-                    value={field.patternMessage}
-                    onInput={(e) => updateField(index, { patternMessage: (e.target as HTMLInputElement).value })}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Allowed email domains — email only */}
-            {c.allowedDomains && (
-              <div class="col-md-5">
-                <label class="form-label small fw-semibold">
-                  Allowed domains <span class="fw-normal text-muted">(one per line)</span>
-                </label>
-                <textarea
-                  class="form-control form-control-sm mono"
-                  rows={2}
-                  value={field.allowedDomainsText}
-                  placeholder="example.com"
-                  onInput={(e) =>
-                    updateField(index, {
-                      allowedDomainsText: (e.target as HTMLTextAreaElement).value,
-                    })
-                  }
+              )}
+            </Field>
+            <Field label="Max length">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="number"
+                  min="0"
+                  value={field.maxLength}
+                  onInput={(e) => updateField(index, { maxLength: (e.target as HTMLInputElement).value })}
                 />
-              </div>
-            )}
+              )}
+            </Field>
+          </>
+        )}
 
-            {/* Widget */}
-            <div class="col-md-3">
-              <label class="form-label small fw-semibold">Widget</label>
-              <select
-                class="form-select form-select-sm"
-                value={field.uiWidget}
-                onChange={(e) => updateField(index, { uiWidget: (e.target as HTMLSelectElement).value })}
+        {/* Numeric range — number / date */}
+        {c.numericRange && (
+          <>
+            <Field label="Min">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="number"
+                  value={field.min}
+                  onInput={(e) => updateField(index, { min: (e.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+            <Field label="Max">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="number"
+                  value={field.max}
+                  onInput={(e) => updateField(index, { max: (e.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+          </>
+        )}
+
+        {/* Step — number only */}
+        {c.step && (
+          <Field label="Step">
+            {(control) => (
+              <TextInput
+                {...control}
+                type="number"
+                value={field.step}
+                onInput={(e) => updateField(index, { step: (e.target as HTMLInputElement).value })}
+              />
+            )}
+          </Field>
+        )}
+
+        {/* Selection range — multi_select only */}
+        {c.selectionLimits && (
+          <>
+            <Field label="Min selections">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="number"
+                  min="0"
+                  value={field.minItems}
+                  onInput={(e) => updateField(index, { minItems: (e.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+            <Field label="Max selections">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="number"
+                  min="0"
+                  value={field.maxItems}
+                  onInput={(e) => updateField(index, { maxItems: (e.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+          </>
+        )}
+
+        {/* Regex pattern + error message — text only */}
+        {c.pattern && (
+          <>
+            <Field label="Pattern" help="A regular expression.">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  class="pk-mono"
+                  value={field.pattern}
+                  onInput={(e) => updateField(index, { pattern: (e.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+            <Field label="Pattern error message">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={field.patternMessage}
+                  onInput={(e) => updateField(index, { patternMessage: (e.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+          </>
+        )}
+
+        {/* Widget */}
+        <Field label="Widget">
+          {(control) => (
+            <Select
+              {...control}
+              value={field.uiWidget}
+              onChange={(e) => updateField(index, { uiWidget: (e.target as HTMLSelectElement).value })}
+            >
+              {UI_WIDGETS.map((w) => (
+                <option key={w || "none"} value={w}>
+                  {w ? w.replace(/_/g, " ") : "Default"}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+
+        {/* Format — text-like / choice fields */}
+        {c.format && (
+          <Field label="Format">
+            {(control) => (
+              <Select
+                {...control}
+                value={field.format}
+                onChange={(e) => updateField(index, { format: (e.target as HTMLSelectElement).value })}
               >
-                {UI_WIDGETS.map((w) => (
-                  <option key={w || "none"} value={w}>
-                    {w ? w.replace(/_/g, " ") : "Default"}
+                {FIELD_FORMATS.map((f) => (
+                  <option key={f || "none"} value={f}>
+                    {f ? f.replace(/_/g, " ") : "Default"}
                   </option>
                 ))}
-              </select>
-            </div>
-
-            {/* Format — text-like / choice fields */}
-            {c.format && (
-              <div class="col-md-3">
-                <label class="form-label small fw-semibold">Format</label>
-                <select
-                  class="form-select form-select-sm"
-                  value={field.format}
-                  onChange={(e) => updateField(index, { format: (e.target as HTMLSelectElement).value })}
-                >
-                  {FIELD_FORMATS.map((f) => (
-                    <option key={f || "none"} value={f}>
-                      {f ? f.replace(/_/g, " ") : "Default"}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              </Select>
             )}
-          </div>
-        </div>
+          </Field>
+        )}
       </div>
+
+      {/* Allow custom answers — select / multi_select. The label wraps the input,
+          so the association survives without an id the surrounding list has to
+          keep unique per field. */}
+      {c.allowCustom && (
+        <label class="pk-check">
+          <input
+            class="pk-check__input"
+            type="checkbox"
+            checked={field.allowCustom}
+            onChange={(e) => updateField(index, { allowCustom: (e.target as HTMLInputElement).checked })}
+          />
+          <span class="pk-check__label">Allow custom answers</span>
+        </label>
+      )}
+
+      {/* Allowed email domains — email only */}
+      {c.allowedDomains && (
+        <Field label="Allowed domains" help="One per line.">
+          {(control) => (
+            <Textarea
+              {...control}
+              class="pk-mono"
+              rows={2}
+              value={field.allowedDomainsText}
+              placeholder="example.com"
+              onInput={(e) =>
+                updateField(index, {
+                  allowedDomainsText: (e.target as HTMLTextAreaElement).value,
+                })
+              }
+            />
+          )}
+        </Field>
+      )}
     </div>
   );
 }

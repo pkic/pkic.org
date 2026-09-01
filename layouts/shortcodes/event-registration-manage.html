@@ -1,144 +1,173 @@
 {{- $eventSlug := partial "events/flow/slug.html" . -}}
 {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
-<div class="event-flow" data-event-registration-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/registration-manage-page">
+<div class="event-flow pk" data-event-registration-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/registration-manage-page">
 
   {{/* ── Prominent registration status banner ───────────────────────── */}}
-  <div data-manage-status-banner class="alert alert-warning d-none mb-4" role="status" aria-live="polite"></div>
+  {{/* Visibility is the platform attribute rather than a class, so the markup
+       and registration-manage-page.tsx cannot disagree about a class name. */}}
+  <div data-manage-status-banner class="pk-alert pk-alert--warn" role="status" aria-live="polite" hidden></div>
 
   {{/* ── Resend manage link (shown when no token is in the URL) ───────── */}}
-  <div data-resend-manage-section class="d-none">
-    <p class="form-text mb-3">Enter the email address you used to register and we&rsquo;ll send you a new management link.</p>
-    <div class="row g-2 align-items-end mb-2">
-      <div class="col-12 col-sm-6">
-        <label class="form-label" for="resend-manage-email">Your email address</label>
-        <input id="resend-manage-email" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" data-resend-manage-email>
+  <div data-resend-manage-section class="pk-stack" hidden>
+    {{/* The sentence is this control's guidance, so it moves inside the field
+         and is announced with the control rather than floating above it. */}}
+    <div class="pk-field">
+      <label class="pk-field__label" for="resend-manage-email">Your email address</label>
+      <div class="pk-field__control">
+        <input id="resend-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" aria-describedby="resend-manage-email-help" data-resend-manage-email>
       </div>
+      <p id="resend-manage-email-help" class="pk-field__help">Enter the email address you used to register and we&rsquo;ll send you a new management link.</p>
     </div>
-    <button type="button" class="btn btn-primary" data-resend-manage-btn>Send my management link</button>
-    <p data-resend-manage-status class="mt-2 small"></p>
+    <div class="pk-cluster">
+      <button type="button" class="pk-btn pk-btn--primary" data-resend-manage-btn>Send my management link</button>
+    </div>
+    <p data-resend-manage-status></p>
   </div>
 
   {{/* ── Greeting / status banner ──────────────────────────────────────── */}}
-  <div data-manage-greeting class="mb-3 d-none">
-    <p class="lead mb-1" data-manage-greeting-text></p>
-    <span data-manage-status-badge class="badge"></span>
+  <div data-manage-greeting class="pk-cluster" hidden>
+    <p data-manage-greeting-text></p>
+    <span data-manage-status-badge class="pk-badge"></span>
   </div>
 
   {{/* ── Loading placeholder ─────────────────────────────────────────── */}}
-  <p data-manage-loading class="form-text">Loading your registration…</p>
+  {{/* A page-level loading notice belongs to no control, so it is muted prose
+       rather than a field's help text. */}}
+  <p data-manage-loading class="pk-muted pk-small">Loading your registration…</p>
 
   {{/* ── Share panel (rendered by JS after data loads) ───────────────── */}}
-  <div data-manage-share class="mb-4"></div>
+  <div data-manage-share></div>
 
   {{/* ── Main form (shown after data loads) ──────────────────────────── */}}
-  <div data-manage-form class="d-none">
-    <form class="row g-3 my-2 needs-validation" novalidate>
+  <div data-manage-form hidden>
+    <form class="pk-form pk-stack--loose needs-validation" novalidate>
 
       {{/* ── Your photo ─────────────────────────────────────────────── */}}
-      <div class="col-12" data-headshot-section>
-        <h3 class="h5">Your photo</h3>
-        <div data-headshot-preview class="pkic-headshot-preview mb-2"></div>
-        <p data-headshot-status class="form-text mb-2"></p>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-          <label class="btn btn-sm btn-outline-secondary mb-0" for="manage-headshot-file">Upload photo</label>
-          <input type="file" id="manage-headshot-file" accept="image/jpeg,image/png,image/webp" class="visually-hidden" data-headshot-file>
-          <button type="button" class="btn btn-sm btn-outline-danger d-none" data-headshot-delete>Remove photo</button>
+      <div data-headshot-section class="pk-stack pk-stack--snug">
+        <h3>Your photo</h3>
+        <div data-headshot-preview class="pkic-headshot-preview"></div>
+        {{/* Upload progress and outcome for the section, written by
+             `registration-manage-headshot.ts`. It reports on an action rather
+             than guiding a control, so it is muted prose. */}}
+        <p data-headshot-status class="pk-muted pk-small"></p>
+        <div class="pk-cluster">
+          <label class="pk-btn pk-btn--sm pk-btn--secondary" for="manage-headshot-file">Upload photo</label>
+          <input type="file" id="manage-headshot-file" accept="image/jpeg,image/png,image/webp" class="pk-sr-only" data-headshot-file>
+          <button type="button" class="pk-btn pk-btn--sm pk-btn--secondary" data-headshot-delete hidden>Remove photo</button>
         </div>
       </div>
 
       {{/* ── Your details ─────────────────────────────────────────────── */}}
-      <div class="col-12">
-        <h3 class="h5">Your details</h3>
-        <div class="row g-2 mb-2" data-email-section>
-          <div class="col-12">
-            <label for="manage-email" class="form-label">Email address</label>
-            <input id="manage-email" name="email" type="email" class="form-control" autocomplete="email">
-            <div data-field-error="email" class="invalid-feedback d-block"></div>
-            <div data-email-change-notice class="form-text text-warning d-none">
-              Changing your email will require you to confirm the new address before your registration is active again.
+      <div class="pk-stack pk-stack--snug">
+        <h3>Your details</h3>
+        <div data-email-section>
+          {{/* The control sits in `pk-field__control` because that is the box
+               the ✓/⚠/✕ mark is positioned inside, and the message and notice
+               sit in the `pk-field` because that is what carries the
+               `--state-*` variables the validator sets. */}}
+          <div class="pk-field">
+            <label for="manage-email" class="pk-field__label">Email address</label>
+            <div class="pk-field__control">
+              <input id="manage-email" name="email" type="email" class="pk-input" autocomplete="email" aria-describedby="manage-email-notice manage-email-error">
             </div>
+            <p id="manage-email-error" data-field-error="email" class="pk-field__message" aria-live="polite" hidden></p>
+            <p id="manage-email-notice" data-email-change-notice class="pk-field__help pk-warning-note" hidden>
+              Changing your email will require you to confirm the new address before your registration is active again.
+            </p>
           </div>
         </div>
         {{- partial "events/flow/personal-fields.html" (dict "prefix" "manage") -}}
       </div>
 
       {{/* ── Event-specific questions (same pipeline as registration) ──── */}}
-      <div class="col-12" data-custom-fields-section>
-        <h3 class="h5">Event questions</h3>
+      <div data-custom-fields-section class="pk-stack pk-stack--snug">
+        <h3>Event questions</h3>
         <div data-custom-fields>
-          <p class="form-text">Loading…</p>
+          {{/* A loading notice belongs to no control, so it is muted prose
+               rather than a field's help text. */}}
+          <p class="pk-muted pk-small">Loading…</p>
         </div>
       </div>
 
       {{/* ── Attendance per day ────────────────────────────────────────── */}}
-      <div class="col-12">
-        <h3 class="h5">Attendance per day</h3>
-        <p class="form-text">Change attendance mode for each day. For multi-day events you cannot cancel individual days — switch a day to <em>On demand</em> to watch the recording instead.</p>
-        <div data-day-attendance>
-          <p class="form-text">Loading event days…</p>
+      <div class="pk-stack pk-stack--snug">
+        <h3>Attendance per day</h3>
+        {{/* The day picker renders one fieldset per day into the container and
+             the message covers the whole answer, so the group is the field:
+             the guidance is its help, and the message can only be coloured by
+             a state if it sits inside it. */}}
+        <div class="pk-field">
+          <p class="pk-field__help">Change attendance mode for each day. For multi-day events you cannot cancel individual days — switch a day to <em>On demand</em> to watch the recording instead.</p>
+          <div data-day-attendance>
+            <p class="pk-muted pk-small">Loading event days…</p>
+          </div>
+          <p data-field-error="dayAttendance" class="pk-field__message" aria-live="polite" hidden></p>
         </div>
-        <div data-field-error="dayAttendance" class="invalid-feedback d-block"></div>
       </div>
 
       {{/* ── Day waitlist (hidden when no active entries) ─────────────── */}}
-      <div class="col-12 d-none" data-day-waitlist-section>
-        <h3 class="h5">Waitlist status</h3>
-        <p class="form-text">These are the days that are still pending. You can keep your registration, change those days to on-demand, or cancel the whole registration if the schedule no longer works for you.</p>
+      <div class="pk-stack pk-stack--snug" data-day-waitlist-section hidden>
+        <h3>Waitlist status</h3>
+        <p class="pk-muted pk-small">These are the days that are still pending. You can keep your registration, change those days to on-demand, or cancel the whole registration if the schedule no longer works for you.</p>
         <div data-day-waitlist></div>
       </div>
 
       {{/* ── Action buttons ───────────────────────────────────────────── */}}
-      <div class="col-12 d-flex gap-2 flex-wrap align-items-center" data-action-buttons>
-        <button type="submit" class="btn btn-success">Save changes</button>
-        <button type="button" data-action="cancel" class="btn btn-outline-danger">Cancel registration</button>
-        <button type="button" data-action="report-unauthorized" class="btn btn-link text-danger small p-0 ms-auto">
+      <div class="pk-cluster" data-action-buttons>
+        <button type="submit" class="pk-btn pk-btn--primary">Save changes</button>
+        <button type="button" data-action="cancel" class="pk-btn pk-btn--secondary">Cancel registration</button>
+        <button type="button" data-action="report-unauthorized" class="pk-btn pk-btn--danger-quiet pk-push">
           I did not request this registration
         </button>
       </div>
 
-      <div class="col-12">
-        <p data-flow-status class="alert visually-hidden mb-0" role="status" aria-live="polite"></p>
+      <div>
+        <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite"></p>
       </div>
 
     </form>
   </div>
 
   {{/* ── Cancel confirmation panel ────────────────────────────────────── */}}
-  <div class="d-none" data-confirm-cancel>
-    <div class="alert alert-warning">
-      <h4 class="alert-heading h6 fw-bold">Cancel your registration?</h4>
-      <p>Are you sure you want to cancel your registration for <strong data-confirm-event-name></strong>?</p>
-      <p class="form-text mb-3">You can re-register later if you change your mind. Waitlisted spots may be released immediately.</p>
-      <div class="d-flex gap-2">
-        <button type="button" data-confirm-cancel-yes class="btn btn-danger btn-sm">Yes, cancel my registration</button>
-        <button type="button" data-confirm-cancel-no class="btn btn-outline-secondary btn-sm">No, keep my registration</button>
+  <div data-confirm-cancel hidden>
+    <div class="pk-alert pk-alert--warn">
+      <h4 class="pk-alert__title">Cancel your registration?</h4>
+      <div class="pk-alert__body pk-stack pk-stack--snug">
+        <p>Are you sure you want to cancel your registration for <strong data-confirm-event-name></strong>?</p>
+        <p class="pk-muted pk-small">You can re-register later if you change your mind. Waitlisted spots may be released immediately.</p>
+        <div class="pk-cluster">
+          <button type="button" data-confirm-cancel-yes class="pk-btn pk-btn--danger pk-btn--sm">Yes, cancel my registration</button>
+          <button type="button" data-confirm-cancel-no class="pk-btn pk-btn--secondary pk-btn--sm">No, keep my registration</button>
+        </div>
       </div>
     </div>
   </div>
 
   {{/* ── Unauthorized report panel ────────────────────────────────────── */}}
-  <div class="d-none" data-confirm-unauthorized>
-    <div class="alert alert-danger">
-      <h4 class="alert-heading h6 fw-bold">Report unauthorized registration</h4>
-      <p>You are reporting that you did not request this registration. We will:</p>
-      <ul class="mb-3">
-        <li>Cancel and flag this registration as unauthorized</li>
-        <li>Remove the personal data stored with this registration</li>
-        <li>Notify the event organizer, who may investigate potential misuse</li>
-      </ul>
-      <p class="form-text mb-3">Your account and email address will not be deleted — only this event's registration record will be anonymized.</p>
-      <div class="d-flex gap-2">
-        <button type="button" data-unauthorized-yes class="btn btn-danger btn-sm">Confirm — I did not request this</button>
-        <button type="button" data-unauthorized-no class="btn btn-outline-secondary btn-sm">Go back</button>
+  <div data-confirm-unauthorized hidden>
+    <div class="pk-alert pk-alert--danger">
+      <h4 class="pk-alert__title">Report unauthorized registration</h4>
+      <div class="pk-alert__body pk-stack pk-stack--snug">
+        <p>You are reporting that you did not request this registration. We will:</p>
+        <ul>
+          <li>Cancel and flag this registration as unauthorized</li>
+          <li>Remove the personal data stored with this registration</li>
+          <li>Notify the event organizer, who may investigate potential misuse</li>
+        </ul>
+        <p class="pk-muted pk-small">Your account and email address will not be deleted — only this event's registration record will be anonymized.</p>
+        <div class="pk-cluster">
+          <button type="button" data-unauthorized-yes class="pk-btn pk-btn--danger pk-btn--sm">Confirm — I did not request this</button>
+          <button type="button" data-unauthorized-no class="pk-btn pk-btn--secondary pk-btn--sm">Go back</button>
+        </div>
       </div>
     </div>
   </div>
 
   {{/* ── Post-action confirmation ──────────────────────────────────────── */}}
-  <div class="d-none" data-post-action>
-    <div class="alert" data-post-action-alert>
-      <h4 class="alert-heading h6 fw-bold" data-post-action-title></h4>
-      <p class="mb-0" data-post-action-message></p>
+  <div data-post-action hidden>
+    <div class="pk-alert" data-post-action-alert>
+      <h4 class="pk-alert__title" data-post-action-title></h4>
+      <p class="pk-alert__body" data-post-action-message></p>
     </div>
   </div>
 

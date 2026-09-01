@@ -51,7 +51,7 @@
   {{- end -}}
 {{- end -}}
 
-<div class="event-webinar-card mb-4">
+<div class="event-webinar-card">
 
   {{/* ── Banner / logo header ──────────────────────────────────────────── */}}
   <div class="event-webinar-card-banner{{ if $cardImg }} event-webinar-card-banner--photo{{ end }}">
@@ -67,7 +67,7 @@
   {{/* ── Card body ─────────────────────────────────────────────────────── */}}
   <div class="event-webinar-card-body">
     <h3 class="event-webinar-title">
-      <a href="{{ $p.RelPermalink }}" class="stretched-link">{{ $eventTitle }}</a>
+      <a href="{{ $p.RelPermalink }}">{{ $eventTitle }}</a>
     </h3>
 
     {{ with $p.Param "eventDate" }}
@@ -104,9 +104,8 @@
     {{ if $isUpcoming }}
     {{ with $p.Param "heroButton" }}
     <a href="{{ $p.Param "heroButton.link" }}"
-       class="btn btn-sm btn-page-accent w-100 mt-2 event-webinar-register-btn"
-       target="_blank" rel="noopener noreferrer"
-       style="position:relative;z-index:2;">
+       class="pk-btn pk-btn--primary pk-btn--sm pk-btn--block event-webinar-register-btn"
+       target="_blank" rel="noopener noreferrer">
       {{ $p.Param "heroButton.label" | default "Register" }}
     </a>
     {{ end }}

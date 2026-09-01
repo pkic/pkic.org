@@ -12,12 +12,39 @@ import {
   RegistrationDayStatusSummary,
 } from "../components/RegistrationDayStatusSummary";
 import { findSubmitButton } from "../shared/form/helpers";
+import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
+import { Field } from "../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
+import { TextInput } from "../ui/TextControl";
 import {
   registrationConfirmInfoResponseSchema,
   registrationConfirmResponseSchema,
   okResponseSchema,
   type RegistrationConfirmResponse,
 } from "../../shared/schemas/registration";
+
+/**
+ * Design system notes (phase 5):
+ *
+ *  - Everything this module renders goes inside `SuccessPanel`, which is
+ *    already on the system and supplies the `.pk` root, so the base layer
+ *    applies to the markup below without a second wrapper.
+ *  - The "next steps" block was an `alert alert-light` — a box carrying no
+ *    severity, which is what a `Panel` is. Its `<strong>` stand-in for a
+ *    heading is now a real one, through `PanelHeader`.
+ *  - The resend panel reports its own outcome instead of writing into the
+ *    page-level `[data-flow-status]` banner. A missing address is a `Field`
+ *    state, so it carries `aria-invalid` and `aria-describedby` on the control
+ *    the reader is standing in; a refused request is an `Alert` beside the
+ *    button. Routing both through `setStatus` announced them from the bottom
+ *    of the page and repainted that element with Bootstrap's `alert-danger`.
+ *  - The resend button keeps one accessible name in every state. Relabelling
+ *    it "Try again" on failure moves the control's name under the reader's
+ *    cursor mid-interaction; the Alert already says what went wrong.
+ *  - Visibility uses the `hidden` property wherever this module owns both
+ *    sides. `[data-confirm-content]` is the exception, commented at its use.
+ */
 
 /**
  * Replace {firstName}, {eventName} and {forEvent} tokens in a template string
@@ -45,6 +72,39 @@ function fillPlaceholders(root: HTMLElement, values: Record<string, string>): vo
   }
 }
 
+/** The manage-registration links, which differ when days are still pending. */
+function NextSteps({ manageUrl, hasPartialDayWaitlist }: { manageUrl: string; hasPartialDayWaitlist: boolean }) {
+  return (
+    <Panel class="pk-start">
+      <PanelHeader title="Next steps" />
+      <PanelBody class="pk-stack pk-stack--snug">
+        {hasPartialDayWaitlist ? (
+          <>
+            <p class="pk-small">
+              Review your confirmed and pending days, then decide whether to keep this registration, change attendance
+              for a day, or cancel entirely.
+            </p>
+            <div class="pk-cluster">
+              <a class="pk-btn pk-btn--secondary pk-btn--sm" href={manageUrl}>
+                Review or change registration
+              </a>
+            </div>
+          </>
+        ) : (
+          <div class="pk-cluster">
+            <a class="pk-btn pk-btn--secondary pk-btn--sm" href={manageUrl}>
+              Manage registration
+            </a>
+            <a class="pk-btn pk-btn--secondary pk-btn--sm" href={`${manageUrl}#manage-headshot-file`}>
+              Upload headshot
+            </a>
+          </div>
+        )}
+      </PanelBody>
+    </Panel>
+  );
+}
+
 /**
  * Psychology applied:
  * - Peak-End Rule: the confirmation success is the emotional peak — pairing it
@@ -66,7 +126,7 @@ function showConfirmedPanel(
   manageToken: string | null | undefined,
   eventSlug: string,
 ): void {
-  form.classList.add("d-none");
+  form.hidden = true;
 
   const successTitle = root.dataset["successTitle"] ?? "{firstName}, you're registered{forEvent}!";
   const successBody =
@@ -89,7 +149,7 @@ function showConfirmedPanel(
     title = interpolate(partialWaitlistTitle, firstName, eventName);
     bodyContent = (
       <>
-        <p class="event-flow-success-body">{interpolate(partialWaitlistBody, firstName, eventName)}</p>
+        <p class="pk-muted">{interpolate(partialWaitlistBody, firstName, eventName)}</p>
         <RegistrationDayStatusSummary
           dayAttendance={result.dayAttendance ?? []}
           dayWaitlist={result.dayWaitlist ?? []}
@@ -99,7 +159,7 @@ function showConfirmedPanel(
   } else {
     icon = "🎉";
     title = interpolate(successTitle, firstName, eventName);
-    bodyContent = <p class="event-flow-success-body">{interpolate(successBody, firstName, eventName)}</p>;
+    bodyContent = <p class="pk-muted">{interpolate(successBody, firstName, eventName)}</p>;
   }
 
   const container = document.createElement("div");
@@ -109,33 +169,7 @@ function showConfirmedPanel(
   render(
     <SuccessPanel icon={icon} title={title}>
       {bodyContent}
-      <div class="alert alert-light mt-3">
-        <p class="mb-2">
-          <strong>Next steps</strong>
-        </p>
-        {hasPartialDayWaitlist ? (
-          <>
-            <p class="small mb-2">
-              Review your confirmed and pending days, then decide whether to keep this registration, change attendance
-              for a day, or cancel entirely.
-            </p>
-            <div class="d-flex gap-2 flex-wrap">
-              <a class="btn btn-sm btn-outline-primary" href={manageUrl}>
-                Review or change registration
-              </a>
-            </div>
-          </>
-        ) : (
-          <div class="d-flex gap-2 flex-wrap">
-            <a class="btn btn-sm btn-outline-primary" href={manageUrl}>
-              Manage registration
-            </a>
-            <a class="btn btn-sm btn-outline-secondary" href={`${manageUrl}#manage-headshot-file`}>
-              Upload headshot
-            </a>
-          </div>
-        )}
-      </div>
+      <NextSteps manageUrl={manageUrl} hasPartialDayWaitlist={hasPartialDayWaitlist} />
       {shareUrl && <div ref={shareRef} />}
       <div ref={donateRef} />
     </SuccessPanel>,
@@ -164,6 +198,12 @@ function showConfirmedPanel(
   root.appendChild(container);
 }
 
+/** What went wrong, and which control the reader should be pointed at. */
+interface ResendProblem {
+  scope: "email" | "request";
+  message: string;
+}
+
 /**
  * Replace the confirm form with a "link expired" panel that lets the attendee
  * request a fresh confirmation email without leaving the page.
@@ -173,7 +213,6 @@ function ResendButton({
   eventSlug,
   token,
   registrationId,
-  statusEl,
   email,
   autoSend = false,
 }: {
@@ -181,20 +220,22 @@ function ResendButton({
   eventSlug: string;
   token: string;
   registrationId: string | null;
-  statusEl: HTMLElement;
   email: string;
   autoSend?: boolean;
 }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [enteredEmail, setEnteredEmail] = useState(email);
+  const [problem, setProblem] = useState<ResendProblem | null>(null);
 
   const sendFreshLink = useCallback(async () => {
     const recoveryEmail = (email || enteredEmail).trim();
     if (!registrationId && !email && !recoveryEmail) {
-      setStatus(statusEl, "Enter the email address you used for registration.", true);
+      setProblem({ scope: "email", message: "Enter the email address you used for registration." });
+      setState("error");
       return;
     }
     setState("sending");
+    setProblem(null);
     try {
       await postJson(
         `${apiBase}/events/${eventSlug}/registrations/resend-confirmation`,
@@ -207,11 +248,10 @@ function ResendButton({
       );
       setState("sent");
     } catch (error) {
-      const normalized = normalizeValidation(error);
-      setStatus(statusEl, normalized.globalMessage, true);
+      setProblem({ scope: "request", message: normalizeValidation(error).globalMessage });
       setState("error");
     }
-  }, [apiBase, email, enteredEmail, eventSlug, registrationId, statusEl, token]);
+  }, [apiBase, email, enteredEmail, eventSlug, registrationId, token]);
 
   useEffect(() => {
     if (autoSend && state === "idle") {
@@ -220,47 +260,56 @@ function ResendButton({
   }, [autoSend, sendFreshLink, state]);
 
   if (state === "sent") {
-    return (
-      <p class="alert alert-success mt-3">
-        A new confirmation link is on its way — please check your inbox (and spam folder).
-      </p>
-    );
+    return <Alert tone="ok">A new confirmation link is on its way — please check your inbox (and spam folder).</Alert>;
   }
+
+  const requestProblem = problem?.scope === "request" ? problem.message : null;
+  const emailProblem = problem?.scope === "email" ? problem.message : null;
 
   if (!email && !registrationId) {
     return (
       <form
-        class="mt-3"
+        class="pk-stack pk-stack--snug pk-start"
         onSubmit={(event) => {
           event.preventDefault();
           void sendFreshLink();
         }}
       >
-        <label class="form-label" for="confirmation-recovery-email">
-          Email address
-        </label>
-        <div class="d-flex gap-2 flex-wrap">
-          <input
-            id="confirmation-recovery-email"
-            class="form-control"
-            type="email"
-            autocomplete="email"
-            value={enteredEmail}
-            onInput={(event) => setEnteredEmail((event.currentTarget as HTMLInputElement).value)}
-            required
-          />
-          <button type="submit" class="btn btn-primary px-4" disabled={state === "sending"}>
-            {state === "error" ? "Try again" : "Send me a new link"}
-          </button>
+        <Field
+          label="Email address"
+          required
+          state={emailProblem ? "invalid" : undefined}
+          message={emailProblem ?? undefined}
+        >
+          {(control) => (
+            <TextInput
+              {...control}
+              type="email"
+              autocomplete="email"
+              value={enteredEmail}
+              onInput={(event) => setEnteredEmail((event.currentTarget as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+        {requestProblem && <Alert tone="danger">{requestProblem}</Alert>}
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" loading={state === "sending"}>
+            Send me a new link
+          </Button>
         </div>
       </form>
     );
   }
 
   return (
-    <button type="button" class="btn btn-primary px-4" onClick={sendFreshLink} disabled={state === "sending"}>
-      {state === "error" ? "Try again" : "Send me a new link"}
-    </button>
+    <div class="pk-stack pk-stack--snug">
+      {requestProblem && <Alert tone="danger">{requestProblem}</Alert>}
+      <div class="pk-cluster pk-cluster--center">
+        <Button variant="primary" loading={state === "sending"} onClick={() => void sendFreshLink()}>
+          Send me a new link
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -271,12 +320,11 @@ function showExpiredPanel(
   eventSlug: string,
   token: string,
   registrationId: string | null,
-  statusEl: HTMLElement,
   firstName: string,
   eventName: string,
   email: string,
 ): void {
-  form.classList.add("d-none");
+  form.hidden = true;
 
   const expiredTitle = root.dataset["expiredTitle"] ?? "Your confirmation link needs refreshing";
   const expiredBody =
@@ -289,7 +337,7 @@ function showExpiredPanel(
   const container = document.createElement("div");
   render(
     <SuccessPanel icon="⏰" title={title}>
-      <p class="event-flow-success-body">
+      <p class="pk-muted">
         {greeting} {interpolate(expiredBody, firstName, eventName)}
       </p>
       <ResendButton
@@ -297,7 +345,6 @@ function showExpiredPanel(
         eventSlug={eventSlug}
         token={token}
         registrationId={registrationId}
-        statusEl={statusEl}
         email={email}
         autoSend={Boolean(email || registrationId)}
       />
@@ -316,10 +363,16 @@ async function main(): Promise<void> {
   const loadingEl = boot.root.querySelector<HTMLElement>("[data-confirm-loading]");
   const contentEl = boot.root.querySelector<HTMLElement>("[data-confirm-content]");
 
+  // The template hides this with the `hidden` attribute, so revealing it is
+  // the platform's own mechanism and no class has to be kept in step.
+  const revealContent = (): void => {
+    if (contentEl) contentEl.hidden = false;
+  };
+
   const token = boot.query.token;
   const registrationId = boot.query.id;
   if (!token) {
-    loadingEl?.classList.add("d-none");
+    if (loadingEl) loadingEl.hidden = true;
     setStatus(boot.statusEl, "Missing confirmation token — please use the link from your email.", true);
     return;
   }
@@ -353,10 +406,10 @@ async function main(): Promise<void> {
   // If the token is already expired before the user clicks Confirm, show the
   // resend panel immediately rather than making them click through to an error.
   if (isExpired || isRecoverable) {
-    loadingEl?.classList.add("d-none");
+    if (loadingEl) loadingEl.hidden = true;
     // We need the form reference — reveal content briefly to get the element
     // then let showExpiredPanel hide it again.
-    contentEl?.classList.remove("d-none");
+    revealContent();
     showExpiredPanel(
       boot.root,
       boot.form,
@@ -364,7 +417,6 @@ async function main(): Promise<void> {
       boot.eventSlug,
       token,
       registrationId,
-      boot.statusEl,
       firstName,
       eventName,
       email,
@@ -378,8 +430,8 @@ async function main(): Promise<void> {
   if (eventName) fills["eventName"] = eventName;
   fillPlaceholders(boot.root, fills);
 
-  loadingEl?.classList.add("d-none");
-  contentEl?.classList.remove("d-none");
+  if (loadingEl) loadingEl.hidden = true;
+  revealContent();
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -421,7 +473,6 @@ async function main(): Promise<void> {
             boot.eventSlug,
             token,
             registrationId,
-            boot.statusEl,
             firstName,
             eventName,
             email,

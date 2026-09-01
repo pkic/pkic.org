@@ -16,6 +16,7 @@ import { seedPersona } from "./personas/seed";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import {
   leadershipAffiliationsResponseSchema,
   leadershipPositionResponseSchema,
@@ -137,6 +138,8 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(affiliations.affiliations.map((item) => item.memberId).sort()).toEqual(
       [firstMemberId, secondMemberId].sort(),
     );
+    const secondIdentityId = affiliations.affiliations.find((item) => item.memberId === secondMemberId)?.identityId;
+    expect(secondIdentityId).toBeTruthy();
 
     const ambiguous = await call(adminToken, "/api/v1/leadership/positions", {
       method: "POST",
@@ -150,14 +153,14 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
       body: JSON.stringify({
         body: "board",
         userId,
-        memberId: secondMemberId,
+        identityId: secondIdentityId,
         title: "Board Member",
         startsAt: "2026-01-01",
       }),
     });
     expect(createdResponse.status).toBe(201);
     const created = leadershipPositionResponseSchema.parse(await createdResponse.json());
-    expect(created.memberId).toBe(secondMemberId);
+    expect(created.identityId).toBe(secondIdentityId);
     expect(created.organizationName).toBe("Second Organization");
 
     const publicResponse = await call(null, "/api/v1/leadership/board");
@@ -372,7 +375,13 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
   it("public GET /api/v1/leadership/:body returns current and past positions with organization enrichment, isolated per body", async () => {
     const orgId = await insertOrganization("Digitorus", "https://digitorus.com");
     const chairUserId = await insertUser("paul@example.test", ["Paul", "van Brouwershaven"]);
-    await insertMember(chairUserId, orgId);
+    const memberId = await insertMember(chairUserId, orgId);
+    await env.DB.prepare(
+      `UPDATE identities SET job_title = ?
+        WHERE user_id = ? AND organization_id = (SELECT organization_id FROM members WHERE id = ?)`,
+    )
+      .bind("Deputy PKI Officer", chairUserId, memberId)
+      .run();
     const pastUserId = await insertUser("kirk@example.test", ["Kirk", "Hall"]);
 
     await call(adminToken, "/api/v1/leadership/positions", {
@@ -394,11 +403,17 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const response = await call(null, "/api/v1/leadership/board");
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      current: Array<{ name: string; organizationName: string | null; organizationWebsite: string | null }>;
+      current: Array<{
+        name: string;
+        jobTitle: string | null;
+        organizationName: string | null;
+        organizationWebsite: string | null;
+      }>;
       past: Array<{ name: string; endsAt: string | null }>;
     };
     expect(body.current).toHaveLength(1);
     expect(body.current[0].name).toBe("Paul van Brouwershaven");
+    expect(body.current[0].jobTitle).toBe("Deputy PKI Officer");
     expect(body.current[0].organizationName).toBe("Digitorus");
     expect(body.current[0].organizationWebsite).toBe("https://digitorus.com");
     expect(body.past).toHaveLength(1);
@@ -444,10 +459,12 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     )[0];
     const chairUserId = await insertUser("consortium-chair@example.test", ["Consortium", "Chair"]);
     const viceChairUserId = await insertUser("consortium-vice-chair@example.test", ["Consortium", "ViceChair"]);
-    await assignRole(chairUserId, "role-group_lead", adminId, { type: "group", id: leadershipGroup.id });
-    await assignRole(viceChairUserId, "role-group_deputy_lead", adminId, {
-      type: "group",
-      id: leadershipGroup.id,
+    await grantGroupLeadershipCapacity(env.DB, leadershipGroup.id, chairUserId, {
+      grantedByUserId: adminId,
+    });
+    await grantGroupLeadershipCapacity(env.DB, leadershipGroup.id, viceChairUserId, {
+      roleId: "role-group_deputy_lead",
+      grantedByUserId: adminId,
     });
 
     const response = await call(null, "/api/v1/leadership/consortium-chairs");

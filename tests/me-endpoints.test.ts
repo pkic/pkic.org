@@ -12,9 +12,14 @@ import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { seedMemberApplication } from "./helpers/member-applications";
 import { myApplicationsListResponseSchema, myProfileSchema } from "../assets/shared/schemas/me";
-import { guardMemberSessionMutationDatabase, requireMemberFromRequest } from "../functions/_lib/auth/member";
+import {
+  findEligibleMemberById,
+  guardMemberSessionMutationDatabase,
+  requireMemberFromRequest,
+} from "../functions/_lib/auth/member";
 import { updateMyProfile } from "../functions/_lib/services/member-self-service";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 
@@ -45,8 +50,16 @@ async function insertActiveMember(email: string, category: string): Promise<stri
     .run();
 
   if (INDIVIDUAL_CATEGORIES.has(category)) {
-    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, new Date().toISOString());
-    await env.DB.batch(statements);
+    const now = new Date().toISOString();
+    const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, category, now);
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId: null,
+      source: "staff",
+      startImmediately: true,
+      now,
+    });
+    await env.DB.batch([...statements, identity.statement]);
     return userId;
   }
 
@@ -72,14 +85,10 @@ describe("Current-user and application self-service", () => {
 
     const response = await call(token, "/api/v1/users/current");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as {
-      email: string;
-      membershipCategory: string;
-      canEditOrganizationName: boolean;
-    };
+    const body = myProfileSchema.parse(await response.json());
     expect(body.email).toBe("me@example.test");
     expect(body.membershipCategory).toBe("F");
-    expect(body.canEditOrganizationName).toBe(false);
+    expect(body.organizationId).not.toBeNull();
   });
 
   it("PATCH /api/v1/users/current updates editable fields", async () => {
@@ -96,7 +105,7 @@ describe("Current-user and application self-service", () => {
     expect(body.biography).toBe("New bio");
   });
 
-  it("only org-less (H5/H6/H7) members may set organizationName", async () => {
+  it("does not allow users to invent an organization affiliation on any identity", async () => {
     const orgTiedUserId = await insertActiveMember("org-tied@example.test", "F");
     const orgTiedToken = await createMemberSession(env.DB, orgTiedUserId, "org-tied-token");
     const orgTiedResponse = await call(orgTiedToken, "/api/v1/users/current", {
@@ -112,15 +121,12 @@ describe("Current-user and application self-service", () => {
       method: "PATCH",
       body: JSON.stringify({ organizationName: "My Consultancy" }),
     });
-    const individualBody = (await individualResponse.json()) as {
-      organizationName: string | null;
-      canEditOrganizationName: boolean;
-    };
-    expect(individualBody.canEditOrganizationName).toBe(true);
-    expect(individualBody.organizationName).toBe("My Consultancy");
+    const individualBody = myProfileSchema.parse(await individualResponse.json());
+    expect(individualBody.organizationId).toBeNull();
+    expect(individualBody.organizationName).toBeNull();
   });
 
-  it("PATCH /api/v1/users/current updates organization representative visibility with the profile", async () => {
+  it("PATCH /api/v1/users/current updates organization identity visibility with the profile", async () => {
     const userId = await insertActiveMember("visibility@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "visibility-token");
 
@@ -131,12 +137,13 @@ describe("Current-user and application self-service", () => {
     expect(response.status).toBe(200);
     expect(myProfileSchema.parse(await response.json()).showOnOrgProfile).toBe(false);
 
-    const rows = await queryAll<{ show_on_org_profile: number }>(
+    const rows = await queryAll<{ show_on_organization_profile: number }>(
       env.DB,
-      "SELECT show_on_org_profile FROM organization_representatives WHERE user_id = ? AND left_at IS NULL",
+      `SELECT show_on_organization_profile FROM identities
+        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
       userId,
     );
-    expect(rows[0].show_on_org_profile).toBe(0);
+    expect(rows[0].show_on_organization_profile).toBe(0);
   });
 
   it("rolls back profile changes when the exact user session is revoked before the D1 batch", async () => {
@@ -157,21 +164,25 @@ describe("Current-user and application self-service", () => {
       }),
     ).rejects.toMatchObject({ status: 409, code: "AUTHORIZATION_CONTEXT_CHANGED" });
 
-    const [user] = await queryAll<{ job_title: string | null }>(
+    const [identity] = await queryAll<{ job_title: string | null }>(
       env.DB,
-      "SELECT job_title FROM users WHERE id = ?",
+      "SELECT job_title FROM identities WHERE user_id = ? AND ended_at IS NULL",
       userId,
     );
-    expect(user.job_title).toBeNull();
+    expect(identity.job_title).toBeNull();
     await expect(
       queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'user_profile_updated'", userId),
     ).resolves.toHaveLength(0);
   });
 
-  it("GET /api/v1/users/current/applications lists applications matching my email", async () => {
+  it("GET /api/v1/users/current/applications lists applications bound to my identity and selected capacity", async () => {
     const userId = await insertActiveMember("applicant-history@example.test", "F");
+    const member = await findEligibleMemberById(env.DB, userId);
+    if (!member) throw new Error("Expected active member");
     const token = await createMemberSession(env.DB, userId, "applicant-history-token");
     await seedMemberApplication({
+      applicantUserId: userId,
+      memberId: member.memberId,
       applicantEmail: "applicant-history@example.test",
       applicantName: "Applicant",
       organizationName: "Org",
@@ -180,6 +191,7 @@ describe("Current-user and application self-service", () => {
       stage: "approved",
     });
     await seedMemberApplication({
+      applicantUserId: userId,
       applicantEmail: "applicant-history@example.test",
       applicantName: "Applicant",
       organizationName: "Other Org",
@@ -207,8 +219,10 @@ describe("Current-user and application self-service", () => {
     expect(invalid.status).toBe(400);
   });
 
-  it("GET /api/v1/users/current/applications/:id returns applicant-facing detail scoped to my own email", async () => {
+  it("GET /api/v1/users/current/applications/:id returns applicant-facing detail scoped to my Member capacity", async () => {
     const userId = await insertActiveMember("applicant-detail@example.test", "F");
+    const member = await findEligibleMemberById(env.DB, userId);
+    if (!member) throw new Error("Expected active member");
     const token = await createMemberSession(env.DB, userId, "applicant-detail-token");
     const staffUserId = crypto.randomUUID();
     await env.DB.prepare(
@@ -218,6 +232,8 @@ describe("Current-user and application self-service", () => {
       .bind(staffUserId)
       .run();
     const applicationId = await seedMemberApplication({
+      applicantUserId: userId,
+      memberId: member.memberId,
       applicantEmail: "applicant-detail@example.test",
       applicantName: "Applicant Detail",
       organizationName: "Org",
@@ -263,6 +279,23 @@ describe("Current-user and application self-service", () => {
     const otherToken = await createMemberSession(env.DB, otherUserId, "not-the-applicant-token");
     const deniedResponse = await call(otherToken, `/api/v1/users/current/applications/${applicationId}`);
     expect(deniedResponse.status).toBe(404);
+  });
+
+  it("uses bounded identity and Member indexes for current-user application history", async () => {
+    const result = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN
+       SELECT id, stage, membership_category, created_at
+         FROM member_applications
+        WHERE member_id = ? OR (member_id IS NULL AND applicant_user_id = ?)
+        ORDER BY created_at DESC, id ASC
+        LIMIT 25`,
+    )
+      .bind(crypto.randomUUID(), crypto.randomUUID())
+      .all<{ detail: string }>();
+    const plan = result.results.map((row) => row.detail).join("\n");
+    expect(plan).toContain("idx_member_applications_member_created");
+    expect(plan).toContain("idx_member_applications_applicant_user");
+    expect(plan).not.toMatch(/SCAN member_applications/i);
   });
 
   it("GET/PATCH /api/v1/users/current/notifications/preferences defaults to all-true and persists partial updates", async () => {

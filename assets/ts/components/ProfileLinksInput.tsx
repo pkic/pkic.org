@@ -1,6 +1,10 @@
-import { useCallback, useImperativeHandle, useState } from "preact/hooks";
+import { useCallback, useId, useImperativeHandle, useState } from "preact/hooks";
 import { forwardRef, type Ref } from "preact/compat";
-import { IconLink, IconPlus, IconRemove } from "./icons";
+import { IconPlus } from "./icons";
+import { Button } from "../ui/Button";
+import { Chip } from "../ui/Chip";
+import { StateIcon } from "../ui/Field";
+import { TextInput } from "../ui/TextControl";
 import { getLinkLabel, hasDuplicateLink, MAX_LINKS, parseLinkUrl } from "../../shared/schemas/links";
 
 export interface ProfileLinksHandle {
@@ -31,6 +35,7 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
   const [internalLinks, setInternalLinks] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState("");
+  const errorId = `${useId()}-profile-links-error`;
   const links = value ?? internalLinks;
   const linkLimit = Math.min(max, MAX_LINKS);
 
@@ -95,56 +100,63 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
   );
 
   return (
-    <>
-      <p class="form-text mt-0 mb-2">{helpText}</p>
+    <div class="pk-stack pk-stack--snug">
+      {/* Prose about the whole widget — the chips as well as the box that adds
+          one — rather than one control's help text, so it is muted small print
+          and not a `pk-field__help` sitting outside any field. */}
+      <p class="pk-muted pk-small">{helpText}</p>
 
-      <div class="profile-links-pills" aria-label="Added profile links">
-        {links.map((url, i) => {
-          const label = getLinkLabel(url);
-          return (
-            <span key={url} class="profile-links-pill" title={url}>
-              <span class="profile-links-pill-icon">
-                <IconLink />
-              </span>
-              <span class="profile-links-pill-label">{label}</span>
-              <button
-                type="button"
-                class="profile-links-pill-remove"
-                aria-label={`Remove ${label}`}
-                onClick={() => remove(i)}
-              >
-                <IconRemove />
-              </button>
-            </span>
-          );
-        })}
-      </div>
-
-      {!atMax && (
-        <div class="profile-links-add-row">
-          <input
-            type="url"
-            class="form-control form-control-sm profile-links-input"
-            placeholder="https://"
-            aria-label={inputAriaLabel}
-            value={inputValue}
-            onInput={(e) => setInputValue((e.target as HTMLInputElement).value)}
-            onKeyDown={handleKeyDown}
-          />
-          <button
-            type="button"
-            class="btn btn-outline-secondary btn-sm profile-links-add-btn"
-            aria-label="Add profile link"
-            onClick={tryAdd}
-          >
-            <IconPlus />
-          </button>
+      {links.length > 0 && (
+        // A bare `aria-label` on a `<div>` is discarded, so the set of added
+        // links used to be an unnamed anonymous box. `role="group"` is what
+        // gives the name somewhere to land.
+        <div class="pk-cluster" role="group" aria-label="Added profile links">
+          {links.map((url, i) => {
+            const label = getLinkLabel(url);
+            return (
+              <Chip key={url} removeLabel={label} onRemove={() => remove(i)}>
+                <span title={url}>{label}</span>
+              </Chip>
+            );
+          })}
         </div>
       )}
 
-      {error && (
-        <div class="profile-links-error form-text text-danger" aria-live="polite">
-          {error}
+      {/* At the cap with nothing to report there is no field left to draw, and
+          an empty one would still take a slot in the parent's rhythm. */}
+      {(!atMax || Boolean(error)) && (
+        <div class={["pk-field", error ? "pk-field--invalid" : null].filter(Boolean).join(" ")}>
+          {!atMax && (
+            // `pk-field__control` is the design system's control box: one flex
+            // row, and `pk-input`'s `min-width: 0` lets the URL field absorb the
+            // shrinking so the square add button keeps its size. This is what
+            // the Bootstrap `input-group` was doing.
+            <div class="pk-field__control">
+              <TextInput
+                type="url"
+                placeholder="https://"
+                aria-label={inputAriaLabel}
+                aria-invalid={error ? "true" : undefined}
+                aria-describedby={error ? errorId : undefined}
+                value={inputValue}
+                onInput={(e) => setInputValue((e.target as HTMLInputElement).value)}
+                onKeyDown={handleKeyDown}
+              />
+              <Button icon aria-label="Add profile link" onClick={tryAdd}>
+                <IconPlus />
+              </Button>
+            </div>
+          )}
+
+          {error && (
+            // A rejected URL blocks the add, so it interrupts rather than
+            // waiting politely — and it carries the state mark as well as the
+            // colour, because a colour on its own is not a status.
+            <p class="pk-field__message" id={errorId} role="alert">
+              <StateIcon state="invalid" class="pk-field__message-icon" />
+              {error}
+            </p>
+          )}
         </div>
       )}
 
@@ -154,6 +166,6 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
           <input key={i} type="hidden" name={`${fieldName}.${i}`} value={url} />
         ))}
       </span>
-    </>
+    </div>
   );
 });

@@ -75,7 +75,7 @@ export const memberWallRouteSchema = {
   },
 };
 
-export const publicMemberRepresentativeSchema = z.object({
+export const publicMemberIdentitySchema = z.object({
   name: z.string(),
   jobTitle: z.string().nullable(),
   bio: z.string().nullable(),
@@ -86,9 +86,9 @@ export const publicMemberRepresentativeSchema = z.object({
 export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
   ...organizationProfileExtendedFieldsSchema.omit({ contentMarkdown: true }).shape,
   content: organizationProfileLongContentSchema,
-  // Populated for org-tied members from show_on_org_profile=1 representatives.
-  // Empty for org-less individual members — their own bio/jobTitle live on the summary/detail fields directly.
-  representatives: z.array(publicMemberRepresentativeSchema),
+  // Populated for organization members from public active identities.
+  // Empty for individual members; their identity profile is shown in the summary/detail fields.
+  identities: z.array(publicMemberIdentitySchema),
   jobTitle: z.string().nullable(),
   linkedin: httpUrlSchema.nullable(),
 });

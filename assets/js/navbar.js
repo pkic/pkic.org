@@ -4,6 +4,25 @@
   var backdrop = document.getElementById('pkicMegaBackdrop');
   if (!backdrop) return; // navbar not present on this page
 
+  // ── Collapsed (hamburger) menu ────────────────────────────────────────
+  // The bar no longer carries Bootstrap's collapse plugin, so the open state
+  // is one class the stylesheet reads and one aria-expanded the reader does.
+
+  var navToggle   = document.getElementById('pkicNavToggle');
+  var navCollapse = document.getElementById('navbarContent');
+
+  function setNavOpen(open) {
+    if (!navToggle || !navCollapse) return;
+    navCollapse.classList.toggle('is-open', open);
+    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  if (navToggle && navCollapse) {
+    navToggle.addEventListener('click', function () {
+      setNavOpen(!navCollapse.classList.contains('is-open'));
+    });
+  }
+
   // ── Multi-panel Mega menu ─────────────────────────────────────────────
 
   var allTriggers = document.querySelectorAll('.pkic-mega-trigger');
@@ -13,6 +32,42 @@
     return document.getElementById(targetId);
   }
 
+  var memberCountsLoaded = false;
+  var memberCountsLoading = false;
+
+  function fetchMemberCount(group) {
+    return fetch('/api/v1/members?group=' + encodeURIComponent(group) + '&limit=1', {
+      headers: { accept: 'application/json' },
+    }).then(function (response) {
+      if (!response.ok) throw new Error('Unable to load member counts');
+      return response.json();
+    }).then(function (payload) {
+      var total = payload && payload.page && payload.page.total;
+      if (!Number.isSafeInteger(total) || total < 0) throw new Error('Invalid member count');
+      return total;
+    });
+  }
+
+  function hydrateMemberCounts() {
+    if (memberCountsLoaded || memberCountsLoading) return;
+    memberCountsLoading = true;
+
+    Promise.all([fetchMemberCount('organization'), fetchMemberCount('independent')])
+      .then(function (counts) {
+        var organizationCount = document.querySelector('[data-member-count="organization"]');
+        var independentCount = document.querySelector('[data-member-count="independent"]');
+        if (organizationCount) organizationCount.textContent = String(counts[0]);
+        if (independentCount) independentCount.textContent = String(counts[1]);
+        memberCountsLoaded = true;
+      })
+      .catch(function () {
+        // Keep the honest unknown state and retry the next time the menu opens.
+      })
+      .finally(function () {
+        memberCountsLoading = false;
+      });
+  }
+
   function resetMegaVisualState() {
     allPanels.forEach(function (panel) { panel.classList.remove('is-open'); });
     document.querySelectorAll('.pkic-mega-chevron').forEach(function (chevron) {
@@ -20,7 +75,7 @@
       chevron.setAttribute('aria-expanded', 'false');
     });
     allTriggers.forEach(function (trigger) {
-      trigger.querySelectorAll('.nav-link').forEach(function (link) { link.classList.remove('is-active'); });
+      trigger.querySelectorAll('.pkic-nav-link').forEach(function (link) { link.classList.remove('is-active'); });
     });
   }
 
@@ -33,9 +88,10 @@
     // Open this one
     panel.classList.add('is-open');
     backdrop.classList.add('is-open');
+    if (targetId === 'pkic-members-mega') hydrateMemberCounts();
     var chevron = triggerEl.querySelector('.pkic-mega-chevron');
     if (chevron) { chevron.classList.add('is-open'); chevron.setAttribute('aria-expanded', 'true'); }
-    triggerEl.querySelectorAll('.nav-link').forEach(function (l) { l.classList.add('is-active'); });
+    triggerEl.querySelectorAll('.pkic-nav-link').forEach(function (l) { l.classList.add('is-active'); });
   }
 
   function closeMega() {
@@ -133,6 +189,7 @@
 
   function openSearch() {
     closeMega();
+    setNavOpen(false);
     if (!searchNav || !sPanel) return;
     searchNav.classList.add('pkic-search-active');
     var navSearch = document.getElementById('pkicNavSearch');
@@ -235,7 +292,7 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (sPanel && !sPanel.hidden) { closeSearch(); }
-      else { closeMega(); }
+      else { closeMega(); setNavOpen(false); }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();

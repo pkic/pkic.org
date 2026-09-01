@@ -1,0 +1,33 @@
+{{- /*
+  The site stylesheet, with the cascade quarantine applied.
+
+  Returns one CSS resource containing, in order:
+
+    1. @charset, which must be the very first thing in the file.
+    2. @font-face declarations, outside every layer — a font face declares a
+       resource rather than competing in the cascade.
+    3. The site-wide layer order. A layer's position is fixed by where its name
+       first appears, and this stylesheet is linked before any other on every
+       page, so declaring the order here settles it for stylesheets that load
+       later — including the design-system CSS emitted by the frontend bundle,
+       which opts into these layers by name.
+    4. Everything authored before the design system, Bootstrap included, wrapped
+       in `@layer legacy`. A layered rule loses to any rule in a later layer no
+       matter how specific it is, so a design-system component never has to
+       out-specify Bootstrap's reboot, element rules, or utilities.
+
+  The wrapping happens after Sass compilation rather than inside main.scss:
+  libsass scopes functions declared in a nested @import, which breaks
+  Bootstrap's own to-rgb() call when its import sits inside an @layer block.
+
+  Callers fingerprint the returned resource themselves, so each template keeps
+  its own integrity/environment behavior.
+*/ -}}
+{{- $fonts := resources.Get "scss/fonts.scss" | css.Sass -}}
+{{- $legacy := resources.Get "scss/main.scss" | css.Sass -}}
+{{- $charset := "@charset \"UTF-8\";" -}}
+{{- $css := printf "%s\n%s\n@layer legacy, tokens, base, components, utilities;\n@layer legacy {\n%s\n}\n"
+      $charset
+      (replace $fonts.Content $charset "")
+      (replace $legacy.Content $charset "") -}}
+{{- return ($css | resources.FromString "scss/main.css") -}}

@@ -1,7 +1,16 @@
-<a href="{{ .RelPermalink }}" class="wg-explore-card h-100 d-flex flex-column text-decoration-none">
+{{/*
+  subpage-card.html — one child page of a section, rendered as a linked card.
+
+  The whole card is the link, so it is an <a> rather than a div with a handler.
+  Its column layout, the rhythm between its three lines, its equal height
+  beside its siblings, and its lack of an underline are all the card's own
+  properties and live in `.wg-explore-card`, so no child carries a margin
+  utility of its own.
+*/}}
+<a href="{{ .RelPermalink }}" class="wg-explore-card">
     <div class="wg-explore-title">{{ .Title }}</div>
     {{- with .Summary -}}
-    <div class="wg-explore-desc mt-1">{{ . | plainify | truncate 160 }}</div>
+    <div class="wg-explore-desc">{{ . | plainify | truncate 160 }}</div>
     {{- end -}}
-    <div class="wg-explore-arrow mt-auto">Read more &rarr;</div>
+    <div class="wg-explore-arrow pk-push-block">Read more &rarr;</div>
 </a>

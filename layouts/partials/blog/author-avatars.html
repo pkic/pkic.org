@@ -83,11 +83,11 @@
   <span class="blog-author-avatars-names">
     {{- range $i, $item := first 3 $items -}}
       {{- if $i }}, {{ end -}}
-      {{- if $item.url -}}<a href="{{ $item.url }}" class="text-reset">{{ $item.name }}</a>
+      {{- if $item.url -}}<a href="{{ $item.url }}">{{ $item.name }}</a>
       {{- else -}}{{ $item.name }}
       {{- end -}}
     {{- end -}}
-    {{- if gt $total 3 }} <span class="text-muted">+{{ sub $total 3 }} more</span>{{- end -}}
+    {{- if gt $total 3 }} <span>+{{ sub $total 3 }} more</span>{{- end -}}
   </span>
 </div>
 {{- end -}}

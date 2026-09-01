@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import { updateProposalReview, upsertProposalReview } from "../functions/_lib/services/proposal-reviews";
@@ -269,18 +270,10 @@ describe("proposal review and finalize", () => {
     const [review] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM proposal_reviews WHERE proposal_id = ?", [
       proposalId,
     ]);
-    const moderatorId = crypto.randomUUID();
-    await env.DB.batch([
-      env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, 'moderator@pkic.org', 'moderator@pkic.org', 'user', 1, datetime('now'), datetime('now'))`,
-      ).bind(moderatorId),
-      env.DB.prepare(
-        `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
-           VALUES (?, ?, 'role-event_moderator', 'event', ?, ?, datetime('now'))`,
-      ).bind(crypto.randomUUID(), moderatorId, eventId, admin1Id),
-    ]);
-    const moderatorToken = await createAdminSession(env.DB, moderatorId, "token-review-moderator");
+    // A real event moderator: reviews proposals for this event, and still may
+    // not edit somebody else's review.
+    const moderator = await seedPersona(env.DB, "eventModerator", { eventId });
+    const moderatorToken = moderator.token!;
 
     const response = await callProposalReview(moderatorToken, proposalId, `/${review.id}`, {
       method: "PATCH",

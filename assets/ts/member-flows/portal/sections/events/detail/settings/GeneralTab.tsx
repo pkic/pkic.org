@@ -8,11 +8,31 @@ import {
 } from "../../../../../../../shared/schemas/event-series";
 import type { EventDetail } from "../../types";
 import { toast } from "../../../../ui";
+import { Alert } from "../../../../../../ui/Alert";
+import { Button } from "../../../../../../ui/Button";
+import { Field } from "../../../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
+import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { EventScheduleFields } from "../../../../../../components/EventScheduleFields";
 import { EventFormLinkSelect } from "./EventFormLinkSelect";
+import "../../../../../../ui/Content.css";
 
 type FormLinkPurpose = "event_registration" | "proposal_submission";
 type FormLinkMode = "unset" | "none" | "explicit";
+
+/**
+ * The outcome of a save, as the reader sees it.
+ *
+ * The Bootstrap surface put "✓ Saved" and the failure message in the same span
+ * and told them apart with `text-success` / `text-danger`, so the two outcomes
+ * differed only by hue. An Alert carries the tone and the role together —
+ * `status` for a success, `alert` for a failure — so the result is announced
+ * rather than merely coloured.
+ */
+interface SaveOutcome {
+  tone: "ok" | "danger";
+  message: string;
+}
 
 function toLocalDateTime(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -60,14 +80,14 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
   const [inviteLimit, setInviteLimit] = useState(event.inviteLimitAttendee);
   const [retentionDays, setRetentionDays] = useState(event.userRetentionDays ? String(event.userRetentionDays) : "");
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState("");
+  const [outcome, setOutcome] = useState<SaveOutcome | null>(null);
 
   const handleSubmit = useCallback(
     async (submitEvent: Event) => {
       submitEvent.preventDefault();
       if (!canWrite) return;
       setSaving(true);
-      setStatus("Saving…");
+      setOutcome(null);
       try {
         const toIso = (value: string) => (value ? new Date(value).toISOString() : null);
         const body: Record<string, unknown> = {
@@ -96,11 +116,11 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
           eventManagementDetailResponseSchema,
         );
         onUpdated(response.event);
-        setStatus("✓ Saved");
+        setOutcome({ tone: "ok", message: "Details saved." });
         toast("Details saved", "success");
       } catch (caught) {
         const message = (caught as Error).message;
-        setStatus(message);
+        setOutcome({ tone: "danger", message });
         toast(message, "error");
       } finally {
         setSaving(false);
@@ -157,219 +177,266 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
   }, [event]);
 
   return (
-    <form onSubmit={handleSubmit}>
-      <fieldset disabled={!canWrite || saving}>
-        <div class="row g-2 mb-2">
-          <div class="col-md-8">
-            <label class="form-label small fw-semibold">Event Name</label>
-            <input
-              class="form-control form-control-sm"
-              type="text"
-              value={name}
-              onInput={(event) => setName((event.target as HTMLInputElement).value)}
-              required
-            />
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold">Slug (read-only)</label>
-            <input class="form-control form-control-sm mono" type="text" value={event.slug} disabled />
-          </div>
-        </div>
-        <EventScheduleFields
-          startsAt={startsAt}
-          endsAt={endsAt}
-          timezone={timezone}
-          onStartsAtChange={setStartsAt}
-          onEndsAtChange={setEndsAt}
-          onTimezoneChange={setTimezone}
-        />
-        <div class="row g-2 mb-2">
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">Venue</label>
-            <input
-              class="form-control form-control-sm"
-              type="text"
-              value={venue}
-              onInput={(event) => setVenue((event.target as HTMLInputElement).value)}
-              placeholder="City, Country"
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">Virtual URL</label>
-            <input
-              class="form-control form-control-sm"
-              type="url"
-              value={virtualUrl}
-              onInput={(event) => setVirtualUrl((event.target as HTMLInputElement).value)}
-              placeholder="https://..."
-            />
-          </div>
-        </div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">Hero image URL</label>
-            <input
-              class="form-control form-control-sm"
-              type="text"
-              value={heroImageUrl}
-              onInput={(event) => setHeroImageUrl((event.target as HTMLInputElement).value)}
-              placeholder="/events/2026/my-event/hero.png"
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">Location label</label>
-            <input
-              class="form-control form-control-sm"
-              type="text"
-              value={location}
-              onInput={(event) => setLocation((event.target as HTMLInputElement).value)}
-              placeholder="Amsterdam, the Netherlands"
-            />
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold">Session types</label>
-          {sessionTypes.map((sessionType, index) => (
-            <div key={index} class="d-flex gap-2 align-items-center mb-1">
-              <input
-                class="form-control form-control-sm"
-                type="text"
-                value={sessionType.label}
-                placeholder="e.g. talk, keynote, panel"
-                onInput={(event) => {
-                  const updated = [...sessionTypes];
-                  updated[index] = { ...updated[index], label: (event.target as HTMLInputElement).value };
-                  setSessionTypes(updated);
-                }}
+    <div class="pk">
+      <form class="pk-stack" onSubmit={handleSubmit}>
+        {/* One disabled fieldset is what keeps a reader out of every control,
+            including the schedule fields this surface renders through a child
+            component it cannot disable one prop at a time. */}
+        <fieldset class="pk-fieldset pk-stack" disabled={!canWrite || saving}>
+          {!canWrite && (
+            <Alert tone="info" title="Read-only">
+              You can view these settings but not change them.
+            </Alert>
+          )}
+
+          <Panel>
+            <PanelHeader title="Event details" headingLevel={2} />
+            <PanelBody class="pk-stack">
+              <div class="pk-grid">
+                <Field label="Event name" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={name}
+                      onInput={(inputEvent) => setName((inputEvent.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Slug" help="Set when the event is created; it cannot be changed here.">
+                  {(control) => <TextInput {...control} class="pk-mono" value={event.slug} disabled />}
+                </Field>
+              </div>
+
+              <EventScheduleFields
+                startsAt={startsAt}
+                endsAt={endsAt}
+                timezone={timezone}
+                onStartsAtChange={setStartsAt}
+                onEndsAtChange={setEndsAt}
+                onTimezoneChange={setTimezone}
               />
-              <div class="form-check form-check-inline mb-0 text-nowrap">
-                <input
-                  class="form-check-input"
-                  type="checkbox"
-                  id={`rp-${index}`}
-                  checked={sessionType.requiresPresentation}
-                  onChange={(event) => {
-                    const updated = [...sessionTypes];
-                    updated[index] = {
-                      ...updated[index],
-                      requiresPresentation: (event.target as HTMLInputElement).checked,
-                    };
-                    setSessionTypes(updated);
+
+              <div class="pk-grid">
+                <Field label="Venue">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={venue}
+                      placeholder="City, Country"
+                      onInput={(inputEvent) => setVenue((inputEvent.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Virtual URL">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="url"
+                      value={virtualUrl}
+                      placeholder="https://..."
+                      onInput={(inputEvent) => setVirtualUrl((inputEvent.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Hero image URL">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={heroImageUrl}
+                      placeholder="/events/2026/my-event/hero.png"
+                      onInput={(inputEvent) => setHeroImageUrl((inputEvent.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Location label">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={location}
+                      placeholder="Amsterdam, the Netherlands"
+                      onInput={(inputEvent) => setLocation((inputEvent.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+              </div>
+            </PanelBody>
+          </Panel>
+
+          <Panel>
+            <PanelHeader title="Session types" headingLevel={2} />
+            <PanelBody class="pk-stack">
+              {sessionTypes.map((sessionType, index) => (
+                // A row has no identity until it is named, so its position is
+                // the only stable key available.
+                <div key={index} class="pk-stack pk-stack--tight">
+                  <Field label={`Session type ${String(index + 1)}`}>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={sessionType.label}
+                        placeholder="e.g. talk, keynote, panel"
+                        onInput={(inputEvent) => {
+                          const updated = [...sessionTypes];
+                          updated[index] = {
+                            ...updated[index],
+                            label: (inputEvent.target as HTMLInputElement).value,
+                          };
+                          setSessionTypes(updated);
+                        }}
+                      />
+                    )}
+                  </Field>
+                  <div class="pk-cluster">
+                    <label class="pk-check">
+                      <input
+                        class="pk-check__input"
+                        type="checkbox"
+                        checked={sessionType.requiresPresentation}
+                        onChange={(changeEvent) => {
+                          const updated = [...sessionTypes];
+                          updated[index] = {
+                            ...updated[index],
+                            requiresPresentation: (changeEvent.target as HTMLInputElement).checked,
+                          };
+                          setSessionTypes(updated);
+                        }}
+                      />
+                      <span class="pk-check__label pk-small">Requires presentation</span>
+                    </label>
+                    <Button
+                      size="sm"
+                      variant="danger-quiet"
+                      onClick={() => setSessionTypes(sessionTypes.filter((_, itemIndex) => itemIndex !== index))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <div class="pk-cluster">
+                <Button
+                  size="sm"
+                  onClick={() => setSessionTypes([...sessionTypes, { label: "", requiresPresentation: true }])}
+                >
+                  + Add session type
+                </Button>
+              </div>
+            </PanelBody>
+          </Panel>
+
+          <Panel>
+            <PanelHeader title="Visibility and registration" headingLevel={2} />
+            <PanelBody class="pk-stack">
+              <div class="pk-grid">
+                <Field
+                  label="Event visibility"
+                  help="Controls event discovery; registration and attendance policies remain separate."
+                >
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={visibility}
+                      onChange={(changeEvent) =>
+                        setVisibility((changeEvent.target as HTMLSelectElement).value as EventVisibility)
+                      }
+                    >
+                      {EVENT_VISIBILITIES.map((value) => (
+                        <option key={value} value={value}>
+                          {EVENT_VISIBILITY_LABELS[value]}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                {!portalOwnsRegistration && (
+                  <Field label="Registration mode">
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={mode}
+                        onChange={(changeEvent) =>
+                          setMode((changeEvent.target as HTMLSelectElement).value as EventDetail["registrationPolicy"])
+                        }
+                      >
+                        <option value="public">Public registration</option>
+                        <option value="required">Registration required</option>
+                        <option value="optional">Optional registration</option>
+                        <option value="invitation_only">Invitation only</option>
+                        <option value="no_registration">No registration</option>
+                      </Select>
+                    )}
+                  </Field>
+                )}
+                <Field label="Invite limit per attendee">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="number"
+                      value={inviteLimit}
+                      onInput={(inputEvent) => setInviteLimit(Number((inputEvent.target as HTMLInputElement).value))}
+                    />
+                  )}
+                </Field>
+                <Field label="User retention (days)">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="number"
+                      value={retentionDays}
+                      placeholder="No policy"
+                      onInput={(inputEvent) => setRetentionDays((inputEvent.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+              </div>
+
+              {/* The form pickers still carry their own column width from the
+                  shared component, so they sit in a stack rather than a grid
+                  that would size them a second time. */}
+              <div class="pk-stack">
+                {!portalOwnsRegistration && (
+                  <EventFormLinkSelect
+                    eventSlug={event.slug}
+                    purpose="event_registration"
+                    label="Registration form"
+                    value={registrationFormKey}
+                    disabled={saving}
+                    autoSelectFirst={registrationFormMode === "unset"}
+                    help="Choose the form this event should use for registrations."
+                    onChange={(value) => {
+                      setRegistrationFormKey(value);
+                      setRegistrationFormMode(value ? "explicit" : "none");
+                    }}
+                  />
+                )}
+                <EventFormLinkSelect
+                  eventSlug={event.slug}
+                  purpose="proposal_submission"
+                  label="Proposal form"
+                  value={proposalFormKey}
+                  disabled={saving}
+                  autoSelectFirst={proposalFormMode === "unset"}
+                  help="Choose the form this event should use for proposals."
+                  onChange={(value) => {
+                    setProposalFormKey(value);
+                    setProposalFormMode(value ? "explicit" : "none");
                   }}
                 />
-                <label class="form-check-label small" for={`rp-${index}`}>
-                  Requires presentation
-                </label>
               </div>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                onClick={() => setSessionTypes(sessionTypes.filter((_, itemIndex) => itemIndex !== index))}
-                title="Remove"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary mt-1"
-            onClick={() => setSessionTypes([...sessionTypes, { label: "", requiresPresentation: true }])}
-          >
-            + Add session type
-          </button>
-        </div>
-        <div class="row g-2 mb-3">
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold">Event visibility</label>
-            <select
-              class="form-select form-select-sm"
-              value={visibility}
-              onChange={(event) => setVisibility((event.target as HTMLSelectElement).value as EventVisibility)}
-            >
-              {EVENT_VISIBILITIES.map((value) => (
-                <option value={value}>{EVENT_VISIBILITY_LABELS[value]}</option>
-              ))}
-            </select>
-            <div class="form-text">Controls event discovery; registration and attendance policies remain separate.</div>
-          </div>
-          {!portalOwnsRegistration && (
-            <EventFormLinkSelect
-              eventSlug={event.slug}
-              purpose="event_registration"
-              label="Registration form"
-              value={registrationFormKey}
-              disabled={saving}
-              autoSelectFirst={registrationFormMode === "unset"}
-              help="Choose the form this event should use for registrations."
-              onChange={(value) => {
-                setRegistrationFormKey(value);
-                setRegistrationFormMode(value ? "explicit" : "none");
-              }}
-            />
-          )}
-          <EventFormLinkSelect
-            eventSlug={event.slug}
-            purpose="proposal_submission"
-            label="Proposal form"
-            value={proposalFormKey}
-            disabled={saving}
-            autoSelectFirst={proposalFormMode === "unset"}
-            help="Choose the form this event should use for proposals."
-            onChange={(value) => {
-              setProposalFormKey(value);
-              setProposalFormMode(value ? "explicit" : "none");
-            }}
-          />
-        </div>
-        <div class="row g-2 mb-3">
-          {!portalOwnsRegistration && (
-            <div class="col-md-6">
-              <label class="form-label small fw-semibold">Registration Mode</label>
-              <select
-                class="form-select form-select-sm"
-                value={mode}
-                onChange={(event) =>
-                  setMode((event.target as HTMLSelectElement).value as EventDetail["registrationPolicy"])
-                }
-              >
-                <option value="public">Public registration</option>
-                <option value="required">Registration required</option>
-                <option value="optional">Optional registration</option>
-                <option value="invitation_only">Invitation only</option>
-                <option value="no_registration">No registration</option>
-              </select>
-            </div>
-          )}
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Invite Limit / Attendee</label>
-            <input
-              class="form-control form-control-sm"
-              type="number"
-              value={inviteLimit}
-              onInput={(event) => setInviteLimit(Number((event.target as HTMLInputElement).value))}
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">User Retention (days)</label>
-            <input
-              class="form-control form-control-sm"
-              type="number"
-              value={retentionDays}
-              onInput={(event) => setRetentionDays((event.target as HTMLInputElement).value)}
-              placeholder="No policy"
-            />
-          </div>
-        </div>
-        <div class="d-flex align-items-center gap-2">
+            </PanelBody>
+          </Panel>
+
           {canWrite && (
-            <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
-              Save Changes
-            </button>
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" loading={saving}>
+                Save changes
+              </Button>
+            </div>
           )}
-          {status && <span class={`small ${status.startsWith("✓") ? "text-success" : "text-danger"}`}>{status}</span>}
-        </div>
-      </fieldset>
-    </form>
+        </fieldset>
+
+        {outcome && <Alert tone={outcome.tone}>{outcome.message}</Alert>}
+      </form>
+    </div>
   );
 }

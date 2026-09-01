@@ -28,7 +28,7 @@ import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { prepareOrganizationContentReviewNotificationIntents } from "./notifications";
 import type { OrganizationContentReviewsListQuery } from "../../../../assets/shared/schemas/organization-self-service";
-import { prepareOrganizationRepresentativeManagementGuard } from "../organization-representations/authorization";
+import { prepareOrganizationIdentityManagementGuard } from "../identities/authorization";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { prepareAuditLogAfterOneChange } from "../audit";
 
@@ -97,7 +97,7 @@ export async function submitOrgContentChange(
   const proposedChangesJson = JSON.stringify(changedFields);
   try {
     await db.batch([
-      prepareOrganizationRepresentativeManagementGuard(db, {
+      prepareOrganizationIdentityManagementGuard(db, {
         memberId: member.memberId,
         actorUserId: member.userId,
         staffAuthorized: false,
@@ -204,7 +204,7 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
 
   try {
     const statements = [
-      prepareOrganizationRepresentativeManagementGuard(db, {
+      prepareOrganizationIdentityManagementGuard(db, {
         memberId: member.memberId,
         actorUserId: member.userId,
         staffAuthorized: false,
@@ -264,7 +264,7 @@ export async function prepareAuthorizedOrganizationLogoStage(
 
   if (existingPending) {
     const statements = [
-      prepareOrganizationRepresentativeManagementGuard(db, {
+      prepareOrganizationIdentityManagementGuard(db, {
         memberId: member.memberId,
         actorUserId: member.userId,
         staffAuthorized: false,
@@ -311,7 +311,7 @@ export async function prepareAuthorizedOrganizationLogoStage(
   return {
     previousStagingKey,
     statements: [
-      prepareOrganizationRepresentativeManagementGuard(db, {
+      prepareOrganizationIdentityManagementGuard(db, {
         memberId: member.memberId,
         actorUserId: member.userId,
         staffAuthorized: false,

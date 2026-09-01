@@ -1,0 +1,104 @@
+/*
+ * Dialog.
+ *
+ * The backdrop is styled through ::backdrop, which only the native element
+ * provides — another reason not to hand-roll the overlay.
+ */
+
+@layer components {
+  .pk-dialog {
+    width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 4rem);
+    padding: 0;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    box-shadow: var(--pk-shadow-3);
+  }
+
+  .pk-dialog::backdrop {
+    background: var(--pk-overlay);
+  }
+
+  .pk-dialog__head {
+    padding: var(--pk-4) var(--pk-4) 0;
+  }
+
+  .pk-dialog__title {
+    margin: 0;
+    font-size: var(--pk-text-lg);
+    font-weight: 700;
+  }
+
+  .pk-dialog__body {
+    padding: var(--pk-2) var(--pk-4) var(--pk-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+    overflow-y: auto;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-dialog__description {
+    margin: 0;
+  }
+
+  .pk-dialog__consequences {
+    margin: 0;
+    padding-left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  /* A destructive dialog states its consequences in the danger tone, so the
+     list reads as the cost rather than as more description. */
+  .pk-dialog--destructive .pk-dialog__consequences {
+    color: var(--pk-danger-ink);
+  }
+
+  .pk-dialog__confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .pk-dialog__confirm-label {
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    color: var(--pk-ink);
+  }
+
+  .pk-dialog__foot {
+    display: flex;
+    gap: var(--pk-2);
+    justify-content: flex-end;
+    padding: var(--pk-3) var(--pk-4);
+    border-top: 1px solid var(--pk-line-soft);
+  }
+
+  /* On a phone a centred card wastes the reachable area; the dialog becomes a
+     sheet anchored to the bottom, where the thumb already is. */
+  @media (max-width: 30rem) {
+    .pk-dialog {
+      width: 100vw;
+      max-width: 100vw;
+      margin: auto 0 0;
+      border-radius: var(--pk-radius-lg) var(--pk-radius-lg) 0 0;
+      border-bottom: 0;
+    }
+
+    .pk-dialog__foot {
+      flex-direction: column-reverse;
+    }
+
+    .pk-dialog__foot .pk-btn {
+      width: 100%;
+    }
+  }
+}

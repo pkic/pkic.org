@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatDateRange, formatDateTimeInZone, formatEventWhen, formatRelativeDays } from "../../assets/ts/shared/ui";
+import {
+  formatDate,
+  formatDateRange,
+  formatDateTimeInZone,
+  formatEventWhen,
+  formatRelativeDays,
+} from "../../assets/ts/shared/ui";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -49,5 +55,12 @@ describe("friendly date formatting", () => {
     expect(formatRelativeDays("2026-08-01T00:00:00.000Z")).toBeNull();
     expect(formatRelativeDays(null)).toBeNull();
     expect(formatRelativeDays("not-a-date")).toBeNull();
+  });
+
+  it("formats a date-only value with no time of day, or an em dash", () => {
+    const date = formatDate("2026-12-01T23:00:00.000Z");
+    expect(date).not.toMatch(/\d{1,2}:\d{2}/);
+    expect(formatDate(null)).toBe("—");
+    expect(formatDate(undefined)).toBe("—");
   });
 });

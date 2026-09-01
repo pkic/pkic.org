@@ -25,9 +25,9 @@ import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
 import { buildAssignRepresentativeRoleStatements, isRepresentativeRoleId } from "../membership/representative-roles";
 import {
-  prepareOrganizationRepresentativeManagementGuard,
-  requireOrganizationRepresentativeManagement,
-} from "../organization-representations/authorization";
+  prepareOrganizationIdentityManagementGuard,
+  requireOrganizationIdentityManagement,
+} from "../identities/authorization";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 
 interface UserRoleRow {
@@ -123,8 +123,8 @@ async function prepareSemanticRoleManagementGuards(
     databaseUserId: adminDatabaseUserId(actor),
     staffAuthorized: true,
   } as const;
-  await requireOrganizationRepresentativeManagement(db, authorization);
-  return [prepareOrganizationRepresentativeManagementGuard(db, authorization)];
+  await requireOrganizationIdentityManagement(db, authorization);
+  return [prepareOrganizationIdentityManagementGuard(db, authorization)];
 }
 
 export async function listUserRoleAssignments(
@@ -218,6 +218,14 @@ export async function assignUserRole(
     [input.roleId],
   );
   if (!role) throw new AppError(404, "ROLE_NOT_FOUND", "Role not found");
+
+  if (input.roleId === SYSTEM_ROLE_IDS.groupLead || input.roleId === SYSTEM_ROLE_IDS.groupDeputyLead) {
+    throw new AppError(
+      422,
+      "GROUP_LEADERSHIP_REQUIRES_MEMBER_CAPACITY",
+      "Assign group leadership through the group's Leadership resource with an explicit Member capacity",
+    );
+  }
 
   const contextType = input.contextType ?? null;
   const contextId = input.contextId ?? null;

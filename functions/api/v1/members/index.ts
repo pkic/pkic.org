@@ -18,6 +18,7 @@ import {
 import type { AdminContext } from "../../../_lib/db/context";
 import { provisionMember } from "../../../_lib/services/membership-management-list";
 import { requireMembershipStaffPermission } from "./authorization";
+import { requirePermission } from "../../../_lib/auth/permissions";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
@@ -36,5 +37,6 @@ export const MembersGet = openApiRoute(membersListRouteSchema, async (c: any, da
 
 export const MemberProvision = openApiRoute(memberProvisionRouteSchema, async (c: AdminContext, data) => {
   const { db, staff } = await requireMembershipStaffPermission(c, "membership:write");
+  requirePermission(staff, "identities:activate");
   return json(memberProvisionResponseSchema.parse(await provisionMember(db, staff, data.body)), 201);
 });

@@ -14,6 +14,7 @@
  * processors use renderAndCacheBadge so failures remain observable/retryable.
  */
 
+import { ensureResvgWasm } from "../utils/resvg";
 import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
@@ -35,20 +36,8 @@ type DonationRenderEnv = Pick<Env, "DB" | "ASSETS" | "ASSETS_PUBLIC">;
 
 // ─── WASM + font singletons (shared for the lifetime of the worker isolate) ──
 
-let wasmReady: Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> | null = null;
-
 function ensureWasm(): Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> {
-  if (!wasmReady) {
-    wasmReady = (async () => {
-      const [{ initWasm, Resvg }, wasmModule] = await Promise.all([
-        import("@resvg/resvg-wasm"),
-        import("@resvg/resvg-wasm/index_bg.wasm"),
-      ]);
-      await initWasm(wasmModule.default);
-      return Resvg;
-    })();
-  }
-  return wasmReady;
+  return ensureResvgWasm();
 }
 
 let fontBuffersCache: Promise<Uint8Array[]> | null = null;

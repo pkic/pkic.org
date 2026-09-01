@@ -17,6 +17,7 @@ export interface OrganizationCapacity {
   userId: string;
   organizationId: string;
   memberId: string;
+  identityId: string;
 }
 
 export async function createOrganizationCapacity(
@@ -26,8 +27,8 @@ export async function createOrganizationCapacity(
   const userId = options.userId ?? (await insertUser(db, options.email));
   const organizationId = await insertOrganization(db, options.organizationName);
   const memberId = await seedOrganizationAggregate(db, organizationId, options.category ?? "A");
-  await addRepresentative(db, memberId, userId);
-  return { userId, organizationId, memberId };
+  const identityId = await addRepresentative(db, memberId, userId);
+  return { userId, organizationId, memberId, identityId };
 }
 
 export async function joinVotingGroup(
@@ -49,8 +50,9 @@ export async function resolveAuthMember(
   db: DatabaseLike,
   userId: string,
   suffix = crypto.randomUUID(),
+  identityId?: string,
 ): Promise<AuthMember> {
-  const token = await createMemberSession(db, userId, `vote-member-${suffix}`);
+  const token = await createMemberSession(db, userId, `vote-member-${suffix}`, undefined, identityId);
   return requireMemberFromRequest(
     db,
     new Request(`https://app.test/api/v1/groups/${TEST_GROUPS.allMembers}/votes`, {
@@ -92,15 +94,21 @@ export async function createCanonicalVote(
   });
 }
 
-export async function createMultiOrganizationUser(
-  db: DatabaseLike,
-): Promise<{ userId: string; defaultMemberId: string; groupMemberId: string }> {
+export async function createMultiOrganizationUser(db: DatabaseLike): Promise<{
+  userId: string;
+  defaultMemberId: string;
+  defaultIdentityId: string;
+  groupMemberId: string;
+  groupIdentityId: string;
+}> {
   const defaultCapacity = await createOrganizationCapacity(db, { category: "A" });
   const groupCapacity = await createOrganizationCapacity(db, { userId: defaultCapacity.userId, category: "B" });
   return {
     userId: defaultCapacity.userId,
     defaultMemberId: defaultCapacity.memberId,
+    defaultIdentityId: defaultCapacity.identityId,
     groupMemberId: groupCapacity.memberId,
+    groupIdentityId: groupCapacity.identityId,
   };
 }
 

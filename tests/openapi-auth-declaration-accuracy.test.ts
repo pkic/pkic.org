@@ -195,7 +195,7 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/groups/any-group/meetings/series",
     "/api/v1/users/current",
     "/api/v1/users/current/applications",
-    `/api/v1/organizations/${ABSENT_ID}/representatives`,
+    `/api/v1/organizations/${ABSENT_ID}/identities`,
   ];
 
   it.each(declaredSessionRequired)("%s rejects an anonymous caller, as declared", async (path) => {

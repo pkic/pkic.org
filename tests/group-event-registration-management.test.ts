@@ -5,6 +5,7 @@ import { grantResourceToGroup } from "../functions/_lib/services/resource-grants
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
@@ -30,16 +31,6 @@ async function userActor(label: string, role = "user"): Promise<UserBackedAuthAd
   return { identityType: "user", id, email, role };
 }
 
-async function assignGroupLead(userId: string, groupId: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, groupId)
-    .run();
-}
-
 async function createFixture(): Promise<Fixture> {
   const administrator = await userActor("attendee-management-administrator", "admin");
   const [ownerGroup, granteeGroup] = await Promise.all(
@@ -54,18 +45,32 @@ async function createFixture(): Promise<Fixture> {
   );
   const ownerLeader = await userActor("attendee-management-owner");
   const granteeLeader = await userActor("attendee-management-grantee");
-  await Promise.all([
-    assignGroupLead(ownerLeader.id, ownerGroup.id),
-    assignGroupLead(granteeLeader.id, granteeGroup.id),
+  const [ownerLeadership, granteeLeadership] = await Promise.all([
+    grantGroupLeadershipCapacity(env.DB, ownerGroup.id, ownerLeader.id),
+    grantGroupLeadershipCapacity(env.DB, granteeGroup.id, granteeLeader.id),
   ]);
+  ownerLeader.memberId = ownerLeadership.memberId;
+  granteeLeader.memberId = granteeLeadership.memberId;
   return {
     administrator,
     ownerGroupId: ownerGroup.id,
     granteeGroupId: granteeGroup.id,
     ownerLeader,
     granteeLeader,
-    ownerLeaderToken: await createAdminSession(env.DB, ownerLeader.id, `owner-${crypto.randomUUID()}`),
-    granteeLeaderToken: await createAdminSession(env.DB, granteeLeader.id, `grantee-${crypto.randomUUID()}`),
+    ownerLeaderToken: await createAdminSession(
+      env.DB,
+      ownerLeader.id,
+      `owner-${crypto.randomUUID()}`,
+      undefined,
+      ownerLeader.memberId,
+    ),
+    granteeLeaderToken: await createAdminSession(
+      env.DB,
+      granteeLeader.id,
+      `grantee-${crypto.randomUUID()}`,
+      undefined,
+      granteeLeader.memberId,
+    ),
   };
 }
 

@@ -1,0 +1,65 @@
+/*
+ * Alert.
+ *
+ * Tones set local CSS variables (--tone, --tone-ink, --tone-soft) so one
+ * layout rule styles all four variants. A leading vertical bar (::before)
+ * uses the tone's strong color; the background is the soft variant.
+ */
+
+@layer components {
+  .pk-alert {
+    position: relative;
+    padding-left: var(--pk-4);
+    padding-top: var(--pk-3);
+    padding-bottom: var(--pk-3);
+    padding-right: var(--pk-3);
+    border-radius: var(--pk-radius);
+    background-color: var(--tone-soft);
+  }
+
+  .pk-alert::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: var(--tone);
+    border-radius: var(--pk-radius-sm) 0 0 var(--pk-radius-sm);
+  }
+
+  .pk-alert__title {
+    color: var(--tone-ink);
+    font-weight: 500;
+    margin: 0 0 var(--pk-2) 0;
+  }
+
+  .pk-alert__body {
+    color: var(--pk-ink);
+    margin: 0;
+  }
+
+  .pk-alert--ok {
+    --tone: var(--pk-ok);
+    --tone-ink: var(--pk-ok-ink);
+    --tone-soft: var(--pk-ok-soft);
+  }
+
+  .pk-alert--warn {
+    --tone: var(--pk-warn);
+    --tone-ink: var(--pk-warn-ink);
+    --tone-soft: var(--pk-warn-soft);
+  }
+
+  .pk-alert--danger {
+    --tone: var(--pk-danger);
+    --tone-ink: var(--pk-danger-ink);
+    --tone-soft: var(--pk-danger-soft);
+  }
+
+  .pk-alert--info {
+    --tone: var(--pk-info);
+    --tone-ink: var(--pk-info-ink);
+    --tone-soft: var(--pk-info-soft);
+  }
+}

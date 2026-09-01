@@ -1,5 +1,11 @@
 import { Fragment, type ComponentChildren } from "preact";
 
+// `pk-code-block`, `pk-answer-pre`, `pk-framed` and `pk-embed` are Content.css
+// classes, and component CSS ships in a lazy chunk rather than the entry
+// stylesheet — a module that writes those class names has to import the sheet
+// that defines them, or the markup renders unstyled.
+import "../ui/Content.css";
+
 type ListBlock = { type: "ul" | "ol"; items: string[] };
 type Block =
   | { type: "paragraph"; text: string }
@@ -156,7 +162,12 @@ export function Markdown({ markdown = "", className }: { markdown?: string | nul
   const blocks = parseMarkdown(markdown ?? "");
 
   return (
-    <div class={`adm-markdown${className ? ` ${className}` : ""}`}>
+    // No `.pk` of its own: rendered Markdown is a block inside somebody else's
+    // surface — a review card, a decision panel, a member page — and it should
+    // read as that surface's prose. Where the surface has adopted the system,
+    // the base layer already gives these bare elements their type, rhythm and
+    // link colour; where it has not, they fall back to the page's own.
+    <div class={className}>
       {blocks.map((block, index) => {
         switch (block.type) {
           case "heading": {
@@ -164,25 +175,31 @@ export function Markdown({ markdown = "", className }: { markdown?: string | nul
             return <Heading key={index}>{renderInline(block.text)}</Heading>;
           }
           case "blockquote":
-            return <blockquote key={index}>{renderInline(block.text)}</blockquote>;
+            // The quote recedes rather than carrying a rule of its own: there
+            // is no quote treatment in the system to reach for, and inventing
+            // a colour or a border width here is how a system stops being one.
+            return (
+              <blockquote class="pk-muted" key={index}>
+                {renderInline(block.text)}
+              </blockquote>
+            );
           case "code":
             return (
-              <pre key={index}>
+              <pre class="pk-code-block pk-answer-pre" key={index}>
                 <code>{block.text}</code>
               </pre>
             );
           case "video":
             return (
-              <div class="ratio ratio-16x9" key={index}>
-                <iframe
-                  src={block.embedUrl}
-                  title="Embedded video"
-                  loading="lazy"
-                  allow="autoplay; picture-in-picture; fullscreen"
-                  allowFullScreen
-                  frameborder="0"
-                ></iframe>
-              </div>
+              <iframe
+                key={index}
+                class="pk-framed pk-embed"
+                src={block.embedUrl}
+                title="Embedded video"
+                loading="lazy"
+                allow="autoplay; picture-in-picture; fullscreen"
+                allowFullScreen
+              ></iframe>
             );
           case "ul":
             return (

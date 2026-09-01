@@ -3,6 +3,7 @@ import { readBoundedBody, readBoundedMultipartFormData } from "../http-body";
 import { type ImagesBinding } from "../types";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES, STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
 import { imageExtensionForContentType, validateRasterImage } from "./image-format";
+import { sanitizeSvgLogo, SVG_LOGO_CONTENT_TYPE, type SanitizedSvgLogo } from "./svg-logo";
 
 export const ALLOWED_MIME_TYPES = new Set<string>(IMAGE_UPLOAD_ALLOWED_MIME_TYPES);
 
@@ -97,8 +98,39 @@ export async function validateUploadedImageFile(
   return readValidatedUploadedImage(request, label, maxBytes);
 }
 
-export function imageExtension(contentType: string): "jpg" | "png" | "webp" {
+export function imageExtension(contentType: string): "jpg" | "png" | "webp" | "svg" {
+  if (contentType === SVG_LOGO_CONTENT_TYPE) return "svg";
   return imageExtensionForContentType(contentType);
+}
+
+export const ORGANIZATION_LOGO_MAX_BYTES = 1024 * 1024;
+
+/**
+ * Organization logos are SVG-only. Reads the upload, rejects rasters with a
+ * policy-stating error, and returns the sanitized, normalized SVG (see
+ * svg-logo.ts) — never the caller's original bytes.
+ */
+export async function readValidatedUploadedSvgLogo(
+  request: Request,
+  maxBytes = ORGANIZATION_LOGO_MAX_BYTES,
+): Promise<SanitizedSvgLogo> {
+  let uploaded: { buffer: ArrayBuffer; contentType: string };
+  try {
+    uploaded = await readUploadedImage(request, maxBytes);
+  } catch (error) {
+    if (error instanceof AppError && error.status === 413) {
+      throw new AppError(413, "FILE_TOO_LARGE", `Logo must be under ${maxBytes / (1024 * 1024)} MB.`);
+    }
+    throw error;
+  }
+  if (validateRasterImage(uploaded.buffer).ok) {
+    throw new AppError(415, "INVALID_FILE_TYPE", "Only SVG logos are accepted.");
+  }
+  const declared = uploaded.contentType.split(";")[0].trim().toLowerCase();
+  if (declared !== SVG_LOGO_CONTENT_TYPE && declared !== "application/octet-stream") {
+    throw new AppError(415, "INVALID_FILE_TYPE", "Only SVG logos are accepted.");
+  }
+  return sanitizeSvgLogo(uploaded.buffer);
 }
 
 export async function putUploadedImage(

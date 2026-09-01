@@ -1,7 +1,14 @@
 import { useRef, useState } from "preact/hooks";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
+import { Badge } from "../../../../ui/Badge";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { TextInput } from "../../../../ui/TextControl";
 import { OperationActions } from "./OperationActions";
 import { RetentionDueTable } from "./RetentionDueTable";
+
+/** What the reminder run falls back to when the field is cleared. */
+const DEFAULT_REMINDER_LIMIT = 120;
 
 /**
  * Operational commands plus the retention domain's own pending list. The
@@ -21,31 +28,32 @@ export function ScheduledWork({
   canWriteMembership: boolean;
   canApproveMembership: boolean;
 }) {
-  const [reminderLimit, setReminderLimit] = useState(120);
+  const [reminderLimit, setReminderLimit] = useState(DEFAULT_REMINDER_LIMIT);
   const retentionActionsRef = useRef<ApiTableActions | null>(null);
   const canRunAnything = canManageEmail || canWriteMembership || canApproveMembership || canRunRetention;
 
   return (
-    <div>
-      <div class="action-card">
-        <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-3">
-          <strong>Scheduled Work</strong>
-          {!canRunAnything && <span class="badge text-bg-light border text-dark">Read only</span>}
-        </div>
-
-        <div class="border rounded p-2 mb-3 bg-light-subtle">
-          <label class="d-inline-flex align-items-center gap-2 mb-0 small">
-            <span class="text-muted">Reminder batch size</span>
-            <input
+    // The frame, padding and rhythm the `action-card` rule drew by hand are
+    // the panel's own, and the "Read only" chip sits in the panel header's
+    // toolbar slot rather than in a flex row above it.
+    <Panel>
+      <PanelHeader title="Scheduled Work">{!canRunAnything && <Badge tone="neutral">Read only</Badge>}</PanelHeader>
+      <PanelBody class="pk-stack">
+        <Field label="Reminder batch size" help="How many reminders one run may send. Between 1 and 500.">
+          {(control) => (
+            <TextInput
+              {...control}
               type="number"
-              class="form-control form-control-sm adm-due-work-limit"
+              class="adm-due-work-limit"
               value={reminderLimit}
               min={1}
               max={500}
-              onInput={(event) => setReminderLimit(Number((event.target as HTMLInputElement).value) || 120)}
+              onInput={(event) =>
+                setReminderLimit(Number((event.target as HTMLInputElement).value) || DEFAULT_REMINDER_LIMIT)
+              }
             />
-          </label>
-        </div>
+          )}
+        </Field>
 
         <OperationActions
           reminderLimit={reminderLimit}
@@ -59,11 +67,11 @@ export function ScheduledWork({
 
         {canRunRetention && <RetentionDueTable actionsRef={retentionActionsRef} />}
 
-        <p class="small text-muted mt-3 mb-0">
+        <p class="pk-small">
           Each command runs in the domain that owns the work, and is available only to staff holding that domain&apos;s
           permission.
         </p>
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

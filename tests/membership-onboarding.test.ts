@@ -118,13 +118,16 @@ describe("Post-approval onboarding", () => {
     );
     expect(primaryContactRows[0].user_id).toBe(body.userId);
 
-    const repRows = await queryAll<{ user_id: string; left_at: string | null }>(
+    const identityRows = await queryAll<{ user_id: string; ended_at: string | null }>(
       env.DB,
-      "SELECT user_id, left_at FROM organization_representatives WHERE member_id = ? AND user_id = ?",
+      `SELECT identity.user_id, identity.ended_at
+         FROM identities identity
+         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+        WHERE capacity.member_id = ? AND identity.user_id = ?`,
       body.memberId,
       body.userId,
     );
-    expect(repRows[0].left_at).toBeNull();
+    expect(identityRows[0].ended_at).toBeNull();
 
     const domainRows = await queryAll<{ domain: string }>(
       env.DB,
@@ -149,8 +152,14 @@ describe("Post-approval onboarding", () => {
     );
     expect(categoryRows[0].category_code).toBe("F");
 
-    const appRows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
+    const appRows = await queryAll<{ stage: string; applicant_user_id: string | null; member_id: string | null }>(
+      env.DB,
+      "SELECT stage, applicant_user_id, member_id FROM member_applications WHERE id = ?",
+      id,
+    );
     expect(appRows[0].stage).toBe("approved");
+    expect(appRows[0].applicant_user_id).toBe(body.userId);
+    expect(appRows[0].member_id).toBe(body.memberId);
   });
 
   it("preserves explicit staff approval as an override when an EC decline already exists", async () => {
@@ -186,7 +195,7 @@ describe("Post-approval onboarding", () => {
     expect(await queryAll(env.DB, "SELECT id FROM members WHERE id = ?", body.memberId)).toHaveLength(1);
   });
 
-  it("carries job_title/linkedin from the application's answers into the provisioned user (Fix 5b)", async () => {
+  it("carries job_title/linkedin from the application's answers into the provisioned representation", async () => {
     const { id } = await createEcReviewApplication(
       {},
       {
@@ -204,9 +213,17 @@ describe("Post-approval onboarding", () => {
       "SELECT job_title, links_json FROM users WHERE id = ?",
       body.userId,
     );
-    expect(userRows[0].job_title).toBe("Chief Cryptography Officer");
-    expect(userRows[0].links_json).toBeTruthy();
-    const links = JSON.parse(userRows[0].links_json as string) as string[];
+    expect(userRows).toEqual([{ job_title: null, links_json: null }]);
+    const identities = await queryAll<{ job_title: string | null; links_json: string | null }>(
+      env.DB,
+      `SELECT job_title, links_json
+         FROM identities
+        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+      body.userId,
+    );
+    expect(identities[0].job_title).toBe("Chief Cryptography Officer");
+    expect(identities[0].links_json).toBeTruthy();
+    const links = JSON.parse(identities[0].links_json as string) as string[];
     expect(links).toEqual(["https://linkedin.com/in/newmember"]);
   });
 
@@ -457,13 +474,16 @@ describe("Post-approval onboarding", () => {
     const orgCount = await queryAll(env.DB, "SELECT id FROM organizations WHERE name = 'Acme Corp'");
     expect(orgCount).toHaveLength(1);
 
-    const repRows = await queryAll(
+    const identityRows = await queryAll(
       env.DB,
-      "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
+      `SELECT identity.id
+         FROM identities identity
+         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+        WHERE capacity.member_id = ? AND identity.user_id = ? AND identity.ended_at IS NULL`,
       body.memberId,
       body.userId,
     );
-    expect(repRows).toHaveLength(1);
+    expect(identityRows).toHaveLength(1);
 
     const auditRows = await queryAll(
       env.DB,

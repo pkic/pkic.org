@@ -2,9 +2,24 @@
 // Homepage
 // ============================================================
 
+// The homepage hero carries `.pk`, so the design system's base layer owns the
+// element's own `background` and `color`. Both are re-pointed through the
+// tokens the base layer reads rather than being declared again here, which a
+// later layer would win: `--pk-canvas` paints the ground, `--pk-accent-ink`
+// gives anchors their colour, and text colour is set on the two wrappers,
+// where nothing in `base.css` competes.
 .pkic-home-hero {
-  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
-  color: #fff;
+  --pk-canvas: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+  // The ground is painted here rather than inherited from `.pk`.
+  //
+  // These surfaces set `--pk-canvas` to their own gradient and used to rely on
+  // `.pk` painting it. `.pk` no longer paints a ground — it was doing that on
+  // every subtree that merely wanted the design system's typography, which put
+  // a grey band beside the home page's announcement and overrode `Panel`'s own
+  // surface — so a surface that redefines the token now says where it wants it.
+  background: var(--pk-canvas);
+  --pk-accent-ink: var(--pk-on-solid);
+  --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
   padding: 3rem 0 2.5rem;
 
   @media (min-width: 992px) {
@@ -18,61 +33,119 @@
   }
 
   .pkic-hero-post-card {
-    display: block;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 1rem;
+    border-radius: var(--pk-radius-lg);
     padding: 2rem 2rem 1.75rem;
-    color: #fff;
+    // Titles and the events link inside the card keep their pale green; the
+    // base layer colours every anchor from this token.
+    --pk-accent-ink: #cde8d8;
     transition:
-      background 0.2s,
-      border-color 0.2s;
+      background var(--pk-dur),
+      border-color var(--pk-dur);
 
     &:hover {
       background: rgba(255, 255, 255, 0.1);
       border-color: rgba(255, 255, 255, 0.22);
     }
+
+    a {
+      text-decoration: none;
+    }
+  }
+
+  // The feature block is the positioned ancestor `pk-stretched` needs, so the
+  // heading's link covers it without wrapping the summary in an anchor.
+  .pkic-hero-post-feature {
+    position: relative;
+  }
+
+  .pkic-hero-post-events {
+    padding-top: var(--pk-4);
+    border-top: 1px solid color-mix(in srgb, var(--pk-on-solid) 14%, transparent);
   }
 
   .pkic-hero-post-label {
-    font-size: 0.7rem;
+    font-size: var(--pk-text-2xs);
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.5);
-    margin-bottom: 0.4rem;
   }
 
   .pkic-hero-post-title {
-    font-size: 1.15rem;
+    font-size: var(--pk-text-lg);
     font-weight: 700;
     line-height: 1.35;
-    margin-bottom: 0.4rem;
     color: #cde8d8;
   }
 
   .pkic-hero-post-date {
     display: block;
-    font-size: 0.8rem;
+    font-size: var(--pk-text-sm);
     color: rgba(255, 255, 255, 0.45);
-    margin-bottom: 0.75rem;
   }
 
   .pkic-hero-post-summary {
-    font-size: 0.875rem;
+    font-size: var(--pk-text-md);
     color: rgba(255, 255, 255, 0.6);
     line-height: 1.55;
-    margin-bottom: 1.1rem;
   }
 
   .pkic-hero-post-cta {
-    font-size: 0.85rem;
+    font-size: var(--pk-text-sm);
     font-weight: 600;
     color: rgba(255, 255, 255, 0.75);
   }
 }
 
+// Seven-to-five split on wide viewports, one column below it. A grid on the
+// surface replaces the `row`/`col-lg-*` pair; `pk-grid` cannot express the
+// asymmetric ratio or the breakpoint the aside disappears at.
+.pkic-home-hero__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: var(--pk-5);
+}
+
+.pkic-home-hero__intro,
+.pkic-home-hero__aside {
+  color: var(--pk-on-solid);
+}
+
+.pkic-home-hero__aside {
+  display: none;
+}
+
+@media (min-width: 992px) {
+  .pkic-home-hero__layout {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  }
+
+  .pkic-home-hero__aside {
+    display: block;
+  }
+}
+
+.pkic-home-hero__kicker {
+  font-size: var(--pk-text-xs);
+  font-weight: 700;
+  letter-spacing: var(--pk-tracking-label);
+  text-transform: uppercase;
+  color: var(--pk-ink-muted);
+}
+
+.pkic-home-hero__lead {
+  font-size: var(--pk-text-xl);
+  max-width: 34rem;
+}
+
 // Generic dark-gradient page hero (fallback for pages without a hero image)
+//
+// `color` stays on the element for the OG-card generator, which renders this
+// class without `.pk`. On the site the element carries `.pk`, so the base
+// layer wins that declaration and the hero body sets its own colour instead.
 .pkic-page-hero {
   position: relative;
   overflow: hidden;
@@ -83,24 +156,8 @@
     padding: 5rem 0;
   }
 
-  // Lead paragraph uses rgba color instead of opacity so child links can override
-  .pkic-hero-lead {
-    color: rgba(255, 255, 255, 0.75);
-
-    a:not(.btn) {
-      color: #fff;
-      text-decoration: underline wavy;
-      text-decoration-color: rgba(255, 255, 255, 0.2);
-      text-underline-offset: 4px;
-      transition: text-decoration-color 0.2s ease;
-      &:hover {
-        text-decoration-color: rgba(255, 255, 255, 0.75);
-      }
-    }
-  }
-
   .pkic-page-hero-kicker {
-    font-size: 0.75rem;
+    font-size: var(--pk-text-xs);
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -109,9 +166,79 @@
   }
 }
 
+// One theme per page, chosen in `hero.html` from the same `color`/section
+// vocabulary `page-theme-gradient.html` resolves for the OG card. Each sets
+// `--pk-canvas`, which `base.css` already paints on a `.pk` root.
+$pkic-page-hero-themes: (
+  "default": (135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%),
+  "blue": (135deg, #08152e 0%, #0d2452 55%, #081a38 100%),
+  "green": (135deg, #0a1f14 0%, #0d3d24 55%, #0a2f14 100%),
+  "orange": (135deg, #1e0c05 0%, #3d1a08 55%, #2a140a 100%),
+  "purple": (135deg, #110820 0%, #2a0d3d 55%, #0e0820 100%),
+  "teal": (135deg, #051d1d 0%, #0b3838 55%, #051d24 100%),
+  "red": (135deg, #200808 0%, #3d0d0d 55%, #200a14 100%),
+  "blog": (135deg, #0c0e2a 0%, #142058 50%, #0a183a 100%),
+  "members": (135deg, #10082a 0%, #200d42 50%, #0c0820 100%),
+  "about": (135deg, #0a0c20 0%, #141c3a 50%, #0a1428 100%),
+  "events": (135deg, #1a0a04 0%, #38200a 50%, #1a1408 100%),
+  "resources": (135deg, #041a18 0%, #083430 50%, #041a24 100%),
+  "pqcc": (135deg, #0c1428 0%, #142050 50%, #0c1a2e 100%),
+  "activities": (135deg, #041816 0%, #083028 50%, #041820 100%)
+);
+
+@each $name, $stops in $pkic-page-hero-themes {
+  .pkic-page-hero--#{$name} {
+    --pk-canvas: linear-gradient(#{$stops});
+    background: var(--pk-canvas);
+  }
+}
+
+.pkic-page-hero__body {
+  // Between `pk-container` (72rem) and `--narrow` (44rem) sits the width the
+  // old `col-lg-8` produced. The container reads this, so no second class.
+  --pk-measure: 56rem;
+  --pk-accent-ink: var(--pk-on-solid);
+  --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
+  color: var(--pk-on-solid);
+}
+
+// Lead paragraph uses rgba color instead of opacity so child links can override
+.pkic-hero-lead {
+  font-size: var(--pk-text-xl);
+  color: rgba(255, 255, 255, 0.75);
+
+  a:not(.pk-btn) {
+    text-decoration: underline wavy;
+    text-decoration-color: rgba(255, 255, 255, 0.2);
+    text-underline-offset: 4px;
+    transition: text-decoration-color var(--pk-dur) ease;
+    &:hover {
+      text-decoration-color: rgba(255, 255, 255, 0.75);
+    }
+  }
+}
+
+// Also a `.pk` root, so the ground and the link colour are re-pointed through
+// the tokens the base layer reads rather than declared again here.
 .pkic-stats-bar {
-  background: $green;
-  color: #fff;
+  --pk-canvas: #{$green};
+  // The ground is painted here rather than inherited from `.pk`.
+  //
+  // These surfaces set `--pk-canvas` to their own gradient and used to rely on
+  // `.pk` painting it. `.pk` no longer paints a ground — it was doing that on
+  // every subtree that merely wanted the design system's typography, which put
+  // a grey band beside the home page's announcement and overrode `Panel`'s own
+  // surface — so a surface that redefines the token now says where it wants it.
+  background: var(--pk-canvas);
+  --pk-accent-ink: var(--pk-on-solid);
+
+  // Four equal columns, three below the small breakpoint where the last one
+  // is dropped — the `row g-0` / `col` quartet it replaces.
+  .pkic-stats-bar__row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    text-align: center;
+  }
 
   .pkic-stat {
     padding: 0.9rem 0.5rem;
@@ -120,11 +247,25 @@
     align-items: center;
     gap: 0.15rem;
     border-right: 1px solid rgba(255, 255, 255, 0.2);
-    color: inherit;
     text-decoration: none;
 
     &:last-child {
       border-right: none;
+    }
+  }
+
+  // Declared after `.pkic-stat` so the hidden state wins at equal specificity.
+  .pkic-stat--wide-only {
+    display: none;
+  }
+
+  @media (min-width: 576px) {
+    .pkic-stats-bar__row {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .pkic-stat--wide-only {
+      display: flex;
     }
   }
 
@@ -172,16 +313,40 @@
 }
 
 .pkic-recent-posts {
-  background: $gray-100;
+  // A band that sits back from the page, from the token that knows both themes.
+  background: var(--pk-surface-sunk);
+
+  // The heading shares a cluster with the "all posts" link, so its rhythm
+  // comes from the section's own padding rather than from `main h2`'s
+  // margins — which would otherwise push the whole row out of alignment.
+  h2 {
+    margin: 0;
+  }
 }
 
 // Blog post cards on the homepage reuse the .blog-card styles from _blog.scss
 
 // ── Join CTA section ────────────────────────────────────────────────────────
 
+// The join CTA carries `.pk`, so the design system's base layer owns the
+// element's own `background` and `color` and the size of the heading inside
+// it. All three are re-pointed through the tokens that layer reads rather than
+// declared again here, which a later layer would win: `--pk-canvas` paints the
+// ground, and `--pk-ink` / `--pk-ink-muted` set the two weights of text. The
+// heading's display size is re-pointed the same way, on the heading itself, so
+// only that element sees it: `base.css` sizes every `h2` from `--pk-text-xl`.
 .pkic-join-cta {
-  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
-  color: #fff;
+  --pk-canvas: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
+  // The ground is painted here rather than inherited from `.pk`.
+  //
+  // These surfaces set `--pk-canvas` to their own gradient and used to rely on
+  // `.pk` painting it. `.pk` no longer paints a ground — it was doing that on
+  // every subtree that merely wanted the design system's typography, which put
+  // a grey band beside the home page's announcement and overrode `Panel`'s own
+  // surface — so a surface that redefines the token now says where it wants it.
+  background: var(--pk-canvas);
+  --pk-ink: #fff;
+  --pk-ink-muted: rgba(255, 255, 255, 0.88);
   padding-top: 3rem;
   padding-bottom: 3rem;
 
@@ -192,22 +357,21 @@
 
   // Override the gradient-text rule applied to all main h2 elements
   h2 {
+    --pk-text-xl: 2.25rem;
     background: none !important;
     -webkit-background-clip: unset !important;
     background-clip: unset !important;
     -webkit-text-fill-color: #fff !important;
     color: #fff !important;
-    font-size: 2.25rem;
-    margin-top: 0;
   }
 
-  .lead {
-    opacity: 0.88;
-    font-size: 1.2rem;
-  }
-
+  // Was `lead mx-auto` on the markup. The measure and the centring are the
+  // paragraph's own properties; the size reads the type scale.
   .pkic-join-cta-body {
     max-width: 560px;
+    margin-inline: auto;
+    font-size: var(--pk-text-xl);
+    color: var(--pk-ink-muted);
   }
 }
 
@@ -222,7 +386,13 @@
 
 // WG spotlight card container
 .pkic-wg-spotlight {
-  background: #fff;
+  // Equal heights across a row belong to the card, not to a utility class every
+  // caller has to remember. The grids that hold these cards stretch their
+  // items, so a full-height card fills whatever cell it lands in.
+  height: 100%;
+  // `--pk-surface` rather than white: the reader can choose the dark theme now,
+  // and a hard-coded ground turns into a light island with near-white text.
+  background: var(--pk-surface);
   border-radius: 14px;
   overflow: hidden;
   box-shadow:
@@ -668,6 +838,11 @@
 }
 
 .pkic-wg-card {
+  // Carries what Bootstrap's `.card` used to supply — surface, frame and
+  // column flow — so the shortcode's markup needs no framework classes.
+  display: flex;
+  flex-direction: column;
+  background: #fff;
   border-radius: 0.85rem;
   overflow: hidden;
   border: none;
@@ -681,16 +856,32 @@
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
   }
 
-  .card-title {
+  .pkic-card-image {
+    width: 100%;
+    display: block;
+  }
+
+  .pkic-card-body {
+    flex: 1 1 auto;
+    padding: var(--pk-4);
+  }
+
+  .pkic-card-title {
+    font-size: 1.05rem;
     font-weight: 700;
   }
-  .card-text {
+  .pkic-card-text {
     color: $gray-600;
     font-size: 0.9rem;
+
+    p:last-child {
+      margin-bottom: 0;
+    }
   }
 }
 
 .pkic-card-header {
+  padding: var(--pk-3) var(--pk-4);
   background: linear-gradient(135deg, #0a1f14, #0d3d24);
   color: #fff;
   font-weight: 600;
@@ -702,6 +893,7 @@
 }
 
 .pkic-card-footer {
+  padding: var(--pk-3) var(--pk-4);
   background: $gray-100;
   font-size: 0.85rem;
   border-top: 1px solid $gray-200;
@@ -719,6 +911,87 @@
     transparent 70%
   );
 }
+// ============================================================
+// Photographic page hero (hero.html, image branch)
+//
+// The height used to be an inline `height` / `min-height` pair; it is a
+// three-step scale now, because the rendered height was always the larger of
+// the two values anyway.
+//
+// `.pk` sits on the scrim rather than on the root. The sponsor strip and the
+// image credit hang off the root, and the strip's logo sizing is still legacy
+// CSS the base layer's `max-width: 100%` would take away.
+// ============================================================
+.pkic-hero-media {
+  position: relative;
+  width: 100%;
+  height: 50vh;
+}
+
+.pkic-hero-media--tall {
+  height: 65vh;
+}
+
+.pkic-hero-media--full {
+  height: 85vh;
+}
+
+.pkic-hero-media__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pkic-hero-media__scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  // The scrim's ground, declared here rather than left to `.pk`: that class
+  // no longer paints one, because it was painting every subtree that only
+  // wanted the design system's typography.
+  --pk-canvas: var(--pk-overlay);
+  background: var(--pk-canvas);
+  --pk-accent-ink: var(--pk-on-solid);
+  --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
+  // `heroButton` used to be `.btn-page-accent`; the same per-page accent now
+  // reaches the design system's primary button through its own token.
+  --pk-accent-strong: var(--page-accent, #{$green});
+  --pk-accent-on: var(--pk-on-solid);
+}
+
+// Text colour sits here, not on the `.pk` root, where `base.css` would win it.
+.pkic-hero-media__content {
+  color: var(--pk-on-solid);
+}
+
+.pkic-hero-media__sponsors {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding-block: var(--pk-7) var(--pk-5);
+}
+
+.pkic-hero-media__credit {
+  position: absolute;
+  right: var(--pk-1);
+  bottom: var(--pk-1);
+  padding: var(--pk-1);
+  text-align: end;
+  font-size: var(--pk-text-xs);
+  color: var(--pk-on-solid);
+  background: var(--pk-overlay);
+  border-radius: var(--pk-radius);
+
+  a {
+    color: inherit;
+  }
+}
+
 .hero-sponsors-overlay {
   background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
   pointer-events: none;

@@ -17,6 +17,10 @@ import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Spinner } from "../../../../components/Spinner";
 import { ApiClientError, getJson, postJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody } from "../../../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 import { activeGroupTypeCatalog, managedGroupCatalog } from "./catalog";
 
 interface GroupCreateDraft {
@@ -34,6 +38,14 @@ interface GroupCreateDraft {
   publicLeadership: boolean;
   minEndorsersForBallot: number;
 }
+
+/** The four enum-backed policy choices, each rendered from its shared vocabulary. */
+const POLICY_CHOICES = [
+  ["visibility", "Visibility", GROUP_VISIBILITIES],
+  ["governanceInheritanceMode", "Leadership inheritance", GROUP_GOVERNANCE_INHERITANCE_MODES],
+  ["eligibilityMode", "Join eligibility", GROUP_ELIGIBILITY_MODES],
+  ["automaticEnrollmentMode", "Automatic enrollment", GROUP_AUTOMATIC_ENROLLMENT_MODES],
+] as const;
 
 function optionLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -57,7 +69,14 @@ function draftFromType(type: GroupType | null): GroupCreateDraft {
   };
 }
 
-export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => void }) {
+export function GroupCreateForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (group: Group) => void;
+  /** Leaves the create page without creating anything; omitted where there is nowhere to return to. */
+  onCancel?: () => void;
+}) {
   const capability = useData(
     () => getJson("/api/v1/groups/creation-capabilities", groupCreationCapabilitiesResponseSchema),
     [],
@@ -87,6 +106,10 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
+    // The submit button stays focusable while the create is in flight — a
+    // disabled control throws a screen-reader user out of the form they are
+    // in the middle of — so the form itself refuses a second submission.
+    if (saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -114,159 +137,159 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
     }
   }
 
-  if (capability.loading) return <Spinner />;
+  if (capability.loading) return <Spinner label="Checking whether you can create a group…" />;
   if (capability.error) return <ErrorAlert error={capability.error} />;
   if (!capability.data?.canCreate) return null;
 
+  const automaticEnrollmentOff = draft.automaticEnrollmentMode === "none";
+
   return (
-    <form class="card border-0 shadow-sm" onSubmit={submit}>
-      <div class="card-header bg-white fw-semibold">Create a group</div>
-      <div class="card-body d-flex flex-column gap-3">
-        <p class="text-muted small mb-0">
-          Create a reusable group context for meetings, events, forms, votes, and membership.
-        </p>
-        <ServerSearchSelect
-          catalog={activeGroupTypeCatalog}
-          label="Group type"
-          value={draft.typeKey}
-          selectedLabel={typeSelected?.pluralLabel}
-          allowEmpty={false}
-          onChange={(type) => {
-            setTypeSelected(type);
-            setField("typeKey", type?.key ?? null);
-          }}
-        />
-        <ServerSearchSelect
-          catalog={managedGroupCatalog}
-          label="Parent group (optional)"
-          value={draft.parentGroupId}
-          selectedLabel={undefined}
-          placeholder="Top-level group"
-          onChange={(group) => setField("parentGroupId", group?.id ?? null)}
-        />
-        <div class="row g-3">
-          <div class="col-md-8">
-            <label class="form-label small fw-semibold" for="create-group-name">
-              Name
-            </label>
-            <input
-              id="create-group-name"
-              class="form-control"
-              required
-              value={draft.name}
-              disabled={saving}
-              onInput={(event) => setField("name", (event.target as HTMLInputElement).value)}
-            />
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for="create-group-slug">
-              Slug (optional)
-            </label>
-            <input
-              id="create-group-slug"
-              class="form-control"
-              value={draft.slug}
-              disabled={saving}
-              onInput={(event) => setField("slug", (event.target as HTMLInputElement).value)}
-            />
-          </div>
-        </div>
-        <div>
-          <label class="form-label small fw-semibold" for="create-group-description">
-            Description
-          </label>
-          <textarea
-            id="create-group-description"
-            class="form-control"
-            rows={3}
-            value={draft.description}
-            disabled={saving}
-            onInput={(event) => setField("description", (event.target as HTMLTextAreaElement).value)}
-          />
-        </div>
-        <div>
-          <label class="form-label small fw-semibold">Links</label>
-          <ProfileLinksInput
-            fieldName="group-create.links"
-            value={draft.links}
-            onChange={(links) => setField("links", links)}
-            helpText="Add relevant group resources."
-            inputAriaLabel="Group resource URL"
-          />
-        </div>
-        <div class="row g-3">
-          {(
-            [
-              ["visibility", "Visibility", GROUP_VISIBILITIES],
-              ["governanceInheritanceMode", "Leadership inheritance", GROUP_GOVERNANCE_INHERITANCE_MODES],
-              ["eligibilityMode", "Join eligibility", GROUP_ELIGIBILITY_MODES],
-              ["automaticEnrollmentMode", "Automatic enrollment", GROUP_AUTOMATIC_ENROLLMENT_MODES],
-            ] as const
-          ).map(([key, label, options]) => (
-            <div class="col-md-6" key={key}>
-              <label class="form-label small fw-semibold" for={`create-group-${key}`}>
-                {label}
-              </label>
-              <select
-                id={`create-group-${key}`}
-                class="form-select"
-                value={draft[key]}
-                disabled={saving}
-                onChange={(event) => setField(key, (event.target as HTMLSelectElement).value as never)}
-              >
-                {options.map((value) => (
-                  <option key={value} value={value}>
-                    {optionLabel(value)}
-                  </option>
+    <div class="pk">
+      {/* The page header names the surface; the panel only holds the form. */}
+      <Panel aria-label="Create a group">
+        <PanelBody class="pk-stack">
+          <p class="pk-small">Create a reusable group context for meetings, events, forms, votes, and membership.</p>
+          <form class="pk-stack" onSubmit={(event) => void submit(event)}>
+            {/* One disabled fieldset takes every control out of play while the
+                create is in flight, rather than each deciding for itself. The
+                submit control stays outside it so the button the reader just
+                pressed keeps focus instead of being disabled from under them. */}
+            <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+              <ServerSearchSelect
+                catalog={activeGroupTypeCatalog}
+                label="Group type"
+                value={draft.typeKey}
+                selectedLabel={typeSelected?.pluralLabel}
+                allowEmpty={false}
+                onChange={(type) => {
+                  setTypeSelected(type);
+                  setField("typeKey", type?.key ?? null);
+                }}
+              />
+              <ServerSearchSelect
+                catalog={managedGroupCatalog}
+                label="Parent group (optional)"
+                value={draft.parentGroupId}
+                selectedLabel={undefined}
+                placeholder="Top-level group"
+                onChange={(group) => setField("parentGroupId", group?.id ?? null)}
+              />
+              <div class="pk-grid pk-grid--roomy">
+                <Field label="Name" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={draft.name}
+                      onInput={(event) => setField("name", event.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Slug (optional)" help="Leave blank to derive one from the name.">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={draft.slug}
+                      onInput={(event) => setField("slug", event.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              </div>
+              <Field label="Description">
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    rows={3}
+                    value={draft.description}
+                    onInput={(event) => setField("description", event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              {/* The link editor is several controls, not one, so the group is
+                  named by a legend rather than by a label with nothing to point
+                  at — and `pk-field` is the group that legend belongs to. */}
+              <fieldset class="pk-fieldset pk-field">
+                <legend class="pk-field__label">Links</legend>
+                <ProfileLinksInput
+                  fieldName="group-create.links"
+                  value={draft.links}
+                  onChange={(links) => setField("links", links)}
+                  helpText="Add relevant group resources."
+                  inputAriaLabel="Group resource URL"
+                />
+              </fieldset>
+              <div class="pk-grid pk-grid--roomy">
+                {POLICY_CHOICES.map(([key, label, options]) => (
+                  <Field label={label} key={key}>
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={draft[key]}
+                        onChange={(event) => setField(key, event.currentTarget.value as never)}
+                      >
+                        {options.map((value) => (
+                          <option key={value} value={value}>
+                            {optionLabel(value)}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
                 ))}
-              </select>
+                <Field label="Minimum endorsers for a ballot">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="number"
+                      min={0}
+                      max={1000}
+                      value={draft.minEndorsersForBallot}
+                      onInput={(event) => setField("minEndorsersForBallot", event.currentTarget.valueAsNumber)}
+                    />
+                  )}
+                </Field>
+              </div>
+              <div class="pk-stack pk-stack--snug">
+                <label class="pk-check">
+                  <input
+                    class="pk-check__input"
+                    type="checkbox"
+                    checked={draft.allowAutomaticOptOut}
+                    disabled={automaticEnrollmentOff}
+                    onChange={(event) => setField("allowAutomaticOptOut", event.currentTarget.checked)}
+                  />
+                  {/* The control is unavailable because of another answer, not
+                      because it is off, so the reason is written out rather
+                      than left to the greyed-out styling. */}
+                  <span class="pk-check__label">
+                    Allow people to opt out of automatic enrollment
+                    {automaticEnrollmentOff && " — available once automatic enrollment is set"}
+                  </span>
+                </label>
+                <label class="pk-check">
+                  <input
+                    class="pk-check__input"
+                    type="checkbox"
+                    checked={draft.publicLeadership}
+                    onChange={(event) => setField("publicLeadership", event.currentTarget.checked)}
+                  />
+                  <span class="pk-check__label">Publish leadership</span>
+                </label>
+              </div>
+            </fieldset>
+            {error && <ErrorAlert error={error} />}
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" loading={saving} disabled={!draft.typeKey || !draft.name.trim()}>
+                {saving ? "Creating…" : "Create group"}
+              </Button>
+              {onCancel && (
+                <Button onClick={onCancel} disabled={saving}>
+                  Cancel
+                </Button>
+              )}
             </div>
-          ))}
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="create-group-endorser-count">
-              Minimum endorsers for a ballot
-            </label>
-            <input
-              id="create-group-endorser-count"
-              class="form-control"
-              type="number"
-              min={0}
-              max={1000}
-              value={draft.minEndorsersForBallot}
-              disabled={saving}
-              onInput={(event) => setField("minEndorsersForBallot", (event.target as HTMLInputElement).valueAsNumber)}
-            />
-          </div>
-        </div>
-        <label class="form-check">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            checked={draft.allowAutomaticOptOut}
-            disabled={saving || draft.automaticEnrollmentMode === "none"}
-            onChange={(event) => setField("allowAutomaticOptOut", (event.target as HTMLInputElement).checked)}
-          />
-          <span class="form-check-label">Allow people to opt out of automatic enrollment</span>
-        </label>
-        <label class="form-check">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            checked={draft.publicLeadership}
-            disabled={saving}
-            onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
-          />
-          <span class="form-check-label">Publish leadership</span>
-        </label>
-        {error && <ErrorAlert error={error} />}
-        <button
-          type="submit"
-          class="btn btn-success align-self-start"
-          disabled={saving || !draft.typeKey || !draft.name.trim()}
-        >
-          {saving ? "Creating…" : "Create group"}
-        </button>
-      </div>
-    </form>
+          </form>
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

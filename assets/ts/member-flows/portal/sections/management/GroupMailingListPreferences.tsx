@@ -6,7 +6,10 @@ import {
   type MailingListPreferenceMutationInput,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { statusLabel } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select } from "../../../../ui/TextControl";
 import { putJson } from "../../../../shared/api-client";
 
 function SubscriptionPreference({
@@ -19,8 +22,10 @@ function SubscriptionPreference({
   onChange: (preference: MailingListPreferenceMutationInput["preference"]) => void;
 }) {
   return (
-    <select
-      class="form-select form-select-sm"
+    // Each row holds one of these, so the name says which list it belongs to:
+    // a column of controls all called "Preference" is indistinguishable to
+    // anyone navigating by form controls.
+    <Select
       aria-label={`Subscription preference for ${subscription.mailingList.label}`}
       value={subscription.preference ?? "inherit"}
       disabled={disabled || !subscription.eligible}
@@ -31,7 +36,7 @@ function SubscriptionPreference({
       <option value="inherit">Use group default</option>
       <option value="subscribed">Subscribed</option>
       <option value="unsubscribed">Unsubscribed</option>
-    </select>
+    </Select>
   );
 }
 
@@ -62,11 +67,12 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
   }
 
   return (
-    <section class="card border-0 shadow-sm" aria-label="My mailing-list preferences">
-      <div class="card-header bg-white fw-semibold">My mailing-list preferences</div>
-      <div class="card-body">
+    <Panel class="pk" aria-label="My mailing-list preferences">
+      <PanelHeader title="My mailing-list preferences" />
+      <PanelBody class="pk-stack pk-stack--snug">
         {error && <ErrorAlert error={error} />}
         <ApiDataTable
+          caption="My mailing-list preferences"
           actionsRef={actions}
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`}
           responseSchema={effectiveMailingListSubscriptionsResponseSchema}
@@ -79,16 +85,18 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
             {
               header: "Mailing list",
               cell: (subscription) => (
-                <div>
-                  <div class="fw-semibold">{subscription.mailingList.label}</div>
-                  <div class="small text-muted">{subscription.mailingList.email}</div>
+                <div class="pk-stack pk-stack--tight">
+                  <span class="pk-strong">{subscription.mailingList.label}</span>
+                  <span class="pk-small pk-break">{subscription.mailingList.email}</span>
                 </div>
               ),
               sort: { asc: "label", desc: "-label" },
             },
             {
               header: "Purpose",
-              cell: (subscription) => subscription.mailingList.purpose.replaceAll("_", " "),
+              // The shared vocabulary rather than an underscore-stripping
+              // replace, so a purpose reads the same wherever it appears.
+              cell: (subscription) => statusLabel(subscription.mailingList.purpose),
               sort: { asc: "purpose", desc: "-purpose" },
             },
             {
@@ -109,7 +117,7 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
           empty="No mailing lists are available through this group."
           rowKey={(subscription) => subscription.mailingList.id}
         />
-      </div>
-    </section>
+      </PanelBody>
+    </Panel>
   );
 }

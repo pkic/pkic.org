@@ -25,7 +25,9 @@
       group.classList.toggle('is-hidden', groupVisible === 0);
     });
 
-    noResult.classList.toggle('d-none', totalVisible > 0 || !q);
+    // `hidden`, not the framework class that used to define it: nothing
+    // declares `d-none` any more, so the toggle stopped hiding anything.
+    if (noResult) noResult.hidden = totalVisible > 0 || !q;
     updateSidebarEmpties();
     updateActiveLetter();
   }

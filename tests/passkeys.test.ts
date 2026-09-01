@@ -13,6 +13,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
+import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
 import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
 import { passkeyAuthenticateCompleteResponseSchema } from "../assets/shared/schemas/passkeys";
@@ -62,20 +63,37 @@ async function insertStaffUser(email: string): Promise<string> {
 /** Org-less (H5) active member — INDIVIDUAL_MEMBERSHIP_CATEGORIES, avoids an organizations row. */
 async function insertActiveMemberUser(email: string): Promise<string> {
   const userId = crypto.randomUUID();
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
+  const now = new Date().toISOString();
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", now);
+  const identity = await buildCreateIdentityStatement(env.DB, {
+    userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+    now,
+  });
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
        VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
     ...statements,
+    identity.statement,
   ]);
   return userId;
 }
 
 async function addActiveIndividualMembership(userId: string): Promise<void> {
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", new Date().toISOString());
-  await env.DB.batch(statements);
+  const now = new Date().toISOString();
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", now);
+  const identity = await buildCreateIdentityStatement(env.DB, {
+    userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+    now,
+  });
+  await env.DB.batch([...statements, identity.statement]);
 }
 
 interface BeginResponse {

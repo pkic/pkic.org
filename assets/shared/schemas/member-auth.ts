@@ -10,13 +10,23 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { successResponseSchema } from "./api-common";
 
+export const authEligibleIdentitySchema = z.object({
+  identityId: databaseIdSchema,
+  memberId: databaseIdSchema,
+  organizationId: databaseIdSchema.nullable(),
+  organizationName: z.string().nullable(),
+  membershipCategory: z.string(),
+});
+
 export const authMemberSchema = z.object({
   userId: databaseIdSchema,
+  identityId: databaseIdSchema,
   email: z.string(),
   memberId: databaseIdSchema,
   organizationId: databaseIdSchema.nullable(),
   membershipCategory: z.string(),
   isEcMember: z.boolean(),
+  activeIdentities: z.array(authEligibleIdentitySchema).min(1),
 });
 
 export const memberAuthVerifyResponseSchema = successResponseSchema.extend({

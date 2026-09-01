@@ -4,29 +4,18 @@ import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "../as
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, updateGroup } from "../functions/_lib/services/groups";
 import { buildUserCatalogPageQuery, listGroupUsers } from "../functions/_lib/services/user-catalog";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
-async function actor(email: string, role = "user"): Promise<AuthAdmin> {
+async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   return { identityType: "user", id, email, role };
-}
-
-async function grantLeadership(groupId: string, userId: string): Promise<string> {
-  const id = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(id, userId, groupId)
-    .run();
-  return id;
 }
 
 beforeEach(resetDb);
@@ -44,8 +33,8 @@ describe("group user catalog", () => {
       typeKey: "working_group",
       name: `Unrelated ${crypto.randomUUID()}`,
     });
-    await grantLeadership(group.id, manager.id);
-    await grantLeadership(unrelated.id, outsider.id);
+    manager.memberId = (await grantGroupLeadershipCapacity(env.DB, group.id, manager.id)).memberId;
+    outsider.memberId = (await grantGroupLeadershipCapacity(env.DB, unrelated.id, outsider.id)).memberId;
 
     const targetId = await insertUser(env.DB, `catalog-primary-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare(
@@ -65,8 +54,20 @@ describe("group user catalog", () => {
     const inactiveId = await insertUser(env.DB, `catalog-inactive-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactiveId).run();
 
-    const managerToken = await createAdminSession(env.DB, manager.id, `manager-${crypto.randomUUID()}`);
-    const outsiderToken = await createAdminSession(env.DB, outsider.id, `outsider-${crypto.randomUUID()}`);
+    const managerToken = await createAdminSession(
+      env.DB,
+      manager.id,
+      `manager-${crypto.randomUUID()}`,
+      undefined,
+      manager.memberId,
+    );
+    const outsiderToken = await createAdminSession(
+      env.DB,
+      outsider.id,
+      `outsider-${crypto.randomUUID()}`,
+      undefined,
+      outsider.memberId,
+    );
     const response = await callApi(env, `/api/v1/groups/${group.slug}/users?q=catalog-alias&sort=email&limit=1`, {
       headers: { authorization: `Bearer ${managerToken}` },
     });
@@ -149,8 +150,10 @@ describe("group user catalog", () => {
       name: `Catalog local child ${crypto.randomUUID()}`,
       parentGroupId: parent.id,
     });
-    const roleId = await grantLeadership(parent.id, leader.id);
-    await grantLeadership(localOnlyChild.id, root.id);
+    const parentLeadership = await grantGroupLeadershipCapacity(env.DB, parent.id, leader.id);
+    leader.memberId = parentLeadership.memberId;
+    const roleId = parentLeadership.roleAssignmentId;
+    await grantGroupLeadershipCapacity(env.DB, localOnlyChild.id, root.id);
     await updateGroup(env.DB, root, localOnlyChild.id, { governanceInheritanceMode: "local_only" });
 
     const inherited = await listGroupUsers(

@@ -1,0 +1,58 @@
+/*
+ * Tabs and TabList.
+ *
+ * Two components, one appearance. `Tabs` navigates - real links, marked with
+ * `aria-current="page"`. `TabList` switches panels in place - real buttons,
+ * marked with `aria-selected`. They look identical on purpose; what differs is
+ * what activating one does, and that is carried by the markup rather than by
+ * the styling.
+ */
+
+@layer components {
+  .pk-tabs {
+    /* No padding or margin; the nav is a transparent wrapper. */
+  }
+
+  .pk-tabs__list {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--pk-line);
+  }
+
+  @media (max-width: 48rem) {
+    .pk-tabs__list {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+  }
+
+  .pk-tabs__link {
+    position: relative;
+    /* A tab may be a button, which brings its own chrome and font. */
+    background: none;
+    border: 0;
+    font: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem var(--pk-4);
+    margin: 0;
+    color: var(--pk-ink-muted);
+    text-decoration: none;
+    transition:
+      color var(--pk-dur-fast),
+      border-color var(--pk-dur-fast);
+    cursor: pointer;
+  }
+
+  .pk-tabs__link:hover:not([aria-current], [aria-selected="true"]) {
+    color: var(--pk-ink);
+  }
+
+  .pk-tabs__link[aria-current="page"],
+  .pk-tabs__link[aria-selected="true"] {
+    color: var(--pk-accent-ink);
+    border-bottom: 2px solid var(--pk-accent);
+    padding-bottom: calc(0.5rem - 2px);
+  }
+}

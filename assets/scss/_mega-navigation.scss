@@ -8,76 +8,197 @@
   --pkic-navbar-height: 57px;
 }
 
+// The width at which the bar stops collapsing into the hamburger. One value,
+// so the toggler, the collapse, the nav row and the mega panels cannot drift
+// apart the way twelve `-lg-` utility classes could.
+$pkic-nav-expand: 992px;
+
+// The bar owns its own box. It used to borrow `.navbar`, `.navbar-expand-lg`
+// and `.sticky-top` from Bootstrap; those declarations now live here, so the
+// markup carries no framework class names.
 .pkic-navbar {
   background: #000 !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
-  .nav-link {
-    font-weight: 500;
-    font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.72) !important;
-    padding: 0.45rem 0.85rem;
-    border-radius: 0.45rem;
-    white-space: nowrap; // prevent nav item text from wrapping to a second line
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.5rem 0;
 
-    &:hover {
-      color: #fff !important;
-      background: rgba(255, 255, 255, 0.08);
-    }
-    &.active,
-    &.is-active {
-      color: #fff !important;
-      background: rgba(255, 255, 255, 0.05);
-    }
+  @media (min-width: $pkic-nav-expand) {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+}
+
+.pkic-navbar-brand {
+  display: flex;
+  align-items: center;
+  padding-block: 0.3125rem;
+  margin-right: 1rem;
+  text-decoration: none;
+}
+
+.pkic-nav-link {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.45rem;
+  text-decoration: none;
+  white-space: nowrap; // prevent nav item text from wrapping to a second line
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  &.is-active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+// Hamburger. The glyph is an inline SVG in the markup now, so there is no
+// background-image and no Bootstrap custom property to point it at.
+.pkic-navbar-toggler {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.75rem;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  border-radius: 0.375rem;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+
+  &:hover {
+    color: #fff;
   }
 
-  .navbar-toggler {
-    border-color: rgba(255, 255, 255, 0.25);
-    color: rgba(255, 255, 255, 0.75);
-    // Force the hamburger icon to use white strokes (Bootstrap defaults to a dark SVG)
-    --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255%2C 255%2C 255%2C 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+  @media (min-width: $pkic-nav-expand) {
+    display: none;
+  }
+}
+
+// Collapsible half of the bar. Closed below the expand breakpoint until
+// navbar.js opens it; always laid out as a row above it.
+.pkic-navbar-collapse {
+  display: none;
+  flex-basis: 100%;
+  flex-grow: 1;
+
+  &.is-open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
-  .navbar-toggler-icon {
-    background-image: var(--bs-navbar-toggler-icon-bg);
-  }
-
-  .dropdown-menu {
-    background: #111;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-
-    .dropdown-item {
-      color: rgba(255, 255, 255, 0.8);
-      &:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: #fff;
-      }
+  @media (min-width: $pkic-nav-expand) {
+    // Both selectors, so the open state does not out-specify the desktop row.
+    &,
+    &.is-open {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 0;
+      flex-basis: auto;
+      // Nav items keep their natural width instead of stretching, which is what
+      // leaves the search room to centre itself between logo and nav.
+      flex-grow: 0;
     }
+  }
+}
+
+.pkic-navbar-nav {
+  display: flex;
+  flex-direction: column;
+
+  @media (min-width: $pkic-nav-expand) {
+    flex-direction: row;
+    align-items: center;
+    margin-left: auto;
+  }
+}
+
+// The site's own section menu, offered only where the collapsed bar is the
+// only navigation on screen.
+.pkic-navbar-sidemenu {
+  display: block;
+
+  @media (min-width: 576px) {
+    display: none;
+  }
+}
+
+.pkic-navbar-divider {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.pkic-navbar-mobile-search {
+  display: block;
+
+  @media (min-width: $pkic-nav-expand) {
+    display: none;
   }
 }
 
 // ─── Navbar search: compact trigger → expanded input ─────────────────
 
-// Provides the stacking context for the absolutely-centred search
+// Provides the stacking context for the absolutely-centred search, and the
+// flex row Bootstrap's `.navbar > .container` used to supply.
 .pkic-navbar-container {
   position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
 
-  // At desktop breakpoint: collapse takes its natural width (nav items don't
-  // shrink/wrap), and the search uses margin:auto to consume the free space
-  // equally on both sides — centering itself in the gap between logo and nav.
-  @media (min-width: 992px) {
-    > .navbar-collapse {
-      flex-grow: 0; // override Bootstrap's flex-grow:1 so nav items stay at natural width
-    }
+// Site controls, pinned to the right of the bar.
+//
+// Not a nav link and not inside the collapsing list: these act on the site
+// rather than lead anywhere, so they read as chrome and stay reachable on a
+// phone, where the link list is behind the toggler. An account control belongs
+// here too when there is one.
+.pkic-navbar-utilities {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  // The ink is set here and inherited by the controls inside, which is the
+  // only way a legacy rule can reach them: their own styles are in the
+  // components layer, which beats this one. It also matches the nav links, so
+  // a preference nobody sets twice does not outrank the navigation.
+  color: rgba(255, 255, 255, 0.72);
+  order: 3;
+  margin-left: auto;
+
+  @media (min-width: $pkic-nav-expand) {
+    margin-left: 0.35rem;
+    // A hairline, not a gap: it separates a control from the last link without
+    // adding another thing to look at.
+    padding-left: 0.5rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
   }
 }
 
-// Centre search widget — margin:auto splits free space equally left & right
+// Centre search widget — margin:auto splits free space equally left & right.
+// Hidden below the expand breakpoint, where .pkic-navbar-mobile-search takes
+// over inside the collapsed menu.
 .pkic-navbar-search {
-  @media (min-width: 992px) {
+  display: none;
+
+  @media (min-width: $pkic-nav-expand) {
+    display: flex;
     flex: 0 1 240px; // can shrink slightly if space is tight, baseline 240px
     min-width: 120px;
     margin: 0 auto;  // absorbs all remaining gap → search sits centred between logo and nav
@@ -216,14 +337,14 @@
     display: flex;
   }
 
-  @media (min-width: 992px) {
+  @media (min-width: $pkic-nav-expand) {
     // Let search fill the rest of the row once nav is hidden
     .pkic-navbar-search {
       flex: 1 1 auto !important;
       margin: 0 0.5rem;
     }
     // Hide nav items so search takes the full row
-    .navbar-collapse {
+    .pkic-navbar-collapse {
       display: none !important;
     }
   }
@@ -247,11 +368,26 @@ body.pkic-search-open {
   right: 0;
   bottom: 0;
   z-index: 1036;
-  background: var(--bs-body-bg, #fff);
+  background: #fff;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+// The measured column inside the panel. Width comes from .pk-container in the
+// markup; only the trailing room below the last result belongs here.
+.pkic-search-panel-body {
+  padding-bottom: 3rem;
+}
+
+// The panel's own search field, shown only where the bar's field is collapsed.
+.pkic-search-panel-mobile-input {
+  padding: 1rem 0 0.25rem;
+
+  @media (min-width: $pkic-nav-expand) {
+    display: none;
+  }
 }
 
 .pkic-search-panel-close {
@@ -477,7 +613,7 @@ body.pkic-search-open {
   align-items: center;
   gap: 0;
 
-  > .nav-link {
+  > .pkic-nav-link {
     pointer-events: all;
   }
 }
@@ -545,6 +681,19 @@ body.pkic-search-open {
     opacity: 1;
     visibility: visible;
   }
+}
+
+// The measured column inside a panel. Width comes from .pk-container in the
+// markup; the block rhythm is the panel's own.
+.pkic-mega-body {
+  padding-block: 1.5rem;
+}
+
+// The "view all" rule under a panel's grid.
+.pkic-mega-footer {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.13);
 }
 
 .pkic-mega-label {
@@ -954,20 +1103,12 @@ body.pkic-search-open {
     display: none !important;
   }
 
-  // Ensure the mobile navbar has comfortable padding and the container
-  // doesn't exceed the viewport, eliminating the white strip on the right
-  .pkic-navbar {
-    .container {
-      padding-left: 1rem;
-      padding-right: 1rem;
-    }
-  }
-
-  // Collapsed nav: give items a little breathing room
-  #navbarContent {
+  // Collapsed nav: give items a little breathing room. The container's own
+  // inline padding comes from .pk-container, so there is nothing to re-state.
+  .pkic-navbar-collapse.is-open {
     padding: 0.5rem 0 0.75rem;
 
-    .nav-link {
+    .pkic-nav-link {
       padding: 0.55rem 0.5rem;
       border-radius: 0.35rem;
     }

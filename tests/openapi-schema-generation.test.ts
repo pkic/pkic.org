@@ -272,7 +272,12 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/users/{userId}/gravatar"].post).toBeDefined();
     expect(spec.paths["/api/v1/users/current"].get).toBeDefined();
     expect(spec.paths["/api/v1/users/current"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/users/current/memberships/active"].put).toBeDefined();
+    expect(spec.paths["/api/v1/users/current/identities/active"].put).toBeDefined();
+    expect(spec.paths["/api/v1/users/current/identities"].get).toBeDefined();
+    expect(spec.paths["/api/v1/users/current/identities"].post).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/identities"].get).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/identities"].post).toBeDefined();
+    expect(spec.paths["/api/v1/organizations/{organizationId}/representatives"]).toBeUndefined();
     expect(spec.paths["/api/v1/users/current/notifications/preferences"].get).toBeDefined();
     expect(spec.paths["/api/v1/users/current/notifications/preferences"].patch).toBeDefined();
     expect(spec.paths["/api/v1/users/current/headshot"].put).toBeDefined();

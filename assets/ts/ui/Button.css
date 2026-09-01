@@ -1,0 +1,162 @@
+/*
+ * Button.
+ *
+ * Co-located with the component and imported by it, so Vite emits this into
+ * whichever lazy chunk first reaches a Button. Everything sits in
+ * `@layer components`: later than the quarantined legacy sheet, so no rule
+ * here has to out-specify Bootstrap, and earlier than `utilities`, so a
+ * utility can still override it.
+ */
+
+@layer components {
+  .pk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: var(--pk-control-y) var(--pk-control-x);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      background-color var(--pk-dur-fast),
+      border-color var(--pk-dur-fast),
+      color var(--pk-dur-fast);
+  }
+
+  /* Disabled and busy are visually the same and behaviourally different: a
+     busy button still owns focus so the screen reader stays where the user
+     put it, while a disabled one does not. */
+  .pk-btn:disabled,
+  .pk-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .pk-btn[aria-busy="true"] {
+    cursor: progress;
+  }
+
+  .pk-btn--primary {
+    background: var(--pk-accent-strong);
+    color: var(--pk-accent-on);
+  }
+  .pk-btn--primary:hover:not(:disabled, [aria-disabled="true"]) {
+    filter: brightness(1.1);
+  }
+
+  .pk-btn--secondary {
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    border-color: var(--pk-line);
+  }
+  .pk-btn--secondary:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-surface-sunk);
+    border-color: var(--pk-line-strong);
+  }
+
+  .pk-btn--ghost {
+    background: transparent;
+    color: var(--pk-ink-muted);
+  }
+  .pk-btn--ghost:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink);
+  }
+
+  /* Destructive comes in two weights. The quiet one is the default in lists,
+     where a filled red button on every row reads as a threat rather than an
+     action; the loud one is for the confirmation step. */
+  .pk-btn--danger-quiet {
+    background: transparent;
+    color: var(--pk-danger-ink);
+    border-color: color-mix(in srgb, var(--pk-danger) 40%, transparent);
+  }
+  .pk-btn--danger-quiet:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-danger-soft);
+  }
+
+  .pk-btn--danger {
+    background: var(--pk-danger-strong);
+    color: var(--pk-on-solid);
+  }
+  .pk-btn--danger:hover:not(:disabled, [aria-disabled="true"]) {
+    filter: brightness(0.92);
+  }
+
+  .pk-btn--link {
+    background: transparent;
+    color: var(--pk-accent-ink);
+    padding-inline: 0;
+    text-decoration: underline;
+  }
+
+  /*
+   * Controls on a surface that paints its own saturated ground.
+   *
+   * A CTA banner, a gradient hero: the ground is the surface's own color and
+   * owes nothing to the page accent, so an accent-filled button inside one
+   * arrives as a second competing color (dark green on blue), and the quiet
+   * button arrives as the theme's own surface — near-black, in the dark
+   * theme, on a mid-blue banner. Marking the surface `pk-on-solid` re-dresses
+   * the controls inside it from the `on-solid` tokens instead: the filled one
+   * becomes white with dark ink, the quiet one a white outline over the
+   * ground, and both hover to the same white fill. Primary and secondary are
+   * the two variants banners use; a ghost or a link button on such a ground
+   * would need the same treatment adding here rather than locally.
+   */
+  .pk-on-solid .pk-btn--primary {
+    background: var(--pk-on-solid);
+    color: var(--pk-on-solid-ink);
+  }
+  .pk-on-solid .pk-btn--secondary {
+    background: transparent;
+    color: var(--pk-on-solid);
+    border-color: var(--pk-on-solid);
+  }
+  /* One hover for both: `brightness` is what gives the already-white fill
+     somewhere to go, since brightening white does nothing. */
+  .pk-on-solid .pk-btn:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-on-solid);
+    color: var(--pk-on-solid-ink);
+    filter: brightness(0.94);
+  }
+
+  .pk-btn--sm {
+    font-size: var(--pk-text-sm);
+    padding: calc(var(--pk-control-y) * 0.7) calc(var(--pk-control-x) * 0.8);
+  }
+  .pk-btn--lg {
+    font-size: var(--pk-text-lg);
+    padding: calc(var(--pk-control-y) * 1.5) calc(var(--pk-control-x) * 1.4);
+  }
+
+  .pk-btn--icon {
+    padding: var(--pk-control-y);
+    aspect-ratio: 1;
+  }
+  .pk-btn--block {
+    width: 100%;
+  }
+
+  .pk-btn__spinner {
+    width: 0.85em;
+    height: 0.85em;
+    flex: none;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: pk-btn-spin var(--pk-dur-spin) linear infinite;
+  }
+
+  @keyframes pk-btn-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}

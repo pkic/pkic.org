@@ -7,6 +7,7 @@ import { getVoteStatisticsForManager, submitBallot } from "../functions/_lib/ser
 import { VOTE_CURRENT_PARTICIPATION_STATISTICS_QUERY } from "../functions/_lib/services/votes/voter-eligibility";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { queryAll } from "./helpers/context";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -25,18 +26,6 @@ async function call(token: string, path: string): Promise<Response> {
   return app.fetch(authorizedRequest(token, path), env, createExecutionContext());
 }
 
-async function assignGroupLeader(userId: string, groupId: string): Promise<string> {
-  const roleId = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(roleId, userId, groupId)
-    .run();
-  return roleId;
-}
-
 describe("group vote statistics", () => {
   beforeEach(async () => {
     await resetDb();
@@ -47,7 +36,7 @@ describe("group vote statistics", () => {
     const capacity = await createMultiOrganizationUser(env.DB);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.defaultMemberId, capacity.groupMemberId]);
     const vote = await createCanonicalVote(env.DB, admin);
-    const member = await resolveAuthMember(env.DB, capacity.userId);
+    const member = await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.groupIdentityId);
     await submitBallot(env.DB, member, vote.id, capacity.groupMemberId, "in_favor", null, TEST_GROUPS.pqc);
 
     const response = await call(adminToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/statistics`);
@@ -93,12 +82,12 @@ describe("group vote statistics", () => {
       TEST_GROUPS.pqc,
     );
     await env.DB.prepare(
-      `UPDATE organization_representatives
-          SET left_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second'),
+      `UPDATE identities
+          SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second'),
               blocked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 second')
-        WHERE member_id = ? AND user_id = ?`,
+        WHERE id = ? AND user_id = ?`,
     )
-      .bind(second.memberId, second.userId)
+      .bind(second.identityId, second.userId)
       .run();
 
     const response = groupVoteStatisticsResponseSchema.parse(
@@ -119,7 +108,7 @@ describe("group vote statistics", () => {
     const vote = await createCanonicalVote(env.DB, admin, { electorateMode: "per_person" });
     await submitBallot(
       env.DB,
-      await resolveAuthMember(env.DB, capacity.userId),
+      await resolveAuthMember(env.DB, capacity.userId, crypto.randomUUID(), capacity.defaultIdentityId),
       vote.id,
       null,
       "abstain",
@@ -203,7 +192,11 @@ describe("group vote statistics", () => {
     );
 
     const managerId = await insertUser(env.DB, "vote-statistics-manager@example.test");
-    const roleId = await assignGroupLeader(managerId, TEST_GROUPS.cm);
+    const { roleAssignmentId: roleId, memberId } = await grantGroupLeadershipCapacity(
+      env.DB,
+      TEST_GROUPS.cm,
+      managerId,
+    );
     await env.DB.prepare(
       "INSERT INTO vote_group_grants (vote_id, group_id, capability, created_at) VALUES (?, ?, 'manage', datetime('now'))",
     )
@@ -214,8 +207,9 @@ describe("group vote statistics", () => {
       id: managerId,
       email: "vote-statistics-manager@example.test",
       role: "user",
+      memberId,
     };
-    const managerToken = await createAdminSession(env.DB, managerId, crypto.randomUUID());
+    const managerToken = await createAdminSession(env.DB, managerId, crypto.randomUUID(), undefined, memberId);
     expect((await call(managerToken, `/api/v1/groups/${TEST_GROUPS.cm}/votes/${vote.id}/statistics`)).status).toBe(200);
     expect((await call(managerToken, `/api/v1/groups/${TEST_GROUPS.pqc}/votes/${vote.id}/statistics`)).status).toBe(
       403,

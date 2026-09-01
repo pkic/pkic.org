@@ -88,8 +88,8 @@ test.describe("public votes pages", () => {
     await expect(page.getByText(title)).toBeVisible();
 
     // ── Detail page (real backend) — not yet closed, no result shown ─────
-    // The card is clickable via Bootstrap's stretched-link pattern (an <a>
-    // whose ::after pseudo-element covers the card) — Playwright's own
+    // The card is clickable via the design system's `pk-stretched` utility
+    // (an <a> whose ::after pseudo-element covers the card) — Playwright's own
     // actionability check sees the <a> itself as zero-size, so click the
     // card container instead, mirroring how a real click lands on it.
     await page.locator(".member-card").filter({ hasText: title }).click();

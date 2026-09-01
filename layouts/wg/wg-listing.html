@@ -1,9 +1,11 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
-<section class="py-5">
-  <div class="container">
-    <div class="row mb-4">
+<section class="pk-section">
+  <div class="pk-container pk-stack pk-stack--loose">
+    {{/* The intro prose was wrapped in a Bootstrap `row`, which turned a block
+         of text into a flex container for no reason. */}}
+    <div>
       {{ .Content }}
     </div>
 
@@ -14,11 +16,9 @@
     {{ end }}
     {{ $wgCards = sort $wgCards "Params.card.order" }}
 
-    <div class="row g-4">
+    <div class="pk-grid">
       {{ range $wgCards }}
-      <div class="col-sm-6 col-xl-3">
-        {{ partial "wg/spotlight-card.html" . }}
-      </div>
+      {{ partial "wg/spotlight-card.html" . }}
       {{ end }}
     </div>
   </div>

@@ -3,20 +3,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { ActivityChartCard } from "../../assets/ts/components/analytics/ActivityChartCard";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
 import { EnumSelect } from "../../assets/ts/components/EnumSelect";
 import { FilterSelect } from "../../assets/ts/components/FilterSelect";
-import { EventScheduleFields } from "../../assets/ts/components/EventScheduleFields";
 import { FormActions } from "../../assets/ts/components/FormActions";
 import { MembershipCategoryPicker } from "../../assets/ts/components/MembershipCategoryPicker";
 import { TimeZoneSelect } from "../../assets/ts/components/TimeZoneSelect";
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
-import { RegistrationActionCard } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationActionCard";
+import { SeriesManagedNotice } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SeriesManagedNotice";
 import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SettingsEditor";
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
+import { buttonNamed, controlFor, namedGroup } from "./helpers/labelled-control";
+import { tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
 
@@ -72,12 +72,6 @@ describe("shared management presentation components", () => {
     expect(pager?.pageSize).toBe(50);
   });
 
-  it("renders activity chart markup in the common card", () => {
-    const container = mount(<ActivityChartCard chart={'<svg data-chart="activity"></svg>'} />);
-    expect(container.textContent).toContain("Activity — last 30 days");
-    expect(container.querySelector('[data-chart="activity"]')).not.toBeNull();
-  });
-
   it("renders filter options and reports the selected value", () => {
     const onChange = vi.fn();
     const container = mount(
@@ -91,7 +85,12 @@ describe("shared management presentation components", () => {
         onChange={onChange}
       />,
     );
-    const select = container.querySelector("select") as HTMLSelectElement;
+    // A visible label has to point at the control it names. The version this
+    // replaces rendered a bare `<label>` with no `for` and put a second copy
+    // of the same word in `aria-label`: two names, neither of them wired.
+    const select = controlFor<HTMLSelectElement>(container, "Status");
+    expect(select.tagName.toLowerCase()).toBe("select");
+    expect(select.getAttribute("aria-label")).toBeNull();
     select.value = "active";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -99,32 +98,25 @@ describe("shared management presentation components", () => {
     expect(onChange).toHaveBeenCalledWith("active");
   });
 
-  it("reports every event schedule field through the shared editor", () => {
-    const onStartsAtChange = vi.fn();
-    const onEndsAtChange = vi.fn();
-    const onTimezoneChange = vi.fn();
-    const container = mount(
-      <EventScheduleFields
-        startsAt="2026-09-01T09:00"
-        endsAt="2026-09-01T17:00"
-        timezone="Europe/Amsterdam"
-        onStartsAtChange={onStartsAtChange}
-        onEndsAtChange={onEndsAtChange}
-        onTimezoneChange={onTimezoneChange}
+  it("FilterSelect never leaves a select anonymous, however little the caller names it", () => {
+    // A toolbar filter has no room for a visible label, and call sites exist
+    // that pass neither name — which announced "combo box" and nothing more.
+    const unnamed = mount(
+      <FilterSelect value="" options={[{ value: "", label: "All statuses" }]} onChange={() => {}} />,
+    );
+    expect(unnamed.querySelector("select")?.getAttribute("aria-label")).toBe("Filter");
+
+    const named = mount(
+      <FilterSelect
+        ariaLabel="Proposal status"
+        value=""
+        options={[{ value: "", label: "All statuses" }]}
+        onChange={() => {}}
       />,
     );
-    const inputs = [...container.querySelectorAll("input")];
-    for (const [input, value] of inputs.map(
-      (input, index) => [input, ["2026-10-01T10:00", "2026-10-01T18:00", "UTC"][index]] as const,
-    )) {
-      input.value = value;
-      void act(() => {
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    }
-    expect(onStartsAtChange).toHaveBeenCalledWith("2026-10-01T10:00");
-    expect(onEndsAtChange).toHaveBeenCalledWith("2026-10-01T18:00");
-    expect(onTimezoneChange).toHaveBeenCalledWith("UTC");
+    expect(named.querySelector("select")?.getAttribute("aria-label")).toBe("Proposal status");
+    // No visible label, and therefore no orphaned `for` either.
+    expect(named.querySelector("label")).toBeNull();
   });
 
   it("renders consistent busy and cancellation form actions", () => {
@@ -146,17 +138,47 @@ describe("shared management presentation components", () => {
     expect(container.textContent).toContain("Waiting");
   });
 
-  it("renders registration actions in the common card structure", () => {
-    const container = mount(
-      <div class="row">
-        <RegistrationActionCard title="Confirmation Email" description="Re-queues the email.">
-          <button>Resend</button>
-        </RegistrationActionCard>
-      </div>,
+  it("says a save is in flight to assistive technology, not only by swapping the label", () => {
+    const busy = mount(<FormActions submitLabel="Save" busyLabel="Saving…" busy onCancel={vi.fn()} />);
+    const submit = busy.querySelector("button")!;
+    expect(submit.getAttribute("aria-busy")).toBe("true");
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
+
+    const idle = mount(<FormActions submitLabel="Save" busy={false} onCancel={vi.fn()} />);
+    const idleSubmit = idle.querySelector("button")!;
+    expect(idleSubmit.hasAttribute("aria-busy")).toBe(false);
+    expect(idleSubmit.disabled).toBe(false);
+  });
+
+  it("announces a failed save as an alert rather than colouring the same sentence red", () => {
+    const failed = mount(
+      <FormActions
+        submitLabel="Save"
+        busy={false}
+        onCancel={vi.fn()}
+        status="Could not save."
+        statusVariant="danger"
+      />,
     );
-    expect(container.querySelector(".card-header")?.textContent).toContain("Confirmation Email");
-    expect(container.textContent).toContain("Re-queues the email.");
-    expect(container.querySelector("button")?.textContent).toBe("Resend");
+    const alert = failed.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Could not save.");
+
+    // The routine outcome is not an alert: it is announced politely, so a
+    // reader is not interrupted every time a form reports that it saved.
+    const saved = mount(<FormActions submitLabel="Save" busy={false} onCancel={vi.fn()} status="Saved." />);
+    expect(saved.querySelector('[role="alert"]')).toBeNull();
+    expect(saved.querySelector('[role="status"]')?.textContent).toBe("Saved.");
+  });
+
+  it("keeps cancel reachable while the save is in flight only when the form is not busy", () => {
+    const onCancel = vi.fn();
+    const ready = mount(<FormActions submitLabel="Save" busy={false} onCancel={onCancel} />);
+    void act(() => buttonNamed(ready, "Cancel").click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    const busy = mount(<FormActions submitLabel="Save" busy onCancel={onCancel} />);
+    void act(() => buttonNamed(busy, "Cancel").click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it("renders one settings shell for loading, errors, actions, and content", () => {
@@ -175,6 +197,43 @@ describe("shared management presentation components", () => {
     expect(ready.textContent).toContain("Settings");
     expect(ready.textContent).toContain("Save");
     expect(ready.textContent).toContain("Content");
+
+    // The wait is announced with a name, not mimed by a grey rectangle.
+    expect(loading.querySelector('[role="status"]')?.textContent).toContain("Loading settings…");
+  });
+
+  it("replaces the settings shell with the reason it could not load", () => {
+    const failed = mount(
+      <SettingsEditor loading={false} error="HTTP 403" description="Settings" actions={<button>Save</button>}>
+        <span>Content</span>
+      </SettingsEditor>,
+    );
+
+    // The failure is announced where it appears, and nothing behind it invites
+    // an edit that cannot be saved.
+    expect(failed.querySelector('[role="alert"]')?.textContent).toContain("You don't have access to this");
+    expect(failed.textContent).not.toContain("Content");
+    expect(failed.textContent).not.toContain("HTTP 403");
+  });
+
+  it("sends a series-managed event to its series through a real link", () => {
+    const container = mount(<SeriesManagedNotice event={{ ownerGroupId: "group-1", seriesId: "series-1" }} />);
+
+    // An informational tone, so it is announced politely rather than
+    // interrupting the reader the way role="alert" would.
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    const link = container.querySelector<HTMLAnchorElement>("a");
+    // A link, not a button: it navigates, so it can be opened in a new tab.
+    expect(link?.getAttribute("href")).toBe("#/groups/group-1/meetings/series-1");
+    expect(link?.textContent).toContain("Open meeting series");
+  });
+
+  it("says why a series-managed event offers no way through when its group is unknown", () => {
+    const container = mount(<SeriesManagedNotice event={{ ownerGroupId: null, seriesId: "series-1" }} />);
+
+    // No dead control: the sentence explains the absence instead.
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("The owning group for this meeting series could not be determined.");
   });
 
   it("moves focus with the complete tabs keyboard pattern without requiring generated ids", () => {
@@ -194,23 +253,23 @@ describe("shared management presentation components", () => {
         onChange={onChange}
       />,
     );
-    const tabs = [...container.querySelectorAll<HTMLButtonElement>("[role='tab']")];
-    tabs[0].focus();
+    const rendered = tabs(container);
+    rendered[0].focus();
     void act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+      rendered[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
     });
     expect(onChange).toHaveBeenLastCalledWith("attendance");
-    expect(document.activeElement).toBe(tabs[2]);
+    expect(document.activeElement).toBe(rendered[2]);
     void act(() => {
-      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      rendered[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     });
     expect(onChange).toHaveBeenLastCalledWith("settings");
-    expect(document.activeElement).toBe(tabs[0]);
+    expect(document.activeElement).toBe(rendered[0]);
     void act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      rendered[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     });
     expect(onChange).toHaveBeenLastCalledWith("attendance");
-    expect(document.activeElement).toBe(tabs[2]);
+    expect(document.activeElement).toBe(rendered[2]);
   });
 
   it("renders shared audit columns while preserving domain-specific cells", async () => {
@@ -271,11 +330,49 @@ describe("shared management presentation components", () => {
     const select = container.querySelector<HTMLSelectElement>("#widget-status")!;
     expect(select.options).toHaveLength(2);
     expect(select.options[1].textContent).toBe("Published");
+    // The caller owns the id, so the label it writes has to reach that id and
+    // not a generated one.
+    expect(controlFor<HTMLSelectElement>(container, "Status")).toBe(select);
     select.value = "published";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("published");
+  });
+
+  it("EnumSelect announces a required field in words, and survives a value outside its vocabulary", () => {
+    const container = mount(
+      <EnumSelect
+        id="widget-policy"
+        label="Posting policy"
+        value={"retired" as "members" | "subscribers"}
+        required
+        help="Who may post to this list."
+        options={[
+          { value: "members", label: "Members" },
+          { value: "subscribers", label: "Subscribers" },
+        ]}
+        onChange={() => {}}
+      />,
+    );
+
+    const select = container.querySelector<HTMLSelectElement>("#widget-policy")!;
+    // A value the contract no longer offers selects nothing rather than
+    // inventing an option for itself, so a stale record cannot be silently
+    // re-saved under a vocabulary term that does not exist.
+    expect(select.value).toBe("");
+    expect(select.required).toBe(true);
+
+    // The asterisk is decorative; the word behind it is what gets announced,
+    // so "required" survives even with images and colour off.
+    const label = container.querySelector("label")!;
+    expect(label.textContent).toContain("(required)");
+    expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
+
+    // Help text is guidance, so it is described-by rather than part of the name.
+    const helpId = select.getAttribute("aria-describedby");
+    expect(helpId).toBe("widget-policy-help");
+    expect(container.querySelector(`[id="${helpId!}"]`)?.textContent).toBe("Who may post to this list.");
   });
 
   it("TimeZoneSelect keeps the submitted value as the raw IANA identifier typed or picked", () => {
@@ -291,6 +388,42 @@ describe("shared management presentation components", () => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("America/New_York");
+  });
+
+  it("TimeZoneSelect names its control, marks it required in words, and wires its guidance", () => {
+    const container = mount(
+      <TimeZoneSelect
+        id="series-timezone"
+        label="Time zone"
+        value="Europe/Amsterdam"
+        help="Recurrence is expanded in this zone."
+        onChange={vi.fn()}
+      />,
+    );
+
+    // Resolved through the label's own for/id pair, so the lookup fails
+    // exactly when the labelling contract does.
+    const input = controlFor(container, "Time zone");
+    expect(input.id).toBe("series-timezone");
+    // The asterisk is decorative; the word behind it is what is announced.
+    const marker = container.querySelector(".pk-field__required");
+    expect(marker?.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
+    expect(marker?.querySelector(".pk-field__sr")?.textContent).toBe("(required)");
+    // The guidance is tied to the control rather than merely placed beside it.
+    expect(container.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toBe(
+      "Recurrence is expanded in this zone.",
+    );
+  });
+
+  it("TimeZoneSelect leaves no orphaned required marker when the field is optional", () => {
+    const container = mount(
+      <TimeZoneSelect id="series-timezone" label="Time zone" value="" required={false} onChange={vi.fn()} />,
+    );
+
+    expect(controlFor(container, "Time zone").hasAttribute("required")).toBe(false);
+    expect(container.querySelector(".pk-field__required")).toBeNull();
+    // No help means no dangling aria-describedby pointing at nothing.
+    expect(controlFor(container, "Time zone").getAttribute("aria-describedby")).toBeNull();
   });
 
   it("MembershipCategoryPicker treats an empty selection as every category", () => {
@@ -339,4 +472,56 @@ describe("shared management presentation components", () => {
     });
     expect(onChange).toHaveBeenCalledWith([]);
   });
+
+  it("MembershipCategoryPicker names the set with a legend and ties its guidance to the group", () => {
+    const container = mount(
+      <MembershipCategoryPicker idPrefix="sync" label="Auto-sync categories" selected={[]} onChange={vi.fn()} />,
+    );
+
+    // A row of fifteen single-letter boxes with no group name is announced as
+    // fifteen unrelated checkboxes; the legend is what says what they are.
+    const group = namedGroup(container, "Auto-sync categories");
+    const describedBy = group.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
+      "Leave every box unchecked to include all membership categories.",
+    );
+
+    // Every box is a complete check block: `pk-check` on the label alone
+    // renders the operating system's own control, which no gate can see.
+    const checks = [...container.querySelectorAll<HTMLLabelElement>("label.pk-check")];
+    expect(checks).toHaveLength(MEMBERSHIP_CATEGORIES.length);
+    for (const check of checks) {
+      const input = check.querySelector<HTMLInputElement>("input.pk-check__input");
+      expect(input).not.toBeNull();
+      expect(check.htmlFor).toBe(input!.id);
+      expect(check.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
+    }
+  });
+
+  it("MembershipCategoryPicker takes the whole set out of play through the fieldset, not per control", () => {
+    const container = mount(
+      <MembershipCategoryPicker
+        idPrefix="sync"
+        label="Auto-sync categories"
+        selected={[]}
+        onChange={vi.fn()}
+        disabled
+      />,
+    );
+
+    // `disabled` on the fieldset is the one attribute that takes every control
+    // inside it out of play, including ones a parent cannot reach.
+    expect(namedGroup(container, "Auto-sync categories").disabled).toBe(true);
+    for (const category of MEMBERSHIP_CATEGORIES) {
+      expect(container.querySelector<HTMLInputElement>(`#sync-${category}`)?.disabled).toBe(true);
+    }
+  });
 });
+
+/**
+ * The shared components every list surface renders. Their internals now
+ * delegate to the design system, so what is worth asserting here is what a
+ * visual specimen cannot show: what each one exposes to assistive technology,
+ * and what it does when the data or the request is not the happy one.
+ */

@@ -4,6 +4,10 @@ interface TableNameRow {
   name: string;
 }
 
+let cachedResettableTables: string[] | null = null;
+let cachedDeleteOrder: string[] | null = null;
+let baselinesInitialized = false;
+
 // `roles` / `role_permissions` are system reference data —
 // built-in roles "ship with the portal" and are seeded once by migration
 // consolidated migration 0035, not per-test business data (unlike ordinary
@@ -90,6 +94,8 @@ const SEEDED_MAILING_LIST_IDS = [
 ] as const;
 
 async function listResettableTables(): Promise<string[]> {
+  if (cachedResettableTables) return cachedResettableTables;
+
   const { results } = await env.DB.prepare(
     `SELECT name
        FROM sqlite_master
@@ -97,14 +103,27 @@ async function listResettableTables(): Promise<string[]> {
          AND name NOT LIKE 'sqlite_%'`,
   ).all<TableNameRow>();
 
-  return results
+  cachedResettableTables = results
     .map((row: TableNameRow) => row.name)
     .filter((name: string) => !name.startsWith("_cf_"))
     .filter((name: string) => !EXCLUDED_TABLES.has(name));
+  return cachedResettableTables;
 }
 
 async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
+  if (cachedDeleteOrder) {
+    try {
+      await env.DB.batch(cachedDeleteOrder.map((tableName) => env.DB.prepare(`DELETE FROM "${tableName}"`)));
+      return;
+    } catch {
+      // A later test may populate an FK edge that earlier resets did not.
+      // The batch is atomic, so relearn a safe order without partial cleanup.
+      cachedDeleteOrder = null;
+    }
+  }
+
   const pending = new Set(tableNames);
+  const deleteOrder: string[] = [];
 
   // Re-try deletes so FK parents are attempted after children are cleared.
   while (pending.size > 0) {
@@ -114,6 +133,7 @@ async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
       try {
         await env.DB.prepare(`DELETE FROM "${tableName}"`).run();
         pending.delete(tableName);
+        deleteOrder.push(tableName);
         deletedInPass += 1;
       } catch {
         // Leave table pending for the next pass (usually FK order related).
@@ -126,6 +146,8 @@ async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
       );
     }
   }
+
+  cachedDeleteOrder = deleteOrder;
 }
 
 /**
@@ -273,8 +295,11 @@ export async function resetDb(): Promise<void> {
   const historyDeleteTriggerSql = await suspendHistoryDeleteTrigger();
   const mailingListDeleteTriggerSql = await suspendMailingListDeleteTrigger();
   try {
-    await ensureMembershipCategoryBaseline();
-    await ensureMembershipSettingsBaseline();
+    if (!baselinesInitialized) {
+      await ensureMembershipCategoryBaseline();
+      await ensureMembershipSettingsBaseline();
+      baselinesInitialized = true;
+    }
     await resetMembershipConfiguration();
     const tableNames = await listResettableTables();
     await clearTablesWithRetry(tableNames);

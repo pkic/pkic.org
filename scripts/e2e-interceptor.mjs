@@ -25,7 +25,9 @@ const server = createServer((req, res) => {
   // Wrangler worker POSTs email payloads here instead of SendGrid
   if (req.method === "POST" && url === "/") {
     let body = "";
-    req.on("data", (chunk) => { body += chunk; });
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
     req.on("end", () => {
       try {
         const payload = JSON.parse(body);

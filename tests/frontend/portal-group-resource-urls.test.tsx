@@ -4,11 +4,20 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
+}));
+
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -87,7 +96,7 @@ describe("URL-addressed group sub-resources", () => {
     const container = mount(<GroupEvents groupId={GROUP_ID} initialEventId={eventId} />);
     await settle();
 
-    expect(container.textContent).toContain("HTTP 403");
+    expect(container.textContent).toContain("don't have access");
   });
 
   it("navigates to and from a form placement's canonical URL and reports its detail load", async () => {
@@ -143,7 +152,11 @@ describe("URL-addressed group sub-resources", () => {
 
     const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
     await settle();
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    // The row itself opens and closes the detail; its activation names the
+    // form both ways.
+    const details = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Show details for Architecture survey",
+    );
     await act(async () => {
       details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -151,7 +164,9 @@ describe("URL-addressed group sub-resources", () => {
     expect(container.textContent).toContain("Architecture survey");
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/${placementId}`);
 
-    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
+    const hide = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Hide details for Architecture survey",
+    );
     await act(async () => {
       hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -203,10 +218,85 @@ describe("URL-addressed group sub-resources", () => {
       }),
     );
 
-    const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} initialPlacementId={placementId} />);
+    const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} placementSegment={placementId} />);
     await settle();
     await settle();
 
-    expect(container.textContent).toContain("HTTP 403");
+    expect(container.textContent).toContain("don't have access");
+  });
+
+  it("threads the group form's resourceTab through GroupForms so a responses deep link opens the responses tab", async () => {
+    const placementId = "80000000-0000-4000-8000-000000000002";
+    const page = { limit: 50, offset: 0, total: 1, hasMore: false };
+    const row = {
+      form: {
+        id: "80000000-0000-4000-8000-000000000001",
+        key: "architecture-survey",
+        purpose: "survey",
+        status: "active",
+        title: "Architecture survey",
+        description: null,
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      },
+      placement: {
+        id: placementId,
+        formId: "80000000-0000-4000-8000-000000000001",
+        ownerGroupId: GROUP_ID,
+        contextType: "group",
+        contextRef: GROUP_ID,
+        audience: "group_members",
+        active: true,
+        opensAt: null,
+        closesAt: null,
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      },
+      capabilities: ["view_definition", "submit", "view_responses"],
+      acceptingResponses: true,
+    } as const;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/forms")) return json({ forms: [row], page });
+        if (url.pathname.endsWith("/submissions")) {
+          return json({ form: row.form, placement: row.placement, submissions: [], page });
+        }
+        if (url.pathname.endsWith(`/forms/${placementId}`)) {
+          return json({
+            form: row.form,
+            placement: row.placement,
+            fields: [],
+            capabilities: row.capabilities,
+            acceptingResponses: row.acceptingResponses,
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    const container = mount(
+      <GroupForms
+        groupId={GROUP_ID}
+        canManage={false}
+        placementSegment={placementId}
+        initialPlacementTab="responses"
+      />,
+    );
+    await settle();
+    await settle();
+
+    const responsesTab = tabs(container).find((item) => item.textContent?.trim() === "Responses");
+    expect(isCurrentTab(responsesTab)).toBe(true);
+
+    const statisticsTab = tabs(container).find((item) => item.textContent?.trim() === "Statistics")!;
+    expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${placementId}/statistics`);
+    await act(async () => {
+      statisticsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/${placementId}/statistics`);
   });
 });

@@ -28,15 +28,15 @@ async function main(): Promise<void> {
   const { boot, token, data, loadingEl, contentEl } = loaded;
   const notAcceptedEl = boot.root.querySelector<HTMLElement>("[data-not-accepted-section]");
 
-  if (loadingEl) loadingEl.classList.add("d-none");
+  if (loadingEl) loadingEl.hidden = true;
 
   // If speaker is not accepted or proposal is not accepted, show not-accepted state
   if (data.speaker.status === "declined" || data.proposal.status !== "accepted") {
-    notAcceptedEl?.classList.remove("d-none");
+    if (notAcceptedEl) notAcceptedEl.hidden = false;
     return;
   }
 
-  if (contentEl) contentEl.classList.remove("d-none");
+  if (contentEl) contentEl.hidden = false;
 
   // Proposal summary
   const proposalTitleEl = boot.root.querySelector<HTMLElement>("[data-proposal-title]");
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
       day: "numeric",
     });
     coSpeakerNotice.textContent = `${uploaderName} already uploaded a presentation for this session on ${uploadedDate}. You only need to upload again if you want to replace it.`;
-    coSpeakerNotice.classList.remove("d-none");
+    coSpeakerNotice.hidden = false;
   }
 
   // Status message
@@ -83,11 +83,11 @@ async function main(): Promise<void> {
       : DEFAULT_PRESENTATION_TERMS;
 
   // File upload with disclaimer
-  const presentationLabel = boot.root.querySelector<HTMLLabelElement>("[data-presentation-upload-label]");
+  const presentationButton = boot.root.querySelector<HTMLButtonElement>("[data-presentation-upload-label]");
   const presentationInput = boot.root.querySelector<HTMLInputElement>("[data-presentation-file]");
   const presentationUploadStatus = boot.root.querySelector<HTMLElement>("[data-presentation-upload-status]");
 
-  presentationLabel?.addEventListener("click", async (e) => {
+  presentationButton?.addEventListener("click", async (e) => {
     e.preventDefault();
     const accepted = await showHeadshotDisclaimer({
       title: "Before you upload your presentation",
@@ -115,7 +115,7 @@ async function main(): Promise<void> {
         if (presentationUploadStatus) presentationUploadStatus.textContent = "Presentation uploaded successfully.";
         if (presentationMsg)
           presentationMsg.textContent = "Presentation uploaded. You can replace it with a newer version if needed.";
-        if (coSpeakerNotice) coSpeakerNotice.classList.add("d-none");
+        if (coSpeakerNotice) coSpeakerNotice.hidden = true;
         setStatus(boot.statusEl, "Presentation uploaded successfully.");
       } catch (error) {
         if (presentationUploadStatus)

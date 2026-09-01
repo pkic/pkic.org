@@ -1,18 +1,26 @@
 {{ define "main" }}
-<div class="py-2 bg-light">
-</div>
+{{/*
+  The default list layout: every page in the section, then the pager.
 
-<div class="album py-5">
-    <div class="container">
+  No `pk` root: `pagelisting.html` renders cards that `assets/scss` still
+  paints, and the base layer beats the legacy layer, so opting in would
+  recolour them. The utilities are unscoped, so the column and the rhythm come
+  from them, and the pager brings its own design-system styling.
+
+  The empty `py-2 bg-light` band that used to sit above the list is gone: it
+  carried no content and existed only to paint a Bootstrap grey strip.
+*/}}
+<div class="pk-section">
+    <div class="pk-container pk-stack pk-stack--loose">
         {{ range .Data.Pages }}
             {{ if not .Params.robots }}
                 {{ partial "pagelisting.html" . }}
             {{ end }}
         {{ end }}
 
-        <div class="pagination justify-content-center mt-5">
-        {{ template "_internal/pagination.html" . }}
-        </div>
+        <nav class="pk-cluster pk-cluster--center" aria-label="Pagination">
+        {{ partial "pagination.html" . }}
+        </nav>
     </div>
 </div>
 {{ end }}

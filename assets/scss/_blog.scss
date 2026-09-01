@@ -3,7 +3,9 @@
 // ============================================================
 
 .blog-card {
-  background: #fff;
+  // `--pk-surface` rather than white: the reader can choose the dark theme now,
+  // and a hard-coded ground turns into a light island with near-white text on it.
+  background: var(--pk-surface);
   border-radius: 1rem;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -281,6 +283,21 @@
 // Blog sidebar
 // ============================================================
 
+// The article/sidebar split. Replaces the `row` + `col-lg-9`/`col-lg-3` pair:
+// one grid declaration instead of a breakpoint class on each column.
+.blog-post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-6);
+  align-items: start;
+}
+
+@media (min-width: 992px) {
+  .blog-post-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(15rem, 1fr);
+  }
+}
+
 .blog-sidebar {
   padding-left: 1.5rem;
 
@@ -340,26 +357,6 @@
     &:hover {
       color: $green;
     }
-  }
-}
-
-// Tags rendered as Bootstrap badges in sidebar context get green pill styling
-.blog-sidebar-section .badge.bg-secondary {
-  display: inline-block;
-  font-size: 0.65rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 0.2em 0.55em !important;
-  border-radius: 999px !important;
-  background: $green-pale !important;
-  color: $green-deep !important;
-  text-decoration: none;
-  margin: 0.15rem 0.1rem;
-
-  &:hover {
-    background: $green !important;
-    color: #fff !important;
   }
 }
 
@@ -460,9 +457,10 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  // social.html renders .linkArea anchors with px-1 Bootstrap padding;
-  // nudge them left so icons sit snug against the name
-  margin-left: -0.1rem;
+  // social.html used to space its icons with a `px-1` on each anchor, which
+  // this rule then had to cancel with a negative margin. One gap here is the
+  // single decision that replaces both.
+  gap: var(--pk-2);
 
   a.linkArea {
     color: $gray-400;
@@ -479,9 +477,9 @@
 // ============================================================
 
 .blog-post-nav {
-  border-top: 1px solid $gray-200;
+  border-top: 1px solid var(--pk-line);
   padding: 2rem 0;
-  background: #fff;
+  background: var(--pk-surface);
 }
 
 .blog-post-nav-inner {
@@ -655,6 +653,13 @@
   border-radius: 1rem;
   border: 1px solid $gray-200;
   z-index: 100; // stay well below the navbar (1040)
+
+  // Replaces `sticky-lg-top` and its inline `top` offset, which the site's
+  // strict CSP and the no-style-attribute rule both forbid.
+  @media (min-width: 992px) {
+    position: sticky;
+    top: 76px; // clears the fixed navbar
+  }
 }
 
 .blog-sidebar-sponsors-intro {
@@ -779,60 +784,6 @@
   }
 }
 
-// ── Gradient cycling ──────────────────────────────────────────
-// Each .blog-card is the sole child of its col, so :nth-child on the card
-// always resolves to 1. Target the wrapping column instead.
-.row [class*="col-"]:nth-child(6n + 2) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(90, 155, 213, 0.25) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n + 3) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(111, 66, 193, 0.25) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n + 4) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(237, 125, 49, 0.3) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n + 5) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(220, 53, 69, 0.25) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(25, 135, 84, 0.3) 0%,
-      transparent 55%
-    );
-  }
-}
-
 // ── Card footer: logo (left) + domain link (right) ────────────
 .news-card-footer {
   margin-top: auto;
@@ -884,6 +835,10 @@
 }
 
 .news-card-domain {
+  // The headline's stretched link covers the whole card, so the domain link
+  // has to sit above that overlay to stay clickable.
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;

@@ -10,6 +10,10 @@ import {
 import { ConsentList } from "../../../../components/ConsentCard";
 import { DayAttendancePicker } from "../../../../components/DayAttendancePicker";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Spinner } from "../../../../ui/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { deriveEventAttendanceType, readField } from "../../../../shared/form/helpers";
@@ -17,6 +21,10 @@ import { readConsentValues } from "../../../../shared/widgets/consents";
 import { CustomFieldList, readCustomFieldValues } from "../../../../shared/widgets/custom-fields";
 import { readDayAttendance } from "../../../../shared/widgets/day-attendance";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
+// The attendance radios and the legend are written as class names rather
+// than rendered through a component, so this module has to pull in the
+// stylesheet that defines them.
+import "../../../../ui/Field.css";
 
 const ATTENDANCE_LABELS: Record<AttendanceType, string> = {
   in_person: "In person",
@@ -34,19 +42,21 @@ function eventRegistrationPath(groupId: string, eventId: string): string {
 
 function attendanceTypeOptions(): JSX.Element {
   return (
-    <fieldset>
-      <legend class="form-label small fw-semibold">How will you attend?</legend>
-      <div class="d-flex flex-column gap-2">
+    // A `legend` rather than a `label`: the question names the group of radios,
+    // and a label may only point at one control.
+    <fieldset class="pk-fieldset pk-field">
+      <legend class="pk-field__label">How will you attend?</legend>
+      <div class="pk-stack pk-stack--tight">
         {ATTENDANCE_TYPES.map((attendanceType) => (
-          <label class="form-check" key={attendanceType}>
+          <label class="pk-check" key={attendanceType}>
             <input
-              class="form-check-input"
+              class="pk-check__input"
               type="radio"
               name="attendanceType"
               value={attendanceType}
               required={attendanceType === ATTENDANCE_TYPES[0]}
             />
-            <span class="form-check-label">{ATTENDANCE_LABELS[attendanceType]}</span>
+            <span class="pk-check__label">{ATTENDANCE_LABELS[attendanceType]}</span>
           </label>
         ))}
       </div>
@@ -76,24 +86,24 @@ function RegistrationFields({ config }: { config: EventFormsResponse }): JSX.Ele
   }
 
   return (
-    <div onChange={handleAttendanceChange}>
+    <div class="pk-stack" onChange={handleAttendanceChange}>
       {config.eventDays.length > 0 ? (
-        <div>
-          <p class="form-label small fw-semibold">Choose your attendance for each day</p>
+        <fieldset class="pk-fieldset pk-field">
+          <legend class="pk-field__label">Choose your attendance for each day</legend>
           <DayAttendancePicker days={config.eventDays} />
-        </div>
+        </fieldset>
       ) : (
         attendanceTypeOptions()
       )}
       {config.form && (
-        <div>
-          <h6 class="small fw-semibold">{config.form.title}</h6>
-          {config.form.description && <p class="small text-muted">{config.form.description}</p>}
+        <div class="pk-stack pk-stack--tight">
+          <h4>{config.form.title}</h4>
+          {config.form.description && <p class="pk-small">{config.form.description}</p>}
           <CustomFieldList fields={config.form.fields} context={customFieldContext} />
         </div>
       )}
-      <div>
-        <h6 class="small fw-semibold">Terms and conditions</h6>
+      <div class="pk-stack pk-stack--tight">
+        <h4>Terms and conditions</h4>
         <ConsentList terms={config.requiredTerms} />
       </div>
     </div>
@@ -136,31 +146,36 @@ function RegistrationPanel({ groupId, event }: { groupId: string; event: GroupEv
     }
   }
 
-  if (config.loading) return <p class="small text-muted">Loading registration…</p>;
+  if (config.loading) return <Spinner label="Loading registration…" />;
   if (config.error) return <ErrorAlert error={config.error} />;
   if (!config.data) return <></>;
   const termsConfigured = config.data.requiredTerms.some((term) => term.required);
 
   return (
-    <section class="border-top pt-3" aria-label={`Register for ${event.name}`}>
-      <h6>Register for this event</h6>
-      <p class="small text-muted">Your verified portal profile will be used for this registration.</p>
-      {!termsConfigured && (
-        <div class="alert alert-warning" role="alert">
-          Registration is temporarily unavailable because the required event terms have not been configured.
-        </div>
-      )}
-      <form ref={formRef} onSubmit={(submitEvent) => void submit(submitEvent)}>
-        <RegistrationFields key={resetKey} config={config.data} />
-        <div class="d-flex gap-2 align-items-center mt-3">
-          <button type="submit" class="btn btn-sm btn-primary" disabled={saving || !termsConfigured}>
-            {saving ? "Registering…" : "Register"}
-          </button>
-          {submitted && <span class="small text-success">Registration submitted.</span>}
-          {submitError && <span class="small text-danger">{submitError}</span>}
-        </div>
-      </form>
-    </section>
+    <Panel class="pk" aria-label={`Register for ${event.name}`}>
+      <PanelHeader title="Register for this event" />
+      <PanelBody class="pk-stack">
+        <p class="pk-small">Your verified portal profile will be used for this registration.</p>
+        {!termsConfigured && (
+          <Alert tone="warn" title="Registration unavailable">
+            Registration is temporarily unavailable because the required event terms have not been configured.
+          </Alert>
+        )}
+        <form class="pk-stack" ref={formRef} onSubmit={(submitEvent) => void submit(submitEvent)}>
+          <RegistrationFields key={resetKey} config={config.data} />
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!termsConfigured}>
+              {saving ? "Registering…" : "Register"}
+            </Button>
+          </div>
+          {/* The outcome is announced as well as shown: `Alert` carries
+              role="status" for the confirmation and role="alert" for the
+              failure, so the words reach a reader who never sees the tone. */}
+          {submitted && <Alert tone="ok">Registration submitted.</Alert>}
+          {submitError && <Alert tone="danger">{submitError}</Alert>}
+        </form>
+      </PanelBody>
+    </Panel>
   );
 }
 

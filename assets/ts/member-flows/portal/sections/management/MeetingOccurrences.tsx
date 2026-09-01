@@ -10,6 +10,8 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt, toast } from "../../ui";
 import { MeetingOccurrenceDetail } from "./MeetingOccurrenceDetail";
 import { MeetingOccurrenceFields, type MeetingOccurrenceDraft } from "./MeetingOccurrenceFields";
@@ -78,31 +80,45 @@ export function MeetingOccurrences({
   }
 
   return (
-    <div class="d-flex flex-column gap-3">
+    <div class="pk pk-stack">
       {canManage && (
-        <div>
-          <button type="button" class="btn btn-sm btn-primary" onClick={() => setShowCreate((shown) => !shown)}>
+        <div class="pk-cluster">
+          <Button
+            size="sm"
+            variant="primary"
+            aria-expanded={showCreate}
+            onClick={() => setShowCreate((shown) => !shown)}
+          >
             {showCreate ? "Hide occurrence form" : "Add occurrence"}
-          </button>
+          </Button>
         </div>
       )}
       {canManage && showCreate && (
-        <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={(event) => void create(event)}>
-          <MeetingOccurrenceFields
-            idPrefix={`meeting-occurrence-create-${series.id}`}
-            draft={draft}
-            disabled={saving}
-            onChange={setDraft}
-          />
-          <div class="d-flex gap-2 align-items-center">
-            <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
-              {saving ? "Creating…" : "Create occurrence"}
-            </button>
-            {error && <ErrorAlert error={error} />}
-          </div>
-        </form>
+        <Panel>
+          <PanelHeader title="New occurrence" />
+          <PanelBody class="pk-stack">
+            <form class="pk-stack" onSubmit={(event) => void create(event)}>
+              <MeetingOccurrenceFields
+                idPrefix={`meeting-occurrence-create-${series.id}`}
+                draft={draft}
+                disabled={saving}
+                onChange={setDraft}
+              />
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
+                  {saving ? "Creating…" : "Create occurrence"}
+                </Button>
+              </div>
+              {/* Below the actions rather than beside them: an alert is a
+                  block, and sharing the button's row pushed the button off
+                  the line as soon as the message ran to a second one. */}
+              {error && <ErrorAlert error={error} />}
+            </form>
+          </PanelBody>
+        </Panel>
       )}
       <ApiDataTable
+        caption={`Scheduled occurrences of ${series.eventName}`}
         endpoint={`${base}/occurrences`}
         responseSchema={eventOccurrencesListResponseSchema}
         resolve={(response) => response.occurrences}
@@ -116,37 +132,52 @@ export function MeetingOccurrences({
             cell: (occurrence) => fmt(occurrence.startsAt),
             sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: "asc" },
           },
-          { header: "Ends", cell: (occurrence) => fmt(occurrence.endsAt), sort: { asc: "ends_at", desc: "-ends_at" } },
+          {
+            header: "Ends",
+            cell: (occurrence) => fmt(occurrence.endsAt),
+            width: "fit",
+            sort: { asc: "ends_at", desc: "-ends_at" },
+          },
           {
             header: "Status",
             cell: (occurrence) => <Badge status={occurrence.status} />,
+            width: "fit",
             sort: { asc: "status", desc: "-status" },
           },
-          { header: "Guests", cell: (occurrence) => occurrence.guestCount },
-          { header: "Joined", cell: (occurrence) => occurrence.joinConfirmedCount },
-          { header: "Verified", cell: (occurrence) => occurrence.attendanceVerifiedCount },
-          ...(canManage || canManageAttendance
-            ? [
-                {
-                  header: "",
-                  className: "text-end",
-                  cell: (occurrence: EventOccurrence) => (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-secondary"
-                      aria-expanded={selectedId === occurrence.id}
-                      aria-controls={`meeting-occurrence-detail-${occurrence.id}`}
-                      onClick={() => setSelectedId((current) => (current === occurrence.id ? null : occurrence.id))}
-                    >
-                      {selectedId === occurrence.id ? "Hide" : "Manage"}
-                    </button>
-                  ),
-                },
-              ]
-            : []),
+          // Counts are compared down the column, so they read from the end
+          // and hug their content instead of claiming slack.
+          {
+            header: { label: "Guests", className: "pk-end" },
+            cell: (occurrence) => occurrence.guestCount,
+            width: "fit",
+          },
+          {
+            header: { label: "Joined", className: "pk-end" },
+            cell: (occurrence) => occurrence.joinConfirmedCount,
+            width: "fit",
+          },
+          {
+            header: { label: "Verified", className: "pk-end" },
+            cell: (occurrence) => occurrence.attendanceVerifiedCount,
+            width: "fit",
+          },
         ]}
         empty="No meeting occurrences have been generated."
         rowKey={(occurrence) => occurrence.id}
+        // Activating a row opens its management detail in place — the same
+        // rule as every other list. The "Manage" button column this replaces
+        // left the row itself inert.
+        rowAction={
+          canManage || canManageAttendance
+            ? (occurrence: EventOccurrence) => ({
+                label:
+                  selectedId === occurrence.id
+                    ? `Hide management for the occurrence starting ${fmt(occurrence.startsAt)}`
+                    : `Manage the occurrence starting ${fmt(occurrence.startsAt)}`,
+                onSelect: () => setSelectedId((current) => (current === occurrence.id ? null : occurrence.id)),
+              })
+            : undefined
+        }
         detailRow={(occurrence) =>
           selectedId === occurrence.id ? (
             <MeetingOccurrenceDetail

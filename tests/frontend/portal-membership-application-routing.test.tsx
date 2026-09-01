@@ -14,10 +14,8 @@ vi.mock("../../assets/ts/shared/api-client", () => ({
 }));
 
 vi.mock("../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView", () => ({
-  ApplicationDetailView: ({ applicationId, onBack }: { applicationId: string; onBack: () => void }) => (
-    <button type="button" data-application-id={applicationId} onClick={onBack}>
-      Back to applications
-    </button>
+  ApplicationDetailView: ({ applicationId }: { applicationId: string }) => (
+    <div data-application-id={applicationId}>Application detail</div>
   ),
 }));
 
@@ -50,14 +48,14 @@ afterEach(() => {
 });
 
 describe("portal membership application routing", () => {
-  it("returns a notification-linked application to the canonical collection route", () => {
+  it("opens a notification-linked application directly in its detail view", () => {
+    // The way back to the collection is the detail view's own trail link
+    // (asserted in portal-membership-applications.test.tsx); the index only
+    // has to hand the routed id to the detail view.
     const container = mount(<MembershipApplications initialApplicationId="application-1" canWrite canApprove />);
 
-    const back = container.querySelector("button[data-application-id='application-1']") as HTMLButtonElement;
-    expect(back).not.toBeNull();
-    void act(() => back.click());
-
-    expect(mocks.navigate).toHaveBeenCalledWith("/membership/applications");
+    const detail = container.querySelector("[data-application-id='application-1']");
+    expect(detail).not.toBeNull();
   });
 
   it("opens list rows at a stable portal detail URL", () => {

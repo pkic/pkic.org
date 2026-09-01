@@ -23,13 +23,14 @@
   background: rgba(0, 0, 0, 0.55);
 }
 
+/* Both cards carry `.pk`, so the base layer sets their ground and their ink
+   from the design system's tokens — which is also what took the last two
+   Bootstrap custom properties out of this file. */
 #headshot-disclaimer-modal .hsd-card,
 #crop-headshot-modal .crop-headshot-card {
   width: 100%;
   max-width: 520px;
-  border-radius: 1rem;
-  background: var(--bs-body-bg);
-  color: var(--bs-body-color);
+  border-radius: var(--pk-radius-lg);
   box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.32);
   padding: 1.5rem;
   display: flex;
@@ -62,17 +63,9 @@
   gap: 1rem;
 }
 
-#headshot-disclaimer-modal .hsd-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 0;
-}
-
-#headshot-disclaimer-modal .hsd-check .form-check-input {
-  margin-top: 0.2rem;
-  flex-shrink: 0;
-}
+/* The agreement control is a `pk-check` now: the block class carries the row
+   layout and the element class carries the box's alignment, so neither needs
+   restating here. */
 
 #headshot-disclaimer-modal .hsd-actions,
 #crop-headshot-modal .crop-headshot-actions {
@@ -94,8 +87,8 @@
   overflow: hidden;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 3px solid var(--bs-success);
-  background: var(--bs-secondary-bg);
+  border: 3px solid var(--pk-accent-strong);
+  background: var(--pk-surface-sunk);
   cursor: grab;
   touch-action: none;
 }

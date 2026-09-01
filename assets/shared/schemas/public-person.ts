@@ -4,6 +4,7 @@ import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 /** Public identity + optional organization attribution reused by leadership views. */
 export const publicOrganizationPersonSchema = z.object({
   name: z.string(),
+  jobTitle: z.string().nullable(),
   organizationName: z.string().nullable(),
   organizationLogoUrl: httpOrSameOriginUrlSchema.nullable(),
   organizationWebsite: httpUrlSchema.nullable(),

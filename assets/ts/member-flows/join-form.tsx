@@ -7,6 +7,8 @@
  */
 import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
+import { setFieldMessage } from "../shared/form/validation-map";
+import { applyFieldState } from "../ui/field-state";
 import { clearStatus, installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
@@ -26,6 +28,12 @@ import {
   memberJoinVerifyResponseSchema,
   memberJoinVerifySchema,
 } from "../../shared/schemas/member-join";
+// This module writes design-system class names into markup it builds itself,
+// so it has to pull in the stylesheets that define them: component CSS ships
+// in the chunk of whoever imports it, not in the entry sheet.
+import "../ui/Button.css";
+import "../ui/Content.css";
+import "../ui/Field.css";
 
 const API_BASE = "/api/v1";
 
@@ -94,15 +102,19 @@ export function renderMembershipCategorySummary(container: HTMLElement, categori
   }
 
   const list = document.createElement("ul");
-  list.className = "mb-0 ps-3";
+  // The bullet without the browser's 40px indent, so the summary lines up
+  // with the label above it instead of hanging off to the right.
+  list.className = "pk-answer-list";
   for (const category of categories) {
     const item = document.createElement("li");
     const title = document.createElement("strong");
     title.textContent = `${category.code} — ${category.label}`;
     item.append(title);
     if (category.description) {
-      const description = document.createElement("span");
-      description.className = "d-block";
+      // A block element rather than a span carrying a display utility: the
+      // description is its own line, which is what a div already means.
+      const description = document.createElement("div");
+      description.className = "pk-small";
       description.textContent = category.description;
       item.append(description);
     }
@@ -144,14 +156,30 @@ export function configureMembershipLegalFields(
   return fields.filter((field) => !configuredKeys.has(field.key));
 }
 
+/**
+ * Draws the email control as invalid, or stops drawing it that way.
+ *
+ * The modifier goes on the field group the label, control and message share,
+ * because that is where the design system's state tokens are read from — a
+ * class on the input alone styles nothing. The `is-invalid` this replaces was
+ * already inert here: Bootstrap only paints it on a `.form-control`, and this
+ * control is a `pk-input`.
+ */
+function markJoinEmailInvalid(email: HTMLInputElement, invalid: boolean): void {
+  // The field group, not the path-details wrapper: `pk-field--invalid` sets the
+  // `--state-*` variables the border, the mark and the message read, and on an
+  // ancestor that is not a `pk-field` it set variables nothing looked at.
+  applyFieldState(email.closest(".pk-field"), invalid ? "invalid" : null);
+}
+
 function clearOrganizationEmailPolicyError(form: HTMLFormElement, email: HTMLInputElement): void {
   if (email.dataset.joinEmailPolicyError !== "true") return;
   if (email.validationMessage === ORGANIZATION_EMAIL_POLICY_MESSAGE) email.setCustomValidity("");
   delete email.dataset.joinEmailPolicyError;
-  email.classList.remove("is-invalid");
+  markJoinEmailInvalid(email, false);
   if (email.checkValidity()) email.removeAttribute("aria-invalid");
   const error = form.querySelector<HTMLElement>('[data-field-error="email"]');
-  if (error?.textContent === ORGANIZATION_EMAIL_POLICY_MESSAGE) error.textContent = "";
+  if (error?.textContent === ORGANIZATION_EMAIL_POLICY_MESSAGE) setFieldMessage(error, "");
 }
 
 /** Adds immediate field-level guidance while the server remains the policy authority. */
@@ -169,10 +197,9 @@ export function applyJoinEmailPolicy(form: HTMLFormElement, applicantKind: JoinA
 
   email.setCustomValidity(ORGANIZATION_EMAIL_POLICY_MESSAGE);
   email.dataset.joinEmailPolicyError = "true";
-  email.classList.add("is-invalid");
+  markJoinEmailInvalid(email, true);
   email.setAttribute("aria-invalid", "true");
-  const error = form.querySelector<HTMLElement>('[data-field-error="email"]');
-  if (error) error.textContent = ORGANIZATION_EMAIL_POLICY_MESSAGE;
+  setFieldMessage(form.querySelector<HTMLElement>('[data-field-error="email"]'), ORGANIZATION_EMAIL_POLICY_MESSAGE);
   return false;
 }
 
@@ -205,31 +232,36 @@ export function applyJoinApplicantKindUI(form: HTMLFormElement, applicantKind: J
 }
 
 export function renderMembershipCategories(container: HTMLElement, categories: MembershipCategory[]): void {
+  // The gap between the options belongs to the list, not to each option: one
+  // decision here instead of one `mb-2` per radio that can disagree.
+  container.className = "pk-stack pk-stack--snug";
   container.replaceChildren(
     ...categories.map((category) => {
-      const wrapper = document.createElement("div");
-      wrapper.className = "form-check mb-2";
+      // All three parts of the check, or the browser draws its own control:
+      // the block on the label, the input class, and the label class.
+      const wrapper = document.createElement("label");
+      wrapper.className = "pk-check";
       const id = `membership-category-${category.code.toLowerCase()}`;
       const input = document.createElement("input");
-      input.className = "form-check-input";
+      input.className = "pk-check__input";
       input.type = "radio";
       input.id = id;
       input.name = "category";
       input.value = category.code;
       input.required = true;
       input.dataset.individual = String(category.isIndividual);
-      const label = document.createElement("label");
-      label.className = "form-check-label";
-      label.htmlFor = id;
+      const label = document.createElement("span");
+      label.className = "pk-check__label";
       const title = document.createElement("strong");
       title.textContent = `${category.code} — ${category.label}`;
       label.append(title);
       if (category.description) {
         const description = document.createElement("span");
-        description.className = "d-block form-text";
+        description.className = "pk-check__hint";
         description.textContent = category.description;
         label.append(description);
       }
+      wrapper.htmlFor = id;
       wrapper.append(input, label);
       return wrapper;
     }),
@@ -261,12 +293,15 @@ function showSuccessPanel(
     root,
     form,
     <SuccessPanel icon="🎉" title={`Thanks${applicantName ? `, ${applicantName}` : ""}!`}>
-      <p class="event-flow-success-body">
+      {/* `event-flow-success-body` took its colour from a Bootstrap custom
+          property and set its own bottom margin. Inside `SuccessPanel`'s
+          stack the gap comes from the parent and the tone from a token. */}
+      <p class="pk-muted">
         Your membership application has been received. We&rsquo;ve emailed you a confirmation with a link to check its
         status at any time.
       </p>
       <p>
-        <a href={statusUrl} class="btn btn-outline-secondary btn-sm">
+        <a href={statusUrl} class="pk-btn pk-btn--secondary pk-btn--sm">
           Check application status →
         </a>
       </p>
@@ -386,7 +421,9 @@ async function main(): Promise<void> {
 
   startForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    startForm.classList.add("was-validated");
+    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
+    // in the one case it means anything — a submission that failed — and
+    // setting it up front marked a form the reader had not got wrong yet.
     const applicantKind = readJoinApplicantKind(startForm);
     if (!applyJoinEmailPolicy(startForm, applicantKind) || !validateBeforeSubmit(startForm, statusEl)) return;
     const email = readField(startForm, "email");
@@ -429,7 +466,6 @@ async function main(): Promise<void> {
 
   applicationForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    applicationForm.classList.add("was-validated");
     if (!validateBeforeSubmit(applicationForm, statusEl)) return;
     const category = readSelectedCategory(applicationForm);
     if (!category || !applicationContext) {

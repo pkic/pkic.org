@@ -13,7 +13,6 @@ import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { isActiveRepresentative } from "./representatives";
 import type { DatabaseLike, StatementLike } from "../../types";
 import {
   REPRESENTATIVE_ROLE_IDS,
@@ -27,15 +26,16 @@ export type { RepresentativeRoleId };
 /**
  * Builds [revoke-previous-holder, insert-new-grant] statements for one of
  * the two singleton organization-contact roles, without doing a preflight read
- * of `organization_representatives` — for callers that are themselves
- * inserting that exact representative row earlier in the same `db.batch()`.
- * The migration-level trigger `trg_user_roles_representative_requires_active`
+ * of `identities` — for callers that are themselves inserting that exact
+ * identity row earlier in the same `db.batch()`.
+ * The migration-level identity trigger
  * is the final execution-time guard for every caller, including this path.
  */
 export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
   db: DatabaseLike,
   input: {
     memberId: string;
+    identityId: string;
     userId: string;
     roleId: RepresentativeRoleId;
     grantedByUserId?: string | null;
@@ -54,14 +54,16 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
     db
       .prepare(
         `INSERT INTO user_roles
-           (id, user_id, role_id, context_type, context_id, granted_by_user_id, single_holder_per_context, created_at)
-         VALUES (?, ?, ?, 'organization', ?, ?, 1, ?)`,
+           (id, user_id, role_id, context_type, context_id, identity_id,
+            granted_by_user_id, single_holder_per_context, created_at)
+         VALUES (?, ?, ?, 'organization', ?, ?, ?, 1, ?)`,
       )
       .bind(
         input.assignmentId ?? uuid(),
         input.userId,
         input.roleId,
         input.memberId,
+        input.identityId,
         input.grantedByUserId ?? null,
         now,
       ),
@@ -71,9 +73,7 @@ export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
 /**
  * Builds [revoke-previous-holder?, insert-new-grant] statements for one of
  * the two singleton organization-contact roles. Throws before building any
- * statement if `(userId, memberId)` has no active `organization_representatives`
- * row — the service-layer invariant that replaces the composite FK a
- * bespoke role table would have had (see consolidated migration 0035's header).
+ * statement if `(userId, memberId)` has no active identity row.
  * The migration-level trigger is also required because this preflight can
  * become stale before the returned batch executes.
  *
@@ -92,15 +92,27 @@ export async function buildAssignRepresentativeRoleStatements(
     now?: string;
   },
 ): Promise<StatementLike[]> {
-  const isRepresentative = await isActiveRepresentative(db, input.memberId, input.userId);
-  if (!isRepresentative) {
+  const identity = await first<{ id: string }>(
+    db,
+    `SELECT identity.id
+       FROM identities identity
+       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+      WHERE capacity.member_id = ?
+        AND identity.user_id = ?
+        AND identity.started_at IS NOT NULL
+        AND identity.ended_at IS NULL
+        AND identity.blocked_at IS NULL
+      LIMIT 1`,
+    [input.memberId, input.userId],
+  );
+  if (!identity) {
     throw new AppError(
       422,
       "NOT_ACTIVE_REPRESENTATIVE",
       "Only an active representative of this organization can hold this role",
     );
   }
-  return buildAssignRepresentativeRoleStatementsForNewRepresentative(db, input);
+  return buildAssignRepresentativeRoleStatementsForNewRepresentative(db, { ...input, identityId: identity.id });
 }
 
 /**
@@ -142,15 +154,17 @@ interface RoleHolderRow {
  * projections. Keep the role, user, and representative aliases explicit because
  * callers use this in both ordinary queries and derived-table projections.
  */
-export function representativeRoleActivePredicate(
+export function organizationContactRoleActivePredicate(
   roleAlias = "ur",
   userAlias = "u",
-  representativeAlias = "rep",
+  identityAlias = "identity",
   nowPlaceholder = "?",
 ): string {
   return `${roleAlias}.revoked_at IS NULL
        AND ${userAlias}.active = 1
-       AND ${representativeAlias}.left_at IS NULL
+       AND ${identityAlias}.started_at IS NOT NULL
+       AND ${identityAlias}.ended_at IS NULL
+       AND ${identityAlias}.blocked_at IS NULL
        AND (${roleAlias}.expires_at IS NULL OR datetime(${roleAlias}.expires_at) > datetime(${nowPlaceholder}))`;
 }
 
@@ -163,10 +177,11 @@ export function primaryContactProjection(): string {
           u.first_name, u.last_name, u.email
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     JOIN organization_representatives rep
-       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+     JOIN identities identity ON identity.id = ur.identity_id AND identity.user_id = ur.user_id
+     JOIN identity_member_capacities capacity
+       ON capacity.identity_id = identity.id AND capacity.member_id = ur.context_id
     WHERE ur.context_type = 'organization' AND ur.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}'
-      AND ${representativeRoleActivePredicate()}) AS primary_contact`;
+      AND ${organizationContactRoleActivePredicate()}) AS primary_contact`;
 }
 
 /** The current active holder of a singleton representative role for an organization, or null. */
@@ -180,10 +195,11 @@ export async function resolveRepresentativeRoleHolder(
     `SELECT ur.user_id
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     JOIN organization_representatives rep
-       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+     JOIN identities identity ON identity.id = ur.identity_id AND identity.user_id = ur.user_id
+     JOIN identity_member_capacities capacity
+       ON capacity.identity_id = identity.id AND capacity.member_id = ur.context_id
      WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.role_id = ?
-       AND ${representativeRoleActivePredicate()}
+       AND ${organizationContactRoleActivePredicate()}
      LIMIT 1`,
     [memberId, roleId, nowIso()],
   );
@@ -204,10 +220,11 @@ export async function resolveRepresentativeRoleHolders(
     `SELECT ur.role_id, ur.user_id
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
-     JOIN organization_representatives rep
-       ON rep.member_id = ur.context_id AND rep.user_id = ur.user_id
+     JOIN identities identity ON identity.id = ur.identity_id AND identity.user_id = ur.user_id
+     JOIN identity_member_capacities capacity
+       ON capacity.identity_id = identity.id AND capacity.member_id = ur.context_id
      WHERE ur.context_type = 'organization' AND ur.context_id = ?
-       AND ${representativeRoleActivePredicate()}
+       AND ${organizationContactRoleActivePredicate()}
        AND ur.role_id IN (?, ?)`,
     [memberId, nowIso(), REPRESENTATIVE_ROLE_IDS.primaryContact, REPRESENTATIVE_ROLE_IDS.secondaryContact],
   );
@@ -235,16 +252,22 @@ export async function isOrganizationContactForRepresentative(
     `SELECT 1 AS allowed
        FROM user_roles ur
        JOIN users actor ON actor.id = ur.user_id
-       JOIN organization_representatives actor_rep
-         ON actor_rep.member_id = ur.context_id AND actor_rep.user_id = ur.user_id
+       JOIN identities actor_identity ON actor_identity.id = ur.identity_id AND actor_identity.user_id = ur.user_id
+       JOIN identity_member_capacities actor_capacity
+         ON actor_capacity.identity_id = actor_identity.id AND actor_capacity.member_id = ur.context_id
        JOIN members m
          ON m.id = ur.context_id AND m.status = 'active' AND m.organization_id IS NOT NULL
-       JOIN organization_representatives target_rep
-         ON target_rep.member_id = m.id AND target_rep.user_id = ? AND target_rep.left_at IS NULL
+       JOIN identity_member_capacities target_capacity ON target_capacity.member_id = m.id
+       JOIN identities target_identity
+         ON target_identity.id = target_capacity.identity_id
+        AND target_identity.user_id = ?
+        AND target_identity.started_at IS NOT NULL
+        AND target_identity.ended_at IS NULL
+        AND target_identity.blocked_at IS NULL
       WHERE ur.user_id = ?
         AND ur.context_type = 'organization'
         AND ur.role_id IN (?, ?)
-        AND ${representativeRoleActivePredicate("ur", "actor", "actor_rep")}
+        AND ${organizationContactRoleActivePredicate("ur", "actor", "actor_identity")}
       LIMIT 1`,
     [
       targetUserId,

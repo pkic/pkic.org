@@ -1,5 +1,15 @@
+/**
+ * The registration setup for one event, as four disclosures.
+ *
+ * `<details>` is kept rather than rebuilt: it is already a disclosure the
+ * keyboard and a screen reader both understand, so it needs no role, no
+ * handler and no state. Each one sits in its own Panel, so the rule the
+ * Bootstrap version drew with `border-top` is the panel's own edge and the
+ * margin under each card is the stack's gap.
+ */
 import { useEffect, useState } from "preact/hooks";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { EventDaysEditor } from "./EventDaysEditor";
 import { EventFormPlacementEditor } from "./EventFormPlacementEditor";
 import { EventRegistrationSettingsEditor } from "./EventRegistrationSettingsEditor";
@@ -23,52 +33,78 @@ export function GroupEventConfiguration({
   const canConfigureForms = event.sourceMode === "portal";
 
   return (
-    <section class="border-top pt-3" aria-label={`Configure ${event.name} registration`}>
+    <section class="pk pk-stack" aria-label={`Configure ${event.name} registration`}>
       <h6>Registration setup</h6>
-      <p class="small text-muted">
+      <p class="pk-small">
         Configure the registration policy, optional custom questions, required terms, and per-day attendance choices.
       </p>
-      <details class="card mb-3" open>
-        <summary class="card-header fw-semibold">Terms and conditions</summary>
-        <div class="card-body">
-          <EventTermsEditor groupId={groupId} event={event} expectedUpdatedAt={updatedAt} onRevision={recordRevision} />
-        </div>
-      </details>
-      <details class="card mb-3" open>
-        <summary class="card-header fw-semibold">Policy and registration questions</summary>
-        <div class="card-body">
-          <EventRegistrationSettingsEditor
-            groupId={groupId}
-            eventId={event.id}
-            expectedUpdatedAt={updatedAt}
-            onRevision={recordRevision}
-            showFormConfiguration={canConfigureForms}
-          />
-        </div>
-      </details>
+      <Panel>
+        <PanelBody>
+          <details open>
+            <summary class="pk-strong">Terms and conditions</summary>
+            <div class="pk-stack">
+              <EventTermsEditor
+                groupId={groupId}
+                event={event}
+                expectedUpdatedAt={updatedAt}
+                onRevision={recordRevision}
+              />
+            </div>
+          </details>
+        </PanelBody>
+      </Panel>
+      <Panel>
+        <PanelBody>
+          <details open>
+            <summary class="pk-strong">Policy and registration questions</summary>
+            <div class="pk-stack">
+              <EventRegistrationSettingsEditor
+                groupId={groupId}
+                eventId={event.id}
+                expectedUpdatedAt={updatedAt}
+                onRevision={recordRevision}
+                showFormConfiguration={canConfigureForms}
+              />
+            </div>
+          </details>
+        </PanelBody>
+      </Panel>
       {canConfigureForms && (
-        <details class="card mb-3">
-          <summary class="card-header fw-semibold">Proposal submission questions</summary>
-          <div class="card-body">
-            <p class="small text-muted">
-              Select or create the questions speakers answer when submitting a proposal for this event.
-            </p>
-            <EventFormPlacementEditor
-              groupId={groupId}
-              eventId={event.id}
-              purpose="proposal_submission"
-              expectedUpdatedAt={updatedAt}
-              onRevision={recordRevision}
-            />
-          </div>
-        </details>
+        <Panel>
+          <PanelBody>
+            <details>
+              <summary class="pk-strong">Proposal submission questions</summary>
+              <div class="pk-stack">
+                <p class="pk-small">
+                  Select or create the questions speakers answer when submitting a proposal for this event.
+                </p>
+                <EventFormPlacementEditor
+                  groupId={groupId}
+                  eventId={event.id}
+                  purpose="proposal_submission"
+                  expectedUpdatedAt={updatedAt}
+                  onRevision={recordRevision}
+                />
+              </div>
+            </details>
+          </PanelBody>
+        </Panel>
       )}
-      <details class="card mb-3">
-        <summary class="card-header fw-semibold">Attendance days</summary>
-        <div class="card-body">
-          <EventDaysEditor groupId={groupId} event={event} expectedUpdatedAt={updatedAt} onRevision={recordRevision} />
-        </div>
-      </details>
+      <Panel>
+        <PanelBody>
+          <details>
+            <summary class="pk-strong">Attendance days</summary>
+            <div class="pk-stack">
+              <EventDaysEditor
+                groupId={groupId}
+                event={event}
+                expectedUpdatedAt={updatedAt}
+                onRevision={recordRevision}
+              />
+            </div>
+          </details>
+        </PanelBody>
+      </Panel>
     </section>
   );
 }

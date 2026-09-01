@@ -5,13 +5,20 @@
  * event previously stacked into one long detail row.
  */
 import { useState } from "preact/hooks";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../../hash-location";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import { getLinkLabel } from "../../../../../shared/schemas/links";
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { fmt, formatEventWhen } from "../../ui";
+import { EventStats } from "../events/detail/EventStats";
+import { Promoters } from "../events/detail/Promoters";
+import { Team } from "../events/detail/Team";
+import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
+import { RegistrationDetailPage } from "../events/detail/RegistrationDetailPage";
 import { GroupEventCommunications } from "./GroupEventCommunications";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
@@ -20,6 +27,9 @@ import { GroupEventProposals } from "./GroupEventProposals";
 import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
+// `pk-datalist` on the overview metadata is defined in Content.css, which ships
+// in a lazy chunk rather than in the entry stylesheet.
+import "../../../../ui/Content.css";
 
 function label(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
@@ -49,6 +59,12 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     visible: (event) => event.capabilities.includes("manage") || event.proposalAccess?.canFinalize === true,
   },
   { key: "communications", label: "Communications", visible: (event) => event.capabilities.includes("manage") },
+  { key: "team", label: "Team", visible: (event) => event.capabilities.includes("manage") },
+  // "manage_attendance" is the lowest manager-tier capability for a group event — the same tier
+  // that gates Registrations — mirroring the "read" capability that gates Promoters and Analytics
+  // on the standalone event detail view (its lowest staff-facing tier, not the plain-viewer tier).
+  { key: "promoters", label: "Promoters", visible: (event) => event.capabilities.includes("manage_attendance") },
+  { key: "stats", label: "Analytics", visible: (event) => event.capabilities.includes("manage_attendance") },
   { key: "settings", label: "Settings", visible: (event) => event.capabilities.includes("manage") },
 ];
 
@@ -63,15 +79,18 @@ export function GroupEventWorkspace({
   event,
   groupId,
   tab,
+  detailId,
   onUpdated,
 }: {
   event: GroupEvent;
   groupId: string;
   /** The URL-addressed tab segment, if any. Undefined selects the default tab. */
   tab?: string;
+  /** A URL-addressed resource inside the tab: a registration or proposal id, or a promoters sub-tab. */
+  detailId?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
-  const [, navigate] = useHashLocation();
+  const [, navigate] = usePortalHashLocation();
   const [editing, setEditing] = useState(false);
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");
@@ -86,71 +105,79 @@ export function GroupEventWorkspace({
   const showUnavailable = isKnownTab && !isVisibleTab;
   const activeTabLabel = EVENT_WORKSPACE_TABS.find((item) => item.key === activeTab)?.label ?? activeTab;
 
-  function goToTab(nextTab: string): void {
+  function tabPath(nextTab: string): string {
     const base = `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`;
-    navigate(nextTab === GROUP_EVENT_OVERVIEW_TAB ? base : `${base}/${nextTab}`);
+    return nextTab === GROUP_EVENT_OVERVIEW_TAB ? base : `${base}/${nextTab}`;
+  }
+
+  function goToTab(nextTab: string): void {
+    navigate(tabPath(nextTab));
   }
 
   return (
-    <section class="d-flex flex-column gap-3" aria-label={`${event.name} workspace`}>
-      <div>
-        <button
-          type="button"
-          class="btn btn-link btn-sm ps-0 mb-2"
-          onClick={() => navigate(`/groups/${encodeURIComponent(groupId)}/events`)}
-        >
-          ← Back to events
-        </button>
-        <h5 class="mb-1">{event.name}</h5>
-        <p class="small text-muted mb-0">{event.slug}</p>
-        <p class="small text-muted mb-0">
+    <section class="pk pk-stack" aria-label={`${event.name} workspace`}>
+      <div class="pk-stack pk-stack--tight">
+        <div class="pk-cluster">
+          <Button variant="link" size="sm" onClick={() => navigate(`/groups/${encodeURIComponent(groupId)}/events`)}>
+            ← Back to events
+          </Button>
+        </div>
+        <h2>{event.name}</h2>
+        <p class="pk-small">
           {formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}
           {event.location ? ` · ${event.location}` : ""}
         </p>
       </div>
 
-      <Tabs items={visibleTabs} active={activeTab} onChange={goToTab} idPrefix={`group-event-${event.id}`} />
+      <Tabs
+        items={visibleTabs}
+        active={activeTab}
+        onChange={goToTab}
+        hrefFor={tabPath}
+        idPrefix={`group-event-${event.id}`}
+      />
 
       {showUnavailable ? (
         <ErrorAlert error="This event section is not available to your current identity." />
       ) : (
-        <section aria-label={`${activeTabLabel} — ${event.name}`} class="d-flex flex-column gap-3">
+        <section aria-label={`${activeTabLabel} — ${event.name}`} class="pk-stack">
           {activeTab === GROUP_EVENT_OVERVIEW_TAB && (
             <>
-              <dl class="row mb-0 small">
-                <dt class="col-sm-3">When</dt>
-                <dd class="col-sm-9">
-                  {formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}
-                </dd>
+              <dl class="pk-datalist pk-small">
+                <dt>When</dt>
+                <dd>{formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}</dd>
                 {event.endsAt && (
                   <>
-                    <dt class="col-sm-3">Ends</dt>
-                    <dd class="col-sm-9">{fmt(event.endsAt)}</dd>
+                    <dt>Ends</dt>
+                    <dd>{fmt(event.endsAt)}</dd>
                   </>
                 )}
-                <dt class="col-sm-3">Profile</dt>
-                <dd class="col-sm-9">
+                <dt>Profile</dt>
+                <dd>
                   <Badge status={event.profileKey ?? "event"} />
                 </dd>
-                <dt class="col-sm-3">Registration</dt>
-                <dd class="col-sm-9">{label(event.registrationPolicy)}</dd>
+                <dt>Registration</dt>
+                <dd>{label(event.registrationPolicy)}</dd>
                 {event.location && (
                   <>
-                    <dt class="col-sm-3">Location</dt>
-                    <dd class="col-sm-9">{event.location}</dd>
+                    <dt>Location</dt>
+                    <dd>{event.location}</dd>
                   </>
                 )}
               </dl>
 
               {event.links.length > 0 && (
-                <div>
-                  <h6 class="small fw-semibold">Event links</h6>
-                  <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+                <div class="pk-stack pk-stack--tight">
+                  <h3 class="pk-small pk-strong">Event links</h3>
+                  {/* Each item is a cluster, which blockifies the `li` and so
+                      drops the marker the base layer restores — the same way
+                      the other migrated portal lists carry their rows. */}
+                  <ul class="pk-stack pk-stack--tight" aria-label="Event links">
                     {event.links.map((url) => (
-                      <li key={url}>
+                      <li key={url} class="pk-cluster">
                         <a href={url} target="_blank" rel="noopener noreferrer">
                           {getLinkLabel(url)}
-                          <span class="visually-hidden"> (opens in a new tab)</span>
+                          <span class="pk-sr-only"> (opens in a new tab)</span>
                         </a>
                       </li>
                     ))}
@@ -162,13 +189,33 @@ export function GroupEventWorkspace({
             </>
           )}
 
-          {activeTab === "registrations" && (
-            <GroupEventRegistrations groupId={groupId} eventId={event.id} canVip={canManage} />
-          )}
+          {activeTab === "registrations" &&
+            (detailId ? (
+              <RegistrationDetailPage
+                slug={event.slug}
+                regId={detailId}
+                onBack={() => navigate(tabPath("registrations"))}
+              />
+            ) : (
+              <GroupEventRegistrations groupId={groupId} eventId={event.id} canVip={canManage} />
+            ))}
 
-          {activeTab === "proposals" && (
-            <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
-          )}
+          {activeTab === "proposals" &&
+            (detailId ? (
+              <ProposalDetailPage
+                slug={event.slug}
+                proposalId={detailId}
+                contextLabel={event.name}
+                onBack={() => navigate(tabPath("proposals"))}
+              />
+            ) : (
+              <GroupEventProposals
+                groupId={groupId}
+                eventId={event.id}
+                eventSlug={event.slug}
+                proposalPathFor={(proposalId) => `${tabPath("proposals")}/${encodeURIComponent(proposalId)}`}
+              />
+            ))}
 
           {activeTab === "invitations" && (
             <>
@@ -179,42 +226,60 @@ export function GroupEventWorkspace({
 
           {activeTab === "communications" && <GroupEventCommunications groupId={groupId} eventId={event.id} />}
 
+          {activeTab === "team" && <Team slug={event.slug} />}
+
+          {activeTab === "promoters" && <Promoters slug={event.slug} subTab={detailId} />}
+
+          {activeTab === "stats" && <EventStats slug={event.slug} />}
+
           {activeTab === "settings" && (
             <>
               {!event.seriesId && <GroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />}
 
-              <div class="border-top pt-3">
-                {isStandaloneEvent(event) && editing ? (
-                  <>
-                    <h6>Edit event</h6>
-                    <GroupEventEditor
-                      groupId={groupId}
-                      event={event}
-                      onSaved={async () => {
-                        setEditing(false);
-                        await onUpdated?.();
-                      }}
-                      onCancel={() => setEditing(false)}
-                    />
-                  </>
-                ) : (
-                  <div class="d-flex align-items-center gap-2">
-                    {isStandaloneEvent(event) && (
-                      <button type="button" class="btn btn-sm btn-primary" onClick={() => setEditing(true)}>
-                        Edit event
-                      </button>
+              {/* The separating rule the Bootstrap version drew with a
+                  `border-top` is the panel's own edge here, and the panel is
+                  only drawn when it has something in it: an event that is
+                  neither standalone nor part of a series offers neither
+                  control, and an empty rule across the page said nothing. */}
+              {(isStandaloneEvent(event) || event.seriesId !== null) && (
+                <Panel>
+                  <PanelBody class="pk-stack">
+                    {isStandaloneEvent(event) && editing ? (
+                      <>
+                        <h3>Edit event</h3>
+                        <GroupEventEditor
+                          groupId={groupId}
+                          event={event}
+                          onSaved={async () => {
+                            setEditing(false);
+                            await onUpdated?.();
+                          }}
+                          onCancel={() => setEditing(false)}
+                        />
+                      </>
+                    ) : (
+                      <div class="pk-cluster">
+                        {isStandaloneEvent(event) && (
+                          <Button variant="primary" size="sm" onClick={() => setEditing(true)}>
+                            Edit event
+                          </Button>
+                        )}
+                        {/* Going to the meeting series is navigation, not an
+                            action, so it stays an anchor and borrows the
+                            button's appearance rather than its element. */}
+                        {event.seriesId && (
+                          <a
+                            class="pk-btn pk-btn--secondary pk-btn--sm"
+                            href={`#/groups/${encodeURIComponent(groupId)}/meetings`}
+                          >
+                            Manage meeting series
+                          </a>
+                        )}
+                      </div>
                     )}
-                    {event.seriesId && (
-                      <a
-                        class="btn btn-sm btn-outline-secondary"
-                        href={`#/groups/${encodeURIComponent(groupId)}/meetings`}
-                      >
-                        Manage meeting series
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
+                  </PanelBody>
+                </Panel>
+              )}
 
               {event.ownerGroupId === groupId && (
                 <ResourceSharingEditor

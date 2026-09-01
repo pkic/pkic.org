@@ -4,63 +4,103 @@
  * Reads the Stripe `session_id` from the URL, polls the backend until the
  * webhook has confirmed the payment, then renders an "I just donated X"
  * badge similar to the event-registration share panel.
+ *
+ * Design system notes (phase 5):
+ *
+ *  - The `.donation-badge*` rules in `assets/scss/_donations.scss` were the
+ *    surface's whole appearance and were built from Bootstrap's own custom
+ *    properties, so the frame, the ground and the type now come from `Panel`
+ *    and the tokens instead. The `.donation-badge-og-*` classes had no
+ *    stylesheet at all — they were named, toggled, and never defined — so
+ *    they are gone rather than translated.
+ *  - The personal share link used to be grafted onto rendered DOM by
+ *    `updateShareLinks`, which relabelled the copy button to "Copied!" — that
+ *    changes a control's accessible name under the reader's cursor. The badge
+ *    is now re-rendered with the promoter URL as a prop, and the copy outcome
+ *    is a `role="status"` line beside a button whose name never moves.
+ *  - The three terminal outcomes are `Alert`s. Each carries its meaning in
+ *    words as well as a tone, and `Alert` gives them the role that makes the
+ *    outcome announced rather than silently swapped in.
  */
 
 import { render, type ComponentChildren } from "preact";
 import type { z } from "zod";
-import { useEffect, useRef } from "preact/hooks";
-import { getJson } from "../api-client";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { getJson, postJson } from "../api-client";
 import { currencyInfo, toMajorUnit } from "../../../shared/constants/currencies";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
 import { classifyDonationPollResult, type DonationSession, type DonationSessionResponse } from "./session-poll";
-import { donationSessionPollResponseSchema } from "../../../shared/schemas/donation";
-import { donationPromoterResponseSchema, donationPromoterRequestSchema } from "../../../shared/schemas/donation";
-import { postJson } from "../api-client";
+import {
+  donationSessionPollResponseSchema,
+  donationPromoterResponseSchema,
+  donationPromoterRequestSchema,
+} from "../../../shared/schemas/donation";
+import { IconLinkedIn, IconXTwitter } from "../../components/icons";
+import { Alert } from "../../ui/Alert";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody } from "../../ui/Panel";
+import { Spinner } from "../../ui/Spinner";
+import { StatCard } from "../../ui/StatCard";
+import { TextInput } from "../../ui/TextControl";
+// `pk-framed` and `pk-mono` are written as class names here rather than
+// reached through a component, so this module has to pull their stylesheet
+// into its own chunk.
+import "../../ui/Content.css";
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLLS = 15;
 const ASYNC_POLL_INTERVAL_MS = 5000;
 const ASYNC_MAX_POLLS = 60;
 
+/** Where a donor is sent before a personal promoter link has been issued. */
+const GENERIC_SHARE_URL = "https://pkic.org/donate/";
+
 // ── Preact components ─────────────────────────────────────────────────────
 
 function Loading() {
   return (
-    <div class="donation-badge-loading text-center text-muted py-3">
-      <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-      Confirming your donation…
+    <div class="pk pk-cluster pk-cluster--center">
+      <Spinner size="sm" label="Confirming your donation…" />
     </div>
   );
 }
 
-function BadgeImage({ badgeUrl, badgeFilename: _badgeFilename }: { badgeUrl: string; badgeFilename: string }) {
+function BadgeImage({ badgeUrl }: { badgeUrl: string }) {
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const imgRef = useRef<HTMLImageElement>(null);
-  const loadingRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const img = imgRef.current;
     if (!img) return;
-    img.addEventListener("load", () => {
-      if (loadingRef.current) loadingRef.current.hidden = true;
-      img.classList.add("donation-badge-og-img--loaded");
-    });
-    img.addEventListener("error", () => {
-      if (previewRef.current) previewRef.current.hidden = true;
-    });
+    if (img.complete) {
+      setState(img.naturalWidth > 0 ? "ready" : "failed");
+      return;
+    }
+    const ready = () => setState("ready");
+    const failed = () => setState("failed");
+    img.addEventListener("load", ready, { once: true });
+    img.addEventListener("error", failed, { once: true });
+    return () => {
+      img.removeEventListener("load", ready);
+      img.removeEventListener("error", failed);
+    };
   }, []);
 
   return (
-    <div class="donation-badge-og-preview" ref={previewRef} data-donation-badge-preview>
-      <div class="donation-badge-og-loading" ref={loadingRef} data-donation-badge-loading>
-        <span class="spinner-border spinner-border-sm text-secondary me-2" role="status" aria-hidden="true" />
-        <span class="text-muted small">Generating badge…</span>
+    <div class="pk-stack pk-stack--tight" data-donation-badge-preview hidden={state === "failed"}>
+      {/* The indicator sits above the picture rather than over it: an overlay
+          would need an absolutely positioned box, and the system has no
+          utility for one. Spinner carries its own role="status", so the wait
+          is announced instead of being a silent grey rectangle. */}
+      <div class="pk-cluster pk-cluster--center" data-donation-badge-loading hidden={state !== "loading"}>
+        <Spinner size="sm" label="Generating badge…" />
       </div>
       <img
         ref={imgRef}
         src={badgeUrl}
         alt="Donation badge for sharing on social media"
-        class="donation-badge-og-img"
+        class="pk-framed"
         data-donation-badge-img
         width={600}
         height={315}
@@ -69,19 +109,60 @@ function BadgeImage({ badgeUrl, badgeFilename: _badgeFilename }: { badgeUrl: str
   );
 }
 
+/**
+ * The personal promoter link, with a copy control whose outcome is reported
+ * separately from the control's own name.
+ */
+function ShareLinkRow({ shareUrl }: { shareUrl: string }) {
+  const [copyStatus, setCopyStatus] = useState("");
+
+  const handleCopy = useCallback(() => {
+    const clipboard = navigator.clipboard;
+    if (!clipboard) {
+      setCopyStatus("Could not copy automatically — select the link above and copy it.");
+      return;
+    }
+    void clipboard.writeText(shareUrl).then(
+      () => setCopyStatus("Link copied to your clipboard."),
+      () => setCopyStatus("Could not copy automatically — select the link above and copy it."),
+    );
+  }, [shareUrl]);
+
+  return (
+    <div class="pk-stack pk-stack--snug pk-start" data-share-link-row>
+      <Field
+        label="Your personal share link"
+        help="Sharing this link lets us see who is driving donations — even without donating again yourself."
+      >
+        {(control) => <TextInput {...control} class="pk-mono" data-share-link value={shareUrl} readOnly />}
+      </Field>
+      <div class="pk-cluster">
+        <Button size="sm" data-share-copy onClick={handleCopy}>
+          Copy link
+        </Button>
+        <p class="pk-small" role="status">
+          {copyStatus}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function DonationBadge({
   session,
   sessionId,
   shareUrl,
-  shareText,
+  personalized,
 }: {
   session: DonationSession;
   sessionId: string;
   shareUrl: string;
-  shareText: string;
+  /** True once `shareUrl` is this donor's own promoter link. */
+  personalized: boolean;
 }) {
   const formattedAmount = formattedAmountFor(session);
   const greeting = session.donorFirstName ? `${session.donorFirstName}, thank` : "Thank";
+  const shareText = shareTextFor(formattedAmount);
 
   const twitterHref = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: shareUrl })}`;
@@ -90,83 +171,62 @@ function DonationBadge({
   const badgeFilename = `donation-badge${session.donorFirstName ? "-" + session.donorFirstName.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}.jpg`;
 
   return (
-    <div class="donation-badge">
-      <div class="donation-badge-amount">{formattedAmount}</div>
-      <h2 class="donation-badge-title">{greeting} you for your donation!</h2>
-      <p class="donation-badge-body">
-        Your generous contribution helps the PKI Consortium keep its memberships, resources, and events free, open, and
-        accessible to more of the global PKI community.
-      </p>
-
-      <BadgeImage badgeUrl={badgeUrl} badgeFilename={badgeFilename} />
-
-      <div class="donation-badge-og-actions text-center mt-2 mb-1">
-        <a
-          href={`${badgeUrl}?download=1&name=${encodeURIComponent(badgeFilename)}`}
-          download={badgeFilename}
-          class="btn btn-sm btn-outline-secondary"
-          aria-label="Download your donation badge"
-        >
-          ⬇ Download badge
-        </a>
-      </div>
-
-      <p class="donation-badge-share-label">Spread the word:</p>
-      <div class="donation-badge-share">
-        <a
-          href={twitterHref}
-          class="btn btn-outline-secondary donation-badge-share-btn"
-          data-share-twitter
-          target="_blank"
-          rel="noopener"
-          aria-label="Share on X / Twitter"
-        >
-          𝕏 Share
-        </a>
-        <a
-          href={linkedinHref}
-          class="btn btn-outline-secondary donation-badge-share-btn"
-          data-share-linkedin
-          target="_blank"
-          rel="noopener"
-          aria-label="Share on LinkedIn"
-        >
-          in Share
-        </a>
-      </div>
-
-      <div class="donation-badge-share-link-row" data-share-link-row hidden>
-        <p class="donation-badge-share-label mb-1">Your personal share link:</p>
-        <div class="d-flex gap-2 align-items-center">
-          <input
-            type="text"
-            class="form-control form-control-sm"
-            data-share-link
-            value={shareUrl}
-            readOnly
-            aria-label="Your personalised donation share link"
-          />
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary flex-shrink-0"
-            data-share-copy
-            aria-label="Copy link"
-          >
-            Copy
-          </button>
-        </div>
-        <p class="text-muted small mt-1">
-          Sharing this link lets us track who is driving donations — even without donating yourself.
+    <Panel class="pk pk-center">
+      <PanelBody class="pk-stack">
+        <StatCard label="Your donation" value={formattedAmount} />
+        <h2>{greeting} you for your donation!</h2>
+        <p class="pk-muted">
+          Your generous contribution helps the PKI Consortium keep its memberships, resources, and events free, open,
+          and accessible to more of the global PKI community.
         </p>
-      </div>
 
-      <p class="donation-badge-disclaimer">
-        PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are
-        not deductible as charitable contributions for federal income tax purposes in the United States. This payment is
-        voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding
-        any possible business-expense treatment or other tax consequences.
-      </p>
-    </div>
+        <BadgeImage badgeUrl={badgeUrl} />
+
+        <div class="pk-cluster pk-cluster--center">
+          <a
+            href={`${badgeUrl}?download=1&name=${encodeURIComponent(badgeFilename)}`}
+            download={badgeFilename}
+            class="pk-btn pk-btn--secondary pk-btn--sm"
+          >
+            <span aria-hidden="true">⬇</span> Download badge
+          </a>
+        </div>
+
+        <div class="pk-cluster pk-cluster--center">
+          <span class="pk-small">Spread the word:</span>
+          <a
+            href={twitterHref}
+            class="pk-btn pk-btn--secondary"
+            data-share-twitter
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Share on X / Twitter"
+          >
+            <IconXTwitter />X
+          </a>
+          <a
+            href={linkedinHref}
+            class="pk-btn pk-btn--secondary"
+            data-share-linkedin
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Share on LinkedIn"
+          >
+            <IconLinkedIn />
+            LinkedIn
+          </a>
+        </div>
+
+        {personalized && <ShareLinkRow shareUrl={shareUrl} />}
+
+        <p class="pk-small">
+          PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are
+          not deductible as charitable contributions for federal income tax purposes in the United States. This payment
+          is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor
+          regarding any possible business-expense treatment or other tax consequences.
+        </p>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -177,57 +237,64 @@ function AsyncPending({ methodType, expiresAt }: { methodType?: string | null; e
     : null;
 
   return (
-    <div class="donation-badge donation-badge--pending">
-      <h2 class="donation-badge-title">Your payment is being processed</h2>
-      <p class="donation-badge-body">
-        Your donation has been initiated via <strong>{info.label}</strong>.
-        {!expiresAt && " These payments typically take a few business days to settle."}
-      </p>
-      {deadline && (
-        <p class="donation-badge-body">
-          Please ensure your payment is received by <strong>{deadline}</strong>. After this deadline Stripe will close
-          the payment window.
-        </p>
-      )}
-      <p class="donation-badge-body">
-        Once your bank confirms the payment you will receive a receipt and your personalised badge by email. No further
-        action is needed on your part.
-      </p>
-      <p class="donation-badge-body text-muted small">
-        Thank you for your patience and generous support of the PKI Consortium!
-      </p>
+    <div class="pk">
+      <Alert tone="info" title="Your payment is being processed">
+        <div class="pk-stack pk-stack--snug">
+          <p>
+            Your donation has been initiated via <strong>{info.label}</strong>.
+            {!expiresAt && " These payments typically take a few business days to settle."}
+          </p>
+          {deadline && (
+            <p>
+              Please ensure your payment is received by <strong>{deadline}</strong>. After this deadline Stripe will
+              close the payment window.
+            </p>
+          )}
+          <p>
+            Once your bank confirms the payment you will receive a receipt and your personalized badge by email. No
+            further action is needed on your part.
+          </p>
+          <p class="pk-small">Thank you for your patience and generous support of the PKI Consortium!</p>
+        </div>
+      </Alert>
     </div>
   );
 }
 
 function FailedBadge() {
   return (
-    <div class="donation-badge donation-badge--failed">
-      <h2 class="donation-badge-title">Payment not completed</h2>
-      <p class="donation-badge-body">Your bank was unable to process the payment. No funds have been charged.</p>
-      <p class="donation-badge-body">
-        If you would like to try again, please <a href="/donate/">return to the donation page</a> and use a different
-        payment method.
-      </p>
+    <div class="pk">
+      <Alert tone="danger" title="Payment not completed">
+        <div class="pk-stack pk-stack--snug">
+          <p>Your bank was unable to process the payment. No funds have been charged.</p>
+          <p>
+            If you would like to try again, please <a href="/donate/">return to the donation page</a> and use a
+            different payment method.
+          </p>
+        </div>
+      </Alert>
     </div>
   );
 }
 
 function ExpiredBadge() {
   return (
-    <div class="donation-badge donation-badge--expired">
-      <h2 class="donation-badge-title">Checkout session expired</h2>
-      <p class="donation-badge-body">The payment window for this checkout has closed and no payment was taken.</p>
-      <p class="donation-badge-body">
-        Please return to the donation page to <a href="/donate/">try again</a>, we really appreciate your support.
-      </p>
+    <div class="pk">
+      <Alert tone="warn" title="Checkout session expired">
+        <div class="pk-stack pk-stack--snug">
+          <p>The payment window for this checkout has closed and no payment was taken.</p>
+          <p>
+            Please return to the donation page to <a href="/donate/">try again</a>, we really appreciate your support.
+          </p>
+        </div>
+      </Alert>
     </div>
   );
 }
 
 function GenericThankYou({ pendingHtml }: { pendingHtml: string }) {
   // SAFETY: pendingHtml is read from Hugo-rendered static markup (data-donation-pending-content)
-  return <div class="donation-badge donation-badge--generic" dangerouslySetInnerHTML={{ __html: pendingHtml }} />;
+  return <div class="pk pk-stack" dangerouslySetInnerHTML={{ __html: pendingHtml }} />;
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────
@@ -254,6 +321,19 @@ function consumeDonationPollResult(
     return { stop: true, session: result.session };
   }
   return { stop: false, session: null };
+}
+
+/**
+ * Shows the badge, then re-renders it with the donor's own promoter link once
+ * that has been issued. The link is a prop rather than a DOM mutation, so the
+ * copy row and the social hrefs cannot disagree about which URL is current.
+ */
+function showBadgeAndPersonalizeShareLink(container: HTMLElement, session: DonationSession, sessionId: string): void {
+  renderBadge(container, session, sessionId, GENERIC_SHARE_URL, false);
+  void fetchPromoterCode(sessionId).then((result) => {
+    if (!result) return;
+    renderBadge(container, session, sessionId, result.shareUrl, true);
+  });
 }
 
 // ── Main flow ─────────────────────────────────────────────────────────────
@@ -305,11 +385,7 @@ export async function initDonationThankYou(): Promise<void> {
   }
 
   if (session) {
-    renderBadge(container, session, sessionId);
-    void fetchPromoterCode(sessionId).then((result) => {
-      if (!result) return;
-      updateShareLinks(container, result.shareUrl, session!, formattedAmountFor(session!));
-    });
+    showBadgeAndPersonalizeShareLink(container, session, sessionId);
     return;
   }
 
@@ -347,23 +423,21 @@ export async function initDonationThankYou(): Promise<void> {
 
   if (!session) return;
 
-  renderBadge(container, session, sessionId);
-  void fetchPromoterCode(sessionId).then((result) => {
-    if (!result) return;
-    updateShareLinks(container, result.shareUrl, session, formattedAmountFor(session));
-  });
+  showBadgeAndPersonalizeShareLink(container, session, sessionId);
 }
 
 // ── Badge rendering ─────────────────────────────────────────────────────
 
-function renderBadge(container: HTMLElement, session: DonationSession, sessionId: string): void {
-  const formattedAmount = formattedAmountFor(session);
-  const shareUrl = "https://pkic.org/donate/";
-  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
-
+function renderBadge(
+  container: HTMLElement,
+  session: DonationSession,
+  sessionId: string,
+  shareUrl: string,
+  personalized: boolean,
+): void {
   renderTo(
     container,
-    <DonationBadge session={session} sessionId={sessionId} shareUrl={shareUrl} shareText={shareText} />,
+    <DonationBadge session={session} sessionId={sessionId} shareUrl={shareUrl} personalized={personalized} />,
   );
 }
 
@@ -373,61 +447,31 @@ function renderStaticThankYou(container: HTMLElement): void {
   renderTo(container, <GenericThankYou pendingHtml={inner} />);
 }
 
-// ── Share link updates ──────────────────────────────────────────────────
+// ── Share text ──────────────────────────────────────────────────────────
 
 type PromoterResult = z.infer<typeof donationPromoterResponseSchema>;
 
 async function fetchPromoterCode(sessionId: string): Promise<PromoterResult | null> {
   try {
     const payload = donationPromoterRequestSchema.parse({ sessionId });
-    return postJson("/api/v1/donations/promoters", payload, donationPromoterResponseSchema);
+    // Awaited rather than returned: returning the promise from inside the
+    // `try` puts its rejection outside this catch, and a promoter endpoint
+    // that answers 500 became an unhandled rejection instead of a badge with
+    // the generic share link on it.
+    return await postJson("/api/v1/donations/promoters", payload, donationPromoterResponseSchema);
   } catch {
     return null;
   }
+}
+
+function shareTextFor(formattedAmount: string): string {
+  return `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
 }
 
 function formattedAmountFor(session: DonationSession): string {
   const info = currencyInfo(session.currency);
   const majorAmount = toMajorUnit(session.grossAmount, session.currency);
   return formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal ?? false);
-}
-
-/** Swap the generic donate URL for the personalized /donate/r/:code URL. */
-function updateShareLinks(
-  container: HTMLElement,
-  shareUrl: string,
-  session: DonationSession,
-  formattedAmount: string,
-): void {
-  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
-  const twitterHref = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
-  const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: shareUrl })}`;
-
-  const twitterBtn = container.querySelector<HTMLAnchorElement>("[data-share-twitter]");
-  const linkedinBtn = container.querySelector<HTMLAnchorElement>("[data-share-linkedin]");
-  const linkInput = container.querySelector<HTMLInputElement>("[data-share-link]");
-  const copyBtn = container.querySelector<HTMLButtonElement>("[data-share-copy]");
-
-  if (twitterBtn) twitterBtn.href = twitterHref;
-  if (linkedinBtn) linkedinBtn.href = linkedinHref;
-
-  if (linkInput) {
-    linkInput.value = shareUrl;
-    linkInput.hidden = false;
-    linkInput.closest<HTMLElement>("[data-share-link-row]")?.removeAttribute("hidden");
-  }
-  if (copyBtn) {
-    copyBtn.hidden = false;
-    copyBtn.addEventListener("click", () => {
-      void navigator.clipboard?.writeText(shareUrl).then(() => {
-        const orig = copyBtn.textContent;
-        copyBtn.textContent = "Copied!";
-        setTimeout(() => {
-          copyBtn.textContent = orig;
-        }, 2000);
-      });
-    });
-  }
 }
 
 // ── Utilities ───────────────────────────────────────────────────────────

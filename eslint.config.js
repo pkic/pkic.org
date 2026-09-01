@@ -8,6 +8,7 @@ const sourceTypeScriptFiles = [
   "functions/**/*.ts",
   "assets/ts/**/*.{ts,tsx}",
   "assets/shared/**/*.ts",
+  "assets/design/**/*.ts",
   "tests/**/*.{ts,tsx}",
 ];
 const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
@@ -68,7 +69,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["assets/js/**/*.js", "static/scripts/**/*.js"],
+    files: ["assets/js/**/*.js", "static/js/*.js", "static/scripts/**/*.js"],
     languageOptions: {
       globals: globals.browser,
     },

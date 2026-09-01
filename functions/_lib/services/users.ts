@@ -51,13 +51,11 @@ export function userRecordColumns(tableAlias?: string): string {
 
 /**
  * Matches a `users` row by its primary email OR by any secondary email
- * recorded in `user_emails` (admin-managed aliases) -- so admin
- * find-or-create flows (adding a
- * representative, the Interim Admin Tool) recognize a person by any known
- * address instead of creating a duplicate `users` row. Human login lookups
- * (magic-link request/verify in `_lib/auth/user-session.ts`)
- * deliberately do NOT go through this helper -- secondary emails are
- * admin/display/search only and must not grant login via an alias.
+ * recorded in `user_emails` (admin-managed aliases) -- so find-or-create
+ * flows recognize a person by any known address instead of creating a
+ * duplicate `users` row. Human login resolves only verified aliases through
+ * `_lib/auth/user-session.ts`; this broader helper must never be used as an
+ * authentication decision.
  */
 async function findExistingUserByAnyEmail(db: DatabaseLike, normalizedEmail: string): Promise<UserRecord | null> {
   const direct = await first<UserRecord>(db, `SELECT ${userRecordColumns()} FROM users WHERE normalized_email = ?`, [

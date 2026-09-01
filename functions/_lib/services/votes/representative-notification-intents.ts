@@ -16,6 +16,7 @@ export interface PendingVoteRepresentativeNotificationIntent {
   round: number;
   closesAt: string;
   memberId: string;
+  identityId: string;
   organizationName: string;
   representativeUserId: string;
   representativeEmail: string;
@@ -48,12 +49,12 @@ export function prepareVoteRepresentativeNotificationIntents(
            AND current_round = ?
        )
        INSERT INTO vote_representative_notification_intents (
-         vote_id, round, member_id, representative_user_id, recipient_email,
+         vote_id, round, member_id, identity_id, representative_user_id, recipient_email,
          representative_name, organization_name, vote_title, closes_at, created_at,
          queued_outbox_id, queued_at
        )
        SELECT
-         v.id, ?, membership.member_id, representative.user_id, representative_user.email,
+         v.id, ?, membership.member_id, identity.id, identity.user_id, representative_user.email,
          CASE
            WHEN TRIM(
              COALESCE(representative_user.first_name, '') || ' ' ||
@@ -73,13 +74,15 @@ export function prepareVoteRepresentativeNotificationIntents(
        JOIN members m ON m.id = membership.member_id AND m.status = 'active' AND m.organization_id IS NOT NULL
        JOIN organizations o ON o.id = m.organization_id
        JOIN member_category_assignments mca ON mca.member_id = m.id
-       JOIN organization_representatives representative
-         ON representative.member_id = m.id
-        AND representative.user_id = membership.user_id
-        AND representative.left_at IS NULL
-        AND representative.blocked_at IS NULL
+       JOIN identities identity
+         ON identity.id = membership.identity_id
+        AND identity.user_id = membership.user_id
+        AND identity.organization_id = m.organization_id
+        AND identity.started_at IS NOT NULL
+        AND identity.ended_at IS NULL
+        AND identity.blocked_at IS NULL
        JOIN users representative_user
-         ON representative_user.id = representative.user_id
+         ON representative_user.id = identity.user_id
         AND representative_user.active = 1
        WHERE (
            ${votingMembershipCategoryExistsSql("mca.category_code")}
@@ -91,7 +94,7 @@ export function prepareVoteRepresentativeNotificationIntents(
              WHERE category.value = mca.category_code
            )
          )
-       ON CONFLICT(vote_id, round, member_id, representative_user_id) DO NOTHING`,
+       ON CONFLICT(vote_id, round, member_id, identity_id) DO NOTHING`,
     )
     .bind(voteId, round, round, createdAt);
 }
@@ -108,6 +111,7 @@ export async function listPendingVoteRepresentativeNotificationIntents(
     round: number;
     closes_at: string;
     member_id: string;
+    identity_id: string;
     organization_name: string;
     representative_user_id: string;
     recipient_email: string;
@@ -115,6 +119,7 @@ export async function listPendingVoteRepresentativeNotificationIntents(
   }>(
     db,
     `SELECT intent.vote_id, vote.owner_group_id, intent.vote_title, intent.round, intent.closes_at, intent.member_id,
+            intent.identity_id,
             intent.organization_name, intent.representative_user_id, intent.recipient_email, intent.representative_name
      FROM vote_representative_notification_intents intent
      JOIN votes vote ON vote.id = intent.vote_id
@@ -131,6 +136,7 @@ export async function listPendingVoteRepresentativeNotificationIntents(
     round: row.round,
     closesAt: row.closes_at,
     memberId: row.member_id,
+    identityId: row.identity_id,
     organizationName: row.organization_name,
     representativeUserId: row.representative_user_id,
     representativeEmail: row.recipient_email,

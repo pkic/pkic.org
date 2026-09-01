@@ -105,6 +105,17 @@
   @include az-sidebar-shape;
   position: sticky;
   top: 68px;
+
+  // The rail is a wide-viewport affordance: below this width the grid is a
+  // single column and there is nothing to scan past. This used to be a
+  // `d-none d-lg-flex` pair in the markup; when the rail appears is a
+  // property of the rail, so it belongs here with the rest of its shape.
+  // `az-sidebar-shape` sets `display: flex`, which the query restores.
+  display: none;
+
+  @media (min-width: 992px) {
+    display: flex;
+  }
 }
 
 .members-content {

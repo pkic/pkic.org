@@ -1,69 +1,93 @@
+{{/*
+  cards — a responsive card grid driven by an inner YAML block.
+
+  Inner YAML:
+    section_id:    optional id for the <section>
+    section_class: optional extra class for the <section>
+    card_style:    "bento" | "default"   (default: "default")
+    cards:
+      - color:      bento tile colour class (bento style only)
+        card_class: extra class on the card (default style only)
+        image:      hero/top image URL
+        icon:       icon name (bento) or literal glyph (default)
+        title:      card title
+        text:       Markdown body
+        header:     { content: Markdown }        default style only
+        footer:     { content: Markdown }        default style only
+        links:
+          - url, text
+            variant: primary | secondary | ghost | link   (default: secondary)
+
+  Columns come from `pk-grid`, which fits as many as the viewport allows, so a
+  card carries no width of its own.
+*/}}
 {{ $yaml := .Inner | transform.Unmarshal }}
 {{- $cardStyle := $yaml.card_style | default "default" -}}
+{{- $variants := dict
+  "primary"   "pk-btn--primary"
+  "secondary" "pk-btn--secondary"
+  "ghost"     "pk-btn--ghost"
+  "link"      "pk-btn--link"
+-}}
 
-<section id="{{ with $yaml.section_id }}{{ . }}{{ else }}cards-section{{ end }}" class="{{ with $yaml.section_class }}{{ . }}{{ end }}{{ if eq $cardStyle "bento" }} pkic-card-bento{{ end }}">
-  <div class="row g-3">
+<section id="{{ with $yaml.section_id }}{{ . }}{{ else }}cards-section{{ end }}" class="{{ with $yaml.section_class }}{{ . }} {{ end }}pk-grid{{ if eq $cardStyle "bento" }} pkic-card-bento{{ end }}">
     {{ range $yaml.cards }}
-      <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }}{{ if ne $cardStyle "bento" }} mb-4{{ end }}">
-        {{- if eq $cardStyle "bento" -}}
-        <div class="bento-card {{ with .color }}{{ . }}{{ end }} h-100">
-          {{ $cardTitle := .title }}
-          {{ with .image }}
-          <div class="bento-hero-image-wrapper">
-            <img src="{{ . }}" class="bento-hero-image" alt="{{ $cardTitle }}">
-          </div>
-          {{ end }}
-          {{ with .icon }}{{ partial "icon" (dict "name" . "size" "2.25rem") }}{{ end }}
-          <p class="bento-title">{{ .title }}</p>
-          <div class="bento-text">{{ with .text }}{{ . | markdownify }}{{ end }}</div>
-          {{- if .links -}}
-          <div class="mt-auto pt-3">
-            {{- range .links -}}
-            {{- $u := urls.Parse .url -}}
-            <a href="{{ .url }}" class="btn btn-sm {{ with .class }}{{ . }}{{ else }}btn-light{{ end }} me-2"{{- if $u.IsAbs }} target="_blank" rel="external"{{ end }}>{{ .text }}</a>
-            {{- end -}}
-          </div>
+      {{- if eq $cardStyle "bento" -}}
+      <div class="bento-card {{ with .color }}{{ . }}{{ end }}">
+        {{ $cardTitle := .title }}
+        {{ with .image }}
+        <div class="bento-hero-image-wrapper">
+          <img src="{{ . }}" class="bento-hero-image" alt="{{ $cardTitle }}">
+        </div>
+        {{ end }}
+        {{ with .icon }}{{ partial "icon" (dict "name" . "size" "2.25rem") }}{{ end }}
+        <p class="bento-title">{{ .title }}</p>
+        <div class="bento-text">{{ with .text }}{{ . | markdownify }}{{ end }}</div>
+        {{- if .links -}}
+        <div class="pk-cluster pk-push-block">
+          {{- range .links -}}
+          {{- $u := urls.Parse .url -}}
+          <a href="{{ .url }}" class="pk-btn pk-btn--sm {{ index $variants (.variant | default "secondary") | default "pk-btn--secondary" }}"{{- if $u.IsAbs }} target="_blank" rel="external"{{ end }}>{{ .text }}</a>
           {{- end -}}
         </div>
-        {{- else -}}
-        <div class="card pkic-wg-card {{ with .card_class }}{{ . }}{{ end }} h-100">
-          {{ with .image }}
-          <img src="{{ . }}" class="card-img-top" alt="{{ $.card_title }}">
-          {{ end }}
-          {{ with .header }}
-          <div class="card-header pkic-card-header">
-            {{ .content | markdownify }}
-          </div>
-          {{ else }}
-          <div class="pkic-card-accent-bar{{ with .color }} pkic-card-accent--{{ . }}{{ end }}"></div>
-          {{ end }}
-          <div class="card-body d-flex flex-column">
-            {{ with .icon }}<span class="pkic-card-icon">{{ . }}</span>{{ end }}
-            {{ with .title }}<h5 class="card-title fw-bold">{{ . }}</h5>{{ end }}
-            {{ with .text }}<p class="card-text text-muted">{{ . | markdownify }}</p>{{ end }}
-            
-            {{ if .links }}
-            <div class="d-flex flex-column mt-auto">
-              {{ range .links }}
-              {{- $u := urls.Parse .url -}}
-              <a href="{{ .url }}" 
-                class="btn {{ with .class }}{{ . }}{{ else }}btn-outline-primary{{ end }} mb-2"
-                {{- if $u.IsAbs }} target="_blank" rel="external"{{ end -}}
-                >{{ .text }}</a>
-              {{ end }}
-            </div>
-            {{ end }}
+        {{- end -}}
+      </div>
+      {{- else -}}
+      <div class="pkic-wg-card {{ with .card_class }}{{ . }}{{ end }}">
+        {{ with .image }}
+        <img src="{{ . }}" class="pkic-card-image" alt="{{ $.card_title }}">
+        {{ end }}
+        {{ with .header }}
+        <div class="pkic-card-header">
+          {{ .content | markdownify }}
+        </div>
+        {{ else }}
+        <div class="pkic-card-accent-bar{{ with .color }} pkic-card-accent--{{ . }}{{ end }}"></div>
+        {{ end }}
+        <div class="pkic-card-body pk-stack">
+          {{ with .icon }}<span class="pkic-card-icon">{{ . }}</span>{{ end }}
+          {{ with .title }}<h3 class="pkic-card-title">{{ . }}</h3>{{ end }}
+          {{ with .text }}<div class="pkic-card-text">{{ . | markdownify }}</div>{{ end }}
 
-          </div>
-          
-          {{ with .footer }}
-          <div class="card-footer pkic-card-footer {{ with .class }}{{ . }}{{ end }}">
-            {{ .content | markdownify }}
+          {{ if .links }}
+          <div class="pk-stack pk-stack--snug pk-push-block">
+            {{ range .links }}
+            {{- $u := urls.Parse .url -}}
+            <a href="{{ .url }}"
+              class="pk-btn {{ index $variants (.variant | default "secondary") | default "pk-btn--secondary" }}"
+              {{- if $u.IsAbs }} target="_blank" rel="external"{{ end -}}
+              >{{ .text }}</a>
+            {{ end }}
           </div>
           {{ end }}
         </div>
-        {{- end }}
+
+        {{ with .footer }}
+        <div class="pkic-card-footer {{ with .class }}{{ . }}{{ end }}">
+          {{ .content | markdownify }}
+        </div>
+        {{ end }}
       </div>
+      {{- end }}
     {{ end }}
-  </div>
 </section>

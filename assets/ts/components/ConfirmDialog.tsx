@@ -1,14 +1,29 @@
 /**
- * Promise-based confirmation dialog that replaces window.confirm portal-wide.
+ * Promise-based confirmation that replaces window.confirm portal-wide.
+ *
  * A confirmation is a decision, so the dialog states consequences as a list
  * the reader can scan, names the action on the confirm button (never "OK"),
  * and for irreversible operations demands the target's name be typed back.
  *
  * Mount <ConfirmDialogHost /> once near the app root; call confirmAction()
- * anywhere. Escape, the cancel button, and the backdrop all resolve false.
+ * anywhere. Cancel and Escape resolve false.
+ *
+ * The dialog itself is the design system's `Dialog`, which is a native
+ * <dialog> opened with showModal(). That is not a cosmetic swap. The version
+ * this replaces was a positioned <div> with `role="alertdialog"`, which meant
+ * it looked modal and was not: focus could tab straight out of it into the
+ * page behind, the rest of the document stayed reachable to a screen reader,
+ * and Escape only worked because of a document-level key listener. The
+ * platform gives all three away for free, correctly, and takes the focus
+ * trap with it.
+ *
+ * One behaviour is deliberately gone: clicking the backdrop no longer
+ * dismisses. For a dialog that exists to confirm something irreversible, a
+ * stray click outside it should not be a way to answer.
  */
 import { signal } from "@preact/signals";
-import { useEffect, useRef, useState } from "preact/hooks";
+
+import { Dialog } from "../ui/Dialog";
 
 export interface ConfirmActionRequest {
   title: string;
@@ -33,7 +48,7 @@ interface ActiveConfirm extends ConfirmActionRequest {
 
 const activeConfirm = signal<ActiveConfirm | null>(null);
 
-/** Ask the user to confirm an action; resolves false on cancel/Escape/backdrop. */
+/** Ask the user to confirm an action; resolves false on cancel or Escape. */
 export function confirmAction(request: ConfirmActionRequest): Promise<boolean> {
   return new Promise((resolve) => {
     // A second request while one is open cancels the first rather than
@@ -51,80 +66,28 @@ function settle(confirmed: boolean): void {
 
 export function ConfirmDialogHost() {
   const request = activeConfirm.value;
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
-  const [typed, setTyped] = useState("");
 
-  useEffect(() => {
-    if (!request) {
-      setTyped("");
-      return;
-    }
-    // Focus the safe action first; confirming should be a deliberate move.
-    const focusTarget = request.typedConfirmation
-      ? document.getElementById("pkic-confirm-typed")
-      : confirmButtonRef.current;
-    focusTarget?.focus({ preventScroll: true });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        settle(false);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [request]);
-
+  // Rendered only while a decision is pending, so a closed host leaves nothing
+  // in the accessibility tree for a test — or a screen reader — to find.
   if (!request) return null;
-  const confirmDisabled = Boolean(request.typedConfirmation) && typed.trim() !== request.typedConfirmation;
 
   return (
-    <div class="pkic-confirm-backdrop" onClick={() => settle(false)}>
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="pkic-confirm-title"
-        class="pkic-confirm-dialog"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h5 id="pkic-confirm-title" class="pkic-confirm-title">
-          {request.title}
-        </h5>
-        {request.body && <p class="pkic-confirm-body">{request.body}</p>}
-        {request.consequences && request.consequences.length > 0 && (
-          <ul class="pkic-confirm-consequences">
-            {request.consequences.map((consequence) => (
-              <li key={consequence}>{consequence}</li>
-            ))}
-          </ul>
-        )}
-        {request.typedConfirmation && (
-          <div class="pkic-confirm-typed">
-            <label class="form-label small" for="pkic-confirm-typed">
-              Type <strong>{request.typedConfirmation}</strong> to confirm
-            </label>
-            <input
-              id="pkic-confirm-typed"
-              class="form-control form-control-sm"
-              value={typed}
-              onInput={(event) => setTyped((event.target as HTMLInputElement).value)}
-            />
-          </div>
-        )}
-        <div class="pkic-confirm-actions">
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => settle(false)}>
-            {request.cancelLabel ?? "Cancel"}
-          </button>
-          <button
-            ref={confirmButtonRef}
-            type="button"
-            class={`btn btn-sm ${request.tone === "primary" ? "btn-success" : "btn-danger"}`}
-            disabled={confirmDisabled}
-            onClick={() => settle(true)}
-          >
-            {request.confirmLabel}
-          </button>
-        </div>
-      </div>
+    <div class="pk">
+      <Dialog
+        open
+        title={request.title}
+        description={request.body}
+        consequences={request.consequences}
+        confirmPhrase={request.typedConfirmation}
+        confirmPrompt={request.typedConfirmation ? `Type ${request.typedConfirmation} to confirm` : undefined}
+        confirmLabel={request.confirmLabel}
+        cancelLabel={request.cancelLabel}
+        // Confirmations default to destructive: the ones that are not are the
+        // exception, and treating a removal as routine is the worse mistake.
+        destructive={request.tone !== "primary"}
+        onConfirm={() => settle(true)}
+        onCancel={() => settle(false)}
+      />
     </div>
   );
 }

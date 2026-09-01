@@ -4,6 +4,7 @@ import { z } from "zod";
 export const PERMISSIONS = [
   "membership:read",
   "membership:write",
+  "identities:activate",
   "membership:approve",
   "events:read",
   "events:write",

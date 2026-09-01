@@ -1,0 +1,54 @@
+/*
+ * Panel.
+ *
+ * A titled surface for forms and lists: border, rounded corners, and a
+ * semantically structured header with optional toolbar slot.
+ */
+
+@layer components {
+  .pk-panel {
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    overflow: hidden;
+  }
+
+  .pk-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: var(--pk-4) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-panel__title {
+    flex: 1;
+    margin: 0;
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--pk-ink);
+  }
+
+  .pk-panel__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: none;
+  }
+
+  .pk-panel__body {
+    padding: var(--pk-4);
+  }
+
+  @media (max-width: 48rem) {
+    .pk-panel__header {
+      padding: var(--pk-3) var(--pk-3);
+    }
+
+    .pk-panel__body {
+      padding: var(--pk-3);
+    }
+  }
+}

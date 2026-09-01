@@ -1,0 +1,324 @@
+/*
+ * DataTable — what a data table does, on top of the skin it shares.
+ *
+ * The static skin (`pk-table`, `pk-table__scroll`, the cells and their rules)
+ * lives in `Table.css`, because the Markdown table render hook draws the same
+ * table on server-rendered pages and the two must not drift. Here is the part
+ * only a data table needs: its denser type, hover, sorting, selection,
+ * checkboxes, loading skeletons and row activation. It rides this component's
+ * chunk, so a content page never downloads any of it.
+ *
+ * Selection is a 6% accent tint rather than a full wash: on a green-accented
+ * product a strong selection colour competes with the status badges, which are
+ * the only green in the row that carries meaning.
+ */
+
+@layer components {
+  /*
+   * THE MEASURE — how wide a list is allowed to get.
+   *
+   * The design system's own examples are drawn inside a 66rem column, and they
+   * look like a table. The portal's `#portal-main` has no width at all, so on a
+   * 2000px screen the same component was handed 1670px: `table-layout: auto`
+   * shares leftover width between the columns IN PROPORTION to what each one
+   * needs, so every column inflated by two thirds and the row stopped reading
+   * as a row. A person sat at the far left, their date at 60%, and the button
+   * that acts on them a third of a metre away at the right edge.
+   *
+   * The list block: search and filters, the table, the pager. It spans the
+   * width the page gives it, so the toolbar, the rows and the pager share
+   * both edges with everything else on the screen.
+   *
+   * This replaced a 66rem measure, which had replaced nothing at all. With no
+   * policy, `table-layout: auto` shared a wide screen's slack among the
+   * columns in proportion to their content — dead space everywhere. The
+   * measure fixed that and earned the next complaint: "the pages are not
+   * using the full width". Both were the same missing decision about where
+   * slack belongs. It belongs in one column — see `pk-table__col--primary`.
+   */
+  .pk-table-list {
+    width: 100%;
+  }
+
+  /*
+   * A data table is denser and quieter than a table in prose: more rows on a
+   * screen, headers that read as column labels rather than sentences, and a
+   * ground it can rely on because it is always drawn inside a `Panel`.
+   *
+   * `tabular-nums` so a column of dates, counts or amounts lines up digit under
+   * digit whichever way the column is aligned. Proportional figures make a
+   * column of numbers look ragged even when every value has the same length.
+   */
+  .pk-table {
+    width: 100%;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * The slack column. On a wide screen the leftover width all flows here —
+   * one column stretches, every other column stays the size its content asks
+   * for, and the row reads left to right without gaps that mean nothing.
+   * The 99% is the table-layout idiom for "everything the others do not
+   * need", not a real percentage; content keeps it from collapsing the rest.
+   */
+  .pk-table__col--primary {
+    width: 99%;
+  }
+
+  /*
+   * One leading for the whole table, so a row's height is its type scale plus
+   * `--pk-row-y` and nothing else. It is the same 1.35 `PersonCell` sets on the
+   * two lines it stacks, which is what stops a row with a face in it drifting
+   * out of rhythm with a row of plain values. The document's 1.55 is a reading
+   * measure for prose and made every wrapped cell a third taller than it needed
+   * to be.
+   */
+  .pk-table th,
+  .pk-table td {
+    line-height: 1.35;
+  }
+
+  .pk-table th {
+    border-bottom-color: var(--pk-line);
+    white-space: nowrap;
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-table td {
+    border-bottom-color: var(--pk-line-soft);
+    vertical-align: middle;
+  }
+
+  /*
+   * A column whose content has a bounded length — a date, a count, a status,
+   * the row's actions. It hugs that content and never wraps, so it takes none
+   * of the row's leftover width and the columns that hold real prose get it
+   * instead. `width: 1px` is the table-layout idiom for "as narrow as this
+   * column's content allows"; the `nowrap` is what makes that the whole value
+   * rather than its longest word.
+   *
+   * This is why a column says `width: "fit"` on its definition rather than
+   * writing `pk-nowrap` on its cells: wrapping is a symptom, and the utility
+   * only ever treated the symptom.
+   */
+  .pk-table__col--fit {
+    width: 1px;
+    white-space: nowrap;
+  }
+
+  .pk-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /*
+   * `overflow` does not clip an absolutely positioned descendant unless the
+   * scroller is also that descendant's containing block. The visually hidden
+   * header spans are absolutely positioned, so on a phone one of them sat
+   * 600px from the viewport's left edge, outside this container, and stretched
+   * the DOCUMENT by 222px — a page that scrolled sideways with nothing visible
+   * out there to explain it. The table itself was clipped correctly the whole
+   * time, which is what made it hard to see.
+   */
+  .pk-table__scroll {
+    position: relative;
+  }
+
+  .pk-table__caption {
+    text-align: left;
+    padding: var(--pk-2) var(--pk-4);
+    font-size: var(--pk-text-md);
+    font-weight: 700;
+  }
+
+  .pk-table__caption--hidden,
+  .pk-table__sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .pk-table tbody tr:hover {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-table tbody tr[aria-selected="true"] {
+    background: color-mix(in oklab, var(--pk-accent) 6%, var(--pk-surface));
+  }
+
+  .pk-table tbody tr[aria-selected="true"]:hover {
+    background: color-mix(in oklab, var(--pk-accent) 10%, var(--pk-surface));
+  }
+
+  .pk-table__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+
+  .pk-table__sort:hover {
+    color: var(--pk-ink);
+  }
+
+  .pk-table th[aria-sort] .pk-table__sort {
+    color: var(--pk-ink);
+  }
+
+  .pk-table__arrow {
+    font-size: 0.85em;
+  }
+
+  .pk-table__select {
+    width: 1px;
+  }
+
+  /* Styled here rather than inherited, so a checkbox in a table never falls
+     back to the operating system's blue beside the accent. */
+  .pk-table__checkbox {
+    appearance: none;
+    margin: 0;
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+    position: relative;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line-strong);
+    border-radius: var(--pk-radius-sm);
+    cursor: pointer;
+  }
+
+  .pk-table__checkbox:checked,
+  .pk-table__checkbox:indeterminate {
+    background: var(--pk-accent-strong);
+    border-color: var(--pk-accent-strong);
+  }
+
+  .pk-table__checkbox:checked::after {
+    content: "";
+    position: absolute;
+    left: 0.29rem;
+    top: 0.09rem;
+    width: 0.26rem;
+    height: 0.52rem;
+    border: solid var(--pk-on-solid);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .pk-table__checkbox:indeterminate::after {
+    content: "";
+    position: absolute;
+    left: 0.18rem;
+    top: 0.42rem;
+    width: 0.55rem;
+    height: 0;
+    border-top: 2px solid var(--pk-on-solid);
+  }
+
+  /* Placeholder rows are inert: they carry no data and must not respond to a
+     pointer, or a click lands on a row that does not exist yet. */
+  .pk-table__placeholder {
+    pointer-events: none;
+  }
+
+  /* `min-width` because a placeholder in a `fit` column has no content to be
+     as wide as, and a skeleton nobody can see is not a loading state. */
+  .pk-table__skeleton {
+    display: block;
+    min-width: var(--pk-7);
+    height: 0.7rem;
+    border-radius: var(--pk-radius-sm);
+    background: linear-gradient(90deg, var(--pk-line-soft) 25%, var(--pk-line) 37%, var(--pk-line-soft) 63%);
+    background-size: 400% 100%;
+    animation: pk-table-shimmer var(--pk-dur-shimmer) ease infinite;
+  }
+
+  @keyframes pk-table-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
+
+  .pk-table__empty {
+    padding: var(--pk-6) var(--pk-4);
+  }
+
+  /*
+   * A row that activates something. The control is a real link or button in
+   * the first cell, stretched over the whole row, so the row is clickable
+   * everywhere while remaining one focusable, named, Enter-activated control.
+   * A `<tr onClick>` is none of those things.
+   *
+   * The control is stretched by its own box rather than by an `::after`
+   * overlay: its label is visually hidden, so a statically positioned button
+   * measures 0x0 and the only thing occupying the row is a pseudo-element
+   * nothing can hit-test, scroll into view, or report as visible. The
+   * element that receives the click is now the element that has the size.
+   */
+  .pk-table__row--action {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .pk-table__row--action:hover {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-table__row-link {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  /* Anything the row's own cells offer - a menu, a link, a checkbox - must sit
+     above the stretched control, or the row swallows every click meant for it.
+     Only what a reader can actually operate is lifted, though: raising every
+     element child put a `<span>` that merely styles half a cell's text over the
+     row's own link, so clicking that half of the text did nothing at all. */
+  .pk-table__row--action
+    td
+    :is(a, button, input, select, textarea, label, summary, [role="menu"], [tabindex]):not(.pk-table__row-link) {
+    position: relative;
+    z-index: 1;
+  }
+
+  .pk-table__row--action:focus-within {
+    outline: var(--pk-focus);
+    outline-offset: -2px;
+  }
+
+  .pk-table__row-link:focus-visible {
+    outline: none;
+  }
+
+  /* An expanded region belonging to the row above it. */
+  .pk-table__detail > td {
+    padding: 0;
+    background: var(--pk-surface-sunk);
+  }
+}

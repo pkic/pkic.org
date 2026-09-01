@@ -25,7 +25,7 @@ import {
 } from "../../../../_lib/services/sponsorship";
 import { deleteStoredImageInBackground } from "../../../../_lib/services/stored-image-pointer";
 import { PUBLIC_IMAGE_CACHE_CONTROL, storedImageResponse } from "../../../../_lib/services/image-response";
-import { readValidatedUploadedImage } from "../../../../_lib/utils/image-upload";
+import { readValidatedUploadedSvgLogo } from "../../../../_lib/utils/image-upload";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const id = c.req.param("id");
@@ -61,7 +61,7 @@ export const SponsorsIdLogoPut = openApiRoute(sponsorshipLogoPutRouteSchema, asy
     staff,
     bucket,
     id,
-    await readValidatedUploadedImage(c.req.raw, "Logo"),
+    await readValidatedUploadedSvgLogo(c.req.raw),
   );
   c.executionCtx.waitUntil(deleteStoredImageInBackground(db, c.env, result.previousKey, "assets"));
   return json(

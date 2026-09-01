@@ -22,6 +22,7 @@
     "assets/ts/**/*.ts",
     "assets/ts/**/*.tsx",
     "assets/shared/**/*.ts",
+    "assets/design/**/*.ts",
     "tests/frontend/**/*.ts",
     "tests/frontend/**/*.tsx"
   ]

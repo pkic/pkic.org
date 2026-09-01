@@ -35,13 +35,15 @@
 {{- end -}}
 
 {{/* ── Hero banner ──────────────────────────────────────────────────────────── */}}
-<div class="webinar-hero{{ if $heroBg }} webinar-hero--photo{{ end }}"
-  {{- if $heroBg }} style="background-image:url('{{ $heroBg.RelPermalink }}')"{{- end -}}>
+{{/* The photo is an <img>, not a CSS background: the repository forbids style
+     attributes, and `partials/hero.html` already sets this precedent. */}}
+<div class="webinar-hero{{ if $heroBg }} webinar-hero--photo{{ end }}">
+  {{ with $heroBg }}<img class="webinar-hero-photo" src="{{ .RelPermalink }}" alt="" aria-hidden="true">{{ end }}
   <div class="webinar-hero-overlay"></div>
-  <div class="container webinar-hero-content">
+  <div class="pk-container pk-stack pk-center webinar-hero-content">
 
     {{/* Sponsored Webinar badge + sponsor name */}}
-    <div class="webinar-hero-eyebrow mb-3">
+    <div class="webinar-hero-eyebrow">
       <span class="webinar-hero-badge">Sponsored Webinar</span>
       {{- if $sponsorName }} <span class="webinar-hero-by">by {{ $sponsorName }}</span>{{- end }}
     </div>
@@ -53,7 +55,7 @@
     <p class="webinar-hero-meta">
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
            fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="me-1">
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
         <line x1="16" y1="2" x2="16" y2="6"/>
         <line x1="8" y1="2" x2="8" y2="6"/>
@@ -67,14 +69,14 @@
     <p class="webinar-hero-description">{{ . }}</p>
     {{ end }}
 
-    <div class="webinar-hero-actions mt-4 d-flex flex-wrap gap-3 justify-content-center">
+    <div class="pk-cluster pk-cluster--center">
       {{ with .Param "heroButton" }}
       <a href="{{ $.Param "heroButton.link" }}"
-         class="btn btn-page-accent btn-lg"
+         class="pk-btn pk-btn--primary pk-btn--lg"
          target="_blank" rel="noopener noreferrer">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
              fill="none" stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round" class="me-2" aria-hidden="true">
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
           <circle cx="9" cy="7" r="4"/>
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -88,39 +90,36 @@
 </div>
 
 {{/* ── Page body ─────────────────────────────────────────────────────────────── */}}
-<div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-lg-8" data-pagefind-body>
+{{/* No `pk` root: the body renders `.Content`, whose prose styling still comes
+     from `main.scss`, and the base layer would take its headings, lists and
+     link colours away. */}}
+<div class="pk-container pk-container--narrow pk-section pk-stack pk-stack--loose" data-pagefind-body>
 
-      {{/* Speaker cards */}}
-      {{ with .Param "speakers" }}
-      <div class="webinar-speakers mb-5">
-        <h2 class="webinar-section-heading">Speaker{{ if gt (len .) 1 }}s{{ end }}</h2>
-        <div class="row g-3">
-          {{ range . }}
-          {{- $speakerName := .representative | default .name -}}
-          {{- $speakerMember := .member | default $sponsorId -}}
-          <div class="col-sm-6">
-            {{ partial "leader-card.html" (dict
-              "name" $speakerName
-              "role" (.badge | default "Speaker")
-              "affiliation" $speakerMember
-            ) }}
-          </div>
-          {{ end }}
-        </div>
-      </div>
+  {{/* Speaker cards */}}
+  {{ with .Param "speakers" }}
+  <div class="webinar-speakers pk-stack">
+    <h2 class="webinar-section-heading">Speaker{{ if gt (len .) 1 }}s{{ end }}</h2>
+    <div class="pk-grid">
+      {{ range . }}
+      {{- $speakerName := .representative | default .name -}}
+      {{- $speakerMember := .member | default $sponsorId -}}
+      {{ partial "leader-card.html" (dict
+        "name" $speakerName
+        "role" (.badge | default "Speaker")
+        "affiliation" $speakerMember
+      ) }}
       {{ end }}
-
-      {{/* Main content */}}
-      <div class="webinar-content">
-        {{ .Content }}
-      </div>
-
-      {{/* Auto-injected disclaimer */}}
-      {{ partial "events/webinar-disclaimer.html" . }}
-
     </div>
   </div>
+  {{ end }}
+
+  {{/* Main content */}}
+  <div class="webinar-content">
+    {{ .Content }}
+  </div>
+
+  {{/* Auto-injected disclaimer */}}
+  {{ partial "events/webinar-disclaimer.html" . }}
+
 </div>
 {{ end }}

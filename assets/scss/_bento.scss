@@ -127,11 +127,6 @@
     color: #1e293b;
   }
 
-  .d-flex .bento-icon {
-    font-size: 1.75rem;
-    margin-bottom: 0;
-  }
-
   .bento-title {
     font-size: 1.25rem;
     font-weight: 700;
@@ -139,11 +134,6 @@
     line-height: 1.35;
     letter-spacing: -0.01em;
     color: inherit;
-  }
-
-  .d-flex .bento-title {
-    margin-bottom: 0;
-    font-size: 1.1rem;
   }
 
   .bento-text {
@@ -158,6 +148,26 @@
     li {
       color: inherit;
     }
+  }
+
+  // Tone modifiers. These used to be Bootstrap's `bg-success` / `bg-warning
+  // text-dark` / `bg-info`, composed by the template with `bg-{{ if ... }}` —
+  // a class name split across Hugo interpolation, which no class-attribute
+  // check can read as one token. The tone is a modifier now, so it is visible
+  // to the gate and reads a token instead of a framework utility.
+  .bento-badge--ok {
+    background: var(--pk-ok);
+    color: var(--pk-on-solid);
+  }
+
+  .bento-badge--warn {
+    background: var(--pk-warn);
+    color: var(--pk-on-solid);
+  }
+
+  .bento-badge--info {
+    background: var(--pk-info);
+    color: var(--pk-on-solid);
   }
 
   .bento-badge {
@@ -181,6 +191,8 @@
 
   // Link card behaviour
   &.bento-card-link {
+  // Was an inline style on the working-group template; belongs with the card.
+  min-height: 120px;
     text-decoration: none;
     color: inherit;
     cursor: pointer;
@@ -227,7 +239,7 @@
 
 @mixin bento-pale($bg) {
   background: linear-gradient(145deg, #ffffff 0%, rgba($bg, 0.08) 100%);
-  color: $body-color;
+  color: $ink;
   border: 1px solid rgba($bg, 0.15);
   box-shadow:
     0 4px 12px rgba($bg, 0.05),
@@ -240,7 +252,7 @@
   }
 
   .bento-text {
-    color: tint-color($body-color, 20%);
+    color: mix(#fff, $ink, 20%);
   }
 
   .bento-icon {
@@ -399,16 +411,6 @@ $wg-colors: (
     background: #fff;
   }
 
-  .form-control {
-    border-color: #dee2e6;
-    border-left: none;
-    font-size: 0.9rem;
-
-    &:focus {
-      box-shadow: none;
-      border-color: #dee2e6;
-    }
-  }
 }
 
 // A–Z quick filter
@@ -477,7 +479,9 @@ $wg-colors: (
     display: none;
   }
 
-  .container {
+  // `members/nav.html` is the only thing that renders this bar, and it is on
+  // `.pk-container` now. The rail must keep its links in one non-wrapping row.
+  .pk-container {
     display: flex;
     align-items: stretch;
     white-space: nowrap;
@@ -500,13 +504,6 @@ $wg-colors: (
       color 0.15s,
       border-color 0.15s;
 
-    .badge {
-      background: rgba(255, 255, 255, 0.12);
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 0.7em;
-      font-weight: 600;
-    }
-
     &:hover {
       color: #fff;
     }
@@ -515,10 +512,6 @@ $wg-colors: (
       color: #fff;
       border-bottom-color: #6f42c1;
 
-      .badge {
-        background: rgba(111, 66, 193, 0.35);
-        color: #fff;
-      }
     }
   }
 }
@@ -542,7 +535,7 @@ $wg-colors: (
 // .member-card-link is no longer used (cards use stretched-link pattern)
 
 .member-card {
-  position: relative; // required for Bootstrap stretched-link
+  position: relative; // the positioned ancestor `.pk-stretched` covers
   border-radius: 1rem;
   padding: 1.25rem;
   background: #fff;
@@ -646,6 +639,9 @@ $wg-colors: (
   }
 
   .member-card-wgs {
+    // Above the stretched link, so the tags are not swallowed by it.
+    position: relative;
+    z-index: 2;
     margin-top: 0.75rem;
     display: flex;
     flex-wrap: wrap;
@@ -665,8 +661,14 @@ $wg-colors: (
   }
 
   .member-card-social {
+    position: relative;
+    z-index: 2;
     margin-top: 0.6rem;
     align-self: center;
+    // social.html no longer pads its own anchors; the row owns the spacing.
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
     background: rgba(255, 255, 255, 0.92);
     border-radius: 999px;
     padding: 0.2rem 0.4rem;
@@ -690,6 +692,8 @@ $wg-colors: (
   }
 
   .member-card-sponsor-footer {
+    position: relative;
+    z-index: 2;
     align-self: stretch;
     // Break out of the card's padding to sit flush with the card edges
     margin: auto -1.25rem -1.25rem;

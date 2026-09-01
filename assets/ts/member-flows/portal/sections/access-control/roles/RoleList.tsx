@@ -2,11 +2,47 @@ import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
-import { RowActions } from "../../../../../components/RowActions";
+import { Badge } from "../../../../../ui/Badge";
+import { Chip } from "../../../../../ui/Chip";
+import { RowActions } from "../../../../../ui/RowActions";
+// `pk-mono` is written here as a class name rather than reached through a
+// component, so this module has to pull its stylesheet into its own chunk.
+// Without the import the permission keys render in the body face and nothing
+// complains.
+import "../../../../../ui/Content.css";
 import { deleteJson } from "../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { toast } from "../../../ui";
 import { rolesListResponseSchema, type Role } from "../../../../../../shared/schemas/access-control";
+
+const MAX_VISIBLE_PERMISSION_CHIPS = 4;
+const PERMISSION_COUNT_ONLY_THRESHOLD = 8;
+
+/**
+ * A role's permission list can run to dozens of entries (the admin role especially). Show a few
+ * chips inline and collapse the rest into a count — the full list stays on the role detail view.
+ */
+function PermissionsSummaryCell({ permissions }: { permissions: string[] }) {
+  if (permissions.length === 0) return <span class="pk-muted pk-small">None</span>;
+  if (permissions.length > PERMISSION_COUNT_ONLY_THRESHOLD) {
+    return <span class="pk-muted pk-small">{permissions.length} permissions</span>;
+  }
+  const visible = permissions.slice(0, MAX_VISIBLE_PERMISSION_CHIPS);
+  const remaining = permissions.length - visible.length;
+  return (
+    // A permission is a tag the row reports, not a status and not a control,
+    // so it is a static Chip — which renders as text rather than as a button
+    // that does nothing when activated.
+    <div class="pk-cluster">
+      {visible.map((p) => (
+        <Chip key={p}>
+          <span class="pk-mono">{p}</span>
+        </Chip>
+      ))}
+      {remaining > 0 && <span class="pk-muted pk-small">+{remaining} more</span>}
+    </div>
+  );
+}
 
 /** List-first roles view: creation and detail both live behind an explicit action, not open by default. */
 export function RoleList({
@@ -42,91 +78,77 @@ export function RoleList({
   }
 
   return (
-    <div>
-      {canGrant && (
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <button type="button" class="btn btn-sm btn-success" onClick={onCreateNew}>
-            New role
-          </button>
-        </div>
-      )}
-
-      <ApiDataTable
-        endpoint="/api/v1/roles"
-        responseSchema={rolesListResponseSchema}
-        resolve={(data) => data.roles}
-        resolvePage={(data) => data.page}
-        paginate
-        actionsRef={tableRef}
-        columns={[
-          {
-            header: "Name",
-            cell: (r) => (
-              <>
-                <span class="fw-semibold mono">{r.name}</span>
-                {r.isSystemRole && <span class="badge text-bg-secondary ms-1">System</span>}
-              </>
-            ),
-            sort: { asc: "name", desc: "-name" },
-          },
-          {
-            header: "Description",
-            cell: (r) => r.description ?? "—",
-            className: "small text-muted",
-            sort: { asc: "description", desc: "-description" },
-          },
-          {
-            header: "Permissions",
-            cell: (r) => (
-              <div class="d-flex flex-wrap gap-1">
-                {r.permissions.length === 0 ? (
-                  <span class="text-muted small">None</span>
-                ) : (
-                  r.permissions.map((p) => (
-                    <span key={p} class="badge text-bg-light border small mono">
-                      {p}
-                    </span>
-                  ))
-                )}
-              </div>
-            ),
-          },
-          {
-            header: "",
-            cell: (r) => (
-              <div class="d-flex gap-1 justify-content-end align-items-center">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => onOpenRole(r.id)}>
-                  Open
-                </button>
-                {canRevoke && (
+    // The table already supplies the surface's `.pk` root and its rhythm, so
+    // the bare wrapper this used to sit in has gone with the utilities on it.
+    <ApiDataTable
+      caption="Roles"
+      urlState="roles"
+      endpoint="/api/v1/roles"
+      responseSchema={rolesListResponseSchema}
+      resolve={(data) => data.roles}
+      resolvePage={(data) => data.page}
+      paginate
+      actionsRef={tableRef}
+      createAction={canGrant ? { label: "New role", onSelect: onCreateNew } : undefined}
+      columns={[
+        {
+          header: "Name",
+          cell: (r) => (
+            // The cluster's gap is what separates the name from the pill; the
+            // pill used to carry its own `ms-1`.
+            <span class="pk-cluster">
+              <span class="pk-strong pk-mono">{r.name}</span>
+              {r.isSystemRole && <Badge tone="neutral">System</Badge>}
+            </span>
+          ),
+          sort: { asc: "name", desc: "-name" },
+        },
+        {
+          header: "Description",
+          cell: (r) => r.description ?? "—",
+          className: "pk-small pk-muted",
+          sort: { asc: "description", desc: "-description" },
+        },
+        {
+          header: "Permissions",
+          cell: (r) => <PermissionsSummaryCell permissions={r.permissions} />,
+        },
+        ...(canRevoke
+          ? [
+              {
+                header: "",
+                cell: (r: Role) => (
+                  // Opening the role is the row's own activation; the menu
+                  // holds only the commands beyond it.
                   <RowActions
+                    subject={r.name}
                     actions={[
                       {
-                        key: "delete",
+                        id: "delete",
                         label: "Delete role",
                         onSelect: () => void handleDelete(r),
                         disabled: r.isSystemRole,
+                        danger: true,
                       },
                     ]}
                   />
-                )}
-              </div>
-            ),
-          },
-        ]}
-        empty={
-          canGrant ? (
-            <EmptyState
-              title="No roles yet"
-              body="Create a role to bundle permissions you assign together."
-              action={{ label: "New role", onSelect: onCreateNew }}
-            />
-          ) : (
-            <EmptyState title="No roles yet" />
-          )
-        }
-        rowKey={(r) => r.id}
-      />
-    </div>
+                ),
+              },
+            ]
+          : []),
+      ]}
+      rowAction={(r) => ({ label: `Open ${r.name}`, onSelect: () => onOpenRole(r.id) })}
+      empty={
+        canGrant ? (
+          // The toolbar above already carries "New role"; repeating it here
+          // would leave one command answering to two identically named
+          // controls.
+          <EmptyState title="No roles yet" body="Use New role above to bundle permissions you assign together." />
+        ) : (
+          <EmptyState title="No roles yet" body="No roles have been defined for this installation." />
+        )
+      }
+      rowKey={(r) => r.id}
+    />
   );
 }

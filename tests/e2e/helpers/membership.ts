@@ -99,16 +99,25 @@ export async function openApplicationDetail(page: Page, email: string, stage: st
   await row.click();
 }
 
-/** The stage badge rendered beside the applicant name in the detail header. */
+/**
+ * The stage badge rendered beside the applicant name in the detail header.
+ *
+ * The header is found through the applicant's `<h2>`, which is a role and a
+ * name rather than the four Bootstrap utility classes that used to be on the
+ * wrapper — those went when the detail view adopted the design system, and a
+ * selector written that way breaks again at the next migration.
+ */
 export function stageBadge(page: Page, applicantName: string) {
   return page
-    .locator("div.d-flex.align-items-center.gap-2.mb-3")
-    .filter({ hasText: applicantName })
-    .locator("span.badge");
+    .locator("div")
+    .filter({ has: page.getByRole("heading", { name: applicantName, level: 2 }) })
+    .last()
+    .locator("span.pk-badge");
 }
 
+/** The stage-transition card, by the name its region announces. */
 export function transitionCard(page: Page) {
-  return page.locator("div.card").filter({ hasText: "Stage transition" });
+  return page.getByRole("region", { name: "Stage transition" });
 }
 
 /**
@@ -127,7 +136,9 @@ export async function transitionStageInUi(
   if (toStage === "on_hold" && options.onHoldSubtype) {
     await card.locator("select").nth(1).selectOption(options.onHoldSubtype);
   }
-  if (options.note) await card.locator("input.form-control").fill(options.note);
+  // Located by the name the field announces rather than by a control class:
+  // the note has a real `for`/`id` pair now, so the spec can use it.
+  if (options.note) await card.getByLabel("Note").fill(options.note);
 
   const response = page.waitForResponse(
     (r) =>
@@ -187,19 +198,19 @@ export async function approveMemberThroughReview(
   return { email: options.email, userId: approved.body.userId, applicationId: application.applicationId };
 }
 
-/** The membership contexts the signed-in person may currently act through. */
-export async function readActiveMemberships(
+/** The exact approved identities the signed-in person may currently act through. */
+export async function readActiveIdentities(
   page: Page,
-): Promise<Array<{ memberId: string; organizationName: string | null }>> {
+): Promise<Array<{ identityId: string; memberId: string; organizationName: string | null }>> {
   const result = await page.evaluate(async () => {
     const response = await fetch("/api/v1/users/current", { credentials: "same-origin" });
     return {
       status: response.status,
       body: (await response.json()) as {
-        activeMemberships: Array<{ memberId: string; organizationName: string | null }>;
+        activeIdentities: Array<{ identityId: string; memberId: string; organizationName: string | null }>;
       },
     };
   });
   expect(result.status, JSON.stringify(result.body)).toBe(200);
-  return result.body.activeMemberships;
+  return result.body.activeIdentities;
 }

@@ -1,7 +1,9 @@
+import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { tab } from "./helpers/tabs";
 
 const PERMISSIONS_API = "/api/v1/permissions";
 const ROLES_API = "/api/v1/roles";
@@ -35,7 +37,7 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/grants$/);
 
   // Tabs are URL-addressed — switching to Roles navigates to its canonical URL.
-  await page.getByRole("tab", { name: "Roles" }).click();
+  await tab(page, "Roles").click();
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles$/);
 
   // Creation lives behind an explicit action, list-first — no inline create form.
@@ -44,7 +46,11 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles\/new$/);
 
   const roleName = `e2e_access_${Date.now()}`;
-  const createCard = page.getByText("New role", { exact: true }).locator("..", { has: page.locator("form") });
+  // The form names itself, so it is reached by that name rather than by climbing
+  // from the heading to a parent that happens to contain it: the heading now
+  // lives in the panel's own header, a sibling of the body holding the form.
+  const createCard = page.getByRole("form", { name: "New role" });
+  await expect(createCard).toBeVisible();
   await createCard.getByLabel("Name").fill(roleName);
   await createCard.getByLabel("Description").fill("Temporary browser-test role");
 
@@ -83,15 +89,16 @@ test("permitted staff manage a custom role through the Settings portal", async (
     (response) =>
       new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) && response.request().method() === "DELETE",
   );
-  await roleRow.getByRole("button", { name: "Row actions" }).click();
-  await page.getByRole("menuitem", { name: "Delete role" }).click();
+  // A row's action names the role it acts on, so a page of rows no longer
+  // offers a column of controls all called "Row actions".
+  await runRowAction(page, roleRow, "Delete role");
   await acceptConfirmDialog(page, "Delete role");
   expect((await deleteResponse).status()).toBe(200);
   await expect(roleRow).toHaveCount(0);
 
   // The former "Staff" tab is now labeled People, without renaming the
   // underlying user_roles-backed schema fields it reads and writes.
-  await page.getByRole("tab", { name: "People" }).click();
+  await tab(page, "People").click();
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/people$/);
   await expect(page.getByText("Staff management", { exact: true })).toHaveCount(0);
 

@@ -18,6 +18,7 @@ import {
   clearAuth,
 } from "./state";
 import { Login } from "./shell/Login";
+import { Alert } from "../../ui/Alert";
 import { ConfirmDialogHost } from "../../components/ConfirmDialog";
 import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
@@ -123,8 +124,16 @@ export function App() {
     return (
       <>
         {verifyError && (
-          <div class="container content-width-sm">
-            <div class="alert alert-danger mt-4">✕ Sponsor access failed: {verifyError}</div>
+          // Laid out like the panel it sits above, so the banner and the card
+          // share one measure. The cross that used to lead the sentence is
+          // gone: `Alert`'s danger tone already carries role="alert", and the
+          // title says what failed in words.
+          <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
+            <div class="content-width-sm">
+              <Alert tone="danger" title="Sponsor access failed">
+                {verifyError}
+              </Alert>
+            </div>
           </div>
         )}
         <SponsorAccess />
@@ -135,8 +144,12 @@ export function App() {
   return (
     <>
       {verifyError && (
-        <div class="container content-width-sm">
-          <div class="alert alert-danger mt-4">✕ Sign-in failed: {verifyError}</div>
+        <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
+          <div class="content-width-sm">
+            <Alert tone="danger" title="Sign-in failed">
+              {verifyError}
+            </Alert>
+          </div>
         </div>
       )}
       <Login

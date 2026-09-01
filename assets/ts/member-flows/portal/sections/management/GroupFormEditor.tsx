@@ -1,3 +1,4 @@
+import { useRef } from "preact/hooks";
 import {
   groupFormDefinitionCreateSchema,
   groupFormDefinitionMutationResponseSchema,
@@ -26,16 +27,22 @@ export function GroupFormEditor({
   placementId?: string;
   detail: EditableFormDetail | null;
   purposes?: readonly FormPurpose[];
-  onSaved: () => void | Promise<void>;
+  /** Receives the created placement's id, so a create page can go to the record it just made. */
+  onSaved: (createdPlacementId?: string) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const mode = placementId ? "edit" : "create";
   const groupBase = `/api/v1/groups/${encodeURIComponent(groupId)}/forms`;
+  // The shared editor hands `onSaved` the form key, which does not address a
+  // placement. The created placement id is carried between the two callbacks
+  // here rather than widening that contract for every other caller.
+  const createdPlacementId = useRef<string | undefined>(undefined);
 
   async function save(payload: FormDefinitionCreateInput | FormDefinitionUpdateInput): Promise<string> {
     if (mode === "create") {
       const input: GroupFormDefinitionCreateInput = groupFormDefinitionCreateSchema.parse(payload);
       const response = await postJson(groupBase, input, groupFormDefinitionMutationResponseSchema);
+      createdPlacementId.current = response.placement.id;
       toast("Form created", "success");
       return response.form.key;
     }
@@ -57,7 +64,7 @@ export function GroupFormEditor({
       detail={detail}
       purposes={purposes}
       onSave={save}
-      onSaved={() => void onSaved()}
+      onSaved={() => void onSaved(createdPlacementId.current)}
       onCancel={onCancel}
       onError={(message) => toast(message, "error")}
     />

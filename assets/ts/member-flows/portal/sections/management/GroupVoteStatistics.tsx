@@ -6,29 +6,37 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { Badge } from "../../../../ui/Badge";
+import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { StatCard } from "../../../../ui/StatCard";
 
 type Aggregate = GroupVoteStatisticsResponse["aggregate"];
+
+interface CandidateRow {
+  candidateId: string;
+  name: string;
+  count: number;
+}
+
+const CANDIDATE_COLUMNS: ReadonlyArray<DataTableColumn<CandidateRow>> = [
+  { id: "candidate", header: "Candidate", cell: (row) => row.name },
+  { id: "count", header: "Ballots", align: "end", cell: (row) => row.count },
+];
+
+const candidateRowKey = (row: CandidateRow): string => row.candidateId;
 
 function labelize(value: string): string {
   return value.replaceAll("_", " ");
 }
 
-function formatValue(value: unknown): string {
-  if (typeof value === "number" || typeof value === "string") return String(value);
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  return JSON.stringify(value);
-}
-
+/** The motion tally, one card per choice the server counted. */
 function CountGrid({ counts }: { counts: Record<string, number> }) {
   return (
-    <div class="row g-2">
+    <div class="pk-grid pk-grid--tight">
       {Object.entries(counts).map(([key, value]) => (
-        <div class="col-sm-4" key={key}>
-          <div class="border rounded p-2 h-100">
-            <div class="small text-body-secondary">{labelize(key)}</div>
-            <div class="fs-5 fw-semibold">{value}</div>
-          </div>
-        </div>
+        <StatCard key={key} label={labelize(key)} value={String(value)} />
       ))}
     </div>
   );
@@ -36,34 +44,35 @@ function CountGrid({ counts }: { counts: Record<string, number> }) {
 
 function AggregateSummary({ aggregate }: { aggregate: Aggregate }) {
   if (aggregate.availability === "withheld_until_closed") {
-    return <p class="text-muted mb-0">Aggregate results will be available after the vote closes.</p>;
+    return <p class="pk-muted">Aggregate results will be available after the vote closes.</p>;
   }
   if (aggregate.availability === "unavailable") {
-    return <p class="text-muted mb-0">Aggregate results are not available for this vote.</p>;
+    return <p class="pk-muted">Aggregate results are not available for this vote.</p>;
   }
   if (aggregate.availability !== "available") return null;
   if (aggregate.kind === "motion") {
     return (
-      <div>
-        <p class="small text-body-secondary mb-2">Motion ballot counts</p>
+      <div class="pk-stack pk-stack--snug">
+        <p class="pk-small pk-strong">Motion ballot counts</p>
         <CountGrid counts={aggregate.counts} />
       </div>
     );
   }
+  if (aggregate.candidates.length === 0) {
+    return <EmptyState title="Election candidates" body="No candidates were recorded for this round." />;
+  }
   return (
-    <div>
-      <p class="small text-body-secondary mb-2">Election candidates</p>
-      <div class="list-group">
-        {aggregate.candidates.map((candidate, index) => {
-          return (
-            <div class="list-group-item d-flex justify-content-between" key={candidate.candidateId}>
-              <span>{candidate.candidateName || `Candidate ${index + 1}`}</span>
-              <span class="fw-semibold">{formatValue(candidate.count)}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <DataTable
+      caption="Election candidates"
+      showCaption
+      columns={CANDIDATE_COLUMNS}
+      rows={aggregate.candidates.map((candidate, index) => ({
+        candidateId: candidate.candidateId,
+        name: candidate.candidateName || `Candidate ${String(index + 1)}`,
+        count: candidate.count,
+      }))}
+      rowKey={candidateRowKey}
+    />
   );
 }
 
@@ -78,53 +87,34 @@ export function GroupVoteStatistics({ groupId, voteId }: { groupId: string; vote
     [groupId, voteId],
   );
 
-  if (!statistics.data && statistics.loading) return <Spinner />;
+  if (!statistics.data && statistics.loading) return <Spinner label="Loading vote statistics…" />;
   if (statistics.error) return <ErrorAlert error={statistics.error} />;
   if (!statistics.data) return null;
 
   const { participation } = statistics.data;
   return (
-    <section class="border rounded p-3 mt-3" aria-label="Vote statistics">
-      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-        <div>
-          <h6 class="mb-1">Vote statistics</h6>
-          <div class="small text-body-secondary">
+    <div class="pk">
+      {/* A panel is a section, so it needs its own name to be announced as a
+          region rather than an anonymous group of numbers. */}
+      <Panel aria-label="Vote statistics">
+        <PanelHeader title="Vote statistics">
+          <Badge tone="neutral">Counts by {labelize(participation.unit)}</Badge>
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <p class="pk-small">
             Round {statistics.data.round} · {labelize(statistics.data.status)} ·{" "}
             {labelize(statistics.data.electorateMode)}
+          </p>
+          <div class="pk-grid pk-grid--tight">
+            <StatCard label="Currently eligible" value={String(participation.currentEligible)} />
+            <StatCard label="Currently eligible and cast" value={String(participation.currentEligibleCast)} />
+            <StatCard label="Currently eligible and not cast" value={String(participation.currentEligibleNotCast)} />
+            <StatCard label="Effective ballots" value={String(participation.effectiveBallots)} />
           </div>
-        </div>
-        <span class="badge text-bg-secondary">Counts by {labelize(participation.unit)}</span>
-      </div>
-      <div class="row g-2 mb-3">
-        <div class="col-sm-6 col-xl-3">
-          <div class="border rounded p-2 h-100">
-            <div class="small text-body-secondary">Currently eligible</div>
-            <div class="fs-5 fw-semibold">{participation.currentEligible}</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-          <div class="border rounded p-2 h-100">
-            <div class="small text-body-secondary">Currently eligible and cast</div>
-            <div class="fs-5 fw-semibold">{participation.currentEligibleCast}</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-          <div class="border rounded p-2 h-100">
-            <div class="small text-body-secondary">Currently eligible and not cast</div>
-            <div class="fs-5 fw-semibold">{participation.currentEligibleNotCast}</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-          <div class="border rounded p-2 h-100">
-            <div class="small text-body-secondary">Effective ballots</div>
-            <div class="fs-5 fw-semibold">{participation.effectiveBallots}</div>
-          </div>
-        </div>
-      </div>
-      <p class="small text-body-secondary mb-3">
-        Ballots without current eligibility: {participation.ballotsWithoutCurrentEligibility}
-      </p>
-      <AggregateSummary aggregate={statistics.data.aggregate} />
-    </section>
+          <p class="pk-small">Ballots without current eligibility: {participation.ballotsWithoutCurrentEligibility}</p>
+          <AggregateSummary aggregate={statistics.data.aggregate} />
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

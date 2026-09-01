@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+{{/*
+  A shell that loads NO Bootstrap.
+
+  This page is the first surface to run entirely on the design system: it links
+  the tokens, the base layer and the component chunks, and nothing else. There
+  is no main.scss here, so if anything on this page depends on Bootstrap it
+  breaks visibly rather than quietly inheriting it.
+
+  That is the phase 5 endgame demonstrated on one page — the portal follows the
+  same route once its sections are migrated, because it is likewise a single
+  Hugo shell that can take its own stylesheet.
+*/}}
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }} | {{ .Site.Title }}</title>
+    <meta name="robots" content="noindex, nofollow">
+    {{- with index (index hugo.Data "asset-manifest") "loader" -}}
+      {{- $entry := . -}}
+      {{- with index $entry "css" }}<link rel="stylesheet" href="{{ . }}"{{ with index $entry "cssIntegrity" }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}>{{ end -}}
+    {{- end }}
+  </head>
+  <body>
+    {{ block "main" . }}{{ end }}
+    {{- with index (index hugo.Data "asset-manifest") "loader" -}}
+      {{- $entry := . -}}
+      {{- $url := index $entry "url" -}}
+      {{- $sri := index $entry "integrity" -}}
+      {{- with $url }}<script src="{{ . }}" type="module"{{ with $sri }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}></script>{{ end -}}
+    {{- end }}
+  </body>
+</html>

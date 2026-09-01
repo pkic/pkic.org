@@ -29,15 +29,20 @@ async function insertGroup(name: string, email: string): Promise<string> {
   return id;
 }
 
-async function joinGroupCapacity(groupId: string, userId: string, memberId: string): Promise<string> {
+async function joinGroupCapacity(
+  groupId: string,
+  userId: string,
+  identityId: string,
+  memberId: string,
+): Promise<string> {
   const id = crypto.randomUUID();
   const at = new Date().toISOString();
   await env.DB.prepare(
     `INSERT INTO group_memberships
-       (id, group_id, user_id, member_id, source, joined_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'staff', ?, ?, ?)`,
+       (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?)`,
   )
-    .bind(id, groupId, userId, memberId, at, at, at)
+    .bind(id, groupId, userId, identityId, memberId, at, at, at)
     .run();
   return id;
 }
@@ -80,8 +85,8 @@ describe("membership access offboarding", () => {
     const groupId = await insertGroup("Offboarding Group", "offboarding-group@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Offboarding Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    await addRepresentative(env.DB, memberId, userId);
-    await joinGroupCapacity(groupId, userId, memberId);
+    const identityId = await addRepresentative(env.DB, memberId, userId);
+    await joinGroupCapacity(groupId, userId, identityId, memberId);
     const desiredSubscriptionCount = await establishDesiredSubscriptions(userId);
 
     await updateUser(env.DB, actor, userId, { active: false });
@@ -91,11 +96,10 @@ describe("membership access offboarding", () => {
       await queryAll(env.DB, "SELECT left_at IS NOT NULL AS closed FROM group_memberships WHERE user_id = ?", userId),
     ).toEqual([{ closed: 1 }]);
     expect(
-      await queryAll(
-        env.DB,
-        "SELECT left_at IS NOT NULL AS closed FROM organization_representatives WHERE member_id = ? AND user_id = ?",
-        [memberId, userId],
-      ),
+      await queryAll(env.DB, "SELECT ended_at IS NOT NULL AS closed FROM identities WHERE id = ? AND user_id = ?", [
+        identityId,
+        userId,
+      ]),
     ).toEqual([{ closed: 1 }]);
     const removals = await queryAll<{ google_group_email: string; idempotency_key: string }>(
       env.DB,
@@ -124,8 +128,8 @@ describe("membership access offboarding", () => {
     const groupId = await insertGroup("Rollback Group", "rollback-group@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Rollback Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    await addRepresentative(env.DB, memberId, userId);
-    await joinGroupCapacity(groupId, userId, memberId);
+    const identityId = await addRepresentative(env.DB, memberId, userId);
+    await joinGroupCapacity(groupId, userId, identityId, memberId);
     await establishDesiredSubscriptions(userId);
     await env.DB.prepare(
       `CREATE TRIGGER reject_offboarding_audit
@@ -145,11 +149,8 @@ describe("membership access offboarding", () => {
         { left_at: null },
       ]);
       expect(
-        await queryAll(env.DB, "SELECT left_at FROM organization_representatives WHERE member_id = ? AND user_id = ?", [
-          memberId,
-          userId,
-        ]),
-      ).toEqual([{ left_at: null }]);
+        await queryAll(env.DB, "SELECT ended_at FROM identities WHERE id = ? AND user_id = ?", [identityId, userId]),
+      ).toEqual([{ ended_at: null }]);
       expect(await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue WHERE user_id = ?", userId)).toHaveLength(
         0,
       );
@@ -163,14 +164,14 @@ describe("membership access offboarding", () => {
     const groupId = await insertGroup("Late Capacity Group", "late-capacity@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Late Capacity Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
-    await addRepresentative(env.DB, memberId, userId);
+    const identityId = await addRepresentative(env.DB, memberId, userId);
     const at = new Date().toISOString();
     const staleOffboardingPlan = await buildUserAccessOffboardingStatements(env.DB, {
       userId,
       causeKey: `user:${userId}:interleaved-deactivate`,
       at,
     });
-    await joinGroupCapacity(groupId, userId, memberId);
+    await joinGroupCapacity(groupId, userId, identityId, memberId);
     await establishDesiredSubscriptions(userId);
 
     await env.DB.batch([
@@ -204,11 +205,11 @@ describe("membership access offboarding", () => {
     const memberA = await seedOrganizationAggregate(env.DB, orgA, "A");
     const memberB = await seedOrganizationAggregate(env.DB, orgB, "B");
     const representativeA = await addRepresentative(env.DB, memberA, userId);
-    await addRepresentative(env.DB, memberB, userId);
+    const identityB = await addRepresentative(env.DB, memberB, userId);
     const groupA = await insertGroup("Representative A Group", "representative-a@lists.pkic.org");
     const groupB = await insertGroup("Representative B Group", "representative-b@lists.pkic.org");
-    await joinGroupCapacity(groupA, userId, memberA);
-    await joinGroupCapacity(groupB, userId, memberB);
+    await joinGroupCapacity(groupA, userId, representativeA, memberA);
+    await joinGroupCapacity(groupB, userId, identityB, memberB);
     await establishDesiredSubscriptions(userId);
 
     await removeMembershipCapacity(
@@ -247,11 +248,10 @@ describe("membership access offboarding", () => {
       ),
     ).toEqual([{ google_group_email: "representative-a@lists.pkic.org" }]);
     expect(
-      await queryAll(
-        env.DB,
-        "SELECT id FROM organization_representatives WHERE member_id = ? AND user_id = ? AND left_at IS NULL",
-        [memberB, userId],
-      ),
+      await queryAll(env.DB, "SELECT id FROM identities WHERE id = ? AND user_id = ? AND ended_at IS NULL", [
+        identityB,
+        userId,
+      ]),
     ).toHaveLength(1);
   });
 });

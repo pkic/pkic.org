@@ -360,7 +360,8 @@ export const userRolesListResponseSchema = paginatedResponseSchema("roles", user
 export const userRolesAssignRouteSchema = {
   tags: ["Users"],
   summary: "Assign a role to a user",
-  description: "A user may hold multiple roles simultaneously, optionally scoped to a resource target.",
+  description:
+    "Assigns a general system or custom role, optionally scoped to a resource target. Group lead and deputy lead assignments are managed through the target group's Leadership resource because they require an explicit active Member capacity.",
   "x-pkic-auth": { required: true, scopes: ["access:grant"] },
   request: {
     params: userIdRolesParamsSchema,
@@ -375,6 +376,9 @@ export const userRolesAssignRouteSchema = {
       content: {
         "application/json": { schema: userRoleResponseEnvelopeSchema },
       },
+    },
+    "422": {
+      description: "The role is owned by a resource-specific command, such as capacity-bound group leadership.",
     },
   },
 };

@@ -1,0 +1,90 @@
+/*
+ * Charts.
+ *
+ * The figure holds three things that say the same thing: the plot, a legend
+ * naming its series, and a visually hidden table carrying the numbers. Only
+ * the first two are drawn.
+ */
+
+@layer components {
+  .pk-chart {
+    /* A <figure> arrives with the UA's 40px inline margin, which no parent's
+       gap can explain away. */
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    min-width: 0;
+  }
+
+  .pk-chart__plot {
+    display: block;
+    width: 100%;
+    max-width: 44rem;
+  }
+
+  .pk-chart__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-3);
+  }
+
+  .pk-chart__key {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  /* ── Labelled progress bars ─────────────────────────────────────────── */
+
+  .pk-chart__bars {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+  }
+
+  .pk-chart__bar-row {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-chart__bar-label {
+    flex: 0 0 8rem;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-chart__bar {
+    flex: 1;
+    height: 6px;
+    appearance: none;
+    border: 0;
+    border-radius: var(--pk-radius-sm);
+    overflow: hidden;
+    /* Firefox paints the track through the element's own background. */
+    background: var(--pk-line-soft);
+  }
+
+  .pk-chart__bar::-webkit-progress-bar {
+    background: var(--pk-line-soft);
+  }
+
+  .pk-chart__bar::-webkit-progress-value {
+    background: var(--pk-accent-strong);
+  }
+
+  .pk-chart__bar::-moz-progress-bar {
+    background: var(--pk-accent-strong);
+  }
+
+  .pk-chart__bar-count {
+    flex: 0 0 2rem;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}

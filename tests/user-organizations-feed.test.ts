@@ -43,7 +43,7 @@ describe("GET /api/v1/users/current/organizations", () => {
 
     const plainOrgId = await insertOrganization(env.DB, "Alpha Plain Org");
     const plainMemberId = await seedOrganizationAggregate(env.DB, plainOrgId, "F");
-    await addRepresentative(env.DB, plainMemberId, userId);
+    const plainIdentityId = await addRepresentative(env.DB, plainMemberId, userId);
 
     const contactOrgId = await insertOrganization(env.DB, "Beta Contact Org");
     const contactMemberId = await seedOrganizationAggregate(env.DB, contactOrgId, "A");
@@ -57,7 +57,7 @@ describe("GET /api/v1/users/current/organizations", () => {
       .bind(crypto.randomUUID(), contactOrgId, userId)
       .run();
 
-    const token = await createMemberSession(env.DB, userId, "feed-user-token");
+    const token = await createMemberSession(env.DB, userId, "feed-user-token", undefined, plainIdentityId);
     const response = await call(token, "/api/v1/users/current/organizations?limit=1&sort=name");
     expect(response.status).toBe(200);
     const firstPage = userOrganizationsListResponseSchema.parse(await response.json());
@@ -118,12 +118,12 @@ describe("GET /api/v1/users/current/organizations", () => {
     const userId = await insertUser(env.DB, "search-user@example.test");
     const matchId = await insertOrganization(env.DB, "Findable Consortium");
     const matchMemberId = await seedOrganizationAggregate(env.DB, matchId, "A");
-    await addRepresentative(env.DB, matchMemberId, userId);
+    const matchIdentityId = await addRepresentative(env.DB, matchMemberId, userId);
     const otherId = await insertOrganization(env.DB, "Unrelated Group");
     const otherMemberId = await seedOrganizationAggregate(env.DB, otherId, "A");
     await addRepresentative(env.DB, otherMemberId, userId);
 
-    const token = await createMemberSession(env.DB, userId, "search-user-token");
+    const token = await createMemberSession(env.DB, userId, "search-user-token", undefined, matchIdentityId);
     const response = await call(token, "/api/v1/users/current/organizations?q=findable");
     const body = userOrganizationsListResponseSchema.parse(await response.json());
     expect(body.organizations.map((organization) => organization.organizationId)).toEqual([matchId]);

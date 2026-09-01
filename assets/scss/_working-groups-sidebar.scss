@@ -151,37 +151,12 @@
 // current positions. Visual differentiation is via .person-card--past (muted bg)
 // and .person-card-avatar-frame--past (grey ring). No separate timeline needed.
 
-// ── Theme-colored CTA button (uses --page-accent) ─────────────────────────────
-.btn-page-accent {
-  --bs-btn-color: #fff;
-  --bs-btn-bg: var(--page-accent, #{$green});
-  --bs-btn-border-color: var(--page-accent, #{$green});
-  --bs-btn-hover-color: #fff;
-  --bs-btn-hover-bg: color-mix(
-    in srgb,
-    var(--page-accent, #{$green}) 85%,
-    #000
-  );
-  --bs-btn-hover-border-color: color-mix(
-    in srgb,
-    var(--page-accent, #{$green}) 85%,
-    #000
-  );
-  --bs-btn-active-color: #fff;
-  --bs-btn-active-bg: color-mix(
-    in srgb,
-    var(--page-accent, #{$green}) 75%,
-    #000
-  );
-  --bs-btn-active-border-color: color-mix(
-    in srgb,
-    var(--page-accent, #{$green}) 75%,
-    #000
-  );
-  --bs-btn-disabled-color: #fff;
-  --bs-btn-disabled-bg: var(--page-accent, #{$green});
-  --bs-btn-disabled-border-color: var(--page-accent, #{$green});
-}
+// The per-page CTA button used to be `.btn-page-accent`, which repainted a
+// Bootstrap button through its own button variables. No template writes that
+// class any more: every page-accented call to action is a `pk-btn` that points
+// `--pk-accent-strong` at `--page-accent` instead, so the rule has been removed
+// rather than translated. `.pkic-hero-media__scrim` and
+// `.event-webinar-register-btn` are the two worked examples.
 
 // ── WG Sidebar layout (flexbox, no Bootstrap grid) ───────────────────────────
 

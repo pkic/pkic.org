@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "preact/compat";
-import { useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 import {
   groupVoteBallotsAuditResponseSchema,
   groupVoteMutationResponseSchema,
@@ -11,8 +11,16 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { patchJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt } from "../../ui";
 import { GroupVoteLifecycleActions } from "./GroupVoteLifecycleActions";
+// The ballot columns are written by class name (`pk-mono` for the opaque
+// identifiers), and component CSS ships in a lazy chunk, so the stylesheet
+// that defines them has to be imported by the module that names them.
+import "../../../../ui/Content.css";
 
 const GroupVoteStatistics = lazy(() =>
   import("./GroupVoteStatistics").then((module) => ({ default: module.GroupVoteStatistics })),
@@ -33,6 +41,7 @@ export function GroupVoteManagementControls({
   vote: GroupVoteDetail;
   onChanged: () => Promise<void>;
 }) {
+  const headingId = useId();
   const ballotActions = useRef<ApiTableActions | null>(null);
   const [title, setTitle] = useState(vote.title);
   const [description, setDescription] = useState(vote.description ?? "");
@@ -46,7 +55,12 @@ export function GroupVoteManagementControls({
   const [error, setError] = useState<Error | null>(null);
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(vote.id)}`;
 
-  async function saveSettings(): Promise<void> {
+  async function saveSettings(event: Event): Promise<void> {
+    event.preventDefault();
+    // The submit control stays focusable while the save is in flight — a
+    // disabled button drops the reader out of the form it is in — so the
+    // handler, not the button, refuses a second submission.
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -65,7 +79,9 @@ export function GroupVoteManagementControls({
     }
   }
 
-  async function saveVisibility(): Promise<void> {
+  async function saveVisibility(event: Event): Promise<void> {
+    event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -80,168 +96,173 @@ export function GroupVoteManagementControls({
   }
 
   return (
-    <section class="border rounded p-3 mb-3" aria-label="Vote management">
-      <h6>Manage vote</h6>
-      <ErrorAlert error={error} />
-      <GroupVoteLifecycleActions groupId={groupId} vote={vote} onChanged={onChanged} />
+    <Panel class="pk" aria-labelledby={headingId}>
+      <PanelHeader id={headingId} title="Vote management" />
+      <PanelBody class="pk-stack">
+        <ErrorAlert error={error} />
+        <GroupVoteLifecycleActions groupId={groupId} vote={vote} onChanged={onChanged} />
 
-      <div class="row g-3 mb-3">
-        <div class="col-md-6">
-          <label class="form-label" for={`vote-${vote.id}-title`}>
-            Title
-          </label>
-          <input
-            id={`vote-${vote.id}-title`}
-            class="form-control"
-            maxLength={300}
-            required
-            value={title}
-            disabled={busy}
-            onInput={(event) => setTitle(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for={`vote-${vote.id}-description`}>
-            Description
-          </label>
-          <input
-            id={`vote-${vote.id}-description`}
-            class="form-control"
-            maxLength={10000}
-            value={description}
-            disabled={busy}
-            onInput={(event) => setDescription(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-5">
-          <label class="form-label" for={`vote-${vote.id}-opens`}>
-            Opens at
-          </label>
-          <input
-            id={`vote-${vote.id}-opens`}
-            type="datetime-local"
-            class="form-control"
-            required
-            value={opensAt}
-            disabled={busy}
-            onInput={(event) => setOpensAt(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-5">
-          <label class="form-label" for={`vote-${vote.id}-closes`}>
-            Closes at
-          </label>
-          <input
-            id={`vote-${vote.id}-closes`}
-            type="datetime-local"
-            class="form-control"
-            required
-            value={closesAt}
-            disabled={busy}
-            onInput={(event) => setClosesAt(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-2 d-flex align-items-end">
-          <button type="button" class="btn btn-primary" disabled={busy} onClick={() => void saveSettings()}>
-            Save settings
-          </button>
-        </div>
-      </div>
+        <form class="pk-stack" aria-label="Vote settings" onSubmit={(event) => void saveSettings(event)}>
+          {/* One disabled fieldset takes every control out of play while the
+              save is in flight rather than each input deciding for itself.
+              The submit button stays outside it so it keeps focus. */}
+          <fieldset class="pk-fieldset pk-stack" disabled={busy}>
+            <div class="pk-grid pk-grid--roomy">
+              <Field label="Title" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    maxLength={300}
+                    value={title}
+                    onInput={(event) => setTitle(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Description">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    maxLength={10000}
+                    value={description}
+                    onInput={(event) => setDescription(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Opens at" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="datetime-local"
+                    value={opensAt}
+                    onInput={(event) => setOpensAt(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Closes at" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="datetime-local"
+                    value={closesAt}
+                    onInput={(event) => setClosesAt(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+            </div>
+          </fieldset>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" loading={busy}>
+              Save settings
+            </Button>
+          </div>
+        </form>
 
-      <div class="row g-3 align-items-end mb-3">
-        <div class="col-md-4">
-          <label class="form-label" for={`vote-${vote.id}-visibility`}>
-            Visibility
-          </label>
-          <select
-            id={`vote-${vote.id}-visibility`}
-            class="form-select"
-            value={visibility}
-            disabled={busy}
-            onChange={(event) => setVisibility(event.currentTarget.value as typeof visibility)}
-          >
-            <option value="private">Private</option>
-            <option value="public">Public</option>
-          </select>
-        </div>
-        <div class="col-md-5">
-          <label class="form-label" for={`vote-${vote.id}-public-detail`}>
-            Public result detail
-          </label>
-          <select
-            id={`vote-${vote.id}-public-detail`}
-            class="form-select"
-            value={publicDetailLevel}
-            disabled={busy}
-            onChange={(event) => setPublicDetailLevel(event.currentTarget.value as typeof publicDetailLevel)}
-          >
-            <option value="outcome_only">Outcome only</option>
-            <option value="aggregate">Aggregate counts</option>
-            <option value="full_breakdown">Full breakdown</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <button type="button" class="btn btn-primary" disabled={busy} onClick={() => void saveVisibility()}>
-            Save visibility
-          </button>
-        </div>
-      </div>
+        <form class="pk-stack" aria-label="Vote visibility" onSubmit={(event) => void saveVisibility(event)}>
+          <fieldset class="pk-fieldset pk-stack" disabled={busy}>
+            <div class="pk-grid pk-grid--roomy">
+              <Field label="Visibility">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={visibility}
+                    onChange={(event) => setVisibility(event.currentTarget.value as typeof visibility)}
+                  >
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                  </Select>
+                )}
+              </Field>
+              <Field
+                label="Public result detail"
+                help="How much of the result a reader outside this group can see once the vote closes."
+              >
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={publicDetailLevel}
+                    onChange={(event) => setPublicDetailLevel(event.currentTarget.value as typeof publicDetailLevel)}
+                  >
+                    <option value="outcome_only">Outcome only</option>
+                    <option value="aggregate">Aggregate counts</option>
+                    <option value="full_breakdown">Full breakdown</option>
+                  </Select>
+                )}
+              </Field>
+            </div>
+          </fieldset>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" loading={busy}>
+              Save visibility
+            </Button>
+          </div>
+        </form>
 
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-secondary"
-        aria-expanded={showBallots}
-        onClick={() => setShowBallots((shown) => !shown)}
-      >
-        {showBallots ? "Hide identifiable ballots" : "Load identifiable ballots"}
-      </button>
-      {showBallots && (
-        <div class="mt-3">
-          <ApiDataTable
-            actionsRef={ballotActions}
-            endpoint={`${base}/ballots`}
-            responseSchema={groupVoteBallotsAuditResponseSchema}
-            resolve={(response) => response.ballots}
-            resolvePage={(response) => response.page}
-            paginate
-            searchPlaceholder="Search ballots…"
-            initialSort="-submittedAt"
-            columns={[
-              { header: "Voter", cell: (ballot) => ballot.userId, sort: { asc: "userId", desc: "-userId" } },
-              {
-                header: "Member",
-                cell: (ballot) => ballot.memberId ?? "—",
-                sort: { asc: "memberId", desc: "-memberId" },
-              },
-              { header: "Choice", cell: (ballot) => ballot.choice, sort: { asc: "choice", desc: "-choice" } },
-              { header: "Round", cell: (ballot) => ballot.round, sort: { asc: "round", desc: "-round" } },
-              {
-                header: "Submitted",
-                cell: (ballot) => fmt(ballot.submittedAt),
-                sort: { asc: "submittedAt", desc: "-submittedAt", defaultDirection: "desc" },
-              },
-            ]}
-            empty="No ballots have been submitted."
-            rowKey={(ballot) => ballot.id}
-            className="table-sm"
-          />
+        <div class="pk-stack pk-stack--snug">
+          <div class="pk-cluster">
+            <Button size="sm" aria-expanded={showBallots} onClick={() => setShowBallots((shown) => !shown)}>
+              {showBallots ? "Hide identifiable ballots" : "Load identifiable ballots"}
+            </Button>
+          </div>
+          {showBallots && (
+            <ApiDataTable
+              caption="Identifiable ballots"
+              actionsRef={ballotActions}
+              endpoint={`${base}/ballots`}
+              responseSchema={groupVoteBallotsAuditResponseSchema}
+              resolve={(response) => response.ballots}
+              resolvePage={(response) => response.page}
+              paginate
+              searchPlaceholder="Search ballots…"
+              initialSort="-submittedAt"
+              columns={[
+                {
+                  header: "Voter",
+                  className: "pk-mono",
+                  cell: (ballot) => ballot.userId,
+                  sort: { asc: "userId", desc: "-userId" },
+                },
+                {
+                  header: "Member",
+                  className: "pk-mono",
+                  cell: (ballot) => ballot.memberId ?? "—",
+                  sort: { asc: "memberId", desc: "-memberId" },
+                },
+                { header: "Choice", cell: (ballot) => ballot.choice, sort: { asc: "choice", desc: "-choice" } },
+                {
+                  header: "Round",
+                  className: "pk-end",
+                  width: "fit",
+                  cell: (ballot) => ballot.round,
+                  sort: { asc: "round", desc: "-round" },
+                },
+                {
+                  // A date has a bounded length; the column says so instead
+                  // of wearing `pk-nowrap` while still claiming slack.
+                  header: "Submitted",
+                  width: "fit",
+                  cell: (ballot) => fmt(ballot.submittedAt),
+                  sort: { asc: "submittedAt", desc: "-submittedAt", defaultDirection: "desc" },
+                },
+              ]}
+              empty="No ballots have been submitted."
+              rowKey={(ballot) => ballot.id}
+            />
+          )}
         </div>
-      )}
-      <div class="mt-3">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          aria-expanded={showStatistics}
-          onClick={() => setShowStatistics((shown) => !shown)}
-        >
-          {showStatistics ? "Hide vote statistics" : "Load vote statistics"}
-        </button>
-        {showStatistics && (
-          <Suspense fallback={<Spinner />}>
-            <GroupVoteStatistics groupId={groupId} voteId={vote.id} />
-          </Suspense>
-        )}
-      </div>
-    </section>
+
+        <div class="pk-stack pk-stack--snug">
+          <div class="pk-cluster">
+            <Button size="sm" aria-expanded={showStatistics} onClick={() => setShowStatistics((shown) => !shown)}>
+              {showStatistics ? "Hide vote statistics" : "Load vote statistics"}
+            </Button>
+          </div>
+          {showStatistics && (
+            <Suspense fallback={<Spinner label="Loading vote statistics…" />}>
+              <GroupVoteStatistics groupId={groupId} voteId={vote.id} />
+            </Suspense>
+          )}
+        </div>
+      </PanelBody>
+    </Panel>
   );
 }

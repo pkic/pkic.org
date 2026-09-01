@@ -1,21 +1,24 @@
-{{ $type := .Get "type" | default "success" }}
-{{- $gradients := dict
-  "success" "135deg, #133d23, #1e6640"
-  "info"    "135deg, #0f2244, #163d72"
-  "warning" "135deg, #3d2608, #5c3a0d"
-  "danger"  "135deg, #3d0d0d, #5c1515"
--}}
-{{- $iconMap := dict
-  "success" "✓"
-  "info"    "ℹ"
-  "warning" "⚠"
-  "danger"  "✗"
--}}
-{{- $grad := index $gradients $type | default (index $gradients "success") -}}
-{{- $icon := index $iconMap $type | default "✓" -}}
-<div class="container">
-  <div class="pkic-alert pkic-alert-{{ $type }}" role="alert" style="background: linear-gradient({{ $grad }}); border-left: 4px solid currentColor;">
-    <span class="pkic-alert-icon">{{ $icon }}</span>
-    <div class="pkic-alert-body">{{ .Inner | markdownify }}</div>
+{{/*
+  {{< alert type="success|info|warning|danger" >}}…{{< /alert >}}
+
+  The tone is the design system's, so the colours come from `--pk-ok`,
+  `--pk-info`, `--pk-warn` and `--pk-danger` rather than from a gradient pair
+  picked by hand. Alert.css ships with the entry stylesheet, so these class
+  names are styled on a server-rendered page.
+*/}}
+{{- $type := .Get "type" | default "success" -}}
+{{- $tones := dict "success" "ok" "info" "info" "warning" "warn" "danger" "danger" -}}
+{{- $icons := dict "success" "✓" "info" "ℹ" "warning" "⚠" "danger" "✗" -}}
+{{- $tone := index $tones $type | default "ok" -}}
+{{- $icon := index $icons $type | default "✓" -}}
+{{/* Matches ui/Alert.tsx: the destructive tones announce, the rest report. */}}
+{{- $role := cond (or (eq $tone "warn") (eq $tone "danger")) "alert" "status" -}}
+{{/* The whole modifier is one interpolated token, so a reader (and the
+     isolation gate) sees a complete class name rather than `pk-alert--{{`. */}}
+{{- $toneClass := printf "pk-alert--%s" $tone -}}
+<div class="pk pk-container">
+  <div class="pk-alert {{ $toneClass }} pk-cluster pk-cluster--start" role="{{ $role }}">
+    <span aria-hidden="true">{{ $icon }}</span>
+    <div class="pk-alert__body">{{ .Inner | markdownify }}</div>
   </div>
 </div>

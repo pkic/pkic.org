@@ -2,7 +2,11 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { membershipApplicationFormDefinitionUpdateSchema } from "../../assets/shared/schemas/membership-application-form";
+import { membershipCategoryUpdateSchema } from "../../assets/shared/schemas/membership-categories";
+import { membershipSettingsUpdateSchema } from "../../assets/shared/schemas/membership-settings";
 import { MembershipConfiguration } from "../../assets/ts/member-flows/portal/sections/MembershipConfiguration";
+import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 
 const NOW = "2026-08-27T12:00:00.000Z";
 const settings = {
@@ -131,34 +135,26 @@ describe("portal membership configuration", () => {
     expect(page.textContent).toContain("Category H1");
     expect(page.textContent).toContain("Organization");
 
-    const categoryLabel = page.querySelector("#membership-category-h1-label") as HTMLInputElement;
-    await act(() => {
-      categoryLabel.value = "Government PKI participants";
-      categoryLabel.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    const categorySave = [...page.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Save category H1"),
-    )!;
-    await act(async () => categorySave.click());
+    await typeInto(controlFor(page, "Label"), "Government PKI participants");
+    await act(async () => buttonNamed(page, "Save category H1").click());
     await settle();
 
-    const settingsSave = [...page.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Save workflow settings"),
-    )!;
-    await act(async () => settingsSave.click());
+    await act(async () => buttonNamed(page, "Save workflow settings").click());
     await settle();
 
-    expect(writes).toContainEqual({
-      path: "/api/v1/membership/categories/H1",
-      body: {
-        expectedRevision: 4,
-        label: "Government PKI participants",
-        description: "Existing description",
-        displayOrder: 80,
-        isVoting: false,
-      },
+    // Both bodies are asserted through the canonical request schemas, so a
+    // shape the endpoint would reject fails here rather than in production.
+    const categoryWrite = writes.find((write) => write.path === "/api/v1/membership/categories/H1");
+    expect(membershipCategoryUpdateSchema.parse(categoryWrite?.body)).toEqual({
+      expectedRevision: 4,
+      label: "Government PKI participants",
+      description: "Existing description",
+      displayOrder: 80,
+      isVoting: false,
     });
-    expect(writes.find((write) => write.path.endsWith("/membership/settings"))?.body.expectedRevision).toBe(3);
+
+    const settingsWrite = writes.find((write) => write.path.endsWith("/membership/settings"));
+    expect(membershipSettingsUpdateSchema.parse(settingsWrite?.body).expectedRevision).toBe(3);
     expect(writes.every((write) => write.path.startsWith("/api/v1/membership/"))).toBe(true);
     expect(writes.some((write) => write.path.startsWith("/api/v1/system/"))).toBe(false);
   });
@@ -230,11 +226,97 @@ describe("portal membership configuration", () => {
 
     const mutation = requests.find((request) => request.method === "PATCH");
     expect(mutation?.path).toBe("/api/v1/members/applications/form/definition");
-    expect(mutation?.body).toMatchObject({
-      expectedUpdatedAt: NOW,
-      fields: [expect.objectContaining({ key: "interest", label: "How will you contribute?" })],
-    });
-    expect((mutation?.body?.fields as Array<{ key: string }>).map((field) => field.key)).not.toContain("agrees_bylaws");
+    const update = membershipApplicationFormDefinitionUpdateSchema.parse(mutation?.body);
+    expect(update.expectedUpdatedAt).toBe(NOW);
+    expect(update.fields).toMatchObject([{ key: "interest", label: "How will you contribute?" }]);
+    // The workflow-owned consent fields are never resubmitted as editable ones.
+    expect(update.fields?.map((field) => field.key)).not.toContain("agrees_bylaws");
     expect(requests.some((request) => request.path.startsWith("/api/v1/admin/forms"))).toBe(false);
+  });
+
+  it("reports a failed load through the shared error alert instead of an empty page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 500 })),
+    );
+
+    const page = mount(true);
+    await settle();
+    await settle();
+
+    const alert = page.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Something went wrong on our side.");
+    // Nothing half-loaded renders behind the failure.
+    expect(page.textContent).not.toContain("Application workflow");
+    expect(page.querySelectorAll("form")).toHaveLength(0);
+  });
+
+  it("keeps the rest of the screen usable when only the application form fails to load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/membership/settings") return json(settings);
+        if (url.pathname === "/api/v1/membership/categories") return json({ categories: [category] });
+        return new Response(null, { status: 503 });
+      }),
+    );
+
+    const page = mount(true);
+    await settle();
+    await settle();
+
+    const formRegion = page.querySelector<HTMLElement>('section[aria-label="Membership application form"]');
+    expect(formRegion).not.toBeNull();
+    expect(formRegion!.querySelector('[role="alert"]')?.textContent).toContain(
+      "The service is temporarily unavailable.",
+    );
+    expect(page.textContent).toContain("Application workflow");
+    expect(page.textContent).toContain("Category H1");
+  });
+
+  it("labels every control it renders and names the regions around them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/membership/settings") return json(settings);
+        if (url.pathname === "/api/v1/membership/categories") return json({ categories: [category] });
+        if (url.pathname.endsWith("/applications/form/definition")) return json(applicationForm);
+        return new Response(null, { status: 404 });
+      }),
+    );
+
+    const page = mount(true);
+    await settle();
+    await settle();
+
+    // Each labelled control is reachable through a real `for`/`id` pair, and
+    // the deadline fields describe their own bounds.
+    const window = controlFor(page, "Consultation window (days)");
+    expect(page.querySelector(`label[for="${window.id}"]`)?.textContent).toBe("Consultation window (days)");
+    const describedBy = window.getAttribute("aria-describedby");
+    expect(describedBy).not.toBeNull();
+    expect(page.querySelector(`#${describedBy!}`)?.textContent).toBe("Between 1 and 60 days.");
+
+    // A checkbox needs all three parts, or it renders as an operating-system
+    // default control.
+    const reminder = Array.from(page.querySelectorAll("label.pk-check")).find((label) =>
+      label.textContent?.startsWith("Send automatic reminders"),
+    );
+    expect(reminder?.querySelector("input.pk-check__input")?.getAttribute("type")).toBe("checkbox");
+    expect(reminder?.querySelector("span.pk-check__label")).not.toBeNull();
+
+    // The mandatory consent fields are a named list, and "Required" is a word
+    // rather than a colour.
+    const policyList = page.querySelector('ul[aria-label="Required policy acknowledgements"]');
+    expect(policyList?.querySelectorAll("li")).toHaveLength(4);
+    expect(policyList?.textContent).toContain("Required");
   });
 });

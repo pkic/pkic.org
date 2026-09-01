@@ -5,7 +5,7 @@
  * explicitly published All Members group's canonical lead/deputy-lead roles;
  * there is no separate consortium authorization model.
  *
- * Board/EC positions store the membership they explicitly represent. This
+ * Board/EC positions store the exact acting identity they explicitly use. This
  * avoids assigning an arbitrary organization to people who concurrently
  * represent more than one member.
  */
@@ -14,7 +14,6 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/links";
 import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
-import { deterministicRepresentativeJoinSql } from "./membership/representative-lookup";
 import { toPublicRoleProfile, type PublicRoleProfile } from "./membership/public-role-profile";
 import { prepareAuditLog } from "./audit";
 import { resolveLeadershipAffiliation } from "./leadership-affiliations";
@@ -32,7 +31,7 @@ export interface LeadershipPositionRecord {
   id: string;
   body: LeadershipBody;
   userId: string;
-  memberId: string | null;
+  identityId: string | null;
   organizationName: string | null;
   name: string;
   email: string;
@@ -45,6 +44,7 @@ export interface LeadershipPositionRecord {
 
 export interface LeadershipPublicPerson {
   name: string;
+  jobTitle: string | null;
   title: string;
   organizationName: string | null;
   organizationLogoUrl: string | null;
@@ -63,7 +63,7 @@ interface LeadershipPositionRow {
   id: string;
   body: LeadershipBody;
   user_id: string;
-  member_id: string | null;
+  identity_id: string | null;
   organization_name: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -76,13 +76,13 @@ interface LeadershipPositionRow {
 }
 
 const LEADERSHIP_POSITION_SELECT = `
-  SELECT lp.id, lp.body, lp.user_id, lp.member_id, o.name AS organization_name,
+  SELECT lp.id, lp.body, lp.user_id, lp.identity_id, o.name AS organization_name,
          u.first_name, u.last_name, u.email,
          lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at
   FROM leadership_positions lp
   JOIN users u ON u.id = lp.user_id
-  LEFT JOIN members m ON m.id = lp.member_id
-  LEFT JOIN organizations o ON o.id = m.organization_id
+  LEFT JOIN identities identity ON identity.id = lp.identity_id
+  LEFT JOIN organizations o ON o.id = identity.organization_id
 `;
 
 function toLeadershipPosition(row: LeadershipPositionRow): LeadershipPositionRecord {
@@ -90,7 +90,7 @@ function toLeadershipPosition(row: LeadershipPositionRow): LeadershipPositionRec
     id: row.id,
     body: row.body,
     userId: row.user_id,
-    memberId: row.member_id,
+    identityId: row.identity_id,
     organizationName: row.organization_name,
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     email: row.email,
@@ -150,7 +150,7 @@ export async function createLeadershipPosition(
   input: {
     body: LeadershipBody;
     userId: string;
-    memberId?: string | null;
+    identityId?: string | null;
     title: string;
     startsAt: string;
     endsAt?: string | null;
@@ -162,17 +162,17 @@ export async function createLeadershipPosition(
     throw new AppError(404, "USER_NOT_FOUND", "User not found");
   }
 
-  const memberId = await resolveLeadershipAffiliation(db, input.userId, input.memberId);
+  const identityId = await resolveLeadershipAffiliation(db, input.userId, input.identityId);
   const id = uuid();
   const now = nowIso();
   await db.batch([
     db
       .prepare(
         `INSERT INTO leadership_positions
-           (id, body, user_id, member_id, title, starts_at, ends_at, created_at, updated_at)
+           (id, body, user_id, identity_id, title, starts_at, ends_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, input.body, input.userId, memberId, input.title, input.startsAt, input.endsAt ?? null, now, now),
+      .bind(id, input.body, input.userId, identityId, input.title, input.startsAt, input.endsAt ?? null, now, now),
     prepareAuditLog(
       db,
       "admin",
@@ -180,7 +180,7 @@ export async function createLeadershipPosition(
       "leadership_position_created",
       "leadership_position",
       id,
-      { body: input.body, userId: input.userId, memberId, title: input.title },
+      { body: input.body, userId: input.userId, identityId, title: input.title },
       now,
     ),
   ]);
@@ -192,7 +192,7 @@ export async function createLeadershipPosition(
 export async function updateLeadershipPosition(
   db: DatabaseLike,
   id: string,
-  patch: { memberId?: string | null; title?: string; startsAt?: string; endsAt?: string | null },
+  patch: { identityId?: string | null; title?: string; startsAt?: string; endsAt?: string | null },
   actorUserId: string,
 ): Promise<LeadershipPositionRecord> {
   const existing = await first<{ id: string; user_id: string; starts_at: string; ends_at: string | null }>(
@@ -212,9 +212,9 @@ export async function updateLeadershipPosition(
 
   const setClauses: string[] = [];
   const values: unknown[] = [];
-  if (patch.memberId !== undefined) {
-    setClauses.push("member_id = ?");
-    values.push(await resolveLeadershipAffiliation(db, existing.user_id, patch.memberId));
+  if (patch.identityId !== undefined) {
+    setClauses.push("identity_id = ?");
+    values.push(await resolveLeadershipAffiliation(db, existing.user_id, patch.identityId));
   }
   if (patch.title !== undefined) {
     setClauses.push("title = ?");
@@ -255,11 +255,12 @@ export async function deleteLeadershipPosition(db: DatabaseLike, id: string, act
 }
 
 interface PublicPositionRow extends LeadershipPositionRow {
+  job_title: string | null;
   org_id: string | null;
   org_name: string | null;
   org_logo_r2_key: string | null;
   org_website: string | null;
-  photo_member_id: string | null;
+  photo_identity_id: string | null;
   headshot_r2_key: string | null;
   links_json: string | null;
 }
@@ -271,21 +272,16 @@ export async function getLeadershipPublic(
   const rows = await all<PublicPositionRow>(
     db,
     `SELECT lp.id, lp.body, lp.user_id, u.first_name, u.last_name, u.email,
-            lp.member_id, lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
+            CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
+            lp.identity_id, lp.title, lp.starts_at, lp.ends_at, lp.created_at, lp.updated_at,
             o.id AS org_id, o.name AS org_name, o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            COALESCE(rep.id, individual.id) AS photo_member_id, u.headshot_r2_key, u.links_json
+            identity.id AS photo_identity_id, u.headshot_r2_key, identity.links_json
      FROM leadership_positions lp
      JOIN users u ON u.id = lp.user_id
-     LEFT JOIN members m ON m.id = lp.member_id
-     LEFT JOIN organization_representatives rep ON rep.id = (
-       SELECT r.id
-       FROM organization_representatives r
-       WHERE r.member_id = lp.member_id AND r.user_id = lp.user_id
-       ORDER BY (r.left_at IS NULL) DESC, r.joined_at DESC
-       LIMIT 1
-     )
-     LEFT JOIN members individual ON individual.id = lp.member_id AND individual.user_id = lp.user_id
-     LEFT JOIN organizations o ON o.id = m.organization_id
+     LEFT JOIN identities identity ON identity.id = lp.identity_id AND identity.user_id = lp.user_id
+     LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+     LEFT JOIN membership_categories category ON category.code = capacity.membership_category
+     LEFT JOIN organizations o ON o.id = identity.organization_id
      WHERE lp.body = ?
      ORDER BY lp.starts_at ASC`,
     [body],
@@ -293,11 +289,12 @@ export async function getLeadershipPublic(
 
   const toPublic = (row: PublicPositionRow): LeadershipPublicPerson => ({
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+    jobTitle: row.job_title,
     title: row.title,
     organizationName: row.org_name,
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
     organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
-    photoUrl: row.headshot_r2_key && row.photo_member_id ? `/api/v1/members/${row.photo_member_id}/logo` : null,
+    photoUrl: row.headshot_r2_key && row.photo_identity_id ? `/api/v1/members/${row.photo_identity_id}/logo` : null,
     linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -316,11 +313,12 @@ interface ConsortiumChairRow {
   role_id: string;
   first_name: string | null;
   last_name: string | null;
+  job_title: string | null;
   org_id: string | null;
   org_name: string | null;
   org_logo_r2_key: string | null;
   org_website: string | null;
-  member_id: string | null;
+  identity_id: string | null;
   headshot_r2_key: string | null;
   links_json: string | null;
   created_at: string;
@@ -335,9 +333,12 @@ export async function getConsortiumChairsPublic(
 ): Promise<{ chair: ConsortiumChairPublic | null; viceChair: ConsortiumChairPublic | null }> {
   const rows = await all<ConsortiumChairRow>(
     db,
-    `SELECT ur.role_id, u.first_name, u.last_name, o.id AS org_id, o.name AS org_name,
+    `SELECT ur.role_id, u.first_name, u.last_name,
+            CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
+            o.id AS org_id, o.name AS org_name,
             o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,
-            COALESCE(rep.id, mi.id) AS member_id, u.headshot_r2_key, u.links_json, ur.created_at
+            identity.id AS identity_id, u.headshot_r2_key, identity.links_json,
+            ur.created_at
      FROM user_roles ur
      JOIN users u ON u.id = ur.user_id
      JOIN groups leadership_group
@@ -345,14 +346,21 @@ export async function getConsortiumChairsPublic(
       AND leadership_group.slug = 'all-members'
       AND leadership_group.active = 1
       AND leadership_group.public_leadership = 1
-     -- A group leader can represent more than one organization at
-     -- once (consolidated migration 0035) — join to a single deterministic
-     -- representative row (earliest joined_at) instead of fanning out one
-     -- result row per represented organization.
-${deterministicRepresentativeJoinSql("u.id")}
-     LEFT JOIN members m ON m.id = rep.member_id
-     LEFT JOIN members mi ON mi.user_id = u.id AND mi.status = 'active'
-     LEFT JOIN organizations o ON o.id = m.organization_id
+     JOIN group_memberships membership
+       ON membership.group_id = leadership_group.id
+      AND membership.user_id = ur.user_id
+      AND membership.member_id = ur.member_id
+      AND membership.left_at IS NULL
+     JOIN members m ON m.id = membership.member_id AND m.status = 'active'
+     JOIN identities identity ON identity.id = membership.identity_id
+      AND identity.user_id = ur.user_id
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL
+      AND identity.blocked_at IS NULL
+     JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+      AND capacity.member_id = m.id
+     JOIN membership_categories category ON category.code = capacity.membership_category
+     LEFT JOIN organizations o ON o.id = identity.organization_id
      WHERE ur.context_type = 'group'
        AND ur.role_id IN (?, ?)
        AND ur.revoked_at IS NULL

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { emailVerificationMethodSchema } from "../../../assets/shared/schemas/organization-representation";
+import { emailVerificationMethodSchema } from "../../../assets/shared/schemas/identity";
 import type { DatabaseLike, StatementLike } from "../types";
 import { nowIso } from "../utils/time";
 

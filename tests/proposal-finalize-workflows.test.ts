@@ -743,6 +743,9 @@ describe("proposal subtree access gate (full router stack)", () => {
   }
 
   async function assignEventModerator(userId: string, eventId: string, grantedBy: string): Promise<void> {
+    // Kept as an assignment rather than a persona because the caller already
+    // holds a user it created for other reasons; the role itself is the same
+    // one `eventModerator` plays.
     await env.DB.prepare(
       `INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
        VALUES (?, ?, 'role-event_moderator', 'event', ?, ?, datetime('now'))`,

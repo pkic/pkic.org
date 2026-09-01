@@ -2,194 +2,186 @@
 {{ partial "hero.html" . }}
 
 {{ if ne .RelPermalink "/events/" }}
-<div class="py-2 bg-light">
-</div>
-
-<div class="container">
-  <div class="row">
-    {{- if $.Page.FirstSection.Param "sideMenu" -}}
-    <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse">
-      <div class="position-sticky p-3 sidebar-sticky">
-        {{- partial "menu.html" . -}}
-      </div>
-    </nav>
-    <div id="content" class="col-md-8 ms-sm-auto col-lg-9 p-4" data-pagefind-body>
-    {{- else -}}
-    <div id="content" class="p-4" data-pagefind-body>
-    {{- end -}}
-
-    {{ .Content }}
+{{- if $.Page.FirstSection.Param "sideMenu" -}}
+<div class="pk-container pk-section events-page-layout">
+  <nav id="sidebarMenu" class="events-page-menu" aria-label="Section navigation">
+    <div class="events-page-menu-sticky">
+      {{- partial "menu.html" . -}}
     </div>
+  </nav>
+  <div id="content" data-pagefind-body>
+    {{ .Content }}
   </div>
 </div>
+{{- else -}}
+<div class="pk-container pk-section">
+  <div id="content" data-pagefind-body>
+    {{ .Content }}
+  </div>
+</div>
+{{- end -}}
 {{ else }}
 
-<div class="events-listing py-5">
-  <div class="container">
-    <div class="row g-5 align-items-start">
+<div class="events-listing pk-section">
+  <div class="pk-container pk-container--wide events-listing-layout">
 
-      {{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          Main column — PKI Consortium Events (3/4 width)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
-      <div class="col-lg-9">
+    {{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Main column — PKI Consortium Events
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
+    <div class="pk-stack pk-stack--loose">
 
-        {{- $consortiumEvts := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "desc" -}}
-        {{- $webinars       := sort (where site.Pages "Params.eventType" "webinar") "Params.eventDate" "asc" -}}
-        {{- $today := now.Format "2006-01-02" -}}
+      {{- $consortiumEvts := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "desc" -}}
+      {{- $webinars       := sort (where site.Pages "Params.eventType" "webinar") "Params.eventDate" "asc" -}}
+      {{- $today := now.Format "2006-01-02" -}}
 
-        {{/* Collect unique years from event date, then sort descending */}}
-        {{- $years := slice -}}
-        {{- range $consortiumEvts -}}
-          {{- $yr := (time (.Param "eventDate")).Format "2006" -}}
-          {{- if not (in $years $yr) -}}
-            {{- $years = $years | append $yr -}}
-          {{- end -}}
+      {{/* Collect unique years from event date, then sort descending */}}
+      {{- $years := slice -}}
+      {{- range $consortiumEvts -}}
+        {{- $yr := (time (.Param "eventDate")).Format "2006" -}}
+        {{- if not (in $years $yr) -}}
+          {{- $years = $years | append $yr -}}
         {{- end -}}
-        {{- $years = sort $years "value" "desc" -}}
+      {{- end -}}
+      {{- $years = sort $years "value" "desc" -}}
 
-        {{/* Split upcoming (current year and future) from past years */}}
-        {{- $upcomingYears := slice -}}
-        {{- $pastYears     := slice -}}
-        {{- range $years -}}
-          {{- if ge (int .) now.Year -}}
-            {{- $upcomingYears = $upcomingYears | append . -}}
-          {{- else -}}
-            {{- $pastYears = $pastYears | append . -}}
-          {{- end -}}
+      {{/* Split upcoming (current year and future) from past years */}}
+      {{- $upcomingYears := slice -}}
+      {{- $pastYears     := slice -}}
+      {{- range $years -}}
+        {{- if ge (int .) now.Year -}}
+          {{- $upcomingYears = $upcomingYears | append . -}}
+        {{- else -}}
+          {{- $pastYears = $pastYears | append . -}}
         {{- end -}}
+      {{- end -}}
 
-        {{/* Upcoming events */}}
-        {{ if $upcomingYears }}
-        <section class="events-section events-section--upcoming mb-5">
-          <div class="events-section-header mb-4">
-            <h2 class="events-section-title">
-              <span class="events-section-title-badge events-section-title-badge--upcoming">Upcoming</span>
-              PKI Consortium Events
-            </h2>
-          </div>
-          {{ range $upcomingYears }}
-          {{ $yr := . }}
-          <div class="row g-4{{ if gt (len $upcomingYears) 1 }} mb-4{{ end }}">
+      {{/* Upcoming events */}}
+      {{ if $upcomingYears }}
+      <section class="events-section events-section--upcoming pk-stack pk-stack--loose">
+        <div class="events-section-header">
+          <h2 class="events-section-title">
+            <span class="events-section-title-badge events-section-title-badge--upcoming">Upcoming</span>
+            PKI Consortium Events
+          </h2>
+        </div>
+        {{ range $upcomingYears }}
+        {{ $yr := . }}
+        <div class="pk-grid pk-grid--roomy">
+          {{ range $consortiumEvts }}
+          {{- $eventDate := time (.Param "eventDate") -}}
+          {{ if eq ($eventDate.Format "2006") $yr }}
+          {{ partial "events/card.html" . }}
+          {{ end }}
+          {{ end }}
+        </div>
+        {{ end }}
+      </section>
+      {{ end }}
+
+      {{/* Content from _index.md (banners, CTAs, etc.) */}}
+      {{ .Content }}
+
+      {{/* Past events grouped by year */}}
+      {{ if $pastYears }}
+      <section class="events-section events-section--past pk-stack pk-stack--loose">
+        <div class="events-section-header">
+          {{ if $upcomingYears }}
+          <h2 class="events-section-title">Past Events</h2>
+          {{ else }}
+          <h2 class="events-section-title">PKI Consortium Events</h2>
+          {{ end }}
+        </div>
+
+        {{ range $pastYears }}
+        {{ $yr := . }}
+        <div class="events-year-group">
+          <h3 class="events-year-heading">{{ $yr }}</h3>
+          <div class="pk-grid pk-grid--roomy">
             {{ range $consortiumEvts }}
             {{- $eventDate := time (.Param "eventDate") -}}
             {{ if eq ($eventDate.Format "2006") $yr }}
-            <div class="col-md-6">
-              {{ partial "events/card.html" . }}
-            </div>
+            {{ partial "events/card.html" . }}
             {{ end }}
             {{ end }}
           </div>
-          {{ end }}
-        </section>
-        {{ end }}
-
-        {{/* Content from _index.md (banners, CTAs, etc.) */}}
-        {{ .Content }}
-
-        {{/* Past events grouped by year */}}
-        {{ if $pastYears }}
-        <section class="events-section events-section--past">
-          <div class="events-section-header mb-4">
-            {{ if $upcomingYears }}
-            <h2 class="events-section-title">Past Events</h2>
-            {{ else }}
-            <h2 class="events-section-title">PKI Consortium Events</h2>
-            {{ end }}
-          </div>
-
-          {{ range $pastYears }}
-          {{ $yr := . }}
-          <div class="events-year-group mb-5">
-            <h3 class="events-year-heading">{{ $yr }}</h3>
-            <div class="row g-4">
-              {{ range $consortiumEvts }}
-              {{- $eventDate := time (.Param "eventDate") -}}
-              {{ if eq ($eventDate.Format "2006") $yr }}
-              <div class="col-md-6">
-                {{ partial "events/card.html" . }}
-              </div>
-              {{ end }}
-              {{ end }}
-            </div>
-          </div>
-          {{ end }}
-        </section>
-        {{ end }}
-
-        {{ if not $consortiumEvts }}
-        <p class="text-muted">No events found.</p>
-        {{ end }}
-
-      </div>{{/* /col-lg-9 */}}
-
-      {{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          Sidebar — Sponsored Webinars (1/4 width)
-      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
-      <aside class="col-lg-3">
-        <div class="events-sidebar sticky-lg-top">
-
-          {{- $ws         := .Scratch.Get "sidebarData" | default dict -}}
-          {{- $wsTitle    := index $ws "title"    | default "Sponsored Webinars" -}}
-          {{- $wsDesc     := index $ws "description" | default "" -}}
-          {{- $wsCta      := index $ws "cta"      | default "Want to host a sponsored webinar?" -}}
-          {{- $wsCtaLink  := index $ws "ctaLink"  | default "/sponsors/" -}}
-          {{- $wsCtaLabel := index $ws "ctaLabel" | default "Sponsorship opportunities" -}}
-
-          <div class="events-sidebar-header mb-4">
-            <h2 class="events-sidebar-title">{{ $wsTitle }}</h2>
-            {{ with $wsDesc }}<div class="events-sidebar-desc">{{ . | markdownify }}</div>{{ end }}
-          </div>
-
-          {{ if $webinars }}
-          {{- $upcomingWebinars := slice -}}
-          {{- $pastWebinars := slice -}}
-          {{- range $webinars -}}
-            {{- $eventDate := time (.Param "eventDate") -}}
-            {{- if ge ($eventDate.Format "2006-01-02") $today -}}
-              {{- $upcomingWebinars = $upcomingWebinars | append . -}}
-            {{- else -}}
-              {{- $pastWebinars = $pastWebinars | append . -}}
-            {{- end -}}
-          {{- end -}}
-
-          {{ if $upcomingWebinars }}
-          <div class="events-webinar-list mb-4">
-            {{ range first 3 $upcomingWebinars }}
-            {{ partial "events/webinar-card.html" . }}
-            {{ end }}
-          </div>
-          {{ end }}
-
-          {{ if $pastWebinars }}
-          {{ if $upcomingWebinars }}
-          <h3 class="events-webinar-past-heading">Past Webinars</h3>
-          {{ end }}
-          <div class="events-webinar-list">
-            {{ range first 2 $pastWebinars }}
-            {{ partial "events/webinar-card.html" . }}
-            {{ end }}
-          </div>
-          {{ end }}
-
-          {{ if or $upcomingWebinars $pastWebinars }}
-          <a href="/events/webinars/" class="btn btn-sm btn-outline-secondary w-100 mt-3">View all webinars</a>
-          {{ end }}
-          {{ else }}
-          <div class="events-webinar-empty">
-            <p>Interested in hosting a sponsored webinar? <a href="/sponsors/">Learn about sponsorship</a>.</p>
-          </div>
-          {{ end }}
-
-          <div class="events-sidebar-cta mt-4">
-            <p class="small text-muted mb-2">{{ $wsCta }}</p>
-            <a href="{{ $wsCtaLink }}" class="btn btn-sm btn-outline-secondary w-100">{{ $wsCtaLabel }}</a>
-          </div>
-
         </div>
-      </aside>
+        {{ end }}
+      </section>
+      {{ end }}
 
-    </div>{{/* /row */}}
-  </div>{{/* /container */}}
+      {{ if not $consortiumEvts }}
+      <p class="pk-muted">No events found.</p>
+      {{ end }}
+
+    </div>{{/* /main column */}}
+
+    {{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Sidebar — Sponsored Webinars
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
+    <aside>
+      <div class="events-sidebar pk-stack">
+
+        {{- $ws         := .Scratch.Get "sidebarData" | default dict -}}
+        {{- $wsTitle    := index $ws "title"    | default "Sponsored Webinars" -}}
+        {{- $wsDesc     := index $ws "description" | default "" -}}
+        {{- $wsCta      := index $ws "cta"      | default "Want to host a sponsored webinar?" -}}
+        {{- $wsCtaLink  := index $ws "ctaLink"  | default "/sponsors/" -}}
+        {{- $wsCtaLabel := index $ws "ctaLabel" | default "Sponsorship opportunities" -}}
+
+        <div class="events-sidebar-header">
+          <h2 class="events-sidebar-title">{{ $wsTitle }}</h2>
+          {{ with $wsDesc }}<div class="events-sidebar-desc">{{ . | markdownify }}</div>{{ end }}
+        </div>
+
+        {{ if $webinars }}
+        {{- $upcomingWebinars := slice -}}
+        {{- $pastWebinars := slice -}}
+        {{- range $webinars -}}
+          {{- $eventDate := time (.Param "eventDate") -}}
+          {{- if ge ($eventDate.Format "2006-01-02") $today -}}
+            {{- $upcomingWebinars = $upcomingWebinars | append . -}}
+          {{- else -}}
+            {{- $pastWebinars = $pastWebinars | append . -}}
+          {{- end -}}
+        {{- end -}}
+
+        {{ if $upcomingWebinars }}
+        <div class="events-webinar-list">
+          {{ range first 3 $upcomingWebinars }}
+          {{ partial "events/webinar-card.html" . }}
+          {{ end }}
+        </div>
+        {{ end }}
+
+        {{ if $pastWebinars }}
+        {{ if $upcomingWebinars }}
+        <h3 class="events-webinar-past-heading">Past Webinars</h3>
+        {{ end }}
+        <div class="events-webinar-list">
+          {{ range first 2 $pastWebinars }}
+          {{ partial "events/webinar-card.html" . }}
+          {{ end }}
+        </div>
+        {{ end }}
+
+        {{ if or $upcomingWebinars $pastWebinars }}
+        <a href="/events/webinars/" class="pk-btn pk-btn--secondary pk-btn--sm pk-btn--block">View all webinars</a>
+        {{ end }}
+        {{ else }}
+        <div class="events-webinar-empty">
+          <p>Interested in hosting a sponsored webinar? <a href="/sponsors/">Learn about sponsorship</a>.</p>
+        </div>
+        {{ end }}
+
+        <div class="events-sidebar-cta pk-stack pk-stack--snug">
+          <p class="pk-small">{{ $wsCta }}</p>
+          <a href="{{ $wsCtaLink }}" class="pk-btn pk-btn--secondary pk-btn--sm pk-btn--block">{{ $wsCtaLabel }}</a>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>{{/* /events-listing-layout */}}
 </div>
 
 {{ end }}

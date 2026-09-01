@@ -6,11 +6,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   sponsorshipCompaniesListResponseSchema,
   sponsorshipTierConfigResponseSchema,
+  sponsorshipTierConfigUpdateSchema,
 } from "../../assets/shared/schemas/sponsorship-management";
 import { managedSponsorTiersResponseSchema } from "../../assets/shared/schemas/sponsors";
 import { SponsorshipTierConfig } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipTierConfig";
 import { Sponsorships } from "../../assets/ts/member-flows/portal/sections/sponsors/management";
 import { SponsorWorkspace } from "../../assets/ts/member-flows/portal/sections/sponsors";
+import { controlFor } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -120,7 +122,174 @@ describe("portal sponsor management", () => {
 
     const patch = requests.find((request) => request.method === "PATCH");
     expect(patch?.url.pathname).toBe("/api/v1/sponsors/tiers/00000000-0000-4000-8000-000000000001");
-    expect(JSON.parse(patch?.body ?? "{}")).toMatchObject({ amountCents: 75000, currency: "usd", active: true });
+    // Parsed through the shared update contract rather than compared field by
+    // field, so the case fails when the contract moves.
+    expect(sponsorshipTierConfigUpdateSchema.parse(JSON.parse(patch?.body ?? "{}"))).toEqual({
+      amountCents: 75000,
+      currency: "usd",
+      active: true,
+    });
+  });
+
+  it("names the pricing table and every editable cell, and titles the panel it sits in", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(managedSponsorTiersResponseSchema.parse({ tiers, visibility: "all" })), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<SponsorshipTierConfig canWrite />);
+    await settle();
+
+    // A table with no caption is announced as "table"; several on one page are
+    // announced as several tables.
+    expect(container.querySelector("caption")?.textContent).toBe("Sponsorship tier pricing");
+    expect(container.querySelector("section.pk-panel")?.getAttribute("aria-label")).toBe("Sponsorship tier pricing");
+
+    // Each cell control is named after the tier it edits, so a column of
+    // identical boxes is distinguishable when listed on its own.
+    const amount = container.querySelector<HTMLInputElement>('input[name="amountCents"]');
+    expect(amount?.getAttribute("aria-label")).toBe("Leader amount in cents");
+    // The active switch is a full check block whose name is real label text,
+    // hidden because the column header already carries it visually.
+    const active = container.querySelector<HTMLLabelElement>("label.pk-check");
+    expect(active?.querySelector("input.pk-check__input")).not.toBeNull();
+    expect(active?.querySelector("span.pk-check__label")?.textContent).toBe("Leader active");
+    expect(active?.querySelector("span.pk-check__label")?.className).toContain("pk-sr-only");
+    // The actions column is named for assistive technology even though its
+    // header is not drawn.
+    expect([...container.querySelectorAll("th")].map((th) => th.textContent)).toContain("Actions");
+  });
+
+  it("says the pricing catalog is empty in an announced region", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(managedSponsorTiersResponseSchema.parse({ tiers: [], visibility: "all" })), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<SponsorshipTierConfig canWrite />);
+    await settle();
+
+    expect(container.querySelector("[role='status']")?.textContent).toContain("No tier pricing is configured.");
+  });
+
+  it("announces a failed pricing load as a sentence rather than an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "unavailable" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<SponsorshipTierConfig canWrite />);
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    // Nothing pretends to be a table the reader could act on.
+    expect(container.querySelector("table")).toBeNull();
+  });
+});
+
+describe("portal sponsorship pipeline filters", () => {
+  function companiesPage(companies: unknown[]): Response {
+    return new Response(
+      JSON.stringify(
+        sponsorshipCompaniesListResponseSchema.parse({
+          companies,
+          page: { limit: 50, offset: 0, total: companies.length, hasMore: false },
+        }),
+      ),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  it("names both pipeline filters through a for/id pair rather than an option label", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => companiesPage([])),
+    );
+
+    const container = mount(<Sponsorships canWrite={false} />);
+    await settle();
+
+    const type = controlFor<HTMLSelectElement>(container, "Type");
+    const stage = controlFor<HTMLSelectElement>(container, "Stage");
+    expect(type.tagName).toBe("SELECT");
+    expect(stage.tagName).toBe("SELECT");
+    // Two competing names for one control is the defect this replaced.
+    expect(type.getAttribute("aria-label")).toBeNull();
+    expect(stage.getAttribute("aria-label")).toBeNull();
+  });
+
+  it("sends the chosen stage to the companies query", async () => {
+    const requested: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requested.push(new URL(String(input), location.origin));
+        return companiesPage([]);
+      }),
+    );
+
+    const container = mount(<Sponsorships canWrite={false} />);
+    await settle();
+
+    const stage = controlFor<HTMLSelectElement>(container, "Stage");
+    stage.value = "contacted";
+    await act(async () => {
+      stage.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(requested.some((url) => url.searchParams.get("stage") === "contacted")).toBe(true);
+  });
+
+  it("states a failed companies query as a sentence in an alert, not as a status code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "nope" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<Sponsorships canWrite={false} />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(alert?.textContent).not.toContain("HTTP 403");
+  });
+
+  it("renders nothing at all for a caller with neither read nor write access", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = mount(<Sponsorships canRead={false} canWrite={false} />);
+    await settle();
+
+    expect(container.textContent).toBe("");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

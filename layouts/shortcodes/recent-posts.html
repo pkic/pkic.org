@@ -22,17 +22,15 @@
 {{- $posts := first $limit (where site.RegularPages "Type" "blog") -}}
 
 {{ if $posts }}
-<section class="pkic-recent-posts py-5">
-  <div class="container">
-    <div class="d-flex align-items-baseline justify-content-between mb-4">
-      <h2 class="h3 fw-bold mb-0">{{ $heading }}</h2>
-      <a href="{{ $moreUrl }}" class="btn btn-sm btn-outline-secondary">{{ $moreText }}</a>
+<section class="pkic-recent-posts pk-section">
+  <div class="pk-container pk-stack pk-stack--loose">
+    <div class="pk-cluster pk-cluster--between">
+      <h2>{{ $heading }}</h2>
+      <a href="{{ $moreUrl }}" class="pk-btn pk-btn--secondary pk-btn--sm">{{ $moreText }}</a>
     </div>
-    <div class="row g-4 align-items-start">
+    <div class="pk-grid pk-grid--roomy">
       {{ range $posts }}
-      <div class="col-md-4">
-        {{ partial "blog/card.html" . }}
-      </div>
+      {{ partial "blog/card.html" . }}
       {{ end }}
     </div>
   </div>

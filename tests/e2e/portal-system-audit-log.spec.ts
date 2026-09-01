@@ -16,8 +16,9 @@ test("a permitted staff identity uses the system audit log only through the port
   await signInToPortal(page, e2eAdminEmail("portal-system-audit-list"));
   await page.goto("/portal/#/system/audit-log");
 
-  await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+  // The Settings hub heads the page; the selected tab names the surface.
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit Log", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.locator("tbody tr").first()).toBeVisible();
   expect(auditLogRequests).toContain("GET /api/v1/audit-log");
@@ -26,7 +27,7 @@ test("a permitted staff identity uses the system audit log only through the port
 
   await page.goto("/portal/#/system/audit-log");
   await expect(page).toHaveURL(/\/portal\/#\/system\/audit-log$/);
-  await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit Log", exact: true })).toHaveAttribute("aria-current", "page");
   expect(legacyAuditRequests).toEqual([]);
 });
 
@@ -91,26 +92,34 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   });
 
   await page.goto("/portal/#/system/audit-log");
-  await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByRole("status")).toBeVisible();
   releaseInitialRequest();
 
+  // The pager is located by its role and accessible name, and the current
+  // page by `aria-current`, rather than by `.adm-pager`/`.page-item`: those
+  // Bootstrap classes left the markup when the pager moved onto the design
+  // system, and a role does not break the next time it is restyled.
+  const pager = page.getByRole("navigation", { name: "Pagination" });
+  const nextPage = pager.getByRole("button", { name: "Next page" });
+  const currentPage = pager.locator('button[aria-current="page"]');
+
   await expect(page.getByText("No entries match the current filters.", { exact: true })).toBeVisible();
-  await expect(page.locator(".adm-pager")).toHaveCount(0);
+  await expect(pager).toHaveCount(0);
 
-  await page.getByRole("button", { name: "↺ Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText("page_one_action", { exact: true })).toBeVisible();
-  await expect(page.locator(".adm-pager-range")).toHaveText("1–1 of 51");
-  await expect(page.locator(".adm-pager .page-item.active .page-link")).toHaveText("1");
-  await expect(page.locator(".adm-pager .page-item").last().locator("button")).toBeEnabled();
+  await expect(pager).toContainText("1–1 of 51");
+  await expect(currentPage).toHaveText("1");
+  await expect(nextPage).toBeEnabled();
 
-  await page.locator(".adm-pager .page-item").last().locator("button").click();
+  await nextPage.click();
   await expect(page.getByText("page_two_action", { exact: true })).toBeVisible();
   await expect(page.getByText("page_one_action", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".adm-pager-range")).toHaveText("51–51 of 51");
-  await expect(page.locator(".adm-pager .page-item.active .page-link")).toHaveText("2");
+  await expect(pager).toContainText("51–51 of 51");
+  await expect(currentPage).toHaveText("2");
 
-  await page.getByRole("button", { name: "↺ Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("Synthetic audit log failure");
   expect(requestCount).toBe(4);
   expect(requestOffsets).toEqual([0, 0, 50, 50]);

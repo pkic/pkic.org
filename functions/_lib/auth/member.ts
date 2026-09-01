@@ -41,16 +41,16 @@ const memberByRequest = new WeakMap<Request, AuthMember>();
  * list) before allowing the switch, so a user can never select an
  * organization they don't actually represent.
  */
-export async function switchActiveMembership(
+export async function switchActiveIdentity(
   db: DatabaseLike,
   member: AuthMember,
-  memberId: string,
+  identityId: string,
 ): Promise<AuthMember> {
   const rows = await resolveEligibleMembershipRows(db, member.userId);
-  if (!rows.some((row) => row.member_id === memberId)) {
-    throw new AppError(403, "NOT_ACTIVE_MEMBERSHIP", "You do not actively hold this membership");
+  if (!rows.some((row) => row.identity_id === identityId)) {
+    throw new AppError(403, "NOT_ACTIVE_IDENTITY", "You do not actively hold this identity");
   }
-  const selected = toAuthMember(rows, memberId);
+  const selected = toAuthMember(rows, identityId);
   return { ...selected, sessionId: member.sessionId, expiresAt: member.expiresAt };
 }
 

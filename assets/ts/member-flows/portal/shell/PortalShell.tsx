@@ -1,17 +1,14 @@
 /** Capability-derived portal shell shared by member and management identities. */
-import { type ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
-import { useEffect } from "preact/hooks";
 import { Router, Route, Switch } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
+import { usePortalHashLocation } from "../hash-location";
 import { clearAuth, portalSession, profile } from "../state";
 import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
 import { Spinner } from "../../../components/Spinner";
-import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
+import { PortalRouteFallback, PortalRouteRedirect, ScrollResetOnNavigate, SectionWrapper } from "./PortalRouteChrome";
 import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
-  portalCapacityFallbackPath,
   portalDefaultPath,
   portalHasAnyGlobalPermission,
   portalHasGlobalPermission,
@@ -76,33 +73,6 @@ function LazyEventWorkspace(props: EventWorkspaceProps) {
   );
 }
 
-function SectionWrapper({ title, children }: { title?: string; children: ComponentChildren }) {
-  return (
-    <div class="portal-section">
-      {title && <h4 class="portal-section-title">{title}</h4>}
-      {children}
-    </div>
-  );
-}
-
-function PortalRouteFallback({ session }: { session: PortalSession | null }) {
-  const [location, navigate] = useHashLocation();
-  const fallbackPath = portalCapacityFallbackPath(session, location);
-
-  useEffect(() => {
-    if (fallbackPath) navigate(fallbackPath);
-  }, [fallbackPath, navigate]);
-
-  if (fallbackPath) return null;
-  return <div class="p-4 text-muted fst-italic">Section not found.</div>;
-}
-
-function PortalRouteRedirect({ to }: { to: string }) {
-  const [, navigate] = useHashLocation();
-  useEffect(() => navigate(to), [navigate, to]);
-  return null;
-}
-
 export function PortalShell() {
   const session = portalSession.value;
   const hasGroupsAccess = portalSectionEnabled(session, "groups");
@@ -112,6 +82,11 @@ export function PortalShell() {
   const hasMemberCapacity = portalSectionEnabled(session, "profile");
   const hasOrganizationsAccess = portalSectionEnabled(session, "organizations");
   const hasOrganizationsDirectory = portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]);
+  // Creating an organization activates its initial identities at once, so it
+  // takes both permissions. Named once, because the directory route and the
+  // create route have to agree on who may reach the create page.
+  const canCreateOrganizations =
+    portalHasGlobalPermission(session, "membership:write") && portalHasGlobalPermission(session, "identities:activate");
   const hasMembershipQueue = portalSectionEnabled(session, "membership");
   const hasUsersDirectory = portalSectionEnabled(session, "users");
   const hasDonationsAccess = portalSectionEnabled(session, "donations");
@@ -126,7 +101,8 @@ export function PortalShell() {
     session?.identity.email ||
     "";
   return (
-    <Router hook={useHashLocation}>
+    <Router hook={usePortalHashLocation}>
+      <ScrollResetOnNavigate />
       <PortalNavigationShell
         session={session}
         displayName={displayName}
@@ -174,7 +150,7 @@ export function PortalShell() {
               <Route
                 path="/sponsors/:sponsorId"
                 component={({ params }: { params: { sponsorId: string } }) => (
-                  <SectionWrapper title="Sponsors">
+                  <SectionWrapper>
                     <SponsorWorkspace
                       sponsors={session?.sponsors ?? []}
                       canRead={portalHasGlobalPermission(session, "sponsorships:read")}
@@ -190,7 +166,7 @@ export function PortalShell() {
               <Route
                 path="/sponsors"
                 component={() => (
-                  <SectionWrapper title="Sponsors">
+                  <SectionWrapper>
                     <SponsorWorkspace
                       sponsors={session?.sponsors ?? []}
                       canRead={portalHasGlobalPermission(session, "sponsorships:read")}
@@ -205,7 +181,7 @@ export function PortalShell() {
               <Route
                 path="/forms/:formKey"
                 component={({ params }: { params: { formKey: string } }) => (
-                  <SectionWrapper title="Forms">
+                  <SectionWrapper>
                     <Forms formKey={params.formKey} canWrite={portalHasGlobalPermission(session, "forms:write")} />
                   </SectionWrapper>
                 )}
@@ -215,25 +191,32 @@ export function PortalShell() {
               <Route
                 path="/forms"
                 component={() => (
-                  <SectionWrapper title="Forms">
+                  <SectionWrapper>
                     <Forms canWrite={portalHasGlobalPermission(session, "forms:write")} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {hasGroupsAccess && (
+            {hasOrganizationsAccess && (
+              // Creation has its own address, so it survives a reload and Back
+              // closes it. Must stay above `/organizations/:organizationId`:
+              // wouter's <Switch> renders the first match, and the detail route
+              // would otherwise open a record whose id is the word "new".
               <Route
-                path="/groups/:groupId/events/:eventId/:eventTab?"
-                component={({ params }: { params: { groupId: string; eventId: string; eventTab?: string } }) => (
-                  <SectionWrapper>
-                    <GroupWorkspace
-                      groupId={params.groupId}
-                      view="events"
-                      resourceId={params.eventId}
-                      resourceTab={params.eventTab}
-                    />
-                  </SectionWrapper>
-                )}
+                path="/organizations/new"
+                component={() =>
+                  hasOrganizationsDirectory && canCreateOrganizations ? (
+                    <SectionWrapper title="Organizations">
+                      <Organizations
+                        canRead={portalHasGlobalPermission(session, "organizations:read")}
+                        canCreate
+                        organizationSegment="new"
+                      />
+                    </SectionWrapper>
+                  ) : (
+                    <PortalRouteRedirect to="/organizations" />
+                  )
+                }
               />
             )}
             {hasOrganizationsAccess && (
@@ -241,12 +224,16 @@ export function PortalShell() {
                 path="/organizations/:organizationId"
                 component={({ params }: { params: { organizationId: string } }) =>
                   hasOrganizationsDirectory ? (
-                    <SectionWrapper title="Organizations">
+                    // No section title here: the record's PageHeader already
+                    // carries the "Organizations" trail and the record's name,
+                    // and the anatomy allows each name exactly once.
+                    <SectionWrapper>
                       <OrganizationDetail
                         organizationId={params.organizationId}
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
                         canWrite={portalHasGlobalPermission(session, "organizations:write")}
-                        canManageRepresentatives={portalHasGlobalPermission(session, "membership:write")}
+                        canManageIdentities={portalHasGlobalPermission(session, "membership:write")}
+                        canReadSponsorships={portalHasGlobalPermission(session, "sponsorships:read")}
                       />
                     </SectionWrapper>
                   ) : (
@@ -265,7 +252,7 @@ export function PortalShell() {
                     <SectionWrapper title="Organizations">
                       <Organizations
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
-                        canCreate={portalHasGlobalPermission(session, "membership:write")}
+                        canCreate={canCreateOrganizations}
                       />
                     </SectionWrapper>
                   ) : (
@@ -280,7 +267,7 @@ export function PortalShell() {
               <Route
                 path="/membership/applications/:applicationId?"
                 component={({ params }: { params: { applicationId?: string } }) => (
-                  <SectionWrapper title="Membership">
+                  <SectionWrapper>
                     <MembershipApplications
                       initialApplicationId={params.applicationId}
                       canWrite={portalHasGlobalPermission(session, "membership:write")}
@@ -294,7 +281,7 @@ export function PortalShell() {
               <Route
                 path="/users/:userId?"
                 component={({ params }: { params: { userId?: string } }) => (
-                  <SectionWrapper title="Users">
+                  <SectionWrapper>
                     <Users
                       userId={params.userId}
                       permissions={{
@@ -303,6 +290,7 @@ export function PortalShell() {
                         canGrantAccess: portalHasGlobalPermission(session, "access:grant"),
                         canAnonymize: portalHasGlobalPermission(session, "users:anonymize"),
                         canManageMembership: portalHasGlobalPermission(session, "membership:write"),
+                        canActivateIdentity: portalHasGlobalPermission(session, "identities:activate"),
                       }}
                     />
                   </SectionWrapper>
@@ -313,7 +301,7 @@ export function PortalShell() {
               <Route
                 path="/donations/detail/:donationId"
                 component={({ params }: { params: { donationId: string } }) => (
-                  <SectionWrapper title="Donation">
+                  <SectionWrapper>
                     <DonationDetailPage
                       donationId={params.donationId}
                       canRead={portalHasGlobalPermission(session, "donations:read")}
@@ -327,7 +315,7 @@ export function PortalShell() {
               <Route
                 path="/donations/:subTab?"
                 component={({ params }: { params: { subTab?: string } }) => (
-                  <SectionWrapper title="Donations">
+                  <SectionWrapper>
                     <Donations
                       subTab={params.subTab}
                       canRead={portalHasGlobalPermission(session, "donations:read")}
@@ -404,7 +392,7 @@ export function PortalShell() {
               <Route
                 path="/system/access-control/roles/:roleId"
                 component={({ params }: { params: { roleId: string } }) => (
-                  <SectionWrapper title="Settings">
+                  <SectionWrapper>
                     <SystemManagement session={session} view="access-control" resourceId={`roles/${params.roleId}`} />
                   </SectionWrapper>
                 )}
@@ -414,7 +402,7 @@ export function PortalShell() {
               <Route
                 path="/system/:view/:resourceId"
                 component={({ params }: { params: { view: string; resourceId: string } }) => (
-                  <SectionWrapper title="Settings">
+                  <SectionWrapper>
                     <SystemManagement session={session} view={params.view} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
@@ -424,7 +412,7 @@ export function PortalShell() {
               <Route
                 path="/system/:view?"
                 component={({ params }: { params: { view?: string } }) => (
-                  <SectionWrapper title="Settings">
+                  <SectionWrapper>
                     <SystemManagement session={session} view={params.view} />
                   </SectionWrapper>
                 )}
@@ -434,8 +422,21 @@ export function PortalShell() {
               <Route
                 path="/home"
                 component={() => (
-                  <SectionWrapper title="Home">
+                  <SectionWrapper>
                     <Home />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasGroupsAccess && (
+              // Same reservation as the organizations create route: this must
+              // stay above `/groups/:groupId/*?`, which would otherwise load a
+              // group workspace for the id "new".
+              <Route
+                path="/groups/new"
+                component={() => (
+                  <SectionWrapper>
+                    <Groups groupSegment="new" />
                   </SectionWrapper>
                 )}
               />
@@ -444,30 +445,35 @@ export function PortalShell() {
               <Route
                 path="/groups"
                 component={() => (
-                  <SectionWrapper title="Groups">
+                  <SectionWrapper>
                     <Groups />
                   </SectionWrapper>
                 )}
               />
             )}
             {hasGroupsAccess && (
+              // One route for the whole group surface: every view, resource,
+              // and event sub-tab under a group renders the SAME mounted
+              // GroupWorkspace, so moving between views, resources, and
+              // groups only changes props — no unmount/remount blank flash,
+              // no redundant refetch of the group context.
               <Route
-                path="/groups/:groupId/:view/:resourceId"
-                component={({ params }: { params: { groupId: string; view: string; resourceId: string } }) => (
-                  <SectionWrapper>
-                    <GroupWorkspace groupId={params.groupId} view={params.view} resourceId={params.resourceId} />
-                  </SectionWrapper>
-                )}
-              />
-            )}
-            {hasGroupsAccess && (
-              <Route
-                path="/groups/:groupId/:view?"
-                component={({ params }: { params: { groupId: string; view?: string } }) => (
-                  <SectionWrapper>
-                    <GroupWorkspace groupId={params.groupId} view={params.view} />
-                  </SectionWrapper>
-                )}
+                path="/groups/:groupId/*?"
+                component={({ params }: { params: { groupId: string; "*"?: string } }) => {
+                  const segments = (params["*"] ?? "").split("/").filter(Boolean).map(decodeURIComponent);
+                  const [view, resourceId, resourceTab, resourceDetailId] = segments;
+                  return (
+                    <SectionWrapper>
+                      <GroupWorkspace
+                        groupId={params.groupId}
+                        view={view}
+                        resourceId={resourceId}
+                        resourceTab={resourceTab}
+                        resourceDetailId={resourceDetailId}
+                      />
+                    </SectionWrapper>
+                  );
+                }}
               />
             )}
             {hasGroupsAccess && (
@@ -485,7 +491,7 @@ export function PortalShell() {
               <Route
                 path="/profile"
                 component={() => (
-                  <SectionWrapper title="My Profile">
+                  <SectionWrapper>
                     <MyProfile />
                   </SectionWrapper>
                 )}
@@ -514,7 +520,7 @@ export function PortalShell() {
               <Route
                 path="/application"
                 component={() => (
-                  <SectionWrapper title="My Application">
+                  <SectionWrapper>
                     <MyApplications />
                   </SectionWrapper>
                 )}
@@ -524,7 +530,7 @@ export function PortalShell() {
               <Route
                 path="/participation"
                 component={() => (
-                  <SectionWrapper title="My participation">
+                  <SectionWrapper>
                     <Participation />
                   </SectionWrapper>
                 )}
@@ -534,7 +540,7 @@ export function PortalShell() {
               <Route
                 path="/account"
                 component={() => (
-                  <SectionWrapper title="Account Settings">
+                  <SectionWrapper>
                     <AccountSettings />
                   </SectionWrapper>
                 )}

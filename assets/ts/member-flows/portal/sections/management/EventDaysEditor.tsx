@@ -7,9 +7,16 @@ import {
   type GroupEvent,
 } from "../../../../../shared/schemas/group-events";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { FormActions } from "../../../../components/FormActions";
+import { Spinner } from "../../../../components/Spinner";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { TextInput } from "../../../../ui/TextControl";
 import { useData } from "../../../../hooks/useData";
 import { getJson, putJson } from "../../../../shared/api-client";
+import "../../../../ui/Content.css";
 
 type DaysResponse = z.infer<typeof groupEventDaysResponseSchema>;
 
@@ -27,69 +34,66 @@ function path(groupId: string, eventId: string): string {
   return `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/days`;
 }
 
+/**
+ * One attendance option.
+ *
+ * The remove control carries its ordinal rather than the word "Remove" alone:
+ * a day can hold twenty of these, and twenty identically named buttons are
+ * indistinguishable to anyone reading the form control by control.
+ */
 function AttendanceOptionRow({
-  idPrefix,
+  ordinal,
   option,
   onChange,
   onRemove,
 }: {
-  idPrefix: string;
+  ordinal: number;
   option: EventAttendanceOption;
   onChange: (option: EventAttendanceOption) => void;
   onRemove: () => void;
 }) {
   return (
-    <div class="row g-2 align-items-end mb-2">
-      <div class="col-md-4">
-        <label class="form-label small mb-1" for={`${idPrefix}-value`}>
-          Value
-        </label>
-        <input
-          id={`${idPrefix}-value`}
-          class="form-control form-control-sm"
-          autocomplete="off"
-          value={option.value}
-          onInput={(event) => onChange({ ...option, value: event.currentTarget.value })}
-          placeholder="in_person"
-          required
-        />
+    <div class="pk-stack pk-stack--tight">
+      <div class="pk-grid pk-grid--tight">
+        <Field label="Value" required help="Lowercase key stored with the registration, such as in_person.">
+          {(control) => (
+            <TextInput
+              {...control}
+              class="pk-mono"
+              autocomplete="off"
+              value={option.value}
+              onInput={(event) => onChange({ ...option, value: event.currentTarget.value })}
+              placeholder="in_person"
+            />
+          )}
+        </Field>
+        <Field label="Label" required help="What an attendee sees when choosing this option.">
+          {(control) => (
+            <TextInput
+              {...control}
+              autocomplete="off"
+              value={option.label}
+              onInput={(event) => onChange({ ...option, label: event.currentTarget.value })}
+            />
+          )}
+        </Field>
+        <Field label="Capacity" help="Leave empty for unlimited places.">
+          {(control) => (
+            <TextInput
+              {...control}
+              type="number"
+              min="1"
+              value={option.capacity ?? ""}
+              onInput={(event) => onChange({ ...option, capacity: event.currentTarget.valueAsNumber || null })}
+              placeholder="Unlimited"
+            />
+          )}
+        </Field>
       </div>
-      <div class="col-md-4">
-        <label class="form-label small mb-1" for={`${idPrefix}-label`}>
-          Label
-        </label>
-        <input
-          id={`${idPrefix}-label`}
-          class="form-control form-control-sm"
-          autocomplete="off"
-          value={option.label}
-          onInput={(event) => onChange({ ...option, label: event.currentTarget.value })}
-          required
-        />
-      </div>
-      <div class="col-md-3">
-        <label class="form-label small mb-1" for={`${idPrefix}-capacity`}>
-          Capacity
-        </label>
-        <input
-          id={`${idPrefix}-capacity`}
-          class="form-control form-control-sm"
-          type="number"
-          min="1"
-          value={option.capacity ?? ""}
-          onInput={(event) => onChange({ ...option, capacity: event.currentTarget.valueAsNumber || null })}
-          placeholder="Unlimited"
-        />
-      </div>
-      <div class="col-md-1">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-danger"
-          onClick={onRemove}
-          aria-label="Remove attendance option"
-        >
-          Remove
-        </button>
+      <div class="pk-cluster">
+        <Button size="sm" variant="danger-quiet" onClick={onRemove}>
+          Remove attendance option {ordinal}
+        </Button>
       </div>
     </div>
   );
@@ -178,156 +182,155 @@ function DaysForm({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)}>
+    <form class="pk pk-stack" onSubmit={(event) => void submit(event)}>
       <ErrorAlert error={error} />
-      {days.map((day, dayIndex) => (
-        <div key={day.id ?? dayIndex} class="card border mb-3">
-          <div class="card-body">
-            <div class="row g-2 mb-2">
-              <div class="col-md-3">
-                <label class="form-label small mb-1" for={`${event.id}-day-${dayIndex}-date`}>
-                  Date
-                </label>
-                <input
-                  id={`${event.id}-day-${dayIndex}-date`}
-                  class="form-control form-control-sm"
-                  type="date"
-                  value={day.date}
-                  onInput={(event) => updateDay(dayIndex, { date: event.currentTarget.value })}
-                  required
-                />
+      {/* One disabled fieldset takes the whole form out of play while the save
+          is in flight, rather than each control deciding for itself. */}
+      <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+        {days.map((day, dayIndex) => (
+          <Panel key={day.id ?? dayIndex}>
+            <PanelHeader title={`Day ${String(dayIndex + 1)}`}>
+              <Button
+                size="sm"
+                variant="danger-quiet"
+                onClick={() => setDays((current) => current.filter((_, index) => index !== dayIndex))}
+              >
+                Remove day {dayIndex + 1}
+              </Button>
+            </PanelHeader>
+            <PanelBody class="pk-stack">
+              <div class="pk-grid pk-grid--tight">
+                <Field label="Date" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="date"
+                      value={day.date}
+                      onInput={(event) => updateDay(dayIndex, { date: event.currentTarget.value })}
+                    />
+                  )}
+                </Field>
+                <Field label="Starts at" help={`Local time in ${event.timezone}.`}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="time"
+                      step={60}
+                      value={day.startTime}
+                      onInput={(event) => updateDay(dayIndex, { startTime: event.currentTarget.value })}
+                    />
+                  )}
+                </Field>
+                <Field label="Ends at" help={`Local time in ${event.timezone}.`}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="time"
+                      step={60}
+                      value={day.endTime}
+                      onInput={(event) => updateDay(dayIndex, { endTime: event.currentTarget.value })}
+                    />
+                  )}
+                </Field>
+                <Field label="Sort order" help="Lower numbers are listed first.">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="number"
+                      min="0"
+                      value={day.sortOrder}
+                      onInput={(event) => updateDay(dayIndex, { sortOrder: event.currentTarget.valueAsNumber || 0 })}
+                    />
+                  )}
+                </Field>
               </div>
-              <div class="col-md-3">
-                <label class="form-label small mb-1" for={`${event.id}-day-${dayIndex}-starts-at`}>
-                  Starts at
-                </label>
-                <input
-                  id={`${event.id}-day-${dayIndex}-starts-at`}
-                  class="form-control form-control-sm"
-                  type="time"
-                  step={60}
-                  value={day.startTime}
-                  onInput={(event) => updateDay(dayIndex, { startTime: event.currentTarget.value })}
+
+              <Field label="Label" help="Shown instead of the date, such as “Workshop day”.">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    autocomplete="off"
+                    value={day.label}
+                    onInput={(event) => updateDay(dayIndex, { label: event.currentTarget.value })}
+                  />
+                )}
+              </Field>
+
+              <h4>Attendance options</h4>
+              {day.attendanceOptions.map((option, optionIndex) => (
+                <AttendanceOptionRow
+                  key={`${option.value}-${optionIndex}`}
+                  ordinal={optionIndex + 1}
+                  option={option}
+                  onChange={(next) =>
+                    updateDay(dayIndex, {
+                      attendanceOptions: day.attendanceOptions.map((current, index) =>
+                        index === optionIndex ? next : current,
+                      ),
+                    })
+                  }
+                  onRemove={() =>
+                    updateDay(dayIndex, {
+                      attendanceOptions: day.attendanceOptions.filter((_, index) => index !== optionIndex),
+                    })
+                  }
                 />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small mb-1" for={`${event.id}-day-${dayIndex}-ends-at`}>
-                  Ends at
-                </label>
-                <input
-                  id={`${event.id}-day-${dayIndex}-ends-at`}
-                  class="form-control form-control-sm"
-                  type="time"
-                  step={60}
-                  value={day.endTime}
-                  onInput={(event) => updateDay(dayIndex, { endTime: event.currentTarget.value })}
-                />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small mb-1" for={`${event.id}-day-${dayIndex}-sort-order`}>
-                  Sort order
-                </label>
-                <input
-                  id={`${event.id}-day-${dayIndex}-sort-order`}
-                  class="form-control form-control-sm"
-                  type="number"
-                  min="0"
-                  value={day.sortOrder}
-                  onInput={(event) => updateDay(dayIndex, { sortOrder: event.currentTarget.valueAsNumber || 0 })}
-                />
-              </div>
-            </div>
-            <div class="row g-2 mb-2">
-              <div class="col-md-10">
-                <label class="form-label small mb-1" for={`${event.id}-day-${dayIndex}-label`}>
-                  Label
-                </label>
-                <input
-                  id={`${event.id}-day-${dayIndex}-label`}
-                  class="form-control form-control-sm"
-                  autocomplete="off"
-                  value={day.label}
-                  onInput={(event) => updateDay(dayIndex, { label: event.currentTarget.value })}
-                />
-              </div>
-              <div class="col-md-2 d-flex align-items-end">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger w-100"
-                  onClick={() => setDays((current) => current.filter((_, index) => index !== dayIndex))}
+              ))}
+              <div class="pk-cluster">
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    updateDay(dayIndex, {
+                      attendanceOptions: [...day.attendanceOptions, { value: "", label: "", capacity: null }],
+                    })
+                  }
                 >
-                  Remove day
-                </button>
+                  Add attendance option
+                </Button>
               </div>
-            </div>
-            <h6 class="small fw-semibold">Attendance options</h6>
-            {day.attendanceOptions.map((option, optionIndex) => (
-              <AttendanceOptionRow
-                key={`${option.value}-${optionIndex}`}
-                idPrefix={`${event.id}-day-${dayIndex}-option-${optionIndex}`}
-                option={option}
-                onChange={(next) =>
-                  updateDay(dayIndex, {
-                    attendanceOptions: day.attendanceOptions.map((current, index) =>
-                      index === optionIndex ? next : current,
-                    ),
-                  })
-                }
-                onRemove={() =>
-                  updateDay(dayIndex, {
-                    attendanceOptions: day.attendanceOptions.filter((_, index) => index !== optionIndex),
-                  })
-                }
-              />
-            ))}
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
-              onClick={() =>
-                updateDay(dayIndex, {
-                  attendanceOptions: [...day.attendanceOptions, { value: "", label: "", capacity: null }],
-                })
-              }
-            >
-              Add attendance option
-            </button>
-          </div>
+            </PanelBody>
+          </Panel>
+        ))}
+
+        {days.length === 0 && (
+          <EmptyState
+            title="No attendance days configured"
+            body="Registration will use one event-level attendance choice."
+          />
+        )}
+
+        <div class="pk-cluster">
+          <Button
+            size="sm"
+            onClick={() =>
+              setDays((current) => [
+                ...current,
+                {
+                  date: "",
+                  label: "",
+                  startTime: "",
+                  endTime: "",
+                  sortOrder: (current.length + 1) * 10,
+                  attendanceOptions: [],
+                },
+              ])
+            }
+          >
+            Add day
+          </Button>
         </div>
-      ))}
-      {days.length === 0 && (
-        <p class="small text-muted">
-          No attendance days configured. Registration will use one event-level attendance choice.
-        </p>
-      )}
-      <div class="d-flex flex-wrap gap-2 mb-3">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          onClick={() =>
-            setDays((current) => [
-              ...current,
-              {
-                date: "",
-                label: "",
-                startTime: "",
-                endTime: "",
-                sortOrder: (current.length + 1) * 10,
-                attendanceOptions: [],
-              },
-            ])
-          }
-        >
-          Add day
-        </button>
-      </div>
-      <FormActions
-        submitLabel="Save days"
-        busyLabel="Saving days…"
-        busy={saving}
-        onCancel={() => void reload()}
-        status={status}
-        submitVariant="primary"
-      />
+
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" size="sm" loading={saving}>
+            {saving ? "Saving days…" : "Save days"}
+          </Button>
+          <Button size="sm" onClick={() => void reload()}>
+            Cancel
+          </Button>
+        </div>
+      </fieldset>
+
+      {status && <Alert tone="ok">{status}</Alert>}
     </form>
   );
 }
@@ -344,7 +347,7 @@ export function EventDaysEditor({
   onRevision: (updatedAt: string) => void;
 }) {
   const resource = useData(() => getJson(path(groupId, event.id), groupEventDaysResponseSchema), [groupId, event.id]);
-  if (resource.loading) return <p class="small text-muted">Loading attendance days…</p>;
+  if (resource.loading) return <Spinner label="Loading attendance days…" />;
   if (resource.error) return <ErrorAlert error={resource.error} />;
   if (!resource.data) return <></>;
   return (

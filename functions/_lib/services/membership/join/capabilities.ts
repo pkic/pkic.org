@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { memberJoinApplicantKindSchema } from "../../../../../assets/shared/schemas/member-join";
 import { normalizedEmailSchema } from "../../../../../assets/shared/schemas/api-common";
+import { databaseIdSchema } from "../../../../../assets/shared/schemas/identifiers";
 import {
   queuedCapabilityToken,
   signStatelessCapabilityToken,
@@ -16,6 +17,11 @@ const memberJoinCapabilityPayloadSchema = z.object({
   capabilityId: z.string().min(16).max(64),
 });
 export type MemberJoinCapabilityPayload = z.infer<typeof memberJoinCapabilityPayloadSchema>;
+
+const memberJoinApplicationCapabilityPayloadSchema = memberJoinCapabilityPayloadSchema.extend({
+  applicantUserId: databaseIdSchema.nullable(),
+});
+export type MemberJoinApplicationCapabilityPayload = z.infer<typeof memberJoinApplicationCapabilityPayloadSchema>;
 
 export function newMemberJoinCapabilityPayload(
   email: string,
@@ -63,7 +69,7 @@ export async function verifyMemberJoinVerificationToken(
 
 export function issueMemberJoinApplicationToken(
   signingSecret: string,
-  payload: MemberJoinCapabilityPayload,
+  payload: MemberJoinApplicationCapabilityPayload,
   ttlSeconds: number,
 ): Promise<string> {
   return signStatelessCapabilityToken({
@@ -77,7 +83,7 @@ export function issueMemberJoinApplicationToken(
 export async function verifyMemberJoinApplicationToken(
   signingSecret: string,
   token: string,
-): Promise<MemberJoinCapabilityPayload> {
+): Promise<MemberJoinApplicationCapabilityPayload> {
   const verified = await verifyStatelessCapabilityToken({
     signingSecret,
     purpose: "member_join_apply",
@@ -92,7 +98,7 @@ export async function verifyMemberJoinApplicationToken(
         : "Invalid membership application capability",
     );
   }
-  const payload = decodeCapabilityPayload(verified.resourceId, memberJoinCapabilityPayloadSchema);
+  const payload = decodeCapabilityPayload(verified.resourceId, memberJoinApplicationCapabilityPayloadSchema);
   if (!payload) throw new AppError(401, "MEMBER_JOIN_CAPABILITY_INVALID", "Invalid membership application capability");
   return payload;
 }

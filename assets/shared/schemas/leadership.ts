@@ -22,7 +22,7 @@ export const leadershipPositionCreateSchema = z
   .object({
     body: leadershipBodySchema,
     userId: databaseIdSchema,
-    memberId: databaseIdSchema.nullable().optional(),
+    identityId: databaseIdSchema.nullable().optional(),
     title: trimmedString(1, 80),
     startsAt: z.iso.date(),
     endsAt: z.iso.date().nullable().optional(),
@@ -35,7 +35,7 @@ export const leadershipPositionCreateSchema = z
 
 export const leadershipPositionUpdateSchema = z
   .object({
-    memberId: databaseIdSchema.nullable().optional(),
+    identityId: databaseIdSchema.nullable().optional(),
     title: trimmedString(1, 80).optional(),
     startsAt: z.iso.date().optional(),
     endsAt: z.iso.date().nullable().optional(),
@@ -46,7 +46,7 @@ export const leadershipPositionResponseSchema = z.object({
   id: z.string(),
   body: leadershipBodySchema,
   userId: z.string(),
-  memberId: z.string().nullable(),
+  identityId: z.string().nullable(),
   organizationName: z.string().nullable(),
   name: z.string(),
   email: z.string(),
@@ -59,6 +59,7 @@ export const leadershipPositionResponseSchema = z.object({
 export type LeadershipPosition = z.infer<typeof leadershipPositionResponseSchema>;
 
 export const leadershipAffiliationSchema = z.object({
+  identityId: databaseIdSchema,
   memberId: databaseIdSchema,
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),

@@ -146,6 +146,52 @@ describe("group vote statistics", () => {
     expect(electionContainer.textContent).toContain("4");
   });
 
+  it("names the statistics region and the candidate table it contains", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          statistics({
+            aggregate: {
+              availability: "available",
+              kind: "election",
+              candidates: [{ candidateId: "c0000000-0000-4000-8000-000000000001", candidateName: "Ada", count: 4 }],
+            },
+          }),
+        ),
+      ),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    await act(() => render(<GroupVoteStatistics groupId={GROUP_ID} voteId={VOTE_ID} />, container));
+    await settle();
+
+    // A section with no name is announced as nothing at all, and a table with
+    // no caption is announced as "table" beside every other table on the page.
+    const region = container.querySelector("section[aria-label='Vote statistics']");
+    expect(region).not.toBeNull();
+    expect(region?.querySelector("h3")?.textContent).toBe("Vote statistics");
+    expect(container.querySelector("table caption")?.textContent).toBe("Election candidates");
+  });
+
+  it("states a refused statistics read rather than rendering an empty panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({}, { status: 403 })),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+
+    await act(() => render(<GroupVoteStatistics groupId={GROUP_ID} voteId={VOTE_ID} />, container));
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(alert?.textContent).not.toContain("HTTP 403");
+    expect(container.querySelector("section[aria-label='Vote statistics']")).toBeNull();
+  });
+
   it("does not request statistics until a manager explicitly expands the control", async () => {
     const requests: string[] = [];
     vi.stubGlobal(

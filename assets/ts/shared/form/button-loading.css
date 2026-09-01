@@ -1,0 +1,16 @@
+/*
+ * The spinner inside a submitting button.
+ *
+ * Spinner draws a standalone indicator that centres itself in a block; inside
+ * a button it needs to sit inline beside the label and take its colour from
+ * the button rather than from the page.
+ */
+
+@layer components {
+  .pk-button-spinner {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-inline-end: var(--pk-2);
+    color: currentColor;
+  }
+}

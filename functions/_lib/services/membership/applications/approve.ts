@@ -157,8 +157,9 @@ export async function approveApplication(
     organizationDomain: isIndividual ? null : application.organization_domain,
     domainClaimApplicationId: isIndividual ? null : application.id,
     membershipCategory: application.membership_category,
-    representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
-    representationSource: "staff",
+    identities: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, links }],
+    identitySource: "membership_approval",
+    activateIdentities: true,
     workingGroupSlugs: requestedWorkingGroupSlugs,
     allowManagedGroupEnrollment: false,
     ineligibleGroupPolicy: "omit",
@@ -167,8 +168,8 @@ export async function approveApplication(
   // Pure/synchronous — safe to call before the batch below commits, since
   // every id and decision it reports was already resolved by a pre-batch
   // read while building `provisioning.statements`.
-  const { organizationId, organizationWasCreated, representatives, groups } = provisioning.buildResult();
-  const member = representatives[0];
+  const { organizationId, organizationWasCreated, identities, groups } = provisioning.buildResult();
+  const member = identities[0];
   const workingGroupSlugs = groups.map((group) => group.slug);
   const workingGroupNames = groups.map((group) => group.name);
 
@@ -191,7 +192,8 @@ export async function approveApplication(
     db
       .prepare(
         `UPDATE member_applications
-         SET stage = 'approved', stage_entered_at = ?, transition_revision = transition_revision + 1,
+         SET stage = 'approved', applicant_user_id = ?, member_id = ?, stage_entered_at = ?,
+             transition_revision = transition_revision + 1,
              on_hold_reminder_sent_at = NULL, updated_at = ?
          WHERE id = ? AND stage = ? AND transition_revision = ?
            AND (? = 0 OR NOT EXISTS (
@@ -199,7 +201,16 @@ export async function approveApplication(
              WHERE application_id = member_applications.id AND decision = 'decline'
            ))`,
       )
-      .bind(now, now, application.id, fromStage, application.transition_revision, requireNoEcDecline ? 1 : 0),
+      .bind(
+        member.userId,
+        member.membershipId,
+        now,
+        now,
+        application.id,
+        fromStage,
+        application.transition_revision,
+        requireNoEcDecline ? 1 : 0,
+      ),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)

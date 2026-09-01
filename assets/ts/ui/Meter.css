@@ -1,0 +1,128 @@
+/*
+ * Meter.
+ *
+ * A bounded progress or level indicator. The fill width is expressed as
+ * a data-fill attribute with values in 5% increments (0, 5, 10, ..., 100),
+ * avoiding inline styles while staying accurate for a progress bar.
+ *
+ * Each tone resolves through a modifier class that sets the tone local
+ * variable, which the track and fill use for their colors.
+ */
+
+@layer components {
+  .pk-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .pk-meter__track {
+    position: relative;
+    width: 100%;
+    height: 0.5rem;
+    background: var(--tone-track);
+    border-radius: var(--pk-radius-pill);
+    overflow: hidden;
+  }
+
+  .pk-meter__fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--tone);
+    border-radius: var(--pk-radius-pill);
+    transition: width var(--pk-dur);
+  }
+
+  /* Width rules for data-fill in 5% increments */
+  .pk-meter__fill[data-fill="0"] {
+    width: 0%;
+  }
+  .pk-meter__fill[data-fill="5"] {
+    width: 5%;
+  }
+  .pk-meter__fill[data-fill="10"] {
+    width: 10%;
+  }
+  .pk-meter__fill[data-fill="15"] {
+    width: 15%;
+  }
+  .pk-meter__fill[data-fill="20"] {
+    width: 20%;
+  }
+  .pk-meter__fill[data-fill="25"] {
+    width: 25%;
+  }
+  .pk-meter__fill[data-fill="30"] {
+    width: 30%;
+  }
+  .pk-meter__fill[data-fill="35"] {
+    width: 35%;
+  }
+  .pk-meter__fill[data-fill="40"] {
+    width: 40%;
+  }
+  .pk-meter__fill[data-fill="45"] {
+    width: 45%;
+  }
+  .pk-meter__fill[data-fill="50"] {
+    width: 50%;
+  }
+  .pk-meter__fill[data-fill="55"] {
+    width: 55%;
+  }
+  .pk-meter__fill[data-fill="60"] {
+    width: 60%;
+  }
+  .pk-meter__fill[data-fill="65"] {
+    width: 65%;
+  }
+  .pk-meter__fill[data-fill="70"] {
+    width: 70%;
+  }
+  .pk-meter__fill[data-fill="75"] {
+    width: 75%;
+  }
+  .pk-meter__fill[data-fill="80"] {
+    width: 80%;
+  }
+  .pk-meter__fill[data-fill="85"] {
+    width: 85%;
+  }
+  .pk-meter__fill[data-fill="90"] {
+    width: 90%;
+  }
+  .pk-meter__fill[data-fill="95"] {
+    width: 95%;
+  }
+  .pk-meter__fill[data-fill="100"] {
+    width: 100%;
+  }
+
+  .pk-meter__value {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  /* Tone modifiers */
+  .pk-meter--accent {
+    --tone: var(--pk-accent);
+    --tone-track: var(--pk-accent-soft);
+  }
+
+  .pk-meter--ok {
+    --tone: var(--pk-ok);
+    --tone-track: var(--pk-ok-soft);
+  }
+
+  .pk-meter--warn {
+    --tone: var(--pk-warn);
+    --tone-track: var(--pk-warn-soft);
+  }
+
+  .pk-meter--danger {
+    --tone: var(--pk-danger);
+    --tone-track: var(--pk-danger-soft);
+  }
+}

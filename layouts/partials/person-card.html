@@ -98,9 +98,14 @@
 {{- end -}}
 
 {{/* ── Avatar sizes ─────────────────────────────────────────────────────── */}}
+{{/* $avatarPx drives Hugo's image processing only. The rendered size is a
+     modifier class on the frame — `--avatar-px` used to be set with a `style`
+     attribute, which the repository forbids and the CSP blocks; the three
+     supported sizes are named in assets/scss/_leadership-cards.scss instead. */}}
 {{- $avatarPx := 80 -}}
-{{- if eq $size "sm" -}}{{- $avatarPx = 72 -}}{{- end -}}
-{{- if eq $size "lg" -}}{{- $avatarPx = 96 -}}{{- end -}}
+{{- $frameSize := "" -}}
+{{- if eq $size "sm" -}}{{- $avatarPx = 72 -}}{{- $frameSize = " person-card-avatar-frame--small" -}}{{- end -}}
+{{- if eq $size "lg" -}}{{- $avatarPx = 96 -}}{{- $frameSize = " person-card-avatar-frame--large" -}}{{- end -}}
 {{- if eq $size "compact" -}}{{- $avatarPx = 48 -}}{{- end -}}
 
 {{/* ── Render: Compact mode (sidebar / narrow context) ────────────────── */}}
@@ -191,8 +196,7 @@
 
   <div class="person-card-main">
   {{/* Avatar with role-arc ring */}}
-  <div class="person-card-avatar-frame{{ if $till }} person-card-avatar-frame--past{{ end }}"
-       style="--avatar-px: {{ $avatarPx }}px">
+  <div class="person-card-avatar-frame{{ if $till }} person-card-avatar-frame--past{{ end }}{{ $frameSize }}">
     {{- if $headshot -}}
       {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
       <img class="person-card-avatar" src="{{ $h.RelPermalink }}" alt="{{ $name }}" loading="lazy">

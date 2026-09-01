@@ -255,7 +255,7 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     path: "/account",
     label: "Account Settings",
     sidebar: false,
-    access: (session) => Boolean(session?.member || session?.staff),
+    access: (session) => Boolean(session?.member || session?.staff || session?.pendingIdentityCount),
   },
 ];
 
@@ -296,6 +296,7 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
 export function portalDefaultPath(session: PortalSession | null): string {
   if (session?.member || session?.staff) return "/home";
   if (session?.sponsors.length) return "/sponsors";
+  if (session?.pendingIdentityCount) return "/account";
   return "/";
 }
 

@@ -1,0 +1,70 @@
+/*
+ * The table skin, shared by the two things that draw a table.
+ *
+ * `DataTable` draws the portal's lists. The Markdown table render hook
+ * (`layouts/_default/_markup/render-table.html`) draws every table an author
+ * writes in a content file. Both write `pk-table`, and this file is what makes
+ * them one table rather than two stylesheets kept in agreement by hand.
+ *
+ * It ships in the entry stylesheet (see `design-system.ts`) because a content
+ * table is server-rendered and linked from the head: it cannot wait for a lazy
+ * chunk without flashing an unstyled table at every reader. The entry is a few
+ * hundred bytes from its ceiling, so what is here is only what a table in
+ * prose needs. The data table's own density and behavior — its type scale,
+ * hover, sorting, selection, checkboxes, skeletons, row activation — stay in
+ * `DataTable.css` and ride that component's chunk.
+ *
+ * WHAT IS DELIBERATELY ABSENT: a ground and an ink on the body rows.
+ *
+ * The tokens flip with the reader's theme; a page's ground and the link colour
+ * inside its cells may not. Painting a row `--pk-surface-sunk` while its text
+ * came from somewhere else is exactly how this table used to render dark grey
+ * on near-black, one row in two, for anyone whose system was set to dark. A
+ * table sits on the page it is written into and inherits both halves from it,
+ * which is the same rule `base.css` states for `.pk`: a surface that does not
+ * own the ground does not paint one. The header is the single band that does
+ * paint, and it names both halves — `--pk-surface-sunk` under `--pk-ink` — so
+ * they can only ever flip together.
+ */
+
+@layer components {
+  .pk-table__scroll {
+    overflow-x: auto;
+    /* A grid or flex item defaults to `min-width: auto`, which means "as wide
+       as my content" — so without this the scroll container grows to the
+       table's full width and pushes the whole page sideways instead of
+       scrolling within itself. */
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* A table in prose is a block in the flow of the article and needs the
+     vertical rhythm of one. A data table sits in a panel that spaces it. */
+  .pk-table__scroll--prose {
+    margin: var(--pk-5) 0;
+  }
+
+  .pk-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .pk-table th {
+    padding: var(--pk-2) var(--pk-4);
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink);
+    border-bottom: 1px solid var(--pk-line-strong);
+    text-align: left;
+    font-size: var(--pk-text-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--pk-tracking-label);
+  }
+
+  .pk-table td {
+    padding: var(--pk-row-y) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line);
+    /* Cells hold text of differing length, so they align to the first line
+       rather than floating in the middle of the tallest cell in the row. */
+    vertical-align: top;
+  }
+}

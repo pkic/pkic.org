@@ -157,12 +157,21 @@ export function sponsorSignInAuthorizationEvidence(
 /** Same-batch evidence that an ordinary user sign-in retains sponsor access. */
 export function sponsorUserSignInAuthorizationEvidence(
   userId: string,
-  normalizedPrimaryEmail: string,
+  normalizedSignInEmail: string,
 ): AuthorizationEvidence {
   return {
     sql: `SELECT 1
             FROM users u
-           WHERE u.id = ? AND u.active = 1 AND u.normalized_email = ?
+           WHERE u.id = ? AND u.active = 1
+             AND (
+               u.normalized_email = ?
+               OR EXISTS (
+                 SELECT 1 FROM user_emails sign_in_email
+                  WHERE sign_in_email.user_id = u.id
+                    AND sign_in_email.normalized_email = ?
+                    AND sign_in_email.verified_at IS NOT NULL
+               )
+             )
              AND EXISTS (
                SELECT 1
                  FROM sponsorships s
@@ -179,7 +188,7 @@ export function sponsorUserSignInAuthorizationEvidence(
                     )
                   )
              )`,
-    bindings: [userId, normalizedPrimaryEmail],
+    bindings: [userId, normalizedSignInEmail, normalizedSignInEmail],
   };
 }
 

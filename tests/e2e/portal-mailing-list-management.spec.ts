@@ -1,5 +1,7 @@
+import { rowActionIsDisabled, runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { acceptConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -48,17 +50,28 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   const editRow = management.locator("tr").filter({ hasText: `Manage ${label}` });
   await expect(editRow).toBeVisible();
   await editRow.getByLabel("Label").fill(editedLabel);
+  // The edit is asserted on its own response, the way the creation above is,
+  // rather than by racing the table's re-render.
+  const listUpdated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      new URL(response.url()).pathname.startsWith(`/api/v1/groups/${GROUP_ID}/mailing-lists/`),
+  );
   await editRow.getByRole("button", { name: "Save changes" }).click();
+  expect((await listUpdated).status()).toBe(200);
 
   const editedRow = management.getByRole("row").filter({ hasText: email });
   await expect(editedRow).toContainText(editedLabel);
-  page.on("dialog", async (dialog) => {
-    expect(dialog.message()).toContain(editedLabel);
-    await dialog.accept();
-  });
-  await editedRow.getByRole("button", { name: "Archive" }).click();
+  // Archiving goes through the portal's own confirmation, not `window.confirm`.
+  // Whether it is reached as a button or through the row's menu depends on how
+  // many actions that row offers, which is the helper's problem, not this
+  // test's.
+  await runRowAction(page, editedRow, "Archive");
+  await expect(confirmDialog(page)).toContainText(editedLabel);
+  await acceptConfirmDialog(page, "Archive mailing list");
   await expect(editedRow).toContainText("Archived");
-  await expect(editedRow.getByRole("button", { name: "Archive" })).toBeDisabled();
+  // An archived list offers the action still, disabled, rather than hiding it.
+  expect(await rowActionIsDisabled(page, editedRow, "Archive")).toBe(true);
 
   expect(adminRequests, "portal group management must not fall back to admin APIs").toEqual([]);
   expect(groupMailingListRequests).toEqual(

@@ -4,8 +4,9 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { confirmAction, ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { confirmationConsequences, requestClose, typedConfirmationInput } from "./helpers/confirm-dialog";
 import { EmptyState } from "../../assets/ts/components/EmptyState";
-import { RowActions } from "../../assets/ts/components/RowActions";
+import { RowActions } from "../../assets/ts/ui/RowActions";
 import { Spinner } from "../../assets/ts/components/Spinner";
 import { DataTable } from "../../assets/ts/components/Table";
 
@@ -47,7 +48,7 @@ describe("ConfirmDialog", () => {
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Remove Dana Yu from Example Corp?");
     expect(dialog?.textContent).toContain("their user account is kept");
-    expect(container.querySelectorAll(".pkic-confirm-consequences li")).toHaveLength(2);
+    expect(confirmationConsequences(container)).toHaveLength(2);
     // The confirm button names the action instead of a generic "OK".
     await act(() => {
       dialogButton(container, "Remove from organization").click();
@@ -71,9 +72,7 @@ describe("ConfirmDialog", () => {
     await act(() => {
       second = confirmAction({ title: "Revoke invitation?", confirmLabel: "Revoke invitation" });
     });
-    await act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
+    await act(() => requestClose(container));
     await expect(second).resolves.toBe(false);
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
@@ -90,7 +89,7 @@ describe("ConfirmDialog", () => {
     });
     const confirm = dialogButton(container, "Anonymize user");
     expect(confirm.disabled).toBe(true);
-    const input = container.querySelector<HTMLInputElement>("#pkic-confirm-typed");
+    const input = typedConfirmationInput(container);
     if (!input) throw new Error("missing typed-confirmation input");
     await act(() => {
       input.value = "dana@example";
@@ -118,25 +117,28 @@ describe("ConfirmDialog", () => {
     });
     await expect(first).resolves.toBe(false);
     expect(document.querySelectorAll('[role="alertdialog"]')).toHaveLength(1);
-    await act(() => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
+    await act(() => requestClose());
   });
 });
 
 describe("RowActions", () => {
-  it("shows status text and a labeled actions menu, and never bubbles clicks into row navigation", async () => {
+  it("puts even a lone action behind the row's menu, so the column is uniform", async () => {
     let rowClicked = 0;
     let selected = 0;
     const container = mount(
       <div onClick={() => (rowClicked += 1)}>
         <RowActions
           status="Invited"
-          actions={[{ key: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) }]}
+          subject="Ada"
+          actions={[{ id: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) }]}
         />
       </div>,
     );
     expect(container.textContent).toContain("Invited");
+    // The rule went to an inline button once, to save a click — and a column
+    // where some rows show a button and others show the menu, depending on how
+    // many commands each row happens to have, reads as broken. The reference
+    // design puts the menu on every row.
     const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
     if (!trigger) throw new Error("missing menu trigger");
     await act(() => trigger.click());
@@ -147,6 +149,54 @@ describe("RowActions", () => {
     await act(() => item.click());
     expect(selected).toBe(1);
     expect(rowClicked).toBe(0);
+  });
+
+  it("keeps every action in the one menu when there are several", async () => {
+    let rowClicked = 0;
+    let selected = 0;
+    const container = mount(
+      <div onClick={() => (rowClicked += 1)}>
+        <RowActions
+          status="Invited"
+          actions={[
+            { id: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) },
+            { id: "resend", label: "Resend invitation", onSelect: () => {} },
+          ]}
+        />
+      </div>,
+    );
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+    if (!trigger) throw new Error("missing menu trigger");
+    await act(() => trigger.click());
+    const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === "Revoke invitation",
+    );
+    if (!item) throw new Error("missing menu item");
+    await act(() => item.click());
+    expect(selected).toBe(1);
+    expect(rowClicked).toBe(0);
+  });
+
+  it("names the row's menu after the row it acts on, whatever it holds", () => {
+    const one = mount(
+      <RowActions subject="custom_reviewer" actions={[{ id: "delete", label: "Delete role", onSelect: () => {} }]} />,
+    );
+    expect(one.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe("Actions for custom_reviewer");
+
+    const two = mount(
+      <RowActions
+        subject="custom_reviewer"
+        actions={[
+          { id: "delete", label: "Delete role", onSelect: () => {} },
+          { id: "duplicate", label: "Duplicate role", onSelect: () => {} },
+        ]}
+      />,
+    );
+    expect(two.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe("Actions for custom_reviewer");
+
+    // No subject is still a named control, just a worse one.
+    const anonymous = mount(<RowActions actions={[{ id: "delete", label: "Delete role", onSelect: () => {} }]} />);
+    expect(anonymous.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe("Row actions");
   });
 
   it("renders status alone when there are no actions", () => {
@@ -172,16 +222,21 @@ describe("EmptyState", () => {
     expect(created).toBe(1);
   });
 
-  it("renders inside a table empty slot without the placeholder italics", () => {
+  it("renders in the table's empty slot rather than as a fake data row", () => {
     const container = mount(
       <DataTable
+        caption="Group members"
         columns={[{ header: { label: "Name" }, cell: () => null }]}
         data={[]}
         empty={<EmptyState title="No people found" />}
       />,
     );
-    expect(container.querySelector(".pkic-empty-state-title")?.textContent).toBe("No people found");
-    expect(container.querySelector("td")?.className).not.toContain("fst-italic");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("No people found");
+    // The absence is a status beside the table, not a row a reader could
+    // mistake for data — the table body stays empty.
+    expect(container.querySelector("tbody tr")).toBeNull();
+    // The table is still named, so it is identifiable when it holds nothing.
+    expect(container.querySelector("caption")?.textContent).toBe("Group members");
   });
 });
 

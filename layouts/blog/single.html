@@ -1,23 +1,26 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
-<div class="py-5">
-    <div class="container">
-        <div class="row">
-          <div class="col-lg-9 order-lg-1">
+{{/* No `pk` root: the article body and the sidebar are both styled from
+     `main.scss`, and the base layer would win the prose's headings, lists and
+     link colours away from it. The unscoped utilities are used instead. */}}
+<div class="pk-section">
+    <div class="pk-container">
+        <div class="blog-post-layout">
+          <div class="pk-stack">
             <article id="content" data-pagefind-body>
             {{ .Content }}
             </article>
 
             {{ if lt .PublishDate (time "2021-02-01") }}
-            <div class="alert alert-success" data-pagefind-ignore="all">
-              <p>This article was originally published by the "<strong>CA Security Council</strong>". In 2021 the CASC was restructred and renamed to the "<strong>Public Key Infrastructure Consortium</strong>" shortly "<strong>PKI Consortium</strong>".</p>
+            <div class="pk-alert pk-alert--ok pk-stack pk-stack--snug" data-pagefind-ignore="all">
+              <p class="pk-alert__body">This article was originally published by the "<strong>CA Security Council</strong>". In 2021 the CASC was restructured and renamed to the "<strong>Public Key Infrastructure Consortium</strong>", in short the "<strong>PKI Consortium</strong>".</p>
               <a href="/about/" title="About the PKI Consortium">Learn more about the PKI Consortium</a>
             </div>
             {{ end }}
           </div>
 
-          <div class="col-lg-3 order-lg-2" data-pagefind-ignore>
+          <div data-pagefind-ignore>
             <div class="blog-sidebar">
 
             {{/* ── Reading time ─────────────────────────────────────── */}}
@@ -70,7 +73,7 @@
             {{ end }}
 
             {{/* ── Sponsors ─────────────────────────────────────────── */}}
-            <div class="blog-sidebar-sponsors sticky-lg-top" style="top: 76px;" data-pagefind-ignore="all">
+            <div class="blog-sidebar-sponsors" data-pagefind-ignore="all">
               <p class="blog-sidebar-sponsors-intro">{{ i18n "sponsors" }}</p>
 
               {{/* Collect and tier general (non-event-specific) sponsors */}}
@@ -126,12 +129,12 @@
 
 
 <div class="blog-post-nav">
-  <div class="container">
+  <div class="pk-container">
     <div class="blog-post-nav-inner">
       {{ with .PrevInSection }}
       <a class="blog-post-nav-item blog-post-nav-prev" href="{{ .RelPermalink }}" title="{{ i18n "previousArticle" }}">
         <span class="blog-post-nav-label">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
           {{ i18n "previousArticle" }}
         </span>
         <span class="blog-post-nav-title">{{ .Title }}</span>
@@ -141,7 +144,7 @@
       <a class="blog-post-nav-item blog-post-nav-next" href="{{ .RelPermalink }}" title="{{ i18n "nextArticle" }}">
         <span class="blog-post-nav-label">
           {{ i18n "nextArticle" }}
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
         </span>
         <span class="blog-post-nav-title">{{ .Title }}</span>
       </a>

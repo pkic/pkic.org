@@ -60,6 +60,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     appBaseUrl: config.appBaseUrl,
     joinCapabilityId: joinCapability.capabilityId,
     applicantKind: joinCapability.applicantKind,
+    applicantUserId: joinCapability.applicantUserId,
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(db, env, created.outboxId));
 

@@ -54,7 +54,8 @@ export function wireHeadshotController(options: HeadshotControllerOptions): void
   function updatePreview(url: string | null | undefined): void {
     currentUrl = url ?? null;
     renderHeadshotPreview(options.preview, currentUrl, options.previewOptions);
-    deleteButton?.classList.toggle("d-none", !currentUrl || !options.deleteHeadshot);
+    const hideDelete = !currentUrl || !options.deleteHeadshot;
+    if (deleteButton) deleteButton.hidden = hideDelete;
   }
 
   function reportError(error: unknown, action: HeadshotAction): void {

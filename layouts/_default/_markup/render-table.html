@@ -1,0 +1,50 @@
+{{- /*
+  Tables written in Markdown, drawn by the design system's table.
+
+  Goldmark's own output is a bare `<table>`, which used to be dressed by two
+  competing element rules in the legacy stylesheet — one of them stating
+  hard-coded slate colours. Rendering the class names here instead means an
+  authored table and a portal list are the same component (`ui/Table.css`)
+  rather than two stylesheets that have to be kept in agreement by hand.
+
+  The scroll container is what keeps a wide table inside the article instead of
+  widening the page: a six-column comparison table is common in this content
+  and a phone is 375px.
+*/ -}}
+<div class="pk-table__scroll pk-table__scroll--prose">
+  <table class="pk-table">
+    <thead>
+      {{- range .THead }}
+      <tr>
+        {{- range . }}
+        {{- /* Alignment comes from the Markdown delimiter row. It is mapped to
+             the design system's alignment utilities rather than a `style` attribute,
+             which the repository forbids and the CSP would not carry. */ -}}
+        {{- if eq .Alignment "center" }}
+        <th class="pk-center">{{ .Text }}</th>
+        {{- else if eq .Alignment "right" }}
+        <th class="pk-end">{{ .Text }}</th>
+        {{- else }}
+        <th>{{ .Text }}</th>
+        {{- end }}
+        {{- end }}
+      </tr>
+      {{- end }}
+    </thead>
+    <tbody>
+      {{- range .TBody }}
+      <tr>
+        {{- range . }}
+        {{- if eq .Alignment "center" }}
+        <td class="pk-center">{{ .Text }}</td>
+        {{- else if eq .Alignment "right" }}
+        <td class="pk-end">{{ .Text }}</td>
+        {{- else }}
+        <td>{{ .Text }}</td>
+        {{- end }}
+        {{- end }}
+      </tr>
+      {{- end }}
+    </tbody>
+  </table>
+</div>

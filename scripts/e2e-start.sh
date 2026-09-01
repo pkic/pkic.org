@@ -78,8 +78,20 @@ EMAIL_BADGE_DELAY_SECONDS=0
 DEFAULT_MIN_PROPOSAL_REVIEWS=0
 EOF
 
+# ── Serve a snapshot, not the live build directory ──────────────────────────
+# `public/` is rewritten by every `hugo` run. When anything rebuilds the site
+# while the suite is running — another worktree task, a developer checking a
+# page — the directory disappears for a moment, Wrangler's asset walk fails
+# with ENOENT, and the worker dies. Every test after that point fails with
+# ERR_CONNECTION_REFUSED, which looks like sixty broken tests rather than one
+# broken server. Copying the built site into this run's own state directory
+# costs a second and makes the run immune to what else is happening on disk.
+SITE_DIR="$STATE_DIR/site"
+cp -R public "$SITE_DIR"
+
 pnpm exec wrangler dev \
   --env=local \
+  --assets="$SITE_DIR" \
   --port="$E2E_PORT" \
   --persist-to="$STATE_DIR" \
   --env-file="$E2E_ENV_FILE" \

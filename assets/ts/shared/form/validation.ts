@@ -1,4 +1,5 @@
-import { clearFieldErrors, findFieldErrorTarget } from "./validation-map";
+import { clearFieldErrors, findControlFieldError, findFieldErrorTarget, setFieldMessage } from "./validation-map";
+import { applyFieldState, type FieldState } from "../../ui/field-state";
 import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
 import { isPersonalEmailAddress } from "../../../shared/constants/email-domains";
 
@@ -12,13 +13,15 @@ function applyEmailWarning(field: HTMLInputElement, form: HTMLFormElement): void
   const isPersonal = isPersonalEmailAddress(field.value);
 
   if (isPersonal) {
-    // data attribute lets CSS neutralise Bootstrap's green :valid ring
+    // The advisory state reads this back: a personal domain is worth flagging
+    // but never blocks a submission, so it must not become `invalid`.
     field.dataset.personalEmail = "true";
-    if (warningEl) warningEl.classList.remove("d-none");
   } else {
     delete field.dataset.personalEmail;
-    if (warningEl) warningEl.classList.add("d-none");
   }
+
+  if (!warningEl) return;
+  warningEl.hidden = !isPersonal;
 }
 
 function applyEmailValidity(field: HTMLInputElement): void {
@@ -48,11 +51,41 @@ function applyEmailValidity(field: HTMLInputElement): void {
   field.dataset.emailFormatError = "true";
 }
 
-function writeFieldError(form: HTMLFormElement, name: string, message: string): void {
-  const target = findFieldErrorTarget(form, name);
-  if (target) {
-    target.textContent = message;
+type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+/**
+ * The state a control is in once it has been checked.
+ *
+ * A control the user has not filled in yet gets no state at all: an empty
+ * optional field is not a success, and marking every blank control green on
+ * page load is noise rather than feedback. Choice controls are excluded from
+ * the success mark because their `value` is the option's value whether or not
+ * it is selected, so it says nothing about whether the group was answered.
+ */
+function fieldStateFor(control: FormControl): FieldState | null {
+  if (!control.checkValidity()) return "invalid";
+  if (control instanceof HTMLInputElement) {
+    if (control.dataset.personalEmail === "true") return "advisory";
+    if (control.type === "radio" || control.type === "checkbox") return null;
   }
+  return control.value.trim().length > 0 ? "ok" : null;
+}
+
+/**
+ * Reports a control's validity through its field.
+ *
+ * The message and the state move together — the field group is what carries
+ * the colour and the mark, so writing the text alone leaves the control looking
+ * exactly as it did when it was correct.
+ */
+function reportField(form: HTMLFormElement, control: FormControl, message: string): void {
+  const target = findControlFieldError(control) ?? findFieldErrorTarget(form, control.name);
+  if (message.length > 0) {
+    setFieldMessage(target, message, "invalid");
+    return;
+  }
+  setFieldMessage(target, "");
+  applyFieldState(control.closest(".pk-field"), fieldStateFor(control));
 }
 
 function validateNativeFields(form: HTMLFormElement): boolean {
@@ -71,7 +104,9 @@ function validateNativeFields(form: HTMLFormElement): boolean {
 
     if (!field.checkValidity()) {
       allValid = false;
-      writeFieldError(form, field.name, field.validationMessage || "Invalid value");
+      reportField(form, field, field.validationMessage || "Invalid value");
+    } else {
+      reportField(form, field, "");
     }
   }
 
@@ -100,12 +135,12 @@ export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElem
     }
 
     if (target.checkValidity()) {
-      writeFieldError(form, target.name, "");
+      reportField(form, target, "");
       return;
     }
 
     form.classList.add("was-validated");
-    writeFieldError(form, target.name, target.validationMessage || "Invalid value");
+    reportField(form, target, target.validationMessage || "Invalid value");
     // Do NOT call setStatus here — per-field inline errors are sufficient
     // feedback during live typing. The global banner is reserved for
     // step-advance failures and submission errors only.
@@ -121,12 +156,18 @@ export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElem
  * Call this when the user corrects their input and successfully advances a step.
  */
 export function clearStatus(target: HTMLElement): void {
-  if (target.dataset.state === "error") {
-    target.textContent = "";
+  if (target.dataset.state !== "error") return;
+  target.textContent = "";
+  // Mirrors setStatus: the element's own class list says which vocabulary it
+  // speaks, so a migrated banner is re-hidden rather than left showing.
+  if (target.classList.contains("pk-alert")) {
+    target.classList.add("pk-sr-only");
+    target.classList.remove("pk-alert--danger", "pk-alert--ok");
+  } else {
     target.classList.add("visually-hidden");
     target.classList.remove("alert-danger", "alert-success");
-    delete target.dataset.state;
   }
+  delete target.dataset.state;
 }
 
 export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLElement): boolean {

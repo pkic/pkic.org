@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useId, useMemo, useState } from "preact/hooks";
 import {
   groupCategoryRulesResponseSchema,
   groupResponseSchema,
@@ -10,6 +10,11 @@ import { memberApplicationFormResponseSchema } from "../../../../../shared/schem
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { ApiClientError, getJson, putJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { DataTable } from "../../../../ui/DataTable";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import "../../../../ui/Content.css";
 
 type RuleDraft = Omit<GroupCategoryRule, "groupId">;
 
@@ -23,6 +28,7 @@ function draftFromResponse(response: GroupCategoryRulesResponse): RuleDraft[] {
 
 /** Manager-only editor for the category policy; the category labels remain D1-backed reference data. */
 export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: string; onUpdated: () => Promise<void> }) {
+  const headingId = useId();
   const [rules, setRules] = useState<RuleDraft[]>([]);
   const [revision, setRevision] = useState(0);
   const [categories, setCategories] = useState<Awaited<ReturnType<typeof loadCategories>>>([]);
@@ -95,69 +101,80 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
 
   if (loading) return <Spinner />;
   return (
-    <form class="card border-0 shadow-sm" onSubmit={submit}>
-      <div class="card-header bg-white fw-semibold">Membership category eligibility</div>
-      <div class="card-body">
-        <p class="text-muted small">
-          Choose which active membership categories may join this group and which are enrolled automatically.
-        </p>
-        {error && <ErrorAlert error={error} />}
-        {categories.length === 0 && <p class="text-muted mb-0">No membership categories are configured.</p>}
-        {categories.length > 0 && (
-          <div class="table-responsive">
-            <table class="table table-sm align-middle">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Join</th>
-                  <th>Automatic enrollment</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map((category) => {
-                  const rule = rulesByCategory.get(category.code);
-                  return (
-                    <tr key={category.code}>
-                      <th scope="row">
-                        <span class="fw-semibold">{category.label}</span>
-                        <div class="small text-muted">{category.code}</div>
-                      </th>
-                      <td>
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          aria-label={`${category.label} may join`}
-                          checked={rule?.permitsJoin ?? false}
-                          disabled={saving}
-                          onChange={(event) =>
-                            updateRule(category.code, "permitsJoin", (event.target as HTMLInputElement).checked)
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          class="form-check-input"
-                          type="checkbox"
-                          aria-label={`${category.label} automatic enrollment`}
-                          checked={rule?.automaticEnrollment ?? false}
-                          disabled={saving}
-                          onChange={(event) =>
-                            updateRule(category.code, "automaticEnrollment", (event.target as HTMLInputElement).checked)
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+    <form class="pk" onSubmit={submit}>
+      <Panel aria-labelledby={headingId}>
+        <PanelHeader id={headingId} title="Membership category eligibility" />
+        <PanelBody class="pk-stack">
+          <p class="pk-small">
+            Choose which active membership categories may join this group and which are enrolled automatically.
+          </p>
+          {error && <ErrorAlert error={error} />}
+          {/* Two checkboxes per category, each named after the category it
+              belongs to, so a reader moving through the grid always knows
+              which row they are in without a visible row header. */}
+          <DataTable
+            caption="Membership category eligibility"
+            rows={categories}
+            rowKey={(category) => category.code}
+            empty="No membership categories are configured."
+            columns={[
+              {
+                id: "category",
+                header: "Category",
+                cell: (category) => (
+                  <div class="pk-stack pk-stack--tight">
+                    <span class="pk-strong">{category.label}</span>
+                    <span class="pk-small pk-mono">{category.code}</span>
+                  </div>
+                ),
+              },
+              {
+                id: "join",
+                header: "Join",
+                cell: (category) => (
+                  <input
+                    class="pk-table__checkbox"
+                    type="checkbox"
+                    aria-label={`${category.label} may join`}
+                    checked={rulesByCategory.get(category.code)?.permitsJoin ?? false}
+                    disabled={saving}
+                    onChange={(event) =>
+                      updateRule(category.code, "permitsJoin", (event.target as HTMLInputElement).checked)
+                    }
+                  />
+                ),
+              },
+              {
+                id: "automatic",
+                header: "Automatic enrollment",
+                cell: (category) => (
+                  <input
+                    class="pk-table__checkbox"
+                    type="checkbox"
+                    aria-label={`${category.label} automatic enrollment`}
+                    checked={rulesByCategory.get(category.code)?.automaticEnrollment ?? false}
+                    disabled={saving}
+                    onChange={(event) =>
+                      updateRule(category.code, "automaticEnrollment", (event.target as HTMLInputElement).checked)
+                    }
+                  />
+                ),
+              },
+            ]}
+          />
+          {saved && <Alert tone="ok">Membership category rules updated.</Alert>}
+          <div class="pk-cluster">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={saving}
+              disabled={saving || (!!error && categories.length === 0)}
+            >
+              {saving ? "Saving…" : "Save category rules"}
+            </Button>
           </div>
-        )}
-        {saved && <div class="alert alert-success">Membership category rules updated.</div>}
-        <button type="submit" class="btn btn-success" disabled={saving || (!!error && categories.length === 0)}>
-          {saving ? "Saving…" : "Save category rules"}
-        </button>
-      </div>
+        </PanelBody>
+      </Panel>
     </form>
   );
 }

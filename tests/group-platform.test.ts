@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   groupMembershipsListQuerySchema,
+  groupMembershipsManagementListResponseSchema,
+  groupMembershipsParticipantListResponseSchema,
   groupCategoryRulesResponseSchema,
   groupJoinSchema,
   authenticatedGroupDetailResponseSchema,
@@ -9,10 +11,11 @@ import {
   publicGroupDetailResponseSchema,
 } from "../assets/shared/schemas/groups";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
-import type { AuthAdmin, Env } from "../functions/_lib/types";
+import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../functions/_lib/types";
 import {
   assignLocalGroupLeadership,
   buildGroupMembershipsPageQuery,
+  buildGroupParticipantsPageQuery,
   buildGroupsPageQuery,
   canManageGroup,
   createGroup,
@@ -23,6 +26,7 @@ import {
   joinGroup,
   leaveGroup,
   listEligibleGroupCapacities,
+  listEffectiveGroupLeadership,
   listGroups,
   replaceGroupCategoryRules,
   revokeLocalGroupLeadership,
@@ -35,21 +39,26 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { activeIdentityIdForMember, ensureGroupMembershipCapacity } from "./helpers/group-leadership";
 
-async function insertActor(email: string, role = "user"): Promise<AuthAdmin> {
+async function insertActor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   return { identityType: "user", id, email, role };
 }
 
-async function grantGroupLeadership(groupId: string, userId: string, roleId = "role-group_lead"): Promise<string> {
+async function grantGroupLeadership(groupId: string, actor: AuthAdmin, roleId = "role-group_lead"): Promise<string> {
+  if (actor.identityType !== "user") throw new Error("Test group leadership requires a user-backed actor");
+  const memberId = await ensureGroupMembershipCapacity(env.DB, groupId, actor.id);
+  const identityId = await activeIdentityIdForMember(env.DB, actor.id, memberId);
+  actor.memberId = memberId;
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, ?, 'group', ?, 0, datetime('now'))`,
+       (id, user_id, identity_id, member_id, role_id, context_type, context_id, single_holder_per_context, created_at)
+     VALUES (?, ?, ?, ?, ?, 'group', ?, 0, datetime('now'))`,
   )
-    .bind(id, userId, roleId, groupId)
+    .bind(id, actor.id, identityId, memberId, roleId, groupId)
     .run();
   return id;
 }
@@ -109,6 +118,23 @@ describe("group visibility", () => {
       .join("\n");
     expect(membershipDetails).toMatch(/idx_group_memberships_group_active/);
     expect(membershipDetails).not.toMatch(/SCAN group_memberships\b/);
+
+    const participantsQuery = buildGroupParticipantsPageQuery(
+      "10000000-0000-4000-8000-000000000001",
+      groupMembershipsListQuerySchema.parse({ active: true, limit: 25 }),
+    );
+    const participantsSql = buildOffsetPageSql(participantsQuery);
+    const participantsPagePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${participantsSql.pageSql}`)
+      .bind(...participantsSql.bindings, participantsQuery.limit, participantsQuery.offset)
+      .all<{ detail: string }>();
+    const participantsCountPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${participantsSql.countSql}`)
+      .bind(...participantsSql.countBindings)
+      .all<{ detail: string }>();
+    const participantsDetails = [...participantsPagePlan.results, ...participantsCountPlan.results]
+      .map((row) => row.detail)
+      .join("\n");
+    expect(participantsDetails).toMatch(/idx_group_memberships_group_active/);
+    expect(participantsDetails).not.toMatch(/SCAN group_memberships\b/);
   });
 });
 
@@ -271,7 +297,7 @@ describe("group capacity membership", () => {
       eligibilityMode: "open",
     });
     const manager = await insertActor("managed-join-lead@example.test");
-    const leadershipId = await grantGroupLeadership(group.id, manager.id);
+    const leadershipId = await grantGroupLeadership(group.id, manager);
     const userId = await insertUser(env.DB, "managed-join-target@example.test");
     const memberId = await seedOrganizationAggregate(
       env.DB,
@@ -309,7 +335,7 @@ describe("group capacity membership", () => {
       eligibilityMode: "open",
     });
     const manager = await insertActor("managed-leave-lead@example.test");
-    const leadershipId = await grantGroupLeadership(group.id, manager.id);
+    const leadershipId = await grantGroupLeadership(group.id, manager);
     const userId = await insertUser(env.DB, "managed-leave-target@example.test");
     const memberId = await seedOrganizationAggregate(
       env.DB,
@@ -697,6 +723,68 @@ describe("group configuration concurrency", () => {
 });
 
 describe("group leadership inheritance", () => {
+  it("binds leadership authority to one explicit represented Member capacity", async () => {
+    const globalAdmin = await insertActor("capacity-admin@example.test", "admin");
+    const group = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Capacity-bound Leadership",
+    });
+    const representative = await insertActor("capacity-leader@example.test");
+    const orgAId = await insertOrganization(env.DB, "Leadership Org A");
+    const orgBId = await insertOrganization(env.DB, "Leadership Org B");
+    const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
+    const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
+    const identityAId = await addRepresentative(env.DB, memberAId, representative.id);
+    const identityBId = await addRepresentative(env.DB, memberBId, representative.id);
+    await env.DB.batch(
+      [
+        { memberId: memberAId, identityId: identityAId },
+        { memberId: memberBId, identityId: identityBId },
+      ].map(({ memberId, identityId }) =>
+        env.DB.prepare(
+          `INSERT INTO group_memberships
+               (id, group_id, user_id, identity_id, member_id, source, joined_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'))`,
+        ).bind(crypto.randomUUID(), group.id, representative.id, identityId, memberId),
+      ),
+    );
+
+    await assignLocalGroupLeadership(env.DB, globalAdmin, group.id, {
+      userId: representative.id,
+      identityId: identityAId,
+      roleId: "role-group_lead",
+    });
+
+    expect(await canManageGroup(env.DB, { ...representative, memberId: memberAId }, group.id)).toBe(true);
+    expect(await canManageGroup(env.DB, { ...representative, memberId: memberBId }, group.id)).toBe(false);
+    const leadership = await listEffectiveGroupLeadership(env.DB, group.id);
+    expect(leadership.assignments).toMatchObject([
+      {
+        userId: representative.id,
+        memberId: memberAId,
+        memberType: "organization",
+        organizationName: "Leadership Org A",
+      },
+    ]);
+
+    await env.DB.prepare(
+      `UPDATE group_memberships
+          SET left_at = datetime('now'), updated_at = datetime('now')
+        WHERE group_id = ? AND user_id = ? AND member_id = ? AND left_at IS NULL`,
+    )
+      .bind(group.id, representative.id, memberAId)
+      .run();
+    expect(await canManageGroup(env.DB, { ...representative, memberId: memberAId }, group.id)).toBe(false);
+    expect(
+      await queryAll<{ revoked_at: string | null }>(
+        env.DB,
+        `SELECT revoked_at FROM user_roles
+          WHERE context_type = 'group' AND context_id = ? AND user_id = ? AND member_id = ?`,
+        [group.id, representative.id, memberAId],
+      ),
+    ).toEqual([{ revoked_at: expect.any(String) }]);
+  });
+
   it("rejects direct and recursive hierarchy cycles without recording a mutation", async () => {
     const admin = await insertActor("cycle-admin@example.test", "admin");
     const root = await createGroup(env.DB, admin, { typeKey: "working_group", name: "Cycle Root" });
@@ -741,7 +829,7 @@ describe("group leadership inheritance", () => {
       name: "Governance Child",
     });
     const parentLeader = await insertActor("parent-leader@example.test");
-    await grantGroupLeadership(parent.id, parentLeader.id);
+    await grantGroupLeadership(parent.id, parentLeader);
     expect(await canManageGroup(env.DB, parentLeader, child.id)).toBe(true);
 
     await expect(
@@ -749,8 +837,10 @@ describe("group leadership inheritance", () => {
     ).rejects.toMatchObject({ code: "GROUP_LOCAL_LEADERSHIP_REQUIRED" });
 
     const localLeader = await insertActor("local-leader@example.test");
+    localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, parentLeader, child.id, {
       userId: localLeader.id,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, parentLeader, child.id, { governanceInheritanceMode: "local_only" });
@@ -789,7 +879,7 @@ describe("group leadership inheritance", () => {
     expect(await canManageGroup(env.DB, exactManager, other.id)).toBe(false);
 
     const inheritedManager = await insertActor("inherited-manager@example.test");
-    await grantGroupLeadership(parent.id, inheritedManager.id);
+    await grantGroupLeadership(parent.id, inheritedManager);
     expect(await canManageGroup(env.DB, inheritedManager, child.id)).toBe(true);
     expect(await canManageGroup(env.DB, { ...inheritedManager, scopeRestricted: true, scopes: [] }, child.id)).toBe(
       false,
@@ -835,10 +925,12 @@ describe("group leadership inheritance", () => {
       name: "Unrelated Group",
     });
     const parentLeader = await insertActor("manageable-list-leader@example.test");
-    await grantGroupLeadership(parent.id, parentLeader.id);
+    await grantGroupLeadership(parent.id, parentLeader);
     const localLeader = await insertActor("manageable-list-local-leader@example.test");
+    localLeader.memberId = await ensureGroupMembershipCapacity(env.DB, localOnly.id, localLeader.id);
     await assignLocalGroupLeadership(env.DB, globalAdmin, localOnly.id, {
       userId: localLeader.id,
+      identityId: await activeIdentityIdForMember(env.DB, localLeader.id, localLeader.memberId!),
       roleId: "role-group_lead",
     });
     await updateGroup(env.DB, globalAdmin, localOnly.id, { governanceInheritanceMode: "local_only" });
@@ -864,7 +956,7 @@ describe("group leadership inheritance", () => {
       name: "Guard Child",
     });
     const parentLeader = await insertActor("guard-parent-leader@example.test");
-    const leadershipId = await grantGroupLeadership(parent.id, parentLeader.id);
+    const leadershipId = await grantGroupLeadership(parent.id, parentLeader);
     const revokeManagement = () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(leadershipId).run();
 
@@ -896,9 +988,11 @@ describe("group leadership inheritance", () => {
 
     await env.DB.prepare("UPDATE user_roles SET revoked_at = NULL WHERE id = ?").bind(leadershipId).run();
     const candidate = await insertActor("guard-candidate@example.test");
+    candidate.memberId = await ensureGroupMembershipCapacity(env.DB, child.id, candidate.id);
     await expect(
       assignLocalGroupLeadership(mutateBeforeNextBatch(env.DB, revokeManagement), parentLeader, child.id, {
         userId: candidate.id,
+        identityId: await activeIdentityIdForMember(env.DB, candidate.id, candidate.memberId!),
         roleId: "role-group_lead",
       }),
     ).rejects.toMatchObject({ status: 409, code: "GROUP_MANAGEMENT_CHANGED" });
@@ -918,6 +1012,7 @@ describe("group leadership inheritance", () => {
       name: "Service Leadership Group",
     });
     const candidate = await insertActor("service-leadership-candidate@example.test");
+    candidate.memberId = await ensureGroupMembershipCapacity(env.DB, group.id, candidate.id);
     const serviceActor: AuthAdmin = {
       identityType: "service",
       id: "api-key",
@@ -928,6 +1023,7 @@ describe("group leadership inheritance", () => {
 
     await assignLocalGroupLeadership(env.DB, serviceActor, group.id, {
       userId: candidate.id,
+      identityId: await activeIdentityIdForMember(env.DB, candidate.id, candidate.memberId!),
       roleId: "role-group_lead",
     });
     expect(
@@ -948,7 +1044,7 @@ describe("group leadership inheritance", () => {
       name: "Detach Child",
     });
     const parentLeader = await insertActor("detach-parent-leader@example.test");
-    await grantGroupLeadership(parent.id, parentLeader.id);
+    await grantGroupLeadership(parent.id, parentLeader);
 
     await expect(updateGroup(env.DB, parentLeader, child.id, { parentGroupId: null })).rejects.toMatchObject({
       status: 403,
@@ -1001,7 +1097,7 @@ describe("group route contracts", () => {
       name: "Route Unrelated",
     });
     const parentLeader = await insertActor("manageable-route-leader@example.test");
-    await grantGroupLeadership(parent.id, parentLeader.id);
+    await grantGroupLeadership(parent.id, parentLeader);
 
     const unauthenticated = await callApi(env as Env, "/api/v1/groups?manageable=true");
     expect(unauthenticated.status).toBe(401);
@@ -1046,7 +1142,7 @@ describe("group route contracts", () => {
       eligibilityMode: "open",
     });
     const parentLeader = await insertActor("context-route-leader@example.test");
-    await grantGroupLeadership(parent.id, parentLeader.id);
+    await grantGroupLeadership(parent.id, parentLeader);
 
     const leaderToken = await createAdminSession(env.DB, parentLeader.id, "context-route-leader-token");
     const leaderResponse = await callApi(env as Env, `/api/v1/groups/${child.id}`, {
@@ -1105,6 +1201,83 @@ describe("group route contracts", () => {
       headers: { authorization: `Bearer ${leaderToken}` },
     });
     expect(retiredContext.status).toBe(404);
+  });
+
+  it("shapes the membership listing by capability: reduced roster for a participant, full roster for a manager, none for neither", async () => {
+    const globalAdmin = await insertActor("membership-shape-admin@example.test", "admin");
+    const group = await createGroup(env.DB, globalAdmin, {
+      typeKey: "working_group",
+      name: "Membership Shape Group",
+      eligibilityMode: "open",
+    });
+
+    const manager = await insertActor("membership-shape-manager@example.test");
+    await grantGroupLeadership(group.id, manager);
+    const managerToken = await createAdminSession(env.DB, manager.id, "membership-shape-manager-token");
+
+    const participantEmail = "membership-shape-participant@example.test";
+    const participantUserId = await insertUser(env.DB, participantEmail);
+    const participantMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Membership Shape Organization"),
+      "A",
+    );
+    await addRepresentative(env.DB, participantMemberId, participantUserId);
+    await joinGroup(env.DB, group.id, {
+      actorUserId: participantUserId,
+      targetUserId: participantUserId,
+      selection: { mode: "all_eligible", confirmed: true },
+      source: "self_service",
+      allowManaged: false,
+    });
+    const participantToken = await createMemberSession(env.DB, participantUserId, "membership-shape-participant-token");
+
+    const outsiderUserId = await insertUser(env.DB, "membership-shape-outsider@example.test");
+    const outsiderMemberId = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Membership Shape Outsider Organization"),
+      "B",
+    );
+    await addRepresentative(env.DB, outsiderMemberId, outsiderUserId);
+    const outsiderToken = await createMemberSession(env.DB, outsiderUserId, "membership-shape-outsider-token");
+
+    // (a) A participant (not a manager) receives the reduced roster: exactly
+    // identity and affiliation fields, no email address and no
+    // capacity/membership identifier anywhere in the raw payload.
+    const participantResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${participantToken}` },
+    });
+    expect(participantResponse.status, await participantResponse.clone().text()).toBe(200);
+    const participantRaw = (await participantResponse.json()) as { memberships: Record<string, unknown>[] };
+    const participantPayload = groupMembershipsParticipantListResponseSchema.parse(participantRaw);
+    const participantRow = participantRaw.memberships.find(
+      (row) => row.organizationName === "Membership Shape Organization",
+    );
+    expect(participantRow).toBeDefined();
+    expect(Object.keys(participantRow!).sort()).toEqual(["headshotUrl", "name", "organizationName", "userId"].sort());
+    expect(JSON.stringify(participantRaw)).not.toContain(participantEmail);
+    expect(
+      participantPayload.memberships.find((row) => row.organizationName === "Membership Shape Organization"),
+    ).toMatchObject({ userId: participantUserId, organizationName: "Membership Shape Organization" });
+
+    // (c) An effective group manager keeps the full capacity roster, email included.
+    const managerResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(managerResponse.status, await managerResponse.clone().text()).toBe(200);
+    const managerPayload = groupMembershipsManagementListResponseSchema.parse(await managerResponse.json());
+    expect(managerPayload.memberships).toContainEqual(
+      expect.objectContaining({ userId: participantUserId, email: participantEmail }),
+    );
+
+    // (b) A caller with neither capability is refused outright.
+    const outsiderResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
+      headers: { authorization: `Bearer ${outsiderToken}` },
+    });
+    expect([403, 404]).toContain(outsiderResponse.status);
+
+    const unauthenticatedResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`);
+    expect(unauthenticatedResponse.status).toBe(401);
   });
 
   it("round-trips revisions through the mounted group and category-rule mutation routes", async () => {

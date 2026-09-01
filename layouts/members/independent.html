@@ -3,6 +3,12 @@
 {{ partial "hero.html" . }}
 {{ partial "members/nav.html" . }}
 
-{{ with .Content }}<div class="py-4"><div id="content" class="container">{{ . }}</div></div>{{ end }}
+{{/*
+  The page's prose keeps its own typography: `.pk` on `#content` would hand the
+  base layer authority over every element the markdown emits, and that styling
+  has not moved yet. The section rhythm and the measured column are utilities,
+  which carry no such opinion.
+*/}}
+{{ with .Content }}<div class="pk-section"><div id="content" class="pk-container">{{ . }}</div></div>{{ end }}
 {{ partial "members/directory-app.html" (dict "group" "independent" "prefix" "i" "label" "independent members" "detailBase" "/members/profile/") }}
 {{ end }}

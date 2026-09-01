@@ -32,9 +32,11 @@
   {{- $external = false -}}
 {{- end -}}
 
-{{- /* stretched-link: the <div> is the grid item; <a> inside uses position:absolute to cover it */ -}}
+{{- /* pk-stretched: the <div> is the grid item; the <a> inside covers it. The
+       parts that sit above the link (working-group tags, social icons, the
+       sponsor footer) are lifted by their own rules in _bento.scss. */ -}}
 <div class="member-card bento-card" data-member-name="{{ lower $member.name }}">
-  <a class="stretched-link" href="{{ $href }}" {{ if $external }}target="_blank" rel="noopener"{{ end }} aria-label="{{ $member.name }}"></a>
+  <a class="pk-stretched" href="{{ $href }}" {{ if $external }}target="_blank" rel="noopener"{{ end }} aria-label="{{ $member.name }}"></a>
   {{- $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) -}}
   <div class="member-card-logo-wrap">
   {{- with $img -}}
@@ -60,7 +62,7 @@
   {{- if $showWorkingGroups -}}
     {{- $wg := $member.workingGroups -}}
     {{- with $wg -}}
-    <div class="member-card-wgs" style="position:relative;z-index:2;">
+    <div class="member-card-wgs">
       {{- if eq (printf "%T" .) "[]interface {}" -}}
         {{- range . -}}<span class="wg-tag">{{ . }}</span>{{- end -}}
       {{- else -}}
@@ -71,10 +73,10 @@
   {{- end -}}
 
   {{- if and $showSocialHover $member.social -}}
-    <div class="member-card-social" style="position:relative;z-index:2;">{{ partial "social.html" $member.social }}</div>
+    <div class="member-card-social">{{ partial "social.html" $member.social }}</div>
   {{- end -}}
 
   {{- if gt $sponsorLevel 0 -}}
-    <div class="member-card-sponsor-footer sponsor-tier-{{ $sponsorLevel }}" style="position:relative;z-index:2;">{{ $sponsorLevelName }} Sponsor</div>
+    <div class="member-card-sponsor-footer sponsor-tier-{{ $sponsorLevel }}">{{ $sponsorLevelName }} Sponsor</div>
   {{- end -}}
 </div>

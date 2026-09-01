@@ -46,7 +46,7 @@
                 <li>
                     View or download list:
                     {{ range . }}
-                    <a href="{{ .url }}/" class="badge bg-secondary" target="_blank">{{ .type }}</a>
+                    <a href="{{ .url }}/" class="pk-badge pk-badge--neutral" target="_blank" rel="noopener">{{ .type }}</a>
                     {{ end }}
                 </li>
             </ul>
@@ -57,7 +57,7 @@
                 <li>
                     Audit scheme:
                     {{ range . }}
-                    <span class="badge bg-primary">{{ .name }}</span>
+                    <span class="pk-badge pk-badge--accent">{{ .name }}</span>
                     {{ end }}
                 </li>
             </ul>

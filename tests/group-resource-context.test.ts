@@ -6,8 +6,9 @@ import {
   requireGroupResourceContext,
 } from "../functions/api/v1/groups/group-resource-context";
 import { createGroup } from "../functions/_lib/services/groups";
-import type { AuthAdmin } from "../functions/_lib/types";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import {
   addRepresentative,
   insertIndividualMember,
@@ -17,20 +18,10 @@ import {
 } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
-async function actor(email: string, role = "user"): Promise<AuthAdmin> {
+async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   return { identityType: "user", id, email, role };
-}
-
-async function grantGroupLeadership(groupId: string, userId: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO user_roles
-       (id, user_id, role_id, context_type, context_id, single_holder_per_context, created_at)
-     VALUES (?, ?, 'role-group_lead', 'group', ?, 0, datetime('now'))`,
-  )
-    .bind(crypto.randomUUID(), userId, groupId)
-    .run();
 }
 
 beforeEach(resetDb);
@@ -104,8 +95,9 @@ describe("group resource context", () => {
       name: `Unrelated management ${crypto.randomUUID()}`,
       visibility: "public",
     });
-    await grantGroupLeadership(unrelatedGroup.id, staff.id);
-    const token = await createAdminSession(env.DB, staff.id, crypto.randomUUID());
+    const { memberId } = await grantGroupLeadershipCapacity(env.DB, unrelatedGroup.id, staff.id);
+    staff.memberId = memberId;
+    const token = await createAdminSession(env.DB, staff.id, crypto.randomUUID(), undefined, memberId);
 
     const context = await requireGroupResourceContext(
       env.DB,

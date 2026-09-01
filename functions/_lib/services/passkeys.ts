@@ -27,7 +27,11 @@ import {
   type UserSessionResult,
 } from "../auth/user-session";
 import { resolveMemberSessionTtlHours } from "../auth/session-policy";
-import { staffSignInAuthorizationEvidence, memberSignInAuthorizationEvidence } from "../auth/identity-capacities";
+import {
+  staffSignInAuthorizationEvidence,
+  memberSignInAuthorizationEvidence,
+  pendingIdentitySignInAuthorizationEvidence,
+} from "../auth/identity-capacities";
 import { AUTH_SCOPES } from "../auth/scopes";
 import { createUserBackedAuthAdmin } from "../auth/admin-identity";
 import { computeGrantsForUser } from "../auth/permissions";
@@ -397,10 +401,11 @@ export async function completePasskeyAuthentication(
     resolved.identity.id,
     resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
   );
-  const capacities: Array<"admin" | "member" | "sponsor"> = [
+  const capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation"> = [
     ...(resolved.staff ? ["admin" as const] : []),
     ...(resolved.member ? ["member" as const] : []),
     ...(resolved.sponsors.length > 0 ? ["sponsor" as const] : []),
+    ...(resolved.pendingIdentityCount > 0 ? ["identity_invitation" as const] : []),
   ];
 
   const lastUsedAt = nowIso();
@@ -410,7 +415,7 @@ export async function completePasskeyAuthentication(
     actorId: string;
     auditSessionId: string;
     expiresAt: string;
-    capacities: Array<"admin" | "member" | "sponsor">;
+    capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation">;
   }) => {
     try {
       await db.batch([
@@ -456,6 +461,17 @@ export async function completePasskeyAuthentication(
               ),
             ]
           : []),
+        ...(resolved.pendingIdentityCount > 0
+          ? [
+              prepareAuthorizationGuard(
+                db,
+                pendingIdentitySignInAuthorizationEvidence(
+                  resolved.identity.id,
+                  normalizeEmail(resolved.identity.email),
+                ),
+              ),
+            ]
+          : []),
         prepared.statement,
         prepareExpiredPasskeyChallengeCleanup(db, lastUsedAt),
       ]);
@@ -492,7 +508,8 @@ export async function completePasskeyAuthentication(
             email: resolved.staff.email,
             role: resolved.staff.role,
             scopes: resolved.staff.role === "admin" ? [...AUTH_SCOPES] : [],
-            grants: await computeGrantsForUser(db, resolved.staff.id),
+            grants: await computeGrantsForUser(db, resolved.staff.id, resolved.member?.memberId ?? null),
+            memberId: resolved.member?.memberId ?? null,
             sessionId: prepared.sessionId,
             expiresAt: userStaffExpiresAt(prepared.createdAt, prepared.expiresAt),
           }),
@@ -502,12 +519,13 @@ export async function completePasskeyAuthentication(
       ? { member: { ...resolved.member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } }
       : {}),
     sponsors: resolved.sponsors,
+    pendingIdentityCount: resolved.pendingIdentityCount,
   };
   const token = await signUserSessionToken(signingSecret, {
     sub: resolved.identity.id,
     sid: prepared.sessionId,
     exp: sessionExpiresAtToExp(prepared.expiresAt),
-    memberId: resolved.member?.memberId,
+    identityId: resolved.member?.identityId,
   });
   return { session, token };
 }

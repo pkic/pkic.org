@@ -1,4 +1,23 @@
+/**
+ * The fields describing one meeting occurrence, shared by the create form and
+ * the occurrence settings form.
+ *
+ * Every control carries an explicit `for`/`id` pair built from `idPrefix`
+ * rather than going through `Field`, because `idPrefix` is this component's
+ * public contract: its callers address these controls by that prefix, and a
+ * generated id would quietly break them. `LabelledField` hands the id down to
+ * the control it names, so the pair cannot drift the way two hand-written
+ * attributes can.
+ *
+ * The fields are one `pk-grid`, whose columns are as many as fit rather than a
+ * breakpoint triplet written per field. The create form and the settings form
+ * then reflow from the same markup instead of each choosing its own widths.
+ */
+
+import type { ComponentChildren } from "preact";
 import { EVENT_OCCURRENCE_STATUSES, type EventOccurrenceStatus } from "../../../../../shared/schemas/event-series";
+import { Select, TextInput } from "../../../../ui/TextControl";
+import "../../../../ui/Field.css";
 
 export type ProviderUrlAction = "keep" | "replace" | "remove";
 
@@ -9,6 +28,53 @@ export interface MeetingOccurrenceDraft {
   location: string;
   providerUrlAction: ProviderUrlAction;
   providerJoinUrl: string;
+}
+
+/** What a control inside a `LabelledField` must spread onto its element. */
+interface LabelledControlProps {
+  id: string;
+  required?: true;
+  "aria-describedby"?: string;
+}
+
+/**
+ * A label and the control it names, paired by a caller-chosen id.
+ *
+ * The same shape as `Field`'s render prop, so a control moves between the two
+ * without being rewritten — the only difference is who picks the id. It also
+ * builds the same markup: the group is a `pk-field`, which is the only element
+ * a validation modifier is ever set on, and the control sits in the
+ * `pk-field__control` box the state mark is positioned against.
+ */
+function LabelledField({
+  id,
+  label,
+  required = false,
+  describedBy,
+  children,
+}: {
+  id: string;
+  label: string;
+  required?: boolean;
+  describedBy?: string;
+  children: (control: LabelledControlProps) => ComponentChildren;
+}) {
+  return (
+    <div class="pk-field">
+      <label class="pk-field__label" for={id}>
+        {label}
+        {required && (
+          <span class="pk-field__required">
+            <span aria-hidden="true">*</span>
+            <span class="pk-field__sr">(required)</span>
+          </span>
+        )}
+      </label>
+      <div class="pk-field__control">
+        {children({ id, required: required || undefined, "aria-describedby": describedBy })}
+      </div>
+    </div>
+  );
 }
 
 function updateDraft<K extends keyof MeetingOccurrenceDraft>(
@@ -35,108 +101,108 @@ export function MeetingOccurrenceFields({
   disabled?: boolean;
   onChange: (draft: MeetingOccurrenceDraft) => void;
 }) {
+  const providerHelpId = `${idPrefix}-provider-help`;
+  const showProviderAction = existing && providerConfigured;
+  const showProviderUrl = !existing || !providerConfigured || draft.providerUrlAction === "replace";
+
   return (
-    <div class="row g-2">
-      <div class={existing ? "col-md-4" : "col-md-3"}>
-        <label class="form-label small fw-semibold" for={`${idPrefix}-starts`}>
-          Starts
-        </label>
-        <input
-          id={`${idPrefix}-starts`}
-          type="datetime-local"
-          class="form-control form-control-sm"
-          value={draft.startsAt}
-          required
-          disabled={disabled}
-          onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
-        />
-      </div>
-      <div class={existing ? "col-md-4" : "col-md-3"}>
-        <label class="form-label small fw-semibold" for={`${idPrefix}-ends`}>
-          Ends
-        </label>
-        <input
-          id={`${idPrefix}-ends`}
-          type="datetime-local"
-          class="form-control form-control-sm"
-          value={draft.endsAt}
-          required
-          disabled={disabled}
-          onInput={(event) => updateDraft(draft, onChange, "endsAt", event.currentTarget.value)}
-        />
-      </div>
-      {existing && (
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`${idPrefix}-status`}>
-            Status
-          </label>
-          <select
-            id={`${idPrefix}-status`}
-            class="form-select form-select-sm"
-            value={draft.status}
+    <div class="pk pk-grid">
+      <LabelledField id={`${idPrefix}-starts`} label="Starts" required>
+        {(control) => (
+          <TextInput
+            {...control}
+            type="datetime-local"
+            value={draft.startsAt}
             disabled={disabled}
-            onChange={(event) =>
-              updateDraft(draft, onChange, "status", event.currentTarget.value as EventOccurrenceStatus)
-            }
-          >
-            {EVENT_OCCURRENCE_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div class={existing ? "col-md-6" : "col-md-3"}>
-        <label class="form-label small fw-semibold" for={`${idPrefix}-location`}>
-          Location override
-        </label>
-        <input
-          id={`${idPrefix}-location`}
-          class="form-control form-control-sm"
-          value={draft.location}
-          disabled={disabled}
-          onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
-        />
-      </div>
-      <div class={existing ? "col-md-6" : "col-md-3"}>
-        {existing && providerConfigured && (
-          <>
-            <label class="form-label small fw-semibold" for={`${idPrefix}-provider-action`}>
-              Meeting-provider URL
-            </label>
-            <select
-              id={`${idPrefix}-provider-action`}
-              class="form-select form-select-sm mb-2"
-              value={draft.providerUrlAction}
+            onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
+          />
+        )}
+      </LabelledField>
+
+      <LabelledField id={`${idPrefix}-ends`} label="Ends" required>
+        {(control) => (
+          <TextInput
+            {...control}
+            type="datetime-local"
+            value={draft.endsAt}
+            disabled={disabled}
+            onInput={(event) => updateDraft(draft, onChange, "endsAt", event.currentTarget.value)}
+          />
+        )}
+      </LabelledField>
+
+      {existing && (
+        <LabelledField id={`${idPrefix}-status`} label="Status">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.status}
               disabled={disabled}
               onChange={(event) =>
-                updateDraft(draft, onChange, "providerUrlAction", event.currentTarget.value as ProviderUrlAction)
+                updateDraft(draft, onChange, "status", event.currentTarget.value as EventOccurrenceStatus)
               }
             >
-              <option value="keep">Keep configured URL</option>
-              <option value="replace">Replace configured URL</option>
-              <option value="remove">Remove configured URL</option>
-            </select>
-          </>
+              {EVENT_OCCURRENCE_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </Select>
+          )}
+        </LabelledField>
+      )}
+
+      <LabelledField id={`${idPrefix}-location`} label="Location override">
+        {(control) => (
+          <TextInput
+            {...control}
+            value={draft.location}
+            disabled={disabled}
+            onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
+          />
         )}
-        {(!existing || !providerConfigured || draft.providerUrlAction === "replace") && (
-          <>
-            <label class="form-label small fw-semibold" for={`${idPrefix}-provider-url`}>
-              {providerConfigured ? "Replacement URL" : "Meeting-provider URL"}
-            </label>
-            <input
-              id={`${idPrefix}-provider-url`}
-              type="url"
-              class="form-control form-control-sm"
-              value={draft.providerJoinUrl}
-              required={existing && providerConfigured && draft.providerUrlAction === "replace"}
-              disabled={disabled}
-              onInput={(event) => updateDraft(draft, onChange, "providerJoinUrl", event.currentTarget.value)}
-            />
-          </>
+      </LabelledField>
+
+      <div class="pk-stack pk-stack--snug">
+        {showProviderAction && (
+          <LabelledField id={`${idPrefix}-provider-action`} label="Meeting-provider URL" describedBy={providerHelpId}>
+            {(control) => (
+              <Select
+                {...control}
+                value={draft.providerUrlAction}
+                disabled={disabled}
+                onChange={(event) =>
+                  updateDraft(draft, onChange, "providerUrlAction", event.currentTarget.value as ProviderUrlAction)
+                }
+              >
+                <option value="keep">Keep configured URL</option>
+                <option value="replace">Replace configured URL</option>
+                <option value="remove">Remove configured URL</option>
+              </Select>
+            )}
+          </LabelledField>
         )}
-        <div class="form-text">The provider URL is encrypted and never returned by the API.</div>
+        {showProviderUrl && (
+          <LabelledField
+            id={`${idPrefix}-provider-url`}
+            label={providerConfigured ? "Replacement URL" : "Meeting-provider URL"}
+            required={existing && providerConfigured && draft.providerUrlAction === "replace"}
+            describedBy={providerHelpId}
+          >
+            {(control) => (
+              <TextInput
+                {...control}
+                type="url"
+                value={draft.providerJoinUrl}
+                disabled={disabled}
+                onInput={(event) => updateDraft(draft, onChange, "providerJoinUrl", event.currentTarget.value)}
+              />
+            )}
+          </LabelledField>
+        )}
+        <p class="pk-small" id={providerHelpId}>
+          The provider URL is encrypted and never returned by the API.
+        </p>
       </div>
     </div>
   );

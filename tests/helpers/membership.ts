@@ -1,7 +1,7 @@
 /**
  * Test fixtures for the post-Phase-1 membership schema (consolidated
  * migration 0035): membership_categories, member_category_assignments,
- * organization_representatives, and representative-role user_roles grants.
+ * identities and identity-owned contact-role user_roles grants.
  * Builds on the real service-layer primitives
  * (functions/_lib/services/membership/*) rather than hand-rolled SQL, so
  * these fixtures exercise the same code paths production traffic does.
@@ -11,7 +11,7 @@ import {
   getOrCreateOrganizationMemberAggregate,
   buildCreateIndividualMemberStatements,
 } from "../../functions/_lib/services/membership/memberships";
-import { buildAddRepresentativeStatement } from "../../functions/_lib/services/membership/representatives";
+import { buildCreateIdentityStatement } from "../../functions/_lib/services/membership/identities";
 import {
   REPRESENTATIVE_ROLE_IDS,
   buildAssignRepresentativeRoleStatements,
@@ -60,21 +60,27 @@ export async function seedOrganizationAggregate(
   return aggregate.id;
 }
 
-/** Adds an active representative row for `userId` against an existing aggregate `memberId`. */
+/** Adds an active organization identity for `userId` against an existing aggregate `memberId`. */
 export async function addRepresentative(
   db: DatabaseLike,
   memberId: string,
   userId: string,
-  opts: { showOnOrgProfile?: boolean } = {},
+  opts: { jobTitle?: string | null; showOnOrgProfile?: boolean } = {},
 ): Promise<string> {
-  const { representativeId, statement } = await buildAddRepresentativeStatement(db, {
-    memberId,
+  const member = await db.prepare("SELECT organization_id FROM members WHERE id = ?").bind(memberId).first<{
+    organization_id: string | null;
+  }>();
+  if (!member?.organization_id) throw new Error("Organization Member aggregate required");
+  const { identityId, statement } = await buildCreateIdentityStatement(db, {
     userId,
+    organizationId: member.organization_id,
     source: "staff",
-    showOnOrgProfile: opts.showOnOrgProfile,
+    jobTitle: opts.jobTitle,
+    showOnOrganizationProfile: opts.showOnOrgProfile,
+    startImmediately: true,
   });
   await db.batch([statement]);
-  return representativeId;
+  return identityId;
 }
 
 /**
@@ -85,12 +91,12 @@ export async function addRepresentative(
 export async function insertOrgRepresentative(
   db: DatabaseLike,
   opts: { organizationId?: string; category?: string; email?: string } = {},
-): Promise<{ userId: string; organizationId: string; memberId: string; representativeId: string }> {
+): Promise<{ userId: string; organizationId: string; memberId: string; identityId: string }> {
   const userId = await insertUser(db, opts.email);
   const organizationId = opts.organizationId ?? (await insertOrganization(db));
   const memberId = await seedOrganizationAggregate(db, organizationId, opts.category ?? "A");
-  const representativeId = await addRepresentative(db, memberId, userId);
-  return { userId, organizationId, memberId, representativeId };
+  const identityId = await addRepresentative(db, memberId, userId);
+  return { userId, organizationId, memberId, identityId };
 }
 
 /** Creates a user plus an org-less individual membership aggregate (H5/H6/H7). */
@@ -98,11 +104,17 @@ export async function insertIndividualMember(
   db: DatabaseLike,
   category = "H6",
   email?: string,
-): Promise<{ userId: string; memberId: string }> {
+): Promise<{ userId: string; memberId: string; identityId: string }> {
   const userId = await insertUser(db, email);
   const { memberId, statements } = buildCreateIndividualMemberStatements(db, userId, category, nowIso());
-  await db.batch(statements);
-  return { userId, memberId };
+  const { identityId, statement: identityStatement } = await buildCreateIdentityStatement(db, {
+    userId,
+    organizationId: null,
+    source: "staff",
+    startImmediately: true,
+  });
+  await db.batch([...statements, identityStatement]);
+  return { userId, memberId, identityId };
 }
 
 /** Grants a primary or secondary organization-contact role, revoking any prior holder. */

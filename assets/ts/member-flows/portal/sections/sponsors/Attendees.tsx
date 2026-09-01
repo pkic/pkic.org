@@ -1,8 +1,12 @@
 /** Sponsor-capability view of consenting attendees in the unified portal. */
 import { useEffect } from "preact/hooks";
 import { ApiClientError } from "../../../../shared/api-client";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { useApiPage } from "../../../../hooks/useApiPage";
+import { Alert } from "../../../../ui/Alert";
+import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { EmptyState } from "../../../../ui/EmptyState";
 import type { SponsorAttendee, SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
 import { sponsorAttendeesListResponseSchema } from "../../../../../shared/schemas/sponsor-access";
 
@@ -14,6 +18,22 @@ function fmtAttendanceType(value: string | null): string {
   if (!value) return "—";
   return value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
+
+/**
+ * Declared once outside the component: the columns depend on nothing the
+ * render decides, so rebuilding them on every listing update only makes the
+ * table re-derive an identical shape.
+ */
+const ATTENDEE_COLUMNS: ReadonlyArray<DataTableColumn<SponsorAttendee>> = [
+  // The design system's table gives slack to no column on its own; the
+  // person is the row's subject, so a wide screen's slack lands there.
+  { id: "name", header: "Name", width: "primary", cell: (a) => fmtName(a) },
+  { id: "email", header: "Email", cell: (a) => a.email ?? "—", cellClass: "pk-break" },
+  { id: "organizationName", header: "Organization", cell: (a) => a.organizationName ?? "—" },
+  { id: "jobTitle", header: "Job title", cell: (a) => a.jobTitle ?? "—" },
+  // A bounded vocabulary hugs its content instead of claiming slack.
+  { id: "attendanceType", header: "Attendance", width: "fit", cell: (a) => fmtAttendanceType(a.attendanceType) },
+];
 
 export function SponsorAttendees({
   capacity,
@@ -30,6 +50,7 @@ export function SponsorAttendees({
   );
   const attendees = listing.data?.attendees ?? null;
   const ineligible = listing.error instanceof ApiClientError && listing.error.status === 403;
+  const sessionExpired = listing.error instanceof ApiClientError && listing.error.status === 401;
 
   useEffect(() => {
     if (listing.error instanceof ApiClientError && listing.error.status === 401) onUnauthorized();
@@ -39,83 +60,56 @@ export function SponsorAttendees({
 
   if (ineligible) {
     return (
-      <div class="container py-4 content-width-md">
-        <div class="alert alert-warning">
-          This sponsorship no longer has attendee data access — either your tier isn't configured for it, or the
-          sponsorship is no longer active. Contact your PKIC representative if you believe this is a mistake.
-        </div>
+      <div class="pk pk-stack content-width-md">
+        <Alert tone="warn" title="This sponsorship no longer has attendee data access">
+          Either your tier isn't configured for it, or the sponsorship is no longer active. Contact your PKIC
+          representative if you believe this is a mistake.
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div class="container py-4 content-width-xl">
-      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-        <div>
-          <h1 class="h4 mb-1">Attendees — {eventLabel}</h1>
-          <p class="text-muted small mb-0">
-            {capacity.tier} sponsor · {capacity.contactEmail}
-          </p>
-        </div>
-        <div class="d-flex gap-2">
-          <a
-            class="btn btn-outline-success"
-            href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
-            download={`attendees-${capacity.eventSlug}.csv`}
-          >
-            Download CSV
-          </a>
-        </div>
+    // Full width: a list fills the measure it is given, and the shell owns
+    // the page's <h1> — the tab strip already names this view, so the strip
+    // below it carries the context line and the list's own actions.
+    <div class="pk pk-stack">
+      <div class="pk-cluster pk-cluster--between pk-cluster--start">
+        <p class="pk-small">
+          {eventLabel} · {capacity.tier} sponsor · {capacity.contactEmail}
+        </p>
+        {/* A download is a navigation to a representation of this list, so it
+            is an anchor wearing the button's clothes rather than a button that
+            fakes one. */}
+        <a
+          class="pk-btn pk-btn--secondary"
+          href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
+          download={`attendees-${capacity.eventSlug}.csv`}
+        >
+          Download CSV
+        </a>
       </div>
 
-      <p class="text-muted small">
+      <p class="pk-small">
         Only attendees who consented to sharing their profile with event sponsors are listed below.
       </p>
 
-      {listing.loading && (
-        <div class="d-flex align-items-center gap-2 text-muted py-4">
-          <div class="spinner-border spinner-border-sm" role="status"></div>
-          Loading attendees…
-        </div>
-      )}
-
-      {listing.error && !ineligible && !(listing.error instanceof ApiClientError && listing.error.status === 401) && (
-        <div class="alert alert-danger">✕ {listing.error.message}</div>
-      )}
-
-      {!listing.loading && !listing.error && attendees && (
-        <div class="table-responsive">
-          <table class="table table-sm table-hover align-middle">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Organization</th>
-                <th>Job title</th>
-                <th>Attendance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attendees.length === 0 ? (
-                <tr>
-                  <td colSpan={5} class="text-muted text-center py-4">
-                    No consenting attendees yet.
-                  </td>
-                </tr>
-              ) : (
-                attendees.map((a) => (
-                  <tr key={a.registrationId}>
-                    <td>{fmtName(a)}</td>
-                    <td>{a.email ?? "—"}</td>
-                    <td>{a.organizationName ?? "—"}</td>
-                    <td>{a.jobTitle ?? "—"}</td>
-                    <td>{fmtAttendanceType(a.attendanceType)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      {listing.error && !sessionExpired ? (
+        <ErrorAlert error={listing.error} />
+      ) : (
+        <DataTable
+          caption={`Consenting attendees for ${eventLabel}`}
+          columns={ATTENDEE_COLUMNS}
+          rows={attendees ?? []}
+          rowKey={(a) => a.registrationId}
+          loading={listing.loading}
+          empty={
+            <EmptyState
+              title="No consenting attendees yet"
+              body="Registered attendees appear here once they agree to share their profile with event sponsors."
+            />
+          }
+        />
       )}
       {listing.pagerProps && <Pager {...listing.pagerProps} />}
     </div>

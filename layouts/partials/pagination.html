@@ -1,0 +1,55 @@
+{{/*
+  pagination — the list pages' page navigation.
+
+  Hugo's `_internal/pagination.html` writes Bootstrap 5 markup (`pagination`,
+  `page-item`, `page-link`). With the framework gone those classes style
+  nothing, so the blog's pager rendered as a bulleted list of blue numbers.
+
+  This writes the same DOM as `ui/Pager.tsx` instead, so one stylesheet dresses
+  the portal's pager and the public list pages alike. A page that cannot be
+  navigated to is a `span`, not a link with the href removed: there is nothing
+  to activate, and `aria-disabled` says so.
+
+  Expects a paginator in `.Paginator` (call `.Paginate` before including it).
+*/}}
+{{- $p := .Paginator -}}
+{{- if gt $p.TotalPages 1 -}}
+{{- $window := 2 -}}
+<nav class="pk-pager" aria-label="{{ or (.Param "paginationLabel") "Page navigation" }}">
+  <ol class="pk-pager__list">
+    <li class="pk-pager__item">
+      {{- if $p.HasPrev }}
+      <a class="pk-pager__button pk-pager__button--prev" href="{{ $p.Prev.URL }}" rel="prev" aria-label="Previous page">‹</a>
+      {{- else }}
+      <span class="pk-pager__button pk-pager__button--prev" aria-disabled="true" aria-label="Previous page">‹</span>
+      {{- end }}
+    </li>
+
+    {{- $first := 1 -}}
+    {{- $last := $p.TotalPages -}}
+    {{- range $p.Pagers -}}
+      {{- $n := .PageNumber -}}
+      {{- $near := and (ge $n (sub $p.PageNumber $window)) (le $n (add $p.PageNumber $window)) -}}
+      {{- if or (eq $n $first) (eq $n $last) $near }}
+    <li class="pk-pager__item">
+      {{- if eq $n $p.PageNumber }}
+      <a class="pk-pager__button" href="{{ .URL }}" aria-current="page" aria-label="Page {{ $n }}, current page">{{ $n }}</a>
+      {{- else }}
+      <a class="pk-pager__button" href="{{ .URL }}" aria-label="Page {{ $n }}">{{ $n }}</a>
+      {{- end }}
+    </li>
+      {{- else if or (eq $n (add $first 1)) (eq $n (sub $last 1)) }}
+    <li class="pk-pager__item pk-pager__item--gap" aria-hidden="true">…</li>
+      {{- end -}}
+    {{- end }}
+
+    <li class="pk-pager__item">
+      {{- if $p.HasNext }}
+      <a class="pk-pager__button pk-pager__button--next" href="{{ $p.Next.URL }}" rel="next" aria-label="Next page">›</a>
+      {{- else }}
+      <span class="pk-pager__button pk-pager__button--next" aria-disabled="true" aria-label="Next page">›</span>
+      {{- end }}
+    </li>
+  </ol>
+</nav>
+{{- end -}}

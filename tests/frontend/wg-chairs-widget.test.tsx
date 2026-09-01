@@ -61,6 +61,7 @@ function assignment(roleId: "role-group_lead" | "role-group_deputy_lead", name: 
     roleId,
     person: {
       name,
+      jobTitle: "Principal Cryptographer",
       organizationName: "Example Consortium",
       organizationLogoUrl: null,
       organizationWebsite: "https://example.test",
@@ -124,7 +125,13 @@ describe("WgChairsWidget", () => {
     expect(container.textContent).toContain("Ada Lovelace");
     expect(container.textContent).toContain("Grace Hopper");
     expect(container.textContent).toContain("Katherine Johnson");
-    expect(container.querySelectorAll('a[aria-label="LinkedIn"]')).toHaveLength(3);
+    expect(container.textContent).toContain("Principal Cryptographer at Example Consortium");
+    // Each profile link is named after the person, not after the network:
+    // three links all called "LinkedIn" are nothing to choose between when
+    // they are read out on their own.
+    expect(
+      [...container.querySelectorAll("a.person-card-linkedin")].map((link) => link.getAttribute("aria-label")),
+    ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn", "Katherine Johnson on LinkedIn"]);
   });
 
   it("keeps the mount hidden when the directory has no public leadership", async () => {

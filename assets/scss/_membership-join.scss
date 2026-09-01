@@ -1,9 +1,13 @@
+// The verified banner is the `ok` tone: the soft ground, the tone's ink, and a
+// line derived from the strong tone the way `pk-badge` derives its own. There
+// is no separate "subtle success line" token, and inventing one would put a
+// second definition of the tone beside the scale in tokens.ts.
 .membership-verified-context {
   padding: 0.9rem 1rem;
-  border: 1px solid var(--bs-success-border-subtle);
-  border-radius: var(--bs-border-radius);
-  background: var(--bs-success-bg-subtle);
-  color: var(--bs-success-text-emphasis);
+  border: 1px solid color-mix(in srgb, var(--pk-ok) 25%, transparent);
+  border-radius: var(--pk-radius);
+  background: var(--pk-ok-soft);
+  color: var(--pk-ok-ink);
 }
 
 .membership-legal-agreements {
@@ -13,16 +17,21 @@
 
 .membership-legal-card {
   overflow: hidden;
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius);
-  background: var(--bs-body-bg);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface);
 }
 
 .membership-legal-card-header {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--bs-border-color);
-  background: var(--bs-tertiary-bg);
+  border-bottom: 1px solid var(--pk-line);
+  background: var(--pk-surface-sunk);
   font-size: 0.9rem;
+
+  // The intro line used to carry `mb-0`; the spacing is the header's.
+  p {
+    margin: 0;
+  }
 }
 
 .membership-legal-card-scroll {
@@ -34,12 +43,12 @@
 }
 
 .membership-legal-card-scroll:focus-visible {
-  outline: 0.2rem solid color-mix(in srgb, var(--bs-primary) 35%, transparent);
+  outline: 0.2rem solid color-mix(in srgb, var(--pk-accent) 35%, transparent);
   outline-offset: -0.2rem;
 }
 
 .membership-legal-document {
-  color: var(--bs-body-color);
+  color: var(--pk-ink);
   font-size: 0.85rem;
   line-height: 1.55;
 }
@@ -54,18 +63,20 @@
 .membership-legal-acceptance {
   margin-top: 1.25rem;
   padding: 1rem;
-  border-top: 1px solid var(--bs-border-color);
-  background: var(--bs-tertiary-bg);
+  border-top: 1px solid var(--pk-line);
+  background: var(--pk-surface-sunk);
 }
 
 .membership-legal-authority {
   padding: 0.9rem 1rem;
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius);
-  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface-sunk);
 }
 
-.was-validated .membership-legal-card:has(.form-check-input:invalid),
-.was-validated .membership-legal-authority:has(.form-check-input:invalid) {
-  border-color: var(--bs-danger);
+// The agreement checkboxes are `pk-check__input` now, on both the document
+// cards and the warranted-authority block.
+.was-validated .membership-legal-card:has(.pk-check__input:invalid),
+.was-validated .membership-legal-authority:has(.pk-check__input:invalid) {
+  border-color: var(--pk-danger);
 }

@@ -10,6 +10,9 @@ static/pagefind
 wrangler.toml
 .env*
 test-results/
+# Playwright writes one output directory per run; parallel runs in this
+# worktree use suffixed ones so they cannot clobber each other's artifacts.
+test-results*/
 playwright-report/
 ignore/
 prd/

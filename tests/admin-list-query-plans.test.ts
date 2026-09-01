@@ -79,12 +79,12 @@ describe("admin list D1 query plans", () => {
 
   it("counts organizations without roster or primary-contact projections", async () => {
     const { pageSql, countSql, bindings, countBindings } = await explainOffsetPage(
-      buildOrganizationsPageQuery({ limit: 25, offset: 50, q: "Consortium", sort: "-member_count" }),
+      buildOrganizationsPageQuery({ limit: 25, offset: 50, q: "Consortium", sort: "-identity_count" }),
     );
 
-    expect(pageSql).toMatch(/organization_representatives|primary_contact|member_count/i);
+    expect(pageSql).toMatch(/identities|primary_contact|active_identity_count/i);
     expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM organizations o/i);
-    expect(countSql).not.toMatch(/organization_representatives|primary_contact|members\s+m|member_count/i);
+    expect(countSql).not.toMatch(/identities|primary_contact|members\s+m|active_identity_count/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings.slice(1));
   });
@@ -106,7 +106,7 @@ describe("admin list D1 query plans", () => {
     expect(countSql).not.toMatch(
       /event_participation_count|COUNT\(DISTINCT ep\.event_id\)|ORDER BY r2\.joined_at|LEFT JOIN members|member_category_assignments/i,
     );
-    expect(countSql).toMatch(/NOT \(EXISTS[\s\S]+organization_representatives[\s\S]+event_participant_role_sources/i);
+    expect(countSql).toMatch(/NOT \(EXISTS[\s\S]+identities[\s\S]+event_participant_role_sources/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings);
   });
@@ -132,7 +132,7 @@ describe("admin list D1 query plans", () => {
     expect(projectionPlan).toContain("idx_groups_parent_active");
   });
 
-  it("counts a user's represented organizations through the representative-user index", async () => {
+  it("counts a user's organizations through the active identity index", async () => {
     const userId = await insertUser(env.DB, "query-plan-user@example.test");
     const organizationId = await insertOrganization(env.DB, "Query Plan Org");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -143,11 +143,11 @@ describe("admin list D1 query plans", () => {
     );
 
     expect(pageSql).toMatch(/member_category_assignments/i);
-    expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM organization_representatives r/i);
+    expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM identities identity/i);
     expect(countSql).not.toMatch(/member_category_assignments/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
     expect(countBindings).toEqual(bindings);
     const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
-    expect(projectionPlan).toContain("idx_organization_representatives_user_active");
+    expect(projectionPlan).toContain("idx_identities_user_lifecycle");
   });
 });

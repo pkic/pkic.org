@@ -27,7 +27,7 @@ const ENVS = {
   },
   preview: {
     wranglerFlag: "--remote",
-    wranglerEnv: "preview",       // maps to env.preview in wrangler.jsonc
+    wranglerEnv: "preview", // maps to env.preview in wrangler.jsonc
     database: "pkic-db-preview",
     assetsBucket: "pkic-assets-preview",
     speakerBucket: "pkic-speaker-uploads-preview",
@@ -58,9 +58,18 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
 
-    if (arg === "--local") { env = "local"; continue; }
-    if (arg === "--preview") { env = "preview"; continue; }
-    if (arg === "--production" || arg === "--remote") { env = "production"; continue; }
+    if (arg === "--local") {
+      env = "local";
+      continue;
+    }
+    if (arg === "--preview") {
+      env = "preview";
+      continue;
+    }
+    if (arg === "--production" || arg === "--remote") {
+      env = "production";
+      continue;
+    }
 
     if (arg === "--only" && argv[i + 1]) {
       only.add(argv[++i]);
@@ -97,16 +106,7 @@ function script(file) {
 // ── Steps ───────────────────────────────────────────────────────────────────
 
 function applyMigrations(cfg) {
-  run("pnpm", [
-    "exec",
-    "wrangler",
-    "d1",
-    "migrations",
-    "apply",
-    cfg.database,
-    ...envFlag(cfg),
-    cfg.wranglerFlag,
-  ]);
+  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...envFlag(cfg), cfg.wranglerFlag]);
 }
 
 function seedAdmin(cfg) {
@@ -117,9 +117,11 @@ function seedEvent(cfg) {
   run("node", [
     script("seed-event.mjs"),
     cfg.wranglerFlag,
-    "--db", cfg.database,
+    "--db",
+    cfg.database,
     ...envFlag(cfg),
-    "--bucket", cfg.assetsBucket,
+    "--bucket",
+    cfg.assetsBucket,
     "--skip-email-templates",
   ]);
 }
@@ -128,9 +130,11 @@ function seedTemplates(cfg) {
   run("node", [
     script("seed-email-templates.mjs"),
     cfg.wranglerFlag,
-    "--db", cfg.database,
+    "--db",
+    cfg.database,
     ...envFlag(cfg),
-    "--bucket", cfg.assetsBucket,
+    "--bucket",
+    cfg.assetsBucket,
   ]);
 }
 

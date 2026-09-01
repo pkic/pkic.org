@@ -11,7 +11,7 @@ import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 import { normalizeOrgName } from "../sponsorship";
 import { buildGetOrCreateOrganizationMemberAggregateStatements } from "../membership/memberships";
-import { isActiveRepresentative } from "../membership/representatives";
+import { isActiveIdentityForMember } from "../membership/identities";
 import {
   REPRESENTATIVE_ROLE_IDS,
   buildAssignRepresentativeRoleStatements,
@@ -106,13 +106,9 @@ export async function updateOrganization(
     ["secondaryContactUserId", input.secondaryContactUserId],
   ] as const) {
     if (!userId || !aggregateId) continue;
-    const isRepresentative = await isActiveRepresentative(db, aggregateId, userId);
+    const isRepresentative = await isActiveIdentityForMember(db, aggregateId, userId);
     if (!isRepresentative) {
-      throw new AppError(
-        422,
-        "NOT_A_REPRESENTATIVE",
-        `${field} must be an existing representative of this organization`,
-      );
+      throw new AppError(422, "NOT_AN_ACTIVE_IDENTITY", `${field} must hold an active identity for this organization`);
     }
   }
 
@@ -154,15 +150,20 @@ export async function updateOrganization(
     );
   }
   if (aggregateId && input.membershipCategory !== undefined) {
-    const representatives = await all<{ user_id: string }>(
+    const identities = await all<{ user_id: string }>(
       db,
-      `SELECT user_id FROM organization_representatives
-        WHERE member_id = ? AND left_at IS NULL AND blocked_at IS NULL
-        ORDER BY user_id`,
+      `SELECT identity.user_id
+         FROM identities identity
+         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+        WHERE capacity.member_id = ?
+          AND identity.started_at IS NOT NULL
+          AND identity.ended_at IS NULL
+          AND identity.blocked_at IS NULL
+        ORDER BY identity.user_id`,
       [aggregateId],
     );
-    for (const representative of representatives) {
-      statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, representative.user_id, now));
+    for (const identity of identities) {
+      statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(authorizedDb, identity.user_id, now));
     }
   }
   if (aggregateId && (input.primaryContactUserId !== undefined || input.secondaryContactUserId !== undefined)) {

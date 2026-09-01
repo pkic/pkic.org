@@ -84,6 +84,10 @@ const config = {
       output: {
         entryFileNames: isDev ? "[name].js" : "[name].[hash].js",
         chunkFileNames: isDev ? "chunks/[name].js" : "chunks/[name].[hash].js",
+        // Stylesheets follow the same rule as the scripts: stable names in a
+        // dev build so the served files can be inspected, hashed in
+        // production so they can be cached indefinitely.
+        assetFileNames: isDev ? "[name][extname]" : "[name].[hash][extname]",
         // Rolldown's automatic chunking groups zod (and the runtime helpers
         // it pulls in) into a shared chunk whenever two or more modules
         // import it, then names that chunk after whichever constituent
@@ -146,13 +150,33 @@ function manifestPlugin({ entries, dataDir, root, isDev }) {
         const key = inputToKey[facadeModule];
         if (!key) continue;
         const url = `/js/built/${fileName}`;
+
+        // CSS imported by the entry is emitted as its own asset rather than
+        // injected by script, so Hugo has to link it. Lazy chunks are not
+        // recorded here on purpose: Vite injects their stylesheets when the
+        // chunk loads, which is what keeps component CSS off pages that never
+        // reach that component.
+        const entryCss = [...(chunk.viteMetadata?.importedCss ?? [])];
+        const cssUrl = entryCss.length > 0 ? `/js/built/${entryCss[0]}` : null;
+        if (entryCss.length > 1) {
+          console.warn(
+            `[build-frontend] entry "${key}" emitted ${entryCss.length} stylesheets; only the first is linked.`,
+          );
+        }
+
         if (isDev) {
-          manifest[key] = { url };
+          manifest[key] = cssUrl ? { url, css: cssUrl } : { url };
         } else {
           const filePath = resolve(outDir, fileName);
           const fileContent = readFileSync(filePath);
           const hash = createHash("sha256").update(fileContent).digest("base64");
           manifest[key] = { url, integrity: `sha256-${hash}` };
+          if (cssUrl) {
+            const cssContent = readFileSync(resolve(outDir, entryCss[0]));
+            const cssHash = createHash("sha256").update(cssContent).digest("base64");
+            manifest[key].css = cssUrl;
+            manifest[key].cssIntegrity = `sha256-${cssHash}`;
+          }
         }
       }
 

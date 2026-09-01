@@ -1,5 +1,10 @@
 // ── CTA participation bar ──────────────────────────────────────────────────
 #participate {
+  // One line of text under the gradient rule, so it takes the tighter step of
+  // the spacing scale rather than `pk-section`'s between-sections rhythm —
+  // which is 3rem, and left the sentence stranded in the middle of a band
+  // twice as tall as the one it replaced.
+  padding-block: var(--pk-5);
   background: #000;
   border-top: 3px solid transparent;
   border-image: linear-gradient(
@@ -35,9 +40,33 @@
 // ── Main footer body ───────────────────────────────────────────────────────
 .footer-body {
   border-top: 1px solid rgba(#fff, 0.06);
+  // Breathing room between the rule and the brand column: the logo was
+  // sitting directly against the border, which reads as a collision rather
+  // than a section break.
+  padding-block: var(--pk-6);
+}
+
+// Four columns on a desktop footer: the brand and the three link lists.
+//
+// The generic tracks are sized for cards. At the 22rem one the four columns
+// folded into two, which doubled the footer's height and left the brand
+// column's divider standing in the middle of it; at the 11rem one a fifth,
+// empty track opens up. A footer column is as wide as its longest link, so it
+// gets its own measure rather than bending a shared one.
+.footer-columns {
+  --pk-col-min: 14rem;
 }
 
 // Brand column
+// The member-logo marquee. It carried `text-nowrap overflow-hidden my-4` in
+// the markup; clipping and not wrapping are what make a marquee a marquee, so
+// they belong here rather than being re-stated on every page that shows one.
+.footer-member-wall {
+  white-space: nowrap;
+  overflow: hidden;
+  margin-block: 1.5rem;
+}
+
 .footer-brand {
   padding-right: 2rem;
 

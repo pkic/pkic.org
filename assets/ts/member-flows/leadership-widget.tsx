@@ -51,7 +51,9 @@ function TimelineItem({
     <div class="person-tl-item">
       <div class="person-tl-avatar-wrap">
         {person.photoUrl ? (
-          <img class="person-tl-avatar" src={person.photoUrl} alt={person.name} loading="lazy" />
+          // The name follows in `person-tl-name`, so an alt repeating it makes
+          // a screen reader say it twice.
+          <img class="person-tl-avatar" src={person.photoUrl} alt="" loading="lazy" />
         ) : (
           <div class={`person-tl-avatar person-tl-avatar--initials wg-${color}`}>{initialsFor(person.name)}</div>
         )}
@@ -74,7 +76,7 @@ function TimelineItem({
   );
 }
 
-function RosterWidget({ apiBase, body, color }: { apiBase: string; body: string; color: string }) {
+export function RosterWidget({ apiBase, body, color }: { apiBase: string; body: string; color: string }) {
   const [data, setData] = useState<LeadershipPublicResponse | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -123,7 +125,7 @@ function RosterWidget({ apiBase, body, color }: { apiBase: string; body: string;
   );
 }
 
-function ConsortiumWidget({ apiBase, color }: { apiBase: string; color: string }) {
+export function ConsortiumWidget({ apiBase, color }: { apiBase: string; color: string }) {
   const [data, setData] = useState<ConsortiumChairsPublicResponse | null>(null);
   const [failed, setFailed] = useState(false);
 

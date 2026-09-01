@@ -4,6 +4,7 @@ interface PortalSessionFixtureOptions {
   staff?: boolean;
   member?: boolean;
   staffRole?: string;
+  pendingIdentityCount?: number;
   grants?: Array<{ permission: string; contextType: string | null; contextId: string | null }>;
 }
 
@@ -13,6 +14,7 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
     success: true,
     identity,
     sponsors: [],
+    pendingIdentityCount: capacities.pendingIdentityCount ?? 0,
     ...(capacities.staff
       ? {
           staff: {
@@ -28,11 +30,21 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
       ? {
           member: {
             userId: identity.id,
+            identityId: "00000000-0000-4000-8000-000000000003",
             email: identity.email,
             memberId: "00000000-0000-4000-8000-000000000002",
             organizationId: null,
             membershipCategory: "H5",
             isEcMember: false,
+            activeIdentities: [
+              {
+                identityId: "00000000-0000-4000-8000-000000000003",
+                memberId: "00000000-0000-4000-8000-000000000002",
+                organizationId: null,
+                organizationName: null,
+                membershipCategory: "H5",
+              },
+            ],
           },
         }
       : {}),

@@ -240,7 +240,7 @@ export async function getGroupVoteDetail(
   voteId: string,
 ): Promise<GroupVoteDetail> {
   const { row, capabilities } = await resolveGroupVote(db, viewer, groupId, voteId);
-  const [hydrated] = await hydrateVotesForUser(db, [row], viewer.userId, groupId);
+  const [hydrated] = await hydrateVotesForUser(db, [row], viewer.userId, viewer.identityId ?? null, groupId);
   const result: VoteResult =
     deriveVoteStatus(row, nowIso()) === "closed" && capabilities.includes("view_results")
       ? closedVoteResult(row)

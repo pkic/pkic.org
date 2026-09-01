@@ -116,15 +116,21 @@ export async function assertEmailAuthCapabilityEmail(options: {
   capability: Pick<EmailAuthCapabilityPayload, "emailFingerprint">;
   currentEmail: string;
 }): Promise<void> {
-  if (
-    !(await verifyHmacSha256Hex(
-      options.signingSecret,
-      emailFingerprintInput(options.currentEmail),
-      options.capability.emailFingerprint,
-    ))
-  ) {
+  if (!(await emailAuthCapabilityMatchesEmail(options))) {
     throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid magic link token");
   }
+}
+
+export async function emailAuthCapabilityMatchesEmail(options: {
+  signingSecret: string;
+  capability: Pick<EmailAuthCapabilityPayload, "emailFingerprint">;
+  currentEmail: string;
+}): Promise<boolean> {
+  return verifyHmacSha256Hex(
+    options.signingSecret,
+    emailFingerprintInput(options.currentEmail),
+    options.capability.emailFingerprint,
+  );
 }
 
 export function emailAuthRedemptionKey(purpose: EmailAuthCapabilityPurpose, capabilityId: string): string {

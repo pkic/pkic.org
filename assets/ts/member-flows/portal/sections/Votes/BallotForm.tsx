@@ -1,5 +1,18 @@
+/**
+ * Casting a ballot: a candidate list for an election, a choice of motions
+ * otherwise.
+ *
+ * The candidate radios are a real group now — a fieldset with a legend — so
+ * they are announced as one choice rather than as loose radios, and each one
+ * carries all three parts of the check block. `pk-check` on the label alone
+ * renders the operating system's own control, which no gate can see.
+ */
 import { useState } from "preact/hooks";
 import { postJson, ApiClientError } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+// The check block's three classes are written here rather than reached
+// through `ui/Field`, so this module pulls the stylesheet into its own chunk.
+import "../../../../ui/Field.css";
 import { toast } from "../../ui";
 import type { MemberVote } from "../../types";
 import { MOTION_CHOICES } from "./shared";
@@ -19,10 +32,13 @@ export function BallotForm({
   onCast: () => Promise<void>;
 }) {
   const [choice, setChoice] = useState<string>("");
-  const [submitting, setSubmitting] = useState(false);
+  // Which choice is in flight, not merely that something is: three motion
+  // buttons all showing a spinner says nothing about which one was pressed.
+  const [pending, setPending] = useState<string | null>(null);
+  const submitting = pending !== null;
 
   async function submit(selected: string): Promise<void> {
-    setSubmitting(true);
+    setPending(selected);
     try {
       await postJson(endpoint, { choice: selected, ...(memberId ? { memberId } : {}) }, submitBallotResponseSchema);
       toast(hasCastBallot ? "Ballot updated" : "Ballot cast", "success");
@@ -30,56 +46,60 @@ export function BallotForm({
     } catch (e) {
       toast(e instanceof ApiClientError ? e.message : "Could not cast your ballot.", "error");
     } finally {
-      setSubmitting(false);
+      setPending(null);
     }
   }
 
   if (vote.voteType === "election") {
     const standing = (vote.candidates ?? []).filter((c) => c.eliminatedRound === null);
     return (
-      <div>
-        <div class="d-flex flex-column gap-2 mb-3">
+      <div class="pk-stack">
+        <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={submitting}>
+          <legend class="pk-strong">Candidates</legend>
           {standing.map((c) => (
-            <label key={c.id} class="list-group-item d-flex align-items-start gap-2">
+            <label key={c.id} class="pk-check">
               <input
                 type="radio"
-                class="form-check-input mt-1"
+                class="pk-check__input"
                 name={`ballot-${vote.id}-${memberId ?? "person"}`}
                 checked={choice === c.id}
-                disabled={submitting}
                 onChange={() => setChoice(c.id)}
               />
-              <span>
-                <span class="fw-semibold d-block">{c.candidateName}</span>
-                {c.candidateBio && <span class="text-muted small">{c.candidateBio}</span>}
+              <span class="pk-check__label">
+                {c.candidateName}
+                {c.candidateBio && <span class="pk-check__hint">{c.candidateBio}</span>}
               </span>
             </label>
           ))}
+        </fieldset>
+        <div class="pk-cluster">
+          <Button
+            variant="primary"
+            size="sm"
+            loading={submitting}
+            disabled={!choice || submitting}
+            onClick={() => void submit(choice)}
+          >
+            {submitting ? "Saving…" : hasCastBallot ? "Update ballot" : "Cast ballot"}
+          </Button>
         </div>
-        <button
-          type="button"
-          class="btn btn-sm btn-success"
-          disabled={!choice || submitting}
-          onClick={() => void submit(choice)}
-        >
-          {submitting ? "Saving…" : hasCastBallot ? "Update ballot" : "Cast ballot"}
-        </button>
       </div>
     );
   }
 
   return (
-    <div class="d-flex gap-2">
+    <div class="pk-cluster" role="group" aria-label={hasCastBallot ? "Update your ballot" : "Cast your ballot"}>
       {MOTION_CHOICES.map((opt) => (
-        <button
+        <Button
           key={opt.value}
-          type="button"
-          class="btn btn-sm btn-outline-primary"
+          variant="secondary"
+          size="sm"
+          loading={pending === opt.value}
           disabled={submitting}
           onClick={() => void submit(opt.value)}
         >
           {opt.label}
-        </button>
+        </Button>
       ))}
     </div>
   );

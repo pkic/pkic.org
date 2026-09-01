@@ -57,6 +57,7 @@ async function loadAccessibleVoteIds(
   db: DatabaseLike,
   voteIds: string[],
   userId: string,
+  identityId: string | null,
   throughGroupId?: string,
 ): Promise<Set<string>> {
   if (voteIds.length === 0) return new Set();
@@ -67,12 +68,13 @@ async function loadAccessibleVoteIds(
     `SELECT DISTINCT vote.id AS vote_id
      FROM votes vote
      JOIN group_memberships membership
-       ON membership.user_id = ?
+      ON membership.user_id = ?
+      AND membership.identity_id = ?
       AND membership.left_at IS NULL
       ${context.sql}
       AND ${voteResultGroupPredicate("vote", "membership.group_id")}
      WHERE ${filter.sql}`,
-    [userId, ...context.bindings, ...filter.bindings],
+    [userId, identityId, ...context.bindings, ...filter.bindings],
   );
   return new Set(rows.map((row) => row.vote_id));
 }
@@ -81,6 +83,7 @@ async function loadEligibleMemberBallots(
   db: DatabaseLike,
   voteIds: string[],
   userId: string,
+  identityId: string | null,
   throughGroupId?: string,
 ): Promise<Map<string, EligibleMemberBallot[]>> {
   const byVoteId = new Map<string, EligibleMemberBallot[]>();
@@ -98,7 +101,8 @@ async function loadEligibleMemberBallots(
             organization.name AS organization_name, ballot.id AS ballot_id
      FROM votes vote
      JOIN group_memberships membership
-       ON membership.user_id = ?
+      ON membership.user_id = ?
+      AND membership.identity_id = ?
       AND membership.left_at IS NULL
       ${context.sql}
       AND ${voteParticipationGroupPredicate("vote", "membership.group_id")}
@@ -108,11 +112,12 @@ async function loadEligibleMemberBallots(
       AND represented_member.organization_id IS NOT NULL
      JOIN organizations organization ON organization.id = represented_member.organization_id
      JOIN member_category_assignments category ON category.member_id = represented_member.id
-     JOIN organization_representatives representative
-       ON representative.member_id = represented_member.id
-      AND representative.user_id = membership.user_id
-      AND representative.left_at IS NULL
-      AND representative.blocked_at IS NULL
+     JOIN identities identity
+       ON identity.id = membership.identity_id
+      AND identity.user_id = membership.user_id
+      AND identity.started_at IS NOT NULL
+      AND identity.ended_at IS NULL
+      AND identity.blocked_at IS NULL
      LEFT JOIN vote_ballots ballot
        ON ballot.vote_id = vote.id
       AND ballot.member_id = membership.member_id
@@ -128,7 +133,7 @@ async function loadEligibleMemberBallots(
          )
        )
      ORDER BY vote.id, organization.name COLLATE NOCASE, membership.member_id`,
-    [userId, ...context.bindings, ...filter.bindings],
+    [userId, identityId, ...context.bindings, ...filter.bindings],
   );
   for (const row of rows) {
     const ballots = byVoteId.get(row.vote_id) ?? [];
@@ -146,6 +151,7 @@ async function loadPersonBallotStatuses(
   db: DatabaseLike,
   voteIds: string[],
   userId: string,
+  identityId: string | null,
   throughGroupId?: string,
 ): Promise<Map<string, PersonBallotStatus>> {
   const result = new Map<string, PersonBallotStatus>();
@@ -157,7 +163,8 @@ async function loadPersonBallotStatuses(
     `SELECT vote.id AS vote_id, MAX(ballot.id) AS ballot_id
      FROM votes vote
      JOIN group_memberships membership
-       ON membership.user_id = ?
+      ON membership.user_id = ?
+      AND membership.identity_id = ?
       AND membership.left_at IS NULL
       ${context.sql}
       AND ${voteParticipationGroupPredicate("vote", "membership.group_id")}
@@ -182,7 +189,7 @@ async function loadPersonBallotStatuses(
          )
        )
      GROUP BY vote.id`,
-    [userId, ...context.bindings, userId, ...filter.bindings],
+    [userId, identityId, ...context.bindings, userId, ...filter.bindings],
   );
   for (const row of rows) result.set(row.vote_id, { eligible: true, hasCastBallot: row.ballot_id !== null });
   return result;
@@ -192,6 +199,7 @@ export async function hydrateVotesForUser(
   db: DatabaseLike,
   rows: VoteRow[],
   userId: string,
+  identityId: string | null,
   throughGroupId?: string,
 ): Promise<MemberVoteSummary[]> {
   if (rows.length === 0) return [];
@@ -199,9 +207,9 @@ export async function hydrateVotesForUser(
   const electionVoteIds = rows.filter((row) => row.vote_type === "election").map((row) => row.id);
   const [candidatesByVoteId, memberBallotsByVoteId, personStatuses, accessibleVoteIds] = await Promise.all([
     getCandidatesForVotes(db, electionVoteIds),
-    loadEligibleMemberBallots(db, voteIds, userId, throughGroupId),
-    loadPersonBallotStatuses(db, voteIds, userId, throughGroupId),
-    loadAccessibleVoteIds(db, voteIds, userId, throughGroupId),
+    loadEligibleMemberBallots(db, voteIds, userId, identityId, throughGroupId),
+    loadPersonBallotStatuses(db, voteIds, userId, identityId, throughGroupId),
+    loadAccessibleVoteIds(db, voteIds, userId, identityId, throughGroupId),
   ]);
 
   const now = nowIso();
@@ -288,7 +296,7 @@ export async function listVisibleVotesForMember(
     limit: params.limit,
     offset: params.offset,
   });
-  return { votes: await hydrateVotesForUser(db, rows, member.userId), total };
+  return { votes: await hydrateVotesForUser(db, rows, member.userId, member.identityId), total };
 }
 
 export async function getVoteDetailForMember(
@@ -300,7 +308,7 @@ export async function getVoteDetailForMember(
   if (row.visibility !== "public" && !(await canMemberAccessGroupResource(db, member.userId, "vote", row.id, "view"))) {
     throw new AppError(404, "VOTE_NOT_FOUND", "Vote not found");
   }
-  const [vote] = await hydrateVotesForUser(db, [row], member.userId);
+  const [vote] = await hydrateVotesForUser(db, [row], member.userId, member.identityId);
   // The questions themselves, projected through the shared form reader so the
   // portal renders a consultation with the ordinary form components.
   return { ...vote, questionForm: await loadConsultationForm(db, row) };

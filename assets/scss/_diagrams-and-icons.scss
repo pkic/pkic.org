@@ -207,77 +207,11 @@
     }
   }
 
-  // Tables — modern card style
-  table {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    margin: 2rem 0;
-    font-size: 0.875rem;
-    border-radius: 0.5rem;
-    overflow: hidden;
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.1),
-      0 0 0 1px #e2e8f0;
-
-    thead {
-      background: #1e293b;
-      color: #e2e8f0;
-
-      th {
-        padding: 0.75rem 1rem;
-        font-weight: 600;
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        text-align: left;
-        border: none;
-        white-space: nowrap;
-
-        &:first-child {
-          border-radius: 0.5rem 0 0 0;
-        }
-        &:last-child {
-          border-radius: 0 0.5rem 0 0;
-        }
-      }
-    }
-
-    tbody {
-      tr {
-        transition: background 0.12s;
-        border-bottom: 1px solid #e2e8f0;
-
-        &:last-child {
-          border-bottom: none;
-        }
-        &:hover {
-          background: #f8fafc;
-        }
-
-        &:nth-child(even) {
-          background: #f8fafc;
-          &:hover {
-            background: #eff6ff;
-          }
-        }
-      }
-
-      td {
-        padding: 0.7rem 1rem;
-        vertical-align: top;
-        border: none;
-        color: #374151;
-        line-height: 1.55;
-      }
-    }
-  }
-
-  // Highlight first-column of tables (label column)
-  table th:first-child + th + th,
-  table td:first-child {
-    font-weight: 500;
-  }
+  // Tables are the design system's: the Markdown table render hook draws
+  // `pk-table`, dressed by `assets/ts/ui/Table.css`. A card treatment with
+  // hard-coded slate colours used to sit here and win on specificity, so a
+  // row could be painted a token surface while its text stayed a fixed
+  // `#374151` — dark grey on near-black once the tokens flipped.
 
   // Horizontal rules
   hr {

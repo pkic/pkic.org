@@ -6,9 +6,18 @@ import {
   meetingJoinResponseSchema,
   type MeetingJoinLanding,
 } from "../../../shared/schemas/event-series";
+import { Spinner } from "../../components/Spinner";
+import { Alert } from "../../ui/Alert";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody } from "../../ui/Panel";
+import { TextInput } from "../../ui/TextControl";
 import { ApiClientError, getJson, patchJson, postJson } from "../../shared/api-client";
 import type { MeetingGuestInvitationFragment } from "./invitation-fragment";
 import { MeetingJoinForm } from "./MeetingJoinForm";
+
+/** The length the verification endpoint accepts; nothing shorter is sent. */
+const VERIFICATION_CODE_LENGTH = 8;
 
 function occurrenceEndpoint(occurrenceId: string): string {
   return `/api/v1/meetings/occurrences/${encodeURIComponent(occurrenceId)}`;
@@ -112,36 +121,54 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   }
 
   if (loading) {
-    return <div class="text-muted py-5 text-center">Preparing secure meeting entry…</div>;
+    // The wait is announced rather than mimed by grey text: Spinner carries
+    // role="status" and names what is being prepared.
+    return <Spinner label="Preparing secure meeting entry…" />;
   }
   if (verificationId) {
     return (
-      <div class="card shadow-sm">
-        <div class="card-body p-4">
-          <h1 class="h4">Verify your invitation</h1>
-          <p>Enter the code sent to the invited email address in this same browser.</p>
-          <label class="form-label fw-semibold" for="meeting-guest-code">
-            Verification code
-          </label>
-          <input
-            id="meeting-guest-code"
-            class="form-control text-uppercase mb-3"
-            autocomplete="one-time-code"
-            inputMode="text"
-            maxlength={8}
-            value={code}
-            onInput={(event) => setCode(event.currentTarget.value)}
-          />
-          {error && <div class="alert alert-danger">{error}</div>}
-          <button
-            class="btn btn-primary"
-            type="button"
-            disabled={submitting || code.trim().length !== 8}
-            onClick={() => void verifyGuest()}
-          >
-            {submitting ? "Verifying…" : "Verify invitation"}
-          </button>
-        </div>
+      <div class="pk">
+        <Panel>
+          <PanelBody class="pk-stack">
+            <div class="pk-stack pk-stack--tight">
+              <h1>Verify your invitation</h1>
+              <p class="pk-muted">Enter the code sent to the invited email address in this same browser.</p>
+            </div>
+            {/* The failure is attached to the control it is about, so it
+                arrives as `aria-invalid` and `aria-describedby` on the input
+                rather than as a red box somewhere near it. */}
+            <Field
+              label="Verification code"
+              required
+              help={`The code is ${String(VERIFICATION_CODE_LENGTH)} characters long.`}
+              state={error ? "invalid" : undefined}
+              message={error ?? undefined}
+            >
+              {(control) => (
+                <TextInput
+                  {...control}
+                  autocomplete="one-time-code"
+                  inputMode="text"
+                  maxlength={VERIFICATION_CODE_LENGTH}
+                  value={code}
+                  // Upper-cased as it is typed rather than by a text
+                  // transform, so what the reader sees is what is sent.
+                  onInput={(event) => setCode(event.currentTarget.value.toUpperCase())}
+                />
+              )}
+            </Field>
+            <div class="pk-cluster">
+              <Button
+                variant="primary"
+                loading={submitting}
+                disabled={submitting || code.trim().length !== VERIFICATION_CODE_LENGTH}
+                onClick={() => void verifyGuest()}
+              >
+                {submitting ? "Verifying…" : "Verify invitation"}
+              </Button>
+            </div>
+          </PanelBody>
+        </Panel>
       </div>
     );
   }
@@ -149,8 +176,10 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
     return <MeetingJoinForm landing={landing} submitting={submitting} error={error} onJoin={(ids) => void join(ids)} />;
   }
   return (
-    <div class="alert alert-warning">
-      {error ?? "Sign in through the member portal or open the invitation sent to the guest email address."}
+    <div class="pk">
+      <Alert tone="warn">
+        {error ?? "Sign in through the member portal or open the invitation sent to the guest email address."}
+      </Alert>
     </div>
   );
 }

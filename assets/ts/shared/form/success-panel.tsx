@@ -6,7 +6,10 @@ export function replaceFormWithSuccess(
   form: HTMLFormElement,
   content: ComponentChildren,
 ): HTMLElement {
-  form.classList.add("d-none");
+  // The platform's own attribute, not a class: the form does not have to know
+  // which stylesheet is loaded for this to work, and nothing has to stay in
+  // step with it.
+  form.hidden = true;
   const container = document.createElement("div");
   render(content as VNode, container);
   root.appendChild(container);

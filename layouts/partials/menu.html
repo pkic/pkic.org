@@ -1,12 +1,18 @@
-<ul class="list-unstyled">
+{{/*
+  menu.html — the section side menu, rendered inside a <nav> supplied by the
+  caller. Spacing comes from the list's own gap rather than per-item padding
+  utilities; `.section-menu` carries the list reset Bootstrap's
+  `.list-unstyled` used to.
+*/}}
+<ul class="section-menu">
 {{ with .FirstSection }}
-    <li class="pt-2 pb-4"><strong><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></strong></li>
+    <li class="section-menu-top"><strong><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></strong></li>
     {{- if .Sections -}}
         {{- range .Sections -}}
-            <li class="pt-2 pb-1"><strong><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></strong></li>
+            <li><strong><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></strong></li>
             {{- if or ($.Page.IsDescendant .) (eq $.Page .) -}}
                 {{- range $i, $e := .Data.Pages -}}
-                    <li class="px-2"><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></li>
+                    <li class="section-menu-child"><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></li>
                 {{- end -}}
             {{- end -}}
         {{- end -}}

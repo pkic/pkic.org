@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberVote } from "../../assets/ts/member-flows/portal/types";
 import { VoteDetails } from "../../assets/ts/member-flows/portal/sections/Votes/VoteDetails";
+import { submitBallotSchema } from "../../assets/shared/schemas/votes";
 
 const mounted: HTMLElement[] = [];
 
@@ -104,25 +105,100 @@ describe("group-scoped per-Member ballots", () => {
     expect(container.textContent).toContain("Ballot recorded");
     expect(container.textContent).toContain("Not yet voted");
 
-    const organizationCards = Array.from(container.querySelectorAll(".border.rounded.p-3"));
+    // One Panel per represented organization, each headed by the organization
+    // it belongs to — so a reader moving by heading can tell the two ballots
+    // apart. The version this replaced titled them with a bold span.
+    const organizationCards = Array.from(container.querySelectorAll(".pk-panel"));
+    expect(organizationCards).toHaveLength(2);
+    expect(Array.from(container.querySelectorAll(".pk-panel__title")).map((h) => h.textContent)).toEqual([
+      "Organization A",
+      "Organization B",
+    ]);
+
     const secondInFavor = Array.from(organizationCards[1]!.querySelectorAll("button")).find(
       (button) => button.textContent === "In favor",
     );
     await act(() => (secondInFavor as HTMLButtonElement).click());
     await settle();
 
-    expect(requests).toEqual([
-      {
-        url: new URL(
-          "/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots",
-          location.origin,
-        ),
-        body: {
-          choice: "in_favor",
-          memberId: "00000000-0000-4000-8000-000000000020",
-        },
-      },
-    ]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toEqual(
+      new URL(
+        "/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots",
+        location.origin,
+      ),
+    );
+    // Through the shared request contract rather than against a literal: a
+    // body that matches the object written here but not the schema the
+    // endpoint validates would otherwise pass.
+    expect(submitBallotSchema.parse(requests[0]?.body)).toEqual({
+      choice: "in_favor",
+      memberId: "00000000-0000-4000-8000-000000000020",
+    });
     expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("says so, rather than showing an empty column, when the reader represents no eligible Member", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+
+    await act(() =>
+      render(
+        <VoteDetails
+          vote={{ ...multiMemberVote(), memberBallots: [] }}
+          ballotEndpoint="/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots"
+          onChanged={vi.fn(async () => undefined)}
+        />,
+        container,
+      ),
+    );
+
+    expect(container.querySelectorAll(".pk-panel")).toHaveLength(0);
+    expect(container.textContent).toContain("You do not represent an eligible Member in a participating group.");
+  });
+
+  it("says a closed vote recorded no result rather than rendering nothing at all", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+
+    await act(() =>
+      render(
+        <VoteDetails
+          vote={{
+            ...multiMemberVote(),
+            status: "closed",
+            // A shape that is neither an election tally nor a motion tally —
+            // the redacted outcome-only projection a group may be given.
+            result: { outcome: null } as MemberVote["result"],
+          }}
+          ballotEndpoint="/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots"
+          onChanged={vi.fn(async () => undefined)}
+        />,
+        container,
+      ),
+    );
+
+    expect(container.textContent).toContain("No result recorded.");
+  });
+
+  it("explains a cancelled vote in words, with the reason, not by greying the panel out", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+
+    await act(() =>
+      render(
+        <VoteDetails
+          vote={{ ...multiMemberVote(), status: "cancelled", cancellationReason: "Superseded by a board decision" }}
+          ballotEndpoint="/api/v1/groups/00000000-0000-4000-8000-000000000002/votes/00000000-0000-4000-8000-000000000001/ballots"
+          onChanged={vi.fn(async () => undefined)}
+        />,
+        container,
+      ),
+    );
+
+    expect(container.textContent).toContain("This vote was cancelled: Superseded by a board decision");
   });
 });

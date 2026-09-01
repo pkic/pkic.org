@@ -13,66 +13,69 @@
 {{- $heroUpcomingEvents := first 1 $upcomingEvents -}}
 {{- $heroMoreCount      := sub (len $upcomingEvents) 1 -}}
 
-<section class="pkic-home-hero">
-  <div class="container py-4">
-    <div class="row align-items-center gy-4">
-      <div class="col-lg-7">
-        <p class="text-uppercase fw-bold small mb-2 opacity-75" style="letter-spacing: 0.16em;">{{ $.Param "heroHeader" }}</p>
-        <h1 class="display-4 fw-bold lh-sm mb-3">{{ $.Param "heroTitle" }}</h1>
-        <p class="lead mb-4" style="max-width:540px;">{{ $.Param "heroDescription" }}</p>
+<section class="pk pkic-home-hero">
+  <div class="pk-container pk-container--wide">
+    <div class="pkic-home-hero__layout">
+      <div class="pk-stack pkic-home-hero__intro">
+        <p class="pkic-home-hero__kicker">{{ $.Param "heroHeader" }}</p>
+        <h1 class="hero-title">{{ $.Param "heroTitle" }}</h1>
+        <p class="pkic-home-hero__lead">{{ $.Param "heroDescription" }}</p>
         {{ with $.Param "heroLinks" }}
-        <div class="d-flex flex-wrap gap-3">
+        <div class="pk-cluster">
           {{- range . -}}
-          {{- $class := cond (.primary | default false) "btn btn-pkic btn-lg px-4" "btn btn-pkic-outline btn-lg px-4" -}}
-          <a href="{{ .url }}" class="{{ $class }}">{{ .text }}</a>
+          {{- $variant := cond (.primary | default false) "pk-btn--primary" "pk-btn--secondary" -}}
+          <a href="{{ .url }}" class="pk-btn {{ $variant }} pk-btn--lg">{{ .text }}</a>
           {{- end -}}
         </div>
         {{ end }}
       </div>
       {{ $featuredPost := first 1 (where .Site.RegularPages "Type" "blog") }}
       {{ with index $featuredPost 0 }}
-      <div class="col-lg-5 d-none d-lg-block">
-        <div class="pkic-hero-post-card">
-          <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
+      <div class="pkic-home-hero__aside">
+        <div class="pkic-hero-post-card pk-stack">
+          {{/* The whole feature block is the link target, so the heading and
+               the summary stay outside the anchor rather than inside it. */}}
+          <div class="pkic-hero-post-feature pk-stack pk-stack--tight">
             <p class="pkic-hero-post-label">Latest News</p>
-            <h3 class="pkic-hero-post-title">{{ .Title }}</h3>
+            <h3 class="pkic-hero-post-title"><a class="pk-stretched" href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
             <time class="pkic-hero-post-date" datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>
-            <p class="pkic-hero-post-summary mb-2">{{ .Summary | truncate 140 }}</p>
-            <span class="pkic-hero-post-cta">Read more &rarr;</span>
-          </a>
+            <p class="pkic-hero-post-summary">{{ .Summary | truncate 140 }}</p>
+            <span class="pkic-hero-post-cta" aria-hidden="true">Read more &rarr;</span>
+          </div>
 
           {{ if $heroUpcomingEvents }}
-          <div class="pt-3 mt-3 border-top" style="border-color: rgba(255,255,255,0.14) !important;">
-            <p class="pkic-hero-post-label mb-2">Upcoming Events</p>
-            <ul class="list-unstyled mb-0">
+          <div class="pkic-hero-post-events pk-stack pk-stack--snug">
+            <p class="pkic-hero-post-label">Upcoming Events</p>
+            {{/* A div list rather than a `ul`: inside `.pk` the base layer owns
+                 list padding, and a legacy rule cannot outrank a later layer
+                 without an `!important`. The roles keep the semantics. */}}
+            <div role="list" class="pk-stack pk-stack--snug">
               {{ range $heroUpcomingEvents }}
               {{ $eventPage := . }}
-              <li class="mb-2">
-                <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
-                  <span class="pkic-hero-post-title d-block mb-1">{{ .Param "heroTitle" | default .Title }}</span>
-                </a>
+              <div role="listitem" class="pk-stack pk-stack--tight">
+                <a class="pkic-hero-post-title" href="{{ .RelPermalink }}">{{ .Param "heroTitle" | default .Title }}</a>
                 {{ with $eventPage.Param "eventDate" }}
                 {{ $eventDate := time . }}
                 {{ $eventDuration := int (default 1 ($eventPage.Param "eventDuration")) }}
                 {{ $eventLabel := partial "events/date-label.html" $eventPage }}
                 {{ if gt $eventDuration 1 }}
                 <time
-                  class="pkic-hero-post-date mb-0 d-block"
+                  class="pkic-hero-post-date"
                   datetime="{{ $eventDate.Format "2006-01-02" }}"
                 >{{ $eventLabel }}</time>
                 {{ else }}
                 <time
-                  class="pkic-hero-post-date mb-0 d-block"
+                  class="pkic-hero-post-date"
                   datetime="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
                   data-local-time="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
                   data-hour-format="24"
                 >{{ $eventLabel }}</time>
                 {{ end }}
                 {{ end }}
-              </li>
+              </div>
               {{ end }}
-            </ul>
-            <a href="/events/" class="pkic-hero-post-cta d-inline-block mt-2">{{ if gt $heroMoreCount 0 }}+{{ $heroMoreCount }} more · {{ end }}View all upcoming and past events &rarr;</a>
+            </div>
+            <a href="/events/" class="pkic-hero-post-cta">{{ if gt $heroMoreCount 0 }}+{{ $heroMoreCount }} more · {{ end }}View all upcoming and past events &rarr;</a>
           </div>
           {{ end }}
         </div>
@@ -90,21 +93,13 @@
     {{ $wgCount = add $wgCount 1 }}
   {{ end }}
 {{ end }}
-<div class="pkic-stats-bar">
-  <div class="container">
-    <div class="row g-0 text-center">
-      <div class="col">
-        <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">{{ $memberCount }}</span><span class="pkic-stat-label">Members</span></a>
-      </div>
-      <div class="col">
-        <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">~1K</span><span class="pkic-stat-label">Representatives</span></a>
-      </div>
-      <div class="col">
-        <a href="/wg/" class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></a>
-      </div>
-      <div class="col d-none d-sm-block">
-        <a href="/join/" class="pkic-stat"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></a>
-      </div>
+<div class="pk pkic-stats-bar">
+  <div class="pk-container pk-container--wide">
+    <div class="pkic-stats-bar__row">
+      <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">{{ $memberCount }}</span><span class="pkic-stat-label">Members</span></a>
+      <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">~1K</span><span class="pkic-stat-label">Representatives</span></a>
+      <a href="/wg/" class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></a>
+      <a href="/join/" class="pkic-stat pkic-stat--wide-only"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></a>
     </div>
   </div>
 </div>

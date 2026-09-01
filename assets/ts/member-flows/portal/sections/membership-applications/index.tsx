@@ -16,6 +16,7 @@ import {
   type MembershipCategoryCatalogEntry,
 } from "../../../../../shared/schemas/membership-categories";
 import { getJson } from "../../../../shared/api-client";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { ApplicationDetailView } from "./ApplicationDetailView";
 import { ApplicationsList } from "./ApplicationsList";
 
@@ -52,11 +53,13 @@ export function MembershipApplications({
         categories={categories}
         canWrite={canWrite}
         canApprove={canApprove}
-        onBack={() => navigate("/membership/applications")}
       />
     );
   }
   return (
-    <ApplicationsList onViewApplication={(id) => navigate(`/membership/applications/${encodeURIComponent(id)}`)} />
+    <div class="pk pk-stack">
+      <PageHeader title="Membership applications" />
+      <ApplicationsList onViewApplication={(id) => navigate(`/membership/applications/${encodeURIComponent(id)}`)} />
+    </div>
   );
 }

@@ -42,6 +42,17 @@
   }
 }
 
+// The hero photograph. Rendered as an <img> so the template needs no inline
+// `style` attribute; it sits beneath the overlay and the content, both of
+// which come later in the document.
+.webinar-hero-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .webinar-hero-overlay {
   position: absolute;
   inset: 0;
@@ -52,6 +63,10 @@
   position: relative;
   z-index: 1;
   color: #fff;
+  // `heroButton` used to be `.btn-page-accent`; the per-page accent now
+  // reaches the design system's primary button through its own token.
+  --pk-accent-strong: var(--page-accent, #{$green});
+  --pk-accent-on: var(--pk-on-solid);
 }
 
 .webinar-hero-title {
@@ -59,7 +74,7 @@
   font-weight: 800;
   line-height: 1.25;
   max-width: 52rem;
-  margin: 0 auto 0.6rem;
+  margin-inline: auto;
   // Override global h1 gradient
   background: none !important;
   -webkit-background-clip: unset !important;
@@ -76,12 +91,15 @@
 }
 
 .webinar-hero-meta {
-  display: inline-flex;
+  // A flex item is blockified, so the row centres itself rather than relying
+  // on `inline-flex` plus an auto margin, which the hero stack would stretch.
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   font-size: 0.88rem;
   color: rgba(#fff, 0.8);
-  margin: 0.1rem auto 0;
+  margin: 0;
 }
 
 // ── Hero eyebrow — badge + "by Sponsor" ──────────────────────────────────────
@@ -121,7 +139,8 @@
   color: $gray-700;
   border-bottom: 2px solid $gray-200;
   padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
+  // Spacing below comes from the section's stack gap.
+  margin: 0;
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
@@ -216,6 +235,10 @@
 
 .webinar-disclaimer {
   border-top: 1px solid $gray-200;
+  // The rule sits above the box, so the gap between the two belongs to the
+  // component rather than to a `pt-*` utility on the markup. The space above
+  // the rule itself comes from the page stack's gap.
+  padding-top: var(--pk-5);
 }
 
 .webinar-disclaimer-inner {

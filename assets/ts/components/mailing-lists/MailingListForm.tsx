@@ -6,6 +6,8 @@ import {
   MAILING_LIST_PURPOSES,
   MAILING_LIST_SUBSCRIPTION_DEFAULTS,
 } from "../../../shared/schemas/mailing-lists";
+import { Field } from "../../ui/Field";
+import { Select, TextInput } from "../../ui/TextControl";
 import { EnumSelect } from "../EnumSelect";
 import { MembershipCategoryPicker } from "../MembershipCategoryPicker";
 import type { MailingListDraft } from "./model";
@@ -19,88 +21,90 @@ const MODERATION_POLICY_OPTIONS = MAILING_LIST_MODERATION_POLICIES.map((value) =
   label: MAILING_LIST_MODERATION_POLICY_LABELS[value],
 }));
 
+/** A machine vocabulary read as words: `eligible_categories` becomes "eligible categories". */
+function humanize(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
 export interface MailingListFormProps {
   draft: MailingListDraft;
   onChange: (patch: Partial<MailingListDraft>) => void;
   idPrefix?: string;
 }
 
-/** Canonical mailing-list configuration form used by group management. */
+/**
+ * Canonical mailing-list configuration form used by group management.
+ *
+ * The fields flow in one responsive grid rather than a twelve-column row: the
+ * columns are as many as fit at the grid's minimum, so the same markup serves
+ * a phone and a wide desktop without a `col-sm-*` triplet per field. `Field`
+ * owns each label, the generated control id and the `aria-describedby` wiring;
+ * `EnumSelect` keeps the caller-supplied id, because its options are addressed
+ * by that id from both the surface and the tests.
+ */
 export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: MailingListFormProps) {
   return (
-    <div class="row g-2">
-      <div class="col-sm-4">
-        <label class="form-label small" htmlFor={`${idPrefix}-email`}>
-          Email
-        </label>
-        <input
-          id={`${idPrefix}-email`}
-          class="form-control form-control-sm"
-          type="email"
-          value={draft.email}
-          required
-          onInput={(event) => onChange({ email: (event.target as HTMLInputElement).value })}
-        />
-      </div>
-      <div class="col-sm-3">
-        <label class="form-label small" htmlFor={`${idPrefix}-label`}>
-          Label
-        </label>
-        <input
-          id={`${idPrefix}-label`}
-          class="form-control form-control-sm"
-          value={draft.label}
-          required
-          onInput={(event) => onChange({ label: (event.target as HTMLInputElement).value })}
-        />
-      </div>
-      <div class="col-sm-2">
-        <label class="form-label small" htmlFor={`${idPrefix}-purpose`}>
-          Purpose
-        </label>
-        <select
-          id={`${idPrefix}-purpose`}
-          class="form-select form-select-sm"
-          value={draft.purpose}
-          onChange={(event) =>
-            onChange({ purpose: (event.target as HTMLSelectElement).value as MailingListDraft["purpose"] })
-          }
-        >
-          {MAILING_LIST_PURPOSES.map((purpose) => (
-            <option value={purpose} key={purpose}>
-              {purpose.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-sm-3">
-        <label class="form-label small" htmlFor={`${idPrefix}-ownership`}>
-          Ownership
-        </label>
-        <input id={`${idPrefix}-ownership`} class="form-control form-control-sm" value="This group" readOnly />
-      </div>
-      <div class="col-sm-3">
-        <label class="form-label small" htmlFor={`${idPrefix}-subscription-default`}>
-          Default subscription
-        </label>
-        <select
-          id={`${idPrefix}-subscription-default`}
-          class="form-select form-select-sm"
-          value={draft.subscriptionDefault}
-          onChange={(event) =>
-            onChange({
-              subscriptionDefault: (event.target as HTMLSelectElement).value as MailingListDraft["subscriptionDefault"],
-            })
-          }
-        >
-          {MAILING_LIST_SUBSCRIPTION_DEFAULTS.map((value) => (
-            <option value={value} key={value}>
-              {value.replaceAll("_", " ")}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-sm-3">
+    <div class="pk-stack pk-stack--snug">
+      <div class="pk-grid pk-grid--tight">
+        <Field label="Email" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="email"
+              value={draft.email}
+              onInput={(event) => onChange({ email: (event.target as HTMLInputElement).value })}
+            />
+          )}
+        </Field>
+        <Field label="Label" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              value={draft.label}
+              onInput={(event) => onChange({ label: (event.target as HTMLInputElement).value })}
+            />
+          )}
+        </Field>
+        <Field label="Purpose">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.purpose}
+              onChange={(event) =>
+                onChange({ purpose: (event.target as HTMLSelectElement).value as MailingListDraft["purpose"] })
+              }
+            >
+              {MAILING_LIST_PURPOSES.map((purpose) => (
+                <option value={purpose} key={purpose}>
+                  {humanize(purpose)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Ownership" help="Set by the group this list belongs to.">
+          {(control) => <TextInput {...control} value="This group" readOnly />}
+        </Field>
+        <Field label="Default subscription">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.subscriptionDefault}
+              onChange={(event) =>
+                onChange({
+                  subscriptionDefault: (event.target as HTMLSelectElement)
+                    .value as MailingListDraft["subscriptionDefault"],
+                })
+              }
+            >
+              {MAILING_LIST_SUBSCRIPTION_DEFAULTS.map((value) => (
+                <option value={value} key={value}>
+                  {humanize(value)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
         <EnumSelect
           id={`${idPrefix}-posting-policy`}
           label="Posting policy"
@@ -109,8 +113,6 @@ export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: 
           required
           onChange={(value) => onChange({ postingPolicy: value })}
         />
-      </div>
-      <div class="col-sm-3">
         <EnumSelect
           id={`${idPrefix}-moderation-policy`}
           label="Moderation policy"
@@ -120,39 +122,35 @@ export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: 
           onChange={(value) => onChange({ moderationPolicy: value })}
         />
       </div>
-      <div class="col-sm-6">
-        <MembershipCategoryPicker
-          idPrefix={`${idPrefix}-auto-sync-categories`}
-          label="Auto-sync categories"
-          selected={draft.autoSyncCategories}
-          onChange={(next) => onChange({ autoSyncCategories: next })}
-        />
-      </div>
-      <div class="col-sm-3 d-flex align-items-end gap-3">
-        <div class="form-check">
+
+      <MembershipCategoryPicker
+        idPrefix={`${idPrefix}-auto-sync-categories`}
+        label="Auto-sync categories"
+        selected={draft.autoSyncCategories}
+        onChange={(next) => onChange({ autoSyncCategories: next })}
+      />
+
+      <div class="pk-cluster">
+        <label class="pk-check">
           <input
             id={`${idPrefix}-primary-discussion`}
-            class="form-check-input"
+            class="pk-check__input"
             type="checkbox"
             checked={draft.primaryDiscussion}
             onChange={(event) => onChange({ primaryDiscussion: (event.target as HTMLInputElement).checked })}
           />
-          <label class="form-check-label small" htmlFor={`${idPrefix}-primary-discussion`}>
-            Primary discussion
-          </label>
-        </div>
-        <div class="form-check">
+          <span class="pk-check__label">Primary discussion</span>
+        </label>
+        <label class="pk-check">
           <input
             id={`${idPrefix}-active`}
-            class="form-check-input"
+            class="pk-check__input"
             type="checkbox"
             checked={draft.active}
             onChange={(event) => onChange({ active: (event.target as HTMLInputElement).checked })}
           />
-          <label class="form-check-label small" htmlFor={`${idPrefix}-active`}>
-            Active
-          </label>
-        </div>
+          <span class="pk-check__label">Active</span>
+        </label>
       </div>
     </div>
   );

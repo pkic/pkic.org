@@ -6,7 +6,7 @@
  */
 import type { z } from "zod";
 import type {
-  myOrganizationRepresentativeSchema,
+  myActingIdentitySchema,
   myProfileSchema,
   myProfileUpdateSchema,
   myNotificationPreferencesSchema,
@@ -32,7 +32,7 @@ import type {
 } from "../../../shared/schemas/votes";
 import type { userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 
-export type OrganizationRepresentative = z.infer<typeof myOrganizationRepresentativeSchema>;
+export type ActingIdentity = z.infer<typeof myActingIdentitySchema>;
 export type MyProfile = z.infer<typeof myProfileSchema>;
 export type MyProfileUpdateInput = z.infer<typeof myProfileUpdateSchema>;
 export type NotificationPreferences = z.infer<typeof myNotificationPreferencesSchema>;

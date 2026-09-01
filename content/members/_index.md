@@ -31,4 +31,4 @@ outputs:
   - members-data
 ---
 
-{{< members class="d-none d-lg-block" >}}
+{{< members class="members-overview--wide-only" >}}

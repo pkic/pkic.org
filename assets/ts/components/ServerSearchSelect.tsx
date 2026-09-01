@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 import {
   buildCollectionResetKey,
   useCollectionResetPending,
@@ -7,6 +7,9 @@ import {
 } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
 import type { ServerCatalog } from "../shared/server-catalog";
+import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
+import { Select, TextInput } from "../ui/TextControl";
 
 const SELECTOR_PAGE_SIZE = 25;
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
@@ -44,6 +47,7 @@ export function ServerSearchSelect<Item, Response>({
   const [pendingSearch, setPendingSearch] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const selectId = useId();
   const valueRef = useRef(value);
   valueRef.current = value;
   const excluded = new Set(excludeValues);
@@ -87,77 +91,92 @@ export function ServerSearchSelect<Item, Response>({
   }
 
   return (
-    <div>
-      <label class="form-label small fw-semibold mb-1">{label}</label>
-      <div class="input-group input-group-sm mb-1">
-        <input
-          type="search"
-          class="form-control"
-          aria-label={`${label} search`}
-          placeholder={searchPlaceholder ?? `Search ${label.toLowerCase()}…`}
-          value={pendingSearch}
-          disabled={disabled}
-          onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              applySearch();
-            }
-          }}
-        />
-        <button type="button" class="btn btn-outline-secondary" disabled={disabled} onClick={applySearch}>
-          Search
-        </button>
+    <div class="pk-stack pk-stack--tight">
+      {/* The name, the box that narrows the list and the box that holds the
+          choice are one field: a `pk-field__control` outside a `pk-field` has
+          no group to take its state from, and the label above it names a
+          control it is not grouped with. The page count and a failed load are
+          not part of the field, so they stay outside it. */}
+      <div class="pk-field">
+        {/* The visible name now points at the control it names. It used to be a
+            bare `<label>` with no `for`, while the select carried a duplicate
+            copy of the same word in `aria-label`. */}
+        <label class="pk-field__label" for={selectId}>
+          {label}
+        </label>
+        {/* One flex row, the way the Bootstrap input group was: `pk-input`'s
+            `min-width: 0` lets the search field absorb the shrinking so the
+            button keeps its text on one line. */}
+        <div class="pk-field__control">
+          <TextInput
+            type="search"
+            aria-label={`${label} search`}
+            placeholder={searchPlaceholder ?? `Search ${label.toLowerCase()}…`}
+            value={pendingSearch}
+            disabled={disabled}
+            onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                applySearch();
+              }
+            }}
+          />
+          <Button size="sm" disabled={disabled} onClick={applySearch}>
+            Search
+          </Button>
+        </div>
+        <div class="pk-field__control">
+          <Select
+            id={selectId}
+            value={value ?? ""}
+            disabled={disabled || collection.loading}
+            onChange={(event) => {
+              const next = (event.target as HTMLSelectElement).value;
+              const selected = items.find((item) => catalog.itemKey(item) === next) ?? null;
+              valueRef.current = selected ? catalog.itemKey(selected) : null;
+              onChange(selected);
+            }}
+          >
+            {allowEmpty && <option value="">{placeholder}</option>}
+            {value && !hasSelectedOption && <option value={value}>{selectedLabel ?? value}</option>}
+            {items.map((item) => (
+              <option key={catalog.itemKey(item)} value={catalog.itemKey(item)}>
+                {catalog.itemLabel(item)}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
-      <select
-        class="form-select form-select-sm"
-        aria-label={label}
-        value={value ?? ""}
-        disabled={disabled || collection.loading}
-        onChange={(event) => {
-          const next = (event.target as HTMLSelectElement).value;
-          const selected = items.find((item) => catalog.itemKey(item) === next) ?? null;
-          valueRef.current = selected ? catalog.itemKey(selected) : null;
-          onChange(selected);
-        }}
-      >
-        {allowEmpty && <option value="">{placeholder}</option>}
-        {value && !hasSelectedOption && <option value={value}>{selectedLabel ?? value}</option>}
-        {items.map((item) => (
-          <option key={catalog.itemKey(item)} value={catalog.itemKey(item)}>
-            {catalog.itemLabel(item)}
-          </option>
-        ))}
-      </select>
-      <div class="d-flex align-items-center gap-2 mt-1" aria-live="polite">
-        <span class={`small ${collection.error ? "text-danger" : "text-muted"}`}>
+      <div class="pk-cluster">
+        {/* The count and a failed load used to be the same sentence in two
+            colours, which is a status nobody who cannot separate red from grey
+            can read. A failure is now its own block, with its own role. */}
+        <span class="pk-small" aria-live="polite">
           {collection.loading
             ? "Loading…"
-            : collection.error
-              ? collection.error.message
-              : page && page.total > 0
-                ? `${page.offset + 1}–${page.offset + rawItems.length} of ${page.total}`
-                : "No matches"}
+            : page && page.total > 0
+              ? `${page.offset + 1}–${page.offset + rawItems.length} of ${page.total}`
+              : "No matches"}
         </span>
-        <div class="btn-group btn-group-sm ms-auto" role="group" aria-label={`${label} result pages`}>
-          <button
-            type="button"
-            class="btn btn-outline-secondary"
+        <div class="pk-cluster pk-push" role="group" aria-label={`${label} result pages`}>
+          <Button
+            size="sm"
             disabled={disabled || collection.loading || offset === 0}
             onClick={() => setOffset((current) => Math.max(0, current - SELECTOR_PAGE_SIZE))}
           >
             Previous
-          </button>
-          <button
-            type="button"
-            class="btn btn-outline-secondary"
+          </Button>
+          <Button
+            size="sm"
             disabled={disabled || collection.loading || !page?.hasMore}
             onClick={() => setOffset((current) => current + SELECTOR_PAGE_SIZE)}
           >
             Next
-          </button>
+          </Button>
         </div>
       </div>
+      {collection.error && <Alert tone="danger">{collection.error.message}</Alert>}
     </div>
   );
 }

@@ -408,7 +408,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Session-token validation — all rejection modes + API key acceptance
-// (tested via GET /api/v1/users as the representative endpoint)
+// (tested via the canonical GET /api/v1/users resource)
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("session-token validation", () => {
