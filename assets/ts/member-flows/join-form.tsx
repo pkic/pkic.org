@@ -7,6 +7,8 @@
  */
 import { getJson, postJson } from "../shared/api-client";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
+import { setFieldMessage } from "../shared/form/validation-map";
+import { applyFieldState } from "../ui/field-state";
 import { clearStatus, installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
@@ -164,7 +166,10 @@ export function configureMembershipLegalFields(
  * control is a `pk-input`.
  */
 function markJoinEmailInvalid(email: HTMLInputElement, invalid: boolean): void {
-  email.closest<HTMLElement>("[data-join-path-details]")?.classList.toggle("pk-field--invalid", invalid);
+  // The field group, not the path-details wrapper: `pk-field--invalid` sets the
+  // `--state-*` variables the border, the mark and the message read, and on an
+  // ancestor that is not a `pk-field` it set variables nothing looked at.
+  applyFieldState(email.closest(".pk-field"), invalid ? "invalid" : null);
 }
 
 function clearOrganizationEmailPolicyError(form: HTMLFormElement, email: HTMLInputElement): void {
@@ -174,7 +179,7 @@ function clearOrganizationEmailPolicyError(form: HTMLFormElement, email: HTMLInp
   markJoinEmailInvalid(email, false);
   if (email.checkValidity()) email.removeAttribute("aria-invalid");
   const error = form.querySelector<HTMLElement>('[data-field-error="email"]');
-  if (error?.textContent === ORGANIZATION_EMAIL_POLICY_MESSAGE) error.textContent = "";
+  if (error?.textContent === ORGANIZATION_EMAIL_POLICY_MESSAGE) setFieldMessage(error, "");
 }
 
 /** Adds immediate field-level guidance while the server remains the policy authority. */
@@ -194,8 +199,7 @@ export function applyJoinEmailPolicy(form: HTMLFormElement, applicantKind: JoinA
   email.dataset.joinEmailPolicyError = "true";
   markJoinEmailInvalid(email, true);
   email.setAttribute("aria-invalid", "true");
-  const error = form.querySelector<HTMLElement>('[data-field-error="email"]');
-  if (error) error.textContent = ORGANIZATION_EMAIL_POLICY_MESSAGE;
+  setFieldMessage(form.querySelector<HTMLElement>('[data-field-error="email"]'), ORGANIZATION_EMAIL_POLICY_MESSAGE);
   return false;
 }
 

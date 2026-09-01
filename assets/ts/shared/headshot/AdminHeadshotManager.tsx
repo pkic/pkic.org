@@ -138,10 +138,8 @@ export function AdminHeadshotManager({
               {fetchLabel}
             </Button>
           )}
-          {/* `hidden` until there is something to remove. The controller sets
-              the attribute; it also still toggles a legacy `d-none` for the
-              surfaces that have not migrated, which agrees with `hidden`
-              rather than fighting it. */}
+          {/* `hidden` until there is something to remove; the controller sets
+              the attribute. */}
           <Button data-headshot-delete variant="danger-quiet" size="sm" block hidden>
             {deleteLabel}
           </Button>

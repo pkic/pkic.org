@@ -18,9 +18,10 @@
 import type { ComponentChildren } from "preact";
 import { useId } from "preact/hooks";
 
+import { FIELD_STATE_ICON, type FieldState } from "./field-state";
 import "./Field.css";
 
-export type FieldState = "ok" | "advisory" | "invalid";
+export type { FieldState };
 
 export interface FieldProps {
   label: string;
@@ -43,20 +44,10 @@ export interface FieldControlProps {
   "aria-invalid"?: "true";
 }
 
-const STATE_ICON: Record<FieldState, string> = {
-  // Tick, triangle, cross — drawn as paths so they take currentColor and scale
-  // with the control rather than arriving as three more network requests.
-  ok: "M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-4.03-2.97a.75.75 0 0 0-1.08.02L7.48 9.4 5.7 7.6a.75.75 0 1 0-1.06 1.06l2.35 2.35a.75.75 0 0 0 1.08-.02l3.92-4.9a.75.75 0 0 0-.02-1.06",
-  advisory:
-    "M8.98 1.57a1.13 1.13 0 0 0-1.96 0L.16 13.23c-.45.78.1 1.77.99 1.77h13.71c.89 0 1.44-.99.98-1.77zM8 5c.54 0 .95.46.9 1l-.35 3.5a.55.55 0 0 1-1.1 0L7.1 6A.9.9 0 0 1 8 5m0 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2",
-  invalid:
-    "M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.35 4.29a.75.75 0 0 0-1.06 1.06L6.94 8l-2.65 2.65a.75.75 0 1 0 1.06 1.06L8 9.06l2.65 2.65a.75.75 0 0 0 1.06-1.06L9.06 8l2.65-2.65a.75.75 0 0 0-1.06-1.06L8 6.94z",
-};
-
 export function StateIcon({ state, class: className }: { state: FieldState; class?: string }) {
   return (
     <svg class={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
-      <path d={STATE_ICON[state]} />
+      <path d={FIELD_STATE_ICON[state]} />
     </svg>
   );
 }

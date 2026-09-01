@@ -12,6 +12,9 @@ import {
   renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
+// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
+import joinFormTemplate from "../../layouts/shortcodes/joinform.html?raw";
+import { mountTemplate } from "./helpers/hugo-template";
 
 type Category = MemberApplicationFormResponse["categories"][number];
 type FormField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
@@ -83,21 +86,10 @@ function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormEle
   return form;
 }
 
+/** The shipped markup, so a template change that breaks these flows fails here. */
 function buildJoinStartForm(): HTMLFormElement {
-  const form = document.createElement("form");
-  form.innerHTML = `
-    <div data-join-path-details hidden>
-      <div data-join-organization-policy hidden></div>
-      <div data-join-individual-policy hidden></div>
-      <div data-join-individual-categories hidden></div>
-      <label data-join-email-label for="joinEmail"></label>
-      <input id="joinEmail" name="email" type="email" disabled />
-      <div data-field-error="email"></div>
-      <div data-join-email-help></div>
-    </div>
-  `;
-  document.body.append(form);
-  return form;
+  const host = mountTemplate(joinFormTemplate);
+  return host.querySelector<HTMLFormElement>("[data-join-start-form]")!;
 }
 
 describe("join-form helpers", () => {
@@ -253,7 +245,7 @@ describe("join-form helpers", () => {
     const form = buildJoinStartForm();
     const email = form.querySelector<HTMLInputElement>("#joinEmail")!;
     const error = form.querySelector<HTMLElement>('[data-field-error="email"]')!;
-    const details = form.querySelector<HTMLElement>("[data-join-path-details]")!;
+    const field = email.closest<HTMLElement>(".pk-field")!;
     applyJoinApplicantKindUI(form, "organization");
 
     email.value = "person@gmail.com";
@@ -262,16 +254,22 @@ describe("join-form helpers", () => {
     expect(email.getAttribute("aria-invalid")).toBe("true");
     // The invalid state is drawn from a modifier on the field group, which is
     // where the design system reads its state tokens from. A class on the
-    // input alone styles nothing.
-    expect(details.classList.contains("pk-field--invalid")).toBe(true);
+    // input alone, or on a wrapper outside the field, styles nothing.
+    expect(field.classList.contains("pk-field--invalid")).toBe(true);
     expect(error.textContent).toBe(ORGANIZATION_EMAIL_POLICY_MESSAGE);
+    expect(error.hidden).toBe(false);
+    // A state is a mark as well as a colour, so the mark has to be drawn.
+    expect(field.querySelector(".pk-field__control .pk-field__state")).not.toBeNull();
+    expect(error.querySelector(".pk-field__message-icon")).not.toBeNull();
 
     email.value = "person@organization.example";
     expect(applyJoinEmailPolicy(form, "organization")).toBe(true);
     expect(email.validationMessage).toBe("");
     expect(email.hasAttribute("aria-invalid")).toBe(false);
-    expect(details.classList.contains("pk-field--invalid")).toBe(false);
+    expect(field.classList.contains("pk-field--invalid")).toBe(false);
     expect(error.textContent).toBe("");
+    expect(error.hidden).toBe(true);
+    expect(field.querySelector(".pk-field__state")).toBeNull();
 
     email.value = "person@gmail.com";
     expect(applyJoinEmailPolicy(form, "individual")).toBe(true);

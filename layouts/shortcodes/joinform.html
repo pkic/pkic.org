@@ -1,10 +1,13 @@
-<div data-member-application data-module="member-flows/join-form" class="join-flow">
+<div data-member-application data-module="member-flows/join-form" class="pk join-flow">
   <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
 
   <div data-join-start>
     <p class="pk-lede">First, tell us whether an organization is connected to your participation.</p>
-    <form data-join-start-form class="pk-grid needs-validation" novalidate>
-      <fieldset>
+    <form data-join-start-form class="pk-stack needs-validation" novalidate>
+      {{/* `pk-field` on the group, not just `pk-fieldset`: the modifier that
+           the validator sets carries the state variables, and for a choice
+           group the fieldset is the element that owns the message. */}}
+      <fieldset class="pk-fieldset pk-field">
         <legend class="pk-field__label pk-strong">Are you employed by, or do you own, an organization?</legend>
         <p id="joinApplicantKindHelp" class="pk-field__help">
           If an organization has separately authorized you to act on its behalf, choose Yes even if you are not its
@@ -38,7 +41,7 @@
             <strong>No</strong> — I am not employed by and do not own an organization
           </label>
         </div>
-        <div class="pk-field__message">Choose the statement that describes your situation.</div>
+        <p data-field-error="applicantKind" class="pk-field__message" aria-live="polite" hidden></p>
       </fieldset>
 
       <div data-join-path-details hidden>
@@ -52,29 +55,39 @@
         </div>
 
         <div data-join-individual-categories hidden>
-          <p class="pk-field__label pk-strong">Eligible individual categories</p>
-          <div data-join-individual-category-list class="pk-field__help" aria-live="polite">
+          {{/* Prose about the flow, not a control's help text: `pk-field__help`
+               belongs to a field and takes its colour from the field's state. */}}
+          <p class="pk-strong">Eligible individual categories</p>
+          <div data-join-individual-category-list class="pk-muted pk-small" aria-live="polite">
             Loading eligible categories…
           </div>
         </div>
 
-        <label for="joinEmail" class="pk-field__label" data-join-email-label
-          >Your official work or organization email address</label
-        >
-        <input
-          type="email"
-          class="pk-input"
-          id="joinEmail"
-          name="email"
-          autocomplete="email"
-          placeholder="you@organization.example"
-          aria-describedby="joinEmailHelp joinEmailError"
-          required
-          disabled
-        />
-        <div id="joinEmailError" data-field-error="email" class="pk-field__message" aria-live="polite"></div>
-        <div id="joinEmailHelp" class="pk-field__help" data-join-email-help>
-          We will send a short-lived verification link before showing the appropriate next step.
+        {{/* The parts belong inside `pk-field`: it is what groups the label,
+             control, message and help, and what carries the `--state-*`
+             variables that `pk-field--ok|--advisory|--invalid` sets. Loose
+             siblings can be styled but can never show a state. */}}
+        <div class="pk-field">
+          <label for="joinEmail" class="pk-field__label" data-join-email-label
+            >Your official work or organization email address</label
+          >
+          <div class="pk-field__control">
+            <input
+              type="email"
+              class="pk-input"
+              id="joinEmail"
+              name="email"
+              autocomplete="email"
+              placeholder="you@organization.example"
+              aria-describedby="joinEmailHelp joinEmailError"
+              required
+              disabled
+            />
+          </div>
+          <p id="joinEmailError" data-field-error="email" class="pk-field__message" aria-live="polite" hidden></p>
+          <p id="joinEmailHelp" class="pk-field__help" data-join-email-help>
+            We will send a short-lived verification link before showing the appropriate next step.
+          </p>
         </div>
 
         <button type="submit" class="pk-btn pk-btn--primary">Continue</button>
@@ -108,7 +121,7 @@
     <a class="pk-btn pk-btn--secondary" href="/contact/">Contact the PKI Consortium</a>
   </section>
 
-  <form data-join-application-form class="pk-grid needs-validation" novalidate hidden>
+  <form data-join-application-form class="pk-stack needs-validation" novalidate hidden>
     <div>
       <div class="membership-verified-context">
         <p>
@@ -122,49 +135,57 @@
       </div>
     </div>
 
-    <div>
-      <p class="pk-field__help">
-        Only eligibility categories permitted for this verified application path are available below.
-      </p>
-    </div>
+    <p class="pk-muted pk-small">
+      Only eligibility categories permitted for this verified application path are available below.
+    </p>
 
-    <fieldset>
+    <fieldset class="pk-fieldset pk-field">
       <legend class="pk-field__label">Eligibility category</legend>
       <p class="pk-field__help">The available categories are determined from your verified membership path.</p>
       <div data-membership-categories></div>
-      <div data-field-error="membershipCategory" class="pk-field__message"></div>
+      <p data-field-error="membershipCategory" class="pk-field__message" aria-live="polite" hidden></p>
     </fieldset>
 
-    <div>
+    <div class="pk-field">
       <label for="firstName" class="pk-field__label">First name</label>
-      <input type="text" class="pk-input" id="firstName" name="firstName" autocomplete="given-name" required />
+      <div class="pk-field__control">
+        <input type="text" class="pk-input" id="firstName" name="firstName" autocomplete="given-name" required />
+      </div>
+      <p data-field-error="firstName" class="pk-field__message" aria-live="polite" hidden></p>
     </div>
-    <div>
+    <div class="pk-field">
       <label for="lastName" class="pk-field__label">Last name</label>
-      <input type="text" class="pk-input" id="lastName" name="lastName" autocomplete="family-name" required />
-      <div data-field-error="applicantName" class="pk-field__message"></div>
+      <div class="pk-field__control">
+        <input type="text" class="pk-input" id="lastName" name="lastName" autocomplete="family-name" required />
+      </div>
+      <p data-field-error="applicantName" class="pk-field__message" aria-live="polite" hidden></p>
     </div>
-    <div data-organization-name-field>
+    <div class="pk-field" data-organization-name-field>
       <label for="organizationName" class="pk-field__label">Organization name</label>
-      <input
-        type="text"
-        class="pk-input"
-        id="organizationName"
-        name="organizationName"
-        autocomplete="organization"
-      />
-      <div data-field-error="organizationName" class="pk-field__message"></div>
-      <div class="pk-field__help">Use the legal or commonly recognized name of the organization you represent.</div>
+      <div class="pk-field__control">
+        <input
+          type="text"
+          class="pk-input"
+          id="organizationName"
+          name="organizationName"
+          autocomplete="organization"
+          aria-describedby="organizationNameHelp"
+        />
+      </div>
+      <p data-field-error="organizationName" class="pk-field__message" aria-live="polite" hidden></p>
+      <p id="organizationNameHelp" class="pk-field__help">
+        Use the legal or commonly recognized name of the organization you represent.
+      </p>
     </div>
 
     <div data-custom-fields>
-      <p class="pk-field__help">Loading additional questions…</p>
+      <p class="pk-muted pk-small">Loading additional questions…</p>
     </div>
 
     <div class="membership-legal-agreements" data-membership-legal-agreements hidden>
       <div>
-        <h3 class="h6">Review and accept the membership terms</h3>
-        <p class="pk-field__help">
+        <h3>Review and accept the membership terms</h3>
+        <p class="pk-muted pk-small">
           Read each document in the scrollable panel. The agreement control is located at the bottom of each document.
         </p>
       </div>
@@ -175,7 +196,7 @@
       .Site.GetPage "/ipr" -}} {{ partial "forms/legal-document-agreement.html" (dict "page" . "fieldKey"
       "agrees_ipr_policy") }} {{- end -}}
 
-      <div class="membership-legal-authority" data-membership-legal-field="warranted_authority">
+      <div class="membership-legal-authority pk-field" data-membership-legal-field="warranted_authority">
         <div class="pk-check">
           <input
             class="pk-check__input"
@@ -189,8 +210,8 @@
             I represent and warrant that I have the necessary authority to submit this membership application and to be
             legally bound by these terms.
           </label>
-          <div class="pk-field__message" data-field-error="warranted_authority"></div>
         </div>
+        <p class="pk-field__message" data-field-error="warranted_authority" aria-live="polite" hidden></p>
       </div>
     </div>
 
