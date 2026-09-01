@@ -2,6 +2,8 @@ import { useRef, useState } from "preact/hooks";
 import { eventSeriesCreateSchema, eventSeriesResponseSchema } from "../../../../../shared/schemas/event-series";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ApiClientError, postJson } from "../../../../shared/api-client";
 import { GroupMeetingSeriesList } from "./GroupMeetingSeriesList";
 import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
@@ -89,31 +91,36 @@ function CreateMeetingSeries({
   }
 
   return (
-    <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={(event) => void submit(event)}>
-      <div class="d-flex justify-content-between align-items-start gap-2">
-        <div>
-          <h6 class="mb-1">Schedule a recurring meeting</h6>
-          <p class="text-muted small mb-0">
+    // Nested inside the meetings panel, so its heading sits one rung below
+    // that panel's rather than as another sibling of it.
+    <Panel aria-label="Schedule a recurring meeting">
+      <PanelHeader title="Schedule a recurring meeting" headingLevel={4}>
+        <Button size="sm" disabled={saving} onClick={onCancel}>
+          Cancel
+        </Button>
+      </PanelHeader>
+      <PanelBody>
+        <form class="pk-stack" onSubmit={(event) => void submit(event)}>
+          <p class="pk-small">
             Configure attendance eligibility, registration, and guest access once for the recurring series.
           </p>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-      {error && <ErrorAlert error={error} />}
-      <MeetingSeriesFields
-        idPrefix="managed-group-meeting-create"
-        draft={draft}
-        disabled={saving}
-        onChange={setDraft}
-      />
-      <div>
-        <button type="submit" class="btn btn-primary" disabled={saving}>
-          {saving ? "Creating…" : "Create meeting series"}
-        </button>
-      </div>
-    </form>
+          {error && <ErrorAlert error={error} />}
+          <MeetingSeriesFields
+            idPrefix="managed-group-meeting-create"
+            draft={draft}
+            disabled={saving}
+            onChange={setDraft}
+          />
+          <div class="pk-cluster">
+            {/* `loading` announces the save through aria-busy and shows the
+                spinner; `disabled` is what actually stops a second submit. */}
+            <Button type="submit" variant="primary" loading={saving} disabled={saving}>
+              {saving ? "Creating…" : "Create meeting series"}
+            </Button>
+          </div>
+        </form>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -132,8 +139,8 @@ export function GroupMeetings({
   const listActions = useRef<ApiTableActions | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-body d-flex flex-column gap-3">
+    <Panel class="pk" aria-label="Meeting series">
+      <PanelBody class="pk-stack">
         {canManage && showCreate && (
           <CreateMeetingSeries
             groupId={groupId}
@@ -151,7 +158,7 @@ export function GroupMeetings({
           initialSeriesTab={initialSeriesTab}
           createAction={canManage ? { label: "New series", onSelect: () => setShowCreate(true) } : undefined}
         />
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

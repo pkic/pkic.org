@@ -1,7 +1,13 @@
 {{ define "main" }}
-<main class="container py-5 content-width-md">
+{{/* baseof.html already supplies the page's <main> landmark, so this is a plain
+     wrapper rather than a second one.
+
+     The `.pk` root is here now that assets/ts/member-flows/meeting-join/ renders
+     the design system's primitives throughout: the base layer no longer has any
+     Bootstrap markup to strip its colours and list styling from. */}}
+<div class="pk pk-container pk-container--narrow pk-section">
   <div id="meeting-join-app" data-module="member-flows/meeting-join-page">
-    <p class="text-muted text-center">Preparing secure meeting entry…</p>
+    <p class="pk-muted pk-center">Preparing secure meeting entry…</p>
   </div>
-</main>
+</div>
 {{ end }}

@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { organizationContentReviewRejectSchema } from "../../assets/shared/schemas/organization-content-reviews";
 import { OrganizationContentReviews } from "../../assets/ts/member-flows/portal/sections/OrganizationContentReviews";
 
 const REVIEW_ID = "00000000-0000-4000-8000-000000000101";
@@ -43,6 +44,34 @@ function button(label: string): HTMLButtonElement | undefined {
   return [...(container?.querySelectorAll("button") ?? [])].find(
     (candidate) => candidate.textContent?.trim() === label,
   );
+}
+
+/**
+ * The control a visible label actually points at.
+ *
+ * Looking the control up through its `for`/`id` pair rather than by a
+ * hard-coded id is itself the assertion: a label that names nothing, or names
+ * an element that is not rendered, fails here instead of passing silently the
+ * way a `querySelector("#some-id")` would once the id moved into `Field`.
+ */
+function controlFor<T extends HTMLElement>(labelText: string): T {
+  const label = [...(container?.querySelectorAll("label") ?? [])].find(
+    (candidate) => candidate.textContent?.trim() === labelText,
+  );
+  expect(label, `no label reading "${labelText}"`).toBeInstanceOf(HTMLLabelElement);
+  const id = label?.getAttribute("for");
+  expect(id, `the label "${labelText}" points at nothing`).toBeTruthy();
+  const control = container?.querySelector<T>(`[id="${id ?? ""}"]`);
+  expect(control, `the label "${labelText}" points at a control that is not rendered`).toBeTruthy();
+  return control!;
+}
+
+function describedBy(control: HTMLElement): HTMLElement | null {
+  return container?.querySelector<HTMLElement>(`[id="${control.getAttribute("aria-describedby") ?? ""}"]`) ?? null;
+}
+
+function captions(): string[] {
+  return [...(container?.querySelectorAll("caption") ?? [])].map((node) => node.textContent?.trim() ?? "");
 }
 
 afterEach(() => {
@@ -102,12 +131,24 @@ describe("portal organization content reviews", () => {
     expect(requests[0]?.url.searchParams.get("sort")).toBe("-submittedAt");
     expect(requests[0]?.url.searchParams.get("limit")).toBe("50");
 
-    await act(async () => button("Example Member")?.click());
+    // The row is opened by a real button whose name says what it opens, not by
+    // a click handler on the `<tr>` that no keyboard could reach.
+    await act(async () => button("Open the content review for Example Member")?.click());
     await settle();
     expect(container.textContent).toContain("Old slogan");
     expect(container.textContent).toContain("A clearer slogan");
 
-    const note = container.querySelector<HTMLTextAreaElement>("#organization-content-review-note")!;
+    // Both tables name themselves, so a screen reader listing the tables on
+    // this page does not read out two tables called nothing.
+    expect(captions()).toEqual(
+      expect.arrayContaining(["Organization content reviews", "Proposed changes for Example Member"]),
+    );
+
+    const note = controlFor<HTMLTextAreaElement>("Reviewer note");
+    expect(note.tagName).toBe("TEXTAREA");
+    expect(note.getAttribute("aria-invalid")).toBeNull();
+    expect(describedBy(note)?.textContent).toContain("Required to reject");
+
     await act(async () => {
       note.value = "Please use a factual slogan.";
       note.dispatchEvent(new Event("input", { bubbles: true }));
@@ -117,13 +158,54 @@ describe("portal organization content reviews", () => {
     await settle();
 
     const rejection = requests.find((request) => request.method === "POST");
-    expect(rejection).toMatchObject({
-      method: "POST",
-      body: { reviewerNote: "Please use a factual slogan." },
+    // The body is checked against the endpoint's own contract rather than a
+    // literal copy of what the component sent, which would only restate it.
+    expect(organizationContentReviewRejectSchema.parse(rejection?.body)).toEqual({
+      reviewerNote: "Please use a factual slogan.",
     });
     expect(rejection?.url.pathname).toBe(`/api/v1/organizations/content-reviews/${REVIEW_ID}/reject`);
     expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
     expect(requests.every((request) => !request.url.pathname.startsWith("/api/v1/system/"))).toBe(true);
+  });
+
+  it("blocks a note-less rejection on the field itself rather than only in a toast", async () => {
+    const requests: Array<{ method: string; url: URL }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        requests.push({ method, url });
+        if (method === "GET" && url.pathname.endsWith(`/${REVIEW_ID}`)) {
+          return json({ review: { ...summary, diff: [], logoStagingR2Key: null, currentLogoR2Key: null } });
+        }
+        return json({ reviews: [summary], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<OrganizationContentReviews />, container!));
+    await settle();
+    await act(async () => button("Open the content review for Example Member")?.click());
+    await settle();
+
+    // A logo-only submission has no field changes, and the table says so
+    // instead of rendering an empty grid.
+    expect(container.textContent).toContain("No field changes (logo only).");
+
+    await act(async () => button("Reject")?.click());
+    await settle();
+
+    const note = controlFor<HTMLTextAreaElement>("Reviewer note");
+    expect(note.getAttribute("aria-invalid")).toBe("true");
+    const message = describedBy(note);
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(message?.textContent).toContain("Write the reason for the rejection");
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
   it("renders a status-scoped empty page and sends status changes back to D1", async () => {
@@ -146,7 +228,7 @@ describe("portal organization content reviews", () => {
     await settle();
     expect(container.textContent).toContain("No pending organization content submissions.");
 
-    const status = container.querySelector<HTMLSelectElement>("#organization-content-review-status")!;
+    const status = controlFor<HTMLSelectElement>("Review status");
     await act(async () => {
       status.value = "approved";
       status.dispatchEvent(new Event("change", { bubbles: true }));

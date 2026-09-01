@@ -3,8 +3,10 @@ import { usePortalHashLocation } from "../../hash-location";
 import { lazy, Suspense } from "preact/compat";
 import type { EventProposalSummary } from "../../../../../shared/schemas/event-proposals";
 import { proposalProgramsListResponseSchema } from "../../../../../shared/schemas/proposal-programs";
+import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
@@ -53,35 +55,44 @@ export function GroupEventProposals({
   }
 
   return (
-    <section aria-label="Event proposals" class="border-top pt-3 mt-3">
-      {program && (
-        <nav class="small text-muted mb-1" aria-label="Proposal program context">
-          <span>{program.group.name}</span>
-          <span aria-hidden="true"> / </span>
-          <span>{program.event.name}</span>
-        </nav>
-      )}
-      <h6>Proposal program</h6>
-      {programCatalog.loading && !resolvedEventSlug ? (
-        <Spinner />
-      ) : programCatalog.error && !resolvedEventSlug ? (
-        <ErrorAlert error={programCatalog.error} />
-      ) : resolvedEventSlug ? (
-        <EventProposalsTable
-          endpoint={`/api/v1/events/${encodeURIComponent(resolvedEventSlug)}/proposals`}
-          storageKey={`portal_proposal_filters_${groupId}_${eventId}`}
-          onSelect={(proposal) => {
-            if (proposalPathFor) {
-              navigate(proposalPathFor(proposal.id));
-            } else {
-              setSelected(proposal);
-            }
-          }}
-          empty="No proposals are available through this event."
-        />
-      ) : (
-        <p class="text-muted fst-italic mb-0">This proposal program is not available.</p>
-      )}
-    </section>
+    // The section used to be a hairline rule and a bare heading. It states
+    // what it is as a named panel instead, so it is one region a reader can
+    // reach rather than a border between two runs of content.
+    <Panel class="pk" aria-label="Proposal program">
+      <PanelHeader title="Proposal program" headingLevel={4}>
+        {program && (
+          <nav class="pk-small" aria-label="Proposal program context">
+            <span>{program.group.name}</span>
+            <span aria-hidden="true"> / </span>
+            <span>{program.event.name}</span>
+          </nav>
+        )}
+      </PanelHeader>
+      <PanelBody>
+        {programCatalog.loading && !resolvedEventSlug ? (
+          <Spinner />
+        ) : programCatalog.error && !resolvedEventSlug ? (
+          <ErrorAlert error={programCatalog.error} />
+        ) : resolvedEventSlug ? (
+          <EventProposalsTable
+            endpoint={`/api/v1/events/${encodeURIComponent(resolvedEventSlug)}/proposals`}
+            storageKey={`portal_proposal_filters_${groupId}_${eventId}`}
+            onSelect={(proposal) => {
+              if (proposalPathFor) {
+                navigate(proposalPathFor(proposal.id));
+              } else {
+                setSelected(proposal);
+              }
+            }}
+            empty="No proposals are available through this event."
+          />
+        ) : (
+          <EmptyState
+            title="This proposal program is not available."
+            body="The event behind it may have been removed, or your access to it may have ended."
+          />
+        )}
+      </PanelBody>
+    </Panel>
   );
 }

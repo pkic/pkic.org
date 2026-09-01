@@ -9,56 +9,117 @@
            internal events.id by POST /api/v1/sponsors/checkouts)
 */}}
 {{- $slug := .Get "slug" -}}
-<div data-event-sponsor-checkout data-module="member-flows/event-sponsor-page" data-api-base="/api/v1" data-event-slug="{{ $slug }}">
-  <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
+<div
+  class="pk"
+  data-event-sponsor-checkout
+  data-module="member-flows/event-sponsor-page"
+  data-api-base="/api/v1"
+  data-event-slug="{{ $slug }}"
+>
+  <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
 
-  <form id="sponsorCheckoutForm" class="row g-3 my-2 needs-validation" novalidate>
-    <div class="col-12">
-      <label class="form-label">Sponsorship tier</label>
-      <div class="row g-2" data-tier-options>
-        <div class="col-sm-6 col-lg-3">
-          <input type="radio" class="btn-check" name="tier" id="tier-Ambassador" value="Ambassador" required autocomplete="off" />
-          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Ambassador">Ambassador<br /><span class="small">$5,000</span></label>
-        </div>
-        <div class="col-sm-6 col-lg-3">
-          <input type="radio" class="btn-check" name="tier" id="tier-Innovator" value="Innovator" required autocomplete="off" />
-          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Innovator">Innovator<br /><span class="small">$10,000</span></label>
-        </div>
-        <div class="col-sm-6 col-lg-3">
-          <input type="radio" class="btn-check" name="tier" id="tier-Inspirator" value="Inspirator" required autocomplete="off" />
-          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Inspirator">Inspirator<br /><span class="small">$20,000</span></label>
-        </div>
-        <div class="col-sm-6 col-lg-3">
-          <input type="radio" class="btn-check" name="tier" id="tier-Leader" value="Leader" required autocomplete="off" />
-          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Leader">Leader<br /><span class="small">$35,000</span></label>
-        </div>
+  <form id="sponsorCheckoutForm" class="pk-form needs-validation" novalidate>
+    {{/* `pk-field` on the group, not just `pk-fieldset`: the modifier the
+         validator sets carries the state variables, and for a choice group the
+         fieldset is the element that owns the message. */}}
+    <fieldset class="pk-fieldset pk-field">
+      <legend class="pk-field__label">Sponsorship tier</legend>
+      <div class="pk-grid pk-grid--tight" data-tier-options>
+        <label class="pk-check" for="tier-Ambassador">
+          <input
+            class="pk-check__input"
+            type="radio"
+            name="tier"
+            id="tier-Ambassador"
+            value="Ambassador"
+            required
+            autocomplete="off"
+          />
+          <span class="pk-check__label">Ambassador<span class="pk-check__hint">$5,000</span></span>
+        </label>
+        <label class="pk-check" for="tier-Innovator">
+          <input
+            class="pk-check__input"
+            type="radio"
+            name="tier"
+            id="tier-Innovator"
+            value="Innovator"
+            required
+            autocomplete="off"
+          />
+          <span class="pk-check__label">Innovator<span class="pk-check__hint">$10,000</span></span>
+        </label>
+        <label class="pk-check" for="tier-Inspirator">
+          <input
+            class="pk-check__input"
+            type="radio"
+            name="tier"
+            id="tier-Inspirator"
+            value="Inspirator"
+            required
+            autocomplete="off"
+          />
+          <span class="pk-check__label">Inspirator<span class="pk-check__hint">$20,000</span></span>
+        </label>
+        <label class="pk-check" for="tier-Leader">
+          <input
+            class="pk-check__input"
+            type="radio"
+            name="tier"
+            id="tier-Leader"
+            value="Leader"
+            required
+            autocomplete="off"
+          />
+          <span class="pk-check__label">Leader<span class="pk-check__hint">$35,000</span></span>
+        </label>
       </div>
-      <div data-field-error="tier" class="invalid-feedback d-block"></div>
+      <p data-field-error="tier" class="pk-field__message" aria-live="polite" hidden></p>
+    </fieldset>
+
+    <div class="pk-grid">
+      <div class="pk-field">
+        <label for="sponsorFirstName" class="pk-field__label">First Name</label>
+        <div class="pk-field__control">
+          <input type="text" class="pk-input" id="sponsorFirstName" name="firstName" required />
+        </div>
+        <p data-field-error="firstName" class="pk-field__message" aria-live="polite" hidden></p>
+      </div>
+      <div class="pk-field">
+        <label for="sponsorLastName" class="pk-field__label">Last Name</label>
+        <div class="pk-field__control">
+          <input type="text" class="pk-input" id="sponsorLastName" name="lastName" required />
+        </div>
+        <p data-field-error="contactName" class="pk-field__message" aria-live="polite" hidden></p>
+      </div>
     </div>
 
-    <div class="col-lg-6">
-      <label for="sponsorFirstName" class="form-label">First Name</label>
-      <input type="text" class="form-control" id="sponsorFirstName" name="firstName" required />
-    </div>
-    <div class="col-lg-6">
-      <label for="sponsorLastName" class="form-label">Last Name</label>
-      <input type="text" class="form-control" id="sponsorLastName" name="lastName" required />
-      <div data-field-error="contactName" class="invalid-feedback d-block"></div>
-    </div>
-    <div class="col-12">
-      <label for="sponsorEmail" class="form-label">Email</label>
-      <input type="email" class="form-control" id="sponsorEmail" name="email" required />
-      <div data-field-error="contactEmail" class="invalid-feedback d-block"></div>
-    </div>
-    <div class="col-12">
-      <label for="sponsorOrganizationName" class="form-label">Organization Name <span class="text-muted small">(optional)</span></label>
-      <input type="text" class="form-control" id="sponsorOrganizationName" name="organizationName" />
-      <div data-field-error="organizationName" class="invalid-feedback d-block"></div>
+    <div class="pk-field">
+      <label for="sponsorEmail" class="pk-field__label">Email</label>
+      <div class="pk-field__control">
+        <input type="email" class="pk-input" id="sponsorEmail" name="email" required />
+      </div>
+      <p data-field-error="contactEmail" class="pk-field__message" aria-live="polite" hidden></p>
     </div>
 
-    <div class="col-12">
-      <button type="submit" class="btn btn-success">Sponsor Now &rarr;</button>
-      <p class="text-muted small mt-2 mb-0">You&rsquo;ll be redirected to Stripe to complete payment securely. Access is granted once our team confirms your sponsorship.</p>
+    <div class="pk-field">
+      <label for="sponsorOrganizationName" class="pk-field__label"
+        >Organization Name <span class="pk-small">(optional)</span></label
+      >
+      <div class="pk-field__control">
+        <input type="text" class="pk-input" id="sponsorOrganizationName" name="organizationName" />
+      </div>
+      <p data-field-error="organizationName" class="pk-field__message" aria-live="polite" hidden></p>
+    </div>
+
+    <div class="pk-stack pk-stack--snug">
+      <div class="pk-cluster">
+        <button type="submit" class="pk-btn pk-btn--primary">Sponsor Now &rarr;</button>
+      </div>
+      <p class="pk-small">
+        You&rsquo;ll be redirected to Stripe to complete payment securely. Access is granted once our team confirms your
+        sponsorship.
+      </p>
     </div>
   </form>
 </div>

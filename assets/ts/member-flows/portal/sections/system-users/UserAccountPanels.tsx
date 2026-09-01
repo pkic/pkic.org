@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
@@ -9,7 +9,12 @@ import {
 import { fmtDate, toast } from "../../ui";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { RowActions } from "../../../../components/RowActions";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { RowActions } from "../../../../ui/RowActions";
+import { TextInput } from "../../../../ui/TextControl";
+import "../../../../ui/Content.css";
 
 export function UserEmailAddressesPanel({
   userId,
@@ -21,6 +26,7 @@ export function UserEmailAddressesPanel({
   canWrite: boolean;
 }) {
   const tableRef = useRef<ApiTableActions | null>(null);
+  const headingId = useId();
   const [newEmail, setNewEmail] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -65,32 +71,45 @@ export function UserEmailAddressesPanel({
   }
 
   return (
-    <div class="card border-0 shadow-sm mt-4">
-      <div class="card-header bg-white fw-semibold">Email addresses</div>
-      <div class="card-body p-3">
-        <div class="small text-muted mb-2">
+    /* `aria-labelledby` makes the section a named region, so a reader can
+       reach "Email addresses" directly instead of one of several unnamed
+       panels on the user record. */
+    <Panel class="pk" aria-labelledby={headingId}>
+      <PanelHeader id={headingId} title="Email addresses" />
+      <PanelBody class="pk-stack">
+        <p class="pk-small">
           Secondary emails are for account association and record-keeping only — they do not allow signing in.
-        </div>
-        <dl class="row mb-3">
-          <dt class="col-sm-2 text-muted small">Primary</dt>
-          <dd class="col-sm-10 mb-0">{primaryEmail}</dd>
+        </p>
+        <dl class="pk-datalist">
+          <dt>Primary</dt>
+          <dd>{primaryEmail}</dd>
         </dl>
         {canWrite && (
-          <form onSubmit={handleAdd} class="d-flex gap-2 mb-3">
-            <input
-              type="email"
-              class="form-control form-control-sm adm-email-input"
-              placeholder="another@example.com"
-              value={newEmail}
-              onInput={(event) => setNewEmail((event.target as HTMLInputElement).value)}
-              disabled={adding}
-            />
-            <button type="submit" class="btn btn-sm btn-outline-success" disabled={adding || !newEmail.trim()}>
-              {adding ? "Adding…" : "Add email"}
-            </button>
+          <form class="pk-stack pk-stack--snug" onSubmit={handleAdd}>
+            {/* The input had a placeholder and no label, so it was announced
+                as an unnamed edit field. The label names it; the placeholder
+                is now only an example of the format. */}
+            <Field label="Add a secondary email">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="email"
+                  placeholder="another@example.com"
+                  value={newEmail}
+                  onInput={(event) => setNewEmail((event.target as HTMLInputElement).value)}
+                  disabled={adding}
+                />
+              )}
+            </Field>
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" size="sm" loading={adding} disabled={adding || !newEmail.trim()}>
+                {adding ? "Adding…" : "Add email"}
+              </Button>
+            </div>
           </form>
         )}
         <ApiDataTable
+          caption="Secondary email addresses"
           endpoint={`/api/v1/users/${encodeURIComponent(userId)}/emails`}
           responseSchema={userEmailsListResponseSchema}
           resolve={(response) => response.emails}
@@ -110,18 +129,19 @@ export function UserEmailAddressesPanel({
             },
             {
               header: "Added",
-              cell: (email) => <span class="small mono">{fmtDate(email.createdAt)}</span>,
+              cell: (email) => <span class="pk-small pk-mono">{fmtDate(email.createdAt)}</span>,
               sort: { asc: "created_at", desc: "-created_at" },
             },
             ...(canWrite
               ? [
                   {
-                    header: "",
+                    header: "Actions",
                     cell: (email: UserEmailRecord) => (
                       <RowActions
+                        subject={email.email}
                         actions={[
                           {
-                            key: "remove",
+                            id: "remove",
                             label: "Remove email",
                             onSelect: () => void handleRemove(email.id, email.email),
                           },
@@ -133,7 +153,7 @@ export function UserEmailAddressesPanel({
               : []),
           ]}
         />
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

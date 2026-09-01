@@ -22,6 +22,8 @@ import { getJson, ApiClientError } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { NotFoundPanel } from "../components/NotFoundPanel";
+import { Badge as StatusBadge } from "../components/Badge";
+import { Badge } from "../ui/Badge";
 import { publicVoteGetResponseSchema, type PublicVoteGetResponse } from "../../shared/schemas/votes";
 
 const API_BASE_FALLBACK = "/api/v1";
@@ -58,14 +60,18 @@ function MotionResult({ result }: { result: MotionResultData }) {
   const totalBallots = "totalBallots" in result ? result.totalBallots : undefined;
 
   return (
-    <div class="mt-3">
-      {outcome && (
-        <span class={`badge me-2 ${outcome === "passed" ? "text-bg-success" : "text-bg-danger"}`}>
-          {outcome === "passed" ? "Passed" : "Failed"}
-        </span>
-      )}
+    <div class="pk-cluster">
+      {/*
+       * The product's own status vocabulary rather than a hand-written pair of
+       * words. The version this replaces read `outcome === "passed" ? "Passed"
+       * : "Failed"`, which labelled `not_quorate` — a vote that decided
+       * nothing because too few people took part — as a defeat. `statusLabel`
+       * calls it what it is, and the tone arrives with a dot, so the outcome
+       * never rests on colour alone.
+       */}
+      {outcome && <StatusBadge status={outcome} />}
       {counts && (
-        <span class="text-muted">
+        <span class="pk-muted">
           {counts.in_favor} in favor · {counts.opposed} opposed · {counts.abstain} abstained
           {typeof totalBallots === "number" && <> ({totalBallots} ballots cast)</>}
         </span>
@@ -79,25 +85,29 @@ function ElectionResult({ result, candidates }: { result: ElectionResultData; ca
   const nameOf = (id: string): string => candidates.find((c) => c.id === id)?.candidateName ?? id;
 
   return (
-    <div class="mt-3">
+    <div class="pk-stack pk-stack--snug">
       {winnerCandidateId && (
-        <p class="mb-2">
-          <span class="badge text-bg-success me-2">Elected</span>
-          <span class="fw-semibold">{nameOf(winnerCandidateId)}</span>
-        </p>
+        <div class="pk-cluster">
+          <Badge tone="ok">Elected</Badge>
+          <span class="pk-strong">{nameOf(winnerCandidateId)}</span>
+        </div>
       )}
       {rounds && (
-        <div class="d-flex flex-column gap-2">
+        <div class="pk-stack pk-stack--snug">
           {rounds.map((round) => (
-            <div key={round.round} class="small">
-              <div class="text-muted">Round {round.round}</div>
-              <ul class="mb-0">
+            <div key={round.round} class="pk-stack pk-stack--tight pk-small">
+              <div class="pk-strong">Round {round.round}</div>
+              <ul>
                 {Object.entries(round.counts).map(([candidateId, count]) => (
                   <li key={candidateId}>
                     {nameOf(candidateId)}: {count}
-                    {round.eliminatedCandidateIds?.includes(candidateId) && (
-                      <span class="text-muted"> (eliminated)</span>
-                    )}
+                    {/*
+                     * Plain text, not a muted span: the whole round block is
+                     * already muted, so the old `text-muted` here distinguished
+                     * nothing — and elimination is information, which should
+                     * not have been carried by a shade in the first place.
+                     */}
+                    {round.eliminatedCandidateIds?.includes(candidateId) && <> (eliminated)</>}
                   </li>
                 ))}
               </ul>
@@ -112,14 +122,12 @@ function ElectionResult({ result, candidates }: { result: ElectionResultData; ca
 function VoteResult({ vote }: { vote: PublicVote }) {
   if (vote.status === "cancelled") {
     return (
-      <p class="text-muted mt-3">
-        This vote was cancelled{vote.cancellationReason ? `: ${vote.cancellationReason}` : "."}
-      </p>
+      <p class="pk-muted">This vote was cancelled{vote.cancellationReason ? `: ${vote.cancellationReason}` : "."}</p>
     );
   }
   if (vote.status !== "closed") {
     return (
-      <p class="text-muted mt-3">
+      <p class="pk-muted">
         Voting {vote.status === "open" ? "closes" : "opens"}{" "}
         {formatDate(vote.status === "open" ? vote.closesAt : vote.opensAt)}. Results will be published here once voting
         closes.
@@ -127,7 +135,7 @@ function VoteResult({ vote }: { vote: PublicVote }) {
     );
   }
   if (!vote.result) {
-    return <p class="text-muted mt-3">Results are not yet available.</p>;
+    return <p class="pk-muted">Results are not yet available.</p>;
   }
   if ("rounds" in vote.result) {
     return <ElectionResult result={vote.result} candidates={vote.candidates ?? []} />;
@@ -135,30 +143,47 @@ function VoteResult({ vote }: { vote: PublicVote }) {
   return <MotionResult result={vote.result} />;
 }
 
-function VoteDetailView({ vote, indexHref }: { vote: PublicVote; indexHref: string }) {
+export function VoteDetailView({ vote, indexHref }: { vote: PublicVote; indexHref: string }) {
   return (
-    <div class="container py-4">
-      <div class="d-flex gap-2 mb-2">
-        <span class="badge text-bg-light border">{VOTE_TYPE_LABELS[vote.voteType]}</span>
-        <span class="badge text-bg-light border">{vote.ownerGroupName}</span>
-        <span class="badge text-bg-light border">
+    <div class="pk pk-container pk-section pk-stack">
+      {/*
+       * Three facts about the vote, not three statuses, so they carry no tone
+       * dot. Each gets a hidden term: "Policy Group" and "Per Member" say
+       * nothing on their own to a reader who meets the badge row without its
+       * visual context.
+       */}
+      <div class="pk-cluster">
+        <Badge tone="neutral" dot={false}>
+          <span class="pk-sr-only">Vote type: </span>
+          {VOTE_TYPE_LABELS[vote.voteType]}
+        </Badge>
+        <Badge tone="neutral" dot={false}>
+          <span class="pk-sr-only">Held by: </span>
+          {vote.ownerGroupName}
+        </Badge>
+        <Badge tone="neutral" dot={false}>
+          <span class="pk-sr-only">Electorate: </span>
           {vote.electorateMode === "per_member" ? "Per Member" : "Per person"}
-        </span>
+        </Badge>
       </div>
-      <h1 class="h3">{vote.title}</h1>
-      {vote.description && <p class="lead">{vote.description}</p>}
-      <p class="text-muted small">
-        Opens {formatDate(vote.opensAt)} · Closes {formatDate(vote.closesAt)}
-      </p>
+      <div class="pk-stack pk-stack--tight">
+        <h1>{vote.title}</h1>
+        {vote.description && <p class="pk-lede">{vote.description}</p>}
+        <p class="pk-small">
+          Opens {formatDate(vote.opensAt)} · Closes {formatDate(vote.closesAt)}
+        </p>
+      </div>
       <VoteResult vote={vote} />
-      <div class="mt-4">
+      {/* Inside a paragraph so the link box is the width of its own words
+          rather than the full column, as NotFoundPanel's back link is. */}
+      <p>
         <a href={indexHref}>&larr; Back to all votes</a>
-      </div>
+      </p>
     </div>
   );
 }
 
-function VoteDetailPage({ apiBase, indexHref }: { apiBase: string; indexHref: string }) {
+export function VoteDetailPage({ apiBase, indexHref }: { apiBase: string; indexHref: string }) {
   const [vote, setVote] = useState<PublicVote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -181,7 +206,9 @@ function VoteDetailPage({ apiBase, indexHref }: { apiBase: string; indexHref: st
     return <NotFoundPanel message="We couldn’t find that vote." backHref={indexHref} backLabel="Back to all votes" />;
   }
   if (error) return <ErrorAlert error={error} />;
-  if (!vote) return <Spinner />;
+  // Named, so the wait says what is loading rather than announcing a bare
+  // "Loading…" on a page that is otherwise empty.
+  if (!vote) return <Spinner label="Loading vote…" />;
 
   return <VoteDetailView vote={vote} indexHref={indexHref} />;
 }

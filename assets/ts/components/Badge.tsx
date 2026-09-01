@@ -1,107 +1,122 @@
-const STATUS_COLOR: Record<string, string> = {
+import { Badge as ToneBadge, type BadgeTone } from "../ui/Badge";
+
+/**
+ * The product's status vocabulary, mapped onto the design system's six tones.
+ *
+ * This is deliberately NOT in the design system. "ec_review" and
+ * "budget_exhausted" are this product's words; a Badge that knew them would
+ * be a Badge that could not be reused. The system owns the six tones and how
+ * they look; this owns which of our statuses mean what.
+ *
+ * The map used to name Bootstrap colours, including `dark` and `light` as
+ * two more shades of grey. Those collapse into `neutral`: the distinction
+ * between an archived thing and a draft one was carried by colour alone,
+ * which is exactly the signal nobody can rely on, and the label says it.
+ */
+const STATUS_TONE: Record<string, BadgeTone> = {
   // registration
-  registered: "success",
-  pending_email_confirmation: "warning",
+  registered: "ok",
+  pending_email_confirmation: "warn",
   waitlisted: "info",
-  cancelled: "secondary",
+  cancelled: "neutral",
   // waitlist offer lifecycle
-  waiting: "warning",
+  waiting: "warn",
   offered: "info",
-  removed: "secondary",
+  removed: "neutral",
   // invite / proposal-invite
   sent: "info",
-  accepted: "success",
+  accepted: "ok",
   declined: "danger",
-  expired: "secondary",
-  revoked: "warning",
+  expired: "neutral",
+  revoked: "warn",
   // entity / form
-  active: "success",
-  inactive: "secondary",
-  archived: "dark",
-  draft: "secondary",
+  active: "ok",
+  inactive: "neutral",
+  archived: "neutral",
+  draft: "neutral",
   // proposal statuses
-  submitted: "primary",
-  resubmitted: "warning",
+  submitted: "accent",
+  resubmitted: "warn",
   under_review: "info",
-  needs_work: "warning",
-  "needs-work": "warning",
-  needs_revision: "warning",
-  withdrawn: "secondary",
+  needs_work: "warn",
+  "needs-work": "warn",
+  needs_revision: "warn",
+  withdrawn: "neutral",
   // review recommendation
-  accept: "success",
+  accept: "ok",
   reject: "danger",
   // decision
   // "accepted" and "rejected" already covered above
   rejected: "danger",
   // permissions / roles
   organizer: "info",
-  program_committee: "primary",
-  moderator: "warning",
-  volunteer: "secondary",
+  program_committee: "accent",
+  moderator: "warn",
+  volunteer: "neutral",
   // user roles
   admin: "danger",
-  user: "secondary",
-  guest: "light",
+  user: "neutral",
+  guest: "neutral",
   // attendee roles on badge
-  speaker: "success",
-  co_speaker: "success",
-  proposer: "primary",
-  panelist: "warning",
-  staff: "secondary",
-  attendee: "primary",
+  speaker: "ok",
+  co_speaker: "ok",
+  proposer: "accent",
+  panelist: "warn",
+  staff: "neutral",
+  attendee: "accent",
   // outbox
-  queued: "secondary",
+  queued: "neutral",
   sending: "info",
-  delivered: "success",
-  delivery_unknown: "warning",
+  delivered: "ok",
+  delivery_unknown: "warn",
   failed: "danger",
   bounced: "danger",
-  retrying: "warning",
+  retrying: "warn",
   // scheduled job runs
-  succeeded: "success",
-  abandoned: "secondary",
-  budget_exhausted: "warning",
+  succeeded: "ok",
+  abandoned: "neutral",
+  budget_exhausted: "warn",
   // donations
-  completed: "success",
-  pending: "warning",
+  completed: "ok",
+  pending: "warn",
   // calendar rsvp
-  rsvp_accepted: "success",
+  rsvp_accepted: "ok",
   rsvp_declined: "danger",
-  rsvp_tentative: "warning",
+  rsvp_tentative: "warn",
   // registration mode
-  open: "success",
+  open: "ok",
   invite_only: "info",
-  invite_or_open: "primary",
+  invite_or_open: "accent",
   // votes (derived lifecycle)
   scheduled: "info",
-  closed: "secondary",
-  canceled: "secondary",
+  closed: "neutral",
+  canceled: "neutral",
   // vote outcomes
-  passed: "success",
+  passed: "ok",
   // "failed" already covered above (outbox)
-  not_quorate: "warning",
+  not_quorate: "warn",
   // membership application stages
-  received: "secondary",
+  received: "neutral",
   screening: "info",
   in_review: "info",
-  on_hold: "warning",
+  on_hold: "warn",
   in_consultation: "info",
-  ec_review: "warning",
-  board_review: "warning",
-  approved: "success",
+  ec_review: "warn",
+  board_review: "warn",
+  approved: "ok",
   onboarding: "info",
   // ec review decision
-  approve: "success",
+  approve: "ok",
   decline: "danger",
   // organization content review
-  pending_review: "warning",
+  pending_review: "warn",
   // sponsorship pipeline stages
-  new_inquiry: "light",
+  new_inquiry: "neutral",
   contacted: "info",
-  proposal_sent: "primary",
-  negotiating: "warning",
-  payment_pending: "warning",
-  lapsed: "secondary",
+  proposal_sent: "accent",
+  negotiating: "warn",
+  payment_pending: "warn",
+  lapsed: "neutral",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -140,12 +155,9 @@ export function statusLabel(status: string): string {
   return STATUS_LABEL[status] ?? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function statusColor(status: string): string {
-  return STATUS_COLOR[status] ?? "secondary";
-}
-
-function formatStatus(status: string): string {
-  return statusLabel(status);
+/** The design-system tone a status carries. Unknown statuses read as neutral. */
+export function statusTone(status: string): BadgeTone {
+  return STATUS_TONE[status] ?? "neutral";
 }
 
 interface BadgeProps {
@@ -153,7 +165,10 @@ interface BadgeProps {
   label?: string;
 }
 
+/**
+ * A status as a pill. The vocabulary is ours; the pill is the system's, so it
+ * carries the tone dot that keeps status from resting on colour alone.
+ */
 export function Badge({ status, label }: BadgeProps) {
-  const color = STATUS_COLOR[status] ?? "secondary";
-  return <span class={`badge text-bg-${color}`}>{label ?? formatStatus(status)}</span>;
+  return <ToneBadge tone={statusTone(status)}>{label ?? statusLabel(status)}</ToneBadge>;
 }

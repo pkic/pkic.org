@@ -7,6 +7,9 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
 import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage";
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
+import { proposalPatchSchema } from "../../assets/shared/schemas/proposal-management";
+import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -229,6 +232,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Opens a proposal the way a person does.
+ *
+ * These used to dispatch a click at the `<tr>`, which matched the old
+ * implementation's handler on the row — an affordance no keyboard could reach.
+ * The row's control is now a real button; clicking that is both what a mouse
+ * does and what Enter does.
+ */
+function rowControl(container: HTMLElement): HTMLElement {
+  const control = container.querySelector<HTMLElement>("tbody .pk-table__row-link");
+  if (!control) throw new Error("the table row offers no control to activate");
+  return control;
+}
+
+/** The Panel whose header reads `title` — the migrated shape of a card. */
+function panelTitled(root: HTMLElement, title: string): HTMLElement {
+  const heading = Array.from(root.querySelectorAll<HTMLElement>(".pk-panel__title")).find(
+    (candidate) => candidate.textContent?.trim() === title,
+  );
+  const panel = heading?.closest<HTMLElement>(".pk-panel");
+  if (!panel) throw new Error(`no panel is titled "${title}"`);
+  return panel;
+}
+
 describe("group event proposal portal", () => {
   it("uses the same canonical detail implementation from the event route", async () => {
     const calls: RequestRecord[] = [];
@@ -248,8 +275,8 @@ describe("group event proposal portal", () => {
       ),
     ).toBe(false);
     expect(container.textContent).not.toContain("Edit");
-    expect(container.textContent).not.toContain("Operator Actions");
-    expect(container.textContent).not.toContain("Open Proposer Manage Page");
+    expect(container.textContent).not.toContain("Operator actions");
+    expect(container.textContent).not.toContain("Open proposer manage page");
     expect(calls.filter(({ url }) => url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`)).toHaveLength(0);
     const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("Speakers"),
@@ -290,7 +317,7 @@ describe("group event proposal portal", () => {
       await settle();
       await settle();
 
-      const activeTab = container.querySelector(".nav-link.active");
+      const activeTab = tabs(container).find(isCurrentTab);
       expect(activeTab?.textContent).toBe("Reviews (0)");
     } finally {
       window.location.hash = previousHash;
@@ -306,9 +333,7 @@ describe("group event proposal portal", () => {
     await settle();
     await settle();
 
-    const row = container.querySelector<HTMLTableRowElement>("tbody tr");
-    expect(row).not.toBeNull();
-    await act(async () => row?.click());
+    await act(async () => rowControl(container!).click());
     await settle();
     await settle();
 
@@ -329,8 +354,7 @@ describe("group event proposal portal", () => {
     await act(() => render(<GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />, container!));
     await settle();
     await settle();
-    const row = container.querySelector<HTMLTableRowElement>("tbody tr");
-    await act(async () => row?.click());
+    await act(async () => rowControl(container!).click());
     await settle();
     await settle();
 
@@ -400,13 +424,20 @@ describe("group event proposal portal", () => {
     );
     await settle();
     await settle();
-    await act(async () => container!.querySelector<HTMLTableRowElement>("tbody tr")?.click());
+    await act(async () => rowControl(container!).click());
     await settle();
     await settle();
 
     expect(container.textContent).toContain("Speakers");
-    expect(container.textContent).toContain("Operator Actions");
-    expect(container.textContent).toContain("Open Proposer Manage Page");
+    // The sidebar's operator panel, located by its heading and its control's
+    // accessible name rather than by a substring of the whole page, so a
+    // rename surfaces here as the panel going missing.
+    expect([...container.querySelectorAll("h3")].map((heading) => heading.textContent)).toContain("Operator actions");
+    expect(
+      [...container.querySelectorAll("button")].some(
+        (button) => button.textContent?.trim() === "Open proposer manage page",
+      ),
+    ).toBe(true);
     expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
 
     const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
@@ -421,7 +452,8 @@ describe("group event proposal portal", () => {
     );
     expect(edit).not.toBeNull();
     await act(async () => edit?.click());
-    const form = edit?.closest(".card")?.querySelector("form");
+    // The speaker card is a design-system Panel now, not a Bootstrap card.
+    const form = edit?.closest(".pk-panel")?.querySelector("form");
     expect(form).not.toBeNull();
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -478,5 +510,80 @@ describe("group event proposal portal", () => {
       calls.some(({ url, method }) => method === "DELETE" && url.includes("/speakers/") && !url.endsWith("/speakers")),
     ).toBe(true);
     expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
+  });
+
+  /**
+   * The abstract editor is the one control on this page a reader types into,
+   * and the class-name migration is exactly the change that can silently
+   * detach a label from it: the old markup put a bare `<textarea>` under a
+   * heading with nothing tying the two together, so the control announced
+   * itself as an unnamed text box.
+   */
+  it("names the abstract editor and reports a rejected save without discarding the draft", async () => {
+    const calls: RequestRecord[] = [];
+    stubFetch(calls, { ...access, canFinalize: true, eventPermissions: ["proposals:manage"] });
+    const passthrough = globalThis.fetch;
+    const patchBodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          patchBodies.push(String(init.body));
+          return json({ error: { code: "CONFLICT", message: "The abstract changed since you opened it" } }, 409);
+        }
+        return passthrough(input, init);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
+    await settle();
+    await settle();
+
+    const abstractPanel = panelTitled(container, "Abstract");
+    await act(async () => buttonNamed(abstractPanel, "Edit").click());
+
+    // Resolving through the `for`/`id` pair fails exactly when the pair is
+    // broken, which is the half a visual review cannot see.
+    const editor = controlFor(abstractPanel, "Abstract");
+    expect(editor.tagName.toLowerCase()).toBe("textarea");
+
+    const draft =
+      "A revised abstract, long enough to satisfy the shared proposal contract, that the server will refuse anyway.";
+    await typeInto(editor, draft);
+    await submitForm(abstractPanel);
+
+    // The request is checked against the canonical contract rather than a
+    // literal, so a schema change cannot leave this test passing on a shape
+    // the endpoint no longer accepts.
+    expect(patchBodies).toHaveLength(1);
+    expect(proposalPatchSchema.parse(JSON.parse(patchBodies[0]))).toEqual({ abstract: draft });
+
+    // A refused save keeps the editor — and what the reader typed — in place.
+    const stillEditing = controlFor(panelTitled(container, "Abstract"), "Abstract") as HTMLTextAreaElement;
+    expect(stillEditing.value).toBe(draft);
+  });
+
+  it("summarizes the proposal without leaning on colour to say whether quorum is met", async () => {
+    const calls: RequestRecord[] = [];
+    stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
+    await settle();
+    await settle();
+
+    const stats = Array.from(container.querySelectorAll<HTMLElement>(".pk-stat-card")).map((card) => ({
+      label: card.querySelector(".pk-stat-card__label")?.textContent?.trim(),
+      value: card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
+      note: card.querySelector(".pk-stat-card__note")?.textContent?.trim(),
+    }));
+    expect(stats.map(({ label }) => label)).toEqual(["Proposer", "Type", "Reviews", "Decision"]);
+    expect(stats[2]).toMatchObject({ value: "0 / 2 required", note: "Quorum not met" });
+    // Stored vocabulary is capitalized in the text itself, not by a CSS
+    // transform a screen reader never sees.
+    expect(stats[1]?.value).toBe("Talk");
+    expect(stats[3]?.value).toBe("Accepted");
   });
 });

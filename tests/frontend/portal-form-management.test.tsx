@@ -17,6 +17,7 @@ import {
   FormManagementList,
 } from "../../assets/ts/components/forms/management/FormManagement";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
 
@@ -173,7 +174,7 @@ describe("portal form management", () => {
       }),
     );
 
-    const container = mount(<FormManagementList canWrite={false} onOpenForm={vi.fn()} />);
+    const container = mount(<FormManagementList onOpenForm={vi.fn()} />);
     await settle();
 
     expect(requests).toHaveLength(1);
@@ -184,23 +185,39 @@ describe("portal form management", () => {
     expect(container.textContent).not.toContain("Archive/Delete");
   });
 
-  it("shows authoring controls only to a form writer, and New form hands off to the caller instead of layering a table below it", async () => {
+  it("keeps creation out of the list itself and exposes the contract's purpose and status filters", async () => {
+    const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => formListResponse()),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return formListResponse();
+      }),
     );
-    const onCreateNew = vi.fn();
 
-    const container = mount(<FormManagementList canWrite onOpenForm={vi.fn()} onCreateNew={onCreateNew} />);
+    const container = mount(<FormManagementList onOpenForm={vi.fn()} />);
     await settle();
 
-    expect(container.querySelector("form")).toBeNull();
-    expect(container.textContent).toContain("New form");
-    const newFormButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "New form",
-    );
-    newFormButton!.click();
-    expect(onCreateNew).toHaveBeenCalledTimes(1);
+    // The create action lives in the page header, not the list's toolbar:
+    // the list renders no "New form" control of its own.
+    expect(container.textContent).not.toContain("New form");
+
+    // The filters the API already accepts are real toolbar controls wired to
+    // the server params, not client-side row filtering.
+    const purposeFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by purpose"]');
+    const statusFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by status"]');
+    expect(purposeFilter).not.toBeNull();
+    expect(statusFilter).not.toBeNull();
+
+    purposeFilter!.value = "survey";
+    purposeFilter!.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    const lastRequest = requests.at(-1);
+    expect(lastRequest?.searchParams.get("purpose")).toBe("survey");
   });
 
   it("does not offer global mutations for a community-owned form", async () => {
@@ -243,7 +260,7 @@ describe("portal form management", () => {
       const container = mount(<FormManagementDetail formKey="member-feedback" canWrite={false} onBack={vi.fn()} />);
       await settle();
 
-      const activeTab = container.querySelector(".nav-link.active");
+      const activeTab = tabs(container).find(isCurrentTab);
       expect(activeTab?.textContent).toBe("Responses");
     } finally {
       window.location.hash = previousHash;
@@ -270,6 +287,41 @@ describe("portal form management", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]?.pathname).toBe("/api/v1/events/pqc-2026/forms");
     expect(requests[0]?.searchParams.get("purpose")).toBe("proposal_submission");
+  });
+
+  it("scopes the event catalogue to linked forms by default and widens it through the scope filter", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return formListResponse();
+      }),
+    );
+
+    const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
+    await settle();
+
+    // The default view sends the contract's boolean value, not a bespoke "1".
+    expect(requests[0]?.searchParams.get("linkedOnly")).toBe("true");
+
+    const scope = container.querySelector<HTMLSelectElement>('select[aria-label="Form scope"]')!;
+    expect(scope).not.toBeNull();
+    scope.value = "";
+    await act(async () => {
+      scope.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    // Widening the scope is the server default: the parameter is dropped.
+    const last = requests.at(-1);
+    expect(last?.pathname).toBe("/api/v1/events/pqc-2026/forms");
+    expect(last?.searchParams.has("linkedOnly")).toBe(false);
   });
 
   it("shows only the creation editor, with no forms table, and cancel hands control back without saving", async () => {
@@ -460,5 +512,104 @@ describe("portal form management", () => {
 
     expect(fetchMock.mock.calls.length).toBe(callsBeforeCancel);
     expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it("states a failed load as a sentence in an alert region rather than an empty panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 503 })),
+    );
+
+    const container = mount(<FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe("The service is temporarily unavailable. Try again in a moment.");
+    // The transport phrasing never reaches the reader, and nothing pretends
+    // the form loaded.
+    expect(container.textContent).not.toContain("HTTP 503");
+    expect(container.querySelector('[role="tab"]')).toBeNull();
+  });
+
+  it("wires each tab to the panel it controls, in both directions", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : globalFormDetailResponse();
+      }),
+    );
+
+    const container = mount(<FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    const strip = container.querySelector('[role="tablist"]');
+    expect(strip?.getAttribute("aria-label")).toBe("Member feedback sections");
+
+    const selected = tabs(container).find(isCurrentTab);
+    const panelId = selected?.getAttribute("aria-controls");
+    expect(panelId).toBeTruthy();
+    const panel = [...container.querySelectorAll('[role="tabpanel"]')].find((element) => element.id === panelId);
+    expect(panel).toBeTruthy();
+    // And back the other way, so the panel is announced with the tab's name.
+    expect(panel?.getAttribute("aria-labelledby")).toBe(selected?.id);
+
+    // Exactly one tab is in the tab order; the arrows move within the strip.
+    const inTabOrder = tabs(container).filter((tab) => tab.tabIndex === 0);
+    expect(inTabOrder).toHaveLength(1);
+  });
+
+  it("names the forms table and makes the whole row a keyboard-reachable control that says which form it opens", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => formListResponse()),
+    );
+    const onOpenForm = vi.fn();
+
+    const container = mount(<FormManagementList onOpenForm={onOpenForm} />);
+    await settle();
+
+    // A table with no caption is announced as "table"; this page can hold
+    // several.
+    expect(container.querySelector("caption")?.textContent).toBe("Configured forms");
+
+    const row = container.querySelector("tbody tr");
+    const action = row?.querySelector("button");
+    expect(action?.textContent).toBe("Open Member feedback");
+    // Not a click handler on the <tr>: a row is not focusable and takes no
+    // Enter key.
+    expect(row?.hasAttribute("onclick")).toBe(false);
+
+    action!.click();
+    expect(onOpenForm).toHaveBeenCalledWith("member-feedback");
+  });
+
+  it("names the response filter bar and every control in it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => formListResponse()),
+    );
+
+    const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
+    await settle();
+
+    const toolbar = container.querySelector('[role="toolbar"]');
+    expect(toolbar?.getAttribute("aria-label")).toBe("Response filters");
+
+    const statusFilter = toolbar?.querySelector("select");
+    expect(statusFilter?.getAttribute("aria-label")).toBe("Submission status");
+    expect([...statusFilter!.options].map((option) => option.value)).toEqual([
+      "",
+      "submitted",
+      "accepted",
+      "rejected",
+      "withdrawn",
+    ]);
+
+    // Attendance is a registration-only vocabulary, so it is absent here.
+    expect(toolbar?.querySelectorAll("select")).toHaveLength(1);
   });
 });

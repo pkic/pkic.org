@@ -6,7 +6,13 @@ import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { readField, setField, formatStatusLabel, statusBadgeClass, q, findSubmitButton } from "../shared/form/helpers";
+import { readField, setField, formatStatusLabel, q, findSubmitButton } from "../shared/form/helpers";
+import { statusTone } from "../components/Badge";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
+import { Panel, PanelBody } from "../ui/Panel";
+import { Select, Textarea, TextInput } from "../ui/TextControl";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../shared/widgets/profile-links";
@@ -34,7 +40,8 @@ function showResendProposalManageLinkForm(
   eventSlug: string,
   introMessage: string,
 ): void {
-  root.querySelector<HTMLElement>("[data-proposal-manage-content]")?.classList.add("d-none");
+  const content = root.querySelector<HTMLElement>("[data-proposal-manage-content]");
+  if (content) content.hidden = true;
   showManageLinkRecoveryForm({
     root,
     loadingSelector: "[data-proposal-manage-loading]",
@@ -169,13 +176,16 @@ export function ProposalManageSpeakerCard({
     await requestJson(headshotEndpoint, successResponseSchema, { method: "DELETE" });
   }
 
-  const roleLabel = speaker.role.replace(/_/g, " ");
+  // The shared option labels rather than an underscore-stripping replace, so
+  // a role reads the same in the badge as it does in the select below it.
+  const roleLabel = SPEAKER_ROLE_OPTIONS.find((option) => option.value === speaker.role)?.label ?? speaker.role;
+  const bioHelpId = `speaker-bio-help-${speaker.userId}`;
 
   return (
-    <div class="card shadow-sm mb-3" data-speaker-card data-speaker-email={speaker.email}>
-      <div class="card-body">
-        <div class="d-flex flex-column flex-lg-row gap-3">
-          <div class="flex-shrink-0">
+    <Panel data-speaker-card data-speaker-email={speaker.email} aria-label={`Speaker ${speakerName}`}>
+      <PanelBody>
+        <div class="pk-stack">
+          <div>
             <AdminHeadshotManager
               initialUrl={speaker.headshotUrl ?? null}
               alt={speakerName}
@@ -200,71 +210,64 @@ export function ProposalManageSpeakerCard({
             />
           </div>
 
-          <div class="flex-fill">
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-              <strong>{speakerName}</strong>
-              {speakerName !== speaker.email && <span class="text-muted small">&lt;{speaker.email}&gt;</span>}
-              <span class="badge bg-secondary text-capitalize">{roleLabel}</span>
-              <span class={`badge rounded-pill px-2 py-1 ${statusBadgeClass(speaker.status)}`}>
-                {formatStatusLabel(speaker.status)}
-              </span>
-              {(speaker.status === "invited" || speaker.status === "confirmed") && (
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary btn-sm ms-lg-auto"
-                  disabled={reminding}
-                  onClick={() => void sendReminder()}
-                >
-                  {reminding
-                    ? "Sending…"
-                    : speaker.status === "invited"
-                      ? "Send invitation reminder"
-                      : "Request speaker to review or update their profile"}
-                </button>
-              )}
-              {!isCurrentProposer && (
-                <button
-                  type="button"
-                  class="btn btn-outline-danger btn-sm"
-                  data-remove-proposal-speaker
-                  disabled={removing}
-                  onClick={() => void removeSpeaker()}
-                >
-                  {removing ? "Removing…" : "Remove speaker"}
-                </button>
-              )}
-            </div>
+          <div class="pk-cluster">
+            <strong>{speakerName}</strong>
+            {speakerName !== speaker.email && <span class="pk-small">&lt;{speaker.email}&gt;</span>}
+            <Badge tone="neutral">{roleLabel}</Badge>
+            <Badge tone={statusTone(speaker.status)}>{formatStatusLabel(speaker.status)}</Badge>
+            {(speaker.status === "invited" || speaker.status === "confirmed") && (
+              // `loading` rather than `disabled`: a disabled control loses
+              // focus, which throws a screen-reader user out of the card they
+              // were working in mid-request.
+              <Button variant="secondary" size="sm" loading={reminding} onClick={() => void sendReminder()}>
+                {reminding
+                  ? "Sending…"
+                  : speaker.status === "invited"
+                    ? "Send invitation reminder"
+                    : "Request speaker to review or update their profile"}
+              </Button>
+            )}
+            {!isCurrentProposer && (
+              <Button
+                variant="danger-quiet"
+                size="sm"
+                data-remove-proposal-speaker
+                loading={removing}
+                onClick={() => void removeSpeaker()}
+              >
+                {removing ? "Removing…" : "Remove speaker"}
+              </Button>
+            )}
+          </div>
 
-            <form class="row g-3" onSubmit={(event) => void saveProfile(event)}>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-first-name-${speaker.userId}`}>
+          <form class="pk-stack" onSubmit={(event) => void saveProfile(event)}>
+            <div class="pk-grid">
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-first-name-${speaker.userId}`}>
                   First name
                 </label>
-                <input
+                <TextInput
                   id={`speaker-first-name-${speaker.userId}`}
-                  class="form-control"
                   value={firstName}
                   onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-last-name-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-last-name-${speaker.userId}`}>
                   Last name
                 </label>
-                <input
+                <TextInput
                   id={`speaker-last-name-${speaker.userId}`}
-                  class="form-control"
                   value={lastName}
                   onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-role-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-role-${speaker.userId}`}>
                   Role
                 </label>
-                <select
+                <Select
                   id={`speaker-role-${speaker.userId}`}
-                  class="form-select"
                   value={role}
                   onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
@@ -275,60 +278,61 @@ export function ProposalManageSpeakerCard({
                       </option>
                     ),
                   )}
-                </select>
+                </Select>
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-organization-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-organization-${speaker.userId}`}>
                   Organization
                 </label>
-                <input
+                <TextInput
                   id={`speaker-organization-${speaker.userId}`}
-                  class="form-control"
                   value={organizationName}
                   onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label" for={`speaker-job-title-${speaker.userId}`}>
+              <div class="pk-field">
+                <label class="pk-field__label" for={`speaker-job-title-${speaker.userId}`}>
                   Job title
                 </label>
-                <input
+                <TextInput
                   id={`speaker-job-title-${speaker.userId}`}
-                  class="form-control"
                   value={jobTitle}
                   onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
                 />
               </div>
-              <div class="col-12">
-                <label class="form-label" for={`speaker-bio-${speaker.userId}`}>
-                  Biography
-                </label>
-                <textarea
-                  id={`speaker-bio-${speaker.userId}`}
-                  class="form-control"
-                  rows={4}
-                  value={biography}
-                  onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
-                />
-                <div class="form-text">Visible to attendees on the event program.</div>
-              </div>
-              <div class="col-12">
-                <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
-              </div>
-              <div class="col-12">
-                <button type="submit" class="btn btn-success btn-sm" disabled={saving}>
-                  {saving ? "Saving…" : "Save speaker details"}
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+            <div class="pk-field">
+              <label class="pk-field__label" for={`speaker-bio-${speaker.userId}`}>
+                Biography
+              </label>
+              <Textarea
+                id={`speaker-bio-${speaker.userId}`}
+                rows={4}
+                value={biography}
+                // Wired to the control rather than merely sitting under it, so
+                // the guidance is announced with the field it is about.
+                aria-describedby={bioHelpId}
+                onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
+              />
+              <p class="pk-field__help" id={bioHelpId}>
+                Visible to attendees on the event program.
+              </p>
+            </div>
+            <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" size="sm" loading={saving}>
+                {saving ? "Saving…" : "Save speaker details"}
+              </Button>
+            </div>
+          </form>
         </div>
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
-function SpeakerList({
+/** Exported so the empty state can be asserted without booting the page. */
+export function SpeakerList({
   speakers,
   token,
   apiBase,
@@ -344,10 +348,11 @@ function SpeakerList({
   onStatus: (message: string, isError?: boolean) => void;
 }) {
   if (!speakers.length) {
-    return <p class="text-muted small">No speakers added yet.</p>;
+    return <EmptyState title="No speakers added yet" body="Invite a co-speaker to add one to this proposal." />;
   }
   return (
-    <div>
+    // The gap belongs to the list, not to a margin on each card.
+    <div class="pk-stack">
       {speakers.map((speaker) => (
         <ProposalManageSpeakerCard
           key={speaker.userId}
@@ -418,10 +423,7 @@ async function main(): Promise<void> {
       refreshed.proposal.proposer_user_id,
       reloadSpeakers,
       (message, isError) => {
-        if (csStatus) {
-          csStatus.textContent = message;
-          csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
-        }
+        if (csStatus) setStatus(csStatus, message, isError);
       },
     );
   }
@@ -442,12 +444,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  boot.root.querySelector<HTMLElement>("[data-proposal-manage-loading]")?.classList.add("d-none");
-  boot.root.querySelector<HTMLElement>("[data-proposal-manage-content]")?.classList.remove("d-none");
+  const loadingEl = boot.root.querySelector<HTMLElement>("[data-proposal-manage-loading]");
+  if (loadingEl) loadingEl.hidden = true;
+  const contentEl = boot.root.querySelector<HTMLElement>("[data-proposal-manage-content]");
+  if (contentEl) contentEl.hidden = false;
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    boot.form.classList.add("was-validated");
+    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
+    // in the one case it means anything — a submission that failed — and
+    // setting it up front marked a form the reader had not got wrong yet.
     if (!validateBeforeSubmit(boot.form, boot.statusEl)) return;
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {
@@ -494,10 +500,7 @@ async function main(): Promise<void> {
     proposalData.proposal.proposer_user_id,
     reloadSpeakers,
     (message, isError) => {
-      if (csStatus) {
-        csStatus.textContent = message;
-        csStatus.className = `mt-2 small ${isError ? "text-danger" : "text-success"}`;
-      }
+      if (csStatus) setStatus(csStatus, message, isError);
     },
   );
 
@@ -508,10 +511,7 @@ async function main(): Promise<void> {
     const role = q<HTMLSelectElement>("#cs-role", boot.root)?.value ?? "speaker";
 
     if (!email) {
-      if (csStatus) {
-        csStatus.textContent = "Please enter an email address.";
-        csStatus.className = "mt-2 small text-danger";
-      }
+      if (csStatus) setStatus(csStatus, "Please enter an email address.", true);
       return;
     }
 
@@ -523,8 +523,7 @@ async function main(): Promise<void> {
           coSpeakerInviteResponseSchema,
         );
         if (csStatus) {
-          csStatus.textContent = invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`;
-          csStatus.className = "mt-2 small text-success";
+          setStatus(csStatus, invited.queued ? `Invite sent to ${email}.` : `${email} already has an active invite.`);
         }
         const emailEl = q<HTMLInputElement>("#cs-email", boot.root);
         const firstEl = q<HTMLInputElement>("#cs-first-name", boot.root);
@@ -535,10 +534,7 @@ async function main(): Promise<void> {
         await reloadSpeakers();
       } catch (error) {
         const normalized = normalizeValidation(error);
-        if (csStatus) {
-          csStatus.textContent = normalized.globalMessage;
-          csStatus.className = "mt-2 small text-danger";
-        }
+        if (csStatus) setStatus(csStatus, normalized.globalMessage, true);
       }
     });
   });

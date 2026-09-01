@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IdentityRoster } from "../../assets/ts/member-flows/portal/sections/system-organizations/IdentityRoster";
 import type { OrganizationDetail } from "../../assets/shared/schemas/organization-management";
 import { identityCreateSchema } from "../../assets/shared/schemas/identity";
+import { buttonNamed, controlFor, groupNames, namedGroup } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["/organizations", vi.fn()],
@@ -186,7 +187,53 @@ describe("linking existing users as acting identities", () => {
     clickButton("Link");
     await settle();
 
-    expect(container.textContent).toContain("This identity was blocked");
+    // A rejection is announced, not left as colored text beside the button.
+    const alert = [...container.querySelectorAll('[role="alert"]')].find((node) =>
+      node.textContent?.includes("This identity was blocked"),
+    );
+    expect(alert).toBeTruthy();
     expect(container.querySelector("form")).toBeTruthy();
+  });
+
+  it("names the roster region, its groups, and every control the add form draws", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ identities: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    mount();
+    await settle();
+
+    // The section carries its own name, so it is a region rather than an
+    // anonymous box; the heading beside it says the same thing visually.
+    const region = container.querySelector('section[aria-label="Identities"]');
+    expect(region).not.toBeNull();
+    expect(region!.querySelector("h3")?.textContent).toBe("Identities");
+
+    // The picker's group is named by a `<legend>`, because `UserPicker` owns
+    // the id of the control inside it and no outside label can point at it.
+    buttonNamed(container, "Link existing user").click();
+    await settle();
+    expect(groupNames(container)).toContain("Existing user");
+    // Nothing is picked yet, so the affirmative action is blocked rather than
+    // pretending a request is already in flight.
+    expect(buttonNamed(container, "Link").disabled).toBe(true);
+
+    buttonNamed(container, "Cancel").click();
+    await settle();
+    buttonNamed(container, "Add new person").click();
+    await settle();
+
+    expect(groupNames(container)).toEqual(expect.arrayContaining(["New person", "Profile links"]));
+    const addForm = namedGroup(container, "New person");
+    expect(controlFor(addForm, "Name").required).toBe(true);
+    expect(controlFor(addForm, "Email").type).toBe("email");
+    expect(controlFor(addForm, "Job title").required).toBe(false);
   });
 });

@@ -9,6 +9,9 @@ import { eventManagementDetailResponseSchema } from "../../../../../../shared/sc
 import { toast } from "../../../ui";
 import type { EventDetail } from "../types";
 import { currentEvent } from "../state";
+import { Button } from "../../../../../ui/Button";
+import { PageHeader } from "../../../../../ui/PageHeader";
+import "../../../../../ui/Content.css";
 
 const Settings = lazy(() => import("./Settings").then((module) => ({ default: module.Settings })));
 const Registrations = lazy(() => import("./Registrations").then((module) => ({ default: module.Registrations })));
@@ -68,29 +71,29 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
   const tab = visibleTabs.find(({ key }) => key === requestedTab)?.key ?? visibleTabs[0]?.key ?? "registrations";
 
   return (
-    <div>
-      {/* Header */}
-      <div class="d-flex align-items-start gap-2 mb-3 flex-wrap">
-        <div>
-          <h5 class="mb-1">{event.name}</h5>
-          <div class="text-muted small">
-            <span class="mono">{event.slug}</span>
-            {event.startsAt && <> · {event.startsAt.substring(0, 10)}</>}
-            {event.venue && <> · {event.venue}</>}
-          </div>
-        </div>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
-          ↺ Refresh
-        </button>
-      </div>
+    <div class="pk pk-stack">
+      {/* The event heads the page over a trail back to the list; the slug,
+          date, and venue are its one quiet line, and refresh is the record's
+          command on the right. */}
+      <PageHeader
+        trail={[{ label: "Events", href: usePortalHashLocation.hrefs("/events") }, { label: event.name }]}
+        title={event.name}
+        actions={
+          <Button size="sm" onClick={() => void load()}>
+            Refresh
+          </Button>
+        }
+        description={[event.slug, event.startsAt?.substring(0, 10), event.venue].filter(Boolean).join(" · ")}
+      />
 
-      {/* Tabs */}
+      {/* Tabs. Named, because the page carries more than one set of them once
+          a tab's own sub-navigation renders below. */}
       <Tabs
         items={visibleTabs}
         active={tab}
+        label="Event sections"
         onChange={(key) => navigate(`/events/${slug}/${key}`)}
         hrefFor={(key) => `/events/${slug}/${key}`}
-        className="mb-3 flex-wrap"
       />
 
       <Suspense fallback={<Spinner />}>

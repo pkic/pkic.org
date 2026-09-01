@@ -14,13 +14,13 @@
         </dl>
         </div>
       {{- end -}}
-      <div class="glossary-group w-100">
+      <div class="glossary-group">
         <h2 class="glossary-letter" id="{{ lower $currentLetter }}">{{ upper $currentLetter }}{{ partial "anchor.html" (lower $currentLetter) }}</h2>
         <dl>
     {{- end -}}
     
-    <div class="glossary-item w-100">
-      <dt class="glossary-term align-items-center" id="{{ $item.term | anchorize }}">{{ $item.term }}{{ partial "anchor.html" ($item.term | anchorize) }}</dt>
+    <div class="glossary-item">
+      <dt class="glossary-term" id="{{ $item.term | anchorize }}">{{ $item.term }}{{ partial "anchor.html" ($item.term | anchorize) }}</dt>
       <dd class="glossary-definition">{{ $item.definition | $.Page.RenderString }}</dd>
     </div>
     

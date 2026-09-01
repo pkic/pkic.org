@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 import {
   isIndividualMembershipCategory,
@@ -8,11 +10,20 @@ import {
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import { asString } from "./helpers";
 import { ApplicationEditForm, type ApplicationEditFormValue } from "./ApplicationEditForm";
+// `pk-datalist` and `pk-mono` are written here as class names rather than
+// reached through a component, so this module has to pull their stylesheet
+// into its own chunk. Without the import the summary renders unstyled and
+// nothing complains.
+import "../../../../ui/Content.css";
 
 /**
  * Read-only application summary, with an in-place edit toggle for
  * correcting applicant-submitted data (typos etc.) without transitioning
  * the stage — mirrors Users.tsx's UserDetailView edit-toggle pattern.
+ *
+ * The summary is a description list. It was a two-column `<table>` with no
+ * caption, which is announced as an unnamed grid sitting among the other
+ * cards; these are label-and-value once each, which is what a `dl` is for.
  */
 export function ApplicationOverviewCard({
   detail,
@@ -86,80 +97,76 @@ export function ApplicationOverviewCard({
   }
 
   return (
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-        <span>Application</span>
-        {!editing && canWrite && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-primary"
-            onClick={startEditing}
-            disabled={categories.length === 0}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-      <div class="card-body">
-        {!editing ? (
-          <table class="table table-sm table-borderless mb-0">
-            <tbody>
-              <tr>
-                <th class="text-muted small">Applicant name</th>
-                <td>{detail.applicantName}</td>
-              </tr>
-              <tr>
-                <th class="text-muted small">Email</th>
-                <td>{detail.applicantEmail}</td>
-              </tr>
-              <tr>
-                <th class="text-muted small">Organization</th>
-                <td>{detail.organizationName ?? <span class="fst-italic text-muted">Individual</span>}</td>
-              </tr>
-              <tr>
-                <th class="text-muted small">Category</th>
-                <td>
-                  {detail.membershipCategoryLabel}{" "}
-                  <span class="mono text-muted small">({detail.membershipCategory})</span>
-                </td>
-              </tr>
-              <tr>
-                <th class="text-muted small">Stage</th>
-                <td>
-                  <Badge status={detail.stage} />
-                </td>
-              </tr>
+    <div class="pk">
+      <Panel aria-label="Application">
+        <PanelHeader title="Application">
+          {canWrite &&
+            !editing &&
+            /*
+             * The category list is what the edit form's one required choice is
+             * built from, so without it there is nothing to edit into. The
+             * surface used to render a disabled button and say nothing, which
+             * reads as "broken" rather than "waiting"; the sentence says which.
+             */
+            (categories.length === 0 ? (
+              <span class="pk-small">Editing needs the membership categories, which are not available.</span>
+            ) : (
+              <Button size="sm" variant="primary" onClick={startEditing}>
+                Edit
+              </Button>
+            ))}
+        </PanelHeader>
+        <PanelBody>
+          {!editing ? (
+            <dl class="pk-datalist pk-small">
+              <dt>Applicant name</dt>
+              <dd>{detail.applicantName}</dd>
+
+              <dt>Email</dt>
+              <dd class="pk-break">{detail.applicantEmail}</dd>
+
+              <dt>Organization</dt>
+              <dd>{detail.organizationName ?? "Individual — no organization"}</dd>
+
+              <dt>Category</dt>
+              <dd>
+                {detail.membershipCategoryLabel} <span class="pk-mono">({detail.membershipCategory})</span>
+              </dd>
+
+              <dt>Stage</dt>
+              <dd>
+                <Badge status={detail.stage} />
+              </dd>
+
               {detail.onHoldSubtype && (
-                <tr>
-                  <th class="text-muted small">On-hold reason</th>
-                  <td>{detail.onHoldSubtype}</td>
-                </tr>
+                <>
+                  <dt>On-hold reason</dt>
+                  <dd>{detail.onHoldSubtype}</dd>
+                </>
               )}
-              <tr>
-                <th class="text-muted small">Stage entered</th>
-                <td class="mono small">{fmt(detail.stageEnteredAt)}</td>
-              </tr>
-              <tr>
-                <th class="text-muted small">Submitted</th>
-                <td class="mono small">{fmt(detail.createdAt)}</td>
-              </tr>
-            </tbody>
-          </table>
-        ) : (
-          editForm && (
-            <ApplicationEditForm
-              form={editForm}
-              categories={categories}
-              onChange={(updater) => setEditForm((f) => (f ? updater(f) : f))}
-              disabled={editSaving}
-              error={editError}
-              onSave={() => void saveEdit()}
-              onCancel={() => setEditing(false)}
-              saving={editSaving}
-            />
-          )
-        )}
-      </div>
+
+              <dt>Stage entered</dt>
+              <dd class="pk-mono">{fmt(detail.stageEnteredAt)}</dd>
+
+              <dt>Submitted</dt>
+              <dd class="pk-mono">{fmt(detail.createdAt)}</dd>
+            </dl>
+          ) : (
+            editForm && (
+              <ApplicationEditForm
+                form={editForm}
+                categories={categories}
+                onChange={(updater) => setEditForm((f) => (f ? updater(f) : f))}
+                disabled={editSaving}
+                error={editError}
+                onSave={() => void saveEdit()}
+                onCancel={() => setEditing(false)}
+                saving={editSaving}
+              />
+            )
+          )}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

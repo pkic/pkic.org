@@ -198,6 +198,23 @@ async function waitForCondition(condition: () => boolean): Promise<void> {
   throw new Error("Expected condition was not reached.");
 }
 
+/**
+ * The design-system Field owns the id that ties a label to its control, so a
+ * test must not assume one: find the label by the words a user reads and
+ * follow its `for`. A required field's label also carries the asterisk and the
+ * screen-reader-only "(required)", which is what assistive technology
+ * announces, so the visible text is compared with those stripped.
+ */
+function controlFor<T extends HTMLElement>(label: string): T {
+  const match = Array.from(container.querySelectorAll("label")).find(
+    (candidate) => (candidate.textContent ?? "").replace("*(required)", "").trim() === label,
+  );
+  if (!match) throw new Error(`No field labelled "${label}" was rendered.`);
+  const control = document.getElementById(match.htmlFor);
+  if (!control) throw new Error(`The label "${label}" points at no control.`);
+  return control as T;
+}
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
@@ -241,7 +258,7 @@ describe("portal organization-contact identity controls", () => {
     void act(() => render(<MyProfile />, container));
     await settle();
 
-    const emailSelect = container.querySelector<HTMLSelectElement>("#portal-identity-email")!;
+    const emailSelect = controlFor<HTMLSelectElement>("Email for this organization");
     expect([...emailSelect.options].map((option) => option.textContent)).toEqual([
       "contact@example.test (primary)",
       "contact@example.org",
@@ -288,6 +305,78 @@ describe("portal organization-contact identity controls", () => {
       Array.from(container.querySelectorAll("button")).filter((button) => button.textContent === "Remove"),
     ).toHaveLength(0);
     expect(container.querySelectorAll('[role="switch"]')).toHaveLength(1);
+  });
+
+  it("names every profile control and ties the organization email select to its guidance", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(representativePage())),
+    );
+    profile.value = currentProfile(false);
+    void act(() => render(<MyProfile />, container));
+    await settle();
+
+    // A required control announces the requirement as a word, not as a colour
+    // or a bare asterisk, and is not invalid merely for being required.
+    const firstName = controlFor<HTMLInputElement>("First name");
+    expect(firstName.required).toBe(true);
+    expect(firstName.getAttribute("aria-invalid")).toBeNull();
+    expect(container.querySelector(`label[for="${firstName.id}"]`)?.textContent).toContain("(required)");
+
+    // The select's guidance is wired, not merely adjacent: without the
+    // describedby it is never read out to anyone who cannot see it.
+    const emailSelect = controlFor<HTMLSelectElement>("Email for this organization");
+    const describedBy = emailSelect.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe(
+      "Used for your profile and actions in this organization capacity.",
+    );
+
+    // The visibility switch takes its name from the label that wraps it.
+    const visibility = container.querySelector<HTMLInputElement>('[role="switch"]')!;
+    expect(visibility.closest("label")?.textContent).toContain("public page");
+  });
+
+  it("reports a failed profile save in an alert and leaves the stored profile untouched", async () => {
+    const initial = currentProfile(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request ? input : undefined;
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : request!.url,
+          location.origin,
+        );
+        const method = init?.method ?? request?.method ?? "GET";
+        if (method === "GET" && url.pathname.endsWith("/identities")) return json(representativePage());
+        if (method === "PATCH" && url.pathname === "/api/v1/users/current") return new Response(null, { status: 500 });
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+    profile.value = initial;
+    void act(() => render(<MyProfile />, container));
+    await settle();
+
+    const submit = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save changes",
+    )!;
+    const form = submit.closest("form")!;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    // A transport status never reaches the reader; the failure is announced,
+    // not merely coloured, and the form stays usable for a second attempt.
+    const alert = await waitForElement(() => form.querySelector('[role="alert"]'));
+    expect(alert.textContent).toContain("Something went wrong on our side");
+    expect(alert.textContent).not.toContain("HTTP 500");
+    expect(profile.value).toBe(initial);
+
+    const retry = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Save changes",
+    )!;
+    expect(retry.disabled).toBe(false);
+    expect(retry.getAttribute("aria-busy")).toBeNull();
   });
 
   it("uses canonical lifecycle routes to update and end an identity while protecting self and primary contacts", async () => {

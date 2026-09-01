@@ -1,4 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { groupMembershipsParticipantListResponseSchema } from "../../assets/shared/schemas/groups";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 /**
  * Browser-level contract for the selected-group shell. The API responses are
@@ -93,8 +95,20 @@ function json(route: Route, body: unknown, status = 200): Promise<void> {
   return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
+const activeIdentities = [
+  {
+    identityId: IDENTITY_ID,
+    memberId: MEMBER_ID,
+    organizationId: null,
+    organizationName: null,
+    membershipCategory: "H5",
+  },
+];
+
+// Built through the canonical session contract so a persona fixture can never
+// drift from the schema the portal parses on boot.
 function sessionFor(persona: Persona): Record<string, unknown> {
-  return {
+  return userAuthSessionResponseSchema.parse({
     success: true,
     identity: { id: USER_ID, email: persona.email },
     ...(persona.staff
@@ -113,15 +127,17 @@ function sessionFor(persona: Persona): Record<string, unknown> {
       ? {
           member: {
             userId: USER_ID,
+            identityId: IDENTITY_ID,
             email: persona.email,
             memberId: MEMBER_ID,
             organizationId: null,
             membershipCategory: "H5",
             isEcMember: false,
+            activeIdentities,
           },
         }
       : {}),
-  };
+  });
 }
 
 function profileFor(persona: Persona): Record<string, unknown> {
@@ -153,15 +169,7 @@ function profileFor(persona: Persona): Record<string, unknown> {
     canEditOrganizationName: false,
     isOrgContact: false,
     organizationIdentities: null,
-    activeIdentities: [
-      {
-        identityId: IDENTITY_ID,
-        memberId: MEMBER_ID,
-        organizationId: null,
-        organizationName: null,
-        membershipCategory: "H5",
-      },
-    ],
+    activeIdentities,
   };
 }
 
@@ -182,6 +190,18 @@ async function installPersona(page: Page, persona: Persona): Promise<void> {
     }
     if (url.pathname === "/api/v1/groups") {
       await json(route, { groups: [group], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+      return;
+    }
+    if (url.pathname === `/api/v1/groups/${GROUP_ID}/memberships`) {
+      // The capability-shaped roster projection a participant receives: a
+      // name, an organization, and nothing the manager payload carries.
+      await json(
+        route,
+        groupMembershipsParticipantListResponseSchema.parse({
+          memberships: [{ userId: USER_ID, name: "Synthetic Persona", headshotUrl: null, organizationName: null }],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      );
       return;
     }
     if (url.pathname === "/api/v1/users/current/groups") {
@@ -235,11 +255,33 @@ async function expectNoSections(page: Page, labels: readonly string[]): Promise<
   }
 }
 
+/**
+ * A participant's Members tab is the read-only roster: a searchable list of
+ * people, with none of the manager surface — no add form, no row menu, no
+ * membership-capacity column.
+ */
+async function expectParticipantRoster(page: Page): Promise<void> {
+  const navigation = page.getByRole("navigation", { name: `${group.name} sections` });
+  await navigation.getByRole("link", { name: "Members", exact: true }).click();
+  const roster = page.getByRole("region", { name: "Members" });
+  await expect(roster.getByRole("listitem").filter({ hasText: "Synthetic Persona" })).toBeVisible();
+  await expect(roster.getByLabel("Search members")).toBeVisible();
+  // No row commands at all: neither the menu a multi-action row would show nor
+  // the inline button a single-action row would.
+  await expect(roster.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  await expect(roster.getByRole("button", { name: /^(Remove|End identity|Change role)/ })).toHaveCount(0);
+  await expect(roster.getByRole("button", { name: /Add member/i })).toHaveCount(0);
+  await expect(roster.getByRole("columnheader", { name: "Participation capacity" })).toHaveCount(0);
+}
+
 test.describe("selected-group portal personas", () => {
   test("member participant sees collaboration sections but no management sections", async ({ page }) => {
     await openGroup(page, PERSONAS.participant);
-    await expectSections(page, ["Overview", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
-    await expectNoSections(page, ["Settings", "Members", "Leadership", "Statistics"]);
+    // "Members" is a participant section: a participant sees who else is in
+    // the group through the privacy-reduced roster projection.
+    await expectSections(page, ["Overview", "Members", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
+    await expectNoSections(page, ["Settings", "Leadership", "Statistics", "Audit log"]);
+    await expectParticipantRoster(page);
     // A plain member holds no global system permission, so the sidebar has no
     // admin surface at all.
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
@@ -280,7 +322,9 @@ test.describe("selected-group portal personas", () => {
 
   test("local-only child participant cannot see management controls", async ({ page }) => {
     await openGroup(page, PERSONAS.localOnly);
-    await expectNoSections(page, ["Settings", "Members", "Leadership", "Statistics"]);
+    await expectNoSections(page, ["Settings", "Leadership", "Statistics", "Audit log"]);
+    // The roster this participant does reach carries no management affordance.
+    await expectParticipantRoster(page);
     // No global system permission means no admin surface for this identity.
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
@@ -305,7 +349,7 @@ test.describe("selected-group portal personas", () => {
       await json(route, { error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
     });
     await page.goto(`/portal/#/groups/${GROUP_ID}/overview`);
-    await expect(page.locator("#portal-inp-email")).toBeVisible();
+    await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByText(group.name)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
   });

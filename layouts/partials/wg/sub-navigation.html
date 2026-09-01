@@ -22,7 +22,7 @@
 {{/* ── Compact sub-page header ──────────────────────────────────────── */}}
 <div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
   {{ partial "wg/icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
-  <div class="container">
+  <div class="pk-container">
     <p class="wg-sub-eyebrow">
       <a href="/wg/">Working Groups</a>
       <span aria-hidden="true">›</span>
@@ -89,7 +89,7 @@
   {{- end -}}
 {{- end -}}
 <nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
-  <div class="container d-flex gap-1">
+  <div class="pk-container pk-cluster">
     <a class="wg-nav-link{{ if eq $.Page.RelPermalink $base }} is-active{{ end }}" href="{{ $base }}">About</a>
 
     {{ if $charterPage }}
@@ -221,7 +221,7 @@
 {{- end -}}
 
 {{/* ── Content ──────────────────────────────────────────────────────── */}}
-<div class="container pt-4 pb-5">
+<div class="pk-container pk-section">
   {{- if $effectiveSideMenu }}
   <div class="wg-layout">
     <aside class="wg-sidebar-wrap wg-{{ $wg.Params.wgID | lower }}" id="wg-sidebar-wrap">

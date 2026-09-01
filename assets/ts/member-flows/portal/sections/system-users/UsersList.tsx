@@ -1,8 +1,9 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { FilterSelect } from "../../../../components/FilterSelect";
 import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
-import { RowActions } from "../../../../components/RowActions";
+import { RowActions } from "../../../../ui/RowActions";
 import { patchJson } from "../../../../shared/api-client";
 import { fmtDate, toast } from "../../ui";
 import {
@@ -68,6 +69,7 @@ export function UsersList({
 
   return (
     <ApiDataTable
+      caption="User accounts"
       urlState="users"
       endpoint="/api/v1/users"
       responseSchema={usersListResponseSchema}
@@ -79,34 +81,37 @@ export function UsersList({
       params={{ ...(roleFilter ? { role: roleFilter } : {}), ...(typeFilter ? { type: typeFilter } : {}) }}
       toolbar={({ resetPage }) => (
         <>
-          <select
-            class="form-select form-select-sm w-auto"
-            aria-label="Filter by role"
+          {/* A toolbar has no room for a stacked label, so each filter keeps
+              its name in `aria-label` — through the shared control, which is
+              the one place that decision is made. */}
+          <FilterSelect
+            ariaLabel="Filter by role"
             value={roleFilter}
-            onChange={(event) => {
-              setRoleFilter((event.target as HTMLSelectElement).value);
+            options={[
+              { value: "", label: "All roles" },
+              { value: "admin", label: "Administrators" },
+              { value: "user", label: "Users" },
+              { value: "guest", label: "Guests" },
+            ]}
+            onChange={(value) => {
+              setRoleFilter(value);
               resetPage();
             }}
-          >
-            <option value="">All roles</option>
-            <option value="admin">Administrators</option>
-            <option value="user">Users</option>
-            <option value="guest">Guests</option>
-          </select>
-          <select
-            class="form-select form-select-sm w-auto"
-            aria-label="Filter by participation"
+          />
+          <FilterSelect
+            ariaLabel="Filter by participation"
             value={typeFilter}
-            onChange={(event) => {
-              setTypeFilter((event.target as HTMLSelectElement).value);
+            options={[
+              { value: "", label: "All types" },
+              { value: "member", label: "Members" },
+              { value: "event_attendee", label: "Event attendees" },
+              { value: "contact_only", label: "Contacts only" },
+            ]}
+            onChange={(value) => {
+              setTypeFilter(value);
               resetPage();
             }}
-          >
-            <option value="">All types</option>
-            <option value="member">Members</option>
-            <option value="event_attendee">Event attendees</option>
-            <option value="contact_only">Contacts only</option>
-          </select>
+          />
         </>
       )}
       columns={[
@@ -127,7 +132,7 @@ export function UsersList({
           cell: (user) => {
             if (user.activeIdentityCount > 0) {
               return (
-                <span class="small">
+                <span class="pk-small">
                   Member · {user.activeIdentityCount} active{" "}
                   {user.activeIdentityCount === 1 ? "identity" : "identities"}
                 </span>
@@ -135,39 +140,44 @@ export function UsersList({
             }
             if (user.type === "event_attendee") {
               return (
-                <span class="small">
+                <span class="pk-small">
                   Event attendee · {user.eventParticipationCount} event{user.eventParticipationCount === 1 ? "" : "s"}
                 </span>
               );
             }
-            return <span class="text-muted small">Contact only</span>;
+            return <span class="pk-muted pk-small">Contact only</span>;
           },
         },
         {
           header: "Since",
           cell: (user) => fmtDate(user.created_at),
-          className: "small text-muted",
+          // A date has a bounded length, so the column says that rather than
+          // wearing `pk-nowrap` and still claiming a share of a wide screen.
+          // It also keeps the table's own ink and size: the row already shows
+          // one line of quiet grey under the name, and a second one left
+          // nothing in the row reading as the record's own data.
+          width: "fit",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {
           header: "",
           cell: (user) => (
             <RowActions
-              label={`Actions for ${personDisplayName(user.first_name, user.last_name, user.email)}`}
+              subject={personDisplayName(user.first_name, user.last_name, user.email)}
               status={roleStatus(user.role)}
               actions={
                 canWrite && canGrantAccess
                   ? user.role === "admin"
                     ? [
                         {
-                          key: "revoke-admin",
+                          id: "revoke-admin",
                           label: "Revoke administrator role",
                           onSelect: () => void updateRole(user, "user"),
                         },
                       ]
                     : [
                         {
-                          key: "grant-admin",
+                          id: "grant-admin",
                           label: "Grant administrator role",
                           onSelect: () => void updateRole(user, "admin"),
                         },
@@ -180,8 +190,10 @@ export function UsersList({
       ]}
       empty="No users found"
       rowKey={(user) => user.id}
-      rowClass={() => "adm-user-row"}
-      onRowClick={(user) => onViewUser(user.id)}
+      rowAction={(user) => ({
+        label: `View ${personDisplayName(user.first_name, user.last_name, user.email)}`,
+        onSelect: () => onViewUser(user.id),
+      })}
     />
   );
 }

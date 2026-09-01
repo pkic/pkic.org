@@ -12,10 +12,25 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { RowActions } from "../../../../components/RowActions";
+import { Badge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { RowActions } from "../../../../ui/RowActions";
+import { TextInput } from "../../../../ui/TextControl";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
+
+/**
+ * The guest's standing, as a word first and a tone second. A revoked guest and
+ * an expired one are not the same situation, and neither is legible from a
+ * colour alone.
+ */
+function guestStanding(guest: EventOccurrenceGuest): { label: string; tone: "ok" | "danger" | "neutral" } {
+  if (guest.revokedAt) return { label: "Revoked", tone: "danger" };
+  return guest.active ? { label: "Active", tone: "ok" } : { label: "Inactive", tone: "neutral" };
+}
 
 export function MeetingGuests({
   base,
@@ -38,6 +53,7 @@ export function MeetingGuests({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const endpoint = `${base}/occurrences/${encodeURIComponent(occurrence.id)}/guests`;
+  const seriesWideId = `guest-series-wide-${occurrence.id}`;
   const effectiveWindow = seriesWide
     ? seriesInviteWindow
     : { startsAt: occurrence.startsAt, endsAt: occurrence.endsAt, timezone: timeZone };
@@ -94,96 +110,86 @@ export function MeetingGuests({
   }
 
   return (
-    <div class="d-flex flex-column gap-3">
+    <div class="pk pk-stack">
       {showAddForm && (
-        <form class="row g-2 border rounded p-3" onSubmit={(event) => void invite(event)}>
-          <div class="col-12 d-flex justify-content-between align-items-start gap-2">
-            <h6 class="mb-0">Add external guest eligibility</h6>
-            <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setShowAddForm(false)}>
+        <Panel>
+          <PanelHeader title="Add external guest eligibility" headingLevel={4}>
+            <Button size="sm" variant="ghost" onClick={() => setShowAddForm(false)}>
               Cancel
-            </button>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for={`meeting-guest-email-${occurrence.id}`}>
-              Email
-            </label>
-            <input
-              id={`meeting-guest-email-${occurrence.id}`}
-              type="email"
-              class="form-control form-control-sm"
-              value={email}
-              required
-              onInput={(e) => setEmail(e.currentTarget.value)}
-            />
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for={`meeting-guest-name-${occurrence.id}`}>
-              Name
-            </label>
-            <input
-              id={`meeting-guest-name-${occurrence.id}`}
-              class="form-control form-control-sm"
-              value={name}
-              required
-              onInput={(e) => setName(e.currentTarget.value)}
-            />
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for={`meeting-guest-affiliation-${occurrence.id}`}>
-              Affiliation
-            </label>
-            <input
-              id={`meeting-guest-affiliation-${occurrence.id}`}
-              class="form-control form-control-sm"
-              value={affiliation}
-              onInput={(e) => setAffiliation(e.currentTarget.value)}
-            />
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for={`meeting-guest-expiry-${occurrence.id}`}>
-              Eligibility expires
-            </label>
-            <input
-              id={`meeting-guest-expiry-${occurrence.id}`}
-              type="datetime-local"
-              class="form-control form-control-sm"
-              value={expiresAt}
-              required
-              max={maximumExpiry}
-              onInput={(e) => setExpiresAt(e.currentTarget.value)}
-            />
-            <div class="form-text">
-              Defaults to the {seriesWide ? "series event" : "occurrence"} start and cannot extend beyond its end.
-            </div>
-          </div>
-          <div class="col-md-8 d-flex align-items-end">
-            <div class="form-check mb-1">
-              <input
-                id={`guest-series-wide-${occurrence.id}`}
-                type="checkbox"
-                class="form-check-input"
-                checked={seriesWide}
-                onChange={(e) => {
-                  const checked = e.currentTarget.checked;
-                  setSeriesWide(checked);
-                  const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
-                  if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
-                }}
-              />
-              <label class="form-check-label" for={`guest-series-wide-${occurrence.id}`}>
-                Eligible for every occurrence in this series
+            </Button>
+          </PanelHeader>
+          <PanelBody>
+            <form class="pk-stack" aria-label="Add external guest eligibility" onSubmit={(event) => void invite(event)}>
+              {/* One `disabled` on the group rather than one per control: the
+                  fields are rendered by a child component that takes no
+                  disabled prop of its own. */}
+              <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={saving}>
+                <Field label="Email" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="email"
+                      value={email}
+                      onInput={(e) => setEmail(e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Name" required>
+                  {(control) => <TextInput {...control} value={name} onInput={(e) => setName(e.currentTarget.value)} />}
+                </Field>
+                <Field label="Affiliation">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={affiliation}
+                      onInput={(e) => setAffiliation(e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Eligibility expires"
+                  required
+                  help={`Defaults to the ${seriesWide ? "series event" : "occurrence"} start and cannot extend beyond its end.`}
+                >
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="datetime-local"
+                      value={expiresAt}
+                      max={maximumExpiry}
+                      onInput={(e) => setExpiresAt(e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              </fieldset>
+              <label class="pk-check" for={seriesWideId}>
+                <input
+                  id={seriesWideId}
+                  type="checkbox"
+                  class="pk-check__input"
+                  checked={seriesWide}
+                  disabled={saving}
+                  onChange={(e) => {
+                    const checked = e.currentTarget.checked;
+                    setSeriesWide(checked);
+                    const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
+                    if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
+                  }}
+                />
+                <span class="pk-check__label">Eligible for every occurrence in this series</span>
               </label>
-            </div>
-          </div>
-          <div class="col-12 d-flex gap-2 align-items-center">
-            <button type="submit" class="btn btn-sm btn-primary" disabled={saving}>
-              {saving ? "Adding…" : "Add guest"}
-            </button>
-            {error && <ErrorAlert error={error} />}
-          </div>
-        </form>
+              {error && <ErrorAlert error={error} />}
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" size="sm" loading={saving}>
+                  {saving ? "Adding…" : "Add guest"}
+                </Button>
+              </div>
+            </form>
+          </PanelBody>
+        </Panel>
       )}
       <ApiDataTable
+        caption="External guests for this meeting occurrence"
         endpoint={endpoint}
         responseSchema={eventOccurrenceGuestsListResponseSchema}
         resolve={(response) => response.guests}
@@ -197,29 +203,31 @@ export function MeetingGuests({
           {
             header: "Guest",
             cell: (guest) => (
-              <>
-                <span class="fw-semibold">{guest.name}</span>
-                <br />
-                <span class="small text-muted">{guest.email}</span>
-              </>
+              <div class="pk-stack pk-stack--tight">
+                <span class="pk-strong">{guest.name}</span>
+                <span class="pk-small">{guest.email}</span>
+              </div>
             ),
             sort: { asc: "name", desc: "-name" },
           },
           { header: "Affiliation", cell: (guest) => guest.affiliation ?? "—" },
           { header: "Scope", cell: (guest) => (guest.seriesWide ? "Series" : "Occurrence") },
-          { header: "Expires", cell: (guest) => fmt(guest.expiresAt) },
+          { header: "Expires", cell: (guest) => fmt(guest.expiresAt), width: "fit" },
           {
             header: "Status",
-            cell: (guest) => (guest.revokedAt ? "Revoked" : guest.active ? "Active" : "Inactive"),
+            cell: (guest) => {
+              const standing = guestStanding(guest);
+              return <Badge tone={standing.tone}>{standing.label}</Badge>;
+            },
           },
           {
             header: "",
-            className: "text-end",
+            className: "pk-end",
             cell: (guest) =>
               !guest.active ? null : (
                 <RowActions
-                  label={`Actions for ${guest.name}`}
-                  actions={[{ key: "revoke", label: "Revoke", onSelect: () => void revoke(guest) }]}
+                  subject={guest.name}
+                  actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revoke(guest) }]}
                 />
               ),
           },

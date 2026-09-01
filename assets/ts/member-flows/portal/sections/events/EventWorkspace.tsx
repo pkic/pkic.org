@@ -3,6 +3,7 @@ import { lazy, Suspense } from "preact/compat";
 import { useEffect } from "preact/hooks";
 import { eventManagementDetailResponseSchema } from "../../../../../shared/schemas/event-management";
 import { Spinner } from "../../../../components/Spinner";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
@@ -66,15 +67,6 @@ function OwnerGroupGate({
   return <>{children}</>;
 }
 
-function WorkspaceSection({ title, children }: { title: string; children: ComponentChildren }) {
-  return (
-    <div class="portal-section">
-      <h4 class="portal-section-title">{title}</h4>
-      {children}
-    </div>
-  );
-}
-
 /**
  * ProposalPrograms is the proposal-only surface for identities that cannot
  * see the events management list at all; an events:read holder manages
@@ -86,25 +78,34 @@ export function eventListShowsProposalPrograms(session: PortalSession | null): b
 }
 
 export function EventWorkspace(props: EventWorkspaceProps) {
-  let content: ComponentChildren;
-  let title: string;
   if (props.view === "list") {
-    title = "Events";
-    content = (
-      <div class="d-flex flex-column gap-3">
-        <EventList />
-        {eventListShowsProposalPrograms(portalSession.value) && <ProposalPrograms />}
+    // The list is a page of its own, so it opens with the anatomy's first
+    // region rather than the workspace's legacy heading.
+    return (
+      <div class="pk pk-stack portal-section">
+        <PageHeader title="Events" />
+        <Suspense fallback={<Spinner />}>
+          <div class="pk-stack">
+            <EventList />
+            {eventListShowsProposalPrograms(portalSession.value) && <ProposalPrograms />}
+          </div>
+        </Suspense>
       </div>
     );
-  } else if (props.view === "proposal") {
-    title = "Proposal";
+  }
+
+  // The record pages below open with their own subject heading, so the
+  // workspace adds no generic "Event"/"Proposal" title above them — that
+  // label named the route, not the record, and repeated what the page's own
+  // heading was about to say.
+  let content: ComponentChildren;
+  if (props.view === "proposal") {
     content = (
       <OwnerGroupGate slug={props.slug} mapPath={(base) => `${base}/proposals/${encodeURIComponent(props.resourceId)}`}>
         <ProposalDetailPage slug={props.slug} proposalId={props.resourceId} />
       </OwnerGroupGate>
     );
   } else if (props.view === "registration") {
-    title = "Registration";
     content = (
       <OwnerGroupGate
         slug={props.slug}
@@ -114,7 +115,6 @@ export function EventWorkspace(props: EventWorkspaceProps) {
       </OwnerGroupGate>
     );
   } else {
-    title = "Event";
     const tab = props.tab;
     const subTab = props.subTab;
     content = (
@@ -132,9 +132,9 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     );
   }
   return (
-    <WorkspaceSection title={title}>
+    <div class="pk pk-stack portal-section">
       <Suspense fallback={<Spinner />}>{content}</Suspense>
-    </WorkspaceSection>
+    </div>
   );
 }
 

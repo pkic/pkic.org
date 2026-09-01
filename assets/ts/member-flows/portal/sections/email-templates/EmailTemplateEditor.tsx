@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Tabs } from "../../../../components/Tabs";
-import { Badge } from "../../../../components/Badge";
+import { statusLabel } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { Alert } from "../../../../ui/Alert";
+import { Badge, type BadgeTone } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 import { postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { highlightTemplateSyntax } from "../../../../shared/email-template-syntax";
@@ -23,8 +28,18 @@ import { successResponseSchema } from "../../../../../shared/schemas/api-common"
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
 import { EMAIL_TEMPLATES_API } from "../../../../shared/email-template-catalog";
 
+// The syntax-highlight backdrop rides this chunk rather than the entry
+// stylesheet, because only the two template editors use it.
+import "../../../../ui/OverlayEditor.css";
+import "../../../../ui/Content.css";
+
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
+
+/** Only the version actually in use carries a tone; a draft is not a status. */
+function versionTone(status: string): BadgeTone {
+  return status === "active" ? "ok" : "neutral";
+}
 
 // ────────────────────────────────────────────────────────
 // Template editor component
@@ -55,7 +70,7 @@ export function TemplateEditor({
   const [previewText, setPreviewText] = useState("");
   const [previewStatus, setPreviewStatus] = useState("Preview not rendered yet.");
   const [saving, setSaving] = useState(false);
-  const [hasPreviewedRef] = [useRef(false)];
+  const hasPreviewedRef = useRef(false);
 
   const subjectPreRef = useRef<HTMLPreElement>(null);
   const bodyPreRef = useRef<HTMLPreElement>(null);
@@ -80,12 +95,14 @@ export function TemplateEditor({
     }
   }, [body]);
 
-  // sync iframe srcdoc
+  // Sync iframe srcdoc. The tab is a dependency because leaving the HTML tab
+  // unmounts the frame, so a viewer coming back gets a brand-new empty element
+  // that the already-rendered HTML has to be written into again.
   useEffect(() => {
     if (iframeRef.current && previewHtml) {
       iframeRef.current.srcdoc = previewHtml;
     }
-  }, [previewHtml]);
+  }, [previewHtml, previewTab]);
 
   function handleBodyScroll() {
     if (bodyPreRef.current && bodyTextareaRef.current) {
@@ -223,77 +240,75 @@ export function TemplateEditor({
   }
 
   return (
-    <div>
-      <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white d-flex align-items-center justify-content-between">
-          <span class="fw-semibold">
-            Edit: <span class="mono">{templateKey}</span>
-            {isLayout && <span class="badge text-bg-info ms-2">shared shell</span>}
-          </span>
-          <button class="btn btn-sm btn-secondary" onClick={onBack}>
+    <div class="pk pk-stack">
+      <Panel>
+        <PanelHeader title={`Edit: ${templateKey}`}>
+          {isLayout && <Badge tone="info">shared shell</Badge>}
+          <Button size="sm" onClick={onBack}>
             ← Back to list
-          </button>
-        </div>
-        <div class="card-body">
-          <div class="row g-3">
+          </Button>
+        </PanelHeader>
+        <PanelBody>
+          <div class="pk-grid pk-grid--roomy">
             {/* Editor column */}
-            <div class="col-lg-7">
-              {isLayout && (
-                <div class="alert alert-info small py-2 mb-3">
-                  This template controls the outer email shell used for all emails.
-                </div>
-              )}
+            <div class="pk-stack">
+              {isLayout && <Alert tone="info">This template controls the outer email shell used for all emails.</Alert>}
               {!isLayout && (
-                <div class="row g-2 mb-2">
-                  <div class="col-md-6">
-                    <label class="form-label small fw-semibold mb-1" for="email-template-editor-content-type">
+                <div class="pk-grid">
+                  {/* Written out rather than composed from <Field>: every
+                      control on this screen is addressed by a fixed id, which
+                      <Field> generates for itself. The markup is the one
+                      <Field> builds — the group carries any state modifier and
+                      the control sits in the box the state mark reads. */}
+                  <div class="pk-field">
+                    <label class="pk-field__label" for="email-template-editor-content-type">
                       Content type
                     </label>
-                    <select
-                      id="email-template-editor-content-type"
-                      class="form-select form-select-sm"
-                      value={contentType}
-                      disabled={!canWrite}
-                      onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
-                    >
-                      <option value="markdown">Markdown</option>
-                      <option value="html">HTML</option>
-                      <option value="text">Plain text</option>
-                    </select>
+                    <div class="pk-field__control">
+                      <Select
+                        id="email-template-editor-content-type"
+                        value={contentType}
+                        disabled={!canWrite}
+                        onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
+                      >
+                        <option value="markdown">Markdown</option>
+                        <option value="html">HTML</option>
+                        <option value="text">Plain text</option>
+                      </Select>
+                    </div>
                   </div>
-                  <div class="col-md-6">
-                    <label class="form-label small fw-semibold mb-1" for="email-template-editor-message-type">
+                  <div class="pk-field">
+                    <label class="pk-field__label" for="email-template-editor-message-type">
                       Default message type
                     </label>
-                    <select
-                      id="email-template-editor-message-type"
-                      class="form-select form-select-sm"
-                      value={messageType}
-                      disabled={!canWrite}
-                      onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
-                    >
-                      <option value="transactional">Transactional</option>
-                      <option value="promotional">Promotional</option>
-                    </select>
+                    <div class="pk-field__control">
+                      <Select
+                        id="email-template-editor-message-type"
+                        value={messageType}
+                        disabled={!canWrite}
+                        onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+                      >
+                        <option value="transactional">Transactional</option>
+                        <option value="promotional">Promotional</option>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Subject with highlight backdrop */}
-              <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1" for="email-template-editor-subject">
-                  Subject template <span class="text-muted fw-normal">(supports conditions and variables)</span>
+              <div class="pk-field">
+                <label class="pk-field__label" for="email-template-editor-subject">
+                  Subject template <span class="pk-muted">(supports conditions and variables)</span>
                 </label>
-                <div class="adm-template-overlay-wrap">
-                  <pre
-                    ref={subjectPreRef}
-                    aria-hidden="true"
-                    class="adm-template-backdrop adm-template-backdrop-subject font-monospace"
-                  ></pre>
-                  <input
+                {/* The overlay editor is this field's control box: both are the
+                    positioned box its contents are placed against, so they are
+                    one element rather than two nested ones. */}
+                <div class="pk-field__control pk-overlay-editor">
+                  <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
+                  <TextInput
                     id="email-template-editor-subject"
-                    type="text"
-                    class="form-control form-control-sm font-monospace adm-template-input-overlay"
+                    class="pk-mono pk-overlay-editor__input"
                     value={subject}
                     disabled={!canWrite}
                     placeholder="e.g. Your invitation to {{eventName}}"
@@ -309,23 +324,30 @@ export function TemplateEditor({
               </div>
 
               {/* Body with highlight backdrop */}
-              <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1" for="email-template-editor-body">
+              <div class="pk-field">
+                <label class="pk-field__label" for="email-template-editor-body">
                   Body{" "}
-                  <span class="text-muted fw-normal">
+                  <span class="pk-muted">
                     (supports {"{{variables}}"}, {"{{#if}}...{{/if}}"}, {"{{#each}}...{{/each}}"})
                   </span>
                 </label>
-                <div class="adm-template-overlay-wrap">
+                <div class="pk-field__control pk-overlay-editor">
                   <pre
                     ref={bodyPreRef}
                     aria-hidden="true"
-                    class="adm-template-backdrop adm-template-backdrop-body font-monospace"
+                    class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
                   ></pre>
+                  {/*
+                   * Written out rather than composed from <Textarea>: the caret
+                   * arithmetic in insertSnippet needs the element itself, and a
+                   * ref on a Preact function component resolves to the
+                   * component instance rather than the DOM node. The classes
+                   * are exactly the ones <Textarea> applies.
+                   */}
                   <textarea
                     id="email-template-editor-body"
                     ref={bodyTextareaRef}
-                    class="form-control font-monospace adm-template-input-overlay adm-template-body-input"
+                    class="pk-input pk-input--textarea pk-mono pk-overlay-editor__input"
                     rows={16}
                     defaultValue={body}
                     readOnly={!canWrite}
@@ -342,14 +364,13 @@ export function TemplateEditor({
               </div>
 
               {/* Partials */}
-              <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1" for="email-template-partial">
+              <div class="pk-field">
+                <label class="pk-field__label" for="email-template-partial">
                   Insert partial
                 </label>
-                <div class="input-group input-group-sm">
-                  <select
+                <div class="pk-field__control">
+                  <Select
                     id="email-template-partial"
-                    class="form-select form-select-sm"
                     disabled={!canWrite}
                     onChange={(e) => {
                       const sel = e.target as HTMLSelectElement;
@@ -364,126 +385,130 @@ export function TemplateEditor({
                         {p.name} — {p.description}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
 
               {/* Template helpers */}
-              <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1">Template helpers</label>
-                <div class="small text-muted mb-2">Click to insert into the active field.</div>
-                <div class="d-flex gap-2 flex-wrap">
-                  {HELPER_CATEGORIES.map((cat) => (
-                    <div key={cat} class="w-100">
-                      <div class="small text-muted fw-semibold mb-1">{cat}</div>
-                      <div class="d-flex gap-2 flex-wrap">
-                        {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
-                          <button
-                            key={item.label}
-                            type="button"
-                            class="btn btn-sm btn-outline-secondary"
-                            disabled={!canWrite}
-                            onClick={() => insertSnippet(item.snippet, item.target)}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+              <div class="pk-stack pk-stack--snug">
+                {/* A heading over a row of buttons, not the label of a control:
+                    `pk-field__label` outside a `pk-field` names nothing and can
+                    never carry a state. */}
+                <div class="pk-stack pk-stack--tight">
+                  <span class="pk-small pk-strong">Template helpers</span>
+                  <span class="pk-small">Click to insert into the active field.</span>
                 </div>
+                {HELPER_CATEGORIES.map((cat) => (
+                  <div key={cat} class="pk-stack pk-stack--tight">
+                    <span class="pk-small pk-strong">{cat}</span>
+                    <div class="pk-cluster">
+                      {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
+                        <Button
+                          key={item.label}
+                          size="sm"
+                          disabled={!canWrite}
+                          onClick={() => insertSnippet(item.snippet, item.target)}
+                        >
+                          {item.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Preview data */}
               {canWrite && (
-                <div class="mb-3">
-                  <label
-                    class="form-label small fw-semibold mb-1 d-flex justify-content-between align-items-center"
-                    for="email-template-preview-data"
-                  >
-                    Preview data (JSON)
-                    <button
-                      type="button"
-                      class="btn btn-link btn-sm p-0 text-muted"
+                <div class="pk-field">
+                  <div class="pk-cluster pk-cluster--between">
+                    <label class="pk-field__label" for="email-template-preview-data">
+                      Preview data (JSON)
+                    </label>
+                    <Button
+                      variant="link"
+                      size="sm"
                       onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
                     >
                       Reset to defaults
-                    </button>
-                  </label>
-                  <textarea
-                    id="email-template-preview-data"
-                    class="form-control font-monospace adm-template-preview-data"
-                    rows={6}
-                    value={previewData}
-                    disabled={!canWrite}
-                    onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
-                  />
+                    </Button>
+                  </div>
+                  <div class="pk-field__control">
+                    <Textarea
+                      id="email-template-preview-data"
+                      class="pk-mono"
+                      rows={6}
+                      value={previewData}
+                      onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
+                    />
+                  </div>
                 </div>
               )}
 
-              <div class="d-flex gap-2 align-items-center flex-wrap">
+              <div class="pk-cluster">
                 {canWrite ? (
                   <>
-                    <button class="btn btn-outline-primary" onClick={() => void doPreview()}>
+                    <Button variant="secondary" onClick={() => void doPreview()}>
                       Render Preview
-                    </button>
-                    <button
-                      class="btn btn-success"
+                    </Button>
+                    <Button
+                      variant="primary"
                       onClick={() => void doSave()}
                       disabled={saving || !hasPreviewedRef.current}
+                      loading={saving}
                     >
                       {saving ? "Saving…" : "Save as Draft"}
-                    </button>
-                    <span class="text-muted small">
+                    </Button>
+                    <span class="pk-small">
                       Preview required before saving. Saving creates a new draft version — activate it below.
                     </span>
                   </>
                 ) : (
-                  <span class="text-muted small">Read-only access. Template changes require write permission.</span>
+                  <span class="pk-small">Read-only access. Template changes require write permission.</span>
                 )}
               </div>
             </div>
 
             {/* Preview column */}
             {canWrite && (
-              <div class="col-lg-5">
-                <div class="card border">
-                  <div class="card-header bg-light small fw-semibold">Rendered Preview</div>
-                  <div class="card-body">
-                    <div class="mb-2">
-                      <div class="small text-muted">Subject</div>
-                      <div class="fw-semibold">{previewSubject}</div>
-                    </div>
-                    <Tabs
-                      items={EMAIL_PREVIEW_TABS}
-                      active={previewTab}
-                      onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
-                      className="mb-2"
-                    />
-                    {previewTab === "html" ? (
-                      <iframe
-                        ref={iframeRef}
-                        title="Rendered email HTML preview"
-                        sandbox=""
-                        class="adm-template-preview-frame"
-                      />
-                    ) : (
-                      <pre class="json-out adm-template-preview-text">{previewText}</pre>
-                    )}
-                    <div class="small text-muted mt-2">{previewStatus}</div>
+              <Panel>
+                <PanelHeader title="Rendered Preview" />
+                <PanelBody class="pk-stack pk-stack--snug">
+                  <div class="pk-stack pk-stack--tight">
+                    <span class="pk-small">Subject</span>
+                    <span class="pk-strong">{previewSubject}</span>
                   </div>
-                </div>
-              </div>
+                  <Tabs
+                    items={EMAIL_PREVIEW_TABS}
+                    active={previewTab}
+                    onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
+                  />
+                  {previewTab === "html" ? (
+                    <iframe
+                      ref={iframeRef}
+                      title="Rendered email HTML preview"
+                      sandbox=""
+                      class="pk-framed"
+                      height={360}
+                    />
+                  ) : (
+                    <pre class="pk-code-block pk-small pk-break">{previewText}</pre>
+                  )}
+                  <p class="pk-small" role="status">
+                    {previewStatus}
+                  </p>
+                </PanelBody>
+              </Panel>
             )}
           </div>
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
 
       {/* Version history */}
-      <div class="card border-0 shadow-sm mt-3">
-        <div class="card-body">
-          <h6 class="text-uppercase small fw-bold text-muted mb-2">Version History</h6>
+      <Panel>
+        <PanelHeader title="Version History" />
+        <PanelBody>
           <ApiDataTable
+            caption="Email template versions"
             endpoint={`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`}
             responseSchema={emailTemplateVersionsListResponseSchema}
             resolve={(response) => response.versions}
@@ -493,46 +518,48 @@ export function TemplateEditor({
             initialSort="-version"
             actionsRef={historyRef}
             columns={[
-              { header: "Version", cell: (v) => `v${v.version}`, className: "mono" },
-              { header: "Status", cell: (v) => <Badge status={v.status} /> },
+              { header: "Version", cell: (v) => <code>v{v.version}</code> },
+              {
+                header: "Status",
+                cell: (v) => <Badge tone={versionTone(v.status)}>{statusLabel(v.status)}</Badge>,
+              },
               {
                 header: "Type",
-                cell: (v) => (v.message_type ? <Badge status={v.message_type} /> : "—"),
+                cell: (v) => (v.message_type ? <Badge tone="neutral">{statusLabel(v.message_type)}</Badge> : "—"),
               },
               {
                 header: "Checksum",
-                cell: (v) => <>{v.checksum_sha256.substring(0, 12)}…</>,
-                className: "mono adm-template-checksum",
+                cell: (v) => <code>{v.checksum_sha256.substring(0, 12)}…</code>,
+                className: "pk-small",
               },
               {
                 header: "Created",
                 cell: (v) => (v.created_at ? new Date(v.created_at).toLocaleString("en-US") : "—"),
-                className: "mono",
+                className: "pk-small",
               },
               {
                 header: "",
                 cell: (v) => (
-                  <>
+                  <div class="pk-cluster">
                     {canWrite && v.status !== "active" ? (
-                      <button class="btn btn-sm btn-outline-success me-1" onClick={() => void doActivate(v.version)}>
+                      <Button size="sm" onClick={() => void doActivate(v.version)}>
                         Activate
-                      </button>
+                      </Button>
                     ) : v.status === "active" ? (
-                      <span class="badge text-bg-success me-1">In use</span>
+                      <Badge tone="ok">In use</Badge>
                     ) : null}
-                    <button class="btn btn-sm btn-outline-secondary" onClick={() => loadVersion(v)}>
+                    <Button size="sm" onClick={() => loadVersion(v)}>
                       Load
-                    </button>
-                  </>
+                    </Button>
+                  </div>
                 ),
-                className: "text-nowrap",
               },
             ]}
             empty="No versions yet"
             rowKey={(v) => v.id}
           />
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

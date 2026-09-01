@@ -21,6 +21,10 @@ import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { EmptyState } from "../components/EmptyState";
+import { Badge as StatusBadge } from "../components/Badge";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { publicVotesListResponseSchema, type PublicVotesListResponse } from "../../shared/schemas/votes";
 
 const API_BASE_FALLBACK = "/api/v1";
@@ -47,17 +51,6 @@ const VOTE_TYPE_LABELS: Record<VoteType, string> = {
   consultation: "Consultation",
 };
 
-function statusBadgeClass(status: string): string {
-  switch (status) {
-    case "open":
-      return "text-bg-success";
-    case "scheduled":
-      return "text-bg-info";
-    default:
-      return "text-bg-secondary";
-  }
-}
-
 export function buildVotesSectionUrl(apiBase: string, section: SectionKey, offset: number): string {
   const status = SECTION_STATUS_FILTER[section];
   return `${apiBase}/votes?status=${status}&limit=${PAGE_SIZE}&offset=${offset}&sort=closes_at`;
@@ -79,13 +72,18 @@ function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }
   const href = `${detailBase}?slug=${encodeURIComponent(vote.slug)}`;
   return (
     <div class="member-card bento-card">
-      <a class="stretched-link" href={href} aria-label={vote.title}></a>
-      <div class="d-flex gap-2 mb-2">
-        <span class={`badge ${statusBadgeClass(vote.status)}`}>
-          {vote.status.charAt(0).toUpperCase() + vote.status.slice(1)}
-        </span>
-        <span class="badge text-bg-light border">{VOTE_TYPE_LABELS[vote.voteType]}</span>
-        <span class="badge text-bg-light border">{vote.ownerGroupName}</span>
+      <a class="pk-stretched" href={href} aria-label={vote.title}></a>
+      <div class="pk-cluster">
+        {/* The lifecycle badge comes from the product's own status vocabulary,
+            so "open" and "scheduled" read the same here as they do in the
+            portal, and the tone carries a dot rather than colour alone. */}
+        <StatusBadge status={vote.status} />
+        <Badge tone="neutral" dot={false}>
+          {VOTE_TYPE_LABELS[vote.voteType]}
+        </Badge>
+        <Badge tone="neutral" dot={false}>
+          {vote.ownerGroupName}
+        </Badge>
       </div>
       <div class="member-card-name">{vote.title}</div>
       {vote.description && (
@@ -93,7 +91,7 @@ function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }
           {vote.description.length > 160 ? `${vote.description.slice(0, 160).trimEnd()}…` : vote.description}
         </p>
       )}
-      <p class="text-muted small mb-0">
+      <p class="pk-small">
         {vote.status === "closed" ? "Closed " : "Closes "}
         {new Date(vote.closesAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
       </p>
@@ -116,7 +114,7 @@ function VoteSectionView({
 }) {
   if (section.page.total === 0) return null;
   return (
-    <section class="mb-5">
+    <section class="pk-stack">
       <h3 class="member-letter-heading">{title}</h3>
       <div class="members-grid">
         {section.votes.map((v) => (
@@ -124,17 +122,17 @@ function VoteSectionView({
         ))}
       </div>
       {section.page.hasMore && (
-        <div class="text-center mt-3">
-          <button type="button" class="btn btn-outline-secondary" disabled={loading} onClick={onLoadMore}>
-            {loading ? "Loading…" : "Load more"}
-          </button>
+        <div class="pk-cluster pk-cluster--center">
+          <Button variant="secondary" loading={loading} onClick={onLoadMore}>
+            {loading ? "Loading…" : `Load more ${title.toLowerCase()}`}
+          </Button>
         </div>
       )}
     </section>
   );
 }
 
-function VotesIndex({ apiBase, detailBase }: { apiBase: string; detailBase: string }) {
+export function VotesIndex({ apiBase, detailBase }: { apiBase: string; detailBase: string }) {
   const [openSection, setOpenSection] = useState<VoteSection | null>(null);
   const [closedSection, setClosedSection] = useState<VoteSection | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -169,11 +167,23 @@ function VotesIndex({ apiBase, detailBase }: { apiBase: string; detailBase: stri
   if (!openSection || !closedSection) return <Spinner />;
 
   if (openSection.page.total === 0 && closedSection.page.total === 0) {
-    return <p class="text-muted fst-italic text-center mt-3">No public vote results are available yet.</p>;
+    return (
+      <EmptyState
+        title="No public votes yet."
+        body="Votes appear here once a group opens one to the public. Nothing is open or closed at the moment."
+      />
+    );
   }
 
   return (
-    <div class="container-fluid px-2 px-md-4 pb-5">
+    /*
+     * The layout utilities carry the measure and the rhythm, but `.pk` stays
+     * off this root: the cards, the grid and the section headings are still
+     * styled by `assets/scss`, and the base layer beats `legacy` — it would
+     * resize `member-letter-heading` from a 0.65rem eyebrow to a full h3.
+     * The primitives below bring their own styles either way.
+     */
+    <div class="pk-container pk-container--wide pk-section pk-stack pk-stack--loose">
       <VoteSectionView
         title="Open for voting"
         section={openSection}

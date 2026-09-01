@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
+import { FilterSelect } from "../../../../components/FilterSelect";
+import { Alert } from "../../../../ui/Alert";
 import { getJson } from "../../../../shared/api-client";
+// `pk-mono` is written here as a class name rather than reached through a
+// component, so this module pulls its stylesheet into its own chunk.
+import "../../../../ui/Content.css";
 import { fmtDate } from "../../ui";
 import { APPLICATION_STAGES } from "../../../../../shared/schemas/member-applications";
 import { membershipApplicationsListResponseSchema } from "../../../../../shared/schemas/membership-application-management";
@@ -34,12 +39,14 @@ function ConsultationQueueBanner() {
   }, []);
 
   return (
-    <div class="alert alert-info small py-2 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span>
-        <strong>{count ?? "…"}</strong> application{count === 1 ? "" : "s"} currently queued for member consultation.
-      </span>
-      <span class="text-muted">Next scheduled batch: Mon &amp; Wed 07:15 UTC.</span>
-    </div>
+    <Alert tone="info">
+      <div class="pk-cluster pk-cluster--between">
+        <span>
+          <strong>{count ?? "…"}</strong> application{count === 1 ? "" : "s"} currently queued for member consultation.
+        </span>
+        <span class="pk-muted pk-small">Next scheduled batch: Mon &amp; Wed 07:15 UTC.</span>
+      </div>
+    </Alert>
   );
 }
 
@@ -48,9 +55,10 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
   const tableRef = useRef<ApiTableActions | null>(null);
 
   return (
-    <div>
+    <div class="pk pk-stack pk-stack--snug">
       {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
       <ApiDataTable
+        caption="Membership applications"
         urlState="applications"
         endpoint="/api/v1/members/applications"
         responseSchema={membershipApplicationsListResponseSchema}
@@ -62,21 +70,21 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
         searchPlaceholder="applicant email or name"
         params={stageFilter ? { stage: stageFilter } : {}}
         toolbar={({ resetPage }) => (
-          <select
-            class="form-select form-select-sm w-auto"
+          // A toolbar has no room for a stacked label, so the filter carries
+          // its name in `aria-label` — and one that says which list it filters,
+          // because a page can hold several.
+          <FilterSelect
+            ariaLabel="Filter applications by stage"
             value={stageFilter}
-            onChange={(e) => {
-              setStageFilter((e.target as HTMLSelectElement).value);
+            options={[
+              { value: "", label: "All stages" },
+              ...APPLICATION_STAGES.map((s) => ({ value: s as string, label: statusLabel(s) })),
+            ]}
+            onChange={(value) => {
+              setStageFilter(value);
               resetPage();
             }}
-          >
-            <option value="">All stages</option>
-            {APPLICATION_STAGES.map((s) => (
-              <option key={s} value={s}>
-                {statusLabel(s)}
-              </option>
-            ))}
-          </select>
+          />
         )}
         columns={[
           {
@@ -85,21 +93,21 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
               <>
                 <strong class="adm-cell-name">{a.applicantName}</strong>
                 <br />
-                <span class="mono text-muted small">{a.applicantEmail}</span>
+                <span class="pk-mono pk-muted pk-small">{a.applicantEmail}</span>
               </>
             ),
             sort: { asc: "applicant_name", desc: "-applicant_name" },
           },
           {
             header: "Organization",
-            cell: (a) => a.organizationName ?? <span class="text-muted fst-italic">Individual</span>,
+            cell: (a) => a.organizationName ?? <span class="pk-muted">Individual</span>,
             sort: { asc: "organization_name", desc: "-organization_name" },
           },
           {
             header: "Category",
             cell: (a) => (
               <>
-                {a.membershipCategoryLabel} <span class="mono text-muted small">({a.membershipCategory})</span>
+                {a.membershipCategoryLabel} <span class="pk-mono pk-muted pk-small">({a.membershipCategory})</span>
               </>
             ),
             sort: { asc: "membership_category", desc: "-membership_category" },
@@ -110,15 +118,21 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
             sort: { asc: "stage", desc: "-stage" },
           },
           {
+            // A date has a bounded length; the column says so instead of
+            // wearing `pk-nowrap` while still claiming a share of a wide
+            // screen, and keeps the table's own ink and size.
             header: "Submitted",
             cell: (a) => fmtDate(a.createdAt),
-            className: "mono small text-nowrap",
+            width: "fit",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
         ]}
         empty="No membership applications have been submitted yet"
         rowKey={(a) => a.id}
-        onRowClick={(a) => onViewApplication(a.id)}
+        rowAction={(a) => ({
+          label: `Review the application from ${a.applicantName}`,
+          onSelect: () => onViewApplication(a.id),
+        })}
       />
     </div>
   );

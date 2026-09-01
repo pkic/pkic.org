@@ -3,8 +3,7 @@
 {{- $subtitle := ($page.Params.heroDescription | default $page.Description | default $page.Summary) | markdownify | plainify -}}
 
 {{/* Site stylesheet — shared components: .pkic-page-hero, fonts, resets */}}
-{{- $sass := resources.Get "scss/main.scss" -}}
-{{- $style := $sass | css.Sass | resources.Fingerprint -}}
+{{- $style := partial "site-stylesheet.html" . | resources.Fingerprint -}}
 
 {{/* Eyebrow / kicker label — distinguished between list (section) and individual pages */}}
 {{- $eyebrow := "" -}}

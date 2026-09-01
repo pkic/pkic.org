@@ -15,7 +15,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertCssBudget } from "./lib/frontend-bundle-budget.mjs";
+import { assertCssBudget, DESIGN_ENTRY_CSS_BUDGET } from "./lib/frontend-bundle-budget.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -67,4 +67,46 @@ try {
 
 function relativeToRoot(absolutePath) {
   return absolutePath.slice(root.length + 1);
+}
+
+/*
+ * The design system's entry stylesheet, emitted by the frontend build rather
+ * than by Hugo, so it lives under static/ and is checked separately.
+ *
+ * It is measured MINIFIED, because that is what a visitor downloads. The check
+ * used to read the file as it sat on disk, and `pnpm run check` builds the
+ * frontend in dev mode, where nothing is minified — so the ceiling was set
+ * against roughly twice the shipped bytes, most of the excess being the
+ * explanatory comments in the design system's own CSS.
+ *
+ * esbuild is not resolvable from here (the build goes through rolldown-vite),
+ * so this strips comments and collapses whitespace instead. Measured against a
+ * real production build of the same source: 17,486 bytes vs 16,995 raw, and
+ * 4,320 vs 4,297 gzipped — within 3%, and erring high, which is the safe
+ * direction for a ceiling.
+ */
+function shipped(css) {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*([{}:;,>])\s*/g, "$1")
+    .replace(/;}/g, "}")
+    .trim();
+}
+
+const designEntry = resolve(root, "static", "js", "built", "loader.css");
+if (existsSync(designEntry)) {
+  try {
+    const design = assertCssBudget(shipped(readFileSync(designEntry, "utf8")), DESIGN_ENTRY_CSS_BUDGET);
+    console.log(
+      `[css-budget] ${relativeToRoot(designEntry)} passes: raw ${(design.rawBytes / 1024).toFixed(2)} KiB, gzip ${(design.gzipBytes / 1024).toFixed(2)} KiB (minified, as shipped)`,
+    );
+  } catch (error) {
+    console.error(
+      `[css-budget] ${relativeToRoot(designEntry)}\n${error.message}\n` +
+        "The entry sheet is linked on every page. Move the component back to a lazy chunk,\n" +
+        "or raise the ceiling deliberately in scripts/lib/frontend-bundle-budget.mjs.",
+    );
+    process.exit(1);
+  }
 }

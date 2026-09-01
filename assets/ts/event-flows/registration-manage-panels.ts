@@ -5,7 +5,7 @@ export function showPostAction(
   manageFormEl: HTMLElement,
   opts: { title: string; message: string; isError?: boolean },
 ): void {
-  manageFormEl.classList.add("d-none");
+  manageFormEl.hidden = true;
   const postAction = root.querySelector<HTMLElement>("[data-post-action]");
   const alertEl = root.querySelector<HTMLElement>("[data-post-action-alert]");
   const titleEl = root.querySelector<HTMLElement>("[data-post-action-title]");
@@ -13,9 +13,9 @@ export function showPostAction(
   if (!postAction || !alertEl || !titleEl || !msgEl) return;
   titleEl.textContent = opts.title;
   msgEl.textContent = opts.message;
-  alertEl.classList.remove("alert-success", "alert-warning", "alert-danger");
-  alertEl.classList.add(opts.isError ? "alert-danger" : "alert-success");
-  postAction.classList.remove("d-none");
+  alertEl.classList.remove("pk-alert--ok", "pk-alert--warn", "pk-alert--danger");
+  alertEl.classList.add(opts.isError ? "pk-alert--danger" : "pk-alert--ok");
+  postAction.hidden = false;
 }
 
 export function showResendManageLinkForm(

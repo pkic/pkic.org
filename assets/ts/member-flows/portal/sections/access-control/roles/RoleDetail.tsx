@@ -2,8 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { RowActions } from "../../../../../components/RowActions";
 import { Spinner } from "../../../../../components/Spinner";
+import { Alert } from "../../../../../ui/Alert";
+import { Badge } from "../../../../../ui/Badge";
+import { Button } from "../../../../../ui/Button";
+import { Chip } from "../../../../../ui/Chip";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { PersonCell } from "../../../../../ui/PersonCell";
+import { RowActions } from "../../../../../ui/RowActions";
 import { deleteJson, getJson } from "../../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../../shared/schemas/api-common";
 import { fmt, fmtDate, toast } from "../../../ui";
@@ -16,6 +22,10 @@ import {
 } from "../../../../../../shared/schemas/access-control";
 import { RoleAssignForm } from "./RoleAssignForm";
 import { RoleEditForm } from "./RoleEditForm";
+// A permission name is an identifier, so it is set in `pk-mono`. That class
+// lives in the content stylesheet, and component CSS ships in lazy chunks —
+// a surface that writes the class name has to import the sheet itself.
+import "../../../../../ui/Content.css";
 
 /** Role detail: fields with Edit, its assignee list, and an assign control — reachable from the roles list. */
 export function RoleDetail({
@@ -70,11 +80,11 @@ export function RoleDetail({
   }
 
   return (
-    <div>
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onBack}>
+    <div class="pk pk-stack">
+      <div class="pk-cluster">
+        <Button variant="secondary" size="sm" onClick={onBack}>
           ← All roles
-        </button>
+        </Button>
       </div>
 
       {loading ? (
@@ -83,22 +93,23 @@ export function RoleDetail({
         <ErrorAlert error={error} />
       ) : role ? (
         <>
-          <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white d-flex align-items-center gap-2 flex-wrap">
-              <div>
-                <h6 class="mb-0 mono">
-                  {role.name}
-                  {role.isSystemRole && <span class="badge text-bg-secondary ms-2">System</span>}
-                </h6>
-                {role.description && <div class="small text-muted">{role.description}</div>}
-              </div>
-              {canGrant && !role.isSystemRole && !editing && (
-                <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => setEditing(true)}>
-                  Edit
-                </button>
+          <Panel>
+            <PanelHeader title={role.name}>
+              {/* "System" is the word, not only a tone: a role that cannot be
+                  edited has to say so where its Edit button would otherwise be. */}
+              {role.isSystemRole && (
+                <Badge tone="info" dot={false}>
+                  System
+                </Badge>
               )}
-            </div>
-            <div class="card-body">
+              {canGrant && !role.isSystemRole && !editing && (
+                <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              )}
+            </PanelHeader>
+            <PanelBody class="pk-stack pk-stack--snug">
+              {!editing && role.description && <p class="pk-muted pk-small">{role.description}</p>}
               {editing ? (
                 <RoleEditForm
                   role={role}
@@ -109,33 +120,34 @@ export function RoleDetail({
                   onCancel={() => setEditing(false)}
                 />
               ) : (
-                <div class="d-flex flex-wrap gap-1">
+                <div class="pk-cluster">
                   {role.permissions.length === 0 ? (
-                    <span class="text-muted small">No permissions</span>
+                    <span class="pk-muted pk-small">No permissions</span>
                   ) : (
-                    role.permissions.map((p) => (
-                      <span key={p} class="badge text-bg-light border small mono">
-                        {p}
-                      </span>
+                    role.permissions.map((permission) => (
+                      <Chip key={permission}>
+                        <span class="pk-mono">{permission}</span>
+                      </Chip>
                     ))
                   )}
                 </div>
               )}
-            </div>
-          </div>
+            </PanelBody>
+          </Panel>
 
-          <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">Assignees</div>
-            <div class="card-body">
+          <Panel>
+            <PanelHeader title="Assignees" />
+            <PanelBody class="pk-stack pk-stack--snug">
               {canGrant && capacityBoundLeadership ? (
-                <p class="alert alert-info small">
+                <Alert tone="info">
                   Assign this role from the selected group&apos;s Leadership section, where the person&apos;s active
                   Member capacity is selected explicitly.
-                </p>
+                </Alert>
               ) : canGrant ? (
                 <RoleAssignForm roleId={role.id} onAssigned={() => void assignmentsRef.current?.reload()} />
               ) : null}
               <ApiDataTable
+                caption={`${role.name} assignees`}
                 endpoint={`/api/v1/roles/${encodeURIComponent(role.id)}/assignments`}
                 responseSchema={roleAssignmentsListResponseSchema}
                 resolve={(data) => data.assignments}
@@ -150,39 +162,31 @@ export function RoleDetail({
                 columns={[
                   {
                     header: "Person",
-                    cell: (assignment) => (
-                      <>
-                        <span class="fw-semibold">{assignment.name}</span>
-                        <div class="small text-muted">{assignment.email}</div>
-                      </>
-                    ),
+                    cell: (assignment) => <PersonCell size="sm" name={assignment.name} email={assignment.email} />,
                     sort: { asc: "name", desc: "-name" },
                   },
                   {
                     header: "Context",
-                    cell: (assignment) => (
-                      <span class="small mono">
-                        {assignment.contextType ? (
-                          `${assignment.contextType}:${assignment.contextId}`
-                        ) : (
-                          <span class="text-muted">Global</span>
-                        )}
-                      </span>
-                    ),
+                    cell: (assignment) =>
+                      assignment.contextType ? (
+                        `${assignment.contextType}:${assignment.contextId}`
+                      ) : (
+                        <span class="pk-muted">Global</span>
+                      ),
+                    className: "pk-mono pk-small",
                     sort: { asc: "context_type", desc: "-context_type" },
                   },
                   {
                     header: "Expires",
-                    cell: (assignment) => (
-                      <span class="small">
-                        {assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="text-muted">Never</span>}
-                      </span>
-                    ),
+                    cell: (assignment) =>
+                      assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="pk-muted">Never</span>,
+                    className: "pk-small",
                     sort: { asc: "expires_at", desc: "-expires_at" },
                   },
                   {
                     header: "Granted",
-                    cell: (assignment) => <span class="small mono">{fmtDate(assignment.createdAt)}</span>,
+                    cell: (assignment) => fmtDate(assignment.createdAt),
+                    className: "pk-mono pk-small",
                     sort: { asc: "created_at", desc: "-created_at" },
                   },
                   {
@@ -190,9 +194,10 @@ export function RoleDetail({
                     cell: (assignment) =>
                       canRevoke ? (
                         <RowActions
+                          subject={assignment.name}
                           actions={[
                             {
-                              key: "unassign",
+                              id: "unassign",
                               label: "Unassign role",
                               onSelect: () => void handleUnassign(assignment),
                             },
@@ -202,8 +207,8 @@ export function RoleDetail({
                   },
                 ]}
               />
-            </div>
-          </div>
+            </PanelBody>
+          </Panel>
         </>
       ) : null}
     </div>

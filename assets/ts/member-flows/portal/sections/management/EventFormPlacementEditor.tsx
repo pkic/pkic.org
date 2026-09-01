@@ -16,6 +16,8 @@ import { FormDefinitionEditor, type EditableFormDetail } from "../../../../compo
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Spinner } from "../../../../components/Spinner";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { getJson, postJson, putJson } from "../../../../shared/api-client";
 import type { ServerCatalog } from "../../../../shared/server-catalog";
 import { toast } from "../../ui";
@@ -151,12 +153,13 @@ export function EventFormPlacementEditor({
   if (!placement && error) return <ErrorAlert error={error} />;
   if (!placement) return null;
 
+  const newFormLabel = purpose === "event_registration" ? "registration" : "proposal submission";
   const currentFormId = placement.form?.form.id ?? null;
   const hasSelectionChange = formId !== currentFormId;
   const title = eventFormLabel(purpose);
 
   return (
-    <div class="d-flex flex-column gap-2">
+    <div class="pk pk-stack pk-stack--snug">
       <ServerSearchSelect
         catalog={catalog}
         label={title}
@@ -169,18 +172,22 @@ export function EventFormPlacementEditor({
           setFormLabel(form?.title);
         }}
       />
-      <div class="d-flex flex-wrap gap-2">
-        <button
-          type="button"
-          class="btn btn-sm btn-success"
-          disabled={saving || !hasSelectionChange}
+      <div class="pk-cluster">
+        {/* `loading` rather than `disabled` while a save is in flight: a
+            disabled control loses focus, which throws a screen-reader user out
+            of the form they were part-way through. */}
+        <Button
+          variant="primary"
+          size="sm"
+          loading={saving}
+          disabled={!hasSelectionChange}
           onClick={() => void savePlacement()}
         >
           {saving ? "Saving…" : `Save ${purpose === "event_registration" ? "registration" : "proposal"} form`}
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={saving}
           aria-expanded={creating}
           onClick={() => setCreating((shown) => !shown)}
@@ -188,26 +195,27 @@ export function EventFormPlacementEditor({
           {creating
             ? "Cancel new form"
             : `Create ${purpose === "event_registration" ? "registration" : "proposal"} form`}
-        </button>
+        </Button>
         {placement.form && formId === currentFormId && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary"
-            disabled={saving || loadingEditor}
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={loadingEditor}
+            disabled={saving}
             aria-expanded={editing !== null}
             onClick={() => (editing ? setEditing(null) : void openEditor())}
           >
             {loadingEditor ? "Loading form…" : editing ? "Close form editor" : "Edit attached form"}
-          </button>
+          </Button>
         )}
       </div>
       {error && <ErrorAlert error={error} />}
       {creating && (
-        <div class="card">
-          <div class="card-header fw-semibold">
-            New {purpose === "event_registration" ? "registration" : "proposal submission"} form
-          </div>
-          <div class="card-body">
+        // The panel is named as well as titled, so it is a region a reader —
+        // and a test — can address by name instead of by a framework class.
+        <Panel aria-label={`New ${newFormLabel} form`}>
+          <PanelHeader title={`New ${newFormLabel} form`} />
+          <PanelBody>
             <FormDefinitionEditor
               mode="create"
               detail={null}
@@ -217,15 +225,13 @@ export function EventFormPlacementEditor({
               onCancel={() => setCreating(false)}
               onError={(message) => setError(message)}
             />
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
       {editing && placement.form && (
-        <div class="card">
-          <div class="card-header fw-semibold">
-            Edit {purpose === "event_registration" ? "registration" : "proposal submission"} form
-          </div>
-          <div class="card-body">
+        <Panel aria-label={`Edit ${newFormLabel} form`}>
+          <PanelHeader title={`Edit ${newFormLabel} form`} />
+          <PanelBody>
             <GroupFormEditor
               groupId={groupId}
               placementId={placement.form.placement.id}
@@ -237,8 +243,8 @@ export function EventFormPlacementEditor({
               }}
               onCancel={() => setEditing(null)}
             />
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
     </div>
   );

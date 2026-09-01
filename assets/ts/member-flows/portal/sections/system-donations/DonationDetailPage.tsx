@@ -1,6 +1,11 @@
+import { Fragment, type ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import { Badge } from "../../../../components/Badge";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { PageHeader } from "../../../../ui/PageHeader";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { getJson, postJson } from "../../../../shared/api-client";
@@ -12,13 +17,24 @@ import {
   donationDetailResponseSchema,
   donationSyncResponseSchema,
 } from "../../../../../shared/schemas/donation-management";
+// `pk-datalist` and `pk-mono` are written here as class names rather than
+// reached through a component, so this module pulls their stylesheet into its
+// own chunk. Without the import the record renders unstyled.
+import "../../../../ui/Content.css";
 
-function Field({ label, children }: { label: string; children: preact.ComponentChildren }) {
+/**
+ * One term and its value inside the record's `pk-datalist`.
+ *
+ * The pair is emitted as a Fragment, not wrapped in a div: `pk-datalist` is a
+ * two-column grid over `dl > dt` and `dl > dd`, and a wrapper between them
+ * takes both out of the grid.
+ */
+function Detail({ label, children }: { label: string; children: ComponentChildren }) {
   return (
-    <div>
-      <div class="lbl">{label}</div>
-      <div class="val">{children}</div>
-    </div>
+    <Fragment>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </Fragment>
   );
 }
 
@@ -33,8 +49,10 @@ export function DonationDetailPage({
 }) {
   if (!canRead) {
     return (
-      <div class="alert alert-warning" role="alert">
-        Donation records require the <code>donations:read</code> permission.
+      <div class="pk">
+        <Alert tone="warn">
+          Donation records require the <code>donations:read</code> permission.
+        </Alert>
       </div>
     );
   }
@@ -42,7 +60,6 @@ export function DonationDetailPage({
 }
 
 function DonationDetailView({ donationId, canSync }: { donationId: string; canSync: boolean }) {
-  const [, navigate] = usePortalHashLocation();
   const [syncing, setSyncing] = useState(false);
 
   const { data, loading, error, reload } = useData(
@@ -94,68 +111,79 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
   const badgeUrl = `/api/v1/donations/checkouts/${encodeURIComponent(d.checkout_session_id)}/badge?name=${encodeURIComponent(d.name)}`;
 
   return (
-    <div>
-      <button class="btn btn-sm btn-outline-secondary mb-3" onClick={() => navigate("/donations")}>
-        ← Back to Donations
-      </button>
-
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <h5 class="mb-0">{d.name}</h5>
-        <Badge status={d.status} />
-        <span class="fw-semibold">{gross}</span>
-      </div>
-
-      <div class="adm-donation-detail">
-        <div class="adm-donation-detail-grid">
-          <Field label="Email">
-            <a href={`mailto:${d.email}`}>{d.email}</a>
-          </Field>
-          {d.organization && <Field label="Organization">{d.organization}</Field>}
-          <Field label="Gross">
-            {gross}
-            {showSettled && (
-              <span class="text-muted"> ({formatDonationAmount(d.settled_amount!, d.settled_currency!)})</span>
+    <div class="pk pk-stack">
+      {/* The donor heads the page, with the donation's standing and amount
+          beside the name and the record's commands on the right; the trail
+          replaces the back button that used to stand in for it. */}
+      <PageHeader
+        trail={[{ label: "Donations", href: usePortalHashLocation.hrefs("/donations") }, { label: d.name }]}
+        title={d.name}
+        context={
+          <>
+            <Badge status={d.status} />
+            <span class="pk-strong">{gross}</span>
+          </>
+        }
+        actions={
+          <>
+            {canSync && needsSync && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={syncing}
+                disabled={syncing}
+                onClick={() => handleSync(d.checkout_session_id)}
+              >
+                {syncing ? "Syncing…" : "Sync with Stripe"}
+              </Button>
             )}
-          </Field>
-          <Field label="Net">{net}</Field>
-          <Field label="Method">
-            {methodLabel}
-            {deadline && <span class="text-muted"> (due {deadline})</span>}
-          </Field>
-          <Field label="Source">{d.source ?? "—"}</Field>
-          <Field label="Session ID">
-            <span class="mono small">{d.checkout_session_id}</span>
-          </Field>
-          {d.payment_intent_id && (
-            <Field label="Payment Intent">
-              <span class="mono small">{d.payment_intent_id}</span>
-            </Field>
-          )}
-          <Field label="Created">{fmt(d.created_at)}</Field>
-          <Field label="Completed">{fmt(d.completed_at)}</Field>
-        </div>
+            {d.status === "completed" && (
+              // A link, not a button: it fetches a file from a URL, so it can
+              // be opened in a new tab and copied like any other address.
+              <a
+                class="pk-btn pk-btn--secondary pk-btn--sm"
+                href={badgeUrl}
+                download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
+              >
+                Download badge
+              </a>
+            )}
+          </>
+        }
+      />
 
-        <div class="d-flex gap-2 mt-3">
-          {canSync && needsSync && (
-            <button
-              class="btn btn-sm btn-outline-primary"
-              disabled={syncing}
-              onClick={() => handleSync(d.checkout_session_id)}
-            >
-              {syncing ? "Syncing…" : "↺ Sync with Stripe"}
-            </button>
-          )}
-          {d.status === "completed" && (
-            <a
-              class="btn btn-sm btn-outline-secondary"
-              href={badgeUrl}
-              download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
-            >
-              Download Badge
-            </a>
-          )}
-        </div>
-      </div>
+      <Panel aria-label={`Donation from ${d.name}`}>
+        <PanelBody class="pk-stack pk-stack--snug">
+          <dl class="pk-datalist">
+            <Detail label="Email">
+              <a href={`mailto:${d.email}`}>{d.email}</a>
+            </Detail>
+            {d.organization && <Detail label="Organization">{d.organization}</Detail>}
+            <Detail label="Gross">
+              {gross}
+              {showSettled && (
+                <span class="pk-muted"> ({formatDonationAmount(d.settled_amount!, d.settled_currency!)})</span>
+              )}
+            </Detail>
+            <Detail label="Net">{net}</Detail>
+            <Detail label="Method">
+              {methodLabel}
+              {deadline && <span class="pk-muted"> (due {deadline})</span>}
+            </Detail>
+            <Detail label="Source">{d.source ?? "—"}</Detail>
+            <Detail label="Session ID">
+              <span class="pk-mono pk-small pk-break">{d.checkout_session_id}</span>
+            </Detail>
+            {d.payment_intent_id && (
+              <Detail label="Payment intent">
+                <span class="pk-mono pk-small pk-break">{d.payment_intent_id}</span>
+              </Detail>
+            )}
+            <Detail label="Created">{fmt(d.created_at)}</Detail>
+            <Detail label="Completed">{fmt(d.completed_at)}</Detail>
+          </dl>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

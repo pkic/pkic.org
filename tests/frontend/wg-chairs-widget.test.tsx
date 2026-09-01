@@ -126,7 +126,12 @@ describe("WgChairsWidget", () => {
     expect(container.textContent).toContain("Grace Hopper");
     expect(container.textContent).toContain("Katherine Johnson");
     expect(container.textContent).toContain("Principal Cryptographer at Example Consortium");
-    expect(container.querySelectorAll('a[aria-label="LinkedIn"]')).toHaveLength(3);
+    // Each profile link is named after the person, not after the network:
+    // three links all called "LinkedIn" are nothing to choose between when
+    // they are read out on their own.
+    expect(
+      [...container.querySelectorAll("a.person-card-linkedin")].map((link) => link.getAttribute("aria-label")),
+    ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn", "Katherine Johnson on LinkedIn"]);
   });
 
   it("keeps the mount hidden when the directory has no public leadership", async () => {

@@ -9,6 +9,8 @@ import { GroupForms } from "../../assets/ts/member-flows/portal/sections/managem
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
+import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -117,6 +119,70 @@ describe("portal selected-group collections", () => {
     await settle();
     expect(container.textContent).toContain("No mailing lists yet");
     expect(container.textContent).toContain("Add mailing list");
+  });
+
+  it("names the primary-discussion filter and sends the choice to the management query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    await settle();
+
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Primary discussion list"]')!;
+    expect(filter).not.toBeNull();
+    // The default view is the server default: no `primaryDiscussion` parameter at all.
+    expect(requests.some((url) => url.searchParams.has("primaryDiscussion"))).toBe(false);
+
+    filter.value = "true";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("primaryDiscussion") === "true")).toBe(true);
+  });
+
+  it("names the form context filter and sends the choice to the group forms query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ forms: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
+    await settle();
+
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by context"]')!;
+    expect(filter).not.toBeNull();
+    // The options speak product language, not the schema's `contextType` keys.
+    expect([...filter.options].map((option) => option.textContent)).toEqual([
+      "All contexts",
+      "Installation-wide",
+      "Group",
+      "Event",
+      "Organization",
+    ]);
+    // The default view is the server default: no `contextType` parameter at all.
+    expect(requests.some((url) => url.searchParams.has("contextType"))).toBe(false);
+
+    filter.value = "event";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("contextType") === "event")).toBe(true);
   });
 
   it("renders manager collection errors", async () => {
@@ -235,9 +301,10 @@ describe("portal selected-group collections", () => {
     });
     expect(created?.body).not.toHaveProperty("groupId");
 
-    expect(button("Manage")).not.toBeUndefined();
+    // The row itself opens the editor; its activation names the list.
+    expect(button("Manage Architecture discussion")).not.toBeUndefined();
     await act(async () => {
-      button("Manage")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button("Manage Architecture discussion")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     const saveButton = button("Save changes");
@@ -249,18 +316,10 @@ describe("portal selected-group collections", () => {
     expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
 
     await settle();
-    const rowMenu = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(rowMenu).not.toBeNull();
-    await act(async () => {
-      rowMenu?.click();
-    });
-    const archiveItem = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
-      (candidate) => candidate.textContent?.trim() === "Archive",
-    );
-    expect(archiveItem).not.toBeUndefined();
-    await act(async () => {
-      archiveItem?.click();
-    });
+    // The row's remaining command lives behind its menu, whose trigger
+    // names the list.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Architecture discussion"]);
+    await runRowAction(container, "Architecture discussion", "Archive");
     await settle();
     const archiveDialog = container.querySelector('[role="alertdialog"]');
     expect(archiveDialog).not.toBeNull();
@@ -517,9 +576,15 @@ describe("portal selected-group collections", () => {
 
     const container = mount(<GroupEvents groupId={GROUP_ID} />);
     await settle();
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    // The whole row opens the event now: the "Details" button in a nameless
+    // last column was a control no keyboard could reach the row through, so
+    // the table's own `rowAction` renders the link and stretches it.
+    const open = Array.from(container.querySelectorAll("a, button")).find(
+      (control) => control.textContent === `Open ${event.name}`,
+    );
+    expect(open).toBeDefined();
     await act(async () => {
-      details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      open?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     await settle();
@@ -534,10 +599,7 @@ describe("portal selected-group collections", () => {
     expect(container.textContent).not.toContain("Attendees");
     expect(container.textContent).not.toContain("Manage meeting series");
 
-    const tab = (label: string) =>
-      Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-        (item) => item.textContent?.trim() === label,
-      );
+    const tab = (label: string) => tabs(container).find((item) => item.textContent?.trim() === label);
 
     // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
     // spy here, so the resulting tab is verified below through the URL it

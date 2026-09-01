@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useMemo, useRef, useState, type MutableRef } from "preact/hooks";
 import { usePortalHashLocation } from "../hash-location";
 import {
@@ -8,21 +9,27 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
 import { EmptyState } from "../../../components/EmptyState";
-import { type MenuAction } from "../../../components/Menu";
-import { RowActions } from "../../../components/RowActions";
+import { Badge } from "../../../ui/Badge";
+import { type MenuItem } from "../../../ui/Menu";
+import { RowActions } from "../../../ui/RowActions";
 import { confirmAction } from "../../../components/ConfirmDialog";
+import type { DataTableRowAction } from "../../../ui/DataTable";
+import { portalEntityHref } from "../entity-links";
 import { Link } from "wouter";
 import { patchJson } from "../../../shared/api-client";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalAvatarInitials } from "../shell/PortalNavigationShell";
 import { portalSession } from "../state";
 import { toast } from "../ui";
+// `pk-mono` on the email line comes from Content.css, which ships in a lazy
+// chunk rather than the entry stylesheet, so this module imports it.
+import "../../../ui/Content.css";
 
 /** The person's name links into user administration when the viewer may see it. */
 function IdentityName({ userId, name }: { userId: string; name: string }) {
   if (!portalHasGlobalPermission(portalSession.value, "users:read")) return <strong>{name}</strong>;
   return (
-    <Link href={`/users/${encodeURIComponent(userId)}`} class="fw-bold">
+    <Link href={`/users/${encodeURIComponent(userId)}`} class="pk-strong">
       {name}
     </Link>
   );
@@ -51,13 +58,15 @@ export interface ActiveActingIdentity {
 
 function ContactRole({ identity }: { identity?: ActiveActingIdentity }) {
   if (!identity?.isPrimaryContact && !identity?.isSecondaryContact) {
-    return <span class="text-muted">—</span>;
+    return <span class="pk-muted">—</span>;
   }
+  // The gap between the two badges is the cluster's, not a margin on the
+  // first one, and each badge still says which role it is in words.
   return (
-    <>
-      {identity.isPrimaryContact && <span class="badge text-bg-primary me-1">Primary</span>}
-      {identity.isSecondaryContact && <span class="badge text-bg-info">Secondary</span>}
-    </>
+    <span class="pk-cluster">
+      {identity.isPrimaryContact && <Badge tone="accent">Primary</Badge>}
+      {identity.isSecondaryContact && <Badge tone="info">Secondary</Badge>}
+    </span>
   );
 }
 
@@ -68,11 +77,15 @@ function statusLabel(identity: ActingIdentity): string {
   return "Active";
 }
 
-/** Navigates rows into user administration only when the viewer can actually see that page. */
-function useIdentityRowNavigation() {
-  const [, navigate] = usePortalHashLocation();
-  const canNavigate = portalHasGlobalPermission(portalSession.value, "users:read");
-  return canNavigate ? (userId: string) => navigate(`/users/${encodeURIComponent(userId)}`) : undefined;
+/**
+ * The row's activation: a link into user administration, offered only when the
+ * viewer can actually reach that page. `portalEntityHref` already applies the
+ * `users:read` rule, so permission is decided in one place rather than here.
+ */
+function identityRowAction(userId: string, name: string): DataTableRowAction | undefined {
+  const path = portalEntityHref("user", userId);
+  if (!path) return undefined;
+  return { label: `Open ${name}'s user account`, href: usePortalHashLocation.hrefs(path) };
 }
 
 function activeColumns(): Column<ActiveActingIdentity>[] {
@@ -80,12 +93,12 @@ function activeColumns(): Column<ActiveActingIdentity>[] {
     {
       header: "Name",
       cell: (identity) => (
-        <div class="d-flex align-items-center gap-2">
+        <div class="pk-cluster">
           <IdentityAvatar name={identity.name ?? identity.email} headshotUrl={identity.headshotUrl} />
-          <div>
+          <div class="pk-stack pk-stack--tight">
             <IdentityName userId={identity.userId} name={identity.name ?? identity.email} />
-            <div class="mono text-muted small">{identity.email}</div>
-            {identity.jobTitle && <div class="small text-muted">{identity.jobTitle}</div>}
+            <div class="pk-mono pk-small">{identity.email}</div>
+            {identity.jobTitle && <div class="pk-small">{identity.jobTitle}</div>}
           </div>
         </div>
       ),
@@ -108,6 +121,7 @@ export function ActingIdentityDirectory({
   onChanged,
   actionsRef,
   createAction,
+  empty,
 }: {
   organizationId: string;
   activeIdentities: ActiveActingIdentity[];
@@ -117,11 +131,19 @@ export function ActingIdentityDirectory({
   actionsRef?: MutableRef<ApiTableActions | null>;
   /** The directory's create affordance, rendered in its own toolbar row alongside search and refresh. */
   createAction?: { label: string; onSelect: () => void };
+  /**
+   * What an empty directory says.
+   *
+   * A surface that offers adding an identity from its own panel header —
+   * rather than through `createAction` — knows the words for it and which
+   * controls carry it out; this directory knows neither. Given one it renders
+   * it, and otherwise falls back to naming the absence.
+   */
+  empty?: ComponentChildren;
 }) {
   const localTableRef = useRef<ApiTableActions | null>(null);
   const tableRef = actionsRef ?? localTableRef;
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const onRowNavigate = useIdentityRowNavigation();
   const activeByIdentityId = useMemo(
     () => new Map(activeIdentities.map((identity) => [identity.identityId, identity])),
     [activeIdentities],
@@ -130,11 +152,12 @@ export function ActingIdentityDirectory({
   if (!canManage) {
     return (
       <DataTable
+        caption="Organization identities"
         columns={activeColumns()}
         data={activeIdentities}
-        empty="No identities yet"
+        empty={empty ?? "No identities yet"}
         rowKey={(identity) => identity.userId}
-        onRowClick={onRowNavigate ? (identity) => onRowNavigate(identity.userId) : undefined}
+        rowAction={(identity) => identityRowAction(identity.userId, identity.name ?? identity.email)}
       />
     );
   }
@@ -190,13 +213,13 @@ export function ActingIdentityDirectory({
     }
   }
 
-  function rowActions(identity: ActingIdentity): MenuAction[] {
+  function rowActions(identity: ActingIdentity): MenuItem[] {
     const status = statusLabel(identity);
     const busy = busyUserId === identity.id;
     if (status !== "Active") return [];
-    const actions: MenuAction[] = [
+    const actions: MenuItem[] = [
       {
-        key: "toggle-visibility",
+        id: "toggle-visibility",
         label: identity.showOnOrganizationProfile ? "Hide from profile" : "Show on profile",
         disabled: busy,
         onSelect: () => void updateVisibility(identity, !identity.showOnOrganizationProfile),
@@ -204,7 +227,7 @@ export function ActingIdentityDirectory({
     ];
     if (canBlock(identity.userId)) {
       actions.push({
-        key: "end",
+        id: "end",
         label: "End identity",
         disabled: busy,
         onSelect: () => void endIdentity(identity),
@@ -215,6 +238,7 @@ export function ActingIdentityDirectory({
 
   return (
     <ApiDataTable
+      caption="Organization identities"
       endpoint={`/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`}
       responseSchema={identitiesListResponseSchema}
       resolve={(response) => response.identities}
@@ -225,19 +249,19 @@ export function ActingIdentityDirectory({
       searchPlaceholder="name or email"
       actionsRef={tableRef}
       createAction={createAction}
-      onRowClick={onRowNavigate ? (identity) => onRowNavigate(identity.userId) : undefined}
+      rowAction={(identity) => identityRowAction(identity.userId, identity.userName)}
       columns={[
         {
           header: "Name",
           cell: (identity) => {
             const active = activeByIdentityId.get(identity.id);
             return (
-              <div class="d-flex align-items-center gap-2">
+              <div class="pk-cluster">
                 <IdentityAvatar name={identity.userName} headshotUrl={identity.headshotUrl} />
-                <div>
+                <div class="pk-stack pk-stack--tight">
                   <IdentityName userId={identity.userId} name={identity.userName} />
-                  <div class="mono text-muted small">{identity.email}</div>
-                  {active?.jobTitle && <div class="small text-muted">{active.jobTitle}</div>}
+                  <div class="pk-mono pk-small">{identity.email}</div>
+                  {active?.jobTitle && <div class="pk-small">{active.jobTitle}</div>}
                 </div>
               </div>
             );
@@ -259,25 +283,31 @@ export function ActingIdentityDirectory({
             statusLabel(identity) === "Active" ? (
               <span>{identity.showOnOrganizationProfile ? "Shown on profile" : "Hidden"}</span>
             ) : (
-              <span class="text-muted">—</span>
+              <span class="pk-muted">—</span>
             ),
         },
         {
-          header: "",
-          className: "text-end",
+          // A blank `th` is announced as an unnamed column; this one holds the
+          // per-row action menu, so it says so.
+          header: "Actions",
+          className: "pk-end",
           cell: (identity) => {
             const actions = rowActions(identity);
             if (actions.length === 0) return null;
-            return <RowActions label={`Actions for ${identity.userName}`} actions={actions} />;
+            return <RowActions subject={identity.userName} actions={actions} />;
           },
         },
       ]}
       empty={
-        createAction ? (
-          <EmptyState title="No identities yet" body="Invite an identity to get started." action={createAction} />
+        empty ??
+        (createAction ? (
+          // The same `createAction` is already the toolbar's button, so this
+          // state names it rather than rendering it a second time under the
+          // same accessible name.
+          <EmptyState title="No identities yet" body={`Use ${createAction.label} above to get started.`} />
         ) : (
           "No identities"
-        )
+        ))
       }
       rowKey={(identity) => identity.id}
     />

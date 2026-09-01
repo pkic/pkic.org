@@ -3,6 +3,7 @@ import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupWorkspace";
+import { isCurrentTab, tabNamed, tabNames } from "./helpers/tabs";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const navigate = vi.fn();
@@ -62,8 +63,8 @@ function configuration(revision = 0) {
   } as const;
 }
 
-function json(value: unknown): Response {
-  return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+function json(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
 async function settle(): Promise<void> {
@@ -149,7 +150,9 @@ describe("portal selected-group workspace", () => {
 
     expect(container.textContent).toContain("Architecture Committee");
     expect(container.textContent).toContain("Part of Parent Group");
-    expect(container.textContent).toContain("Members represented");
+    // The headline counts live on the overview's about panel now, not in the
+    // page header repeated above every view.
+    expect(container.textContent).not.toContain("Members represented");
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     // The group workspace is route-addressed; no manageable-group picker request is made.
     expect(requests.some(({ url }) => url.searchParams.get("manageable") === "true")).toBe(false);
@@ -159,7 +162,12 @@ describe("portal selected-group workspace", () => {
       false,
     );
 
-    const name = container.querySelector<HTMLInputElement>("#managed-group-name")!;
+    // The design-system Field owns the control's id, so the input is found
+    // the way a reader finds it: through the label that points at it.
+    const nameLabel = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Name"))!;
+    expect(nameLabel.htmlFor).not.toBe("");
+    const name = container.querySelector<HTMLInputElement>(`[id="${nameLabel.htmlFor}"]`)!;
+    expect(name).not.toBeNull();
     name.value = "Architecture and Design Committee";
     void act(() => {
       name.dispatchEvent(new Event("input", { bubbles: true }));
@@ -201,9 +209,94 @@ describe("portal selected-group workspace", () => {
     await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="overview" />, container));
     await settle();
 
-    const tabs = [...container.querySelectorAll("nav a")].map((link) => link.textContent);
-    expect(tabs).toEqual(["Overview", "Members", "Events", "Meetings", "Votes", "Forms", "Mailing lists"]);
+    expect(tabNames(container)).toEqual([
+      "Overview",
+      "Members",
+      "Events",
+      "Meetings",
+      "Votes",
+      "Forms",
+      "Mailing lists",
+    ]);
     expect(container.textContent).toContain("You participate in this group.");
     expect(container.textContent).not.toContain("Save group settings");
+  });
+
+  it("names the workspace context and the section strip for a reader who cannot see them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}`) {
+          return json({ group: { ...group(), active: false }, capabilities: ["view", "participate"] });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="overview" />, container));
+    await settle();
+
+    // The page header is a labelled region, so the context a reader lands in
+    // can be reached by landmark rather than being one more unlabelled box.
+    const context = container.querySelector("header[aria-labelledby]")!;
+    expect(context).not.toBeNull();
+    expect(context.querySelector("h2")?.textContent).toBe("Architecture Committee");
+    // The trail leads back to the catalog.
+    const trailLink = container.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a');
+    expect(trailLink?.getAttribute("href")).toBe("#/groups");
+
+    // The strip says which set of sections it is, and the current one is
+    // marked rather than merely coloured.
+    const strip = container.querySelector('nav[aria-label$=" sections"]')!;
+    expect(strip.getAttribute("aria-label")).toBe("Architecture Committee sections");
+    expect(isCurrentTab(tabNamed(container, "Overview"))).toBe(true);
+    expect(isCurrentTab(tabNamed(container, "Members"))).toBe(false);
+
+    // An inactive group says the word as well as showing the tone.
+    expect(context.textContent).toContain("Inactive");
+  });
+
+  it("reports a failed group load instead of rendering an empty workspace", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({ error: { code: "GROUP_NOT_VISIBLE", message: "This group is not visible to you." } }, 404),
+      ),
+    );
+
+    await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="overview" />, container));
+    await settle();
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("This group is not visible to you.");
+    expect(container.querySelector("header[aria-labelledby]")).toBeNull();
+    expect(tabNames(container)).toEqual([]);
+  });
+
+  it("refuses a section the identity's capabilities do not grant", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}`) {
+          return json({ group: group(), capabilities: ["view"] });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="audit" />, container));
+    await settle();
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "This group section is not available to your current identity.",
+    );
+    expect(tabNames(container)).toEqual(["Overview"]);
   });
 });

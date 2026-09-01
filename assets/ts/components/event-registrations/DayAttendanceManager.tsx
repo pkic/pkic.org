@@ -9,6 +9,14 @@ import { patchJson, postJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
 import { DataTable } from "../Table";
 import { Badge } from "../Badge";
+import { Alert } from "../../ui/Alert";
+import { Button } from "../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { Select, Textarea } from "../../ui/TextControl";
+
+// `pk-mono` on the offer-expiry stamp comes from the content stylesheet,
+// which is not in the entry chunk, so this module has to pull it in.
+import "../../ui/Content.css";
 
 type DayOption = "none" | string;
 type AttendanceDetail = EventRegistrationAttendanceDetailResponse;
@@ -49,7 +57,7 @@ export function DayAttendanceManager({
   const [applyingVip, setApplyingVip] = useState(false);
   const [message, setMessage] = useState<{ text: string; kind: "success" | "danger" } | null>(null);
 
-  if (!eventDays.length) return <p class="small text-muted fst-italic mb-0">No event days configured.</p>;
+  if (!eventDays.length) return <p class="pk pk-small">No event days configured.</p>;
 
   const attendanceByDate = new Map(dayAttendance.map((day) => [day.dayDate, day.attendanceType as DayOption]));
   const waitlistByDate = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry]));
@@ -68,6 +76,9 @@ export function DayAttendanceManager({
   const activeWaitlistCount = dayWaitlist.filter(
     (entry) => entry.status === "waiting" || entry.status === "offered",
   ).length;
+  const vipReasonId = `${idPrefix}-vip-reason`;
+  const vipReasonHelpId = `${idPrefix}-vip-reason-help`;
+  const vipReasonTooShort = vipReason.trim().length > 0 && vipReason.trim().length < 3;
 
   async function reloadWithSuccess(text: string): Promise<void> {
     onSuccess?.(text);
@@ -166,22 +177,25 @@ export function DayAttendanceManager({
   }
 
   return (
-    <>
+    <div class="pk pk-stack pk-stack--snug">
       {activeWaitlistCount > 0 && (
-        <div class="alert alert-info small py-2 mb-3">
+        <Alert tone="info">
           Select <strong>Manager override</strong> for one or more waitlisted in-person days to admit this attendee
           beyond capacity. Admission removes those day waitlist entries and queues an update email.
-        </div>
+        </Alert>
       )}
-      {message && (
-        <div class={`alert alert-${message.kind} small py-2`} role="status" aria-live="polite">
-          {message.text}
-        </div>
-      )}
+      {/*
+       * Outcome messages name what happened, so the tone reinforces the words
+       * rather than carrying the meaning on its own. Alert also picks the
+       * right live-region role per tone: a failure interrupts, a success does
+       * not.
+       */}
+      {message && <Alert tone={message.kind === "success" ? "ok" : "danger"}>{message.text}</Alert>}
       <DataTable
+        caption="Attendance by event day"
         columns={[
-          { header: "Date", cell: (day) => day.dayDate, className: "mono small" },
-          { header: "Day", cell: (day) => day.label ?? "—", className: "small" },
+          { header: "Date", cell: (day) => day.dayDate, className: "pk-mono pk-small" },
+          { header: "Day", cell: (day) => day.label ?? "—", className: "pk-small" },
           {
             header: "Attendance",
             cell: (day) => {
@@ -189,9 +203,8 @@ export function DayAttendanceManager({
               const isSaving = saving[day.dayDate] ?? false;
               const changed = selected !== day.current;
               return (
-                <div class="d-flex gap-1 align-items-center">
-                  <select
-                    class="form-select form-select-sm"
+                <div class="pk-cluster">
+                  <Select
                     aria-label={`Attendance for ${day.dayDate}`}
                     value={selected}
                     disabled={isSaving}
@@ -212,16 +225,17 @@ export function DayAttendanceManager({
                         {option.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   {changed && (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-primary text-nowrap"
-                      disabled={isSaving}
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      class="pk-nowrap"
+                      loading={isSaving}
                       onClick={() => void applyChange(day.dayDate, selected)}
                     >
                       {isSaving ? "Saving…" : "Apply"}
-                    </button>
+                    </Button>
                   )}
                 </div>
               );
@@ -231,17 +245,17 @@ export function DayAttendanceManager({
             header: "Waitlist",
             cell: (day) =>
               day.waitlist ? (
-                <div class="small">
-                  <span class="me-2">
+                <div class="pk-stack pk-stack--tight pk-small">
+                  <div class="pk-cluster">
                     <Badge status={day.waitlist.status} />
-                  </span>
-                  <span class="text-muted">{day.waitlist.priorityLane}</span>
+                    <span class="pk-muted">{day.waitlist.priorityLane}</span>
+                  </div>
                   {day.waitlist.offerExpiresAt && (
-                    <div class="text-muted mono mt-1">Offer expires {formatDateTime(day.waitlist.offerExpiresAt)}</div>
+                    <span class="pk-muted pk-mono">Offer expires {formatDateTime(day.waitlist.offerExpiresAt)}</span>
                   )}
                 </div>
               ) : (
-                <span class="small text-muted">—</span>
+                <span class="pk-small">—</span>
               ),
           },
           {
@@ -258,113 +272,139 @@ export function DayAttendanceManager({
                 day.inPersonCapacity > 0;
               const inputId = `${idPrefix}-admit-${day.dayDate}`;
               return (
-                <div>
-                  <div class="form-check mb-1">
+                <div class="pk-stack pk-stack--tight">
+                  <div class="pk-check">
                     <input
                       id={inputId}
                       type="checkbox"
-                      class="form-check-input"
+                      class="pk-check__input"
                       checked={admitDayDates.includes(day.dayDate)}
                       disabled={!canAdmit || admitting}
                       onChange={(event) => setAdmitChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
                     />
-                    <label class={`form-check-label small ${canAdmit ? "" : "text-muted"}`} for={inputId}>
+                    <label class="pk-check__label pk-small" for={inputId}>
                       Admit day
                     </label>
                   </div>
                   {canReturnToWaitlist && (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-warning text-nowrap"
-                      disabled={saving[day.dayDate] ?? false}
-                      onClick={() => void applyChange(day.dayDate, "waitlist")}
-                    >
-                      Return to waitlist
-                    </button>
+                    <div class="pk-cluster">
+                      <Button
+                        size="sm"
+                        variant="danger-quiet"
+                        class="pk-nowrap"
+                        disabled={saving[day.dayDate] ?? false}
+                        onClick={() => void applyChange(day.dayDate, "waitlist")}
+                      >
+                        Return to waitlist
+                      </Button>
+                    </div>
                   )}
                 </div>
               );
             },
-            className: "text-nowrap",
+            className: "pk-nowrap",
           },
         ]}
         data={rows}
-        className="align-middle"
         rowKey={(day) => day.dayDate}
       />
-      <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
-        <button
-          type="button"
-          class="btn btn-sm btn-warning"
-          disabled={admitDayDates.length === 0 || admitting}
+      <div class="pk-cluster">
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={admitDayDates.length === 0}
+          loading={admitting}
           onClick={() => void admitSelectedDays()}
         >
           {admitting ? "Admitting…" : "Admit selected days"}
-        </button>
-        <span class="small text-muted">
+        </Button>
+        <span class="pk-small" role="status">
           {admitDayDates.length > 0
             ? `${admitDayDates.length} ${admitDayDates.length === 1 ? "day" : "days"} selected`
             : "Select waitlisted in-person days to enable admission."}
         </span>
       </div>
+      {/* The override is one of several sections stacked inside the attendance
+          panel, so it names itself: an unnamed <section> is announced as
+          nothing at all. */}
       {canVip && (
-        <fieldset class="card border-warning mt-3">
-          <legend class="card-header h6 mb-0">Reasoned VIP admission override</legend>
-          <div class="card-body">
-            <p class="small text-muted">
+        <Panel aria-label="Reasoned VIP admission override">
+          <PanelHeader title="Reasoned VIP admission override" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <p class="pk-small">
               Requires the effective event <code>manage</code> capability. The narrower <code>manage_attendance</code>
               capability can admit only actively waitlisted days and cannot use this capacity override.
             </p>
-            <div class="d-flex flex-wrap gap-3 mb-3">
-              {rows
-                .filter((day) => day.supportsInPerson)
-                .map((day) => {
-                  const inputId = `${idPrefix}-vip-${day.dayDate}`;
-                  return (
-                    <div class="form-check" key={day.dayDate}>
-                      <input
-                        id={inputId}
-                        type="checkbox"
-                        class="form-check-input"
-                        checked={vipDayDates.includes(day.dayDate)}
-                        disabled={applyingVip}
-                        onChange={(event) => setVipChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
-                      />
-                      <label class="form-check-label" for={inputId}>
-                        {day.label ? `${day.label} — ` : ""}
-                        {day.dayDate}
-                      </label>
-                    </div>
-                  );
-                })}
+            <fieldset class="pk-fieldset pk-field" disabled={applyingVip}>
+              <legend class="pk-field__label">Days to admit</legend>
+              <div class="pk-cluster">
+                {rows
+                  .filter((day) => day.supportsInPerson)
+                  .map((day) => {
+                    const inputId = `${idPrefix}-vip-${day.dayDate}`;
+                    return (
+                      <div class="pk-check" key={day.dayDate}>
+                        <input
+                          id={inputId}
+                          type="checkbox"
+                          class="pk-check__input"
+                          checked={vipDayDates.includes(day.dayDate)}
+                          disabled={applyingVip}
+                          onChange={(event) => setVipChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
+                        />
+                        <label class="pk-check__label" for={inputId}>
+                          {day.label ? `${day.label} — ` : ""}
+                          {day.dayDate}
+                        </label>
+                      </div>
+                    );
+                  })}
+              </div>
+            </fieldset>
+            {/*
+             * The label carries an explicit `for`/`id` pair rather than going
+             * through Field, because `idPrefix` is this component's public
+             * contract: the caller addresses these controls by that prefix,
+             * and a generated id would quietly break it.
+             */}
+            <div class="pk-field">
+              <label class="pk-field__label" for={vipReasonId}>
+                Required reason
+              </label>
+              <div class="pk-field__control">
+                <Textarea
+                  id={vipReasonId}
+                  rows={2}
+                  minLength={3}
+                  maxLength={1000}
+                  required
+                  value={vipReason}
+                  disabled={applyingVip}
+                  aria-describedby={vipReasonHelpId}
+                  aria-invalid={vipReasonTooShort ? "true" : undefined}
+                  onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
+                />
+              </div>
+              <p class="pk-small" id={vipReasonHelpId} role={vipReasonTooShort ? "alert" : undefined}>
+                {vipReasonTooShort
+                  ? "Give at least three characters of reason before applying the override."
+                  : "At least three characters. This action is audited and queues a registration-update email."}
+              </p>
             </div>
-            <label class="form-label" for={`${idPrefix}-vip-reason`}>
-              Required reason
-            </label>
-            <textarea
-              id={`${idPrefix}-vip-reason`}
-              class="form-control"
-              rows={2}
-              minLength={3}
-              maxLength={1000}
-              value={vipReason}
-              disabled={applyingVip}
-              onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
-            />
-            <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
-              <button
-                type="button"
-                class="btn btn-sm btn-warning"
-                disabled={vipDayDates.length === 0 || vipReason.trim().length < 3 || applyingVip}
+            <div class="pk-cluster">
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={vipDayDates.length === 0 || vipReason.trim().length < 3}
+                loading={applyingVip}
                 onClick={() => void applyVipOverride()}
               >
                 {applyingVip ? "Applying…" : "Apply VIP override"}
-              </button>
-              <span class="small text-muted">This action is audited and queues a registration-update email.</span>
+              </Button>
             </div>
-          </div>
-        </fieldset>
+          </PanelBody>
+        </Panel>
       )}
-    </>
+    </div>
   );
 }

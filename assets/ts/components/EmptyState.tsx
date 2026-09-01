@@ -2,8 +2,21 @@
  * A designed empty state: name what is absent, explain it in one line, and —
  * whenever the viewer can act — hand them the action. "No X" with nowhere to
  * go is a dead end, not a state.
+ *
+ * The `action` shorthand exists because seventeen surfaces pass one; the
+ * design system's EmptyState takes children, so the button it renders is the
+ * design system's Button rather than a Bootstrap one.
+ *
+ * One command, one control: pass `action` only when nothing else on the
+ * surface already offers it. A list whose `ApiDataTable` declares a
+ * `createAction` puts that command in the toolbar directly above this state,
+ * and repeating it here leaves two buttons with one accessible name — which
+ * is ambiguous to anyone navigating by name rather than by sight.
  */
 import type { ComponentChildren } from "preact";
+
+import { Button } from "../ui/Button";
+import { EmptyState as SystemEmptyState } from "../ui/EmptyState";
 
 export function EmptyState({
   title,
@@ -19,15 +32,15 @@ export function EmptyState({
   children?: ComponentChildren;
 }) {
   return (
-    <div class="pkic-empty-state" role="status">
-      <p class="pkic-empty-state-title">{title}</p>
-      {body && <p class="pkic-empty-state-body">{body}</p>}
-      {action && (
-        <button type="button" class="btn btn-sm btn-outline-success" onClick={action.onSelect}>
-          {action.label}
-        </button>
-      )}
-      {children}
+    <div class="pk">
+      <SystemEmptyState title={title} body={body}>
+        {action && (
+          <Button size="sm" variant="secondary" onClick={action.onSelect}>
+            {action.label}
+          </Button>
+        )}
+        {children}
+      </SystemEmptyState>
     </div>
   );
 }

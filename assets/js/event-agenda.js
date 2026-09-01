@@ -17,73 +17,47 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize overflow navigation
     initializeOverflowNavigation();
 
-    // Unload YouTube videos on modal close
-    unloadYoutubeOnModalClose();
-
-    // Keep nested actions from triggering their session card.
-    initializeSessionActionPropagation();
+    // Day tabs and the session dialogs
+    initializeDayTabs();
+    initializeSessionDialogs();
 
     // Break overlays removed; using inline break cards again
 });
 
-// YouTube embed handling
-document.addEventListener('DOMContentLoaded', function () {
-    // Handle modal show events to load YouTube videos
-    const sessionModals = document.querySelectorAll('.session-modal');
-
-    sessionModals.forEach(modal => {
-        modal.addEventListener('shown.bs.modal', function () {
-            const iframe = this.querySelector('.youtube-iframe');
-            const placeholder = this.querySelector('.youtube-loading-placeholder');
-
-            if (iframe && placeholder) {
-                // Show iframe and start loading
-                iframe.classList.remove('d-none');
-
-                // Handle iframe load event
-                iframe.addEventListener('load', function () {
-                    setTimeout(() => {
-                        placeholder.classList.add('fade-out');
-                        iframe.classList.add('loaded');
-                    }, 500); // Small delay for smoother transition
-                });
-
-                // Fallback timeout in case load event doesn't fire
-                setTimeout(() => {
-                    if (!iframe.classList.contains('loaded')) {
-                        placeholder.classList.add('fade-out');
-                        iframe.classList.add('loaded');
-                    }
-                }, 3000);
-            }
-        });
-
-        // Reset video state when modal is hidden
-        modal.addEventListener('hidden.bs.modal', function () {
-            const iframe = this.querySelector('.youtube-iframe');
-            const placeholder = this.querySelector('.youtube-loading-placeholder');
-
-            if (iframe && placeholder) {
-                // Reset states
-                placeholder.classList.remove('fade-out');
-                iframe.classList.remove('loaded');
-                iframe.classList.add('d-none');
-
-                // Reset iframe src to stop video
-                const src = iframe.src;
-                iframe.src = '';
-                iframe.src = src;
-            }
+/**
+ * Session dialogs.
+ *
+ * `<dialog>` supplies the top layer, the backdrop, the focus trap and
+ * Escape-to-close, so what is left is opening one from a card, closing it from
+ * either of its buttons or a backdrop click, locking the page behind it, and
+ * reloading the embed so a closed recording stops playing.
+ */
+function initializeSessionDialogs() {
+    document.querySelectorAll('[data-agenda-open-session]').forEach(trigger => {
+        trigger.addEventListener('click', () => {
+            const dialog = document.getElementById(trigger.getAttribute('data-agenda-open-session'));
+            if (!dialog || typeof dialog.showModal !== 'function' || dialog.open) return;
+            dialog.showModal();
+            document.body.classList.add('agenda-modal-open');
         });
     });
-});
 
-function unloadYoutubeOnModalClose() {
-    // Unload YouTube iframe when modal is closed
-    const sessionModals = document.querySelectorAll('.session-modal');
-    sessionModals.forEach(modal => {
-        modal.addEventListener('hidden.bs.modal', function () {
-            const iframe = modal.querySelector('iframe[src*="youtube"]');
+    document.querySelectorAll('.session-modal').forEach(dialog => {
+        dialog.querySelectorAll('[data-agenda-close-session]').forEach(closer => {
+            closer.addEventListener('click', () => dialog.close());
+        });
+
+        // A click that lands on the dialog element itself landed on the
+        // backdrop: every piece of content sits in a child element.
+        dialog.addEventListener('click', event => {
+            if (event.target === dialog) dialog.close();
+        });
+
+        dialog.addEventListener('close', () => {
+            if (!document.querySelector('.session-modal[open]')) {
+                document.body.classList.remove('agenda-modal-open');
+            }
+            const iframe = dialog.querySelector('iframe[src*="youtube"]');
             if (iframe) {
                 const src = iframe.src;
                 iframe.src = '';
@@ -93,20 +67,72 @@ function unloadYoutubeOnModalClose() {
     });
 }
 
-function initializeSessionActionPropagation() {
-    document.querySelectorAll('[data-agenda-stop-propagation]').forEach(element => {
-        element.addEventListener('click', event => event.stopPropagation());
+/**
+ * Day tabs.
+ *
+ * Replaces Bootstrap's tab plugin: it moves `aria-selected`, the roving
+ * tabindex and each panel's `hidden` attribute, then re-measures the grid it
+ * just revealed — every width read while a panel was hidden came back zero.
+ */
+function initializeDayTabs() {
+    const tablist = document.getElementById('agenda-tabs');
+    if (!tablist) return;
+
+    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
+    if (tabs.length === 0) return;
+
+    const panelFor = tab => document.getElementById(tab.getAttribute('aria-controls'));
+
+    function activate(tab, moveFocus) {
+        tabs.forEach(other => {
+            const isTarget = other === tab;
+            other.classList.toggle('is-active', isTarget);
+            other.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+            other.tabIndex = isTarget ? 0 : -1;
+            const otherPanel = panelFor(other);
+            if (otherPanel) otherPanel.hidden = !isTarget;
+        });
+
+        if (moveFocus) tab.focus();
+
+        const panel = panelFor(tab);
+        if (!panel) return;
+        setTimeout(() => {
+            recalcBreakWidths(panel.querySelector('.agenda-grid-container'));
+            updateOverflowNavigation(panel);
+        }, 50);
+    }
+
+    tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => activate(tab, false));
+        tab.addEventListener('keydown', event => {
+            let next = null;
+            if (event.key === 'ArrowRight') next = tabs[(index + 1) % tabs.length];
+            else if (event.key === 'ArrowLeft') next = tabs[(index - 1 + tabs.length) % tabs.length];
+            else if (event.key === 'Home') next = tabs[0];
+            else if (event.key === 'End') next = tabs[tabs.length - 1];
+            if (!next) return;
+            event.preventDefault();
+            activate(next, true);
+        });
     });
+}
+
+/** Keeps a location filter's `active` class and its `aria-pressed` state together. */
+function setLocationSelected(button, selected) {
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
 }
 
 function initializeLocationFiltering() {
     // Handle individual location buttons
     document.querySelectorAll('.location-filter-btn').forEach(button => {
         button.addEventListener('click', function () {
-            const tabPane = this.closest('.tab-pane');
+            const tabPane = this.closest('.agenda-panel');
 
             // Toggle active state for multiple selection
             this.classList.toggle('active');
+            this.setAttribute('aria-pressed', this.classList.contains('active') ? 'true' : 'false');
 
             filterByMultipleLocations(tabPane);
         });
@@ -115,11 +141,11 @@ function initializeLocationFiltering() {
     // Handle "All Locations" button
     document.querySelectorAll('#select-all-locations').forEach(button => {
         button.addEventListener('click', function () {
-            const tabPane = this.closest('.tab-pane');
+            const tabPane = this.closest('.agenda-panel');
             const locationBtns = tabPane.querySelectorAll('.location-filter-btn');
 
             // Select all locations
-            locationBtns.forEach(btn => btn.classList.add('active'));
+            locationBtns.forEach(btn => setLocationSelected(btn, true));
             filterByMultipleLocations(tabPane);
         });
     });
@@ -127,13 +153,13 @@ function initializeLocationFiltering() {
     // Initialize all locations as selected by default - run after a short delay to ensure DOM is ready
     setTimeout(() => {
         document.querySelectorAll('.desktop-agenda').forEach(desktopAgenda => {
-            const tabPane = desktopAgenda.closest('.tab-pane');
+            const tabPane = desktopAgenda.closest('.agenda-panel');
             const locationBtns = tabPane.querySelectorAll('.location-filter-btn');
 
             // Only initialize if no buttons are already active
             const activeButtons = tabPane.querySelectorAll('.location-filter-btn.active');
             if (activeButtons.length === 0) {
-                locationBtns.forEach(btn => btn.classList.add('active'));
+                locationBtns.forEach(btn => setLocationSelected(btn, true));
                 filterByMultipleLocations(tabPane);
             }
         });
@@ -279,12 +305,14 @@ function initializeFullscreen() {
                 container.classList.remove('agenda-fullscreen');
                 document.body.style.overflow = '';
                 this.title = 'Toggle Fullscreen';
+                this.setAttribute('aria-label', this.title);
                 setTimeout(() => recalcBreakWidths(container.querySelector('.agenda-grid-container')), 100);
             } else {
                 // Enter fullscreen
                 container.classList.add('agenda-fullscreen');
                 document.body.style.overflow = 'hidden';
                 this.title = 'Exit Fullscreen';
+                this.setAttribute('aria-label', this.title);
                 setTimeout(() => recalcBreakWidths(container.querySelector('.agenda-grid-container')), 150);
             }
         });
@@ -292,15 +320,18 @@ function initializeFullscreen() {
 
     // ESC key to exit fullscreen
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            const container = document.getElementById('agenda-container');
-            if (container && container.classList.contains('agenda-fullscreen')) {
-                container.classList.remove('agenda-fullscreen');
-                document.body.style.overflow = '';
-                fullscreenBtns.forEach(btn => {
-                    btn.title = 'Toggle Fullscreen';
-                });
-            }
+        if (e.key !== 'Escape') return;
+        // An open dialog owns Escape; the browser closes it and the agenda
+        // stays where the reader left it.
+        if (document.querySelector('.session-modal[open]')) return;
+        const container = document.getElementById('agenda-container');
+        if (container && container.classList.contains('agenda-fullscreen')) {
+            container.classList.remove('agenda-fullscreen');
+            document.body.style.overflow = '';
+            fullscreenBtns.forEach(btn => {
+                btn.title = 'Toggle Fullscreen';
+                btn.setAttribute('aria-label', btn.title);
+            });
         }
     });
 }
@@ -355,8 +386,9 @@ function initializeGlobalExpandAll() {
             // Update all buttons
             expandBtns.forEach(btn => {
                 btn.title = expanded ? 'Collapse All' : 'Expand All';
-                btn.classList.toggle('btn-primary', expanded);
-                btn.classList.toggle('btn-outline-secondary', !expanded);
+                btn.setAttribute('aria-label', btn.title);
+                btn.classList.toggle('pk-btn--primary', expanded);
+                btn.classList.toggle('pk-btn--secondary', !expanded);
             });
         });
     });
@@ -371,18 +403,22 @@ function initializeOverflowNavigation() {
         if (desktopAgenda.querySelector('.scroll-arrow')) return;
 
         // Add navigation arrows to the desktop-agenda wrapper (not the scrolling container)
-        const leftArrow = document.createElement('div');
+        const leftArrow = document.createElement('button');
+        leftArrow.type = 'button';
         leftArrow.className = 'scroll-arrow scroll-left disabled';
+        leftArrow.setAttribute('aria-label', 'Scroll the agenda left');
         leftArrow.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                 <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
             </svg>
         `;
 
-        const rightArrow = document.createElement('div');
+        const rightArrow = document.createElement('button');
+        rightArrow.type = 'button';
         rightArrow.className = 'scroll-arrow scroll-right';
+        rightArrow.setAttribute('aria-label', 'Scroll the agenda right');
         rightArrow.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                 <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
             </svg>
         `;

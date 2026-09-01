@@ -3,6 +3,6 @@
 {{ partial "hero.html" . }}
 {{ partial "members/nav.html" . }}
 
-{{ with .Content }}<div class="py-4"><div id="content" class="container">{{ . }}</div></div>{{ end }}
+{{ with .Content }}<div class="pk-section"><div id="content" class="pk-container">{{ . }}</div></div>{{ end }}
 {{ partial "members/directory-app.html" (dict "group" "organization" "prefix" "m" "label" "members" "detailBase" "/members/profile/") }}
 {{ end }}

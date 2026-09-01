@@ -3,6 +3,8 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupStatistics } from "../../assets/ts/member-flows/portal/sections/management/GroupStatistics";
+import { groupStatsQuerySchema } from "../../assets/shared/schemas/group-statistics";
+import { chooseOption, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -42,6 +44,27 @@ async function settle(): Promise<void> {
   });
 }
 
+/**
+ * The number a named stat card reports.
+ *
+ * The label and the value are separate elements inside the card, so reading
+ * the pair is what proves the number is attached to the name a reader hears
+ * beside it rather than merely present somewhere on the page.
+ */
+function statValue(root: ParentNode, label: string): string {
+  const card = [...root.querySelectorAll(".pk-stat-card")].find(
+    (candidate) => candidate.querySelector(".pk-stat-card__label")?.textContent?.trim() === label,
+  );
+  if (!card) throw new Error(`no stat card is labelled "${label}"`);
+  return card.querySelector(".pk-stat-card__value")?.textContent?.trim() ?? "";
+}
+
+/** The element a control points at with `aria-describedby`. */
+function describedBy(control: HTMLElement, root: ParentNode): Element | null {
+  const id = control.getAttribute("aria-describedby");
+  return id ? root.querySelector(`[id="${id}"]`) : null;
+}
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -63,17 +86,38 @@ describe("portal group statistics", () => {
       ),
     );
     const container = mount();
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Loading group statistics");
 
     resolveResponse(json(baseStats));
     await settle();
     expect(container.textContent).toContain("Distinct users");
     expect(container.textContent).toContain("Member participation rows");
-    expect(container.textContent).toContain("Active people");
+    expect(statValue(container, "People")).toBe("2");
+    expect(statValue(container, "Membership capacities")).toBe("3");
+    expect(statValue(container, "Active people")).toBe("2");
+    expect(statValue(container, "Actions")).toBe("4");
     expect(container.textContent).toContain("2026-08-26 12:00:00 UTC");
-    expect(container.querySelector('[aria-label="People: 2"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Membership capacities: 3"]')).not.toBeNull();
-    expect(container.textContent).toContain("Actions");
+  });
+
+  it("names every window control through a for/id pair and names each region", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(baseStats)),
+    );
+    const container = mount();
+    await settle();
+
+    // `controlFor` resolves through the label's `for` and the control's `id`,
+    // so it throws exactly when that pair is broken.
+    expect(controlFor<HTMLSelectElement>(container, "Population scope").tagName).toBe("SELECT");
+    expect(controlFor(container, "From (UTC)").getAttribute("type")).toBe("date");
+    expect(controlFor(container, "To (UTC, exclusive)").getAttribute("type")).toBe("date");
+
+    const from = controlFor(container, "From (UTC)");
+    expect(describedBy(from, container)?.textContent).toContain("beginning of available history");
+
+    const regions = [...container.querySelectorAll("section")].map((section) => section.getAttribute("aria-label"));
+    expect(regions).toEqual(["Group statistics", "Participation", "Activity"]);
   });
 
   it("uses the shared schema-backed UTC window controls and sends filtering to D1", async () => {
@@ -95,29 +139,47 @@ describe("portal group statistics", () => {
     );
     const container = mount();
     await settle();
-    const scope = container.querySelector<HTMLSelectElement>("#group-stats-scope")!;
-    scope.value = "historical";
-    await act(async () => {
-      scope.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const from = container.querySelector<HTMLInputElement>("#group-stats-from")!;
-    const to = container.querySelector<HTMLInputElement>("#group-stats-to")!;
-    from.value = "2026-08-01";
-    to.value = "2026-08-26";
-    await act(async () => {
-      from.dispatchEvent(new Event("input", { bubbles: true }));
-      to.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => container.querySelector<HTMLFormElement>("form")!.requestSubmit());
+    await chooseOption(controlFor<HTMLSelectElement>(container, "Population scope"), "historical");
+    await typeInto(controlFor(container, "From (UTC)"), "2026-08-01");
+    await typeInto(controlFor(container, "To (UTC, exclusive)"), "2026-08-26");
+    await submitForm(container);
     await settle();
 
     const request = requests.at(-1)!;
     expect(request.pathname).toBe(`/api/v1/groups/${GROUP_ID}/stats`);
-    expect(request.searchParams.get("scope")).toBe("historical");
-    expect(request.searchParams.get("timezone")).toBe("UTC");
-    expect(request.searchParams.get("from")).toBe("2026-08-01T00:00:00.000Z");
-    expect(request.searchParams.get("to")).toBe("2026-08-26T00:00:00.000Z");
+    // The query the surface put on the wire has to satisfy the same contract
+    // the route parses it with; comparing strings would only restate the code.
+    expect(groupStatsQuerySchema.parse(Object.fromEntries(request.searchParams))).toEqual({
+      scope: "historical",
+      timezone: "UTC",
+      from: "2026-08-01T00:00:00.000Z",
+      to: "2026-08-26T00:00:00.000Z",
+    });
     expect(container.textContent).toContain("Historical window");
+  });
+
+  it("marks the offending boundary invalid rather than issuing a request", async () => {
+    const fetchMock = vi.fn(async () => json(baseStats));
+    vi.stubGlobal("fetch", fetchMock);
+    const container = mount();
+    await settle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await typeInto(controlFor(container, "From (UTC)"), "2026-08-26");
+    await typeInto(controlFor(container, "To (UTC, exclusive)"), "2026-08-01");
+    await submitForm(container);
+    await settle();
+
+    // A window that ends before it starts is rejected by the shared schema on
+    // the `to` path, so that is the control that carries the error.
+    const to = controlFor(container, "To (UTC, exclusive)");
+    expect(to.getAttribute("aria-invalid")).toBe("true");
+    const message = describedBy(to, container);
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(message?.textContent).toContain("to must be later than from");
+    expect(controlFor(container, "From (UTC)").getAttribute("aria-invalid")).toBeNull();
+    // The rejected window never reached the server.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("reports shared API errors and an explicit zero-activity state", async () => {
@@ -141,8 +203,9 @@ describe("portal group statistics", () => {
     );
     const zeroContainer = mount();
     await settle();
-    expect(zeroContainer.textContent).toContain("People");
-    expect(zeroContainer.querySelector('[aria-label="People: 0"]')).not.toBeNull();
-    expect(zeroContainer.textContent).toContain("No activity recorded in this UTC window.");
+    expect(statValue(zeroContainer, "People")).toBe("0");
+    const empty = zeroContainer.querySelector(".pk-empty-state");
+    expect(empty?.getAttribute("role")).toBe("status");
+    expect(empty?.textContent).toContain("No activity recorded in this UTC window.");
   });
 });

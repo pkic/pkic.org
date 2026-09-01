@@ -1,0 +1,207 @@
+/*
+ * GENERATED FILE — do not edit.
+ *
+ * Source: assets/design/tokens.ts and assets/design/palette.ts
+ * Regenerate: pnpm run build:tokens
+ *
+ * `pnpm run check` fails if this file drifts from the module.
+ */
+@layer legacy, tokens, base, components, utilities;
+
+@layer tokens {
+  :root {
+    --pk-palette-green: #198754;
+    --pk-palette-emerald: #28a745;
+    --pk-palette-teal: #20c997;
+    --pk-palette-cyan: #17a2b8;
+    --pk-palette-blue: #5a9bd5;
+    --pk-palette-indigo: #667eea;
+    --pk-palette-purple: #6f42c1;
+    --pk-palette-violet: #9c27b0;
+    --pk-palette-rose: #e91e63;
+    --pk-palette-red: #dc3545;
+    --pk-palette-coral: #ff7f50;
+    --pk-palette-orange: #ed7d31;
+    --pk-palette-amber: #ffc107;
+    --pk-palette-yellow: #ffc000;
+
+    --pk-accent: #198754;
+    --pk-accent-2: #20c997;
+
+    --pk-1: 0.25rem;
+    --pk-2: 0.5rem;
+    --pk-3: 0.75rem;
+    --pk-4: 1rem;
+    --pk-5: 1.5rem;
+    --pk-6: 2rem;
+    --pk-7: 3rem;
+    --pk-8: 4rem;
+    --pk-font: "Roboto", system-ui, -apple-system, sans-serif;
+    --pk-font-mono: "Roboto Mono", ui-monospace, monospace;
+    --pk-text-2xs: 0.6875rem;
+    --pk-text-xs: 0.75rem;
+    --pk-text-sm: 0.8125rem;
+    --pk-text-md: 0.875rem;
+    --pk-text-lg: 1rem;
+    --pk-text-xl: 1.25rem;
+    --pk-text-2xl: 1.5rem;
+    --pk-text-3xl: 2rem;
+    --pk-tracking-label: 0.12em;
+    --pk-radius-sm: 4px;
+    --pk-radius: 6px;
+    --pk-radius-lg: 10px;
+    --pk-radius-pill: 999px;
+    --pk-dur-fast: 120ms;
+    --pk-dur: 220ms;
+    --pk-dur-slow: 520ms;
+    --pk-ease: cubic-bezier(0.16, 0.84, 0.28, 1);
+    --pk-dur-spin: 700ms;
+    --pk-dur-shimmer: 1400ms;
+    --pk-dur-instant: 1ms;
+    --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent);
+    --pk-on-solid: #ffffff;
+    --pk-on-solid-ink: #212529;
+    --pk-danger-strong: color-mix(in oklab, var(--pk-danger) 62%, #000);
+    --pk-accent-on: var(--pk-on-solid);
+    --pk-grad-tonal: linear-gradient(135deg, var(--pk-accent-deep), var(--pk-accent-lift));
+    --pk-grad-duo: linear-gradient(135deg, var(--pk-accent-deep) 0%, var(--pk-accent) 45%, var(--pk-accent-2) 100%);
+    --pk-grad-brand: linear-gradient(135deg, #198754 0%, #5a9bd5 50%, #ed7d31 100%);
+    --pk-stripe: linear-gradient(90deg, #198754 0%, #5a9bd5 50%, #ed7d31 100%);
+
+    --pk-control-y: 0.4rem;
+    --pk-control-x: 0.75rem;
+    --pk-row-y: 0.55rem;
+    --pk-stack: 1rem;
+
+    --pk-canvas: #f5f6f7;
+    --pk-surface: #ffffff;
+    --pk-surface-sunk: #f8f9fa;
+    --pk-surface-raise: #ffffff;
+    --pk-ink: #212529;
+    --pk-ink-muted: #6c757d;
+    --pk-ink-faint: #868e96;
+    --pk-ink-inverse: #ffffff;
+    --pk-line: #dee2e6;
+    --pk-line-soft: #e9ecef;
+    --pk-line-strong: #adb5bd;
+    --pk-overlay: rgba(33, 37, 41, 0.45);
+    --pk-ok: #198754;
+    --pk-ok-ink: #0f5132;
+    --pk-ok-soft: #e8f3ed;
+    --pk-warn: #b3760a;
+    --pk-warn-ink: #8a5a08;
+    --pk-warn-soft: #fdf3e3;
+    --pk-danger: #dc3545;
+    --pk-danger-ink: #a71d2a;
+    --pk-danger-soft: #fbeaec;
+    --pk-info: #2b6cb0;
+    --pk-info-ink: #1f4f83;
+    --pk-info-soft: #e8f0f9;
+    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 12%, #fff);
+    --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 72%, #000);
+    --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 80%, #fff);
+    --pk-grad-sheen: linear-gradient(160deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 45%);
+    --pk-shadow-1: 0 1px 2px rgba(16, 24, 32, 0.06);
+    --pk-shadow-2: 0 2px 8px rgba(16, 24, 32, 0.08), 0 1px 2px rgba(16, 24, 32, 0.04);
+    --pk-shadow-3: 0 12px 32px rgba(16, 24, 32, 0.14), 0 2px 8px rgba(16, 24, 32, 0.06);
+  }
+
+  /* The un-stamped document is the common case: most viewers never choose a
+     theme, so only prefers-color-scheme separates them. Guarding on
+     :not([data-theme="light"]) lets an explicit light choice beat a dark OS. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --pk-canvas: #121417;
+      --pk-surface: #1a1e22;
+      --pk-surface-sunk: #16191d;
+      --pk-surface-raise: #22272c;
+      --pk-ink: #e9ecef;
+      --pk-ink-muted: #9aa3ab;
+      --pk-ink-faint: #6c757d;
+      --pk-ink-inverse: #10141a;
+      --pk-line: #2f353b;
+      --pk-line-soft: #262b31;
+      --pk-line-strong: #4a5259;
+      --pk-overlay: rgba(0, 0, 0, 0.62);
+      --pk-ok: #3ec98c;
+      --pk-ok-ink: #6fd8a4;
+      --pk-ok-soft: #16281f;
+      --pk-warn: #e0a94f;
+      --pk-warn-ink: #edc07a;
+      --pk-warn-soft: #2a2415;
+      --pk-danger: #f0757f;
+      --pk-danger-ink: #f59aa1;
+      --pk-danger-soft: #2c191c;
+      --pk-info: #7cb0f5;
+      --pk-info-ink: #a0c7f8;
+      --pk-info-soft: #16202e;
+      --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+      --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
+      --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
+      --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
+      --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);
+      --pk-grad-sheen: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 45%);
+      --pk-shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+      --pk-shadow-2: 0 2px 8px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3);
+      --pk-shadow-3: 0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+    }
+  }
+
+  /* Stamped explicitly, so the toggle also wins in the other direction. */
+  :root[data-theme="dark"] {
+    --pk-canvas: #121417;
+    --pk-surface: #1a1e22;
+    --pk-surface-sunk: #16191d;
+    --pk-surface-raise: #22272c;
+    --pk-ink: #e9ecef;
+    --pk-ink-muted: #9aa3ab;
+    --pk-ink-faint: #6c757d;
+    --pk-ink-inverse: #10141a;
+    --pk-line: #2f353b;
+    --pk-line-soft: #262b31;
+    --pk-line-strong: #4a5259;
+    --pk-overlay: rgba(0, 0, 0, 0.62);
+    --pk-ok: #3ec98c;
+    --pk-ok-ink: #6fd8a4;
+    --pk-ok-soft: #16281f;
+    --pk-warn: #e0a94f;
+    --pk-warn-ink: #edc07a;
+    --pk-warn-soft: #2a2415;
+    --pk-danger: #f0757f;
+    --pk-danger-ink: #f59aa1;
+    --pk-danger-soft: #2c191c;
+    --pk-info: #7cb0f5;
+    --pk-info-ink: #a0c7f8;
+    --pk-info-soft: #16202e;
+    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
+    --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
+    --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
+    --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
+    --pk-accent-lift: color-mix(in oklab, var(--pk-accent) 62%, #fff);
+    --pk-grad-sheen: linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 45%);
+    --pk-shadow-1: 0 1px 2px rgba(0,0,0,0.4);
+    --pk-shadow-2: 0 2px 8px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3);
+    --pk-shadow-3: 0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  [data-density="compact"] {
+    --pk-control-y: 0.25rem;
+    --pk-control-x: 0.6rem;
+    --pk-row-y: 0.32rem;
+    --pk-stack: 0.75rem;
+  }
+
+  [data-radius="sharp"] {
+    --pk-radius-sm: 2px;
+    --pk-radius: 3px;
+    --pk-radius-lg: 4px;
+  }
+
+  [data-radius="round"] {
+    --pk-radius-sm: 8px;
+    --pk-radius: 12px;
+    --pk-radius-lg: 18px;
+  }
+}

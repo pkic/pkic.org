@@ -3,6 +3,12 @@ import type { FormField } from "../types";
 import { optionsFor, readRules, type FieldRules } from "./custom-field-rules";
 import { COUNTRIES } from "../countries";
 import { isAllowedProfileUrl } from "../../../shared/schemas/form-field-rules";
+import { Button } from "../../ui/Button";
+// The control classes — `pk-input`, `pk-input--select`, and the three-part
+// check block — are written here as class names rather than reached through
+// `ui/Field`, because this module renders the bare control that somebody
+// else's row labels. Writing the names means importing their stylesheet.
+import "../../ui/Field.css";
 
 // ── Validation helpers ────────────────────────────────────────────────────
 
@@ -88,12 +94,18 @@ function shuffled<T>(arr: T[]): T[] {
 
 // ── Widget components ─────────────────────────────────────────────────────
 
+/**
+ * A lone checkbox. Its word is the row's own `<label for>` beside it, not a
+ * `pk-check__label` inside a wrapping label, so only the input's half of the
+ * check block applies here — the drawn box, with the name coming through the
+ * `for`/`id` pair the row already establishes.
+ */
 function BooleanInput({ field }: { field: FormField; initialValue?: unknown }) {
   return (
     <input
       type="checkbox"
       name={`custom.${field.key}`}
-      class="form-check-input"
+      class="pk-check__input"
       id={`custom-${field.key}`}
       required={field.required}
     />
@@ -103,7 +115,12 @@ function BooleanInput({ field }: { field: FormField; initialValue?: unknown }) {
 function SelectInput({ field, rules }: { field: FormField; rules: FieldRules }) {
   const firstLabel = rules.placeholder?.trim() || "Please select";
   return (
-    <select name={`custom.${field.key}`} class="form-select" id={`custom-${field.key}`} required={field.required}>
+    <select
+      name={`custom.${field.key}`}
+      class="pk-input pk-input--select"
+      id={`custom-${field.key}`}
+      required={field.required}
+    >
       <option value="">{firstLabel}</option>
       {optionsFor(field).map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -117,20 +134,23 @@ function SelectInput({ field, rules }: { field: FormField; rules: FieldRules }) 
 function MultiSelectCheckboxes({ field }: { field: FormField }) {
   const options = optionsFor(field);
   return (
-    <div class="event-flow-checkbox-group">
+    // Named as one group, so the set is announced as the question it answers
+    // rather than as a run of unrelated checkboxes. The gap between the boxes
+    // is the stack's, not a margin on each one.
+    <div class="event-flow-checkbox-group pk-stack pk-stack--snug" role="group" aria-label={field.label}>
       {options.map((option, index) => (
-        <div key={option.value} class="form-check mb-2">
+        // All three parts of the check block: the label, the input and the
+        // word. `pk-check` on its own renders the operating system's control.
+        <label key={option.value} class="pk-check" for={`custom-${field.key}-${index}`}>
           <input
             type="checkbox"
-            class="form-check-input"
+            class="pk-check__input"
             name={`custom.${field.key}[]`}
             value={option.value}
             id={`custom-${field.key}-${index}`}
           />
-          <label class="form-check-label" for={`custom-${field.key}-${index}`}>
-            {option.label}
-          </label>
-        </div>
+          <span class="pk-check__label">{option.label}</span>
+        </label>
       ))}
     </div>
   );
@@ -242,7 +262,10 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
         <input
           ref={textRef}
           type="text"
-          class="form-control"
+          class="pk-input"
+          // The row's label points at this id. Without it the label named
+          // nothing, because the field's value lives in a hidden input.
+          id={`custom-${field.key}`}
           placeholder={rules.placeholder ?? "Type a topic and press Enter"}
           autocomplete="off"
           list={datalistId}
@@ -258,9 +281,9 @@ function TagPicker({ field, rules, initialValue }: { field: FormField; rules: Fi
             }
           }}
         />
-        <button type="button" class="btn btn-outline-secondary btn-sm" onClick={() => addValue(inputValue)}>
+        <Button variant="secondary" size="sm" onClick={() => addValue(inputValue)}>
           Add
-        </button>
+        </Button>
       </div>
 
       {/* Suggestion chips (shuffled to avoid bias) */}
@@ -302,9 +325,13 @@ function RatingButtons({
   const select = useCallback((v: number) => {
     if (hiddenRef.current) hiddenRef.current.value = String(v);
     const buttons = wrapperRef.current?.querySelectorAll<HTMLButtonElement>("button[data-value]");
-    buttons?.forEach((btn) => {
-      btn.classList.toggle("btn-primary", btn.dataset.value === String(v));
-      btn.classList.toggle("btn-outline-secondary", btn.dataset.value !== String(v));
+    buttons?.forEach((button) => {
+      const chosen = button.dataset.value === String(v);
+      button.classList.toggle("pk-btn--primary", chosen);
+      button.classList.toggle("pk-btn--secondary", !chosen);
+      // The chosen score was a fill and nothing else, which says nothing to a
+      // reader who cannot see it. `aria-pressed` states it.
+      button.setAttribute("aria-pressed", chosen ? "true" : "false");
     });
   }, []);
 
@@ -319,7 +346,7 @@ function RatingButtons({
   }, [initialValue, select]);
 
   return (
-    <div ref={wrapperRef} class="event-flow-rating d-flex flex-wrap gap-2">
+    <div ref={wrapperRef} class="event-flow-rating pk-cluster" role="group" aria-label={field.label}>
       <input ref={hiddenRef} type="hidden" name={`custom.${field.key}`} data-custom-widget="rating" />
       {Array.from({ length: max - min + 1 }, (_, i) => {
         const v = min + i;
@@ -327,8 +354,9 @@ function RatingButtons({
           <button
             key={v}
             type="button"
-            class="btn btn-sm btn-outline-secondary"
+            class="pk-btn pk-btn--sm pk-btn--secondary"
             data-value={String(v)}
+            aria-pressed="false"
             onClick={() => select(v)}
           >
             {v}
@@ -362,7 +390,7 @@ function CountrySelect({ field, rules, geoHint }: { field: FormField; rules: Fie
       <select
         ref={selectRef}
         name={`custom.${field.key}`}
-        class="form-select"
+        class="pk-input pk-input--select"
         id={`custom-${field.key}`}
         required={field.required}
         onChange={() => setHintVisible(false)}
@@ -374,22 +402,35 @@ function CountrySelect({ field, rules, geoHint }: { field: FormField; rules: Fie
           </option>
         ))}
       </select>
-      <div class="event-flow-country-hint form-text" hidden={!hintVisible} aria-live="polite">
+      <div class="event-flow-country-hint pk-small" hidden={!hintVisible} aria-live="polite">
         {hintVisible && "Detected from your network — change if needed"}
       </div>
     </div>
   );
 }
 
+/**
+ * Two dates side by side. The row's own label points at `custom-<key>`, which
+ * neither of these inputs can be, so each one names itself — without that a
+ * screen reader announced two unlabelled date fields.
+ */
 function DateRangeInput({ field }: { field: FormField }) {
   return (
-    <div class="row g-2">
-      <div class="col-md-6">
-        <input type="date" class="form-control" name={`custom.${field.key}.start`} required={field.required} />
-      </div>
-      <div class="col-md-6">
-        <input type="date" class="form-control" name={`custom.${field.key}.end`} required={field.required} />
-      </div>
+    <div class="pk-grid pk-grid--tight">
+      <input
+        type="date"
+        class="pk-input"
+        name={`custom.${field.key}.start`}
+        aria-label={`${field.label} — start date`}
+        required={field.required}
+      />
+      <input
+        type="date"
+        class="pk-input"
+        name={`custom.${field.key}.end`}
+        aria-label={`${field.label} — end date`}
+        required={field.required}
+      />
     </div>
   );
 }
@@ -401,7 +442,7 @@ function TextAreaInput({ field, rules }: { field: FormField; rules: FieldRules }
       ref={validationRef as preact.RefObject<HTMLTextAreaElement>}
       name={`custom.${field.key}`}
       rows={4}
-      class="form-control"
+      class="pk-input pk-input--textarea"
       id={`custom-${field.key}`}
       {...commonInputProps(field, rules)}
     />
@@ -423,7 +464,7 @@ function TextInput({ field, rules }: { field: FormField; rules: FieldRules }) {
       ref={validationRef as preact.RefObject<HTMLInputElement>}
       type={type}
       name={`custom.${field.key}`}
-      class="form-control"
+      class="pk-input"
       id={`custom-${field.key}`}
       {...commonInputProps(field, rules)}
     />

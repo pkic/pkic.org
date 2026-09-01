@@ -4,6 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupFormDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupFormDetail";
 import { GroupFormEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormEditor";
+import { controlFor, typeInto } from "./helpers/labelled-control";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -49,6 +51,10 @@ function setValue(element: HTMLInputElement, value: string): void {
   element.value = value;
   element.dispatchEvent(new Event("input", { bubbles: true }));
 }
+
+/** The per-field row names its controls with aria-label, not a visible label. */
+const FIELD_KEY_INPUT = 'input[aria-label="Field key (lowercase, letters, digits, underscores)"]';
+const FIELD_LABEL_INPUT = 'input[aria-label="Field label"]';
 
 function detail(ownerGroupId: string, capabilities: string[]) {
   return {
@@ -123,13 +129,13 @@ describe("group form management", () => {
       <GroupFormEditor groupId={GROUP_ID} detail={null} onSaved={() => undefined} onCancel={() => undefined} />,
     );
     await settle();
-    setValue(container.querySelector<HTMLInputElement>("input.mono:not(.adm-fkey-input)")!, "member-survey");
+    await typeInto(controlFor(container, "Key"), "member-survey");
     await settle();
-    setValue(container.querySelector<HTMLInputElement>(".col-md-4 input")!, "Member survey");
+    await typeInto(controlFor(container, "Title"), "Member survey");
     await settle();
-    setValue(container.querySelector<HTMLInputElement>(".adm-fkey-input")!, "priority");
+    setValue(container.querySelector<HTMLInputElement>(FIELD_KEY_INPUT)!, "priority");
     await settle();
-    setValue(container.querySelector<HTMLInputElement>(".adm-flabel-input")!, "Priority");
+    setValue(container.querySelector<HTMLInputElement>(FIELD_LABEL_INPUT)!, "Priority");
     await settle();
     await act(async () => {
       container
@@ -156,7 +162,7 @@ describe("group form management", () => {
 
     expect(container.textContent).toContain("Save availability");
     expect(container.textContent).not.toContain("Edit form");
-    expect(container.querySelector(".adm-fkey-input")).toBeNull();
+    expect(container.querySelector(FIELD_KEY_INPUT)).toBeNull();
   });
 
   it("does not fetch statistics for the default respond tab", async () => {
@@ -239,6 +245,55 @@ describe("group form management", () => {
     expect(listRequest?.searchParams.get("sort")).toBe("-submitted_at");
   });
 
+  it("names the form panel and its tab strip, and points the tabs at real URLs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(detail(GROUP_ID, ["view_definition", "manage", "view_responses", "submit"]))),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    // The panel is labelled by the heading that names the form, so the row it
+    // expands inside is not an unnamed region among the others.
+    const panel = container.querySelector("section")!;
+    const headingId = panel.getAttribute("aria-labelledby")!;
+    expect(container.querySelector(`[id="${headingId}"]`)?.textContent).toContain("Architecture survey");
+
+    // The strip says which set of tabs it is; a page can hold several.
+    expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe("Architecture survey sections");
+    expect(tabs(container).length).toBeGreaterThan(1);
+  });
+
+  it("says a form could not be loaded instead of rendering an empty shell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "This form is no longer placed." } }), {
+            status: 404,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    expect(container.querySelector("nav")).toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("This form is no longer placed.");
+  });
+
+  it("explains a form nothing can be done with rather than showing a bare strip", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ ...detail(GROUP_ID, ["view_definition"]), acceptingResponses: false })),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    const status = container.querySelector('[role="status"]')!;
+    expect(status.textContent).toContain("No actions are available for this form.");
+  });
+
   it("opens the tab given by an initial resourceTab", async () => {
     vi.stubGlobal(
       "fetch",
@@ -255,10 +310,8 @@ describe("group form management", () => {
     );
     await settle();
 
-    const responsesTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Responses",
-    );
-    expect(responsesTab?.getAttribute("aria-selected")).toBe("true");
+    const responsesTab = tabs(container).find((item) => item.textContent === "Responses");
+    expect(isCurrentTab(responsesTab)).toBe(true);
   });
 
   it("navigates to the canonical placement tab URL when a tab is clicked", async () => {
@@ -272,9 +325,7 @@ describe("group form management", () => {
     );
     await settle();
 
-    const statisticsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Statistics",
-    )!;
+    const statisticsTab = tabs(container).find((item) => item.textContent === "Statistics")!;
     expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${PLACEMENT_ID}/statistics`);
 
     await act(async () => statisticsTab.click());

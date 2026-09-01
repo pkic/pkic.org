@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { tab } from "./helpers/tabs";
 
 const FORMS_API = "/api/v1/forms";
 const LEGACY_ADMIN_FORMS_API = "/api/v1/admin/forms";
@@ -62,7 +63,7 @@ test("permitted staff manage global forms through the canonical Forms resource",
   await expect(page.getByText(formTitle, { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/portal/#/forms/${formKey.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}$`));
 
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await tab(page, "Edit").click();
   const updatedTitle = `${formTitle} updated`;
   const detailEditor = page
     .locator("form")

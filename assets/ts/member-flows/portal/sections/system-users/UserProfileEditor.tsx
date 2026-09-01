@@ -1,6 +1,14 @@
 import { useState } from "preact/hooks";
 import { patchJson } from "../../../../shared/api-client";
-import { userRoleValueSchema, userUpdateResponseSchema } from "../../../../../shared/schemas/user-management";
+import {
+  userRoleValueSchema,
+  userUpdateResponseSchema,
+  userUpdateSchema,
+} from "../../../../../shared/schemas/user-management";
+import { FormActions } from "../../../../components/FormActions";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
 import type { UserDetail } from "./model";
 
@@ -14,6 +22,12 @@ type EditableUser = {
   isEcMember: boolean;
 };
 
+const NAME_FIELDS: Array<[string, keyof EditableUser]> = [
+  ["First name", "firstName"],
+  ["Last name", "lastName"],
+  ["Preferred name", "preferredName"],
+];
+
 function editFormFor(user: UserDetail): EditableUser {
   return {
     email: user.email,
@@ -24,6 +38,18 @@ function editFormFor(user: UserDetail): EditableUser {
     active: user.active,
     isEcMember: user.isEcMember ?? false,
   };
+}
+
+/**
+ * The address is checked against the canonical update contract rather than a
+ * second regular expression written here: a rejection the server would issue
+ * anyway is better said beside the control that caused it, and there is only
+ * one definition of what a valid address is.
+ */
+function emailProblem(email: string): string | null {
+  const trimmed = email.trim();
+  if (!trimmed) return null;
+  return userUpdateSchema.safeParse({ email: trimmed }).success ? null : "Enter a valid email address.";
 }
 
 export function UserProfileEditor({
@@ -40,6 +66,12 @@ export function UserProfileEditor({
   const [error, setError] = useState("");
   const [form, setForm] = useState<EditableUser>(() => editFormFor(user));
 
+  const emailError = canGrantAccess ? emailProblem(form.email) : null;
+
+  function update(patch: Partial<EditableUser>): void {
+    setForm((current) => ({ ...current, ...patch }));
+  }
+
   function startEditing() {
     setForm(editFormFor(user));
     setError("");
@@ -47,6 +79,7 @@ export function UserProfileEditor({
   }
 
   async function save() {
+    if (emailError) return;
     setSaving(true);
     setError("");
     try {
@@ -74,112 +107,117 @@ export function UserProfileEditor({
 
   if (!editing) {
     return (
-      <button class="btn btn-sm btn-outline-primary" onClick={startEditing}>
-        Edit profile
-      </button>
+      <div class="pk pk-cluster">
+        <Button size="sm" onClick={startEditing}>
+          Edit profile
+        </Button>
+      </div>
     );
   }
 
   return (
-    <div class="mt-3">
-      <div class="row g-2 mb-2">
-        {(
-          [
-            ["First name", "firstName"],
-            ["Last name", "lastName"],
-            ["Preferred name", "preferredName"],
-          ] as Array<[string, keyof EditableUser]>
-        ).map(([label, field]) => (
-          <div key={field} class="col-sm-6">
-            <label class="form-label small mb-1" for={`user-${field}`}>
-              {label}
-            </label>
-            <input
-              id={`user-${field}`}
-              type="text"
-              class="form-control form-control-sm"
-              value={form[field] as string}
-              onInput={(event) => setForm((current) => ({ ...current, [field]: event.currentTarget.value }))}
-              disabled={saving}
-            />
-          </div>
-        ))}
-        {canGrantAccess && (
-          <div class="col-12">
-            <label class="form-label small mb-1" for="user-email">
-              Email
-            </label>
-            <input
-              id="user-email"
-              type="email"
-              class="form-control form-control-sm"
-              value={form.email}
-              onInput={(event) => setForm((current) => ({ ...current, email: event.currentTarget.value }))}
-              disabled={saving}
-            />
-          </div>
-        )}
-        {canGrantAccess && (
-          <div class="col-sm-6">
-            <div class="form-label small mb-1">Role</div>
-            <div class="d-flex gap-3">
-              {userRoleValueSchema.options.map((role) => (
-                <div key={role} class="form-check mb-0">
-                  <input
-                    class="form-check-input"
-                    type="radio"
-                    id={`edit-role-${role}`}
-                    name="edit-role"
-                    checked={form.role === role}
-                    onChange={() => setForm((current) => ({ ...current, role }))}
-                    disabled={saving}
+    <div class="pk">
+      <form
+        class="pk-stack pk-stack--snug"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        {/* One `disabled` fieldset takes the whole form out of play while the
+            save is in flight, in place of the same prop on every control. */}
+        <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={saving}>
+          <div class="pk-grid pk-grid--tight">
+            {NAME_FIELDS.map(([label, field]) => (
+              <Field label={label} key={field}>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={form[field] as string}
+                    onInput={(event) => update({ [field]: event.currentTarget.value })}
                   />
-                  <label class="form-check-label small" for={`edit-role-${role}`}>
-                    {role}
+                )}
+              </Field>
+            ))}
+            {canGrantAccess && (
+              <Field
+                label="Email"
+                state={emailError ? "invalid" : undefined}
+                message={emailError ?? undefined}
+                help="Used to sign in. Leave unchanged to keep the current address."
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="email"
+                    value={form.email}
+                    onInput={(event) => update({ email: event.currentTarget.value })}
+                  />
+                )}
+              </Field>
+            )}
+          </div>
+
+          {canGrantAccess && (
+            <fieldset class="pk-fieldset pk-field">
+              <legend class="pk-field__label">Role</legend>
+              <div class="pk-cluster">
+                {userRoleValueSchema.options.map((role) => (
+                  <label class="pk-check" for={`edit-role-${role}`} key={role}>
+                    <input
+                      class="pk-check__input"
+                      type="radio"
+                      id={`edit-role-${role}`}
+                      name="edit-role"
+                      checked={form.role === role}
+                      onChange={() => update({ role })}
+                    />
+                    <span class="pk-check__label">{role}</span>
                   </label>
-                </div>
-              ))}
+                ))}
+              </div>
+            </fieldset>
+          )}
+
+          <fieldset class="pk-fieldset pk-field">
+            <legend class="pk-field__label">Standing</legend>
+            <div class="pk-stack pk-stack--tight">
+              <label class="pk-check" for="edit-active">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  id="edit-active"
+                  checked={form.active}
+                  onChange={(event) => update({ active: event.currentTarget.checked })}
+                />
+                <span class="pk-check__label">Active</span>
+              </label>
+              <label class="pk-check" for="edit-ec-member">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  id="edit-ec-member"
+                  checked={form.isEcMember}
+                  onChange={(event) => update({ isEcMember: event.currentTarget.checked })}
+                />
+                <span class="pk-check__label">Executive Council member</span>
+              </label>
             </div>
-          </div>
-        )}
-        <div class="col-sm-6">
-          <div class="form-check mt-4">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="edit-active"
-              checked={form.active}
-              onChange={(event) => setForm((current) => ({ ...current, active: event.currentTarget.checked }))}
-              disabled={saving}
-            />
-            <label class="form-check-label small" for="edit-active">
-              Active
-            </label>
-          </div>
-          <div class="form-check mt-2">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              id="edit-ec-member"
-              checked={form.isEcMember}
-              onChange={(event) => setForm((current) => ({ ...current, isEcMember: event.currentTarget.checked }))}
-              disabled={saving}
-            />
-            <label class="form-check-label small" for="edit-ec-member">
-              Executive Council member
-            </label>
-          </div>
-        </div>
-      </div>
-      {error && <div class="alert alert-danger small py-2 mb-2">{error}</div>}
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-primary" onClick={() => void save()} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => setEditing(false)} disabled={saving}>
-          Cancel
-        </button>
-      </div>
+          </fieldset>
+        </fieldset>
+
+        {/* The save/cancel pair, its busy state, and a failed save announced as
+            an alert rather than as red text, all from the shared component. */}
+        <FormActions
+          submitLabel="Save"
+          busyLabel="Saving…"
+          busy={saving}
+          disabled={Boolean(emailError)}
+          onCancel={() => setEditing(false)}
+          status={error || undefined}
+          statusVariant="danger"
+        />
+      </form>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { Leadership } from "../../assets/ts/member-flows/portal/sections/leadership/Leadership";
+import { confirmationButton } from "./helpers/confirm-dialog";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
@@ -77,10 +79,9 @@ describe("portal System leadership", () => {
     expect(container.textContent).toContain("Board of Directors");
     expect(container.textContent).toContain("Executive Council");
     expect(container.textContent).toContain("Ada Lovelace");
-    const rowActionsTrigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(rowActionsTrigger).toBeTruthy();
-    void act(() => rowActionsTrigger!.click());
-    expect(container.textContent).toContain("Remove position");
+    // A caller who may revoke but not grant gets exactly one row command, and
+    // it names the position holder it would remove.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
     expect(container.textContent).not.toContain("Edit position");
     expect(container.textContent).not.toContain("Add");
     expect(container.textContent).not.toContain("Group leadership");
@@ -142,24 +143,18 @@ describe("portal System leadership", () => {
     );
     await settle();
 
-    function openRowMenuAndSelectRemove() {
-      const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
-      void act(() => trigger.click());
-      void act(() => dialogButton(container, "Remove position").click());
-    }
-
-    // Cancel: the row menu's "Remove position" opens the confirm dialog, but
+    // Cancel: the row's "Remove position" opens the confirm dialog, but
     // dismissing it must not delete the position.
-    openRowMenuAndSelectRemove();
+    await runRowAction(container, "Ada Lovelace", "Remove position");
     expect(container.textContent).toContain("Remove Ada Lovelace (Board Chair)?");
     void act(() => dialogButton(container, "Cancel").click());
     await settle();
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
 
-    // Confirm: clicking the dialog's own "Remove position" button deletes it
-    // through the canonical route.
-    openRowMenuAndSelectRemove();
-    void act(() => dialogButton(container, "Remove position").click());
+    // Confirm: clicking the dialog's own "Remove position" button — not the
+    // row's, which reads the same — deletes it through the canonical route.
+    await runRowAction(container, "Ada Lovelace", "Remove position");
+    await act(() => confirmationButton("Remove position", container)?.click());
     await settle();
     const deleteRequest = requests.find((r) => r.method === "DELETE");
     expect(deleteRequest?.pathname).toBe(`/api/v1/leadership/positions/${positionId}`);

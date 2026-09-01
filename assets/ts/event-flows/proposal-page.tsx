@@ -45,12 +45,17 @@ function renderSessionTypes(root: HTMLElement, types: string[]): void {
         const id = `type-${type}`;
         const label = SESSION_TYPE_LABELS[type] ?? type.replace(/_/g, " ");
         return (
-          <>
-            <input class="btn-check" type="radio" name="proposalType" id={id} value={type} defaultChecked={i === 0} />
-            <label class="btn btn-outline-secondary btn-sm" htmlFor={id}>
-              {label}
-            </label>
-          </>
+          <label class="pk-check" htmlFor={id}>
+            <input
+              class="pk-check__input"
+              type="radio"
+              name="proposalType"
+              id={id}
+              value={type}
+              defaultChecked={i === 0}
+            />
+            <span class="pk-check__label">{label}</span>
+          </label>
         );
       })}
     </>,
@@ -208,7 +213,7 @@ function showSuccessPanel(
   eventName: string,
   eventSlug: string,
 ): void {
-  form.classList.add("d-none");
+  form.hidden = true;
 
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
@@ -221,12 +226,12 @@ function showSuccessPanel(
       </p>
       {result.manageUrl && (
         <p>
-          <a href={result.manageUrl} class="btn btn-outline-secondary btn-sm">
+          <a href={result.manageUrl} class="pk-btn pk-btn--secondary pk-btn--sm">
             Manage your proposal →
           </a>
         </p>
       )}
-      <p class="text-muted small">
+      <p class="pk-small">
         Speakers you listed will each receive a personal email with a private link to confirm their participation,
         complete their profile, and upload a headshot once accepted. If there is context about additional potential
         speakers, include that in your proposal notes or follow up with the program team.
@@ -367,7 +372,10 @@ async function main(): Promise<void> {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    form.classList.add("was-validated");
+    // `validateBeforeSubmit` marks the form as validated itself; adding the
+    // class here as well was a second owner for the same state. Consent cards
+    // draw their own error from the platform's `invalid` event, which
+    // `syncConsentValidation` triggers, so nothing here depended on the class.
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) return;
 

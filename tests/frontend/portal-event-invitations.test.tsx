@@ -7,6 +7,8 @@ import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+import { controlFor } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -127,21 +129,6 @@ async function waitForElement<T extends Element>(find: () => T | null): Promise<
   throw new Error("Expected element was not rendered.");
 }
 
-async function openRowMenu(container: HTMLElement, ariaLabel: string): Promise<void> {
-  const trigger = await waitForElement(() =>
-    container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`),
-  );
-  await act(() => trigger.click());
-}
-
-function menuItem(container: HTMLElement, label: string): HTMLButtonElement | null {
-  return (
-    [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === label,
-    ) ?? null
-  );
-}
-
 function confirmDialogButton(label: string): HTMLButtonElement {
   const dialog = document.querySelector('[role="alertdialog"]');
   if (!dialog) throw new Error("no confirm dialog is open");
@@ -196,13 +183,19 @@ describe("portal event invitations", () => {
     const listPath = `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites`;
     expect(requests[0]).toMatchObject({ method: "GET", url: expect.objectContaining({ pathname: listPath }) });
 
-    const status = container.querySelector<HTMLSelectElement>('select[aria-label="Invitation status"]')!;
+    // The filter names the set it narrows: two of these panels can sit on one
+    // tab, and two controls both called "Invitation status" are the same
+    // control twice to anyone moving between them.
+    const status = container.querySelector<HTMLSelectElement>('select[aria-label="Attendee invitation status"]')!;
     status.value = "sent";
     status.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("status")).toBe("sent");
 
-    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search invitations…"]')!;
+    // Located through its label, which now names the list it searches, because
+    // a page with several collections used to offer several fields all called
+    // "Search".
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!;
     search.value = "ada";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     await settle();
@@ -221,8 +214,9 @@ describe("portal event invitations", () => {
     expect(requests.at(-1)?.url.searchParams.get("limit")).toBe("50");
     expect(requests.at(-1)?.url.searchParams.get("offset")).toBe("0");
 
-    await openRowMenu(container, "Actions for Ada Lovelace");
-    await act(async () => menuItem(container, "Resend invitation")!.click());
+    // Two actions, so this row collapses into its menu; the helper finds it
+    // there without the test having to know that.
+    await runRowAction(container, "Ada Lovelace", "Resend invitation");
     await settle();
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -236,8 +230,7 @@ describe("portal event invitations", () => {
     expect(resendRequest?.body).toBe("{}");
     expect(container.textContent).toContain("Invitation resent to Ada Lovelace.");
 
-    await openRowMenu(container, "Actions for Ada Lovelace");
-    await act(async () => menuItem(container, "Revoke invitation")!.click());
+    await runRowAction(container, "Ada Lovelace", "Revoke invitation");
     await act(async () => confirmDialogButton("Revoke invitation").click());
     await settle();
     expect(requests).toContainEqual(
@@ -264,10 +257,12 @@ describe("portal event invitations", () => {
 
     const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
     await settle();
-    await openRowMenu(container, "Actions for Ada Lovelace");
-    expect(menuItem(container, "Revoke invitation")).toBeNull();
+    // Revoke is not authorized here, so resend is the row's only action —
+    // still behind the row's menu, whose trigger names the invitee so a page
+    // of rows is a page of distinguishable controls.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
 
-    await act(async () => menuItem(container, "Resend invitation")!.click());
+    await runRowAction(container, "Ada Lovelace", "Resend invitation");
     await settle();
     expect(resend).toBe(true);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Invitation is no longer pending.");
@@ -454,7 +449,14 @@ describe("portal event invitations", () => {
     expect(manager.textContent).toContain("Attendee invitations");
   });
 
-  it("uses distinct resend deadline controls for attendee and speaker invitations", async () => {
+  /**
+   * The two panels are the same component twice on one tab, so everything a
+   * reader navigates by has to tell them apart. The ids are generated by
+   * `Field` now, so this asserts the thing that actually matters: each
+   * deadline control is reached through its own `for`/`id` pair from a label
+   * that says which set it belongs to, and the two are different elements.
+   */
+  it("names the resend deadline, status filter and panel of each invitation set apart", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(response([]))),
@@ -466,13 +468,28 @@ describe("portal event invitations", () => {
       </>,
     );
     await settle();
-    const ids = Array.from(
-      container.querySelectorAll<HTMLInputElement>('input[id^="group-event-invite-deadline-"]'),
-    ).map((input) => input.id);
-    expect(ids).toEqual([
-      `group-event-invite-deadline-${EVENT_ID}-attendee`,
-      `group-event-invite-deadline-${EVENT_ID}-speaker`,
-    ]);
-    expect(new Set(ids).size).toBe(ids.length);
+
+    const attendee = controlFor(container, "Attendee resend deadline");
+    const speaker = controlFor(container, "Speaker resend deadline");
+    expect(attendee.type).toBe("datetime-local");
+    expect(speaker.type).toBe("datetime-local");
+    expect(attendee.id).not.toBe(speaker.id);
+    expect(attendee).not.toBe(speaker);
+
+    // The help sentence is announced with the control rather than floating
+    // beside it, so the deadline's rule reaches a screen reader.
+    const describedBy = attendee.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain(
+      "cannot be later than the event end",
+    );
+
+    expect(Array.from(container.querySelectorAll("select")).map((select) => select.getAttribute("aria-label"))).toEqual(
+      ["Attendee invitation status", "Speaker invitation status"],
+    );
+
+    expect(
+      Array.from(container.querySelectorAll("section[aria-label]")).map((s) => s.getAttribute("aria-label")),
+    ).toContain("Speaker invitations");
   });
 });

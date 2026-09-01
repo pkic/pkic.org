@@ -1,0 +1,82 @@
+/*
+ * Toast.
+ *
+ * A transient confirmation message. The tone is resolved through a modifier
+ * class that sets the --tone local variable, which the dot and action button
+ * use for their colours. The component uses role="status", not role="alert",
+ * because a toast is a confirmation, not an interruption.
+ */
+
+@layer components {
+  .pk-toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: var(--pk-control-y) var(--pk-control-x);
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-md);
+    color: var(--pk-ink);
+  }
+
+  .pk-toast__dot {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    background: var(--tone);
+    border-radius: 50%;
+  }
+
+  .pk-toast__message {
+    flex: 1;
+  }
+
+  .pk-toast__action {
+    flex: none;
+    padding: 0 0.5rem;
+    background: transparent;
+    color: var(--tone);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius-sm);
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color var(--pk-dur-fast),
+      color var(--pk-dur-fast);
+  }
+
+  .pk-toast__action:hover {
+    background: color-mix(in srgb, var(--tone) 10%, transparent);
+  }
+
+  .pk-toast__dismiss {
+    flex: none;
+    padding: 0 0.5rem;
+    background: transparent;
+    color: var(--pk-ink-muted);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius-sm);
+    font-size: var(--pk-text-md);
+    cursor: pointer;
+    transition: color var(--pk-dur-fast);
+  }
+
+  .pk-toast__dismiss:hover {
+    color: var(--pk-ink);
+  }
+
+  /* Tone modifiers */
+  .pk-toast--ok {
+    --tone: var(--pk-ok);
+  }
+
+  .pk-toast--info {
+    --tone: var(--pk-info);
+  }
+
+  .pk-toast--danger {
+    --tone: var(--pk-danger);
+  }
+}

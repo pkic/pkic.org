@@ -1,7 +1,9 @@
+import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { definitionFor } from "./helpers/definition-list";
 
 test("permitted staff manage organizations through the canonical domain API", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -21,14 +23,42 @@ test("permitted staff manage organizations through the canonical domain API", as
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
-  await page.locator("#organization-create-name").fill(organizationName);
-  await page.locator("#organization-create-category").selectOption("F");
-  await page.locator("#organization-create-member-since").fill("2026-01-15");
-  await page.locator("#organization-create-website").fill("https://example.invalid");
-  await page.locator("#organization-create-identity-name-0").fill("Primary Representative");
-  await page.locator("#organization-create-identity-email-0").fill(primaryEmail);
-  await page.locator("#organization-create-identity-title-0").fill("Security Engineer");
-  await page.locator("#organization-create-activation-reason").fill("E2E organization setup");
+
+  // Creation is its own view: the directory table is gone, not layered above
+  // the form, and "new" is a reserved id in the /organizations/:id route.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+  await expect(page.locator("tbody tr")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
+
+  // The way back leaves the page without creating anything, and the browser's
+  // Back button does the same, because creation has an address of its own.
+  await page.getByRole("button", { name: "← All organizations", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+
+  // Located by the names the form announces — the region, its grouped
+  // fieldsets, and each control's label — rather than by generated ids.
+  const createForm = page.getByRole("region", { name: "Add organization" });
+  const organizationGroup = createForm.getByRole("group", { name: "Organization", exact: true });
+  await organizationGroup.getByLabel("Organization name").fill(organizationName);
+  await organizationGroup.getByLabel("Membership category").selectOption("F");
+  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  await createForm.getByRole("group", { name: "Web presence" }).getByLabel("Website").fill("https://example.invalid");
+  // People are optional and the form starts with none; the activation reason
+  // only exists once a person has been added, because only that path skips
+  // the invitation flow.
+  await expect(createForm.getByLabel("Reason for activating without an invitation")).toHaveCount(0);
+  await createForm.getByRole("button", { name: "Add person", exact: true }).click();
+  const firstPerson = createForm.getByRole("group", { name: "Person 1" });
+  await firstPerson.getByLabel("Name").fill("Primary Representative");
+  await firstPerson.getByLabel("Email").fill(primaryEmail);
+  await firstPerson.getByLabel("Job title").fill("Security Engineer");
+  await createForm.getByLabel("Reason for activating without an invitation").fill("E2E organization setup");
 
   const createResponse = page.waitForResponse(
     (response) =>
@@ -37,16 +67,26 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.getByRole("button", { name: "Create organization" }).click();
   expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();
 
-  await page.getByRole("cell", { name: new RegExp(organizationName) }).click();
+  // Success navigates straight to the created organization's own detail view,
+  // which opens with one statement of the record and its facets as tabs.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/[0-9a-fA-F-]{36}$/);
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
+
+  // The roster is the Identities facet; its bounded query runs when the tab
+  // is selected, not on first paint.
+  await page.getByRole("tab", { name: "Identities" }).click();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Add new person", exact: true }).click();
-  await page.locator("#organization-identity-name").fill("Secondary Representative");
-  await page.locator("#organization-identity-email").fill(secondaryEmail);
-  await page.locator("#organization-identity-job-title").fill("Program Manager");
+  // Located by the group's accessible name and each control's label rather
+  // than by ids the surface used to hand out, so this keeps working the next
+  // time the markup moves.
+  const newPerson = page.getByRole("group", { name: "New person" });
+  await newPerson.getByLabel("Name").fill("Secondary Representative");
+  await newPerson.getByLabel("Email").fill(secondaryEmail);
+  await newPerson.getByLabel("Job title").fill("Program Manager");
   const associateResponse = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/identities$/.test(new URL(response.url()).pathname) &&
@@ -55,6 +95,18 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.getByRole("button", { name: "Add", exact: true }).click();
   expect((await associateResponse).status()).toBe(201);
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
+
+  // The sponsorships facet answers "which sponsorships" from the canonical
+  // staff pipeline list, bounded to this organization — an honest empty state
+  // here, since this organization has none.
+  const sponsorshipsResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/v1/sponsors" && response.request().method() === "GET",
+  );
+  await page.getByRole("tab", { name: "Sponsorships" }).click();
+  const sponsorshipsUrl = new URL((await sponsorshipsResponse).url());
+  expect(sponsorshipsUrl.searchParams.get("visibility")).toBe("all");
+  expect(sponsorshipsUrl.searchParams.get("organizationId")).toBeTruthy();
+  await expect(page.getByText("No sponsorships", { exact: true })).toBeVisible();
 
   // Ordinary additions are invitations. The exact user must accept before
   // this identity grants organization or group capacity or exposes its
@@ -82,10 +134,15 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(secondaryUserRow).toContainText("Member · 1 active identity");
   await expect(secondaryUserRow).not.toContainText(organizationName);
   await secondaryUserRow.click();
-  await expect(page.locator(".page-heading")).toHaveText("Secondary Representative");
-  const capacityCard = page.locator(".border.rounded.p-3").filter({ hasText: organizationName });
-  await expect(capacityCard).toContainText(secondaryEmail);
-  await expect(capacityCard).toContainText("Program Manager");
+  // Located by role rather than by the class the record used to carry: the
+  // user's name is a real heading now.
+  await expect(page.getByRole("heading", { name: "Secondary Representative", level: 2 })).toBeVisible();
+  // The acting identity is a description list, not a bordered card, so each
+  // value is asserted under the label it answers rather than as text somewhere
+  // inside `.border.rounded.p-3` — Bootstrap class names that are now gone.
+  await expect(definitionFor(page, "Organization")).toHaveText(organizationName);
+  await expect(definitionFor(page, "Identity email")).toHaveText(secondaryEmail);
+  await expect(definitionFor(page, "Job title")).toHaveText("Program Manager");
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   await expect(page.locator("#user-organizationName")).toHaveCount(0);
   await expect(page.locator("#user-jobTitle")).toHaveCount(0);
@@ -106,14 +163,15 @@ test("permitted staff manage organizations through the canonical domain API", as
       /\/api\/v1\/organizations\/[^/]+\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "PATCH",
   );
-  await representativeRow.getByRole("button", { name: "Actions for Secondary Representative" }).click();
-  await page.getByRole("menuitem", { name: "End identity" }).click();
+  await runRowAction(page, representativeRow, "End identity");
   await acceptConfirmDialog(page, "End identity");
   expect((await removeResponse).status()).toBe(200);
 
   representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
   await expect(representativeRow).toContainText("Ended");
-  await expect(representativeRow.getByRole("button", { name: "Actions for Secondary Representative" })).toHaveCount(0);
+  // An ended identity offers nothing to do — neither an inline action nor a menu.
+  await expect(representativeRow.getByRole("button", { name: "End identity" })).toHaveCount(0);
+  await expect(representativeRow.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
 
   expect(canonicalRequests).toEqual(
     expect.arrayContaining([

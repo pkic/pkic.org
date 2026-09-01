@@ -3,6 +3,8 @@
  * 403") and machine codes never reach the reader: known situations get real
  * copy, and anything unrecognized keeps its message but is stated plainly.
  */
+import { Alert } from "../ui/Alert";
+
 interface ErrorAlertProps {
   error: string | Error | null | undefined;
 }
@@ -30,10 +32,10 @@ export function friendlyErrorMessage(raw: string): string {
 
 export function ErrorAlert({ error }: ErrorAlertProps) {
   if (!error) return null;
-  const msg = error instanceof Error ? error.message : error;
+  const message = error instanceof Error ? error.message : error;
   return (
-    <div class="alert alert-danger" role="alert" aria-live="assertive">
-      {friendlyErrorMessage(msg)}
+    <div class="pk">
+      <Alert tone="danger">{friendlyErrorMessage(message)}</Alert>
     </div>
   );
 }

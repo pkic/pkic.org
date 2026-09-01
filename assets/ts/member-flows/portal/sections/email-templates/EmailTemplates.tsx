@@ -1,7 +1,12 @@
 import { useState, useEffect } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../components/EmptyState";
+import { Badge as ToneBadge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field, type FieldState } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
@@ -14,6 +19,14 @@ import {
 } from "../../../../../shared/schemas/email-templates";
 import { TemplateEditor } from "./EmailTemplateEditor";
 import { EMAIL_TEMPLATES_API, getEmailTemplateEditorVersion } from "../../../../shared/email-template-catalog";
+
+// The key, the subject and the body are code, so they are set in `pk-mono`.
+// Content.css rides a lazy chunk rather than the entry stylesheet, so the
+// module that writes the class has to import it or the text renders in the
+// body face.
+import "../../../../ui/Content.css";
+
+const TEMPLATE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 // ────────────────────────────────────────────────────────
 // Create new template
@@ -43,7 +56,7 @@ function CreateTemplate({
       setKeyCheckStatus("idle");
       return;
     }
-    if (!key || !/^[a-z][a-z0-9_]*$/.test(key)) {
+    if (!key || !TEMPLATE_KEY_PATTERN.test(key)) {
       setKeyCheckStatus("idle");
       return;
     }
@@ -57,11 +70,17 @@ function CreateTemplate({
   }, [key]);
 
   const keyError =
-    key && !/^[a-z][a-z0-9_]*$/.test(key)
+    key && !TEMPLATE_KEY_PATTERN.test(key)
       ? "Use lowercase letters, digits, and underscores only (must start with a letter)"
       : keyCheckStatus === "exists"
         ? "A template with this key already exists"
         : null;
+
+  // A checked-and-good key gets a state of its own rather than a green border:
+  // Field draws each state as a mark as well as a hue, and only the blocking
+  // one sets aria-invalid.
+  const keyState: FieldState | undefined = keyError ? "invalid" : keyCheckStatus === "available" ? "ok" : undefined;
+  const keyMessage = keyError ?? (keyCheckStatus === "available" ? "Key is available" : undefined);
 
   async function doCreate() {
     if (!key || keyError) {
@@ -98,101 +117,105 @@ function CreateTemplate({
   }
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white d-flex align-items-center justify-content-between">
-        <span class="fw-semibold">Create New Template</span>
-        {showCancel && (
-          <button class="btn btn-sm btn-secondary" onClick={onCancel}>
-            ← Back to list
-          </button>
-        )}
-      </div>
-      <div class="card-body adm-template-create-form">
-        <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1" for="email-template-key">
-            Template key
-          </label>
-          <input
-            id="email-template-key"
-            type="text"
-            class={`form-control form-control-sm font-monospace${keyError ? " is-invalid" : keyCheckStatus === "available" ? " is-valid" : ""}`}
-            value={key}
-            placeholder="e.g. speaker_confirmation"
-            onInput={(e) => setKey((e.target as HTMLInputElement).value)}
-          />
-          {keyError && <div class="invalid-feedback">{keyError}</div>}
-          {keyCheckStatus === "available" && <div class="valid-feedback">Key is available</div>}
-          <div class="form-text">
-            {keyCheckStatus === "checking"
-              ? "Checking availability…"
-              : "A unique identifier for this template. Cannot be changed later."}
+    <div class="pk pk-container pk-container--narrow">
+      <Panel>
+        <PanelHeader title="Create New Template">
+          {showCancel && (
+            <Button size="sm" onClick={onCancel}>
+              ← Back to list
+            </Button>
+          )}
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <Field
+            label="Template key"
+            required
+            state={keyState}
+            message={keyMessage}
+            help={
+              keyCheckStatus === "checking"
+                ? "Checking availability…"
+                : "A unique identifier for this template. Cannot be changed later."
+            }
+          >
+            {(control) => (
+              <TextInput
+                {...control}
+                class="pk-mono"
+                autocomplete="off"
+                value={key}
+                placeholder="e.g. speaker_confirmation"
+                onInput={(e) => setKey((e.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
+
+          <div class="pk-grid pk-grid--tight">
+            <Field label="Content type">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={contentType}
+                  onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
+                >
+                  <option value="markdown">Markdown</option>
+                  <option value="html">HTML</option>
+                  <option value="text">Plain text</option>
+                </Select>
+              )}
+            </Field>
+            <Field label="Default message type">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={messageType}
+                  onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+                >
+                  <option value="transactional">Transactional</option>
+                  <option value="promotional">Promotional</option>
+                </Select>
+              )}
+            </Field>
           </div>
-        </div>
-        <div class="row g-2 mb-3">
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold mb-1" for="email-template-content-type">
-              Content type
-            </label>
-            <select
-              id="email-template-content-type"
-              class="form-select form-select-sm"
-              value={contentType}
-              onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
+
+          <Field label="Subject template" help="Leave this empty to keep the subject the sending code supplies.">
+            {(control) => (
+              <TextInput
+                {...control}
+                class="pk-mono"
+                autocomplete="off"
+                value={subject}
+                placeholder="e.g. Your invitation to {{eventName}}"
+                onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
+
+          <Field label="Body" required>
+            {(control) => (
+              <Textarea
+                {...control}
+                class="pk-mono"
+                rows={12}
+                value={body}
+                placeholder="Template body content…"
+                onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+              />
+            )}
+          </Field>
+
+          <div class="pk-cluster">
+            <Button
+              variant="primary"
+              onClick={() => void doCreate()}
+              loading={saving}
+              disabled={!key || Boolean(keyError) || keyCheckStatus === "checking"}
             >
-              <option value="markdown">Markdown</option>
-              <option value="html">HTML</option>
-              <option value="text">Plain text</option>
-            </select>
+              {saving ? "Creating…" : "Create Template"}
+            </Button>
           </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold mb-1" for="email-template-message-type">
-              Default message type
-            </label>
-            <select
-              id="email-template-message-type"
-              class="form-select form-select-sm"
-              value={messageType}
-              onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
-            >
-              <option value="transactional">Transactional</option>
-              <option value="promotional">Promotional</option>
-            </select>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1" for="email-template-subject">
-            Subject template
-          </label>
-          <input
-            id="email-template-subject"
-            type="text"
-            class="form-control form-control-sm font-monospace"
-            value={subject}
-            placeholder="e.g. Your invitation to {{eventName}}"
-            onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1" for="email-template-body">
-            Body
-          </label>
-          <textarea
-            id="email-template-body"
-            class="form-control font-monospace"
-            rows={12}
-            value={body}
-            placeholder="Template body content…"
-            onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-          />
-        </div>
-        <button
-          class="btn btn-success"
-          onClick={() => void doCreate()}
-          disabled={saving || !key || !!keyError || keyCheckStatus === "checking"}
-        >
-          {saving ? "Creating…" : "Create Template"}
-        </button>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }
@@ -202,26 +225,24 @@ function EmailTemplateCreateOnly() {
 
   if (createdKey) {
     return (
-      <section aria-labelledby="email-template-created-heading">
-        <h5 id="email-template-created-heading" class="mb-2">
-          Template created
-        </h5>
-        <p class="text-muted small">
+      <section class="pk pk-stack pk-stack--snug" aria-labelledby="email-template-created-heading">
+        <h3 id="email-template-created-heading">Template created</h3>
+        <p class="pk-small">
           {createdKey} was created. You do not have permission to view template history or activate versions.
         </p>
-        <button type="button" class="btn btn-sm btn-primary" onClick={() => setCreatedKey(null)}>
-          Create another template
-        </button>
+        <div class="pk-cluster">
+          <Button variant="primary" size="sm" onClick={() => setCreatedKey(null)}>
+            Create another template
+          </Button>
+        </div>
       </section>
     );
   }
 
   return (
-    <section aria-labelledby="email-template-create-heading">
-      <h5 id="email-template-create-heading" class="mb-2">
-        Create email template
-      </h5>
-      <p class="text-muted small">You can create a draft template without access to the template catalog.</p>
+    <section class="pk pk-stack pk-stack--snug" aria-labelledby="email-template-create-heading">
+      <h3 id="email-template-create-heading">Create email template</h3>
+      <p class="pk-small">You can create a draft template without access to the template catalog.</p>
       <CreateTemplate canRead={false} onCreated={setCreatedKey} onCancel={() => undefined} showCancel={false} />
     </section>
   );
@@ -273,6 +294,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
 
   return (
     <ApiDataTable
+      caption="Email templates"
       urlState="templates"
       endpoint={EMAIL_TEMPLATES_API}
       responseSchema={emailTemplatesListResponseSchema}
@@ -285,47 +307,46 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
         {
           header: "Template Key",
           cell: (t) => t.template_key,
-          className: "mono adm-template-key",
+          className: "pk-mono pk-small",
           sort: { asc: "template_key", desc: "-template_key" },
         },
         {
           header: "Active",
           cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
-          className: "mono",
+          className: "pk-mono",
+          width: "fit",
           sort: { asc: "active_version", desc: "-active_version" },
         },
         {
           header: "Status",
           cell: (t) => {
             const hasActive = t.active_version != null;
-            const hasDraft = t.draft_count > 0;
             return (
-              <>
+              <div class="pk-cluster">
                 <Badge status={hasActive ? "active" : "draft"} />
-                {hasDraft && hasActive && <span class="badge text-bg-warning ms-1">draft pending</span>}
-              </>
+                {hasActive && t.draft_count > 0 && <ToneBadge tone="warn">draft pending</ToneBadge>}
+              </div>
             );
           },
         },
         {
           header: "Versions",
           cell: (t) => t.version_count,
-          className: "mono",
+          className: "pk-mono",
+          width: "fit",
           sort: { asc: "version_count", desc: "-version_count", defaultDirection: "desc" },
-        },
-        {
-          header: "",
-          cell: (t) => (
-            <button class="btn btn-sm btn-outline-success" onClick={() => void openEditor(t.template_key)}>
-              {canWrite ? "Edit" : "View"} →
-            </button>
-          ),
         },
       ]}
       empty={
         canWrite ? <EmptyState title="No templates yet" body="Create a template to get started." /> : "No templates"
       }
       rowKey={(t) => t.template_key}
+      // The whole row opens the template. It used to be an "Edit →" button in
+      // a nameless last column, which left the row itself inert.
+      rowAction={(t) => ({
+        label: `${canWrite ? "Edit" : "View"} ${t.template_key}`,
+        onSelect: () => void openEditor(t.template_key),
+      })}
     />
   );
 }

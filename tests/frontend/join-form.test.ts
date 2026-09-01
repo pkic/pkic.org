@@ -12,6 +12,9 @@ import {
   renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
+// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
+import joinFormTemplate from "../../layouts/shortcodes/joinform.html?raw";
+import { mountTemplate } from "./helpers/hugo-template";
 
 type Category = MemberApplicationFormResponse["categories"][number];
 type FormField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
@@ -83,21 +86,10 @@ function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormEle
   return form;
 }
 
+/** The shipped markup, so a template change that breaks these flows fails here. */
 function buildJoinStartForm(): HTMLFormElement {
-  const form = document.createElement("form");
-  form.innerHTML = `
-    <div data-join-path-details hidden>
-      <div data-join-organization-policy hidden></div>
-      <div data-join-individual-policy hidden></div>
-      <div data-join-individual-categories hidden></div>
-      <label data-join-email-label for="joinEmail"></label>
-      <input id="joinEmail" name="email" type="email" disabled />
-      <div data-field-error="email"></div>
-      <div data-join-email-help></div>
-    </div>
-  `;
-  document.body.append(form);
-  return form;
+  const host = mountTemplate(joinFormTemplate);
+  return host.querySelector<HTMLFormElement>("[data-join-start-form]")!;
 }
 
 describe("join-form helpers", () => {
@@ -150,6 +142,27 @@ describe("join-form helpers", () => {
     expect(container.textContent).not.toContain("Certification authority");
   });
 
+  it("draws each category radio with all three check parts and a label that names it", () => {
+    const container = document.createElement("div");
+    renderMembershipCategories(container, categories);
+
+    // All three parts, or the browser draws its own control instead: the block
+    // on the label, the input class, and the label class.
+    const checks = [...container.querySelectorAll("label.pk-check")];
+    expect(checks).toHaveLength(2);
+    for (const check of checks) {
+      const input = check.querySelector<HTMLInputElement>("input.pk-check__input");
+      expect(input).not.toBeNull();
+      expect(input?.type).toBe("radio");
+      expect(check.querySelector(".pk-check__label")).not.toBeNull();
+      // The label's `for` and the input's `id` are the pair that names the
+      // control; without it a radio is announced with no name at all.
+      expect((check as HTMLLabelElement).htmlFor).toBe(input?.id);
+      expect(input?.id).not.toBe("");
+    }
+    expect(container.querySelector(".pk-check__hint")?.textContent).toBe("An organization category.");
+  });
+
   it("binds configured agreement fields to canonical document controls without generic duplicates", () => {
     const form = document.createElement("form");
     form.innerHTML = `
@@ -186,6 +199,16 @@ describe("join-form helpers", () => {
     expect(container.querySelectorAll("li")).toHaveLength(1);
     expect(container.textContent).toContain("H6 — Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
+    // The list keeps its bullet without the browser's 40px indent, so the
+    // summary lines up with the label above it.
+    expect(container.querySelector("ul")?.className).toBe("pk-answer-list");
+  });
+
+  it("says so in words when no individual category is available", () => {
+    const container = document.createElement("div");
+    renderMembershipCategorySummary(container, []);
+    expect(container.querySelector("ul")).toBeNull();
+    expect(container.textContent).toBe("No eligible individual categories are currently available.");
   });
 
   it("renders mutually exclusive organization and individual start states", () => {
@@ -222,21 +245,31 @@ describe("join-form helpers", () => {
     const form = buildJoinStartForm();
     const email = form.querySelector<HTMLInputElement>("#joinEmail")!;
     const error = form.querySelector<HTMLElement>('[data-field-error="email"]')!;
+    const field = email.closest<HTMLElement>(".pk-field")!;
     applyJoinApplicantKindUI(form, "organization");
 
     email.value = "person@gmail.com";
     expect(applyJoinEmailPolicy(form, "organization")).toBe(false);
     expect(email.validationMessage).toBe(ORGANIZATION_EMAIL_POLICY_MESSAGE);
     expect(email.getAttribute("aria-invalid")).toBe("true");
-    expect(email.classList.contains("is-invalid")).toBe(true);
+    // The invalid state is drawn from a modifier on the field group, which is
+    // where the design system reads its state tokens from. A class on the
+    // input alone, or on a wrapper outside the field, styles nothing.
+    expect(field.classList.contains("pk-field--invalid")).toBe(true);
     expect(error.textContent).toBe(ORGANIZATION_EMAIL_POLICY_MESSAGE);
+    expect(error.hidden).toBe(false);
+    // A state is a mark as well as a colour, so the mark has to be drawn.
+    expect(field.querySelector(".pk-field__control .pk-field__state")).not.toBeNull();
+    expect(error.querySelector(".pk-field__message-icon")).not.toBeNull();
 
     email.value = "person@organization.example";
     expect(applyJoinEmailPolicy(form, "organization")).toBe(true);
     expect(email.validationMessage).toBe("");
     expect(email.hasAttribute("aria-invalid")).toBe(false);
-    expect(email.classList.contains("is-invalid")).toBe(false);
+    expect(field.classList.contains("pk-field--invalid")).toBe(false);
     expect(error.textContent).toBe("");
+    expect(error.hidden).toBe(true);
+    expect(field.querySelector(".pk-field__state")).toBeNull();
 
     email.value = "person@gmail.com";
     expect(applyJoinEmailPolicy(form, "individual")).toBe(true);

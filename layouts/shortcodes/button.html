@@ -1,1 +1,26 @@
-<a href="{{ .Get `link` }}"{{ with .Get `target` }} target="{{ . }}"{{ end }}class="btn btn-{{ with .Get `type`}}{{ . }}{{ else }}success{{ end }} my-2">{{ .Get `label` }}</a>
+{{/*
+  button — a call-to-action link rendered as a design-system button.
+
+  Parameters:
+    link   — destination URL (required)
+    label  — visible text (required)
+    target — optional link target, e.g. "_blank"
+    type   — optional legacy tone name, mapped onto a Button variant below
+
+  The design system has one emphasis scale rather than Bootstrap's colour
+  names, so every historical tone resolves to the variant that carries the
+  same weight: the call to action is primary, everything else is secondary.
+*/}}
+{{- $variants := dict
+  "primary" "primary"
+  "success" "primary"
+  "secondary" "secondary"
+  "dark" "secondary"
+  "light" "secondary"
+  "info" "secondary"
+  "warning" "secondary"
+  "danger" "danger"
+  "link" "link"
+-}}
+{{- $variant := index $variants (.Get "type" | default "primary") | default "primary" -}}
+<a class="pk pk-btn pk-btn--{{ $variant }}" href="{{ .Get "link" }}"{{ with .Get "target" }} target="{{ . }}"{{ end }}>{{ .Get "label" }}</a>

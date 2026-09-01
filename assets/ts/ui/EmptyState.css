@@ -1,0 +1,33 @@
+/*
+ * EmptyState.
+ *
+ * A left-aligned layout with the title in large text, optional body in muted
+ * text, and action children positioned below with spacing. Meant for empty
+ * lists, search results, or collection states.
+ */
+
+@layer components {
+  .pk-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pk-3);
+  }
+
+  .pk-empty-state__title {
+    font-size: var(--pk-text-lg);
+    font-weight: 500;
+    color: var(--pk-ink);
+    margin: 0;
+  }
+
+  .pk-empty-state__body {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+    margin: 0;
+  }
+
+  .pk-empty-state__action {
+    margin-top: var(--pk-3);
+  }
+}

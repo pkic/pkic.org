@@ -25,15 +25,30 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   await signInToPortal(page, e2eAdminEmail("portal-organizations"));
   await page.goto("/portal/#/organizations");
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
-  await page.locator("#organization-create-name").fill(organizationName);
-  await page.locator("#organization-create-category").selectOption("F");
-  await page.locator("#organization-create-member-since").fill("2026-01-15");
-  await page.locator("#organization-create-identity-name-0").fill("Logo Representative");
-  await page.locator("#organization-create-identity-email-0").fill(`svg-logo-${suffix}@example.invalid`);
+  // Creation is its own routed view, not a panel above the directory.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+  const createForm = page.getByRole("region", { name: "Add organization" });
+  const organizationGroup = createForm.getByRole("group", { name: "Organization", exact: true });
+  await organizationGroup.getByLabel("Organization name").fill(organizationName);
+  await organizationGroup.getByLabel("Membership category").selectOption("F");
+  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  await createForm.getByRole("button", { name: "Add person", exact: true }).click();
+  const firstPerson = createForm.getByRole("group", { name: "Person 1" });
+  await firstPerson.getByLabel("Name").fill("Logo Representative");
+  await firstPerson.getByLabel("Email").fill(`svg-logo-${suffix}@example.invalid`);
+  // Adding a person activates them at once, so the form requires a reason for
+  // it. Leaving it empty does not fail the request — the browser refuses to
+  // submit at all, and nothing is ever created.
+  await createForm.getByLabel("Reason for activating without an invitation").fill("E2E SVG logo setup");
+  const createResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/organizations" && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Create organization" }).click();
+  expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
 
-  await page.getByRole("cell", { name: new RegExp(organizationName) }).click();
+  // Success lands on the created organization's own detail view.
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   const organizationId = decodeURIComponent(page.url().split("/organizations/")[1].split(/[/?#]/)[0]);
 

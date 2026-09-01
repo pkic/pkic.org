@@ -1,18 +1,21 @@
-<div data-member-application data-module="member-flows/join-form" class="join-flow">
-  <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
+<div data-member-application data-module="member-flows/join-form" class="pk pk-form join-flow">
+  <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
 
   <div data-join-start>
-    <p class="lead">First, tell us whether an organization is connected to your participation.</p>
-    <form data-join-start-form class="row g-3 my-2 needs-validation" novalidate>
-      <fieldset class="col-12">
-        <legend class="form-label fs-6 fw-semibold">Are you employed by, or do you own, an organization?</legend>
-        <p id="joinApplicantKindHelp" class="form-text mb-3">
+    <p class="pk-lede">First, tell us whether an organization is connected to your participation.</p>
+    <form data-join-start-form class="pk-stack needs-validation" novalidate>
+      {{/* `pk-field` on the group, not just `pk-fieldset`: the modifier that
+           the validator sets carries the state variables, and for a choice
+           group the fieldset is the element that owns the message. */}}
+      <fieldset class="pk-fieldset pk-field">
+        <legend class="pk-field__label pk-strong">Are you employed by, or do you own, an organization?</legend>
+        <p id="joinApplicantKindHelp" class="pk-field__help">
           If an organization has separately authorized you to act on its behalf, choose Yes even if you are not its
           employee or owner.
         </p>
-        <div class="form-check mb-2">
+        <div class="pk-check">
           <input
-            class="form-check-input"
+            class="pk-check__input"
             type="radio"
             name="applicantKind"
             id="joinApplicantOrganization"
@@ -20,13 +23,13 @@
             aria-describedby="joinApplicantKindHelp"
             required
           />
-          <label class="form-check-label" for="joinApplicantOrganization">
+          <label class="pk-check__label" for="joinApplicantOrganization">
             <strong>Yes</strong> — I am employed by or own an organization
           </label>
         </div>
-        <div class="form-check">
+        <div class="pk-check">
           <input
-            class="form-check-input"
+            class="pk-check__input"
             type="radio"
             name="applicantKind"
             id="joinApplicantIndividual"
@@ -34,50 +37,60 @@
             aria-describedby="joinApplicantKindHelp"
             required
           />
-          <label class="form-check-label" for="joinApplicantIndividual">
+          <label class="pk-check__label" for="joinApplicantIndividual">
             <strong>No</strong> — I am not employed by and do not own an organization
           </label>
         </div>
-        <div class="invalid-feedback">Choose the statement that describes your situation.</div>
+        <p data-field-error="applicantKind" class="pk-field__message" aria-live="polite" hidden></p>
       </fieldset>
 
-      <div data-join-path-details class="col-12" hidden>
-        <div data-join-organization-policy class="alert alert-info" hidden>
+      <div data-join-path-details hidden>
+        <div data-join-organization-policy class="pk-alert pk-alert--info" hidden>
           You must participate on behalf of that organization. Use an email address belonging to it so we can verify the
           relationship and keep organizational and IPR attribution clear.
         </div>
-        <div data-join-individual-policy class="alert alert-warning" hidden>
+        <div data-join-individual-policy class="pk-alert pk-alert--warn" hidden>
           Individual participation is limited to eligible categories for people who are not employed by, do not own, and
           are not acting for an organization.
         </div>
 
-        <div data-join-individual-categories class="mb-3" hidden>
-          <p class="form-label fw-semibold mb-2">Eligible individual categories</p>
-          <div data-join-individual-category-list class="form-text" aria-live="polite">
+        <div data-join-individual-categories hidden>
+          {{/* Prose about the flow, not a control's help text: `pk-field__help`
+               belongs to a field and takes its colour from the field's state. */}}
+          <p class="pk-strong">Eligible individual categories</p>
+          <div data-join-individual-category-list class="pk-muted pk-small" aria-live="polite">
             Loading eligible categories…
           </div>
         </div>
 
-        <label for="joinEmail" class="form-label" data-join-email-label
-          >Your official work or organization email address</label
-        >
-        <input
-          type="email"
-          class="form-control"
-          id="joinEmail"
-          name="email"
-          autocomplete="email"
-          placeholder="you@organization.example"
-          aria-describedby="joinEmailHelp joinEmailError"
-          required
-          disabled
-        />
-        <div id="joinEmailError" data-field-error="email" class="invalid-feedback d-block" aria-live="polite"></div>
-        <div id="joinEmailHelp" class="form-text" data-join-email-help>
-          We will send a short-lived verification link before showing the appropriate next step.
+        {{/* The parts belong inside `pk-field`: it is what groups the label,
+             control, message and help, and what carries the `--state-*`
+             variables that `pk-field--ok|--advisory|--invalid` sets. Loose
+             siblings can be styled but can never show a state. */}}
+        <div class="pk-field">
+          <label for="joinEmail" class="pk-field__label" data-join-email-label
+            >Your official work or organization email address</label
+          >
+          <div class="pk-field__control">
+            <input
+              type="email"
+              class="pk-input"
+              id="joinEmail"
+              name="email"
+              autocomplete="email"
+              placeholder="you@organization.example"
+              aria-describedby="joinEmailHelp joinEmailError"
+              required
+              disabled
+            />
+          </div>
+          <p id="joinEmailError" data-field-error="email" class="pk-field__message" aria-live="polite" hidden></p>
+          <p id="joinEmailHelp" class="pk-field__help" data-join-email-help>
+            We will send a short-lived verification link before showing the appropriate next step.
+          </p>
         </div>
 
-        <button type="submit" class="btn btn-success mt-3">Continue</button>
+        <button type="submit" class="pk-btn pk-btn--primary">Continue</button>
       </div>
     </form>
   </div>
@@ -87,7 +100,7 @@
     <p>
       We sent a short-lived verification link to <strong data-join-pending-email></strong>. Open that link to continue.
     </p>
-    <button type="button" class="btn btn-outline-secondary" data-edit-join-email>Use a different email address</button>
+    <button type="button" class="pk-btn pk-btn--secondary" data-edit-join-email>Use a different email address</button>
   </section>
 
   <section data-join-organization-access hidden tabindex="-1">
@@ -96,7 +109,7 @@
       Your verified email address is associated with an active PKI Consortium member organization. No new membership
       application is needed.
     </p>
-    <a class="btn btn-success" href="/portal/">Continue to the portal</a>
+    <a class="pk-btn pk-btn--primary" href="/portal/">Continue to the portal</a>
   </section>
 
   <section data-join-support-required hidden tabindex="-1">
@@ -105,66 +118,74 @@
       We could not safely determine the appropriate membership path from this email address. Please contact the PKI
       Consortium so we can help.
     </p>
-    <a class="btn btn-outline-secondary" href="/contact/">Contact the PKI Consortium</a>
+    <a class="pk-btn pk-btn--secondary" href="/contact/">Contact the PKI Consortium</a>
   </section>
 
-  <form data-join-application-form class="row g-3 my-2 needs-validation" novalidate hidden>
-    <div class="col-12">
+  <form data-join-application-form class="pk-stack needs-validation" novalidate hidden>
+    <div>
       <div class="membership-verified-context">
-        <p class="mb-1">
+        <p>
           <strong data-verified-application-kind></strong> using verified email address
           <strong data-verified-application-email></strong>.
         </p>
-        <p class="small mb-0">
+        <p class="pk-small">
           Your verified email address and application path are fixed for this application. Start again if either is
           incorrect.
         </p>
       </div>
     </div>
 
-    <div class="col-12">
-      <p class="form-text mb-0">
-        Only eligibility categories permitted for this verified application path are available below.
+    <p class="pk-muted pk-small">
+      Only eligibility categories permitted for this verified application path are available below.
+    </p>
+
+    <fieldset class="pk-fieldset pk-field">
+      <legend class="pk-field__label">Eligibility category</legend>
+      <p class="pk-field__help">The available categories are determined from your verified membership path.</p>
+      <div data-membership-categories></div>
+      <p data-field-error="membershipCategory" class="pk-field__message" aria-live="polite" hidden></p>
+    </fieldset>
+
+    <div class="pk-field">
+      <label for="firstName" class="pk-field__label">First name</label>
+      <div class="pk-field__control">
+        <input type="text" class="pk-input" id="firstName" name="firstName" autocomplete="given-name" required />
+      </div>
+      <p data-field-error="firstName" class="pk-field__message" aria-live="polite" hidden></p>
+    </div>
+    <div class="pk-field">
+      <label for="lastName" class="pk-field__label">Last name</label>
+      <div class="pk-field__control">
+        <input type="text" class="pk-input" id="lastName" name="lastName" autocomplete="family-name" required />
+      </div>
+      <p data-field-error="applicantName" class="pk-field__message" aria-live="polite" hidden></p>
+    </div>
+    <div class="pk-field" data-organization-name-field>
+      <label for="organizationName" class="pk-field__label">Organization name</label>
+      <div class="pk-field__control">
+        <input
+          type="text"
+          class="pk-input"
+          id="organizationName"
+          name="organizationName"
+          autocomplete="organization"
+          aria-describedby="organizationNameHelp"
+        />
+      </div>
+      <p data-field-error="organizationName" class="pk-field__message" aria-live="polite" hidden></p>
+      <p id="organizationNameHelp" class="pk-field__help">
+        Use the legal or commonly recognized name of the organization you represent.
       </p>
     </div>
 
-    <fieldset class="col-12">
-      <legend class="form-label">Eligibility category</legend>
-      <p class="form-text">The available categories are determined from your verified membership path.</p>
-      <div data-membership-categories></div>
-      <div data-field-error="membershipCategory" class="invalid-feedback d-block"></div>
-    </fieldset>
-
-    <div class="col-lg-6">
-      <label for="firstName" class="form-label">First name</label>
-      <input type="text" class="form-control" id="firstName" name="firstName" autocomplete="given-name" required />
-    </div>
-    <div class="col-lg-6">
-      <label for="lastName" class="form-label">Last name</label>
-      <input type="text" class="form-control" id="lastName" name="lastName" autocomplete="family-name" required />
-      <div data-field-error="applicantName" class="invalid-feedback d-block"></div>
-    </div>
-    <div class="col-12" data-organization-name-field>
-      <label for="organizationName" class="form-label">Organization name</label>
-      <input
-        type="text"
-        class="form-control"
-        id="organizationName"
-        name="organizationName"
-        autocomplete="organization"
-      />
-      <div data-field-error="organizationName" class="invalid-feedback d-block"></div>
-      <div class="form-text">Use the legal or commonly recognized name of the organization you represent.</div>
+    <div data-custom-fields>
+      <p class="pk-muted pk-small">Loading additional questions…</p>
     </div>
 
-    <div class="col-12" data-custom-fields>
-      <p class="form-text">Loading additional questions…</p>
-    </div>
-
-    <div class="col-12 membership-legal-agreements" data-membership-legal-agreements hidden>
+    <div class="membership-legal-agreements" data-membership-legal-agreements hidden>
       <div>
-        <h3 class="h6 mb-1">Review and accept the membership terms</h3>
-        <p class="form-text mb-0">
+        <h3>Review and accept the membership terms</h3>
+        <p class="pk-muted pk-small">
           Read each document in the scrollable panel. The agreement control is located at the bottom of each document.
         </p>
       </div>
@@ -175,27 +196,27 @@
       .Site.GetPage "/ipr" -}} {{ partial "forms/legal-document-agreement.html" (dict "page" . "fieldKey"
       "agrees_ipr_policy") }} {{- end -}}
 
-      <div class="membership-legal-authority" data-membership-legal-field="warranted_authority">
-        <div class="form-check">
+      <div class="membership-legal-authority pk-field" data-membership-legal-field="warranted_authority">
+        <div class="pk-check">
           <input
-            class="form-check-input"
+            class="pk-check__input"
             type="checkbox"
             id="custom-warranted-authority"
             name="custom.warranted_authority"
             data-membership-legal-input
             required
           />
-          <label class="form-check-label fw-semibold" for="custom-warranted-authority" data-membership-legal-label>
+          <label class="pk-check__label" for="custom-warranted-authority" data-membership-legal-label>
             I represent and warrant that I have the necessary authority to submit this membership application and to be
             legally bound by these terms.
           </label>
-          <div class="invalid-feedback d-block" data-field-error="warranted_authority"></div>
         </div>
+        <p class="pk-field__message" data-field-error="warranted_authority" aria-live="polite" hidden></p>
       </div>
     </div>
 
-    <div class="col-12">
-      <button type="submit" class="btn btn-success">Submit membership application</button>
+    <div>
+      <button type="submit" class="pk-btn pk-btn--primary">Submit membership application</button>
     </div>
   </form>
 </div>

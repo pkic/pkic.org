@@ -11,10 +11,20 @@
 import { Fragment } from "preact";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { getJson, postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
-import { Spinner } from "../../../components/Spinner";
-import { ErrorAlert } from "../../../components/ErrorAlert";
+import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { confirmAction } from "../../../components/ConfirmDialog";
-import { Pager } from "../../../components/Pager";
+import { statusLabel } from "../../../components/Badge";
+import type { PagerProps as OffsetPagerProps } from "../../../components/Pager";
+import { Alert } from "../../../ui/Alert";
+import { Badge, type BadgeTone } from "../../../ui/Badge";
+import { Button } from "../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
+import { EmptyState } from "../../../ui/EmptyState";
+import { Field } from "../../../ui/Field";
+import { Pager } from "../../../ui/Pager";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { Spinner } from "../../../ui/Spinner";
+import { TextInput, Textarea } from "../../../ui/TextControl";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
@@ -31,13 +41,52 @@ import {
   organizationMemberProfileResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
-import { Badge } from "../../../components/Badge";
+import "../../../ui/Content.css";
 
 export { IdentitySelect } from "./MyOrganizationGovernance";
 
 const organizationPath = (organizationId: string) => `/api/v1/organizations/${encodeURIComponent(organizationId)}`;
 
 const URL_FIELD_ORDER = ["website", "blogUrl", "blogFeedUrl", "pressUrl", "pressFeedUrl", "careersUrl"] as const;
+
+/**
+ * The review lifecycle as tones. Written out per status rather than derived
+ * from a colour name, so adding a status is a compile error here instead of a
+ * silent fall-through to grey.
+ */
+const REVIEW_STATUS_TONE: Record<MyOrganizationReview["status"], BadgeTone> = {
+  pending: "warn",
+  approved: "ok",
+  rejected: "danger",
+  withdrawn: "neutral",
+};
+
+/**
+ * The canonical error sentence, rendered by the design system.
+ * `friendlyErrorMessage` stays the one place transport phrasing becomes
+ * English; only the surface that shows it moves here, because the shared
+ * `ErrorAlert` is still Bootstrap markup.
+ */
+function ErrorNotice({ error }: { error: string | Error }) {
+  return <Alert tone="danger">{friendlyErrorMessage(error instanceof Error ? error.message : error)}</Alert>;
+}
+
+/**
+ * The shared offset-pager state, as the design system's Pager reads it. The
+ * hook still speaks the older prev/next/page-size shape, so translating once
+ * here keeps that conversion out of the markup.
+ */
+function pagerViewProps(props: OffsetPagerProps, label: string) {
+  return {
+    page: props.page,
+    pageCount: props.total > 0 ? Math.max(1, Math.ceil(props.total / props.pageSize)) : props.page,
+    total: props.total,
+    rangeStart: props.rowCount === 0 ? 0 : props.offset + 1,
+    rangeEnd: props.offset + props.rowCount,
+    onSelect: props.onJump,
+    label,
+  };
+}
 
 function LogoUploader({
   organizationId,
@@ -71,22 +120,25 @@ function LogoUploader({
   }
 
   return (
-    <div>
-      <label class="btn btn-sm btn-outline-primary w-100 mb-1">
+    <div class="pk-stack pk-stack--tight">
+      {/* The button is the control and the file input is opened through it, so
+          there is one focusable thing carrying one accessible name — rather
+          than a label wrapping an input that a utility class has hidden. */}
+      <Button variant="secondary" size="sm" block loading={busy} onClick={() => fileRef.current?.click()}>
         {busy ? "Uploading…" : "Change logo (SVG)"}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/svg+xml"
-          class="d-none"
-          disabled={busy}
-          onChange={(e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (file) void upload(file);
-          }}
-        />
-      </label>
-      {org.pendingReview?.hasLogoChange && <div class="form-text text-warning mb-0">New logo pending review</div>}
+      </Button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/svg+xml"
+        hidden
+        disabled={busy}
+        onChange={(e) => {
+          const file = (e.target as HTMLInputElement).files?.[0];
+          if (file) void upload(file);
+        }}
+      />
+      {org.pendingReview?.hasLogoChange && <p class="pk-small pk-warning-note">New logo pending review</p>}
     </div>
   );
 }
@@ -103,45 +155,39 @@ function OrganizationProfileCard({
   const links = URL_FIELD_ORDER.filter((key) => org[key]);
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">{org.name}</div>
-      <div class="card-body">
-        <div class="row g-4">
-          <div class="col-md-3 text-center">
-            {org.logoUrl ? (
-              <img
-                src={org.logoUrl}
-                alt={`${org.name} logo`}
-                class="img-fluid border rounded p-2 bg-white mb-2 portal-organization-logo"
-              />
-            ) : (
-              <div class="d-flex align-items-center justify-content-center border rounded bg-light text-muted mb-2 portal-organization-logo-placeholder">
-                No logo
-              </div>
-            )}
-            {org.isOrgContact && <LogoUploader organizationId={organizationId} org={org} reload={reload} />}
-          </div>
-          <div class="col-md-9">
-            {org.slogan && <p class="fst-italic text-muted mb-2">{org.slogan}</p>}
-            {org.description && <p class="mb-2">{org.description}</p>}
-            {links.length > 0 && (
-              <dl class="row small mb-0">
-                {links.map((key) => (
-                  <Fragment key={key}>
-                    <dt class="col-sm-3">{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
-                    <dd class="col-sm-9">
-                      <a href={org[key] as string} target="_blank" rel="noreferrer">
-                        {org[key]}
-                      </a>
-                    </dd>
-                  </Fragment>
-                ))}
-              </dl>
-            )}
-          </div>
+    <Panel>
+      <PanelHeader title={org.name} />
+      <PanelBody class="pk-grid pk-grid--tight">
+        <div class="pk-stack pk-stack--snug">
+          {org.logoUrl ? (
+            <img src={org.logoUrl} alt={`${org.name} logo`} class="portal-organization-logo" />
+          ) : (
+            <div class="pk-framed pk-cluster pk-cluster--center pk-muted pk-small portal-organization-logo-placeholder">
+              No logo
+            </div>
+          )}
+          {org.isOrgContact && <LogoUploader organizationId={organizationId} org={org} reload={reload} />}
         </div>
-      </div>
-    </div>
+        <div class="pk-stack pk-stack--snug">
+          {org.slogan && <p class="pk-lede">{org.slogan}</p>}
+          {org.description && <p>{org.description}</p>}
+          {links.length > 0 && (
+            <dl class="pk-datalist pk-small">
+              {links.map((key) => (
+                <Fragment key={key}>
+                  <dt>{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
+                  <dd class="pk-break">
+                    <a href={org[key] as string} target="_blank" rel="noreferrer">
+                      {org[key]}
+                    </a>
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+        </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -182,29 +228,32 @@ function PendingReviewBanner({
   }
 
   return (
-    <div class="alert alert-info mb-0">
-      <p class="mb-2 fw-semibold">A content change is pending staff review — submitted {fmt(review.submittedAt)}.</p>
-      {review.hasLogoChange && <p class="mb-2 small">Includes a new logo.</p>}
-      {fields.length > 0 && (
-        <ul class="small mb-3">
-          {fields.map(([field, value]) => (
-            <li key={field}>
-              <strong>{ORGANIZATION_CONTENT_FIELD_LABELS[field] ?? field}:</strong>{" "}
-              {value === null || value === "" || (Array.isArray(value) && value.length === 0) ? (
-                <em>(cleared)</em>
-              ) : Array.isArray(value) ? (
-                value.join(", ")
-              ) : (
-                String(value)
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <button type="button" class="btn btn-sm btn-outline-secondary" disabled={busy} onClick={() => void withdraw()}>
-        {busy ? "Withdrawing…" : "Withdraw submission"}
-      </button>
-    </div>
+    <Alert tone="info" title={`A content change is pending staff review — submitted ${fmt(review.submittedAt)}.`}>
+      <div class="pk-stack pk-stack--snug">
+        {review.hasLogoChange && <p class="pk-small">Includes a new logo.</p>}
+        {fields.length > 0 && (
+          <ul class="pk-stack pk-stack--tight pk-small">
+            {fields.map(([field, value]) => (
+              <li key={field}>
+                <strong>{ORGANIZATION_CONTENT_FIELD_LABELS[field] ?? field}:</strong>{" "}
+                {value === null || value === "" || (Array.isArray(value) && value.length === 0) ? (
+                  <em>(cleared)</em>
+                ) : Array.isArray(value) ? (
+                  value.join(", ")
+                ) : (
+                  String(value)
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div class="pk-cluster">
+          <Button variant="secondary" size="sm" loading={busy} onClick={() => void withdraw()}>
+            {busy ? "Withdrawing…" : "Withdraw submission"}
+          </Button>
+        </div>
+      </div>
+    </Alert>
   );
 }
 
@@ -281,71 +330,78 @@ function ContentEditForm({
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)}>
-      <p class="text-muted small">
+    <form onSubmit={(e) => void handleSubmit(e)} class="pk-stack">
+      <p class="pk-muted pk-small">
         Changes are queued for staff review — your organization's public page won't update until they're approved.
       </p>
-      <div class="row g-3">
-        <div class="col-12">
-          <label class="form-label fw-semibold small">Slogan</label>
-          <input
-            class="form-control"
+      <Field label="Slogan">
+        {(control) => (
+          <TextInput
+            {...control}
             value={form.slogan}
             onInput={(e) => setField("slogan", (e.target as HTMLInputElement).value)}
             disabled={saving}
           />
-        </div>
-        <div class="col-12">
-          <label class="form-label fw-semibold small">Description</label>
-          <textarea
-            class="form-control"
+        )}
+      </Field>
+      <Field label="Description">
+        {(control) => (
+          <Textarea
+            {...control}
             rows={3}
             value={form.description}
             onInput={(e) => setField("description", (e.target as HTMLTextAreaElement).value)}
             disabled={saving}
           />
-        </div>
-        <div class="col-12">
-          <label class="form-label fw-semibold small">Long-form content (Markdown)</label>
-          <textarea
-            class="form-control"
+        )}
+      </Field>
+      <Field label="Long-form content (Markdown)">
+        {(control) => (
+          <Textarea
+            {...control}
             rows={6}
             value={form.contentMarkdown}
             onInput={(e) => setField("contentMarkdown", (e.target as HTMLTextAreaElement).value)}
             disabled={saving}
           />
-        </div>
+        )}
+      </Field>
+      <div class="pk-grid">
         {URL_FIELD_ORDER.map((key) => (
-          <div class="col-sm-6" key={key}>
-            <label class="form-label fw-semibold small">{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</label>
-            <input
-              type="url"
-              class="form-control"
-              placeholder="https://…"
-              value={form[key]}
-              onInput={(e) => setField(key, (e.target as HTMLInputElement).value)}
-              disabled={saving}
-            />
-          </div>
+          <Field key={key} label={ORGANIZATION_CONTENT_FIELD_LABELS[key]}>
+            {(control) => (
+              <TextInput
+                {...control}
+                type="url"
+                placeholder="https://…"
+                value={form[key]}
+                onInput={(e) => setField(key, (e.target as HTMLInputElement).value)}
+                disabled={saving}
+              />
+            )}
+          </Field>
         ))}
-        <div class="col-12">
-          <label class="form-label fw-semibold small">Links (X, LinkedIn, Facebook, etc — one URL per line)</label>
-          <textarea
-            class="form-control"
+      </div>
+      <Field label="Links (X, LinkedIn, Facebook, etc — one URL per line)">
+        {(control) => (
+          <Textarea
+            {...control}
             rows={4}
             placeholder="https://…"
             value={linksText}
             onInput={(e) => setLinksText((e.target as HTMLTextAreaElement).value)}
             disabled={saving}
           />
-        </div>
+        )}
+      </Field>
+
+      {error && <ErrorNotice error={error} />}
+
+      <div class="pk-cluster">
+        <Button type="submit" variant="primary" loading={saving}>
+          {saving ? "Submitting…" : "Submit for review"}
+        </Button>
       </div>
-
-      {error && <ErrorAlert error={error} />}
-
-      <button type="submit" class="btn btn-success mt-3" disabled={saving}>
-        {saving ? "Submitting…" : "Submit for review"}
-      </button>
     </form>
   );
 }
@@ -360,18 +416,28 @@ function ContentEditorCard({
   reload: () => Promise<void>;
 }) {
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Edit organization content</div>
-      <div class="card-body">
+    <Panel>
+      <PanelHeader title="Edit organization content" />
+      <PanelBody>
         {org.pendingReview ? (
           <PendingReviewBanner review={org.pendingReview} organizationId={organizationId} onWithdrawn={reload} />
         ) : (
           <ContentEditForm organizationId={organizationId} org={org} reload={reload} />
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
+
+const REVIEW_HISTORY_COLUMNS: ReadonlyArray<DataTableColumn<MyOrganizationReview>> = [
+  {
+    id: "status",
+    header: "Status",
+    cell: (review) => <Badge tone={REVIEW_STATUS_TONE[review.status]}>{statusLabel(review.status)}</Badge>,
+  },
+  { id: "submittedAt", header: "Submitted", cell: (review) => fmt(review.submittedAt) },
+  { id: "reviewerNote", header: "Reviewer note", cell: (review) => review.reviewerNote ?? "—" },
+];
 
 function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
   const history = useApiPage<z.infer<typeof organizationContentReviewsListResponseSchema>>(
@@ -383,35 +449,33 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
   const reviews = history.data?.reviews ?? [];
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Submission history</div>
-      <div class="card-body">
-        {history.loading ? (
-          <Spinner label="Loading submission history…" />
-        ) : history.error ? (
-          <ErrorAlert
-            error={history.error instanceof Error ? history.error.message : "Could not load submission history."}
-          />
-        ) : reviews.length === 0 ? (
-          <p class="text-muted small mb-0">No past submissions.</p>
+    <Panel>
+      <PanelHeader title="Submission history" />
+      <PanelBody class="pk-stack pk-stack--snug">
+        {history.error ? (
+          <ErrorNotice error={history.error instanceof Error ? history.error : "Could not load submission history."} />
         ) : (
           <>
-            <ul class="list-group list-group-flush">
-              {reviews.map((review: MyOrganizationReview) => (
-                <li key={review.id} class="list-group-item px-0">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <Badge status={review.status} />
-                    <span class="text-muted small">{fmt(review.submittedAt)}</span>
-                  </div>
-                  {review.reviewerNote && <p class="small text-muted mb-0 mt-1">{review.reviewerNote}</p>}
-                </li>
-              ))}
-            </ul>
-            {history.pagerProps && <Pager {...history.pagerProps} />}
+            <DataTable
+              caption="Organization content submissions"
+              columns={REVIEW_HISTORY_COLUMNS}
+              rows={reviews}
+              rowKey={(review) => review.id}
+              loading={history.loading}
+              empty={
+                <EmptyState
+                  title="No past submissions."
+                  body="Content changes submitted for staff review are listed here once they have been decided."
+                />
+              }
+            />
+            {history.pagerProps && reviews.length > 0 && (
+              <Pager {...pagerViewProps(history.pagerProps, "Submission history pages")} />
+            )}
           </>
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -452,14 +516,24 @@ export function MyOrganization({ organizationId: requestedOrganizationId }: { or
     void reload();
   }, [reload]);
 
-  if (loading) return <Spinner label="Loading your organization…" />;
+  if (loading) {
+    return (
+      <div class="pk">
+        <Spinner label="Loading your organization…" />
+      </div>
+    );
+  }
   if (error) {
-    return errorCode === "NO_ORGANIZATION" ? <div class="alert alert-info">{error}</div> : <ErrorAlert error={error} />;
+    return (
+      <div class="pk">
+        {errorCode === "NO_ORGANIZATION" ? <Alert tone="info">{error}</Alert> : <ErrorNotice error={error} />}
+      </div>
+    );
   }
   if (!org || !organizationId) return null;
 
   return (
-    <div class="d-flex flex-column gap-3 content-width-lg">
+    <div class="pk pk-stack content-width-lg">
       <OrganizationProfileCard organizationId={organizationId} org={org} reload={reload} />
       {org.isOrgContact && <ContentEditorCard organizationId={organizationId} org={org} reload={reload} />}
       {org.isOrgContact && (

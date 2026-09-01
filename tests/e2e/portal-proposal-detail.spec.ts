@@ -3,6 +3,8 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
+import { definitionFor } from "./helpers/definition-list";
+import { tab } from "./helpers/tabs";
 
 const adminSessionResponse = userAuthSessionResponseSchema.parse({
   success: true,
@@ -486,10 +488,13 @@ test("renders the portal proposal detail workflow with submission answers and op
   await abstractCard.getByRole("textbox").fill("A corrected accepted abstract for the published program.");
   await abstractCard.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("A corrected accepted abstract for the published program.")).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Panel discussion" })).toBeVisible();
-  await expect(page.getByText("Platform operators", { exact: true })).toBeVisible();
-  await expect(page.locator("li").filter({ hasText: /^PKI$/ })).toBeVisible();
-  await expect(page.locator("li").filter({ hasText: /^Policy$/ })).toBeVisible();
+  // The submission answers are a description list, not a table: one label and
+  // one value each. Asserting the pair rather than the value alone also proves
+  // each answer is filed under the question it answers.
+  await expect(definitionFor(page, "Preferred format")).toHaveText("Panel discussion");
+  await expect(definitionFor(page, "Target audience")).toHaveText("Platform operators");
+  const tracks = definitionFor(page, "Tracks").getByRole("listitem");
+  await expect(tracks).toHaveText(["PKI", "Policy"]);
 
   // Proposer name appears in the stat card header area
   await expect(page.getByText("Sam Speaker").first()).toBeVisible();
@@ -503,12 +508,12 @@ test("renders the portal proposal detail workflow with submission answers and op
   await expect(page.getByRole("button", { name: "Load more comments" })).toHaveCount(0);
 
   // Navigate to Reviews tab to see reviewer details
-  await page.getByRole("tab", { name: /Reviews/ }).click();
+  await tab(page, /Reviews/).click();
   await expect(page.getByText("Ada Reviewer").first()).toBeVisible();
   await expect(page.getByText("Reviews are read-only after a proposal decision.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit Review" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Open Proposer Manage Page ↗" }).click();
+  await page.getByRole("button", { name: "Open proposer manage page" }).click();
   await expect
     .poll(async () => page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? []))
     .toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
@@ -516,15 +521,21 @@ test("renders the portal proposal detail workflow with submission answers and op
 
   expect(openedUrls).toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
 
-  await page.getByRole("tab", { name: "Audit Log" }).click();
+  await tab(page, "Audit Log").click();
   await expect(page.getByText("Proposal updated: title")).toBeVisible();
-  await expect(page.locator(".adm-pager-range")).toHaveText("1–1 of 51");
-  await page.locator(".adm-pager .page-item").last().getByRole("button").click();
+  // The pager is reached by its role and accessible name, and the page it is
+  // showing by `aria-current` — `.adm-pager`/`.page-item` were Bootstrap class
+  // names that outlived the markup they described.
+  const auditPager = page.getByRole("navigation", { name: "Pagination" });
+  await expect(auditPager).toContainText("1–1 of 51");
+  await expect(auditPager.locator('button[aria-current="page"]')).toHaveText("1");
+  await auditPager.getByRole("button", { name: "Next page" }).click();
   await expect(page.getByText("proposal speaker removed")).toBeVisible();
-  await expect(page.locator(".adm-pager-range")).toHaveText("51–51 of 51");
+  await expect(auditPager).toContainText("51–51 of 51");
+  await expect(auditPager.locator('button[aria-current="page"]')).toHaveText("2");
   expect(auditOffsets).toEqual([0, 50]);
 
-  await page.getByRole("tab", { name: "Presentation" }).click();
+  await tab(page, "Presentation").click();
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: /Upload on behalf of speaker/ }).click();
   const fileChooser = await fileChooserPromise;
@@ -536,8 +547,13 @@ test("renders the portal proposal detail workflow with submission answers and op
   expect(adminUpload?.fileSize).toBe(String(pdfBody.byteLength));
   expect(adminUpload?.body).toEqual(pdfBody);
 
-  await page.getByRole("tab", { name: "Decision" }).click();
-  await page.getByLabel("Comment to speakers *").fill("The speaker is unavailable for the scheduled session.");
+  await tab(page, "Decision").click();
+  // The required marker is no longer part of the label's own words — it is the
+  // control's `required` and a "(required)" the label carries for a screen
+  // reader — so the field is named by its name and its requirement asserted.
+  const speakerComment = page.getByLabel("Comment to speakers");
+  await expect(speakerComment).toHaveAttribute("required", "");
+  await speakerComment.fill("The speaker is unavailable for the scheduled session.");
   await page.getByLabel("I understand that every speaker linked to this proposal will be notified.").check();
   await page.getByRole("button", { name: "Cancel accepted session" }).click();
   await expect(page.getByText("Session canceled", { exact: true })).toBeVisible();
@@ -634,7 +650,7 @@ test("offers event presentation archives only with proposal read access", async 
   await page.goto("/portal/#/events/pqc-2026/proposals");
 
   const currentDownload = page.getByRole("link", { name: "Current presentations" });
-  const allVersionsDownload = page.getByRole("link", { name: "All versions" });
+  const allVersionsDownload = page.getByRole("link", { name: "All presentation versions" });
   await expect(currentDownload).toHaveCount(0);
   await expect(allVersionsDownload).toHaveCount(0);
 

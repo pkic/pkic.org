@@ -1,22 +1,117 @@
-import { StatCard } from "../../../../../components/StatCard";
-import { Spinner } from "../../../../../components/Spinner";
-import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { Badge } from "../../../../../components/Badge";
+import type { ComponentChildren } from "preact";
+import { Alert } from "../../../../../ui/Alert";
+import { Badge, type BadgeTone } from "../../../../../ui/Badge";
+import { Button } from "../../../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
+import { EmptyState } from "../../../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { Spinner } from "../../../../../ui/Spinner";
+import { StatCard } from "../../../../../ui/StatCard";
+import { statusLabel } from "../../../../../components/Badge";
+import { friendlyErrorMessage } from "../../../../../components/ErrorAlert";
 import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
-import { svgStackedBarChart, isoDateRange } from "../../../../../components/analytics/charts";
+import { svgStackedBarChart } from "../../../../../ui/chart";
+import { isoDateRange } from "../../../../../components/analytics/date-range";
 import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
 
-const ATT_COLORS: Record<string, string> = { in_person: "#0d6efd", virtual: "#198754", on_demand: "#fd7e14" };
-const ATT_LIGHT_COLORS: Record<string, string> = { in_person: "#9ec5fe", virtual: "#a3cfbb", on_demand: "#fed8b1" };
+/**
+ * Chart fills read the state tokens rather than brand hexes, so the bars stay
+ * legible on both grounds instead of being a light-theme palette painted onto
+ * a dark surface. The tones come from the independent state scale, not the
+ * accent: an accent-derived "virtual" would be indistinguishable from a
+ * primary control on a green-accented product.
+ */
+const ATTENDANCE_TOKEN: Record<string, string> = {
+  in_person: "--pk-info",
+  virtual: "--pk-ok",
+  on_demand: "--pk-warn",
+};
+
+function attendanceFill(type: string): string {
+  return `var(${ATTENDANCE_TOKEN[type] ?? "--pk-ink-muted"})`;
+}
+
+/**
+ * The pending half of a stacked pair. Mixed toward the surface rather than
+ * taken from the `-soft` tints, which are backgrounds: as a bar fill they are
+ * pale enough to read as empty.
+ */
+function attendancePendingFill(type: string): string {
+  return `color-mix(in oklab, ${attendanceFill(type)} 38%, var(--pk-surface))`;
+}
+
+/** Invite lifecycle tones. The wording stays canonical through `statusLabel`. */
+const INVITE_STATUS_TONE: Record<string, BadgeTone> = {
+  sent: "info",
+  accepted: "ok",
+  declined: "danger",
+  revoked: "warn",
+  expired: "neutral",
+};
 
 /** "sent" reads as "Pending" from an invite-recipient's point of view — override the default status label. */
 function inviteBadge(status: string) {
-  return <Badge status={status} label={status === "sent" ? "Pending" : undefined} />;
+  return (
+    <Badge tone={INVITE_STATUS_TONE[status] ?? "neutral"}>{status === "sent" ? "Pending" : statusLabel(status)}</Badge>
+  );
 }
+
+interface CountRow {
+  key: string;
+  label: ComponentChildren;
+  count: number;
+}
+
+function countColumns(header: string): ReadonlyArray<DataTableColumn<CountRow>> {
+  return [
+    { id: "label", header, cell: (row) => row.label },
+    { id: "count", header: "Count", align: "end", cell: (row) => row.count },
+  ];
+}
+
+const countRowKey = (row: CountRow): string => row.key;
+
+interface DeclineReasonRow {
+  key: string;
+  reason: string;
+  count: number;
+  unsubscribed: number;
+}
+
+const DECLINE_REASON_COLUMNS: ReadonlyArray<DataTableColumn<DeclineReasonRow>> = [
+  { id: "reason", header: "Reason", cell: (row) => row.reason },
+  { id: "count", header: "Count", align: "end", cell: (row) => row.count },
+  { id: "unsubscribed", header: "Unsubscribed", align: "end", cell: (row) => row.unsubscribed },
+];
+
+interface WaitlistDayRow {
+  label: string;
+  waiting: number;
+  offered: number;
+  accepted: number;
+}
+
+const WAITLIST_DAY_COLUMNS: ReadonlyArray<DataTableColumn<WaitlistDayRow>> = [
+  { id: "day", header: "Event day", cell: (row) => row.label },
+  { id: "waiting", header: "Waiting", align: "end", cell: (row) => row.waiting },
+  { id: "offered", header: "Offered", align: "end", cell: (row) => row.offered },
+  {
+    id: "open",
+    header: "Open now",
+    align: "end",
+    cell: (row) => <span class="pk-strong">{row.waiting + row.offered}</span>,
+  },
+  {
+    id: "accepted",
+    header: "Accepted historically",
+    align: "end",
+    cell: (row) => <span class="pk-muted">{row.accepted}</span>,
+  },
+];
 
 export function EventStats({ slug }: { slug: string }) {
   const {
@@ -29,8 +124,18 @@ export function EventStats({ slug }: { slug: string }) {
     [slug],
   );
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (loading)
+    return (
+      <div class="pk">
+        <Spinner label="Loading the event dashboard…" />
+      </div>
+    );
+  if (error)
+    return (
+      <div class="pk">
+        <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>
+      </div>
+    );
   if (!stats) return null;
 
   const s = stats;
@@ -71,6 +176,17 @@ export function EventStats({ slug }: { slug: string }) {
   const waitlistedAttendees = attendanceStatuses.reduce((sum, item) => sum + item.waitlisted, 0);
   const acceptedAttendees = attendanceStatuses.reduce((sum, item) => sum + item.accepted, 0);
 
+  /**
+   * The Bootstrap surface tinted two stat values amber to mark them
+   * actionable. StatCard has no warning variant by design — colour alone is
+   * not a signal — so the same meaning is stated in words, once, in the
+   * system's own device for it.
+   */
+  const needsAttention = [
+    waitlistedAttendees > 0 ? `${String(waitlistedAttendees)} attendees are on an active day waitlist` : null,
+    pendingConfirmation > 0 ? `${String(pendingConfirmation)} registrations have not confirmed their email` : null,
+  ].filter((item): item is string => item !== null);
+
   // Growth chart
   const growthDates = (() => {
     const raw = [...new Set(growthByDay.map((r) => r.date))].sort();
@@ -84,7 +200,7 @@ export function EventStats({ slug }: { slug: string }) {
   }
   const growthSeries = allAttTypes.map((at) => ({
     label: attendanceTypeLabel(at),
-    color: ATT_COLORS[at] ?? "#6c757d",
+    color: attendanceFill(at),
     values: growthDates.map((d) => growthIdx[d]?.[at] ?? 0),
   }));
 
@@ -103,278 +219,239 @@ export function EventStats({ slug }: { slug: string }) {
     .flatMap((at) => [
       {
         label: `${attendanceTypeLabel(at)} – Accepted`,
-        color: ATT_COLORS[at] ?? "#6c757d",
+        color: attendanceFill(at),
         values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.accepted ?? 0),
       },
       {
         label: `${attendanceTypeLabel(at)} – Pending`,
-        color: ATT_LIGHT_COLORS[at] ?? "#ced4da",
+        color: attendancePendingFill(at),
         values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.pending ?? 0),
       },
     ])
     .filter((sr) => sr.values.some((v) => v > 0));
 
-  // Waitlist-by-day chart/table
-  const waitlistDayLabels = [...new Set(waitlistByEventDay.map((r) => r.label ?? r.day_date))];
+  // Waitlist by event day
   const waitlistDayIdx: Record<string, Record<string, number>> = {};
   for (const r of waitlistByEventDay) {
     const lbl = r.label ?? r.day_date;
     waitlistDayIdx[lbl] ??= {};
     waitlistDayIdx[lbl][r.status] = (waitlistDayIdx[lbl][r.status] ?? 0) + r.count;
   }
+  const waitlistDayRows: WaitlistDayRow[] = [...new Set(waitlistByEventDay.map((r) => r.label ?? r.day_date))].map(
+    (label) => ({
+      label,
+      waiting: waitlistDayIdx[label]?.waiting ?? 0,
+      offered: waitlistDayIdx[label]?.offered ?? 0,
+      accepted: waitlistDayIdx[label]?.accepted ?? 0,
+    }),
+  );
   const waitlistOpenCount = (waitlistTotals.byStatus?.waiting ?? 0) + (waitlistTotals.byStatus?.offered ?? 0);
   const waitlistAcceptedCount = waitlistTotals.byStatus?.accepted ?? 0;
   const waitlistOfferedCount = waitlistTotals.byStatus?.offered ?? 0;
 
+  const rsvpStatusRows: CountRow[] = Object.entries(s.rsvp?.byStatus ?? {}).map(([status, count]) => ({
+    key: status,
+    label: statusLabel(status),
+    count,
+  }));
+  const rsvpActionRows: CountRow[] = Object.entries(s.rsvp?.actionsTaken ?? {}).map(([action, count]) => ({
+    key: action,
+    label: statusLabel(action),
+    count,
+  }));
+
   return (
-    <div>
-      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-        <div>
-          <h5 class="mb-1">Event dashboard</h5>
-          <div class="small text-muted">Current attendee status, movement, waitlist pressure, and event activity.</div>
-        </div>
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => void reload()}>
-          ↺ Refresh
-        </button>
-      </div>
+    <div class="pk pk-stack">
+      <Panel>
+        <PanelHeader title="Event dashboard" headingLevel={2}>
+          <Button size="sm" onClick={() => void reload()}>
+            <span aria-hidden="true">↺</span> Refresh
+          </Button>
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <p class="pk-small">Current attendee status, movement, waitlist pressure, and event activity.</p>
 
-      {/* At-a-glance status */}
-      <div class="row g-3 mb-3">
-        <div class="col-6 col-md-4 col-xl-2">
-          <StatCard label="Accepted attendees" value={acceptedAttendees} note="not on an active waitlist" />
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <StatCard
-            label="Waitlisted attendees"
-            value={waitlistedAttendees}
-            note="unique people with an active day waitlist"
-            variant={waitlistedAttendees > 0 ? "warning" : "default"}
-          />
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <StatCard
-            label="Pending confirmation"
-            value={pendingConfirmation}
-            note="email not confirmed"
-            variant={pendingConfirmation > 0 ? "warning" : "default"}
-          />
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <StatCard label="Total registrations" value={s.registrations?.total ?? 0} note="all statuses" />
-        </div>
-        {s.proposals && (
-          <div class="col-6 col-md-4 col-xl-2">
-            <StatCard label="Proposals" value={s.proposals.total} note="all proposal statuses" />
+          <div class="pk-grid pk-grid--tight">
+            <StatCard label="Accepted attendees" value={String(acceptedAttendees)} note="not on an active waitlist" />
+            <StatCard
+              label="Waitlisted attendees"
+              value={String(waitlistedAttendees)}
+              note="unique people with an active day waitlist"
+            />
+            <StatCard label="Pending confirmation" value={String(pendingConfirmation)} note="email not confirmed" />
+            <StatCard label="Total registrations" value={String(s.registrations?.total ?? 0)} note="all statuses" />
+            {s.proposals && (
+              <StatCard label="Proposals" value={String(s.proposals.total)} note="all proposal statuses" />
+            )}
+            <StatCard
+              label="Sponsor consent"
+              value={String(consentGranted)}
+              note={`${String(consentPct)}% of ${String(consentTotal)}`}
+            />
           </div>
-        )}
-        <div class="col-6 col-md-4 col-xl-2">
-          <StatCard label="Sponsor consent" value={consentGranted} note={`${consentPct}% of ${consentTotal}`} />
-        </div>
-      </div>
 
-      {/* Accepted and waitlisted attendance by type */}
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-body">
-          <h6 class="text-uppercase small fw-bold text-muted mb-2">Attendance Status</h6>
-          <div class="row g-3">
+          {needsAttention.length > 0 && (
+            <Alert tone="warn" title="Needs attention">
+              {needsAttention.join(" · ")}
+            </Alert>
+          )}
+        </PanelBody>
+      </Panel>
+
+      <Panel>
+        <PanelHeader title="Attendance status" headingLevel={2} />
+        <PanelBody>
+          <div class="pk-grid pk-grid--tight">
             {attendanceStatuses.map(({ type, label, accepted, waitlisted }) => (
-              <div key={type} class="col-6 col-md-4">
-                <StatCard
-                  label={`${label} accepted`}
-                  value={accepted}
-                  note={waitlisted > 0 ? `+${waitlisted} waitlisted` : "No active waitlist"}
-                />
-              </div>
+              <StatCard
+                key={type}
+                label={`${label} accepted`}
+                value={String(accepted)}
+                note={waitlisted > 0 ? `+${String(waitlisted)} waitlisted` : "No active waitlist"}
+              />
             ))}
           </div>
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
 
       <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />
 
-      {/* Registration growth chart */}
-      <div class="card border-0 shadow-sm mb-3">
-        <div class="card-body">
-          <h6 class="text-uppercase small fw-bold text-muted mb-2">Registrations Received by Day</h6>
-          {growthDates.length > 0 ? (
+      <Panel>
+        <PanelHeader title="Registrations received by day" headingLevel={2} />
+        <PanelBody>
+          {growthDates.length > 0 && growthSeries.length > 0 ? (
             <div
               dangerouslySetInnerHTML={{
                 __html: svgStackedBarChart(
                   growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`),
                   growthSeries,
-                  { isoLabels: growthDates },
+                  { caption: "Registrations received by day", isoLabels: growthDates },
                 ),
               }}
             />
           ) : (
-            <p class="text-muted fst-italic small">No registrations yet.</p>
+            <EmptyState title="No registrations yet." />
           )}
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
 
-      {/* Per-day registrations */}
       {dayLabels.length > 0 && (
-        <div class="card border-0 shadow-sm mb-3">
-          <div class="card-body">
-            <h6 class="text-uppercase small fw-bold text-muted mb-2">Registrations by Event Day</h6>
-            <div class="text-muted small mb-2">
-              <span class="text-success fw-semibold">solid = accepted</span>,{" "}
-              <span class="text-secondary fw-semibold">light = pending/waitlisted</span>
+        <Panel>
+          <PanelHeader title="Registrations by event day" headingLevel={2} />
+          <PanelBody class="pk-stack pk-stack--snug">
+            {/* The chart's own legend names each series; this key explains what
+                the two shades within a series mean. The badge dot repeats the
+                tone as a shape, so it does not rest on colour alone. */}
+            <div class="pk-cluster">
+              <Badge tone="ok">solid = accepted</Badge>
+              <Badge tone="neutral">light = pending/waitlisted</Badge>
             </div>
-            <div dangerouslySetInnerHTML={{ __html: svgStackedBarChart(dayLabels, daySeries) }} />
-          </div>
-        </div>
+            {daySeries.length > 0 ? (
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: svgStackedBarChart(dayLabels, daySeries, { caption: "Registrations by event day" }),
+                }}
+              />
+            ) : (
+              <EmptyState title="No registrations on any event day yet." />
+            )}
+          </PanelBody>
+        </Panel>
       )}
 
-      {/* Operational waitlist */}
-      {waitlistDayLabels.length > 0 && (
-        <div class="card border-0 shadow-sm mb-3">
-          <div class="card-body">
-            <h6 class="text-uppercase small fw-bold text-muted mb-2">Open Waitlist by Event Day</h6>
-            <div class="row g-3 mb-3">
-              <div class="col-6 col-md-4">
-                <StatCard label="Open day entries" value={waitlistOpenCount} note="waiting + offered" />
-              </div>
-              <div class="col-6 col-md-4">
-                <StatCard
-                  label="Offers awaiting response"
-                  value={waitlistOfferedCount}
-                  note="included in open entries"
-                />
-              </div>
-              <div class="col-6 col-md-4">
-                <StatCard label="Accepted from waitlist" value={waitlistAcceptedCount} note="historical total" />
-              </div>
+      {waitlistDayRows.length > 0 && (
+        <Panel>
+          <PanelHeader title="Open waitlist by event day" headingLevel={2} />
+          <PanelBody class="pk-stack">
+            <div class="pk-grid pk-grid--tight">
+              <StatCard label="Open day entries" value={String(waitlistOpenCount)} note="waiting + offered" />
+              <StatCard
+                label="Offers awaiting response"
+                value={String(waitlistOfferedCount)}
+                note="included in open entries"
+              />
+              <StatCard label="Accepted from waitlist" value={String(waitlistAcceptedCount)} note="historical total" />
             </div>
-            <div class="tbl-wrap">
-              <table class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th class="small">Event day</th>
-                    <th class="text-end small">Waiting</th>
-                    <th class="text-end small">Offered</th>
-                    <th class="text-end small">Open now</th>
-                    <th class="text-end small">Accepted historically</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {waitlistDayLabels.map((lbl) => {
-                    const waiting = waitlistDayIdx[lbl]?.waiting ?? 0;
-                    const offered = waitlistDayIdx[lbl]?.offered ?? 0;
-                    const accepted = waitlistDayIdx[lbl]?.accepted ?? 0;
-                    return (
-                      <tr key={lbl}>
-                        <td class="small">{lbl}</td>
-                        <td class="mono text-end">{waiting}</td>
-                        <td class="mono text-end">{offered}</td>
-                        <td class="mono text-end fw-semibold">{waiting + offered}</td>
-                        <td class="mono text-end text-muted">{accepted}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+            <DataTable
+              caption="Open waitlist by event day"
+              columns={WAITLIST_DAY_COLUMNS}
+              rows={waitlistDayRows}
+              rowKey={(row) => row.label}
+            />
+          </PanelBody>
+        </Panel>
       )}
 
-      {/* Invites breakdown */}
-      <div class="row g-3 mb-3">
+      <div class="pk-grid pk-grid--roomy">
         {(["attendee", "speaker"] as const).map((type) => {
           const inv = s.invites?.[type];
           if (!inv) return null;
           const declineReasons = inv.declineReasons ?? [];
+          const title = type === "attendee" ? "Attendee invites" : "Speaker invites";
+          const inviteRows: CountRow[] = [
+            ...Object.entries(inv.byStatus ?? {}).map(([status, count]) => ({
+              key: status,
+              label: inviteBadge(status),
+              count,
+            })),
+            { key: "__total", label: <span class="pk-strong">Total</span>, count: inv.total ?? 0 },
+          ];
           return (
-            <div key={type} class="col-md-6">
-              <div class="card border-0 shadow-sm h-100">
-                <div class="card-body">
-                  <h6 class="text-uppercase small fw-bold text-muted mb-2">
-                    {type === "attendee" ? "Attendee" : "Speaker"} Invites
-                  </h6>
-                  <div class="tbl-wrap">
-                    <table class="table table-sm mb-0">
-                      <tbody>
-                        {Object.entries(inv.byStatus ?? {}).map(([status, count]) => (
-                          <tr key={status}>
-                            <td>{inviteBadge(status)}</td>
-                            <td class="mono text-end">{count}</td>
-                          </tr>
-                        ))}
-                        <tr class="table-light fw-semibold">
-                          <td class="small">Total</td>
-                          <td class="mono text-end">{inv.total ?? 0}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  {declineReasons.length > 0 && (
-                    <>
-                      <div class="small fw-semibold mt-2 mb-1">Decline reasons</div>
-                      <table class="table table-sm mb-0">
-                        <thead>
-                          <tr>
-                            <th class="small">Reason</th>
-                            <th class="text-end small">Count</th>
-                            <th class="text-end small">Unsub</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {declineReasons.map((dr, i) => (
-                            <tr key={i}>
-                              <td class="small">{dr.reason_code ?? "Not specified"}</td>
-                              <td class="mono text-end">{dr.count}</td>
-                              <td class="mono text-end">{dr.unsubscribed}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+            <Panel key={type}>
+              <PanelHeader title={title} headingLevel={2} />
+              <PanelBody class="pk-stack pk-stack--snug">
+                <DataTable
+                  caption={`${title} by status`}
+                  columns={countColumns("Status")}
+                  rows={inviteRows}
+                  rowKey={countRowKey}
+                />
+                {declineReasons.length > 0 && (
+                  <>
+                    <p class="pk-strong pk-small">Decline reasons</p>
+                    <DataTable
+                      caption={`${title}: decline reasons`}
+                      columns={DECLINE_REASON_COLUMNS}
+                      rows={declineReasons.map((dr, index) => ({
+                        key: dr.reason_code ?? `unspecified-${String(index)}`,
+                        reason: dr.reason_code ?? "Not specified",
+                        count: dr.count,
+                        unsubscribed: dr.unsubscribed,
+                      }))}
+                      rowKey={(row) => row.key}
+                    />
+                  </>
+                )}
+              </PanelBody>
+            </Panel>
           );
         })}
       </div>
 
-      {/* RSVP data */}
       {(s.rsvp?.total ?? 0) > 0 && (
-        <div class="card border-0 shadow-sm mb-3">
-          <div class="card-body">
-            <h6 class="text-uppercase small fw-bold text-muted mb-2">Calendar RSVP ({s.rsvp.total})</h6>
-            <div class="row g-2">
-              <div class="col-md-6">
-                <div class="small fw-semibold mb-1">By Status</div>
-                <table class="table table-sm mb-0">
-                  <tbody>
-                    {Object.entries(s.rsvp.byStatus ?? {}).map(([st, cnt]) => (
-                      <tr key={st}>
-                        <td class="small">{st}</td>
-                        <td class="mono text-end">{cnt}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {Object.keys(s.rsvp.actionsTaken ?? {}).length > 0 && (
-                <div class="col-md-6">
-                  <div class="small fw-semibold mb-1">Actions Taken</div>
-                  <table class="table table-sm mb-0">
-                    <tbody>
-                      {Object.entries(s.rsvp.actionsTaken ?? {}).map(([action, cnt]) => (
-                        <tr key={action}>
-                          <td class="small">{action}</td>
-                          <td class="mono text-end">{cnt}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+        <Panel>
+          <PanelHeader title={`Calendar RSVP (${String(s.rsvp.total)})`} headingLevel={2} />
+          <PanelBody>
+            <div class="pk-grid pk-grid--roomy">
+              <DataTable
+                caption="By status"
+                showCaption
+                columns={countColumns("Status")}
+                rows={rsvpStatusRows}
+                rowKey={countRowKey}
+              />
+              {rsvpActionRows.length > 0 && (
+                <DataTable
+                  caption="Actions taken"
+                  showCaption
+                  columns={countColumns("Action")}
+                  rows={rsvpActionRows}
+                  rowKey={countRowKey}
+                />
               )}
             </div>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
     </div>
   );

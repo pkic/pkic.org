@@ -1,3 +1,13 @@
+// Every stylesheet authored before the design system.
+//
+// This file is not linked directly. layouts/partials/site-stylesheet.html
+// compiles it, wraps the compiled output in `@layer legacy`, and prepends the
+// site-wide layer order — so nothing in here can win against a design-system
+// component regardless of how specific its selectors are. Add legacy partials
+// here; add design-system styles to the frontend bundle instead.
+//
+// @font-face lives in fonts.scss, outside every layer, because it declares a
+// resource rather than competing in the cascade.
 @import "theme-and-bootstrap";
 @import "layout-utilities";
 @import "footer-and-edit";

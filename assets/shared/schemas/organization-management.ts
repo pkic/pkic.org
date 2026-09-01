@@ -111,17 +111,30 @@ export const organizationIdentityProvisionSchema = z.object({
   links: linksSchema.optional(),
 });
 
-/** New organizations always have an organization-tied membership aggregate. */
-export const organizationCreateSchema = z.object({
-  name: trimmedString(1, 200),
-  website: httpUrlSchema.optional(),
-  description: trimmedString(0, 2000).optional(),
-  membershipCategory: orgTiedMembershipCategorySchema,
-  memberSince: z.iso.date(),
-  identities: z.array(organizationIdentityProvisionSchema).min(1).max(10),
-  workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
-  activationReason: trimmedString(1, 500),
-});
+/**
+ * New organizations always have an organization-tied membership aggregate.
+ * Initial identities are optional: staff may create the organization alone
+ * and invite people through the roster later. When identities ARE provided
+ * they start active immediately — skipping the invitation flow — so that
+ * path, and only that path, must carry an activation reason for the audit
+ * log (and demands the `identities:activate` permission on the server).
+ */
+export const organizationCreateSchema = z
+  .object({
+    name: trimmedString(1, 200),
+    website: httpUrlSchema.optional(),
+    description: trimmedString(0, 2000).optional(),
+    links: linksSchema.optional(),
+    membershipCategory: orgTiedMembershipCategorySchema,
+    memberSince: z.iso.date(),
+    identities: z.array(organizationIdentityProvisionSchema).max(10).default([]),
+    workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
+    activationReason: trimmedString(1, 500).optional(),
+  })
+  .refine((input) => input.identities.length === 0 || input.activationReason !== undefined, {
+    message: "Explain why these people are being activated without an invitation.",
+    path: ["activationReason"],
+  });
 
 export const organizationCreateResponseSchema = organizationDetailResponseSchema;
 
@@ -150,15 +163,19 @@ export const organizationManagementListRouteSchema = {
 
 export const organizationCreateRouteSchema = {
   tags: ["Organizations"],
-  "x-pkic-auth": { required: true, scopes: ["membership:write", "identities:activate"] },
-  summary: "Create an organization and its initial acting identities",
+  "x-pkic-auth": { required: true, scopes: ["membership:write"] },
+  summary: "Create an organization, optionally with initial acting identities",
+  description:
+    "Identities are optional. When any are provided they are activated immediately, which additionally requires the identities:activate permission and an activationReason recorded in the audit log.",
   request: { body: { required: true, content: { "application/json": { schema: organizationCreateSchema } } } },
   responses: {
     "201": {
       description: "Organization created.",
       content: { "application/json": { schema: organizationCreateResponseSchema } },
     },
-    "403": { description: "membership:write permission required." },
+    "403": {
+      description: "membership:write permission required; identities:activate as well when identities are provided.",
+    },
     "409": { description: "An organization or active identity already exists." },
   },
 };

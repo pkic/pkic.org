@@ -1,5 +1,8 @@
 import { useState } from "preact/hooks";
+import { FormActions } from "../../../../../components/FormActions";
 import { patchValidated } from "../../../../../shared/api-client";
+import { Field } from "../../../../../ui/Field";
+import { TextInput } from "../../../../../ui/TextControl";
 import { toast } from "../../../ui";
 import {
   roleResponseEnvelopeSchema,
@@ -23,6 +26,10 @@ export function RoleEditForm({
   const [description, setDescription] = useState(role.description ?? "");
   const [selected, setSelected] = useState<Set<Permission>>(new Set(role.permissions));
   const [submitting, setSubmitting] = useState(false);
+  // A refused save used to be a toast and nothing else, so it was gone before
+  // the reader had finished reading it and left no trace beside the form that
+  // still held the rejected values.
+  const [error, setError] = useState<string | null>(null);
 
   function toggle(permission: Permission) {
     setSelected((prev) => {
@@ -37,6 +44,7 @@ export function RoleEditForm({
     e.preventDefault();
     if (!name.trim()) return;
     setSubmitting(true);
+    setError(null);
     try {
       const updated = await patchValidated(
         `/api/v1/roles/${role.id}`,
@@ -52,52 +60,56 @@ export function RoleEditForm({
       toast("Role updated", "success");
       onSaved(updated.role);
     } catch (err) {
-      toast((err as Error).message, "error");
+      setError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSave}>
-      <div class="row g-2 mb-2">
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for="access-control-role-edit-name">
-            Name
-          </label>
-          <input
-            id="access-control-role-edit-name"
-            class="form-control form-control-sm"
-            value={name}
-            onInput={(e) => setName((e.target as HTMLInputElement).value)}
-            pattern="^[a-z][a-z0-9_]*$"
-            disabled={submitting}
-            required
-          />
+    <form class="pk pk-stack" onSubmit={handleSave}>
+      {/* One `disabled` attribute takes the whole form out of play while the
+          save is in flight, including the checkboxes a child component
+          renders and which no prop from here could otherwise reach. */}
+      <fieldset class="pk-fieldset pk-stack" disabled={submitting}>
+        <div class="pk-grid pk-grid--roomy">
+          <Field label="Name" required help="Lower case, digits and underscores; must start with a letter.">
+            {(control) => (
+              <TextInput
+                {...control}
+                value={name}
+                onInput={(e) => setName((e.target as HTMLInputElement).value)}
+                pattern="^[a-z][a-z0-9_]*$"
+              />
+            )}
+          </Field>
+          <Field label="Description">
+            {(control) => (
+              <TextInput
+                {...control}
+                value={description}
+                onInput={(e) => setDescription((e.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
         </div>
-        <div class="col-md-8">
-          <label class="form-label small fw-semibold" for="access-control-role-edit-description">
-            Description
-          </label>
-          <input
-            id="access-control-role-edit-description"
-            class="form-control form-control-sm"
-            value={description}
-            onInput={(e) => setDescription((e.target as HTMLInputElement).value)}
-            disabled={submitting}
-          />
-        </div>
-      </div>
-      <label class="form-label small fw-semibold">Permissions</label>
-      <PermissionCheckboxes selected={selected} onToggle={toggle} disabled={submitting} />
-      <div class="d-flex gap-2">
-        <button type="submit" class="btn btn-sm btn-success" disabled={submitting}>
-          {submitting ? "Saving…" : "Save changes"}
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel} disabled={submitting}>
-          Cancel
-        </button>
-      </div>
+        {/* "Permissions" used to be a bare `<label>` with no `for`, so it
+            named nothing: the checkboxes below it were an unlabelled run of
+            controls. A `<legend>` names the group it actually introduces. */}
+        <fieldset class="pk-fieldset pk-field">
+          <legend class="pk-field__label">Permissions</legend>
+          <PermissionCheckboxes selected={selected} onToggle={toggle} disabled={submitting} />
+        </fieldset>
+      </fieldset>
+      <FormActions
+        submitLabel="Save changes"
+        busyLabel="Saving…"
+        busy={submitting}
+        onCancel={onCancel}
+        status={error ?? undefined}
+        statusVariant="danger"
+        disabled={!name.trim()}
+      />
     </form>
   );
 }

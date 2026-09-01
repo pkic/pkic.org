@@ -2,8 +2,9 @@ import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
-import { RowActions } from "../../../../components/RowActions";
-import type { MenuAction } from "../../../../components/Menu";
+import { Chip } from "../../../../ui/Chip";
+import { RowActions } from "../../../../ui/RowActions";
+import type { MenuItem } from "../../../../ui/Menu";
 import {
   eventAudienceDetailSchema,
   eventManagementSummarySchema,
@@ -49,13 +50,13 @@ function eventWhen(event: EventRow): string {
  * is set. Everyone else — every audience row, and a management row with no
  * owning group — gets no menu at all.
  */
-function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuAction[] {
+function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
   if (isAudienceEvent(event) || !event.ownerGroupId) return [];
   const groupId = event.ownerGroupId;
   const groupLabel = event.ownerGroupName ?? "group";
   return [
     {
-      key: "open-workspace",
+      id: "open-workspace",
       label: `Open in ${groupLabel} workspace`,
       onSelect: () => navigate(`/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`),
     },
@@ -66,23 +67,16 @@ type Scope = "upcoming" | "past";
 
 function ScopeToggle({ scope, onChange }: { scope: Scope; onChange: (scope: Scope) => void }) {
   return (
-    <div class="btn-group btn-group-sm" role="group" aria-label="Events scope">
-      <button
-        type="button"
-        class={`btn btn-outline-secondary${scope === "upcoming" ? " active" : ""}`}
-        aria-pressed={scope === "upcoming"}
-        onClick={() => onChange("upcoming")}
-      >
+    // Two applied-filter toggles, which is what `Chip` is: each is a real
+    // button carrying `aria-pressed`, and the pressed state is drawn rather
+    // than announced only by an `active` class the design system never had.
+    <div class="pk-cluster" role="group" aria-label="Events scope">
+      <Chip pressed={scope === "upcoming"} onToggle={() => onChange("upcoming")}>
         Upcoming
-      </button>
-      <button
-        type="button"
-        class={`btn btn-outline-secondary${scope === "past" ? " active" : ""}`}
-        aria-pressed={scope === "past"}
-        onClick={() => onChange("past")}
-      >
+      </Chip>
+      <Chip pressed={scope === "past"} onToggle={() => onChange("past")}>
         Past
-      </button>
+      </Chip>
     </div>
   );
 }
@@ -99,6 +93,7 @@ export function EventList() {
         // Remounting on scope change resets pagination and default sort
         // together, so "Past" reliably opens on most-recent-first.
         key={scope}
+        caption={scope === "past" ? "Past events" : "Upcoming events"}
         urlState="events"
         endpoint="/api/v1/events"
         responseSchema={eventsListResponseSchema}
@@ -117,16 +112,19 @@ export function EventList() {
             sort: { asc: "name", desc: "-name" },
           },
           {
+            // A date-and-place line has a bounded length; without saying so
+            // the event name's slack squeezed it into a four-line wrap.
             header: "When",
             cell: (e) => {
               const relative = formatRelativeDays(e.startsAt);
               return (
                 <>
                   {eventWhen(e)}
-                  {relative && <span class="text-muted ms-2">({relative})</span>}
+                  {relative && <span class="pk-muted"> ({relative})</span>}
                 </>
               );
             },
+            width: "fit",
             sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: scope === "past" ? "desc" : "asc" },
           },
           {
@@ -135,21 +133,22 @@ export function EventList() {
               !isAudienceEvent(e) && e.ownerGroupId ? (
                 <a href={`#/groups/${encodeURIComponent(e.ownerGroupId)}`}>{e.ownerGroupName ?? e.ownerGroupId}</a>
               ) : (
-                <span class="text-muted">—</span>
+                <span class="pk-muted">—</span>
               ),
           },
           {
             header: "Your status",
             cell: (e) => (isAudienceEvent(e) && e.viewer ? <ViewerEventState viewer={e.viewer} /> : null),
+            // A badge has a bounded length; the slack belongs to the event
+            // name, not spread between it and a column of short states.
+            width: "fit",
           },
           {
             header: "",
-            cell: (e) => <RowActions label={`Actions for ${e.name}`} actions={workspaceActions(e, navigate)} />,
+            cell: (e) => <RowActions subject={e.name} actions={workspaceActions(e, navigate)} />,
           },
         ]}
-        onRowClick={(e) => {
-          if (e.basePath) window.location.assign(e.basePath);
-        }}
+        rowAction={(e) => (e.basePath ? { label: `Open ${e.name}`, href: e.basePath } : undefined)}
         empty={
           <EmptyState
             title={scope === "past" ? "No past events" : "No upcoming events"}

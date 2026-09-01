@@ -8,20 +8,31 @@
  * query string and fetches GET /api/v1/members/:id client-side, mirroring the
  * `?id=&token=` query-string pattern application-status-page.tsx already uses
  * for the same "no per-record static page" reason.
+ *
+ * The layout is the design system's: a measured column, a stack for vertical
+ * rhythm, and a grid that reflows when its columns stop fitting — rather than
+ * `col-lg-*`/`order-lg-*` pairs and an `mb-*` on every child. What is kept
+ * from the legacy stylesheet is the branded initials avatar and the logo's
+ * height, which are this site's own devices rather than Bootstrap's.
  */
-import { render } from "preact";
+import { Fragment, render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
 import { NotFoundPanel } from "../components/NotFoundPanel";
+import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import { memberInitials } from "../shared/member-display";
 import { findLinkedinUrl, getLinkLabel } from "../../shared/schemas/links";
 import {
   publicMemberDetailSchema,
   type PublicMemberDetail as MemberDetail,
 } from "../../shared/schemas/members-directory";
+// `pk-datalist` is a Content.css class, and component CSS ships in a lazy
+// chunk rather than the entry stylesheet — a module that writes the class name
+// has to import the sheet that defines it, or the list renders unstyled.
+import "../ui/Content.css";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -40,35 +51,52 @@ type PublicIdentity = MemberDetail["identities"][number];
 
 function LinkedInIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      fill="currentColor"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+    >
       <path d="M0 1.146C0 .513.526 0 1.175 0h13.65C15.474 0 16 .513 16 1.146v13.708c0 .633-.526 1.146-1.175 1.146H1.175C.526 16 0 15.487 0 14.854V1.146zm4.943 12.248V6.169H2.542v7.225h2.401zm-1.2-8.212c.837 0 1.358-.554 1.358-1.248-.015-.709-.52-1.248-1.342-1.248-.822 0-1.359.54-1.359 1.248 0 .694.521 1.248 1.327 1.248h.016zm4.908 8.212V9.359c0-.216.016-.432.08-.586.173-.431.568-.878 1.232-.878.869 0 1.216.662 1.216 1.634v3.865h2.401V9.25c0-2.22-1.184-3.252-2.764-3.252-1.274 0-1.845.7-2.165 1.193v.025h-.016a5.54 5.54 0 0 1 .016-.025V6.169h-2.4c.03.678 0 7.225 0 7.225h2.4z" />
     </svg>
   );
 }
 
-function SocialLinks({ linkedin }: { linkedin?: string | null }) {
+/**
+ * The LinkedIn link, as an icon with a name.
+ *
+ * The icon is hidden from assistive technology and the name is carried as text
+ * beside it: a `title` attribute is the weakest of the accessible-name sources,
+ * and this page can show two of these links at once — "LinkedIn" twice says
+ * nothing about whose profile either one opens.
+ */
+function SocialLinks({ name, linkedin }: { name: string; linkedin?: string | null }) {
   if (!linkedin) return null;
   return (
-    <a href={linkedin} target="_blank" rel="noopener" class="px-1" title="LinkedIn">
+    <a href={linkedin} target="_blank" rel="noopener">
       <LinkedInIcon />
+      <span class="pk-sr-only">{name} on LinkedIn</span>
     </a>
   );
 }
 
-/** Renders every org link that isn't the LinkedIn one already shown as the heading icon. */
+/** Every org link that isn't the LinkedIn one already shown as the heading icon. */
 function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | null }) {
   const others = links.filter((url) => url !== linkedin);
-  if (others.length === 0) return null;
   return (
     <>
       {others.map((url) => (
-        <span key={url}>
-          <strong>{getLinkLabel(url)}:</strong>{" "}
-          <a href={url} target="_blank" rel="noopener">
-            {url}
-          </a>
-          <br />
-        </span>
+        <Fragment key={url}>
+          <dt>{getLinkLabel(url)}</dt>
+          <dd class="pk-break">
+            <a href={url} target="_blank" rel="noopener">
+              {url}
+            </a>
+          </dd>
+        </Fragment>
       ))}
     </>
   );
@@ -76,132 +104,122 @@ function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | n
 
 function IdentityCard({ identity }: { identity: PublicIdentity }) {
   return (
-    <div class="row mb-5">
-      <div class="col-lg-9 order-lg-2">
-        <h2 class="featurette-heading">
-          {identity.name} <SocialLinks linkedin={identity.linkedin} />
-        </h2>
-        {identity.jobTitle && <h5>{identity.jobTitle}</h5>}
-        {identity.bio && <Markdown markdown={identity.bio} />}
-      </div>
-      <div class="col-lg-3 order-lg-1">
-        {identity.photoUrl ? (
-          <img class="img-thumbnail" alt={identity.name} title={identity.name} src={identity.photoUrl} />
-        ) : (
-          <div
-            class={`standalone-initials standalone-initials--representative initial-color-${identity.name.length % 6}`}
-          >
-            {memberInitials(identity.name)}
+    <Panel>
+      <PanelBody class="pk-stack pk-stack--snug">
+        <div class="pk-cluster pk-cluster--start">
+          {identity.photoUrl ? (
+            // Decorative: the name it belongs to is the heading beside it, so
+            // repeating it in `alt` announces the person twice.
+            <img class="speaker-photo" alt="" src={identity.photoUrl} />
+          ) : (
+            <div
+              aria-hidden="true"
+              class={`standalone-initials standalone-initials--representative initial-color-${identity.name.length % 6}`}
+            >
+              {memberInitials(identity.name)}
+            </div>
+          )}
+          <div class="pk-stack pk-stack--tight">
+            <h3 class="pk-cluster">
+              {identity.name}
+              <SocialLinks name={identity.name} linkedin={identity.linkedin} />
+            </h3>
+            {identity.jobTitle && <p class="pk-muted">{identity.jobTitle}</p>}
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+        {identity.bio && <Markdown markdown={identity.bio} />}
+      </PanelBody>
+    </Panel>
   );
 }
 
-function MemberDetailView({ member, directoryHref }: { member: MemberDetail; directoryHref: string }) {
+export function MemberDetailView({ member, directoryHref }: { member: MemberDetail; directoryHref: string }) {
   const colorIdx = member.name.length % 6;
   // member.linkedin is already resolved server-side for org-less individuals;
   // for organizations it's derived from the generic links list here.
   const linkedin = member.linkedin ?? findLinkedinUrl(member.links);
+  const namedLinks: Array<[string, string | null | undefined]> = [
+    ["Website", member.website],
+    ["Press", member.pressUrl],
+    ["Careers", member.careersUrl],
+    ["Blog", member.blogUrl],
+  ];
 
   return (
-    <div>
-      <section class="py-4 text-center container">
-        <div class="row py-lg-2">
-          <div class="col-10 mx-auto">
-            {member.logoUrl ? (
-              <img class="member-profile-logo py-3" alt={member.name} src={member.logoUrl} />
-            ) : (
-              <div class={`standalone-initials standalone-initials--hero initial-color-${colorIdx} mx-auto`}>
-                {memberInitials(member.name)}
-              </div>
-            )}
-            <h1 class="fw-light">
-              <strong>{member.name}</strong> is a member of the PKI Consortium
-            </h1>
-            {member.jobTitle && <h5 class="text-muted">{member.jobTitle}</h5>}
-            {member.slogan && <p class="lead text-muted">{member.slogan}</p>}
-            {member.description && <p class="lead text-muted">{member.description}</p>}
-          </div>
-        </div>
-      </section>
-
-      <div class="py-2 bg-light"></div>
-
-      <div class="py-5">
-        <div class="container">
-          <div class="row">
-            <div class="col-lg-8 order-lg-1">{member.content && <Markdown markdown={member.content} />}</div>
-            <div id="sidebar" class="col-lg-4 order-lg-2">
-              <div class="text-end">
-                <SocialLinks linkedin={linkedin} />
-              </div>
-              <small>
-                <strong>Member since:</strong>{" "}
-                {new Date(member.memberSince).toLocaleDateString(undefined, { year: "numeric", month: "long" })}
-                <br />
-                {member.website && (
-                  <>
-                    <strong>Website:</strong>{" "}
-                    <a href={member.website} target="_blank" rel="noopener">
-                      {member.website}
-                    </a>
-                    <br />
-                  </>
-                )}
-                {member.pressUrl && (
-                  <>
-                    <strong>Press:</strong>{" "}
-                    <a href={member.pressUrl} target="_blank" rel="noopener">
-                      {member.pressUrl}
-                    </a>
-                    <br />
-                  </>
-                )}
-                {member.careersUrl && (
-                  <>
-                    <strong>Careers:</strong>{" "}
-                    <a href={member.careersUrl} target="_blank" rel="noopener">
-                      {member.careersUrl}
-                    </a>
-                    <br />
-                  </>
-                )}
-                {member.blogUrl && (
-                  <>
-                    <strong>Blog:</strong>{" "}
-                    <a href={member.blogUrl} target="_blank" rel="noopener">
-                      {member.blogUrl}
-                    </a>
-                    <br />
-                  </>
-                )}
-                <OtherLinks links={member.links} linkedin={linkedin} />
-              </small>
+    <div class="pk pk-stack pk-stack--loose pk-section">
+      <header class="pk-container pk-stack pk-stack--snug pk-center">
+        {/* A cluster rather than `mx-auto`: the avatar is a fixed-size block,
+            so centring it is the parent's job and text-align cannot do it. */}
+        <div class="pk-cluster pk-cluster--center">
+          {member.logoUrl ? (
+            <img class="member-profile-logo" alt={member.name} src={member.logoUrl} />
+          ) : (
+            <div aria-hidden="true" class={`standalone-initials standalone-initials--hero initial-color-${colorIdx}`}>
+              {memberInitials(member.name)}
             </div>
-          </div>
+          )}
         </div>
+        <h1>
+          <strong>{member.name}</strong> is a member of the PKI Consortium
+        </h1>
+        {member.jobTitle && <p class="pk-lede">{member.jobTitle}</p>}
+        {member.slogan && <p class="pk-lede">{member.slogan}</p>}
+        {member.description && <p class="pk-lede">{member.description}</p>}
+      </header>
+
+      <div class="pk-container pk-grid pk-grid--roomy">
+        {member.content && (
+          <div class="pk-stack">
+            <Markdown markdown={member.content} />
+          </div>
+        )}
+        <Panel>
+          <PanelHeader title="Member details" headingLevel={2}>
+            <SocialLinks name={member.name} linkedin={linkedin} />
+          </PanelHeader>
+          <PanelBody>
+            {/* A term/value list, which is what this always was: it used to be
+                a run of `<strong>Label:</strong> value<br>` inside a `<small>`,
+                so nothing paired a term with its value for a reader who could
+                not see the layout. */}
+            <dl class="pk-datalist pk-small">
+              <dt>Member since</dt>
+              <dd>{new Date(member.memberSince).toLocaleDateString(undefined, { year: "numeric", month: "long" })}</dd>
+              {namedLinks.map(([label, url]) =>
+                url ? (
+                  <Fragment key={label}>
+                    <dt>{label}</dt>
+                    <dd class="pk-break">
+                      <a href={url} target="_blank" rel="noopener">
+                        {url}
+                      </a>
+                    </dd>
+                  </Fragment>
+                ) : null,
+              )}
+              <OtherLinks links={member.links} linkedin={linkedin} />
+            </dl>
+          </PanelBody>
+        </Panel>
       </div>
 
       {member.identities.length > 0 && (
-        <div class="py-5 bg-light">
-          <div class="container">
-            {member.identities.map((identity) => (
-              <IdentityCard key={identity.name} identity={identity} />
-            ))}
-          </div>
-        </div>
+        <section class="pk-container pk-stack" aria-labelledby="member-representatives">
+          <h2 id="member-representatives">Representatives</h2>
+          {member.identities.map((identity) => (
+            <IdentityCard key={identity.name} identity={identity} />
+          ))}
+        </section>
       )}
 
-      <div class="container py-4">
+      <p class="pk-container">
         <a href={directoryHref}>&larr; Back to members</a>
-      </div>
+      </p>
     </div>
   );
 }
 
-function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directoryHref: string }) {
+export function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directoryHref: string }) {
   const [member, setMember] = useState<MemberDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -226,7 +244,9 @@ function MemberDetailPage({ apiBase, directoryHref }: { apiBase: string; directo
     );
   }
   if (error) return <ErrorAlert error={error} />;
-  if (!member) return <Spinner />;
+  // Named, so the wait says what is loading rather than announcing a bare
+  // "Loading…" on a page that is otherwise empty.
+  if (!member) return <Spinner label="Loading member profile…" />;
 
   return <MemberDetailView member={member} directoryHref={directoryHref} />;
 }

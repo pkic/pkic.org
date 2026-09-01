@@ -4,6 +4,25 @@
   var backdrop = document.getElementById('pkicMegaBackdrop');
   if (!backdrop) return; // navbar not present on this page
 
+  // ── Collapsed (hamburger) menu ────────────────────────────────────────
+  // The bar no longer carries Bootstrap's collapse plugin, so the open state
+  // is one class the stylesheet reads and one aria-expanded the reader does.
+
+  var navToggle   = document.getElementById('pkicNavToggle');
+  var navCollapse = document.getElementById('navbarContent');
+
+  function setNavOpen(open) {
+    if (!navToggle || !navCollapse) return;
+    navCollapse.classList.toggle('is-open', open);
+    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  if (navToggle && navCollapse) {
+    navToggle.addEventListener('click', function () {
+      setNavOpen(!navCollapse.classList.contains('is-open'));
+    });
+  }
+
   // ── Multi-panel Mega menu ─────────────────────────────────────────────
 
   var allTriggers = document.querySelectorAll('.pkic-mega-trigger');
@@ -56,7 +75,7 @@
       chevron.setAttribute('aria-expanded', 'false');
     });
     allTriggers.forEach(function (trigger) {
-      trigger.querySelectorAll('.nav-link').forEach(function (link) { link.classList.remove('is-active'); });
+      trigger.querySelectorAll('.pkic-nav-link').forEach(function (link) { link.classList.remove('is-active'); });
     });
   }
 
@@ -72,7 +91,7 @@
     if (targetId === 'pkic-members-mega') hydrateMemberCounts();
     var chevron = triggerEl.querySelector('.pkic-mega-chevron');
     if (chevron) { chevron.classList.add('is-open'); chevron.setAttribute('aria-expanded', 'true'); }
-    triggerEl.querySelectorAll('.nav-link').forEach(function (l) { l.classList.add('is-active'); });
+    triggerEl.querySelectorAll('.pkic-nav-link').forEach(function (l) { l.classList.add('is-active'); });
   }
 
   function closeMega() {
@@ -170,6 +189,7 @@
 
   function openSearch() {
     closeMega();
+    setNavOpen(false);
     if (!searchNav || !sPanel) return;
     searchNav.classList.add('pkic-search-active');
     var navSearch = document.getElementById('pkicNavSearch');
@@ -272,7 +292,7 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (sPanel && !sPanel.hidden) { closeSearch(); }
-      else { closeMega(); }
+      else { closeMega(); setNavOpen(false); }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();

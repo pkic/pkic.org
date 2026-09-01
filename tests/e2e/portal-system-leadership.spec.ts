@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { runRowAction } from "./helpers/data-table";
 
 const LEADERSHIP_API = "/api/v1/leadership/positions";
 const REMOVED_SYSTEM_LEADERSHIP_API = "/api/v1/system/leadership-positions";
@@ -29,12 +30,14 @@ test("permitted staff manage the public leadership roster through the System por
   await page.goto("/portal/#/system/leadership");
   await expect(page.getByRole("link", { name: "Leadership" })).toBeVisible();
 
-  const boardCard = page.locator(".card").filter({ has: page.getByText("Board of Directors", { exact: true }) });
+  // The panel names itself, so the roster is addressed as a named region
+  // rather than by the framework class its markup used to carry.
+  const boardCard = page.getByRole("region", { name: "Board of Directors" });
   const title = `Browser-test Board Member ${Date.now()}`;
   await boardCard.getByPlaceholder("Search by email or name…").fill(staffEmail);
   await boardCard.getByRole("button", { name: new RegExp(staffEmail, "i") }).click();
-  await boardCard.getByPlaceholder("Title (e.g. Board Member)").fill(title);
-  await boardCard.getByTitle("From").fill("2026-08-28");
+  await boardCard.getByLabel("Title").fill(title);
+  await boardCard.getByLabel("From").fill("2026-08-28");
 
   const createResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === LEADERSHIP_API && response.request().method() === "POST",
@@ -43,7 +46,7 @@ test("permitted staff manage the public leadership roster through the System por
   await boardCard.getByRole("button", { name: "Add", exact: true }).click();
   expect((await createResponse).status()).toBe(201);
 
-  const position = boardCard.locator(".portal-leadership-name").locator("..", { hasText: title });
+  const position = boardCard.locator("tr").filter({ hasText: title });
   await expect(position).toContainText(title);
 
   const publicResponse = await page.request.get("/api/v1/leadership/board");
@@ -55,8 +58,10 @@ test("permitted staff manage the public leadership roster through the System por
     (response) =>
       new URL(response.url()).pathname.startsWith(`${LEADERSHIP_API}/`) && response.request().method() === "DELETE",
   );
-  await position.getByRole("button", { name: "Row actions" }).click();
-  await page.getByRole("menuitem", { name: "Remove position" }).click();
+  // Whether removal is a button or an item in the row's menu depends on
+  // whether this operator may also edit the position, so the helper resolves
+  // it rather than this spec assuming one shape.
+  await runRowAction(page, position, "Remove position");
   await acceptConfirmDialog(page, "Remove position");
   expect((await deleteResponse).status()).toBe(200);
   await expect(position).toHaveCount(0);

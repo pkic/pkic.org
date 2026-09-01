@@ -1,21 +1,176 @@
+// ── The tier wall's spacing ladder ──────────────────────────────────────────
+// Five distances, each one token step apart, so the wall groups itself by
+// proximity rather than by anything the reader has to work out:
+//
+//   logo → the wall's edge     --pk-3   the smallest, so an outer logo is never
+//                                       pushed away as though a column were
+//                                       missing beside it
+//   caption → its own logos    --pk-4   the caption belongs to the band below it
+//   row → row inside a tier    --pk-5   a wrapped row is still the same tier
+//   logo → logo across a row   --pk-6   neighbours are separated, not crowded
+//   band → band                --pk-7   the largest gap on the wall is the one
+//                                       that actually divides one rank from
+//                                       the next
+//
+// The band gap is three times the caption's, which is what stops a caption
+// from reading as though it were floating between two tiers; the row gap stays
+// below the band gap, which is what stops a tier that wrapped from reading as
+// two tiers. Before this, the caption gap, the row gap and the band gap were
+// all `--pk-4` and the wall had no rhythm at all.
+//
+// A phone takes the same five rungs shifted one step down the scale
+// (`--pk-2` through `--pk-6`), so the proportions survive the narrow screen
+// instead of being replaced by a second set of numbers.
 .sponsors {
+  --sponsors-edge-inset: var(--pk-2);
+  --sponsors-caption-gap: var(--pk-3);
+  --sponsors-row-gap: var(--pk-4);
+  --sponsors-logo-gap: var(--pk-5);
+  // The band separation is the stack utility's own gap: the wall is a
+  // `pk-stack`, and its "Load more" control wants the same distance from the
+  // last band that the bands want from each other.
+  --pk-gap: var(--pk-6);
+
+  padding-block: var(--pk-5);
+
+  @media (min-width: 768px) {
+    --sponsors-edge-inset: var(--pk-3);
+    --sponsors-caption-gap: var(--pk-4);
+    --sponsors-row-gap: var(--pk-5);
+    --sponsors-logo-gap: var(--pk-6);
+    --pk-gap: var(--pk-7);
+
+    padding-block: var(--pk-6);
+  }
+
   a {
     text-decoration: none;
   }
 
+  // ── One tier band ─────────────────────────────────────────────────────────
+  // A captioned rule with the tier's logos in a row beneath it. The markup
+  // used to build this out of Bootstrap's grid and position utilities; it
+  // lives here instead, because this surface's other styling does, and because
+  // a page being taken off the framework cannot keep depending on
+  // `position-absolute top-0 start-50` to place a label.
+  //
+  // The band carries its own weight class, so the sizes below are declared
+  // once for the tier rather than repeated onto every logo in it.
+  .sponsors-tier {
+    // Rank is expressed as how tall a tier's logos are allowed to be. Each
+    // step up the catalog's display weight adds the same amount, so the whole
+    // catalog sits on one ramp rather than on a table of hand-set sizes.
+    --sponsors-logo-height: calc(1.25rem + 0.375rem * (var(--sponsor-weight, 1) - 1));
+    // One box for every logo in the band, because logos disagree wildly about
+    // their aspect ratio — this wall holds wordmarks past 10:1 beside glyphs
+    // that are square. Contained in a shared rectangle, a wide wordmark and a
+    // square glyph read as members of the same row instead of each claiming
+    // whatever width its own drawing happens to want.
+    //
+    // The second term is what makes a phone work. It is half the row, minus
+    // the gap the two halves are separated by, so a narrow screen holds
+    // exactly two logos per line with no arithmetic left over: no orphan third
+    // that only just failed to fit, and no strip of dead air down each margin.
+    // It replaces a flat `34vw`, which capped every tier at the same width and
+    // so flattened the rank ramp into nothing but height — and left a third of
+    // the line unused. Ranks small enough to stay under the cap keep their own
+    // width, so the ramp survives the narrow screen at the bottom of the wall
+    // and compresses only at the top, where the tiers are one or two logos
+    // wide anyway.
+    --sponsors-logo-width: min(var(--sponsors-logo-height) * 3.6, calc((100% - var(--sponsors-logo-gap)) / 2));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--sponsors-caption-gap);
+  }
+
+  // The tier's name, read as a caption sitting in a gap in the rule. The rule
+  // is drawn as the two lines flanking the name rather than as a border the
+  // name is knocked out of with a solid background: a knockout has to repaint
+  // whatever the page is painted on, so it renders a chip of the wrong colour
+  // the moment the caption sits on anything but the plain page surface.
   .sponsor-level {
-    color: #bbb;
-    font-size: 0.7em;
+    display: flex;
+    align-items: center;
+    // The gap the caption sits in. It matches the distance from the caption to
+    // its own logos, so the space around the label reads as one measure rather
+    // than as a tight horizontal notch above a loose vertical one.
+    gap: var(--sponsors-caption-gap);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-2xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+
+    &::before,
+    &::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--pk-line-soft);
+    }
+  }
+
+  // The logos in a tier, centered and wrapping. Each one's own spacing comes
+  // from this gap rather than padding on a wrapper per logo.
+  //
+  // The two axes differ on purpose. Logos are wide and short, so neighbours
+  // across a row need more air between them than rows need between each other
+  // to stay separate; equal gaps read as crowded sideways and loose
+  // vertically. The column gap is also the one the box width is derived from,
+  // which is why both read the same custom property rather than two numbers
+  // that have to be kept in step by hand.
+  .sponsors-tier-logos {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: var(--sponsors-row-gap) var(--sponsors-logo-gap);
+    // Side air for the row, not for the captioned rule above it: the rules run
+    // the full width of the page's column, where they line up with every other
+    // rule on the page, while the logos stop short of it. Without this a
+    // wordmark on a phone ends exactly on the column edge and reads as clipped.
+    padding-inline: var(--sponsors-edge-inset);
+  }
+
+  // The box. `img-fluid` used to cap a logo's width at its container and leave
+  // its intrinsic size alone; the rule that replaced it set `width: 100%`,
+  // which is the opposite — every logo inflated to its permitted maximum
+  // regardless of how large it was drawn.
+  .sponsor-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: var(--sponsors-logo-height);
+    inline-size: var(--sponsors-logo-width);
+  }
+
+  // A member's logo is their artwork, and almost all of it is drawn in dark
+  // ink for a light page. On the dark theme those logos vanish into the
+  // ground — Thales, IBM, EverTrust and several others were simply not there.
+  // Recolouring someone's mark is not ours to do, so the plate under it stays
+  // light in both themes and the artwork is shown as its owner drew it. The
+  // plate is only as large as the logo box, and the wall's own ground still
+  // follows the theme around it.
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) & .sponsor-link {
+      background: var(--pk-on-solid);
+      border-radius: var(--pk-radius-sm);
+      padding: var(--pk-2);
+      box-sizing: content-box;
+    }
+  }
+
+  :root[data-theme="dark"] & .sponsor-link {
+    background: var(--pk-on-solid);
+    border-radius: var(--pk-radius-sm);
+    padding: var(--pk-2);
+    box-sizing: content-box;
   }
 
   .sponsor-logo {
-    width: 100%;
-    height: auto;
+    max-block-size: 100%;
+    max-inline-size: 100%;
     object-fit: contain;
-    max-height: calc(15px + (15px * (var(--sponsor-weight) - 1)));
-    max-width: calc(100px + (50px * (var(--sponsor-weight) - 1)));
-    min-height: 15px;
-    min-width: 75px;
   }
 }
 
@@ -49,10 +204,21 @@
   max-width: calc(60px * var(--sponsor-weight, 1));
 }
 
+// The strip's own label, when a caller supplies none of its own. Its width,
+// centring, spacing, case and colour were five Bootstrap utility classes
+// written into `sponsors-wall.tsx`; they belong beside the rest of the label's
+// appearance instead.
 .sponsor-strip-default-label {
+  width: 100%;
+  margin-bottom: var(--pk-3);
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   opacity: 0.6;
+  text-align: center;
+  text-transform: uppercase;
+  // The strip sits over the hero's dark media, so the label takes the ink
+  // meant for a solid ground rather than the page's body colour.
+  color: var(--pk-on-solid);
 }
 
 .sponsor-strip-default-logo {

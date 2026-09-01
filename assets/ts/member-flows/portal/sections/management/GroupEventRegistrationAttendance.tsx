@@ -5,6 +5,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { attendanceTypeLabel } from "../events/attendance";
 import { fmt } from "../../ui";
 
 export function GroupEventRegistrationAttendance({
@@ -27,22 +28,27 @@ export function GroupEventRegistrationAttendance({
     [registrationEndpoint],
   );
 
-  if (detail.loading) return <Spinner />;
+  if (detail.loading) return <Spinner label="Loading this registration…" />;
   if (detail.error) return <ErrorAlert error={detail.error} />;
   if (!detail.data) return null;
 
   const registration = detail.data.registration;
   return (
-    <section aria-label={`Attendance for ${registration.display_name ?? registration.user_email ?? "attendee"}`}>
-      <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
-        <div>
-          <h6 class="mb-1">{registration.display_name ?? registration.user_email ?? "Attendee"}</h6>
-          {registration.user_email && <div class="small text-muted">{registration.user_email}</div>}
+    <section
+      class="pk pk-stack"
+      aria-label={`Attendance for ${registration.display_name ?? registration.user_email ?? "attendee"}`}
+    >
+      <div class="pk-cluster pk-cluster--start pk-cluster--between">
+        <div class="pk-stack pk-stack--tight">
+          <h4>{registration.display_name ?? registration.user_email ?? "Attendee"}</h4>
+          {registration.user_email && <p class="pk-small">{registration.user_email}</p>}
         </div>
-        <div class="d-flex flex-wrap align-items-center gap-2 small">
+        <div class="pk-cluster pk-small">
           <Badge status={registration.status} />
-          <span>{registration.attendance_type.replaceAll("_", " ")}</span>
-          <span class="text-muted">Registered {fmt(registration.created_at)}</span>
+          {/* The shared vocabulary rather than an underscore-stripping
+              replace, so "on_demand" reads the same here as everywhere else. */}
+          <span>{attendanceTypeLabel(registration.attendance_type)}</span>
+          <span class="pk-nowrap">Registered {fmt(registration.created_at)}</span>
         </div>
       </div>
       <DayAttendanceManager

@@ -1,0 +1,31 @@
+/*
+ * DescriptionList.
+ *
+ * The block itself — the grid, the reset a `dl` needs, the two columns — is in
+ * `Content.css`, because the class it defines is already written by hand on
+ * about twenty surfaces and there must not be two of it. What is here is what
+ * only the component produces: its density, and its stand-in for a value that
+ * is not there.
+ */
+
+@layer components {
+  /*
+   * The smaller of the two densities. Sidebars and cards were pairing the list
+   * with a separate small-text class to get this; a modifier on the block keeps
+   * the two decisions from drifting apart.
+   */
+  .pk-datalist--compact {
+    gap: var(--pk-1) var(--pk-2);
+    font-size: var(--pk-text-sm);
+  }
+
+  /*
+   * A missing value is a dash, not a blank. An empty `dd` reads as a layout
+   * fault — the eye looks for the value and finds a hole — where a dash says
+   * the field was looked at and had nothing in it. Faint, so a page of them
+   * does not compete with the values that are there.
+   */
+  .pk-datalist__empty {
+    color: var(--pk-ink-faint);
+  }
+}

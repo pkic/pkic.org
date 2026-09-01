@@ -1,6 +1,8 @@
 import { useState } from "preact/hooks";
 import { postJson } from "../../../../shared/api-client";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { Button, type ButtonVariant } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { toast } from "../../ui";
 import { emailReminderRunResponseSchema } from "../../../../../shared/schemas/email-reminders";
 import {
@@ -86,69 +88,93 @@ export function OperationActions({
 
   const canRunAnything = canManageEmail || canWriteMembership || canApproveMembership || canRunRetention;
 
+  /**
+   * The commands, as data. Six near-identical button blocks differed only in
+   * their label, their permission and the call they made, which is three
+   * facts per command and sixty lines of markup to carry them.
+   */
+  const commands: ReadonlyArray<{
+    key: CommandKey;
+    label: string;
+    variant: ButtonVariant;
+    visible: boolean;
+    activate: () => void;
+  }> = [
+    {
+      key: "preview",
+      label: "Preview reminders",
+      variant: "secondary",
+      visible: true,
+      activate: () => void run("preview", () => reminders("preview")),
+    },
+    {
+      key: "reminders",
+      label: "Queue reminders",
+      variant: "primary",
+      visible: canManageEmail,
+      activate: () => void run("reminders", () => reminders("execute")),
+    },
+    {
+      key: "consultation",
+      label: "Run consultation batch",
+      variant: "primary",
+      visible: canWriteMembership,
+      activate: () => void run("consultation", () => membershipBatch("consultation")),
+    },
+    {
+      key: "ec-review",
+      label: "Run EC review batch",
+      variant: "primary",
+      visible: canApproveMembership,
+      activate: () => void run("ec-review", () => membershipBatch("ec-review")),
+    },
+    {
+      key: "wg-chair-digest",
+      label: "Queue chair digest",
+      variant: "primary",
+      visible: canWriteMembership,
+      activate: () => void run("wg-chair-digest", () => membershipBatch("wg-chair-digest")),
+    },
+    {
+      key: "retention",
+      label: "Run retention redaction",
+      variant: "danger-quiet",
+      visible: canRunRetention && canAnonymizeUsers,
+      activate: () => void runRetention(),
+    },
+  ];
+
   return (
-    <div class="border rounded p-3 mb-3" aria-label="Operational commands">
-      <div class="d-flex flex-wrap gap-2">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          disabled={busy !== null}
-          onClick={() => void run("preview", () => reminders("preview"))}
-        >
-          Preview reminders
-        </button>
-        {canManageEmail && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-primary"
-            disabled={busy !== null}
-            onClick={() => void run("reminders", () => reminders("execute"))}
-          >
-            Queue reminders
-          </button>
-        )}
-        {canWriteMembership && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-primary"
-            disabled={busy !== null}
-            onClick={() => void run("consultation", () => membershipBatch("consultation"))}
-          >
-            Run consultation batch
-          </button>
-        )}
-        {canApproveMembership && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-primary"
-            disabled={busy !== null}
-            onClick={() => void run("ec-review", () => membershipBatch("ec-review"))}
-          >
-            Run EC review batch
-          </button>
-        )}
-        {canWriteMembership && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-primary"
-            disabled={busy !== null}
-            onClick={() => void run("wg-chair-digest", () => membershipBatch("wg-chair-digest"))}
-          >
-            Queue chair digest
-          </button>
-        )}
-        {canRunRetention && canAnonymizeUsers && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-danger"
-            disabled={busy !== null}
-            onClick={() => void runRetention()}
-          >
-            Run retention redaction
-          </button>
-        )}
-      </div>
-      {!canRunAnything && <p class="small text-muted mb-0 mt-2">Reminder preview is read-only.</p>}
+    // `aria-label` on a bare `<div>` names nothing — a div has no role for the
+    // name to attach to — so the group of commands was announced as unlabeled
+    // content. A named panel is a region with a heading, which is what a bar
+    // of irreversible operations should be.
+    <div class="pk">
+      <Panel aria-label="Operational commands">
+        <PanelHeader title="Operational commands" />
+        <PanelBody class="pk-stack pk-stack--snug">
+          <div class="pk-cluster">
+            {commands
+              .filter((command) => command.visible)
+              .map((command) => (
+                // `loading` keeps the running command focusable and says it is
+                // busy, rather than disabling it and throwing a keyboard user
+                // out of the bar they were in.
+                <Button
+                  key={command.key}
+                  size="sm"
+                  variant={command.variant}
+                  loading={busy === command.key}
+                  disabled={busy !== null}
+                  onClick={command.activate}
+                >
+                  {command.label}
+                </Button>
+              ))}
+          </div>
+          {!canRunAnything && <p class="pk-small">Reminder preview is read-only.</p>}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

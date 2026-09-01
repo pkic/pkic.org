@@ -1,0 +1,65 @@
+/*
+ * Chip.
+ *
+ * The wrapper carries the shape; the two controls inside it are independently
+ * focusable, so each gets its own focus treatment rather than one ring around
+ * the pair.
+ */
+
+@layer components {
+  .pk-chip {
+    display: inline-flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-pill);
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink);
+  }
+
+  .pk-chip--pressed {
+    background: var(--pk-accent-soft);
+    border-color: var(--pk-accent);
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-chip__toggle {
+    padding: 0.15rem 0.7rem;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .pk-chip__toggle--static {
+    cursor: default;
+  }
+
+  .pk-chip__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* A 44px target is the accessible minimum for touch; the chip is smaller
+       than that by design, so the hit area is widened with padding rather than
+       by growing the visible control. */
+    min-width: 1.9rem;
+    padding: 0 0.5rem 0 0.25rem;
+    background: none;
+    border: 0;
+    color: var(--pk-ink-faint);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .pk-chip__remove:hover {
+    color: var(--pk-ink);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-chip--pressed .pk-chip__remove:hover {
+    background: color-mix(in oklab, var(--pk-accent) 18%, var(--pk-surface));
+  }
+}

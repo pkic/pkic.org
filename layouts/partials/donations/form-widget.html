@@ -3,17 +3,28 @@
 
   Called from:
     - layouts/shortcodes/donation-form.html  (content-authored placements)
-    - layouts/donate/single.html             (right-column on /donate/)
+    - content/donate/_index.md               (right-hand column on /donate/)
 
   Expected context (dict):
     .heading          — Form card heading
     .description      — Description text below heading (empty string omits it)
     .email            — Pre-fill email field
     .name             — Pre-fill donor name field
-    .organizationName — Pre-fill organisation field
+    .organizationName — Pre-fill organization field
     .source           — Attribution source label / metadata
     .successPath      — Relative redirect path after successful donation
     .cancelPath       — Relative redirect path if donor cancels
+
+  Two structural rules this markup has to keep:
+
+  1. `initDonationForm` (assets/ts/shared/donation/form.tsx) reaches the
+     checkout container through `[data-donation-form]`'s parentElement, so the
+     form body and the checkout body have to stay siblings inside the panel.
+  2. The widget is placed inside markdown columns, so its output is parsed by
+     Goldmark. A line that follows a blank line and is indented four spaces or
+     more becomes an indented code block, which renders the whole form as
+     escaped source. Every line after a blank line therefore starts at two
+     spaces; deeper nesting only ever appears in an unbroken run of lines.
 */}}
 {{- $heading          := .heading          | default "Support the PKI Consortium" -}}
 {{- $description      := .description      | default "Your voluntary contribution helps us to keep the PKI Consortium Membership, Conferences, and Resources free. Every donation makes a difference." -}}
@@ -24,111 +35,102 @@
 {{- $successPath      := .successPath      | default "" -}}
 {{- $cancelPath       := .cancelPath       | default "" -}}
 
-<div class="donation-widget" data-module="shared/donation-form">
-<div
-  class="donation-form"
-  data-donation-form
-  {{ with $email            }}data-donation-email="{{ . }}"{{ end }}
-  {{ with $name             }}data-donation-name="{{ . }}"{{ end }}
-  {{ with $organizationName }}data-donation-organization="{{ . }}"{{ end }}
-  {{ with $source           }}data-donation-source="{{ . }}"{{ end }}
-  {{ with $successPath      }}data-donation-success-path="{{ . }}"{{ end }}
-  {{ with $cancelPath       }}data-donation-cancel-path="{{ . }}"{{ end }}
+<div class="pk pk-panel" data-module="shared/donation-form">
+{{- /* Every optional attribute trims its own newline, so an unset one cannot
+       leave a blank line inside the opening tag: that would end the HTML block
+       mid-element and leave the closing `>` on its own line, which markdown
+       then reads as a blockquote. */ -}}
+<div class="pk-panel__body pk-stack" data-donation-form
+  {{- with $email            }} data-donation-email="{{ . }}"{{ end }}
+  {{- with $name             }} data-donation-name="{{ . }}"{{ end }}
+  {{- with $organizationName }} data-donation-organization="{{ . }}"{{ end }}
+  {{- with $source           }} data-donation-source="{{ . }}"{{ end }}
+  {{- with $successPath      }} data-donation-success-path="{{ . }}"{{ end }}
+  {{- with $cancelPath       }} data-donation-cancel-path="{{ . }}"{{ end -}}
 >
-  <h3 class="donation-form-heading">{{ $heading }}</h3>
-  {{ with $description }}<p class="donation-form-description">{{ . }}</p>{{ end }}
-  <p class="donation-form-receipt-notice">A receipt will be issued by email after your donation is processed.</p>
+  <div class="pk-stack pk-stack--tight">
+    <h3>{{ $heading }}</h3>
+    {{ with $description }}<p class="pk-muted">{{ . }}</p>{{ end }}
+    <p class="pk-small">A receipt will be issued by email after your donation is processed.</p>
+  </div>
 
-  {{/* Donor identity fields */}}
-  <div class="donation-form-identity">
-    <div class="mb-2">
-      <label for="donation-donor-name" class="form-label donation-form-label">Full name <span class="text-danger" aria-hidden="true">*</span></label>
-      <input
-        type="text"
-        id="donation-donor-name"
-        class="form-control form-control-sm"
-        data-donation-name-input
-        placeholder="Your full name"
-        required
-        autocomplete="name"
-        aria-required="true"
-      />
+  {{/* Donor identity fields. Every control sits in `pk-field__control`: the
+       state mark is positioned against that wrapper, so an input outside it
+       has nowhere to draw the tick, the caution or the cross. */}}
+  <div class="pk-stack pk-stack--snug">
+    <div class="pk-field">
+      <label for="donation-donor-name" class="pk-field__label">Full name <span class="pk-field__required" aria-hidden="true">*</span></label>
+      <div class="pk-field__control">
+        <input type="text" id="donation-donor-name" class="pk-input" data-donation-name-input placeholder="Your full name" required autocomplete="name" aria-required="true">
+      </div>
     </div>
-    <div class="mb-2">
-      <label for="donation-donor-email" class="form-label donation-form-label">Email</label>
-      <input
-        type="email"
-        id="donation-donor-email"
-        class="form-control form-control-sm"
-        data-donation-email-input
-        placeholder="your@email.com"
-        autocomplete="email"
-      />
+    <div class="pk-field">
+      <label for="donation-donor-email" class="pk-field__label">Email</label>
+      <div class="pk-field__control">
+        <input type="email" id="donation-donor-email" class="pk-input" data-donation-email-input placeholder="your@email.com" autocomplete="email">
+      </div>
     </div>
-    <div class="mb-3">
-      <label for="donation-donor-org" class="form-label donation-form-label">Organisation <span class="text-muted small">(optional)</span></label>
-      <input
-        type="text"
-        id="donation-donor-org"
-        class="form-control form-control-sm"
-        data-donation-org-input
-        placeholder="Your company or organisation"
-        autocomplete="organization"
-      />
+    <div class="pk-field">
+      <label for="donation-donor-org" class="pk-field__label">Organization <span class="pk-small">(optional)</span></label>
+      <div class="pk-field__control">
+        <input type="text" id="donation-donor-org" class="pk-input" data-donation-org-input placeholder="Your company or organization" autocomplete="organization">
+      </div>
     </div>
   </div>
 
   {{/* Currency selector */}}
-  <div class="donation-form-currency-row">
-    <label for="donation-currency" class="form-label donation-form-currency-label">Currency</label>
-    <select id="donation-currency" class="form-select form-select-sm donation-form-currency-select" data-donation-currency>
-      <option value="usd">USD ($) — US Dollar</option>
-    </select>
-  </div>
-
-  {{/* Preset amount buttons */}}
-  <div class="donation-form-presets" data-donation-presets>
-    <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="50">$50</button>
-    <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="100">$100</button>
-    <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="250">$250</button>
-    <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="500">$500</button>
-    <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="1000">$1,000</button>
-  </div>
-
-  {{/* Custom amount input */}}
-  <div class="donation-form-custom">
-    <label for="donation-custom-amount" class="form-label">Or enter a custom amount</label>
-    <div class="input-group input-group-sm">
-      <span class="input-group-text" data-donation-currency-prefix>$</span>
-      <input
-        type="number"
-        id="donation-custom-amount"
-        class="form-control"
-        data-donation-custom-input
-        placeholder="Other amount"
-        min="1"
-        step="1"
-        aria-label="Custom donation amount"
-      />
+  <div class="pk-field">
+    <label for="donation-currency" class="pk-field__label">Currency</label>
+    <div class="pk-field__control">
+      <select id="donation-currency" class="pk-input pk-input--select" data-donation-currency>
+        <option value="usd">USD ($) — US Dollar</option>
+      </select>
     </div>
   </div>
 
-  <button type="button" class="btn btn-page-accent donation-form-submit" data-donation-submit>
-    Donate
-  </button>
+  {{/* Preset amounts. `renderPresets` replaces these with the same amounts
+       converted into the donor's currency; the container's class is the
+       layout either way. */}}
+  <div class="pk-cluster" data-donation-presets>
+    <button type="button" class="pk-btn pk-btn--secondary donation-preset-btn" data-preset-amount="50" aria-pressed="false">$50</button>
+    <button type="button" class="pk-btn pk-btn--secondary donation-preset-btn" data-preset-amount="100" aria-pressed="false">$100</button>
+    <button type="button" class="pk-btn pk-btn--secondary donation-preset-btn" data-preset-amount="250" aria-pressed="false">$250</button>
+    <button type="button" class="pk-btn pk-btn--secondary donation-preset-btn" data-preset-amount="500" aria-pressed="false">$500</button>
+    <button type="button" class="pk-btn pk-btn--secondary donation-preset-btn" data-preset-amount="1000" aria-pressed="false">$1,000</button>
+  </div>
 
-  <p class="donation-form-status small mt-2" data-donation-status hidden></p>
+  {{/* Custom amount. The live currency symbol sits inside the label rather
+       than in a leading box with its own `aria-label`, so the control's
+       accessible name says which currency the number is in. The label belongs
+       to a `pk-field` like every other one: outside it, it is a part with no
+       whole and can never carry a state. */}}
+  <div class="pk-field">
+    <label for="donation-custom-amount" class="pk-field__label">Or enter a custom amount (<span data-donation-currency-prefix>$</span>)</label>
+    <div class="pk-field__control">
+      <input type="number" id="donation-custom-amount" class="pk-input" data-donation-custom-input placeholder="Other amount" min="1" step="1">
+    </div>
+  </div>
+  {{- /* Kept in the same unbroken run as the block above, and trimmed so this
+         comment does not introduce a break of its own: `button` is not one of
+         the tags that opens a markdown HTML block, so a blank line here would
+         wrap it in a paragraph and make that paragraph, rather than the
+         button, the stack's child. */ -}}
+  <button type="button" class="pk-btn pk-btn--primary pk-btn--block" data-donation-submit>Donate</button>
 
+  {{/* `showStatus` writes the outcome here and adds the Alert tone to it. The
+       role is on the element already, so the region exists before there is
+       anything to announce. */}}
+  <p class="pk-small" role="status" data-donation-status hidden></p>
   {{ if $description }}
-  <p class="donation-form-disclaimer">{{ partial "donations/disclaimer.html" . }}</p>
+  <p class="pk-small">{{ partial "donations/disclaimer.html" . }}</p>
   {{ end }}
 </div>
 
-{{/* Embedded Stripe Checkout container — shown after the donor clicks Donate */}}
-<div class="donation-checkout-overlay" data-donation-checkout hidden>
-  <button type="button" class="btn btn-sm btn-outline-secondary donation-checkout-back mb-3" data-donation-back>
-    ← Back
-  </button>
+{{/* Embedded Stripe Checkout — shown in place of the form after Donate */}}
+<div class="pk-panel__body pk-stack pk-stack--snug" data-donation-checkout hidden>
+  <div class="pk-cluster">
+    <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-donation-back><span aria-hidden="true">&larr;</span> Back</button>
+  </div>
   <div data-donation-checkout-mount></div>
 </div>
-</div>{{/* .donation-widget */}}
+</div>

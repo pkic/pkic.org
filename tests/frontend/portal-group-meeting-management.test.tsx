@@ -2,11 +2,17 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { EventOccurrence, GroupEventSeries } from "../../assets/shared/schemas/event-series";
+import {
+  eventOccurrenceGuestInviteSchema,
+  type EventOccurrence,
+  type GroupEventSeries,
+} from "../../assets/shared/schemas/event-series";
 import { GroupMeetingSeriesDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetingSeriesDetail";
 import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
+import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -80,6 +86,31 @@ function baseSeries(overrides: Partial<GroupEventSeries> = {}): GroupEventSeries
   };
 }
 
+const SERIES_INVITE_WINDOW = {
+  startsAt: "2026-09-01T13:00:00.000Z",
+  endsAt: "2026-09-29T14:00:00.000Z",
+  timezone: "UTC",
+};
+
+function guestOccurrence(overrides: Partial<EventOccurrence> = {}): EventOccurrence {
+  return {
+    id: "80000000-0000-4000-8000-000000000004",
+    seriesId: "60000000-0000-4000-8000-000000000004",
+    startsAt: "2026-09-08T13:00:00.000Z",
+    endsAt: "2026-09-08T14:00:00.000Z",
+    status: "scheduled",
+    locationOverride: null,
+    location: "Online",
+    providerConfigured: true,
+    guestCount: 0,
+    joinConfirmedCount: 0,
+    attendanceVerifiedCount: 0,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-25T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("portal group meeting management", () => {
   it("sends a true series patch and keeps materialized schedule fields locked", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
@@ -129,16 +160,20 @@ describe("portal group meeting management", () => {
     const onChanged = vi.fn(async () => {});
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={onChanged} />);
     expect(container.textContent).toContain("recurring schedule is locked");
-    for (const suffix of ["start", "recurrence", "timezone", "duration"]) {
+    // The recurrence editor and the time-zone input own their ids, which the
+    // series fields still hand them. Every other control is inside a `Field`,
+    // which pairs label and control by generated id, so it is resolved
+    // through that pair — the lookup then fails exactly when the labelling
+    // contract is broken rather than when an id is renamed.
+    for (const suffix of ["recurrence", "timezone"]) {
       expect(
         container.querySelector<HTMLInputElement>(`#meeting-series-settings-${series.id}-${suffix}`)?.disabled,
       ).toBe(true);
     }
-    const name = container.querySelector<HTMLInputElement>(`#meeting-series-settings-${series.id}-name`)!;
-    name.value = "Updated materialized call";
-    void act(() => {
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    for (const label of ["First occurrence", "Duration (minutes)"]) {
+      expect(controlFor(container, label).disabled).toBe(true);
+    }
+    await typeInto(controlFor(container, "Meeting name"), "Updated materialized call");
     const active = container.querySelector<HTMLInputElement>(`#meeting-series-active-${series.id}`)!;
     active.checked = false;
     void act(() => {
@@ -276,26 +311,7 @@ describe("portal group meeting management", () => {
 
   it("defaults guest validity to the selected scope and submits the canonical shared contract", async () => {
     const requests: Array<{ method: string; body?: Record<string, unknown> }> = [];
-    const occurrence: EventOccurrence = {
-      id: "80000000-0000-4000-8000-000000000004",
-      seriesId: "60000000-0000-4000-8000-000000000004",
-      startsAt: "2026-09-08T13:00:00.000Z",
-      endsAt: "2026-09-08T14:00:00.000Z",
-      status: "scheduled",
-      locationOverride: null,
-      location: "Online",
-      providerConfigured: true,
-      guestCount: 0,
-      joinConfirmedCount: 0,
-      attendanceVerifiedCount: 0,
-      createdAt: "2026-08-01T00:00:00.000Z",
-      updatedAt: "2026-08-25T10:00:00.000Z",
-    };
-    const seriesInviteWindow = {
-      startsAt: "2026-09-01T13:00:00.000Z",
-      endsAt: "2026-09-29T14:00:00.000Z",
-      timezone: "UTC",
-    };
+    const occurrence = guestOccurrence();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -328,22 +344,19 @@ describe("portal group meeting management", () => {
       <MeetingGuests
         base="/api/v1/groups/test/meetings/series/test"
         occurrence={occurrence}
-        seriesInviteWindow={seriesInviteWindow}
+        seriesInviteWindow={SERIES_INVITE_WINDOW}
         timeZone="UTC"
       />,
     );
     await settle();
 
-    expect(container.querySelector(`#meeting-guest-expiry-${occurrence.id}`)).toBeNull();
-    const addGuest = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Add guest",
-    )!;
-    await act(async () => addGuest.click());
+    expect(labelNames(container)).not.toContain("Eligibility expires");
+    await act(async () => buttonNamed(container, "Add guest").click());
 
-    const expiry = container.querySelector<HTMLInputElement>(`#meeting-guest-expiry-${occurrence.id}`)!;
+    const expiry = controlFor(container, "Eligibility expires");
     expect(expiry.value).toBe("2026-09-08T13:00");
     expect(expiry.max).toBe("2026-09-08T14:00");
-    const seriesWide = container.querySelector<HTMLInputElement>(`#guest-series-wide-${occurrence.id}`)!;
+    const seriesWide = controlFor(container, "Eligible for every occurrence in this series");
     seriesWide.checked = true;
     void act(() => {
       seriesWide.dispatchEvent(new Event("change", { bubbles: true }));
@@ -351,28 +364,183 @@ describe("portal group meeting management", () => {
     expect(expiry.value).toBe("2026-09-01T13:00");
     expect(expiry.max).toBe("2026-09-29T14:00");
 
-    const email = container.querySelector<HTMLInputElement>(`#meeting-guest-email-${occurrence.id}`)!;
-    email.value = "guest@example.test";
-    void act(() => {
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    const name = container.querySelector<HTMLInputElement>(`#meeting-guest-name-${occurrence.id}`)!;
-    name.value = "External Guest";
-    void act(() => {
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await typeInto(controlFor(container, "Email"), "guest@example.test");
+    await typeInto(controlFor(container, "Name"), "External Guest");
     await act(async () => {
       container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     await settle();
 
-    expect(requests.find((request) => request.method === "POST")?.body).toEqual({
+    // Parsed through the shared contract rather than compared to a literal, so
+    // the assertion fails if the surface stops sending what the endpoint takes.
+    const posted = requests.find((request) => request.method === "POST")?.body;
+    expect(eventOccurrenceGuestInviteSchema.parse(posted)).toEqual({
       email: "guest@example.test",
       name: "External Guest",
       affiliation: null,
       expiresAt: "2026-09-01T13:00:00.000Z",
       seriesWide: true,
     });
+  });
+
+  it("keeps the guest form open and states the reason when the invitation is rejected", async () => {
+    const occurrence = guestOccurrence();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        if ((init.method ?? "GET") === "POST") {
+          return new Response(
+            JSON.stringify({
+              error: { code: "GUEST_ALREADY_ELIGIBLE", message: "That guest is already eligible for this occurrence." },
+            }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          );
+        }
+        return json({ guests: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const container = mount(
+      <MeetingGuests
+        base="/api/v1/groups/test/meetings/series/test"
+        occurrence={occurrence}
+        seriesInviteWindow={SERIES_INVITE_WINDOW}
+        timeZone="UTC"
+      />,
+    );
+    await settle();
+    await act(async () => buttonNamed(container, "Add guest").click());
+    await typeInto(controlFor(container, "Email"), "guest@example.test");
+    await typeInto(controlFor(container, "Name"), "External Guest");
+    await act(async () => {
+      container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    // The failure is announced, not only toasted, and nothing the reviewer
+    // typed is thrown away.
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("already eligible");
+    expect(controlFor(container, "Email").value).toBe("guest@example.test");
+    expect(container.querySelector("form")).not.toBeNull();
+  });
+
+  it("names the guest table and every control the add form asks for", async () => {
+    const occurrence = guestOccurrence();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ guests: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    const container = mount(
+      <MeetingGuests
+        base="/api/v1/groups/test/meetings/series/test"
+        occurrence={occurrence}
+        seriesInviteWindow={SERIES_INVITE_WINDOW}
+        timeZone="UTC"
+      />,
+    );
+    await settle();
+
+    expect(container.querySelector("table caption")?.textContent).toBe("External guests for this meeting occurrence");
+
+    await act(async () => buttonNamed(container, "Add guest").click());
+    expect(labelNames(container)).toEqual(
+      expect.arrayContaining([
+        "Email",
+        "Name",
+        "Affiliation",
+        "Eligibility expires",
+        "Eligible for every occurrence in this series",
+      ]),
+    );
+    // A checkbox needs all three parts of the block: the label, the input, and
+    // the text. Only the first renders an operating-system default control.
+    const scope = controlFor(container, "Eligible for every occurrence in this series");
+    expect(scope.classList.contains("pk-check__input")).toBe(true);
+    const scopeLabel = container.querySelector<HTMLLabelElement>(`label[for="${scope.id}"]`)!;
+    expect(scopeLabel.classList.contains("pk-check")).toBe(true);
+    expect(scopeLabel.querySelector(".pk-check__label")?.textContent).toBe(
+      "Eligible for every occurrence in this series",
+    );
+    // Required fields say so through the attribute, not only the asterisk.
+    expect(controlFor(container, "Email").required).toBe(true);
+    expect(controlFor(container, "Affiliation").required).toBe(false);
+  });
+
+  it("draws the series' active switch as a real check block, and names the generate panel", () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ series })),
+    );
+
+    const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+
+    // All three parts, or the browser draws its own box in its own accent —
+    // which no gate can see and which looks like a bug beside our controls.
+    const active = container.querySelector<HTMLLabelElement>("label.pk-check")!;
+    expect(active.querySelector("input.pk-check__input")).not.toBeNull();
+    expect(active.querySelector("span.pk-check__label")?.textContent).toBe("Active series");
+    expect(container.querySelector<HTMLInputElement>(`#meeting-series-active-${series.id}`)).not.toBeNull();
+
+    // The generation panel is a named region, not an unlabelled box among the
+    // several this editor stacks up.
+    const panel = [...container.querySelectorAll("section.pk-panel")].at(-1);
+    const headingId = panel?.getAttribute("aria-labelledby");
+    expect(headingId).toBeTruthy();
+    expect(container.querySelector(`[id="${headingId!}"]`)?.textContent).toBe("Generate recurring occurrences");
+
+    // And its one control is named by a real for/id pair.
+    expect(controlFor(container, "Generate through").tagName.toLowerCase()).toBe("input");
+  });
+
+  it("keeps the series form open and announces a rejected save as an alert", async () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "conflict" }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+    await typeInto(controlFor(container, "Meeting name"), "Renamed call");
+    await act(async () => {
+      container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert).not.toBeNull();
+    // The reader is told what happened in a sentence, not by a status code or
+    // a red border, and the draft they typed is still there to retry.
+    expect(alert?.textContent).toContain("Someone else changed this at the same time.");
+    expect(controlFor<HTMLInputElement>(container, "Meeting name").value).toBe("Renamed call");
+    expect(buttonNamed(container, "Save series")).toBeDefined();
+  });
+
+  it("names each series panel after the series it belongs to, and links no tab to a missing id", async () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+
+    // The tabs navigate, so they are links marked `aria-current` — not the
+    // ARIA tab pattern, and so the regions below are named sections rather
+    // than tabpanels pointing at ids no link carries.
+    expect(container.querySelector("[role='tabpanel']")).toBeNull();
+    const region = container.querySelector("section[aria-label]");
+    expect(region?.getAttribute("aria-label")).toBe("Architecture call occurrences");
+    for (const element of container.querySelectorAll("[aria-labelledby]")) {
+      const target = element.getAttribute("aria-labelledby")!;
+      expect(container.querySelector(`[id="${target}"]`)).not.toBeNull();
+    }
   });
 
   it("opens the tab given by an initial resourceTab", async () => {
@@ -386,10 +554,8 @@ describe("portal group meeting management", () => {
       <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
     );
 
-    const settingsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Series settings",
-    );
-    expect(settingsTab?.getAttribute("aria-selected")).toBe("true");
+    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings");
+    expect(isCurrentTab(settingsTab)).toBe(true);
     expect(container.textContent).toContain("Save series");
   });
 
@@ -404,9 +570,9 @@ describe("portal group meeting management", () => {
       <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
     );
 
-    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1);
-    const occurrencesTab = container.querySelector('[role="tab"]');
-    expect(occurrencesTab?.getAttribute("aria-selected")).toBe("true");
+    expect(tabs(container)).toHaveLength(1);
+    const occurrencesTab = tabs(container)[0];
+    expect(isCurrentTab(occurrencesTab)).toBe(true);
     expect(occurrencesTab?.textContent).toBe("Occurrences");
   });
 
@@ -419,9 +585,7 @@ describe("portal group meeting management", () => {
 
     const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
 
-    const settingsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Series settings",
-    )!;
+    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings")!;
     expect(settingsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${series.id}/settings`);
 
     await act(async () => {

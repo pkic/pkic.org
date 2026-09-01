@@ -41,7 +41,7 @@ class SessionRegistration extends HTMLElement {
   // Helper function to escape HTML
   escapeHTML(str) {
     if (!str) return '';
-    return str.replace(/[&<"']/g, function(match) {
+    return str.replace(/[&<>"']/g, function(match) {
       return {
         '&': '&amp;',
         '<': '&lt;',
@@ -63,34 +63,30 @@ class SessionRegistration extends HTMLElement {
   // Helper function to render current registration status
   renderCurrentRegistration() {
     return `
-      <!-- Current Registration Status Card -->
-      <div class="card mb-4 location-0-session">
-        <div class="card-header location-0-session">
-          <h5 class="card-title mb-0 text-white">Current Session Registrations</h5>
+      <!-- Current Registration Status Panel -->
+      <section class="pk-panel location-0-session" aria-labelledby="current-registrations-title">
+        <div class="pk-panel__header">
+          <h2 class="pk-panel__title" id="current-registrations-title">Current Session Registrations</h2>
         </div>
-        <div class="card-body">
-          <p class="text-muted small">You're already registered for some sessions, great! If you'd like to make any changes, simply resubmit the form below to update your selections.</p>
-          
-          <div class="row">
-            <div class="col-md-6">
-              <div class="card border-primary mb-4">
-                <div class="card-body">
-                  <h6 class="card-title text-primary">Your Current <strong>Morning</strong> Session</h6>
-                  <p class="card-text fw-bold">${this.escapeHTML(this.userRegistration?.morningSession) || 'No selection'}</p>
-                </div>
+        <div class="pk-panel__body pk-stack">
+          <p class="pk-small">You're already registered for some sessions, great! If you'd like to make any changes, simply resubmit the form below to update your selections.</p>
+
+          <div class="pk-grid pk-grid--roomy">
+            <div class="pk-panel">
+              <div class="pk-panel__body pk-stack pk-stack--tight">
+                <h3 class="pk-panel__title">Your Current <strong>Morning</strong> Session</h3>
+                <p class="pk-strong">${this.escapeHTML(this.userRegistration?.morningSession) || 'No selection'}</p>
               </div>
             </div>
-            <div class="col-md-6">
-              <div class="card border-primary mb-4">
-                <div class="card-body">
-                  <h6 class="card-title text-primary">Your Current <strong>Afternoon</strong> Session</h6>
-                  <p class="card-text fw-bold">${this.escapeHTML(this.userRegistration?.afternoonSession) || 'No selection'}</p>
-                </div>
+            <div class="pk-panel">
+              <div class="pk-panel__body pk-stack pk-stack--tight">
+                <h3 class="pk-panel__title">Your Current <strong>Afternoon</strong> Session</h3>
+                <p class="pk-strong">${this.escapeHTML(this.userRegistration?.afternoonSession) || 'No selection'}</p>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
     `;
   }
 
@@ -100,32 +96,29 @@ class SessionRegistration extends HTMLElement {
     const locationClass = timeSlot === 'morning' ? 'location-1-session' : 'location-2-session';
     const title = timeSlot === 'morning' ? 'Morning Sessions' : 'Afternoon Sessions';
 
+    const titleId = `${sessionType}-sessions-title`;
+
     return `
-      <!-- ${title} Card -->
-      <div class="card mb-4 ${locationClass}">
-        <div class="card-header ${locationClass}">
-          <h5 class="card-title mb-0 text-white">${title}</h5>
+      <!-- ${title} Panel -->
+      <section class="pk-panel ${locationClass}" aria-labelledby="${titleId}">
+        <div class="pk-panel__header">
+          <h2 class="pk-panel__title" id="${titleId}">${title}</h2>
         </div>
-        <div class="card-body">
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <div class="session-card h-100 ${!userSelection ? 'registered' : ''}">
-                <div class="session-content">
-                  <div class="form-check mb-2">
-                    <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-none" value="" ${!userSelection ? 'checked' : ''}>
-                    <label class="form-check-label w-100" for="${sessionType}-none">
-                      <h6 class="session-title mb-2"><strong>No Selection</strong></h6>
-                      <p class="text-muted small">Select this option if you prefer not to attend any ${sessionType} sessions.</p>
-                    </label>
-                  </div>
-                </div>
+        <div class="pk-panel__body">
+          <div class="pk-grid pk-grid--roomy">
+            <div class="session-card${!userSelection ? ' registered' : ''}">
+              <div class="session-content pk-stack pk-stack--snug">
+                <label class="pk-check" for="${sessionType}-none">
+                  <input class="pk-check__input" type="radio" name="${sessionType}" id="${sessionType}-none" value="" ${!userSelection ? 'checked' : ''}>
+                  <span class="pk-check__label session-title">No Selection<span class="pk-check__hint">Select this option if you prefer not to attend any ${sessionType} sessions.</span></span>
+                </label>
               </div>
             </div>
             ${sessions.map((s) => {
               const isRegistered = userSelection === s.title;
               const isFullForOthers = !s.available && !isRegistered;
 
-              let cardClasses = 'session-card h-100 position-relative';
+              let cardClasses = 'session-card';
               if (isRegistered) {
                 cardClasses += ' registered';
               } else if (isFullForOthers) {
@@ -133,52 +126,48 @@ class SessionRegistration extends HTMLElement {
               }
 
               return `
-              <div class="col-md-6 mb-3">
-                <div class="${cardClasses}">
-                  ${isFullForOthers ? `
-                    <div class="session-full-overlay">
-                      <span class="session-full-text">FULL</span>
+              <div class="${cardClasses}">
+                ${isFullForOthers ? `
+                  <div class="session-full-overlay">
+                    <span class="session-full-text">FULL</span>
+                  </div>
+                ` : ''}
+                <div class="session-content pk-stack pk-stack--snug">
+                  <label class="pk-check" for="${sessionType}-${s.id}">
+                    <input class="pk-check__input" type="radio" name="${sessionType}" id="${sessionType}-${s.id}" value="${this.escapeHTML(s.title)}" ${isRegistered ? 'checked' : ''} ${isFullForOthers ? 'disabled' : ''}>
+                    <span class="pk-check__label session-title">${this.escapeHTML(s.title)}</span>
+                  </label>
+                  ${s.speakers && s.speakers.length > 0 ? `
+                    <div class="session-speakers">
+                      ${s.speakers.map(speaker => `
+                        <div class="speaker-info">
+                          ${speaker.headshot ? `
+                            <img src="${this.escapeHTML(speaker.headshot.x150)}" class="speaker-avatar" alt="${this.escapeHTML(speaker.name)}">
+                          ` : `
+                            <div class="speaker-avatar speaker-initial">
+                              ${this.escapeHTML(speaker.name.charAt(0).toUpperCase())}
+                            </div>
+                          `}
+                          <div class="speaker-details">
+                            <div class="speaker-name">${this.escapeHTML(speaker.name)}</div>
+                            <div class="speaker-role">${this.escapeHTML(speaker.title)}</div>
+                          </div>
+                        </div>
+                      `).join('')}
                     </div>
                   ` : ''}
-                  <div class="session-content">
-                    <div class="form-check mb-2">
-                      <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-${s.id}" value="${this.escapeHTML(s.title)}" ${isRegistered ? 'checked' : ''} ${isFullForOthers ? 'disabled' : ''}>
-                      <label class="form-check-label w-100" for="${sessionType}-${s.id}">
-                        <h6 class="session-title mb-2"><strong>${this.escapeHTML(s.title)}</strong></h6>
-                      </label>
+                  ${s.abstract ? `
+                    <div class="session-preview-wrapper">
+                      <div class="session-preview-gradient">${this.escapeHTML(this.stripMarkdown(s.abstract))}</div>
                     </div>
-                    ${s.speakers && s.speakers.length > 0 ? `
-                      <div class="session-speakers mb-2">
-                        ${s.speakers.map(speaker => `
-                          <div class="speaker-info">
-                            ${speaker.headshot ? `
-                              <img src="${speaker.headshot.x150}" class="speaker-avatar" alt="${this.escapeHTML(speaker.name)}">
-                            ` : `
-                              <div class="speaker-avatar speaker-initial">
-                                ${this.escapeHTML(speaker.name.charAt(0).toUpperCase())}
-                              </div>
-                            `}
-                            <div class="speaker-details">
-                              <div class="speaker-name">${this.escapeHTML(speaker.name)}</div>
-                              <div class="speaker-role">${this.escapeHTML(speaker.title)}</div>
-                            </div>
-                          </div>
-                        `).join('')}
-                      </div>
-                    ` : ''}
-                    ${s.abstract ? `
-                      <div class="session-preview-wrapper">
-                        <div class="session-preview-gradient">${this.escapeHTML(this.stripMarkdown(s.abstract))}</div>
-                      </div>
-                    ` : ''}
-                  </div>
+                  ` : ''}
                 </div>
               </div>
               `;
             }).join('')}
           </div>
         </div>
-      </div>
+      </section>
     `;
   }
 
@@ -295,14 +284,25 @@ class SessionRegistration extends HTMLElement {
     if (hasError) {
       content = this.renderErrorState();
     } else if (this.isLoading) {
-      content = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Loading session data...</p></div>';
+      // The design system's loading placeholder, not a spinner: Spinner ships in
+      // a lazy chunk, while pk-skeleton rides the entry stylesheet this
+      // server-rendered page already links.
+      content =
+        '<div class="pk-stack pk-stack--snug" role="status" aria-live="polite">' +
+        '<p class="pk-center pk-muted">Loading session data…</p>' +
+        '<span class="pk-skeleton pk-skeleton--lg"></span>' +
+        '<span class="pk-skeleton"></span>' +
+        '<span class="pk-skeleton"></span>' +
+        '</div>';
     } else if (hasSuccess) {
       content = this.renderSuccessState();
     } else {
       content = this.renderForm();
     }
 
-    this.innerHTML = content;
+    // The base layer is scoped to `.pk`, so the host element carries it.
+    this.classList.add('pk');
+    this.innerHTML = `<div class="pk-stack pk-stack--loose">${content}</div>`;
     this.attachEventListeners();
 
     const messageEl = this.querySelector('#error-message, #success-message');
@@ -315,15 +315,14 @@ class SessionRegistration extends HTMLElement {
     let messageContent;
     if (this.errorMessage.includes('just filled up')) {
       messageContent = `
-        <div id="error-message" class="alert alert-danger" role="alert">
-          <h5 class="alert-heading">Save Failed</h5>
-          <p>${this.escapeHTML(this.errorMessage)}</p>
-          <hr>
-          <p class="mb-0">The session list is being updated. Please make a new selection.</p>
+        <div id="error-message" class="pk-alert pk-alert--danger pk-stack pk-stack--tight" role="alert">
+          <p class="pk-alert__title">Save Failed</p>
+          <p class="pk-alert__body">${this.escapeHTML(this.errorMessage)}</p>
+          <p class="pk-alert__body">The session list is being updated. Please make a new selection.</p>
         </div>
       `;
     } else {
-      messageContent = `<div id="error-message" class="alert alert-danger" role="alert">${this.escapeHTML(this.errorMessage)}</div>`;
+      messageContent = `<div id="error-message" class="pk-alert pk-alert--danger" role="alert"><p class="pk-alert__body">${this.escapeHTML(this.errorMessage)}</p></div>`;
     }
     // Show the form below the error
     return messageContent + this.renderForm();
@@ -331,8 +330,8 @@ class SessionRegistration extends HTMLElement {
 
   renderSuccessState() {
     const successContent = `
-      <div id="success-message" class="alert alert-success" role="alert">
-        ${this.escapeHTML(this.successMessage)}
+      <div id="success-message" class="pk-alert pk-alert--ok" role="alert">
+        <p class="pk-alert__body">${this.escapeHTML(this.successMessage)}</p>
       </div>
     `;
     // Show the form below the success message
@@ -347,19 +346,19 @@ class SessionRegistration extends HTMLElement {
       ${this.renderCurrentRegistration()}
 
       <!-- Session Selection Form -->
-      <form id="registration-form">
+      <form id="registration-form" class="pk-stack pk-stack--loose">
         ${this.renderSessionList(morningSessions, 'morning', this.userRegistration?.morningSession)}
         ${this.renderSessionList(afternoonSessions, 'afternoon', this.userRegistration?.afternoonSession)}
 
         <!-- Save Button -->
-        <div class="text-center mb-4">
-          <button type="submit" class="btn btn-primary btn-lg location-0-session-btn">Save Session Registrations</button>
+        <div class="pk-cluster pk-cluster--center">
+          <button type="submit" class="pk-btn pk-btn--primary pk-btn--lg">Save Session Registrations</button>
         </div>
       </form>
 
       <!-- Deregister All Button -->
-      <div class="text-center mb-4">
-        <button type="button" class="btn btn-secondary" id="deregister-btn">Deregister All Sessions</button>
+      <div class="pk-cluster pk-cluster--center">
+        <button type="button" class="pk-btn pk-btn--secondary" id="deregister-btn">Deregister All Sessions</button>
       </div>
     `;
   }

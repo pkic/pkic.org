@@ -14,7 +14,7 @@
   flex-direction: column !important;
 
   // Fix the header layout in fullscreen
-  .position-relative {
+  .agenda-toolbar {
     position: relative !important;
     margin-bottom: 1rem !important;
     flex-shrink: 0 !important;
@@ -133,6 +133,7 @@
 
 .scroll-arrow {
   position: absolute;
+  padding: 0;
   top: 50%;
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.95);
@@ -150,8 +151,8 @@
 
   &:hover {
     background: white;
-    border-color: var(--bs-primary);
-    color: var(--bs-primary);
+    border-color: var(--pk-accent);
+    color: var(--pk-accent-ink);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     transform: translateY(-50%) scale(1.05);
   }
@@ -206,16 +207,6 @@
 
 .desktop-agenda.show-right-fade::after {
   opacity: 1;
-}
-
-// Ensure buttons stay above gradients
-.desktop-agenda {
-  position: relative;
-
-  .float-end {
-    position: relative;
-    z-index: 20; // Higher than gradients and arrows
-  }
 }
 
 // Time styling
@@ -537,58 +528,13 @@
     --location-text-color-secondary: #6c757d;
   }
 
-  // Card header background colors for session registration
-  .card .card-header.#{$location}-session {
-    background-color: #{$color};
-    color: white;
-  }
-
-  // Accent colors for session registration card bodies
-  .card.#{$location}-session .border-primary {
-    border-color: #{$color} !important;
-  }
-
-  .card.#{$location}-session .text-primary {
-    color: #{$color} !important;
-  }
-
-  .card.#{$location}-session .bg-primary-subtle {
-    background-color: #{rgba($color, 0.1)} !important;
-  }
-
-  .card.#{$location}-session .bg-success-subtle {
-    background-color: #{rgba($color, 0.1)} !important;
-  }
-
-  .card.#{$location}-session .border-success {
-    border-color: #{$color} !important;
-  }
-
-  // Save button colors for session registration
-  .btn.location-0-session-btn {
-    background-color: #{map-get(
-        $all-pkic-locations-colors,
-        "location-0"
-      )} !important;
-    border-color: #{map-get(
-        $all-pkic-locations-colors,
-        "location-0"
-      )} !important;
-  }
-
-  .btn.location-0-session-btn:hover {
-    background-color: #{darken(
-        map-get($all-pkic-locations-colors, "location-0"),
-        10%
-      )} !important;
-    border-color: #{darken(
-        map-get($all-pkic-locations-colors, "location-0"),
-        10%
-      )} !important;
-  }
+  // The session-registration surface has moved onto the design system, so the
+  // `.card`/`.btn` overrides that used to tint its headers and save button are
+  // gone with their markup. The location colour still reaches that surface
+  // through the custom properties above, which `.session-card` reads.
 
   // Modal header still gets a slight gradient for visual interest, using the base color
-  .#{$location}-modal .modal-header {
+  .#{$location}-modal .session-modal__header {
     background: linear-gradient(
       135deg,
       #{$color} 0%,
@@ -682,8 +628,8 @@
 }
 
 // Fix: main h2 in _base-layout-and-modules.scss applies gradient text + -webkit-text-fill-color: transparent
-// which overrides `color: white` set by .location-X-modal .modal-header. Reset those properties here.
-.session-modal .modal-header h2.modal-title {
+// which overrides `color: white` set by .location-X-modal .session-modal__header. Reset those here.
+.session-modal .session-modal__title {
   background: none;
   -webkit-background-clip: initial;
   -webkit-text-fill-color: white;
@@ -708,14 +654,7 @@
   pointer-events: none;
 }
 
-// Modal styling - simplified
-.session-modal .modal-content {
-  border: none;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.modal-title-container {
+.session-modal__heading {
   flex-grow: 1;
 }
 
@@ -802,7 +741,7 @@
 }
 
 // Responsive design - consolidated
-@include media-breakpoint-down(lg) {
+@media (max-width: 991.98px) {
   .agenda-grid {
     @for $i from 1 through 10 {
       &[data-locations="#{$i}"] {
@@ -835,7 +774,7 @@
   }
 }
 
-@include media-breakpoint-down(md) {
+@media (max-width: 767.98px) {
   .agenda-grid {
     grid-template-columns: 80px 1fr;
     gap: 0.25rem;
@@ -875,4 +814,278 @@
   .agenda-grid-container::before {
     left: 80px; // After smaller time column
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Structure the agenda used to borrow from Bootstrap.
+//
+// The shortcode is off the framework, so the four things Bootstrap's JS
+// components supplied — the day tab strip, the responsive mobile/desktop
+// swap, the absolutely placed control cluster, and the session modal — are
+// declared here instead. Colour, type, space, radius and shadow read design
+// tokens; nothing in this block hard-codes a value that the system owns.
+// ─────────────────────────────────────────────────────────────────────────────
+
+.agenda-container {
+  position: relative;
+}
+
+// Day tabs. Replaces `.nav.nav-tabs` plus the `#agenda-tabs .nav-link`
+// overrides that used to live in _base-layout-and-modules.scss.
+.agenda-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pk-1);
+  border-bottom: 1px solid var(--pk-line);
+  margin-bottom: var(--pk-3);
+}
+
+.agenda-tab {
+  appearance: none;
+  padding: var(--pk-2) var(--pk-4);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--pk-radius) var(--pk-radius) 0 0;
+  background: var(--pk-ok-soft);
+  color: var(--pk-ink);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.agenda-tab:hover {
+  background: var(--pk-surface-sunk);
+}
+
+.agenda-tab.is-active {
+  background: var(--pk-surface);
+  border-color: var(--pk-line);
+  font-weight: 700;
+}
+
+.agenda-tab:focus-visible {
+  outline: 2px solid var(--pk-accent);
+  outline-offset: 2px;
+}
+
+// The mobile/desktop swap, formerly `d-md-none` and `d-none d-md-block`.
+.mobile-agenda {
+  display: block;
+}
+
+.desktop-agenda {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .mobile-agenda {
+    display: none;
+  }
+
+  .desktop-agenda {
+    display: block;
+  }
+}
+
+// The filter row, with the expand/fullscreen pair pinned to its right edge.
+// Formerly `position-relative` on the row and `position-absolute top-0 end-0`
+// on the cluster.
+.agenda-toolbar {
+  position: relative;
+}
+
+.agenda-controls {
+  display: flex;
+  gap: var(--pk-2);
+}
+
+.agenda-toolbar .agenda-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+// Sponsored break card.
+.agenda-break-heading {
+  font-size: var(--pk-text-2xl);
+  font-weight: 600;
+}
+
+.agenda-break-sponsor {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--pk-3);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface);
+  box-shadow: var(--pk-shadow-1);
+}
+
+.agenda-break-sponsor__logo {
+  width: auto;
+  height: auto;
+  max-width: 150px;
+  max-height: 35px;
+}
+
+// Speakers tab portraits, formerly `rounded-circle` plus an inline style.
+.agenda-speaker-portrait {
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin-inline: auto;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.agenda-speaker-portrait--initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pk-accent-strong);
+  color: var(--pk-accent-on);
+  font-size: var(--pk-text-3xl);
+  font-weight: 600;
+}
+
+// A session card opens its dialog through a real button that covers the card,
+// rather than a click handler on the card `div`. The action row sits above it
+// so the Watch and Slides controls stay reachable.
+.session-card__open {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.session-card__open:focus-visible {
+  outline: 2px solid var(--pk-accent);
+  outline-offset: -2px;
+}
+
+.session-card__actions {
+  position: relative;
+  z-index: 2;
+  padding: var(--pk-2);
+  background: var(--pk-surface-sunk);
+}
+
+// The action buttons keep their accessible name in `aria-label`, so hiding the
+// visible word on narrow columns costs nothing.
+.session-action-label {
+  display: none;
+}
+
+@media (min-width: 992px) {
+  .session-action-label {
+    display: inline;
+  }
+}
+
+// The session dialog. `<dialog>` supplies the top layer, the backdrop, the
+// focus trap and Escape-to-close, so what is left is the box itself.
+.session-modal {
+  // `width` capped by `max-width` rather than a CSS `min()`, which libsass
+  // tries to evaluate as its own numeric function and rejects.
+  width: calc(100vw - 2rem);
+  max-width: 1140px;
+  max-height: calc(100vh - 3rem);
+  padding: 0;
+  border: 0;
+  border-radius: var(--pk-radius-lg);
+  overflow: hidden;
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  box-shadow: var(--pk-shadow-3);
+}
+
+.session-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+// `::backdrop` only inherits custom properties from its originating element in
+// newer engines; the literal is the fallback for the ones that do not, and is
+// never used where the token resolves.
+.session-modal::backdrop {
+  background-color: var(--pk-overlay, rgba(0, 0, 0, 0.45));
+}
+
+// Formerly `modal-fullscreen-md-down`.
+@media (max-width: 767.98px) {
+  .session-modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+}
+
+body.agenda-modal-open {
+  overflow: hidden;
+}
+
+.session-modal__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pk-4);
+  padding: 1.5rem;
+}
+
+.session-modal__close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--pk-1);
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.session-modal__close:hover {
+  opacity: 1;
+}
+
+.session-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-5);
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--pk-4) 1.5rem;
+}
+
+.session-modal__speakers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-3);
+}
+
+// Formerly `ratio ratio-16x9 bg-light`.
+.session-modal__video {
+  position: relative;
+  // Interpolated so libsass emits the ratio rather than dividing it.
+  aspect-ratio: #{"16 / 9"};
+  background: var(--pk-surface-sunk);
+}
+
+.session-modal__video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.session-modal__footer {
+  padding: var(--pk-3) 1.5rem;
+  border-top: 1px solid var(--pk-line);
 }

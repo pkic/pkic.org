@@ -12,11 +12,15 @@ import {
   type GroupSettingsDetail,
 } from "../../../../../shared/schemas/groups";
 import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
-import { Badge } from "../../../../components/Badge";
+import { Badge as StatusBadge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { Tabs } from "../../../../components/Tabs";
+import { Badge } from "../../../../ui/Badge";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { usePortalHashLocation } from "../../hash-location";
 import { portalSession } from "../../state";
 import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
 import { GroupParticipationCard } from "../GroupParticipationCard";
@@ -43,34 +47,28 @@ const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => 
 
 const OVERVIEW_VIEW = "overview";
 
+/**
+ * The group heads the workspace as a page header, not as a panel: the trail
+ * leads back to the catalog, the name is the page's `<h2>`, the type and the
+ * inactive state stand beside it as badges — the inactive one saying the word
+ * as well as showing the tone — and the parent, when there is one, is the
+ * header's single quiet sentence. The headline counts that used to share this
+ * box moved to the overview's "About this group" panel, where they are
+ * content rather than chrome.
+ */
 function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
-    <div class="portal-management-context card border-0 shadow-sm">
-      <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
-        <div>
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <h4 class="portal-context-title mb-0">{group.name}</h4>
-            <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
-            {!group.active && <Badge status="inactive" />}
-          </div>
-          {group.parentGroup && <p class="text-muted small mb-0 mt-1">Part of {group.parentGroup.name}</p>}
-        </div>
-        <dl class="d-flex flex-wrap gap-4 mb-0 small">
-          <div>
-            <dt>People</dt>
-            <dd class="mb-0">{group.participantCount}</dd>
-          </div>
-          <div>
-            <dt>Members represented</dt>
-            <dd class="mb-0">{group.representedMemberCount}</dd>
-          </div>
-          <div>
-            <dt>Subgroups</dt>
-            <dd class="mb-0">{group.childCount}</dd>
-          </div>
-        </dl>
-      </div>
-    </div>
+    <PageHeader
+      trail={[{ label: "Groups", href: usePortalHashLocation.hrefs("/groups") }, { label: group.name }]}
+      title={group.name}
+      context={
+        <>
+          <Badge tone="neutral">{group.type.singularLabel}</Badge>
+          {!group.active && <StatusBadge status="inactive" />}
+        </>
+      }
+      description={group.parentGroup ? `Part of ${group.parentGroup.name}` : undefined}
+    />
   );
 }
 
@@ -117,6 +115,7 @@ export function GroupWorkspace({
   /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
   resourceDetailId?: string;
 }) {
+  const [, navigate] = usePortalHashLocation();
   const detail = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
     [groupId],
@@ -132,43 +131,49 @@ export function GroupWorkspace({
   const settingsGroup: GroupSettingsDetail | null =
     group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
 
+  // Tab targets derive from the route's groupId, never from fetched data:
+  // while another group's data is in flight, links must not point back into
+  // the group being left.
+  function viewPath(nextView: string): string {
+    return `/groups/${encodeURIComponent(groupId)}/${nextView}`;
+  }
+
   return (
-    <div class="d-flex flex-column gap-3">
+    <div class="pk pk-stack">
       {detail.loading && !group && <Spinner label="Loading group…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {group && (
         <>
           <GroupContextHeader group={group} />
-          {/* Tab targets derive from the route's groupId, never from fetched
-              data: while another group's data is in flight, links must not
-              point back into the group being left. */}
-          <nav class="nav nav-tabs" aria-label={`${group.name} sections`}>
-            {views.map((item) => (
-              <Link
-                key={item.key}
-                href={`/groups/${encodeURIComponent(groupId)}/${item.key}`}
-                class={`nav-link${view === item.key ? " active" : ""}`}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          <Tabs
+            items={views.map((item) => ({ key: item.key, label: item.label }))}
+            active={view}
+            label={`${group.name} sections`}
+            onChange={(nextView) => navigate(viewPath(nextView))}
+            hrefFor={viewPath}
+          />
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
               <>
                 {!canParticipate && Boolean(portalSession.value?.member) && (
                   <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
                 )}
-                <GroupOverview groupId={group.id} description={group.description} />
+                <GroupOverview
+                  groupId={group.id}
+                  description={group.description}
+                  participantCount={group.participantCount}
+                  representedMemberCount={group.representedMemberCount}
+                  childCount={group.childCount}
+                />
                 {canParticipate && (
-                  <p class="text-muted small mb-0">
+                  <p class="pk-small">
                     You participate in this group. <Link href="/groups">Manage your participation</Link>
                   </p>
                 )}
               </>
             )}
             {view === "settings" && canManage && settingsGroup && (
-              <div class="d-flex flex-column gap-3">
+              <div class="pk-stack">
                 <GroupSettingsForm group={settingsGroup} onUpdated={detail.reload} />
                 <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
               </div>
@@ -201,7 +206,7 @@ export function GroupWorkspace({
                 key={`${group.id}:${resourceId ?? ""}`}
                 groupId={group.id}
                 canManage={canManage}
-                initialPlacementId={resourceId}
+                placementSegment={resourceId}
                 initialPlacementTab={resourceTab}
               />
             )}
@@ -211,7 +216,7 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 canParticipate={canParticipate}
-                initialVoteId={resourceId}
+                voteSegment={resourceId}
               />
             )}
             {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}

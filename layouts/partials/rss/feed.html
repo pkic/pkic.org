@@ -1,25 +1,33 @@
+{{/*
+  rss/feed.html — the three most recent items of one feed, as cards.
+
+  Nothing in the repository calls this partial; it is kept because the shape it
+  renders is still the shape a feed block would take. `Panel` and the layout
+  utilities ship with the entry stylesheet, so this markup is styled on a
+  server-rendered page without waiting for a lazy chunk.
+*/}}
 {{- with . -}}
   {{- $feedURL := . -}}
   {{- $t := debug.Timer $feedURL -}}
   {{- $items := partialCached "rss/item-data.html" $feedURL $feedURL -}}
+  <div class="pk pk-stack">
   {{- range first 3 $items -}}
-    <div class="card mb-3">
-      <div class="row g-0">
+    <article class="pk-panel">
+      <div class="pk-panel__body pk-cluster pk-cluster--start">
         {{- with .image -}}
-        <div class="col-lg-3">
-          <img src="{{ .url }}" title="{{ .title }}">
-        </div>
+        <img src="{{ .url }}" alt="" width="160">
         {{- end -}}
-        <div class="col">
-          <div class="card-body">
-            <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
-            <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
-            <p class="card-text"><small class="text-muted">Published on {{ with .pubDate }}{{ dateFormat "Monday January 2, 2006" . }}{{ end }}</small></p>
-          </div>
+        <div class="pk-stack pk-stack--snug">
+          <h3 class="pk-panel__title">
+            <a href="{{ .link }}" target="_blank" rel="noopener noreferrer">{{ .title | plainify | htmlUnescape }}</a>
+          </h3>
+          <p>{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
+          <p class="pk-small">Published on {{ with .pubDate }}{{ dateFormat "Monday January 2, 2006" . }}{{ end }}</p>
         </div>
       </div>
-    </div>
+    </article>
   {{- end -}}
+  </div>
   {{- $t.Stop -}}
 {{- else -}}
   {{- warnf "Feed URL is empty." -}}

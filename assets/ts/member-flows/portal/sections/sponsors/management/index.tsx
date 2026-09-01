@@ -34,6 +34,9 @@ import {
   type SponsorshipPipelineStage,
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { Badge, statusLabel } from "../../../../../components/Badge";
+import { FilterSelect } from "../../../../../components/FilterSelect";
+import { Alert } from "../../../../../ui/Alert";
+import { Button } from "../../../../../ui/Button";
 import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
 import { CompanyDetailPanel } from "./CompanyDetailPanel";
 import { useCompanySponsorships } from "./useCompanySponsorships";
@@ -57,16 +60,20 @@ function SponsorshipDetailPage({
   const [, navigate] = usePortalHashLocation();
   if (!canRead) {
     return (
-      <div class="alert alert-warning" role="alert">
-        Viewing sponsorship details requires the <code>sponsorships:read</code> permission.
+      <div class="pk">
+        <Alert tone="warn">
+          Viewing sponsorship details requires the <code>sponsorships:read</code> permission.
+        </Alert>
       </div>
     );
   }
   return (
-    <div>
-      <button type="button" class="btn btn-link btn-sm ps-0 mb-2" onClick={() => navigate("/sponsors")}>
-        ← Back to sponsorships
-      </button>
+    <div class="pk pk-stack pk-stack--snug">
+      <div class="pk-cluster">
+        <Button variant="link" size="sm" onClick={() => navigate("/sponsors")}>
+          ← Back to sponsorships
+        </Button>
+      </div>
       <SponsorshipDetail id={detailId} canWrite={canWrite} />
     </div>
   );
@@ -78,31 +85,29 @@ function SponsorshipCreateOnly() {
 
   if (created) {
     return (
-      <section aria-labelledby="sponsorship-created-heading">
-        <h5 id="sponsorship-created-heading" class="mb-2">
-          Sponsorship created
-        </h5>
-        <p class="text-muted small">You do not have permission to view the sponsorship pipeline.</p>
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          onClick={() => {
-            setCreated(false);
-            setFormKey((value) => value + 1);
-          }}
-        >
-          Create another sponsorship
-        </button>
+      <section class="pk pk-stack pk-stack--snug" aria-labelledby="sponsorship-created-heading">
+        <h5 id="sponsorship-created-heading">Sponsorship created</h5>
+        <p class="pk-small">You do not have permission to view the sponsorship pipeline.</p>
+        <div class="pk-cluster">
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => {
+              setCreated(false);
+              setFormKey((value) => value + 1);
+            }}
+          >
+            Create another sponsorship
+          </Button>
+        </div>
       </section>
     );
   }
 
   return (
-    <section aria-labelledby="sponsorship-create-heading">
-      <h5 id="sponsorship-create-heading" class="mb-2">
-        Create sponsorship
-      </h5>
-      <p class="text-muted small">You can create a sponsorship without access to the sponsorship pipeline.</p>
+    <section class="pk pk-stack pk-stack--snug" aria-labelledby="sponsorship-create-heading">
+      <h5 id="sponsorship-create-heading">Create sponsorship</h5>
+      <p class="pk-small">You can create a sponsorship without access to the sponsorship pipeline.</p>
       <CreateSponsorshipForm
         key={formKey}
         onCreated={() => setCreated(true)}
@@ -141,11 +146,11 @@ export function Sponsorships({
   }
 
   const companyColumns: Column<SponsorshipCompany>[] = [
-    { header: "Company", cell: (c) => <span class="fw-semibold">{c.label}</span> },
+    { header: "Company", cell: (c) => <span class="pk-strong">{c.label}</span> },
     {
       header: "Stages",
       cell: (c) => (
-        <span class="d-flex gap-1 flex-wrap">
+        <span class="pk-cluster">
           {c.stages.split(",").map((s) => (
             <Badge key={s} status={s} />
           ))}
@@ -159,32 +164,29 @@ export function Sponsorships({
   ];
 
   return (
-    <div>
-      <div class="d-flex flex-wrap gap-2 mb-3">
-        <select
-          class="form-select form-select-sm"
+    <div class="pk pk-stack pk-stack--snug">
+      {/* Both filters carry a visible name through a real `for`/`id` pair.
+          They used to be two bare selects whose only clue was the "All types"
+          option, which a reader tabbing between form controls never sees. */}
+      <div class="pk-cluster pk-cluster--start">
+        <FilterSelect
+          label="Type"
           value={type}
-          onChange={(e) => setType((e.target as HTMLSelectElement).value as typeof type)}
-        >
-          <option value="">All types</option>
-          {SPONSOR_TYPES.map((t) => (
-            <option value={t} key={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-        <select
-          class="form-select form-select-sm"
+          options={[
+            { value: "" as typeof type, label: "All types" },
+            ...SPONSOR_TYPES.map((t) => ({ value: t as typeof type, label: t })),
+          ]}
+          onChange={setType}
+        />
+        <FilterSelect
+          label="Stage"
           value={stage}
-          onChange={(e) => setStage((e.target as HTMLSelectElement).value as typeof stage)}
-        >
-          <option value="">All stages</option>
-          {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
-            <option value={s} key={s}>
-              {statusLabel(s)}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "" as typeof stage, label: "All stages" },
+            ...SPONSORSHIP_PIPELINE_STAGES.map((s) => ({ value: s as typeof stage, label: statusLabel(s) })),
+          ]}
+          onChange={setStage}
+        />
       </div>
 
       {canWrite && showCreate && (
@@ -199,6 +201,7 @@ export function Sponsorships({
 
       {!selectedCompany && (
         <ApiDataTable
+          caption="Sponsoring companies"
           urlState="sponsorships"
           endpoint="/api/v1/sponsors/companies"
           responseSchema={sponsorshipCompaniesListResponseSchema}
@@ -210,7 +213,7 @@ export function Sponsorships({
           columns={companyColumns}
           params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
           rowKey={(c) => c.key}
-          onRowClick={selectCompany}
+          rowAction={(c) => ({ label: `View sponsorships for ${c.label}`, onSelect: () => selectCompany(c) })}
           empty={
             canWrite ? (
               <EmptyState title="No sponsorships found" body="Create a sponsorship, or adjust the filters above." />

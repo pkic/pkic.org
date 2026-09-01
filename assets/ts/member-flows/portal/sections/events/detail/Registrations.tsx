@@ -5,6 +5,7 @@ import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
+import { Button } from "../../../../../ui/Button";
 import { postJson } from "../../../../../shared/api-client";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
 import { fmt, fmtDate, toast } from "../../../ui";
@@ -24,6 +25,9 @@ import {
   eventRegistrationsPath,
   eventRegistrationViewPath,
 } from "./registration-paths";
+// `pk-mono` is defined in Content.css, which ships in a lazy chunk, so the
+// module that writes the class name has to import the stylesheet itself.
+import "../../../../../ui/Content.css";
 
 const ATTENDANCE_CHANGE_PRESETS: Record<string, string> = {
   "attendance-changed": "any",
@@ -58,7 +62,6 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
   const [consentFilter, setConsentFilter] = useState("");
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
-  const [, navigate] = usePortalHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
 
   async function runWaitlistPromotions() {
@@ -99,7 +102,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           {r.display_name && r.user_email && (
             <>
               <br />
-              <span class="text-muted small">{r.user_email}</span>
+              <span class="pk-small">{r.user_email}</span>
             </>
           )}
         </>
@@ -129,25 +132,30 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
               const history = r.attendanceChangeHistory ?? [];
               const latest = r.lastAttendanceChange;
               return latest ? (
-                <div class="small">
-                  <div class="fw-semibold">{attendanceJourneyLabel(history)}</div>
-                  <div class="text-muted mono">Last changed {fmt(latest.changedAt)}</div>
+                <div class="pk-stack pk-stack--tight pk-small">
+                  <div class="pk-strong">{attendanceJourneyLabel(history)}</div>
+                  <div class="pk-muted pk-mono">Last changed {fmt(latest.changedAt)}</div>
                   {history.length > 1 && (
-                    <details class="mt-1" onClick={(event) => event.stopPropagation()}>
-                      <summary class="text-primary">View {history.length} updates</summary>
-                      <div class="mt-1 border-start ps-2">
+                    <details onClick={(event) => event.stopPropagation()}>
+                      <summary>View {history.length} updates</summary>
+                      {/* The left rule and indent this had were Bootstrap's
+                          `border-start ps-2`; the disclosure already marks the
+                          entries as subordinate, so the nesting is carried by
+                          the control rather than by a border with no
+                          design-system equivalent. */}
+                      <div class="pk-stack pk-stack--tight">
                         {history.map((change) => (
-                          <div key={change.changedAt} class="mb-1">
+                          <div key={change.changedAt} class="pk-stack pk-stack--tight">
                             {change.transitions.map((transition) => (
                               <div key={`${transition.fromType}->${transition.toType}`}>
                                 {attendanceTypeLabel(transition.fromType)} → {attendanceTypeLabel(transition.toType)}
-                                <span class="text-muted">
+                                <span class="pk-muted">
                                   {" "}
                                   · {transition.days.map((day) => day.label ?? day.dayDate).join(", ")}
                                 </span>
                               </div>
                             ))}
-                            <div class="text-muted mono">{fmt(change.changedAt)}</div>
+                            <div class="pk-muted pk-mono">{fmt(change.changedAt)}</div>
                           </div>
                         ))}
                       </div>
@@ -171,70 +179,110 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
       ? [
           {
             header: "Consent",
+            /*
+             * A green tick with a `title` was the whole signal: colour, which
+             * not every reader can separate, plus a tooltip a screen reader
+             * and a touch device never surface. The mark stays as the visual
+             * and the word goes beside it, hidden, so the cell is announced
+             * as "Consented" rather than as a tick.
+             */
             cell: (r: Registration) =>
               r.sponsor_consent === true ? (
-                <span class="text-success" title="Consented to share with sponsors">
-                  ✓
-                </span>
+                <>
+                  <span aria-hidden="true">✓</span>
+                  <span class="pk-sr-only">Consented to share with sponsors</span>
+                </>
               ) : r.sponsor_consent === false ? (
-                <span class="text-muted">—</span>
+                <>
+                  <span class="pk-muted" aria-hidden="true">
+                    —
+                  </span>
+                  <span class="pk-sr-only">No sponsor consent</span>
+                </>
               ) : (
-                "—"
+                <>
+                  <span class="pk-muted" aria-hidden="true">
+                    —
+                  </span>
+                  <span class="pk-sr-only">Not asked</span>
+                </>
               ),
-            className: "text-center",
+            className: "pk-center",
           },
-          { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "small text-muted" },
+          { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "pk-small pk-muted" },
           {
             header: "Registered",
             cell: (r: Registration) => fmtDate(r.created_at),
-            className: "mono small",
+            className: "pk-mono pk-small",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" as const },
           },
         ]
       : []),
-    { header: "", cell: () => <span class="btn btn-sm btn-outline-secondary">View →</span> },
+    /*
+     * The row itself is the link — `rowAction` renders a real control and
+     * stretches it over the row — so this column is the affordance a reader
+     * sees, not a second control. It used to be a `<span>` wearing button
+     * classes, which announced nothing and looked like something to press.
+     */
+    {
+      header: { label: "View", className: "pk-end" },
+      cell: () => (
+        <span class="pk-muted" aria-hidden="true">
+          View →
+        </span>
+      ),
+    },
   ];
 
+  /*
+   * The tinted numbers are gone rather than translated. Each one already sits
+   * beside the word that says what it counts — "accepted", "waitlisted",
+   * "pending", "bounced" — so the colour was a second copy of a signal a
+   * reader who cannot separate the hues never received in the first place.
+   * This is the same call `EventStats` made when its two amber stat values
+   * became a sentence.
+   */
   return (
-    <div>
+    <div class="pk pk-stack">
       {stats && (
-        <div class="adm-mini-stats mb-3">
+        <div class="adm-mini-stats" role="group" aria-label="Registration totals">
           <span class="adm-mini-stat">
-            <strong class="text-success">{accepted}</strong> accepted
+            <strong>{accepted}</strong> accepted
           </span>
           {waitlisted > 0 && (
             <span class="adm-mini-stat">
-              <strong class="text-info">{waitlisted}</strong> waitlisted
+              <strong>{waitlisted}</strong> waitlisted
             </span>
           )}
           {pendingConfirmation > 0 && (
             <span class="adm-mini-stat">
-              <strong class="text-warning">{pendingConfirmation}</strong> pending
+              <strong>{pendingConfirmation}</strong> pending
             </span>
           )}
           <span class="adm-mini-stat">
             <strong>{total}</strong> total
           </span>
-          <span class="adm-mini-stat-sep" />
+          <span class="adm-mini-stat-sep" aria-hidden="true" />
           {attendanceStatuses
             .filter(({ accepted, waitlisted }) => accepted + waitlisted > 0)
             .map(({ type, label, accepted, waitlisted }) => (
               <span key={type} class="adm-mini-stat">
                 <strong>{accepted}</strong> {label}
-                {waitlisted > 0 && <span class="text-info"> (+{waitlisted} waitlisted)</span>}
+                {waitlisted > 0 && <span> (+{waitlisted} waitlisted)</span>}
               </span>
             ))}
           {bouncedCount > 0 && (
             <>
-              <span class="adm-mini-stat-sep" />
+              <span class="adm-mini-stat-sep" aria-hidden="true" />
               <span class="adm-mini-stat">
-                <strong class="text-danger">{bouncedCount}</strong> bounced
+                <strong>{bouncedCount}</strong> bounced
               </span>
             </>
           )}
         </div>
       )}
       <ApiDataTable
+        caption="Event registrations"
         endpoint={eventRegistrationsPath(slug)}
         responseSchema={eventRegistrationsListResponseSchema}
         resolve={(data) => data.registrations}
@@ -265,57 +313,68 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
                 resetPage();
               }}
             />
-            <select
-              aria-label="Attendance changes"
-              class="form-select form-select-sm adm-filter-select"
+            {/* Every filter is a FilterSelect, so each one carries its own
+                name. Two of these were bare `<select>` elements with no label
+                and no `aria-label` at all: a toolbar of four controls, two of
+                which announced only "combo box". */}
+            <FilterSelect
+              ariaLabel="Attendance changes"
+              className="adm-filter-select"
               value={attendanceChangeFilter}
-              onChange={(e) => {
-                setAttendanceChangeFilter((e.target as HTMLSelectElement).value);
+              options={[
+                { value: "", label: "All attendance activity" },
+                { value: "any", label: "Changed attendance" },
+                { value: "left_in_person", label: "Left in-person and is no longer in-person" },
+                { value: "joined_in_person", label: "Joined in-person and is currently in-person" },
+              ]}
+              onChange={(value) => {
+                setAttendanceChangeFilter(value);
                 resetPage();
               }}
-            >
-              <option value="">All attendance activity</option>
-              <option value="any">Changed attendance</option>
-              <option value="left_in_person">Left in-person and is no longer in-person</option>
-              <option value="joined_in_person">Joined in-person and is currently in-person</option>
-            </select>
-            <select
-              class="form-select form-select-sm adm-filter-select"
+            />
+            <FilterSelect
+              ariaLabel="Email delivery status"
+              className="adm-filter-select"
               value={bouncedFilter}
-              onChange={(e) => {
-                setBouncedFilter((e.target as HTMLSelectElement).value);
+              options={[
+                { value: "", label: "All email statuses" },
+                { value: "true", label: "Bounced" },
+                { value: "false", label: "Not bounced" },
+              ]}
+              onChange={(value) => {
+                setBouncedFilter(value);
                 resetPage();
               }}
-            >
-              <option value="">All email statuses</option>
-              <option value="true">Bounced</option>
-              <option value="false">Not bounced</option>
-            </select>
-            <select
-              class="form-select form-select-sm adm-filter-select"
+            />
+            <FilterSelect
+              ariaLabel="Sponsor consent"
+              className="adm-filter-select"
               value={consentFilter}
-              onChange={(e) => {
-                setConsentFilter((e.target as HTMLSelectElement).value);
+              options={[
+                { value: "", label: "All consent" },
+                { value: "true", label: "Sponsor consent given" },
+                { value: "false", label: "No sponsor consent" },
+              ]}
+              onChange={(value) => {
+                setConsentFilter(value);
                 resetPage();
               }}
-            >
-              <option value="">All consent</option>
-              <option value="true">Sponsor consent given</option>
-              <option value="false">No sponsor consent</option>
-            </select>
-            <button class="btn btn-sm btn-outline-warning" onClick={() => void runWaitlistPromotions()}>
+            />
+            <Button variant="secondary" size="sm" onClick={() => void runWaitlistPromotions()}>
               Run waitlist promotions
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" onClick={downloadCsv}>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={downloadCsv}>
               Download CSV
-            </button>
+            </Button>
           </>
         )}
         columns={columns}
         empty={attendanceChangeFilter ? "No attendees match this attendance change" : "No registrations yet"}
         rowKey={(r) => r.id}
-        rowClass={() => "adm-reg-row"}
-        onRowClick={(r) => navigate(eventRegistrationViewPath(slug, r.id))}
+        rowAction={(r) => ({
+          label: `View registration for ${r.display_name ?? r.user_email ?? "this attendee"}`,
+          href: usePortalHashLocation.hrefs(eventRegistrationViewPath(slug, r.id)),
+        })}
       />
     </div>
   );
@@ -328,8 +387,11 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
   const tab = subTab === "responses" || subTab === "email" ? subTab : "overview";
 
   return (
-    <div>
+    <div class="pk pk-stack">
+      {/* The tab set is named, so it is not one of several anonymous
+          "Sections" strips when a reader lists the page's landmarks. */}
       <Tabs
+        label="Registration sections"
         items={[
           { key: "overview", label: "Overview" },
           { key: "responses", label: "Responses" },

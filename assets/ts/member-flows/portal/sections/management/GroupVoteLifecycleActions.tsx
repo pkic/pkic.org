@@ -4,6 +4,9 @@ import { groupVoteLifecycleTransitionResponseSchema } from "../../../../../share
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Textarea } from "../../../../ui/TextControl";
 
 interface GroupVoteLifecycleActionsProps {
   groupId: string;
@@ -72,71 +75,77 @@ export function GroupVoteLifecycleActions({ groupId, vote, onChanged }: GroupVot
   }
 
   return (
-    <section class="border-bottom pb-3 mb-3" aria-label="Vote lifecycle management">
-      <div class="d-flex gap-2 flex-wrap">
+    // Still a named region, and still the design system's rhythm: the rule
+    // above it and the `mt-*`/`mb-*` each block carried are one `gap` now.
+    <section class="pk pk-stack" aria-label="Vote lifecycle management">
+      <div class="pk-cluster">
         {canOpen && (
-          <button type="button" class="btn btn-sm btn-success" disabled={busy} onClick={() => void open()}>
+          // `loading` alongside `disabled`: the spinner and aria-busy say the
+          // transition is in flight, and `disabled` still stops a second one.
+          <Button size="sm" variant="primary" loading={busy} disabled={busy} onClick={() => void open()}>
             Open vote now
-          </button>
+          </Button>
         )}
         {canClose && (
-          <button type="button" class="btn btn-sm btn-primary" disabled={busy} onClick={() => void close()}>
+          <Button size="sm" variant="primary" loading={busy} disabled={busy} onClick={() => void close()}>
             Close current round
-          </button>
+          </Button>
         )}
         {canCancel && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-danger"
+          <Button
+            size="sm"
+            variant="danger-quiet"
             disabled={busy}
             aria-expanded={showCancellation}
             onClick={() => setShowCancellation((shown) => !shown)}
           >
             Cancel vote
-          </button>
+          </Button>
         )}
       </div>
 
       {showCancellation && (
         <form
-          class="mt-3"
+          class="pk-stack pk-stack--snug"
+          aria-label={`Cancel ${vote.title}`}
           onSubmit={(event) => {
             event.preventDefault();
             void transition({ transition: "cancel", reason: cancellationReason });
           }}
         >
-          <label class="form-label fw-semibold" for={`vote-${vote.id}-cancellation-reason`}>
-            Cancellation reason
-          </label>
-          <textarea
-            id={`vote-${vote.id}-cancellation-reason`}
-            class="form-control"
-            rows={3}
-            maxLength={1000}
-            required
-            disabled={busy}
-            value={cancellationReason}
-            onInput={(event) => setCancellationReason(event.currentTarget.value)}
-          />
-          <div class="d-flex gap-2 mt-2">
-            <button type="submit" class="btn btn-sm btn-danger" disabled={busy || !cancellationReason.trim()}>
-              {busy ? "Cancelling…" : "Confirm cancellation"}
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
-              disabled={busy}
-              onClick={() => setShowCancellation(false)}
+          {/* One `disabled` attribute takes the whole form out of play while
+              the cancellation is in flight, the control included. */}
+          <fieldset class="pk-fieldset" disabled={busy}>
+            <Field label="Cancellation reason" required help="Sent to members with the cancellation notice.">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={3}
+                  maxLength={1000}
+                  value={cancellationReason}
+                  onInput={(event) => setCancellationReason(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+          </fieldset>
+          <div class="pk-cluster">
+            <Button
+              type="submit"
+              size="sm"
+              variant="danger"
+              loading={busy}
+              disabled={busy || !cancellationReason.trim()}
             >
+              {busy ? "Cancelling…" : "Confirm cancellation"}
+            </Button>
+            <Button size="sm" disabled={busy} onClick={() => setShowCancellation(false)}>
               Keep vote
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
-      <div class="mt-3 mb-0">
-        <ErrorAlert error={error} />
-      </div>
+      <ErrorAlert error={error} />
     </section>
   );
 }

@@ -1,22 +1,22 @@
+/**
+ * The portal's pager, rendered by the design system's.
+ *
+ * The portal thinks in offsets, because that is what its list endpoints take;
+ * the design system thinks in page numbers, because that is what a reader
+ * clicks. This translates between them in one place.
+ *
+ * Two behaviours are kept from the version this replaces, because they are
+ * about what to show rather than how it looks:
+ *
+ *   - A list with nothing in it and nothing after it renders no pager. There
+ *     is no page to go to.
+ *   - A list that fits on the smallest page keeps its count and drops the
+ *     controls. "12 items" is useful; a single page button beside it is not.
+ */
+import { Pager as SystemPager } from "../ui/Pager";
+
 export const ADMIN_LIST_PAGE_SIZE_DEFAULT = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
-
-function rangeText(offset: number, rowCount: number, total: number): string {
-  if (total === 0) return "No results";
-  return `${offset + 1}–${offset + rowCount} of ${total}`;
-}
-
-function pageItems(current: number, max: number): Array<number | "…"> {
-  if (max <= 7) return Array.from({ length: max }, (_, i) => i + 1);
-  const items: Array<number | "…"> = [1];
-  const start = Math.max(2, current - 2);
-  const end = Math.min(max - 1, current + 2);
-  if (start > 2) items.push("…");
-  for (let p = start; p <= end; p++) items.push(p);
-  if (end < max - 1) items.push("…");
-  items.push(max);
-  return items;
-}
 
 export interface PagerProps {
   page: number;
@@ -31,72 +31,28 @@ export interface PagerProps {
   onPageSizeChange: (size: number) => void;
 }
 
-export function Pager({
-  page,
-  hasMore,
-  pageSize,
-  offset,
-  rowCount,
-  total,
-  onPrev,
-  onNext,
-  onJump,
-  onPageSizeChange,
-}: PagerProps) {
+export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onJump, onPageSizeChange }: PagerProps) {
   if (rowCount === 0 && !hasMore && offset === 0) return null;
-  // A list that fits on the smallest page has nothing to paginate — but the
-  // total is still worth stating. Keep the count, drop the page buttons and
-  // page-size select.
+
   if (page <= 1 && !hasMore && total <= Math.min(...PAGE_SIZE_OPTIONS)) {
-    return (
-      <div class="d-flex justify-content-center mt-3 adm-pager">
-        <span class="text-muted small adm-pager-range">{total === 1 ? "1 item" : `${total} items`}</span>
-      </div>
-    );
+    return <p class="pk pk-small pk-center">{total === 1 ? "1 item" : `${total} items`}</p>;
   }
-  const max = total > 0 ? Math.ceil(total / pageSize) : page + (hasMore ? 1 : 0);
+
+  // Without a total the server has only told us whether there is more, so the
+  // page count is "this one, and one more if there is more".
+  const pageCount = total > 0 ? Math.ceil(total / pageSize) : page + (hasMore ? 1 : 0);
 
   return (
-    <div class="d-flex align-items-center justify-content-center gap-2 flex-wrap mt-3 adm-pager">
-      <span class="text-muted small adm-pager-range">{rangeText(offset, rowCount, total)}</span>
-      <nav>
-        <ul class="pagination pagination-sm mb-0">
-          <li class={`page-item${page <= 1 ? " disabled" : ""}`}>
-            <button class="page-link" onClick={onPrev} disabled={page <= 1}>
-              &laquo;
-            </button>
-          </li>
-          {pageItems(page, max).map((item, i) =>
-            item === "…" ? (
-              <li key={`e${i}`} class="page-item disabled">
-                <span class="page-link">…</span>
-              </li>
-            ) : (
-              <li key={item} class={`page-item${item === page ? " active" : ""}`}>
-                <button class="page-link" onClick={() => onJump(item)}>
-                  {item}
-                </button>
-              </li>
-            ),
-          )}
-          <li class={`page-item${!hasMore ? " disabled" : ""}`}>
-            <button class="page-link" onClick={onNext} disabled={!hasMore}>
-              &raquo;
-            </button>
-          </li>
-        </ul>
-      </nav>
-      <select
-        class="form-select form-select-sm adm-pager-size"
-        value={pageSize}
-        onChange={(e) => onPageSizeChange(Number((e.target as HTMLSelectElement).value))}
-      >
-        {PAGE_SIZE_OPTIONS.map((o) => (
-          <option key={o} value={o}>
-            {o} / page
-          </option>
-        ))}
-      </select>
+    <div class="pk">
+      <SystemPager
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        rangeStart={total === 0 ? 0 : offset + 1}
+        rangeEnd={offset + rowCount}
+        onSelect={onJump}
+        pageSize={{ value: pageSize, options: PAGE_SIZE_OPTIONS, onChange: onPageSizeChange }}
+      />
     </div>
   );
 }

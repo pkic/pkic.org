@@ -1,8 +1,14 @@
 // Unified portal navigation shell, scoped under the portal mount.
 
-$portal-bg: #f4f5f7;
-$portal-surface: #fff;
-$portal-border: #dee2e6;
+// The portal's chrome, from the tokens rather than from fixed colours.
+//
+// These were three hexes, so the portal stayed light while the components
+// inside it followed the reader's theme: a white sidebar and a grey page
+// around dark tables and inputs. `$portal-green` keeps its literal because
+// Sass reads it through `rgba()`, which a custom property cannot pass through.
+$portal-bg: var(--pk-canvas);
+$portal-surface: var(--pk-surface);
+$portal-border: var(--pk-line);
 $portal-green: #198754;
 $portal-sidebar-width: 240px;
 
@@ -29,31 +35,17 @@ $portal-sidebar-width: 240px;
 .portal-access-role-permissions {
   max-height: 180px;
   overflow-y: auto;
-}
 
-.portal-user-picker-results {
-  z-index: 20;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.portal-leadership-user {
-  min-width: 220px;
-}
-
-.portal-leadership-affiliation {
-  width: 220px;
-}
-
-.portal-leadership-title {
-  width: 180px;
+  // The frame and the inset were `p-2 border rounded` in the markup. They
+  // belong with the scroll behaviour that is already this box's own shape,
+  // and they read design-system tokens so the box matches every other
+  // framed region rather than choosing its own border and radius.
+  padding: var(--pk-2);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
 }
 
 .portal-leadership-date,
-.portal-leadership-name {
-  width: 160px;
-}
-
 #portal-root {
   display: flex;
   min-height: calc(100vh - var(--pkic-navbar-height, 57px));
@@ -71,13 +63,16 @@ $portal-sidebar-width: 240px;
   button {
     background: none;
     border: none;
-    color: #495057;
+    color: var(--pk-ink-muted);
     display: flex;
     align-items: center;
   }
 }
 
+// The sidebar's own padding, which used to be Bootstrap `p-2` in the markup.
 #portal-sidebar {
+  padding: 0.5rem;
+
   width: $portal-sidebar-width;
   min-width: $portal-sidebar-width;
   background: $portal-surface;
@@ -115,7 +110,7 @@ $portal-sidebar-width: 240px;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--pk-ink-muted);
   border-radius: 0.375rem;
   text-decoration: none;
   margin-bottom: 1px;
@@ -125,7 +120,7 @@ $portal-sidebar-width: 240px;
     color 0.12s;
 
   &:hover {
-    background: #f0f7f4;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
     color: $portal-green;
     text-decoration: none;
   }
@@ -151,7 +146,7 @@ $portal-sidebar-width: 240px;
 .portal-sidebar-groups {
   margin: 0 0 0.25rem 0.75rem;
   padding-left: 0.5rem;
-  border-left: 1px solid #e3e8e5;
+  border-left: 1px solid var(--pk-line);
   list-style: none;
 }
 
@@ -159,7 +154,7 @@ $portal-sidebar-width: 240px;
   display: block;
   padding: 0.3rem 0.75rem;
   font-size: 0.8125rem;
-  color: #495057;
+  color: var(--pk-ink-muted);
   border-radius: 0.375rem;
   text-decoration: none;
   transition:
@@ -167,7 +162,7 @@ $portal-sidebar-width: 240px;
     color 0.12s;
 
   &:hover {
-    background: #f0f7f4;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
     color: $portal-green;
     text-decoration: none;
   }
@@ -189,7 +184,7 @@ $portal-sidebar-width: 240px;
 .portal-sidebar-group-context {
   display: block;
   font-size: 0.6875rem;
-  color: #6c757d;
+  color: var(--pk-ink-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -202,16 +197,28 @@ $portal-sidebar-width: 240px;
 }
 
 .portal-sidebar-group-more {
-  color: #6c757d;
+  color: var(--pk-ink-muted);
   font-style: italic;
 }
 
+// The brand block at the top of the sidebar; was `px-2 py-3 mb-1`.
+.portal-sidebar-brand {
+  padding: 0.75rem 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
 .portal-sidebar-footer {
+  padding: 0.75rem 0.25rem 0;
+
   margin-top: auto;
 }
 
-.pkic-menu {
-  position: relative;
+// The account menu's trigger is the design system's Menu in its `plain`
+// variant, which contributes no chrome of its own; this styles the content
+// inside it. Transitional — the shell has not been migrated yet.
+.portal-sidebar-footer .pk-menu,
+.portal-sidebar-footer .pk-menu__trigger {
+  width: 100%;
 }
 
 .portal-sidebar-user {
@@ -222,15 +229,15 @@ $portal-sidebar-width: 240px;
   padding: 0.4rem 0.6rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--pk-ink-muted);
   text-align: left;
   background: none;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--pk-line);
   border-radius: 0.375rem;
 
   &:hover,
   &:focus-visible {
-    background: #f0f7f4;
+    background: color-mix(in srgb, var(--pk-accent) 10%, transparent);
     color: $portal-green;
   }
 }
@@ -271,136 +278,27 @@ $portal-sidebar-width: 240px;
   font-size: 0.75rem;
 }
 
-// Positioned to the trigger by Menu.tsx with fixed coordinates so overflow
-// ancestors (scrolling table wrappers) cannot clip it and opening it never
-// scrolls the page.
-.pkic-menu-popup {
-  position: fixed;
-  z-index: 1050;
-  display: flex;
-  flex-direction: column;
-  padding: 0.25rem;
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 0.375rem;
-  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
-}
-
-.pkic-menu-item {
-  display: block;
-  width: 100%;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.8125rem;
-  color: #495057;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: 0.25rem;
-
-  &:hover,
-  &:focus-visible {
-    background: #f0f7f4;
-    color: $portal-green;
-  }
-
-  &:disabled {
-    color: #adb5bd;
-  }
-}
-
 // The public site uppercases every `main h5` for its editorial look; inside
-// the application that style shouts from card headers and dialog titles.
-// Restore sentence case for all portal headings.
+// the application that style shouts from card headers.
 #portal-root h5,
-#portal-root .h5,
-.pkic-confirm-dialog h5 {
+#portal-root .h5 {
   text-transform: none;
   letter-spacing: normal;
   color: inherit;
 }
 
-.pkic-confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1080;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(33, 37, 41, 0.45);
-}
+// The confirmation dialog's styles are gone: it is now the design system's
+// `Dialog`, a native <dialog> whose CSS lives with the component in
+// assets/ts/ui/Dialog.css. What was here reproduced a modal's appearance
+// around markup that was not modal — no focus trap, nothing inert behind it —
+// in hard-coded greys that had no dark theme.
 
-.pkic-confirm-dialog {
-  width: 100%;
-  max-width: 420px;
-  padding: 1.25rem 1.5rem;
-  background: #fff;
-  border-radius: 0.5rem;
-  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.25);
-}
-
-.pkic-confirm-title {
-  margin-bottom: 0.5rem;
-}
-
-.pkic-confirm-body {
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  color: #495057;
-}
-
-.pkic-confirm-consequences {
-  margin: 0 0 0.75rem;
-  padding-left: 1.25rem;
-  font-size: 0.8125rem;
-  color: #495057;
-
-  li + li {
-    margin-top: 0.25rem;
-  }
-}
-
-.pkic-confirm-typed {
-  margin-bottom: 0.75rem;
-}
-
-.pkic-confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.pkic-row-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  width: 100%;
-}
-
-.pkic-row-actions-status {
-  font-size: 0.8125rem;
-  color: #495057;
-  white-space: nowrap;
-}
-
-.pkic-row-actions-trigger {
-  padding: 0 0.5rem;
-  font-size: 1rem;
-  line-height: 1.4;
-  color: #495057;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-
-  &:hover,
-  &:focus-visible {
-    background: #f0f7f4;
-    border-color: #dee2e6;
-    color: $portal-green;
-  }
-}
+// The row-actions cell and the menu it opens are now the design system's
+// RowActions and Menu, styled in assets/ts/ui/*.css. What was here was a
+// second implementation of both, in hard-coded greys with no dark theme, and
+// it was the better one: it flipped the popup above the trigger when there was
+// no room below and clamped it into the viewport, which the design-system Menu
+// did not. Those behaviours moved into the primitive rather than being lost.
 
 .pkic-empty-state {
   padding: 2rem 1rem;
@@ -410,14 +308,14 @@ $portal-sidebar-width: 240px;
 .pkic-empty-state-title {
   margin-bottom: 0.25rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--pk-ink-muted);
 }
 
 .pkic-empty-state-body {
   max-width: 34rem;
   margin: 0 auto 0.75rem;
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--pk-ink-muted);
 }
 
 .portal-section-title {
@@ -429,7 +327,7 @@ $portal-sidebar-width: 240px;
 .portal-context-title {
   font-size: 1.35rem;
   font-weight: 600;
-  color: #212529;
+  color: var(--pk-ink);
 }
 
 .portal-management-picker {
@@ -442,49 +340,6 @@ $portal-sidebar-width: 240px;
 
 .portal-management-search {
   max-width: 720px;
-}
-
-// A designed stand-in for JSON.stringify(details) in audit-log style tables: a compact
-// label/value list instead of a raw machine payload.
-.details-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8125rem;
-}
-
-.details-summary-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-
-  dt {
-    flex: 0 0 auto;
-    min-width: 96px;
-    margin-bottom: 0;
-    font-weight: 600;
-    color: #6c757d;
-  }
-
-  dd {
-    margin-bottom: 0;
-    word-break: break-word;
-  }
-}
-
-.details-summary-sublist {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin: 0.25rem 0 0 1rem;
-  padding-left: 0.5rem;
-  border-left: 2px solid #e9ecef;
-}
-
-.details-summary-raw summary {
-  cursor: pointer;
-  font-size: 0.8125rem;
-  color: #6c757d;
 }
 
 #portal-toast-area {

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
@@ -104,10 +105,13 @@ test("portal proposal detail uses canonical proposal resources without admin fal
       response.request().method() === "GET" &&
       new URL(response.url()).pathname === `/api/v1/proposals/${proposalId}/audit-log`,
   );
-  await page.getByRole("tab", { name: "Audit Log", exact: true }).click();
+  // Scoped to the proposal's own tab strip: the group workspace around it
+  // carries an "Audit log" tab of its own, and an unscoped lookup names both.
+  const proposalTabs = page.getByRole("tablist", { name: "Proposal sections" });
+  await tab(proposalTabs, "Audit Log").click();
   expect((await auditResponse).status()).toBe(200);
   await expect(page.getByRole("heading", { name: "Audit Log", exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Speakers", exact: true }).click();
+  await tab(proposalTabs, "Speakers").click();
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   await expect(page.getByLabel("Proposal speakers").getByText("Portal Proposer", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit profile" }).click();

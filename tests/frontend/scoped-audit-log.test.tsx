@@ -96,7 +96,7 @@ async function assertPagedAuditLog(
   expect(container.textContent).toContain(firstRendered);
   expect(container.textContent).not.toContain(secondRendered);
 
-  const next = container.querySelector(".adm-pager .page-item:last-child button");
+  const next = container.querySelector('button[aria-label="Next page"]');
   expect(next).toBeInstanceOf(HTMLButtonElement);
   await act(() => (next as HTMLButtonElement).click());
   await settle();
@@ -138,6 +138,73 @@ describe("scoped audit-log server pagination", () => {
       "proposal_review_upserted",
       "Review updated",
     );
+  });
+
+  it("says the audit log is unavailable, politely, when the viewer may not read it", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<AuditLogSection proposalId="proposal-1" enabled={false} />, container));
+
+    // Nothing the viewer can act on, so it is announced as a status rather
+    // than as an alert, and it says which permission is missing.
+    const status = container.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(status?.textContent).toContain("Audit log access requires proposal review permission.");
+    expect(container.querySelector("table")).toBeNull();
+  });
+
+  it("names each scoped audit table after the record whose history it is", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(jsonResponse(auditResponse(0, "proposal_edited", "proposal_edited")))),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+
+    await act(() => render(<AuditLogSection proposalId="proposal-1" enabled />, container));
+    await settle();
+
+    // Four tables on a page all called "Audit history" are announced as four
+    // identical tables, so each says whose history it is.
+    expect(container.querySelector("table caption")?.textContent).toBe("Proposal history");
+  });
+
+  it("names the canonical proposal history and pairs each detail with its own term", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({
+            auditLog: [
+              {
+                ...auditEntry("audit-detail", "proposal_edited", "Ada Lovelace"),
+                details: { title: { from: "Old title", to: "New title" }, reviewer: "Grace" },
+              },
+            ],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          }),
+        ),
+      ),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+
+    await act(() => render(<ProposalAuditLog endpoint="/api/v1/proposals/proposal-1/audit-log" />, container));
+    await settle();
+
+    expect(container.querySelector("table caption")?.textContent).toBe("Proposal history");
+
+    // The details used to be one run-on line reading "title: a → b reviewer:
+    // Grace". Each key is now a term answered by its own value, and the pairs
+    // are direct children of the list so both stay in the two-column grid.
+    const list = container.querySelector("dl")!;
+    expect([...list.querySelectorAll(":scope > dt")].map((dt) => dt.textContent)).toEqual(["title", "reviewer"]);
+    const values = [...list.querySelectorAll(":scope > dd")].map((dd) => dd.textContent);
+    expect(values[0]).toBe("Old title → New title");
+    expect(values[1]).toBe("Grace");
   });
 
   it("pages registration audit entries with the shared limit/offset pager", async () => {

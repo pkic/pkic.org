@@ -4,10 +4,17 @@ import {
   organizationDetailResponseSchema,
   type OrganizationDetail,
 } from "../../../../../shared/schemas/organization-management";
-import { FormActions } from "../../../../components/FormActions";
+import { friendlyErrorMessage } from "../../../../components/ErrorAlert";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { patchJson } from "../../../../shared/api-client";
-import { fmt, toast } from "../../ui";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { fmt, fmtDate, toast } from "../../ui";
+import "../../../../ui/Content.css";
 
 const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
 
@@ -80,106 +87,123 @@ function OrganizationProfileForm({
   }
 
   return (
-    <form onSubmit={submit}>
-      <div class="row g-2 mb-2">
-        <div class="col-md-4">
-          <label class="form-label small mb-1" for="organization-profile-category">
-            Membership category
-          </label>
-          <select
-            id="organization-profile-category"
-            class="form-select form-select-sm"
-            value={membershipCategory}
-            onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
-            disabled={busy}
-          >
-            {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-          <div class="form-text">This category applies to every active identity for the organization.</div>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small mb-1" for="organization-profile-member-since">
-            Member since
-          </label>
-          <input
-            id="organization-profile-member-since"
-            type="date"
-            class="form-control form-control-sm"
-            value={memberSince}
-            onInput={(event) => setMemberSince((event.target as HTMLInputElement).value)}
-            disabled={busy}
-          />
-        </div>
-        {PROFILE_FIELDS.map(([label, field]) => (
-          <div key={field} class="col-md-4">
-            <label class="form-label small mb-1" for={`organization-profile-${field}`}>
-              {label}
-            </label>
-            <input
-              id={`organization-profile-${field}`}
-              type={field === "website" || field.endsWith("Url") ? "url" : "text"}
-              class="form-control form-control-sm"
-              value={form[field]}
-              onInput={(event) =>
-                setForm((current) => ({ ...current, [field]: (event.target as HTMLInputElement).value }))
-              }
+    <form class="pk-stack" onSubmit={submit}>
+      <div class="pk-grid pk-grid--tight">
+        <Field label="Membership category" help="This category applies to every active identity for the organization.">
+          {(control) => (
+            <Select
+              {...control}
+              value={membershipCategory}
               disabled={busy}
+              onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
+            >
+              {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Member since">
+          {(control) => (
+            <TextInput
+              {...control}
+              type="date"
+              value={memberSince}
+              disabled={busy}
+              onInput={(event) => setMemberSince((event.target as HTMLInputElement).value)}
             />
-          </div>
+          )}
+        </Field>
+        {PROFILE_FIELDS.map(([label, field]) => (
+          <Field key={field} label={label}>
+            {(control) => (
+              <TextInput
+                {...control}
+                type={field === "website" || field.endsWith("Url") ? "url" : "text"}
+                value={form[field]}
+                disabled={busy}
+                onInput={(event) =>
+                  setForm((current) => ({ ...current, [field]: (event.target as HTMLInputElement).value }))
+                }
+              />
+            )}
+          </Field>
         ))}
-        <div class="col-12">
-          <label class="form-label small mb-1" for="organization-profile-description">
-            Description
-          </label>
-          <textarea
-            id="organization-profile-description"
-            class="form-control form-control-sm"
+      </div>
+
+      <Field label="Description">
+        {(control) => (
+          <Textarea
+            {...control}
             rows={2}
             value={description}
-            onInput={(event) => setDescription((event.target as HTMLTextAreaElement).value)}
             disabled={busy}
+            onInput={(event) => setDescription((event.target as HTMLTextAreaElement).value)}
           />
-        </div>
-        <div class="col-12">
-          <label class="form-label small mb-1" for="organization-profile-content">
-            Content (Markdown)
-          </label>
-          <textarea
-            id="organization-profile-content"
-            class="form-control form-control-sm mono"
+        )}
+      </Field>
+
+      <Field label="Content (Markdown)">
+        {(control) => (
+          <Textarea
+            {...control}
+            class="pk-mono"
             rows={8}
             value={contentMarkdown}
-            onInput={(event) => setContentMarkdown((event.target as HTMLTextAreaElement).value)}
             disabled={busy}
+            onInput={(event) => setContentMarkdown((event.target as HTMLTextAreaElement).value)}
           />
-        </div>
-        <div class="col-12">
-          <label class="form-label small mb-1">Links</label>
-          <ProfileLinksInput fieldName="organization.links" value={links} onChange={setLinks} />
-        </div>
+        )}
+      </Field>
+
+      <fieldset class="pk-fieldset pk-field">
+        <legend class="pk-field__label">Links</legend>
+        <ProfileLinksInput
+          fieldName="organization.links"
+          value={links}
+          inputAriaLabel="Organization profile URL"
+          onChange={setLinks}
+        />
+      </fieldset>
+
+      {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+
+      <div class="pk-cluster">
+        <Button type="submit" variant="primary" loading={busy}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+        <Button onClick={onCancel} disabled={busy}>
+          Cancel
+        </Button>
       </div>
-      <FormActions
-        submitLabel="Save"
-        busyLabel="Saving…"
-        busy={busy}
-        onCancel={onCancel}
-        status={error}
-        statusVariant="danger"
-        submitVariant="primary"
-      />
     </form>
   );
 }
 
-function Contacts({ organization, onSaved }: { organization: OrganizationDetail; onSaved: () => Promise<void> }) {
-  const [busy, setBusy] = useState<"primaryContactUserId" | "secondaryContactUserId" | null>(null);
+const CONTACT_FIELDS = [
+  ["Primary contact", "primaryContactUserId"],
+  ["Secondary contact", "secondaryContactUserId"],
+] as const;
 
-  async function update(field: "primaryContactUserId" | "secondaryContactUserId", userId: string) {
+/**
+ * Who to talk to. Secondary to the record itself, so the page gives it the
+ * supporting column rather than a third panel of equal weight.
+ */
+export function OrganizationContacts({
+  organization,
+  onSaved,
+}: {
+  organization: OrganizationDetail;
+  onSaved: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<(typeof CONTACT_FIELDS)[number][1] | null>(null);
+  const [error, setError] = useState("");
+
+  async function update(field: (typeof CONTACT_FIELDS)[number][1], userId: string) {
     setBusy(field);
+    setError("");
     try {
       await patchJson(
         `/api/v1/organizations/${encodeURIComponent(organization.id)}`,
@@ -189,59 +213,94 @@ function Contacts({ organization, onSaved }: { organization: OrganizationDetail;
       toast("Contact updated", "success");
       await onSaved();
     } catch (caught) {
-      toast((caught as Error).message, "error");
+      const message = (caught as Error).message;
+      setError(message);
+      toast(message, "error");
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <section class="card border-0 shadow-sm mb-4" aria-labelledby="organization-contacts-heading">
-      <div class="card-header bg-white fw-semibold" id="organization-contacts-heading">
-        Contacts
-      </div>
-      <div class="card-body p-3">
-        <div class="row g-2">
-          {(
-            [
-              ["Primary contact", "primaryContactUserId"],
-              ["Secondary contact", "secondaryContactUserId"],
-            ] as const
-          ).map(([label, field]) => (
-            <div class="col-md-6" key={field}>
-              <label class="form-label small" for={`organization-contact-${field}`}>
-                {label}
-              </label>
-              <select
-                id={`organization-contact-${field}`}
-                class="form-select form-select-sm"
-                value={organization[field] ?? ""}
-                disabled={busy !== null}
-                onChange={(event) => void update(field, (event.target as HTMLSelectElement).value)}
-              >
-                <option value="">None</option>
-                {organization.identities
-                  // One person cannot hold both contact roles; the service
-                  // enforces it, the select simply hides the collision.
-                  .filter(
-                    (representative) =>
-                      representative.userId !==
-                      organization[
-                        field === "primaryContactUserId" ? "secondaryContactUserId" : "primaryContactUserId"
-                      ],
-                  )
-                  .map((representative) => (
-                    <option key={representative.userId} value={representative.userId}>
-                      {representative.name} ({representative.email})
-                    </option>
-                  ))}
-              </select>
-            </div>
+    <Panel aria-label="Contacts">
+      <PanelHeader title="Contacts" />
+      <PanelBody class="pk-stack">
+        <div class="pk-grid">
+          {CONTACT_FIELDS.map(([label, field]) => (
+            <Field key={field} label={label}>
+              {(control) => (
+                <Select
+                  {...control}
+                  value={organization[field] ?? ""}
+                  disabled={busy !== null}
+                  onChange={(event) => void update(field, (event.target as HTMLSelectElement).value)}
+                >
+                  <option value="">None</option>
+                  {organization.identities
+                    // One person cannot hold both contact roles; the service
+                    // enforces it, the select simply hides the collision.
+                    .filter(
+                      (representative) =>
+                        representative.userId !==
+                        organization[
+                          field === "primaryContactUserId" ? "secondaryContactUserId" : "primaryContactUserId"
+                        ],
+                    )
+                    .map((representative) => (
+                      <option key={representative.userId} value={representative.userId}>
+                        {representative.name} ({representative.email})
+                      </option>
+                    ))}
+                </Select>
+              )}
+            </Field>
           ))}
         </div>
-      </div>
-    </section>
+        {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+      </PanelBody>
+    </Panel>
   );
+}
+
+/**
+ * A stored URL, rendered as the link it is.
+ *
+ * `null` comes back as `undefined` rather than as a dash: `DescriptionList`
+ * owns what an absent value looks like, and a surface that writes its own dash
+ * is the reason the portal had four of them.
+ */
+function profileLink(url: string | null) {
+  if (!url) return undefined;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer">
+      {url}
+    </a>
+  );
+}
+
+/**
+ * The record's facts. A term/value list, not a table: there is one record and
+ * no columns to compare across.
+ *
+ * The membership category is not repeated here — it is a badge beside the
+ * organization's name, where the page states what this record is.
+ */
+function ProfileSummary({ organization }: { organization: OrganizationDetail }) {
+  const items: DescriptionListItem[] = [
+    { term: "Website", value: profileLink(organization.website) },
+    { term: "Slogan", value: organization.slogan },
+    { term: "Description", value: organization.description },
+    { term: "Blog", value: profileLink(organization.blogUrl) },
+    { term: "Press", value: profileLink(organization.pressUrl) },
+    { term: "Careers", value: profileLink(organization.careersUrl) },
+    // A calendar date, not an instant: the contract is `z.iso.date()`, and
+    // `fmt` would widen it into a moment with a time of day and a zone that
+    // the value never carried. AGENTS.md forbids that widening explicitly.
+    { term: "Member since", value: fmtDate(organization.memberSince) },
+    { term: "Created", value: fmt(organization.createdAt) },
+  ];
+
+  return <DescriptionList items={items} density="compact" />;
 }
 
 export function OrganizationProfile({
@@ -255,61 +314,32 @@ export function OrganizationProfile({
 }) {
   const [editing, setEditing] = useState(false);
 
+  // The panel is the record itself, and nothing else. Contacts used to be
+  // rendered from inside here, which meant the page could not decide that one
+  // of the two mattered more than the other.
   return (
-    <>
-      <section class="card border-0 shadow-sm mb-4" aria-labelledby="organization-profile-heading">
-        <div class="card-header bg-white fw-semibold d-flex align-items-center justify-content-between">
-          <span id="organization-profile-heading">Profile</span>
-          {canWrite && !editing && (
-            <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => setEditing(true)}>
-              Edit
-            </button>
-          )}
-        </div>
-        <div class="card-body p-3">
-          {editing ? (
-            <OrganizationProfileForm
-              organization={organization}
-              onSaved={async () => {
-                setEditing(false);
-                await onSaved();
-              }}
-              onCancel={() => setEditing(false)}
-            />
-          ) : (
-            <table class="table table-sm table-borderless mb-0">
-              <tbody>
-                <tr>
-                  <th class="text-muted small">Membership category</th>
-                  <td>
-                    {organization.membershipCategory ? (
-                      <span class="badge text-bg-success mono">{organization.membershipCategory}</span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-                {[
-                  ["Website", organization.website],
-                  ["Slogan", organization.slogan],
-                  ["Description", organization.description],
-                  ["Blog", organization.blogUrl],
-                  ["Press", organization.pressUrl],
-                  ["Careers", organization.careersUrl],
-                  ["Member since", fmt(organization.memberSince)],
-                  ["Created", fmt(organization.createdAt)],
-                ].map(([label, value]) => (
-                  <tr key={label}>
-                    <th class="text-muted small">{label}</th>
-                    <td>{value || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
-      {canWrite && <Contacts organization={organization} onSaved={onSaved} />}
-    </>
+    <Panel aria-label="Profile">
+      <PanelHeader title="Profile">
+        {canWrite && !editing && (
+          <Button size="sm" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+        )}
+      </PanelHeader>
+      <PanelBody>
+        {editing ? (
+          <OrganizationProfileForm
+            organization={organization}
+            onSaved={async () => {
+              setEditing(false);
+              await onSaved();
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <ProfileSummary organization={organization} />
+        )}
+      </PanelBody>
+    </Panel>
   );
 }

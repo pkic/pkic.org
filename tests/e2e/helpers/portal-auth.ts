@@ -14,8 +14,8 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   // address and exhausts the production-equivalent per-IP limiter.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   await page.goto("/portal/");
-  await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#portal-inp-email").fill(email);
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
@@ -27,7 +27,7 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   await page.reload();
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
-  await expect(page.locator("#portal-inp-email")).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByLabel("Email")).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
 }

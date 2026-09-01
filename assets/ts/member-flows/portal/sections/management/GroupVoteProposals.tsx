@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 import {
   groupVoteProposalApproveResponseSchema,
   groupVoteProposalDetailResponseSchema,
@@ -16,6 +16,11 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { deleteJson, getJson, postJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Textarea } from "../../../../ui/TextControl";
 import { fmtDate } from "../../ui";
 import { GroupVoteProposalForm } from "./GroupVoteProposalForm";
 
@@ -28,6 +33,7 @@ function GroupVoteProposalDetail({
   proposal: GroupVoteProposal;
   onChanged: () => Promise<void>;
 }) {
+  const headingId = useId();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -85,73 +91,84 @@ function GroupVoteProposalDetail({
   }
 
   return (
-    <div class="border rounded p-3">
-      <h6>{current.title}</h6>
-      <p>{current.description}</p>
-      <p class="small text-muted">
-        {current.endorsementCount} of {current.minEndorsersRequired} required endorsements
-      </p>
-      {current.rejectionReason && <div class="alert alert-danger">{current.rejectionReason}</div>}
-      <ErrorAlert error={error} />
-      <div class="d-flex gap-2 flex-wrap">
-        {current.capabilities.includes("endorse") && (
-          <button
-            type="button"
-            class="btn btn-sm btn-success"
-            disabled={busy}
-            onClick={() => void action(() => postJson(`${base}/endorse`, {}, groupVoteProposalEndorseResponseSchema))}
+    <Panel class="pk" aria-labelledby={headingId}>
+      <PanelHeader id={headingId} title={current.title} />
+      <PanelBody class="pk-stack">
+        <p>{current.description}</p>
+        <p class="pk-small">
+          {current.endorsementCount} of {current.minEndorsersRequired} required endorsements
+        </p>
+        {/* The reason is titled rather than left as red text: a tone that is
+            the only thing saying "rejected" says nothing to a reader who
+            cannot separate it from the surrounding ink. */}
+        {current.rejectionReason && (
+          <Alert tone="danger" title="Rejected">
+            {current.rejectionReason}
+          </Alert>
+        )}
+        <ErrorAlert error={error} />
+        <div class="pk-cluster">
+          {current.capabilities.includes("endorse") && (
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={busy}
+              onClick={() => void action(() => postJson(`${base}/endorse`, {}, groupVoteProposalEndorseResponseSchema))}
+            >
+              Endorse
+            </Button>
+          )}
+          {current.capabilities.includes("withdraw_endorsement") && (
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => void action(() => deleteJson(`${base}/endorse`, groupVoteProposalMutationResponseSchema))}
+            >
+              Withdraw endorsement
+            </Button>
+          )}
+          {current.capabilities.includes("withdraw") && (
+            <Button size="sm" variant="danger-quiet" disabled={busy} onClick={() => void withdraw()}>
+              Withdraw proposal
+            </Button>
+          )}
+          {current.capabilities.includes("approve") && (
+            <Button size="sm" variant="primary" disabled={busy} onClick={() => void approve()}>
+              Approve and create vote
+            </Button>
+          )}
+        </div>
+        {current.capabilities.includes("reject") && (
+          <form
+            class="pk-stack pk-stack--snug"
+            aria-label={`Reject ${current.title}`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void action(() => postJson(`${base}/reject`, { reason }, groupVoteProposalRejectResponseSchema));
+            }}
           >
-            Endorse
-          </button>
+            <fieldset class="pk-fieldset" disabled={busy}>
+              <Field label="Rejection reason" required help="Sent to the proposer with the decision.">
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    rows={2}
+                    maxLength={1000}
+                    value={reason}
+                    onInput={(event) => setReason(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+            </fieldset>
+            <div class="pk-cluster">
+              <Button type="submit" variant="danger" size="sm" disabled={busy || !reason.trim()}>
+                Reject proposal
+              </Button>
+            </div>
+          </form>
         )}
-        {current.capabilities.includes("withdraw_endorsement") && (
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary"
-            disabled={busy}
-            onClick={() => void action(() => deleteJson(`${base}/endorse`, groupVoteProposalMutationResponseSchema))}
-          >
-            Withdraw endorsement
-          </button>
-        )}
-        {current.capabilities.includes("withdraw") && (
-          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void withdraw()}>
-            Withdraw proposal
-          </button>
-        )}
-        {current.capabilities.includes("approve") && (
-          <button type="button" class="btn btn-sm btn-primary" disabled={busy} onClick={() => void approve()}>
-            Approve and create vote
-          </button>
-        )}
-      </div>
-      {current.capabilities.includes("reject") && (
-        <form
-          class="mt-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void action(() => postJson(`${base}/reject`, { reason }, groupVoteProposalRejectResponseSchema));
-          }}
-        >
-          <label class="form-label" for={`proposal-${current.id}-rejection-reason`}>
-            Rejection reason
-          </label>
-          <textarea
-            id={`proposal-${current.id}-rejection-reason`}
-            class="form-control"
-            rows={2}
-            maxLength={1000}
-            required
-            value={reason}
-            disabled={busy}
-            onInput={(event) => setReason(event.currentTarget.value)}
-          />
-          <button type="submit" class="btn btn-sm btn-danger mt-2" disabled={busy || !reason.trim()}>
-            Reject proposal
-          </button>
-        </form>
-      )}
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -166,21 +183,22 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
   }
 
   return (
-    <div>
+    <div class="pk pk-stack">
       {canParticipate && (
-        <div class="mb-3">
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
+        <div class="pk-cluster">
+          <Button
+            size="sm"
+            variant="primary"
             aria-expanded={showCreate}
             onClick={() => setShowCreate((shown) => !shown)}
           >
             {showCreate ? "Hide proposal form" : "Propose a vote"}
-          </button>
+          </Button>
         </div>
       )}
       {showCreate && <GroupVoteProposalForm groupId={groupId} onCreated={reload} />}
       <ApiDataTable
+        caption="Vote proposals"
         actionsRef={actions}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/vote-proposals`}
         responseSchema={groupVoteProposalsListResponseSchema}
@@ -193,9 +211,9 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
           {
             header: "Proposal",
             cell: (proposal) => (
-              <div>
-                <div class="fw-semibold">{proposal.title}</div>
-                <div class="small text-muted">{proposal.description}</div>
+              <div class="pk-stack pk-stack--tight">
+                <span class="pk-strong">{proposal.title}</span>
+                <span class="pk-small">{proposal.description}</span>
               </div>
             ),
             sort: { asc: "title", desc: "-title" },
@@ -206,47 +224,47 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
             sort: { asc: "status", desc: "-status" },
           },
           {
+            // Counts and dates have a bounded length; the columns say so
+            // instead of wearing `pk-nowrap` while still claiming slack.
             header: "Endorsements",
+            width: "fit",
             cell: (proposal) => `${proposal.endorsementCount} / ${proposal.minEndorsersRequired}`,
             sort: { asc: "endorsement_count", desc: "-endorsement_count" },
           },
           {
             header: "Created",
+            width: "fit",
             cell: (proposal) => fmtDate(proposal.createdAt),
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
-          },
-          {
-            header: "",
-            className: "text-end",
-            cell: (proposal) => (
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
-                aria-expanded={selectedProposal?.id === proposal.id}
-                onClick={() => setSelectedProposal((current) => (current?.id === proposal.id ? null : proposal))}
-              >
-                {selectedProposal?.id === proposal.id ? "Hide" : "Details"}
-              </button>
-            ),
           },
         ]}
         empty={
           canParticipate ? (
+            // "Propose a vote" is already above this state, as the form's
+            // disclosure; a second button under that name would be one
+            // command answering to two controls.
             <EmptyState
               title="No vote proposals yet"
-              body="Propose a vote for this group to start collecting endorsements."
-              action={{ label: "Propose a vote", onSelect: () => setShowCreate(true) }}
+              body="Use Propose a vote above to start collecting endorsements."
             />
           ) : (
             "No vote proposals are available through this group."
           )
         }
         rowKey={(proposal) => proposal.id}
+        // Activating a row opens its detail in place — the same rule as
+        // every other list. The "Details" button column this replaces left
+        // the row itself inert.
+        rowAction={(proposal) => ({
+          label:
+            selectedProposal?.id === proposal.id
+              ? `Hide details for ${proposal.title}`
+              : `Show details for ${proposal.title}`,
+          onSelect: () => setSelectedProposal((current) => (current?.id === proposal.id ? null : proposal)),
+        })}
         detailRow={(proposal) =>
           selectedProposal?.id === proposal.id ? (
-            <div class="p-3 bg-body-tertiary">
-              <GroupVoteProposalDetail groupId={groupId} proposal={selectedProposal} onChanged={reload} />
-            </div>
+            <GroupVoteProposalDetail groupId={groupId} proposal={selectedProposal} onChanged={reload} />
           ) : null
         }
       />

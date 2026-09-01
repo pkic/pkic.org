@@ -43,3 +43,33 @@
 .text-pre-wrap {
   white-space: pre-wrap;
 }
+
+// The section side menu (layouts/partials/menu.html). Replaces Bootstrap's
+// `.list-unstyled` plus the per-item `pt-*`/`pb-*`/`px-*` utilities the list
+// used to carry: one gap on the parent instead of a padding decision per row.
+.section-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-2);
+}
+
+.section-menu-top {
+  margin-bottom: var(--pk-3);
+}
+
+.section-menu-child {
+  padding-inline-start: var(--pk-3);
+}
+
+// Replaces Bootstrap's `.row` for the {{% row %}}/{{% col %}} content
+// shortcodes. Deliberately gapless: `col.html` still emits `col-lg-*`
+// percentage widths that add up to exactly 100%, and any gap would wrap a
+// 7/5 split onto two lines. The columns' own gutter padding is the spacing.
+.content-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}

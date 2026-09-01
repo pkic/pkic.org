@@ -1,0 +1,345 @@
+/*
+ * Layout utilities.
+ *
+ * Deliberately a handful, not four hundred. Bootstrap's utility set encodes
+ * every value as a class (`mb-3`, `col-md-6`, `d-flex`), which is why the
+ * markup carries ~8,800 of them: each is an independent decision that can
+ * disagree with its neighbours.
+ *
+ * These express the four arrangements almost every page actually uses — a
+ * measured column, a vertical rhythm, a horizontal group, and a responsive
+ * grid — and take their spacing from one custom property. A surface tunes
+ * `--pk-gap` where it needs to instead of picking a different class.
+ *
+ * They live in `@layer utilities`, the last layer, so they beat components by
+ * design: a utility is the escape hatch, and it should win without anyone
+ * reaching for `!important`.
+ */
+
+@layer utilities {
+  /* A measured reading column. One max-width, not twelve breakpoint variants. */
+  .pk-container {
+    width: 100%;
+    max-width: var(--pk-measure, 72rem);
+    margin-inline: auto;
+    padding-inline: var(--pk-4);
+  }
+
+  .pk-container--narrow {
+    --pk-measure: 44rem;
+  }
+
+  .pk-container--wide {
+    --pk-measure: 84rem;
+  }
+
+  /*
+   * Vertical rhythm. The gap goes on the parent, so twelve children cannot
+   * disagree about their spacing the way twelve `mb-*` classes can.
+   */
+  .pk-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-gap, var(--pk-4));
+  }
+
+  /* Tighter rhythms, as classes. A surface that needs a smaller gap picks one
+     of these rather than writing an inline custom property — the repository
+     forbids style attributes, and a class keeps the value on the scale. */
+  .pk-stack--tight {
+    --pk-gap: var(--pk-1);
+  }
+
+  .pk-stack--snug {
+    --pk-gap: var(--pk-2);
+  }
+
+  .pk-stack--loose {
+    --pk-gap: var(--pk-5);
+  }
+
+  /* A horizontal group that wraps. Buttons in a toolbar, tags under a title. */
+  .pk-cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /*
+   * A form column.
+   *
+   * A form is filled one line at a time, so its width is set by the line rather
+   * than by the page. Stretched across a wide screen, an input becomes a target
+   * with no shape and the eye loses the label on its way to the control; the
+   * design page puts its own field examples in a column for the same reason.
+   * Composes with the stack modifiers, which is why the gap is the stack's.
+   */
+  .pk-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-gap, var(--pk-4));
+    max-width: 42rem;
+  }
+
+  /* A cluster whose items align to their tops rather than their centres —
+     an icon beside a wrapping paragraph, where centring looks accidental. */
+  .pk-cluster--start {
+    align-items: flex-start;
+  }
+
+  .pk-cluster--between {
+    justify-content: space-between;
+  }
+
+  .pk-cluster--end {
+    justify-content: flex-end;
+  }
+
+  /* The third main-axis alignment, beside --between and --end: a group
+     centered in the space it is given. A caption inside a fixed-size
+     placeholder box needs both axes, and the cluster already centers the
+     cross axis, so this is the half that was missing. */
+  .pk-cluster--center {
+    justify-content: center;
+  }
+
+  /*
+   * A responsive grid with no breakpoint classes at all: columns are as many
+   * as fit at `--pk-col-min`, so the same markup works on a phone and a wide
+   * desktop without `col-sm-6 col-lg-3` triplets.
+   *
+   * `auto-fill`, not `auto-fit`. `auto-fit` collapses the tracks it has no
+   * items for and shares the space between the ones that are left, so a list
+   * that happens to hold one item stretched that item across the whole row —
+   * a single upcoming event rendered as a banner three times the size of the
+   * same card on a month with three events. `auto-fill` keeps the empty tracks,
+   * so a card is the same size whether it has neighbours or not.
+   */
+  .pk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--pk-col-min, 16rem), 100%), 1fr));
+    gap: var(--pk-gap, var(--pk-4));
+  }
+
+  .pk-grid--tight {
+    --pk-col-min: 11rem;
+  }
+
+  .pk-grid--roomy {
+    --pk-col-min: 22rem;
+  }
+
+  /*
+   * A figure that stands beside the prose rather than across it.
+   *
+   * Rendered Markdown can hand a shortcode one thing about an illustration —
+   * its class — so the class has to carry the whole shape. This is the shape a
+   * logo or a small diagram wants: a stated width, so it can neither grow into
+   * a banner nor disappear, and, once the column is wide enough to leave a
+   * readable measure next to it, a side to sit on with the text running past.
+   *
+   * The width is stated rather than capped because a float is sized to fit its
+   * contents, and an SVG declaring only a `viewBox` has no contents to measure:
+   * the same logo that overran the column with no float on it was invisible in
+   * production with one, floated to zero width.
+   *
+   * It replaces `float-lg-end`, which is where the About page's logo came from
+   * and which has meant nothing since the framework was removed.
+   */
+  .pk-figure-aside {
+    width: min(18rem, 100%);
+    margin: var(--pk-4) auto;
+  }
+
+  @media (min-width: 60rem) {
+    .pk-figure-aside {
+      float: inline-end;
+      margin: 0 0 var(--pk-4) var(--pk-6);
+    }
+  }
+
+  /* Vertical section rhythm, so pages do not each choose their own py-*. */
+  .pk-section {
+    box-sizing: border-box;
+    padding-block: var(--pk-7);
+  }
+
+  /*
+   * A fieldset carrying no visible frame.
+   *
+   * `disabled` on a fieldset is the only way to take a whole form out of play
+   * in one attribute — including controls the surface renders through a child
+   * component it cannot pass a prop to — but the element arrives with the user
+   * agent's groove border, its own padding, and `min-inline-size: min-content`,
+   * which stops it shrinking inside a grid or flex parent. `base.css` resets
+   * headings and lists, not this, so the reset lives here rather than being
+   * re-derived by every form that needs the disabled behaviour. Padding is
+   * removed rather than tokenised: the spacing belongs to the parent's `gap`.
+   */
+  .pk-fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+  }
+
+  /*
+   * The framed variant: a repeated sub-record inside a form — one person in a
+   * list of drafts — whose fields must read as its own rather than as the
+   * surrounding form's. The frame is what carries that boundary, and the
+   * legend sits on it, naming the card the way a fieldset always could.
+   */
+  .pk-fieldset--boxed {
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    padding: var(--pk-4);
+    background: var(--pk-surface);
+  }
+
+  .pk-fieldset--boxed > legend {
+    padding-inline: var(--pk-1);
+  }
+
+  /* The few text utilities worth having, all reading tokens. */
+  .pk-muted {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-center {
+    text-align: center;
+  }
+
+  /* The end-aligned counterpart. Also the word a table column uses to say
+     which way its cells run, so a migrated surface never has to write
+     `text-end` into a file the isolation gate holds at zero. */
+  .pk-end {
+    text-align: end;
+  }
+
+  /* The third of the trio. A surface does not choose start alignment for fun
+     — it chooses it to opt back out of an ancestor that centered everything,
+     which `SuccessPanel` does to the panels rendered inside it. Without this
+     the only way back is an inline `style`, which the repository forbids. */
+  .pk-start {
+    text-align: start;
+  }
+
+  .pk-strong {
+    font-weight: 700;
+  }
+
+  /* An introductory paragraph, and its opposite. Both read the type scale so
+     a page cannot invent its own "slightly bigger" text. */
+  .pk-lede {
+    font-size: var(--pk-text-lg);
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-small {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  /* Fills the remaining space in a flex parent — replaces `mt-auto`/`ms-auto`
+     without needing a direction-specific class for each. */
+  .pk-push {
+    margin-inline-start: auto;
+  }
+
+  .pk-push-block {
+    margin-block-start: auto;
+  }
+
+  /*
+   * Makes a link's nearest positioned ancestor the click target, so a whole
+   * card is clickable without nesting the card's other content inside the
+   * anchor — which would put headings and paragraphs inside a link.
+   * The card itself needs `position: relative`.
+   */
+  .pk-stretched::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  /*
+   * The visually-hidden pattern, defined once rather than per component.
+   *
+   * It is absolutely positioned, which means an ancestor's `overflow: auto`
+   * does NOT clip it unless that ancestor is also positioned. Put one of these
+   * inside a horizontally scrolling region whose container is static and it
+   * will stretch the whole document sideways from wherever it happens to land.
+   * Any scroll container that can hold one needs `position: relative`.
+   */
+  .pk-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /*
+   * A loading placeholder. Carries no information, so it is hidden from
+   * assistive technology — the surface around it is responsible for saying
+   * that something is loading, via aria-busy or a live region.
+   */
+  .pk-skeleton {
+    display: block;
+    min-height: 1em;
+    border-radius: var(--pk-radius-sm);
+    background: linear-gradient(90deg, var(--pk-line-soft) 25%, var(--pk-line) 37%, var(--pk-line-soft) 63%);
+    background-size: 400% 100%;
+    animation: pk-skeleton-shimmer var(--pk-dur-shimmer) ease infinite;
+  }
+
+  .pk-skeleton--lg {
+    min-height: 1.6em;
+  }
+
+  @keyframes pk-skeleton-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
+
+  /* A required marker beside a label. Its colour is the danger state, because
+     that is what it means, not because red was handy. */
+  .pk-required {
+    color: var(--pk-danger-ink);
+  }
+
+  /* An inline caution beside a control, short of a full Alert. */
+  .pk-warning-note {
+    color: var(--pk-warn-ink);
+  }
+
+  /* Long unbroken strings — a token, a URL — that would otherwise widen their
+     container past the viewport. */
+  .pk-break {
+    overflow-wrap: anywhere;
+  }
+
+  /* The value keeps the ink and the term recedes, so the pair reads as a pair
+     even inside `.pk-small`, which would otherwise mute both halves into one
+     another. */
+  /* Keeps a short value - a date, a count, a status - on one line, so a
+     narrow column does not break it in two and make every row taller. */
+  .pk-nowrap {
+    white-space: nowrap;
+  }
+
+  /* A list of values inside a description list's `dd` — several selected
+     options, several uploaded files. Keeps the bullet without the browser's
+     40px indent, which would push the values out of line with their term. */
+  /* Preformatted text that must still wrap: a long free-text answer has no
+     line breaks of its own and would otherwise scroll sideways forever. */
+}

@@ -1,3 +1,4 @@
+import { useId } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import {
   groupFormDefinitionResponseSchema,
@@ -5,13 +6,16 @@ import {
   groupFormSubmissionStatsResponseSchema,
   groupFormSubmissionsResponseSchema,
 } from "../../../../../shared/schemas/group-forms";
-import { FormResponseStats, FormSubmissionsTable } from "../../../../components/forms/FormResponseViews";
+import { FormResponseStats } from "../../../../components/forms/FormResponseStats";
+import { FormSubmissionsTable } from "../../../../components/forms/FormResponseViews";
 import { FormSubmissionForm } from "../../../../components/forms/FormSubmissionForm";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson, postJson } from "../../../../shared/api-client";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { GroupFormPlacementEditor } from "./GroupFormPlacementEditor";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
@@ -32,6 +36,7 @@ export function GroupFormDetail({
   initialTab?: string;
   onChanged: () => void | Promise<void>;
 }) {
+  const headingId = useId();
   const [, navigate] = usePortalHashLocation();
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`;
   const requestedTab = (initialTab as GroupFormTab | undefined) ?? DEFAULT_TAB;
@@ -49,7 +54,7 @@ export function GroupFormDetail({
     [base, shouldLoadStats],
   );
 
-  if (detail.loading) return <Spinner />;
+  if (detail.loading) return <Spinner label="Loading form…" />;
   if (detail.error) return <ErrorAlert error={detail.error} />;
   if (!detail.data) return null;
 
@@ -86,56 +91,74 @@ export function GroupFormDetail({
   }
 
   return (
-    <div class="p-3 bg-body-tertiary">
-      <div class="mb-3">
-        <h6 class="mb-1">{form.form.title}</h6>
-        {form.form.description && <p class="small text-muted mb-0">{form.form.description}</p>}
-      </div>
-      {tabs.length > 1 && <Tabs items={tabs} active={activeTab ?? ""} onChange={goToTab} hrefFor={tabPath} />}
-      {!activeTab && <p class="small text-muted mb-0">No actions are available for this form.</p>}
-      {activeTab === "respond" && (
-        <FormSubmissionForm
-          fields={form.fields}
-          onSubmit={async (answers) => {
-            await postJson(`${base}/submissions`, { answers }, groupFormSubmissionResponseSchema);
-          }}
-        />
-      )}
-      {activeTab === "statistics" &&
-        (stats.loading ? (
-          <Spinner />
-        ) : stats.error ? (
-          <ErrorAlert error={stats.error} />
-        ) : stats.data ? (
-          <FormResponseStats fields={form.fields} stats={stats.data.stats} total={stats.data.total} />
-        ) : null)}
-      {activeTab === "responses" && (
-        <FormSubmissionsTable
-          fields={form.fields}
-          endpoint={`${base}/submissions`}
-          responseSchema={groupFormSubmissionsResponseSchema}
-        />
-      )}
-      {activeTab === "definition" && (
-        <GroupFormEditor
-          groupId={groupId}
-          placementId={placementId}
-          detail={form}
-          onSaved={reload}
-          onCancel={() => goToTab(canViewResponses ? "statistics" : "availability")}
-        />
-      )}
-      {activeTab === "availability" && (
-        <GroupFormPlacementEditor groupId={groupId} placement={form.placement} onSaved={reload} />
-      )}
-      {activeTab === "sharing" && canManageDefinition && form.placement.ownerGroupId && (
-        <ResourceSharingEditor
-          kind="formPlacement"
-          groupId={groupId}
-          resourceId={form.placement.id}
-          ownerGroupId={form.placement.ownerGroupId}
-        />
-      )}
-    </div>
+    // The detail row this opens inside is already a sunk band with no padding
+    // of its own, so the form states what it is as a named panel rather than
+    // as a tinted box with a bare heading floating in it. The panel's body
+    // owns the rhythm between the description, the tabs and the active
+    // section; the `mb-*` each of them carried is gone.
+    <Panel class="pk" aria-labelledby={headingId}>
+      <PanelHeader id={headingId} title={form.form.title} />
+      <PanelBody class="pk-stack">
+        {form.form.description && <p class="pk-small">{form.form.description}</p>}
+        {tabs.length > 1 && (
+          <Tabs
+            items={tabs}
+            active={activeTab ?? ""}
+            onChange={goToTab}
+            hrefFor={tabPath}
+            label={`${form.form.title} sections`}
+          />
+        )}
+        {!activeTab && (
+          <EmptyState
+            title="No actions are available for this form."
+            body="You can read this form, but nothing here is open to your current identity."
+          />
+        )}
+        {activeTab === "respond" && (
+          <FormSubmissionForm
+            fields={form.fields}
+            onSubmit={async (answers) => {
+              await postJson(`${base}/submissions`, { answers }, groupFormSubmissionResponseSchema);
+            }}
+          />
+        )}
+        {activeTab === "statistics" &&
+          (stats.loading ? (
+            <Spinner label="Loading response statistics…" />
+          ) : stats.error ? (
+            <ErrorAlert error={stats.error} />
+          ) : stats.data ? (
+            <FormResponseStats fields={form.fields} stats={stats.data.stats} total={stats.data.total} />
+          ) : null)}
+        {activeTab === "responses" && (
+          <FormSubmissionsTable
+            fields={form.fields}
+            endpoint={`${base}/submissions`}
+            responseSchema={groupFormSubmissionsResponseSchema}
+          />
+        )}
+        {activeTab === "definition" && (
+          <GroupFormEditor
+            groupId={groupId}
+            placementId={placementId}
+            detail={form}
+            onSaved={reload}
+            onCancel={() => goToTab(canViewResponses ? "statistics" : "availability")}
+          />
+        )}
+        {activeTab === "availability" && (
+          <GroupFormPlacementEditor groupId={groupId} placement={form.placement} onSaved={reload} />
+        )}
+        {activeTab === "sharing" && canManageDefinition && form.placement.ownerGroupId && (
+          <ResourceSharingEditor
+            kind="formPlacement"
+            groupId={groupId}
+            resourceId={form.placement.id}
+            ownerGroupId={form.placement.ownerGroupId}
+          />
+        )}
+      </PanelBody>
+    </Panel>
   );
 }

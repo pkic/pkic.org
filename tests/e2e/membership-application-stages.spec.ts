@@ -12,6 +12,7 @@
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import {
@@ -67,7 +68,7 @@ test("staff walk an application through every review stage in the portal and app
 
   const sinceApproval = await capturedEmailCount();
   await page.getByRole("button", { name: "Approve & run onboarding" }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Approve & run onboarding", exact: true }).click();
+  await acceptConfirmDialog(page, "Approve & run onboarding");
   await expect(page.locator(".my-toast", { hasText: "Application approved" })).toBeVisible({ timeout: 20_000 });
   await expect(stageBadge(page, name).filter({ hasText: "Approved" })).toBeVisible();
 

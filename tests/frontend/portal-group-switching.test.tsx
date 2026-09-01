@@ -11,6 +11,7 @@ import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupWorkspace";
+import { tabs } from "./helpers/tabs";
 
 const GROUP_X = "10000000-0000-4000-8000-00000000000a";
 const GROUP_Y = "10000000-0000-4000-8000-00000000000b";
@@ -129,10 +130,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// The page header is found the way a reader finds it — as the labelled
+// header region the workspace opens with, not by a styling class that a
+// migration can move.
 function contexts(): string[] {
-  return [...container.querySelectorAll(".portal-management-context")].map(
-    (node) => node.querySelector("h4")?.textContent ?? "",
+  return [...container.querySelectorAll("header[aria-labelledby]")].map(
+    (node) => node.querySelector("h2")?.textContent ?? "",
   );
+}
+
+// Likewise the tab strip: the shared helper finds a tab of either kind, so
+// the assertion survives the surface choosing links over buttons or back.
+function tabLinks(): HTMLElement[] {
+  return tabs(container);
 }
 
 describe("group workspace switching", () => {
@@ -185,9 +195,7 @@ describe("group workspace switching", () => {
     await act(() => render(<GroupWorkspace groupId={GROUP_Y} view="overview" />, container));
     await settle();
     expect(contexts()).toEqual([]);
-    const staleTabLinks = [...container.querySelectorAll("nav.nav-tabs a")].filter((link) =>
-      link.getAttribute("href")?.includes(GROUP_X),
-    );
+    const staleTabLinks = tabLinks().filter((link) => link.getAttribute("href")?.includes(GROUP_X));
     expect(staleTabLinks).toEqual([]);
     expect(container.textContent).toContain("Loading group…");
 
@@ -196,7 +204,7 @@ describe("group workspace switching", () => {
     });
     await settle();
     expect(contexts()).toEqual(["Beta Working Group"]);
-    const tabHrefs = [...container.querySelectorAll("nav.nav-tabs a")].map((link) => link.getAttribute("href"));
+    const tabHrefs = tabLinks().map((link) => link.getAttribute("href"));
     expect(tabHrefs.length).toBeGreaterThan(0);
     for (const href of tabHrefs) {
       expect(href).toContain(GROUP_Y);

@@ -10,6 +10,10 @@ import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-c
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
+import { confirmationButton } from "./helpers/confirm-dialog";
+import { buttonNamed, controlFor } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
+import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -35,12 +39,6 @@ function mount(node: preact.ComponentChildren): HTMLElement {
   mounted.push(container);
   void act(() => render(node, container));
   return container;
-}
-
-function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
-  const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-  if (!button) throw new Error(`missing button: ${label}`);
-  return button;
 }
 
 beforeEach(() => {
@@ -111,10 +109,9 @@ describe("portal system access control", () => {
     await settle();
     expect(revokeOnly.textContent).not.toContain("New grant");
     expect(revokeOnly.textContent).not.toContain("Grant a permission");
-    const revokeTrigger = revokeOnly.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
-    expect(revokeTrigger).toBeTruthy();
-    void act(() => revokeTrigger!.click());
-    expect(revokeOnly.textContent).toContain("Revoke grant");
+    // The row's commands live behind the `…` menu, whose trigger says which
+    // grant it acts on.
+    expect(rowActionControlNames(revokeOnly)).toEqual(["Actions for access:grant granted to staff@example.test"]);
 
     // A grant-authorized caller sees the action, not an always-open form.
     void act(() => render(null, revokeOnly));
@@ -135,7 +132,7 @@ describe("portal system access control", () => {
 
   it("navigates the top-level tabs to their canonical /system/access-control/:tab URLs", () => {
     const container = mount(<AccessControl canGrant canRevoke resourceId="roles" />);
-    const tabButtons = Array.from(container.querySelectorAll('[role="tab"]'));
+    const tabButtons = Array.from(tabs(container));
     expect(tabButtons.map((button) => button.textContent)).toEqual(["Access Grants", "Roles", "People"]);
 
     const peopleTab = tabButtons.find((button) => button.textContent === "People")!;
@@ -145,6 +142,27 @@ describe("portal system access control", () => {
     const grantsTab = tabButtons.find((button) => button.textContent === "Access Grants")!;
     void act(() => (grantsTab as HTMLButtonElement).click());
     expect(navigate).toHaveBeenCalledWith("/system/access-control/grants");
+  });
+
+  it("rewrites the bare section path to the tab it is actually showing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    mount(<AccessControl canGrant canRevoke />);
+    await settle();
+    // Replaced rather than pushed: Back belongs to whoever linked here.
+    expect(navigate).toHaveBeenCalledWith("/system/access-control/grants", { replace: true });
+  });
+
+  it("leaves a URL that already names its tab alone", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    mount(<AccessControl canGrant canRevoke resourceId="grants" />);
+    await settle();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("falls back to the grants tab for an unrecognized resourceId", async () => {
@@ -178,7 +196,7 @@ describe("portal system access control", () => {
       expect(onNavigate).toHaveBeenCalledWith("new");
 
       const openButton = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent === "Open",
+        (button) => button.textContent === `Open ${ROLE.name}`,
       );
       void act(() => openButton!.click());
       expect(onNavigate).toHaveBeenCalledWith(ROLE.id);
@@ -258,7 +276,7 @@ describe("portal system access control", () => {
       const onNavigate = vi.fn();
       const container = mount(<Roles canGrant roleSegment="new" onNavigate={onNavigate} />);
 
-      const nameInput = container.querySelector<HTMLInputElement>("#access-control-role-name")!;
+      const nameInput = controlFor<HTMLInputElement>(container, "Name");
       void act(() => {
         nameInput.value = "brand_new";
         nameInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -418,7 +436,10 @@ describe("portal system access control", () => {
       )!;
       void act(() => editButton.click());
 
-      const descriptionInput = container.querySelector<HTMLInputElement>("#access-control-role-edit-description")!;
+      // Reached through the `for`/`id` pair the Field emits rather than a
+      // hand-written id, so the lookup fails exactly when the label stops
+      // naming its control.
+      const descriptionInput = controlFor(container, "Description");
       void act(() => {
         descriptionInput.value = "Updated description";
         descriptionInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -435,6 +456,57 @@ describe("portal system access control", () => {
       const parsed = roleUpdateSchema.parse(patchBody!.body);
       expect(parsed.revision).toBe(ROLE.updatedAt);
       expect(parsed.description).toBe("Updated description");
+    });
+
+    it("keeps a refused edit on screen beside the form instead of a toast that fades", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(
+            typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+            location.origin,
+          );
+          if (url.pathname === `/api/v1/roles/${ROLE.id}` && init?.method === "PATCH") {
+            return new Response(
+              JSON.stringify({ error: { code: "CONFLICT", message: "Someone else changed this role." } }),
+              { status: 409, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.pathname === `/api/v1/roles/${ROLE.id}/assignments`) {
+            return json({ assignments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+          }
+          return json({ role: ROLE });
+        }),
+      );
+
+      const container = mount(<Roles canGrant canRevoke roleSegment={ROLE.id} onNavigate={vi.fn()} />);
+      await settle();
+      void act(() =>
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent === "Edit")!
+          .click(),
+      );
+
+      // The name is required, so the form refuses to submit an empty one
+      // before it ever reaches the server.
+      const name = controlFor(container, "Name");
+      expect(name.required).toBe(true);
+      const describedBy = name.getAttribute("aria-describedby");
+      expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain("must start with a letter");
+
+      const saveForm = Array.from(container.querySelectorAll("form")).find((form) =>
+        form.textContent?.includes("Save changes"),
+      )!;
+      await act(async () => {
+        saveForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // The failure is announced and stays put; the editor keeps the values
+      // that were rejected rather than closing over them.
+      const alert = container.querySelector('[role="alert"]');
+      expect(alert?.textContent).toContain("Someone else changed this role.");
+      expect(controlFor(container, "Name").value).toBe(ROLE.name);
     });
 
     it("surfaces a load error for an unknown role instead of a blank detail", async () => {
@@ -488,22 +560,18 @@ describe("portal system access control", () => {
     );
     await settle();
 
-    function openRowMenuAndSelectDelete() {
-      const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
-      void act(() => trigger.click());
-      void act(() => dialogButton(container, "Delete role").click());
-    }
-
     // Cancel: the confirm dialog names the role, but dismissing it must not delete it.
-    openRowMenuAndSelectDelete();
+    await runRowAction(container, "custom_reviewer", "Delete role");
     expect(container.textContent).toContain('Delete the role "custom_reviewer"?');
-    void act(() => dialogButton(container, "Cancel").click());
+    void act(() => buttonNamed(container, "Cancel").click());
     await settle();
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
 
-    // Confirm: the dialog's own "Delete role" button deletes it through the canonical route.
-    openRowMenuAndSelectDelete();
-    void act(() => dialogButton(container, "Delete role").click());
+    // Confirm: the dialog's own "Delete role" button deletes it through the
+    // canonical route. It is looked up inside the dialog, because the row's
+    // control now reads "Delete role" too.
+    await runRowAction(container, "custom_reviewer", "Delete role");
+    await act(() => confirmationButton("Delete role", container)?.click());
     await settle();
     const deleteRequest = requests.find((r) => r.method === "DELETE");
     expect(deleteRequest?.pathname).toBe(`/api/v1/roles/${ROLE.id}`);

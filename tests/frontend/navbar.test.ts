@@ -21,11 +21,11 @@ describe("navbar mega-menu state", () => {
     document.body.innerHTML = `
       <div id="pkicMegaBackdrop"></div>
       <div class="pkic-mega-trigger" id="first-trigger">
-        <a class="nav-link"></a>
+        <a class="pkic-nav-link"></a>
         <button class="pkic-mega-chevron" data-mega-target="first-panel" aria-expanded="false"></button>
       </div>
       <div class="pkic-mega-trigger" id="second-trigger">
-        <a class="nav-link"></a>
+        <a class="pkic-nav-link"></a>
         <button class="pkic-mega-chevron" data-mega-target="second-panel" aria-expanded="false"></button>
       </div>
       <div class="pkic-mega-panel" id="first-panel"></div>
@@ -50,7 +50,7 @@ describe("navbar mega-menu state", () => {
     document.body.innerHTML = `
       <div id="pkicMegaBackdrop"></div>
       <div class="pkic-mega-trigger" id="members-trigger">
-        <a class="nav-link"></a>
+        <a class="pkic-nav-link"></a>
         <button class="pkic-mega-chevron" data-mega-target="pkic-members-mega" aria-expanded="false"></button>
       </div>
       <div class="pkic-mega-panel" id="pkic-members-mega">

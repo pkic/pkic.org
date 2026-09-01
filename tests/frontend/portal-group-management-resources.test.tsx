@@ -6,6 +6,16 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
 import { groupMemberAddSchema } from "../../assets/shared/schemas/groups";
+import {
+  buttonNamed,
+  buttonNames,
+  controlFor,
+  groupNames,
+  labelNames,
+  namedGroup,
+  typeInto,
+} from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
 
@@ -41,20 +51,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-async function openRowMenu(container: HTMLElement, ariaLabel: string): Promise<void> {
-  const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`);
-  if (!trigger) throw new Error(`missing row menu trigger: ${ariaLabel}`);
-  await act(() => trigger.click());
-}
-
-function menuItem(container: HTMLElement, label: string): HTMLButtonElement {
-  const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-    (candidate) => candidate.textContent === label,
-  );
-  if (!item) throw new Error(`missing menu item: ${label}`);
-  return item;
 }
 
 function confirmDialogButton(label: string): HTMLButtonElement {
@@ -176,14 +172,13 @@ describe("portal group management resources", () => {
     await settle();
 
     expect(container.textContent).toContain("No meeting series yet");
-    expect(container.querySelector("#managed-group-meeting-create-name")).toBeNull();
+    // The create form is absent until it is asked for, and present once it
+    // is — said by the name the reader would look for, not by an id.
+    expect(labelNames(container)).not.toContain("Meeting name");
     const newSeries = [...container.querySelectorAll("button")].find((button) => button.textContent === "New series")!;
     await act(async () => newSeries.click());
-    const name = container.querySelector<HTMLInputElement>("#managed-group-meeting-create-name")!;
-    name.value = "Architecture call";
-    void act(() => {
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    expect(labelNames(container)).toContain("Meeting name");
+    await typeInto(controlFor(container, "Meeting name"), "Architecture call");
     await settle();
     const create = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Create meeting series",
@@ -205,9 +200,15 @@ describe("portal group management resources", () => {
       },
     });
     expect(container.textContent).toContain("Architecture call");
-    expect(container.querySelector<HTMLAnchorElement>("a[href$='/calendar.ics']")?.href).toContain(
+    // The calendar download is a command behind the row's menu, and it
+    // navigates to the canonical group route.
+    const openWindow = vi.spyOn(window, "open").mockReturnValue(null);
+    await runRowAction(container, "Architecture call", "Download calendar");
+    expect(openWindow).toHaveBeenCalledWith(
       `/api/v1/groups/${GROUP_ID}/meetings/series/60000000-0000-4000-8000-000000000001/calendar.ics`,
+      "_self",
     );
+    openWindow.mockRestore();
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     expect(requests.some(({ url }) => url.pathname.includes("/admin/"))).toBe(false);
   });
@@ -255,14 +256,20 @@ describe("portal group management resources", () => {
 
     const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    // The row itself opens and closes the detail; its activation names the
+    // series both ways.
+    const details = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Show details for Architecture call",
+    );
     await act(async () => {
       details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${seriesId}`);
 
-    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
+    const hide = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Hide details for Architecture call",
+    );
     await act(async () => {
       hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -381,11 +388,20 @@ describe("portal group management resources", () => {
 
     expect(container.textContent).toContain("Member Person");
     expect(container.textContent).toContain("Member Organization");
-    const search = container.querySelector<HTMLInputElement>("#managed-group-member-search")!;
-    search.value = "member@example.test";
-    void act(() => {
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+
+    // What a visual review cannot see: the panel names itself among the
+    // group workspace's stack of panels, and the table is identifiable in a
+    // page that holds several of them rather than announced as "table".
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Membership capacities");
+    expect(container.querySelector("caption")?.textContent).toBe("Active membership capacities in this group");
+    // The actions column names each row's subject instead of the control, so
+    // a roster of "Remove" buttons is still a roster of distinct controls.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Member Person"]);
+
+    // The search box is reached through its own `for`/`id` pair, so this
+    // lookup fails exactly when the labelling does.
+    const search = controlFor(container, "Search membership capacities");
+    await typeInto(search, "member@example.test");
     await settle();
     void act(() => {
       search.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -393,8 +409,7 @@ describe("portal group management resources", () => {
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("q")).toBe("member@example.test");
 
-    await openRowMenu(container, "Actions for Member Person");
-    await act(async () => menuItem(container, "Remove").click());
+    await runRowAction(container, "Member Person", "Remove");
     await act(async () => confirmDialogButton("End participation").click());
     await settle();
     expect(
@@ -441,16 +456,16 @@ describe("portal group management resources", () => {
     await settle();
 
     expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
-    const addPerson = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Add person",
-    )!;
-    await act(async () => addPerson.click());
-    await pickUser(container, "selected@example.test");
+    await act(async () => buttonNamed(container, "Add person").click());
 
-    const add = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Add to group",
-    )!;
-    await act(async () => add.click());
+    // The picker names its own search box, so the heading beside it is the
+    // `<legend>` of the group it belongs to rather than a `<label>` pointing
+    // at nothing — and that group is what goes inert while the add is running.
+    expect(groupNames(container)).toContain("User");
+    expect(namedGroup(container, "User").querySelector('input[placeholder="Search by email or name…"]')).not.toBeNull();
+
+    await pickUser(container, "selected@example.test");
+    await act(async () => buttonNamed(container, "Add to group").click());
     await settle();
     await settle();
 
@@ -462,6 +477,61 @@ describe("portal group management resources", () => {
     });
     expect(onChanged).toHaveBeenCalledOnce();
     expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
+  });
+
+  it("announces a refused add and keeps the form open with the picked person", async () => {
+    const userId = "40000000-0000-4000-8000-000000000010";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`) return json(usersPage(userId, "refused@example.test"));
+        if ((init.method ?? "GET") === "POST") {
+          return new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 });
+        }
+        return json({ memberships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const onChanged = vi.fn(async () => {});
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={onChanged} />);
+    await settle();
+
+    await act(async () => buttonNamed(container, "Add person").click());
+    await pickUser(container, "refused@example.test");
+    await act(async () => buttonNamed(container, "Add to group").click());
+    await settle();
+    await settle();
+
+    // The refusal is announced rather than left as coloured text, and it is a
+    // sentence rather than the transport's own phrasing.
+    const alert = [...container.querySelectorAll('[role="alert"]')].find((node) =>
+      node.textContent?.includes("You don't have access to this"),
+    );
+    expect(alert).toBeDefined();
+    // A failed add is a retry, not a restart: the form and the pick survive.
+    expect(container.querySelector('input[placeholder="Search by email or name…"]')).not.toBeNull();
+    expect(buttonNames(container)).toContain("Add to group");
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed membership load instead of claiming the group has nobody in it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ message: "Server error" }), { status: 500 })),
+    );
+    const onChanged = vi.fn(async () => {});
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={onChanged} />);
+    await settle();
+
+    expect(container.textContent).toContain("on our side");
+    // "No matching active membership capacities" is a claim about the group,
+    // and the surface does not know that when the request never arrived — so
+    // the table is replaced rather than rendered empty beside the error.
+    expect(container.textContent).not.toContain("No matching active membership capacities.");
+    expect(container.querySelector("caption")).toBeNull();
   });
 
   it("renders the read-only participant roster instead of the management table when the caller cannot manage", async () => {
@@ -487,8 +557,9 @@ describe("portal group management resources", () => {
 
     expect(container.textContent).toContain("Roster Person");
     expect(container.textContent).toContain("Roster Organization");
-    // No management affordances: no add-person action and no per-row menu.
+    // No management affordances: no add-person action and no row commands at
+    // all — neither inline buttons nor menus.
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Add person")).toBe(false);
-    expect(container.querySelector('button[aria-label^="Actions for"]')).toBeNull();
+    expect(rowActionControlNames(container)).toEqual([]);
   });
 });

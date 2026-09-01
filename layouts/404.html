@@ -1,14 +1,16 @@
 {{ define "main" }}
-<section class="py-5 text-center container">
-    <div class="row py-lg-5">
-        <div class="col-10 mx-auto">
-        <h1 class="fw-light">404: Page not found</h1>
-        <p class="lead text-muted">You will be redirected to the homepage ...</p>
-        </div>
+{{/* The surface is two elements the base layer styles on its own, so the `pk`
+     root is safe here: nothing on this page draws from `main.scss`. */}}
+<section class="pk pk-section">
+    <div class="pk-container pk-container--narrow pk-stack pk-center">
+        <h1>404: Page not found</h1>
+        <p class="pk-lede">You will be redirected to the homepage ...</p>
     </div>
 </section>
 
 <script>
-    setTimeout("location.href = '/';", 20000);
+    setTimeout(function () {
+        location.href = "/";
+    }, 20000);
 </script>
 {{ end }}

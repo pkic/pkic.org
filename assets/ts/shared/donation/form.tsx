@@ -14,6 +14,8 @@
  * pre-filled via data attributes or URL query parameters.
  */
 import { render } from "preact";
+
+import "./donation-presets.css";
 import { postJson, getJson } from "../api-client";
 import { donationCheckoutSchema } from "../../../shared/schemas/donation";
 import { donationCheckoutEmbeddedResponseSchema } from "../../../shared/schemas/donation";
@@ -294,7 +296,15 @@ async function initForm(root: HTMLElement): Promise<void> {
     if (!statusEl) return;
     statusEl.textContent = msg;
     statusEl.hidden = false;
-    statusEl.className = `donation-form-status small mt-2 ${isError ? "text-danger" : "text-success"}`;
+    // Assigning `className` wholesale used to repaint this element after the
+    // page had rendered, putting Bootstrap back into markup the gate had
+    // certified as clean. The tone is a modifier now, and the element keeps
+    // the classes its own markup gave it.
+    statusEl.classList.add("pk-alert");
+    statusEl.classList.toggle("pk-alert--danger", isError);
+    statusEl.classList.toggle("pk-alert--ok", !isError);
+    // A failure interrupts; a confirmation does not.
+    statusEl.setAttribute("role", isError ? "alert" : "status");
   }
 
   function clearStatus(): void {
@@ -350,7 +360,7 @@ function PresetButtons({ currencyCode }: { currencyCode: string }) {
         <button
           key={amt}
           type="button"
-          class={`btn btn-outline-secondary donation-preset-btn${amt === defaultConverted ? " donation-preset-btn--popular" : ""}`}
+          class={`pk-btn pk-btn--secondary donation-preset-btn${amt === defaultConverted ? " donation-preset-btn--popular" : ""}`}
           data-preset-amount={amt}
         >
           {amt === defaultConverted && <span class="donation-preset-popular-label">Most popular</span>}
@@ -368,14 +378,12 @@ function renderPresets(container: HTMLElement, currencyCode: string): void {
 function activatePreset(container: HTMLElement, amount: number): void {
   container.querySelectorAll<HTMLButtonElement>("[data-preset-amount]").forEach((btn) => {
     const isMatch = Number(btn.dataset.presetAmount) === amount;
-    btn.classList.toggle("active", isMatch);
     btn.setAttribute("aria-pressed", String(isMatch));
   });
 }
 
 function clearPresetSelection(container: HTMLElement): void {
   container.querySelectorAll<HTMLButtonElement>("[data-preset-amount]").forEach((btn) => {
-    btn.classList.remove("active");
     btn.setAttribute("aria-pressed", "false");
   });
 }

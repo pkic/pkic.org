@@ -26,13 +26,14 @@ export function ViewerEventState({ viewer }: { viewer: EventViewerState }) {
   const registeredDays = viewer.days.filter((day) => day.state === "registered").map((day) => day.date);
   const waitlistedDays = viewer.days.filter((day) => day.state === "waitlisted").map((day) => day.date);
   return (
-    <Link href="/participation" class="small text-muted d-block portal-event-viewer-state">
+    // The cluster carries the spacing between the badge and each fragment, so
+    // none of them needs a margin of its own; `pk-small` is the muted, smaller
+    // type the row used two Bootstrap classes to ask for.
+    <Link href="/participation" class="pk-cluster pk-small">
       <Badge status={viewer.registrationStatus} label={attendanceLabel(viewer.registrationStatus)} />
-      <span class="ms-2">{attendanceLabel(viewer.attendanceType)}</span>
-      {registeredDays.length > 0 && <span class="ms-2">Days: {registeredDays.map(formatDayLabel).join(", ")}</span>}
-      {waitlistedDays.length > 0 && (
-        <span class="ms-2">Waitlisted: {waitlistedDays.map(formatDayLabel).join(", ")}</span>
-      )}
+      <span>{attendanceLabel(viewer.attendanceType)}</span>
+      {registeredDays.length > 0 && <span>Days: {registeredDays.map(formatDayLabel).join(", ")}</span>}
+      {waitlistedDays.length > 0 && <span>Waitlisted: {waitlistedDays.map(formatDayLabel).join(", ")}</span>}
       {viewer.waitlisted && waitlistedDays.length === 0 && <Badge status="waitlisted" label="Waitlisted" />}
     </Link>
   );

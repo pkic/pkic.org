@@ -1,0 +1,206 @@
+/*
+ * Element defaults, built on the tokens.
+ *
+ * Everything here sits in `@layer base`, between the tokens and the
+ * components. Two consequences worth knowing:
+ *
+ *   - It loses to every component rule regardless of specificity, so a
+ *     component never has to undo a base rule.
+ *   - It beats the whole quarantined legacy stylesheet, so a surface that
+ *     opts into the design system stops inheriting Bootstrap's reboot without
+ *     needing a single `!important`.
+ *
+ * Scope is deliberate: these rules apply only inside `.pk`, so adopting the
+ * system is a per-surface decision rather than a site-wide flag day.
+ */
+
+@layer base {
+  /*
+   * `pk` says "this subtree speaks the design system": its typography and its
+   * ink. It deliberately does NOT paint a ground.
+   *
+   * It used to, and that is the single most expensive line this stylesheet has
+   * had. `pk` sits on twenty-four surfaces, most of them inline — a width
+   * container around an alert, a cluster of event cards, a button. Every one of
+   * them painted the canvas over whatever it was sitting on: grey bands down
+   * both sides of the home page's announcement, a footer bar that lost its
+   * black, a `Panel` whose own surface colour was overridden by the class that
+   * was only meant to give it the right font.
+   *
+   * A page-level surface that wants the ground asks for it by name.
+   */
+  .pk {
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-md);
+    line-height: 1.55;
+    color: var(--pk-ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .pk-canvas {
+    background: var(--pk-canvas);
+  }
+
+  /*
+   * Border-box, globally — not scoped to `.pk`.
+   *
+   * This is the one thing in the base layer that deliberately reaches outside
+   * the design system's own root, and it is here because Bootstrap's reboot
+   * used to provide it for the whole document. Scoping it to `.pk` meant that
+   * removing Bootstrap silently put every legacy-styled element back on
+   * content-box, so a `width: 100%` with padding overflowed its parent. That
+   * showed up as an 8-to-24-pixel sideways scroll on every portal page, at
+   * every width, which no source-level check could see.
+   *
+   * Border-box is what essentially every stylesheet in this repository was
+   * already written against. Making it global is restoring an assumption, not
+   * imposing a new one.
+   */
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /*
+   * No gutter around the document.
+   *
+   * The user agent gives `body` an 8px margin, and Bootstrap's reboot used to
+   * take it away for the whole page. Removing the framework put it back, so
+   * every full-bleed band — the hero, the stats bar, the member wall, the
+   * footer — stopped at 8px from each edge and the site rendered inside a thin
+   * empty frame. Obvious on a wide display, easy to miss on a laptop, and not
+   * something any component can fix from the inside.
+   */
+  body {
+    margin: 0;
+    /*
+     * The page's ground and its ink, from the tokens.
+     *
+     * Nothing painted either: in light mode the browser's own white passes for
+     * the canvas closely enough that nobody noticed, and the moment a reader
+     * chooses the dark theme the tokens flip the ink to near-white and leave
+     * the ground white underneath it. A theme the reader can choose has to
+     * reach the page itself, not only the components drawn on it.
+     */
+    background: var(--pk-canvas);
+    color: var(--pk-ink);
+  }
+
+  /*
+   * No image wider than the box that holds it — globally, like `box-sizing`.
+   *
+   * The cap existed twice and nowhere else: once inside `.pk`, once inside
+   * `[data-pagefind-body]` in the prose stylesheet. A page that had adopted
+   * neither had nothing holding its images, and a source with no intrinsic
+   * width — an SVG carrying only a `viewBox` — resolved against whatever
+   * contained it and drew itself the full width of the column. Stating it once
+   * here means a surface cannot lose the guarantee by not opting in.
+   *
+   * `:where()` keeps the specificity at zero, so a component that genuinely
+   * wants a wider image only has to name it.
+   */
+  :where(img, svg, video, canvas) {
+    max-width: 100%;
+  }
+
+  .pk h1,
+  .pk h2,
+  .pk h3,
+  .pk h4,
+  .pk h5,
+  .pk h6 {
+    margin: 0;
+    line-height: 1.18;
+    text-wrap: balance;
+    font-weight: 700;
+  }
+
+  .pk h1 {
+    font-size: var(--pk-text-2xl);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  .pk h2 {
+    font-size: var(--pk-text-xl);
+    letter-spacing: -0.01em;
+  }
+  .pk h3 {
+    font-size: var(--pk-text-lg);
+  }
+
+  .pk p {
+    margin: var(--pk-2) 0;
+  }
+
+  .pk a {
+    color: var(--pk-accent-ink);
+    text-underline-offset: 2px;
+  }
+
+  .pk :where(ul, ol) {
+    margin: var(--pk-2) 0;
+    padding-left: 1.2rem;
+  }
+
+  .pk :where(code, kbd, samp, pre) {
+    font-family: var(--pk-font-mono);
+    font-size: 0.9em;
+  }
+
+  /* Digits that sit in columns line up. Applied here because it is a property
+     of the typeface's use, not of any one component. */
+  .pk :where(table, .pk-num) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pk :where(img, svg, video, canvas) {
+    max-width: 100%;
+    display: block;
+  }
+
+  .pk :where(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* One focus treatment for the whole system. Components may reposition the
+     ring but must not remove it. */
+  .pk :focus-visible {
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+
+  /*
+   * `hidden` means hidden, everywhere — not only under a `.pk` root.
+   *
+   * The user agent hides `[hidden]` with a rule any author `display` beats, so
+   * a component that sets `display: flex` — a field, its message, a check —
+   * renders even while the attribute says it should not. Scoping the correction
+   * to `.pk` meant a template that uses the components without a design-system
+   * root got the visible half of that bargain and not the hiding half, which is
+   * how empty message slots came to occupy a line under half the site's forms.
+   *
+   * `!important` in this layer is what makes it hold: an important declaration
+   * beats every ordinary one in a later layer, so a component cannot outrank
+   * the attribute by accident. The legacy layer can still override it
+   * deliberately, because important declarations resolve layers in reverse.
+   */
+  :where([hidden]) {
+    display: none !important;
+  }
+
+  /* Honour the setting rather than merely shortening durations: a vestibular
+     trigger is the movement itself, not its length. */
+  @media (prefers-reduced-motion: reduce) {
+    .pk *,
+    .pk *::before,
+    .pk *::after {
+      animation-duration: var(--pk-dur-instant) !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: var(--pk-dur-instant) !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

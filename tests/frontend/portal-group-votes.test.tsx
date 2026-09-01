@@ -4,6 +4,12 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
+import { openConfirmation } from "./helpers/confirm-dialog";
+
+// The votes surface routes creation through the portal's hash location, so the
+// component needs one even when a test only exercises participation.
+const navigate = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
@@ -90,7 +96,7 @@ describe("selected-group vote participation", () => {
     const container = document.createElement("div");
     document.body.append(container);
     await act(() =>
-      render(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate initialVoteId={VOTE_ID} />, container),
+      render(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate voteSegment={VOTE_ID} />, container),
     );
     await settle();
     expect(container.textContent).toContain("Example Organization");
@@ -164,8 +170,8 @@ describe("selected-group vote participation", () => {
     await settle();
     await act(() =>
       (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Details",
+        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
+          (button) => button.textContent === "Show details for Architecture motion",
         ) as HTMLButtonElement
       ).click(),
     );
@@ -178,7 +184,7 @@ describe("selected-group vote participation", () => {
       ).click(),
     );
     await settle();
-    const closeDialog = container.querySelector('[role="alertdialog"]');
+    const closeDialog = openConfirmation(container);
     expect(closeDialog).not.toBeNull();
     await act(() =>
       (
@@ -248,8 +254,8 @@ describe("selected-group vote participation", () => {
     await settle();
     await act(() =>
       (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Details",
+        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
+          (button) => button.textContent === "Show details for Architecture motion",
         ) as HTMLButtonElement
       ).click(),
     );

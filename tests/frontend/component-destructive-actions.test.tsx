@@ -7,6 +7,8 @@ import { LogoManager } from "../../assets/ts/components/LogoManager";
 import { PasskeySettings } from "../../assets/ts/components/passkey-settings";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import type { ProposalSpeaker } from "../../assets/shared/schemas/proposal-speakers";
+import { controlFor, labelNames } from "./helpers/labelled-control";
+import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
@@ -108,6 +110,56 @@ describe("LogoManager confirmation", () => {
     expect(onRemove).not.toHaveBeenCalled();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
+
+  it("names the file input and ties the upload policy to it", () => {
+    const container = mount(<LogoManager {...props({ hint: "SVG only. The logo is sanitized automatically." })} />);
+
+    // A bare <input type="file"> announces as "file upload button" and nothing
+    // else, which is what this was. The label resolves through for/id.
+    const input = controlFor(container, "Replace logo");
+    expect(input.getAttribute("type")).toBe("file");
+    expect(container.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toBe(
+      "SVG only. The logo is sanitized automatically.",
+    );
+  });
+
+  it("names the input after what activating it does when there is no logo yet", () => {
+    const container = mount(<LogoManager {...props({ imageUrl: null })} />);
+
+    expect(controlFor(container, "Upload logo").getAttribute("type")).toBe("file");
+    // With nothing to remove, no dead removal control is offered.
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Remove logo");
+    expect(container.textContent).toContain("No logo");
+  });
+
+  it("reports a refused upload through the caller's notifier and clears the chosen file", async () => {
+    const toast = vi.fn();
+    const onChanged = vi.fn();
+    const container = mount(
+      <LogoManager
+        {...props({
+          toast,
+          onChanged,
+          onUpload: vi.fn(async () => {
+            throw new Error("That file is not an SVG.");
+          }),
+        })}
+      />,
+    );
+
+    const input = controlFor<HTMLInputElement>(container, "Replace logo");
+    const file = new File(["<svg />"], "logo.svg", { type: "image/svg+xml" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(toast).toHaveBeenCalledWith("That file is not an SVG.", "error");
+    expect(onChanged).not.toHaveBeenCalled();
+    // The rejected file is not left sitting in the control as though it took.
+    expect(input.value).toBe("");
+  });
 });
 
 describe("PasskeySettings confirmation and row actions", () => {
@@ -151,14 +203,10 @@ describe("PasskeySettings confirmation and row actions", () => {
     );
     await settle();
 
-    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Actions for Work laptop"]');
-    if (!trigger) throw new Error("missing row actions trigger");
-    await act(() => trigger.click());
-    const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (candidate) => candidate.textContent === "Remove",
-    );
-    if (!removeItem) throw new Error("missing Remove menu item");
-    await act(() => removeItem.click());
+    // A passkey list is a column of "Remove" controls, so each one says which
+    // key it would remove rather than leaving that to the row it sits in.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Work laptop"]);
+    await runRowAction(container, "Work laptop", "Remove");
 
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain('Remove passkey "Work laptop"?');
@@ -167,6 +215,55 @@ describe("PasskeySettings confirmation and row actions", () => {
     await settle();
 
     expect(requests.some((request) => request.method === "DELETE")).toBe(true);
+  });
+
+  it("names the table and the device-name field instead of leaving both anonymous", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => passkeysResponse()),
+    );
+    // jsdom has no WebAuthn, so the enrolment form is only offered once the
+    // capability check the component runs can find it.
+    vi.stubGlobal("PublicKeyCredential", function PublicKeyCredentialStub() {
+      /* presence is the whole capability check */
+    });
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    // A page of unnamed tables is announced as a list of "table"s.
+    expect(container.querySelector("caption")?.textContent).toBe("Passkeys registered to this account");
+    // The Bootstrap version's <label> carried no `for`, and the input carried
+    // no id, so the field announced nothing at all.
+    const field = controlFor(container, "Device name (optional)");
+    expect(field.tagName).toBe("INPUT");
+    expect(labelNames(container)).toContain("Device name (optional)");
+  });
+
+  it("states a failed passkey list as a sentence and shows no table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 403 })),
+    );
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(container.querySelector("table")).toBeNull();
+  });
+
+  it("says so, once, when the browser has no passkey support", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => passkeysResponse()),
+    );
+    // jsdom carries no WebAuthn, which is the unsupported case verbatim: the
+    // enrolment form must not be offered, and the reason must be stated.
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("This browser doesn't support passkeys.");
   });
 });
 

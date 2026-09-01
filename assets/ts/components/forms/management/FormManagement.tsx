@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useState } from "preact/hooks";
 import { useHashQueryParam } from "../../../hooks/useHashQueryParam";
 import {
   formCreateResponseSchema,
@@ -13,6 +13,8 @@ import {
 } from "../../../../shared/schemas/form-management";
 import {
   eventFormsResponseSchema,
+  FORM_PURPOSES,
+  FORM_STATUSES,
   type EventFormsPurpose,
   type FormDefinitionCreateInput,
   type FormDefinitionUpdateInput,
@@ -25,18 +27,25 @@ import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-cl
 import { ApiDataTable } from "../../ApiDataTable";
 import { confirmAction } from "../../ConfirmDialog";
 import { ErrorAlert } from "../../ErrorAlert";
+import { FilterSelect, type FilterOption } from "../../FilterSelect";
 import { Spinner } from "../../Spinner";
 import { Tabs } from "../../Tabs";
 import { Badge } from "../../Badge";
+import { Button } from "../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { Toolbar } from "../../../ui/Toolbar";
 import { FormDefinitionEditor, type EditableFormDetail } from "../FormDefinitionEditor";
-import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "../FormResponseViews";
+import { FormResponseStats, type ServerFieldStat } from "../FormResponseStats";
+import { FormSubmissionsTable } from "../FormResponseViews";
+// `pk-mono` lives in the design system's Content.css, which ships in a lazy
+// chunk: a surface that writes the class name has to import the stylesheet
+// itself, or the identifier renders in the body face once Bootstrap is gone.
+import "../../../ui/Content.css";
 
 type FormTab = "responses" | "statistics" | "edit";
 
 function formScopeLabel(form: FormSummary): string {
   if (form.scope_type === "event") return form.event_name ?? form.scope_ref ?? "Event";
-  if (form.scope_type === "community") return "Community";
-  if (form.scope_type === "global") return "Global";
   if (form.scope_type === "community") return "Community";
   if (form.scope_type === "global") return "Global";
   return form.scope_type.replace(/_/g, " ");
@@ -52,6 +61,29 @@ function collectAttendanceOptions(
     }
   }
   return [...options.values()];
+}
+
+/**
+ * The status vocabulary a submission filter offers. A registration form is
+ * filtered by the canonical registration lifecycle; every other purpose by the
+ * submission lifecycle, so the two sets stay named where they are defined
+ * rather than restated as markup.
+ */
+function statusOptions(purpose: EventFormsPurpose): ReadonlyArray<FilterOption> {
+  const all: FilterOption = { value: "", label: "All statuses" };
+  if (purpose === "event_registration") {
+    return [
+      all,
+      ...EVENT_REGISTRATION_STATUSES.map((entry) => ({ value: entry, label: eventRegistrationStatusLabel(entry) })),
+    ];
+  }
+  return [
+    all,
+    { value: "submitted", label: "Submitted" },
+    { value: "accepted", label: "Accepted" },
+    { value: "rejected", label: "Rejected" },
+    { value: "withdrawn", label: "Withdrawn" },
+  ];
 }
 
 function formatTimestamp(value: string): string {
@@ -123,6 +155,13 @@ export function FormManagementDetail({
 }) {
   const [rawTab, setTab] = useHashQueryParam("formTab", "statistics");
   const tab: FormTab = rawTab === "responses" || rawTab === "edit" ? rawTab : "statistics";
+  // The tab strip is the WAI-ARIA pattern, so each tab has to point at the
+  // panel it controls and each panel back at its tab. The ids are generated
+  // rather than derived from the form key, which can repeat across mounts.
+  const tabPrefix = `${useId()}-form-tab`;
+  const statisticsPanelId = `${tabPrefix}-statistics-panel`;
+  const responsesPanelId = `${tabPrefix}-responses-panel`;
+  const editPanelId = `${tabPrefix}-edit-panel`;
   const [detail, setDetail] = useState<FormDetailResponse | null>(null);
   const [stats, setStats] = useState<ServerFieldStat[]>([]);
   const [totalResponses, setTotalResponses] = useState(0);
@@ -176,75 +215,89 @@ export function FormManagementDetail({
     }
   }
 
+  // The waiting and failed views carry the `pk` root too: without it the
+  // design system's base layer never applies and the region falls back to
+  // whatever the surrounding page happens to define.
   if (loading) return <Spinner label="Loading form…" />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error)
+    return (
+      <div class="pk">
+        <ErrorAlert error={error} />
+      </div>
+    );
   if (!detail) return null;
   const canManageForm = canWrite && detail.form.scope_type !== "community";
   const effectiveTab: FormTab = tab === "edit" && !canManageForm ? "statistics" : tab;
 
   return (
-    <div>
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onBack}>
+    <div class="pk pk-stack">
+      <div class="pk-cluster">
+        <Button size="sm" onClick={onBack}>
           ← All forms
-        </button>
+        </Button>
       </div>
-      <div class="card">
-        <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-          <div>
-            <h6 class="mb-0">{detail.form.title}</h6>
-            <div class="small text-muted">
-              <span class="mono">{detail.form.key}</span> · {detail.form.purpose.replace(/_/g, " ")} · updated{" "}
-              {formatTimestamp(detail.form.updated_at)}
-            </div>
-          </div>
-          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
+      <Panel>
+        <PanelHeader title={detail.form.title}>
+          <Button size="sm" onClick={() => void load()}>
             Refresh
-          </button>
+          </Button>
           {canManageForm && (
-            <button type="button" class="btn btn-sm btn-outline-danger" onClick={() => void remove()}>
+            <Button size="sm" variant="danger-quiet" onClick={() => void remove()}>
               Archive/Delete
-            </button>
+            </Button>
           )}
-        </div>
-        <div class="card-body">
+        </PanelHeader>
+        {/* The body's `gap` is the only spacing between the identity line, the
+            tab strip and the active panel — no child carries a margin. */}
+        <PanelBody class="pk-stack">
+          <p class="pk-muted pk-small">
+            <span class="pk-mono">{detail.form.key}</span> · {detail.form.purpose.replace(/_/g, " ")} · updated{" "}
+            {formatTimestamp(detail.form.updated_at)}
+          </p>
           <Tabs
+            label={`${detail.form.title} sections`}
             items={[
-              { key: "statistics", label: `Statistics (${totalResponses})` },
-              { key: "responses", label: "Responses" },
-              ...(canManageForm ? [{ key: "edit", label: "Edit" }] : []),
+              { key: "statistics", label: `Statistics (${totalResponses})`, panelId: statisticsPanelId },
+              { key: "responses", label: "Responses", panelId: responsesPanelId },
+              ...(canManageForm ? [{ key: "edit", label: "Edit", panelId: editPanelId }] : []),
             ]}
             active={effectiveTab}
             onChange={(key) => setTab(key)}
-            className="mb-3"
+            idPrefix={tabPrefix}
           />
           {effectiveTab === "statistics" && (
-            <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />
+            <div id={statisticsPanelId} role="tabpanel" aria-labelledby={`${tabPrefix}-statistics`}>
+              <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />
+            </div>
           )}
           {effectiveTab === "responses" && (
-            <FormSubmissionsTable
-              fields={detail.fields}
-              endpoint={`${base}/submissions`}
-              responseSchema={formSubmissionsResponseSchema}
-              params={submissionParams}
-            />
+            <div id={responsesPanelId} role="tabpanel" aria-labelledby={`${tabPrefix}-responses`}>
+              <FormSubmissionsTable
+                fields={detail.fields}
+                endpoint={`${base}/submissions`}
+                responseSchema={formSubmissionsResponseSchema}
+                params={submissionParams}
+              />
+            </div>
           )}
           {effectiveTab === "edit" && canManageForm && (
-            <FormDefinitionManagementEditor
-              mode="edit"
-              detail={detail}
-              createEndpoint="/api/v1/forms"
-              updateEndpoint={base}
-              onSaved={() => {
-                void load();
-                onChanged?.();
-              }}
-              onCancel={() => setTab("statistics")}
-              notify={notify}
-            />
+            <div id={editPanelId} role="tabpanel" aria-labelledby={`${tabPrefix}-edit`}>
+              <FormDefinitionManagementEditor
+                mode="edit"
+                detail={detail}
+                createEndpoint="/api/v1/forms"
+                updateEndpoint={base}
+                onSaved={() => {
+                  void load();
+                  onChanged?.();
+                }}
+                onCancel={() => setTab("statistics")}
+                notify={notify}
+              />
+            </div>
           )}
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }
@@ -260,17 +313,15 @@ export function FormManagementCreate({
   notify?: (message: string, kind: "success" | "error") => void;
 }) {
   return (
-    <div>
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
+    <div class="pk pk-stack">
+      <div class="pk-cluster">
+        <Button size="sm" onClick={onCancel}>
           ← All forms
-        </button>
+        </Button>
       </div>
-      <div class="card">
-        <div class="card-header">
-          <h6 class="mb-0">New form</h6>
-        </div>
-        <div class="card-body">
+      <Panel>
+        <PanelHeader title="New form" />
+        <PanelBody>
           <FormDefinitionManagementEditor
             mode="create"
             detail={null}
@@ -279,24 +330,19 @@ export function FormManagementCreate({
             onCancel={onCancel}
             notify={notify}
           />
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }
 
-export function FormManagementList({
-  canWrite,
-  onOpenForm,
-  onCreateNew,
-}: {
-  canWrite: boolean;
-  onOpenForm: (formKey: string) => void;
-  onCreateNew?: () => void;
-}) {
+export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: string) => void }) {
+  const [purposeFilter, setPurposeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   return (
-    <div>
+    <div class="pk">
       <ApiDataTable
+        caption="Configured forms"
         urlState="forms"
         endpoint="/api/v1/forms"
         responseSchema={formsListResponseSchema}
@@ -306,36 +352,71 @@ export function FormManagementList({
         initialPageSize={25}
         initialSort="title"
         searchPlaceholder="Search forms…"
-        createAction={canWrite && onCreateNew ? { label: "New form", onSelect: onCreateNew } : undefined}
+        params={{
+          ...(purposeFilter ? { purpose: purposeFilter } : {}),
+          ...(statusFilter ? { status: statusFilter } : {}),
+        }}
+        toolbar={({ resetPage }) => (
+          // Both filters already exist on the list contract; the toolbar
+          // exposes them instead of leaving purpose and status concepts the
+          // reader must express through search syntax.
+          <>
+            <FilterSelect
+              ariaLabel="Filter forms by purpose"
+              value={purposeFilter}
+              options={[
+                { value: "", label: "All purposes" },
+                ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
+              ]}
+              onChange={(value) => {
+                setPurposeFilter(value);
+                resetPage();
+              }}
+            />
+            <FilterSelect
+              ariaLabel="Filter forms by status"
+              value={statusFilter}
+              options={[
+                { value: "", label: "All statuses" },
+                ...FORM_STATUSES.map((status) => ({ value: status as string, label: status })),
+              ]}
+              onChange={(value) => {
+                setStatusFilter(value);
+                resetPage();
+              }}
+            />
+          </>
+        )}
         columns={[
-          { header: "Key", cell: (form: FormSummary) => <span class="mono small">{form.key}</span> },
+          // The presentational vocabulary is the column's, not a wrapper
+          // span's: `Table` translates these onto the design system's cell
+          // utilities and alignment in one place.
+          { header: "Key", cell: (form: FormSummary) => form.key, className: "pk-mono pk-small" },
           {
             header: "Purpose",
             cell: (form: FormSummary) => form.purpose.replace(/_/g, " "),
-            className: "small",
+            width: "fit",
           },
-          { header: "Status", cell: (form: FormSummary) => <Badge status={form.status} /> },
-          { header: "Scope", cell: (form: FormSummary) => formScopeLabel(form), className: "small" },
+          { header: "Status", cell: (form: FormSummary) => <Badge status={form.status} />, width: "fit" },
+          { header: "Scope", cell: (form: FormSummary) => formScopeLabel(form), className: "pk-small" },
           {
-            header: { label: "Fields", className: "text-end" },
+            header: { label: "Fields", className: "pk-end" },
             cell: (form: FormSummary) => form.field_count,
-            className: "mono text-end",
+            className: "pk-mono pk-end",
+            width: "fit",
           },
           {
-            header: { label: "Responses", className: "text-end" },
+            header: { label: "Responses", className: "pk-end" },
             cell: (form: FormSummary) => form.submission_count,
-            className: "mono text-end",
+            className: "pk-mono pk-end",
+            width: "fit",
           },
-          { header: "Title", cell: (form: FormSummary) => form.title, className: "small" },
-          {
-            header: "",
-            cell: (form: FormSummary) => (
-              <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => onOpenForm(form.key)}>
-                Open
-              </button>
-            ),
-          },
+          { header: "Title", cell: (form: FormSummary) => form.title, className: "pk-small" },
         ]}
+        // Row activation is the design system's stretched control rather than
+        // an "Open" button repeated down a column: every row gets a name that
+        // says which form it opens, and the whole row is the target.
+        rowAction={(form: FormSummary) => ({ label: `Open ${form.title}`, onSelect: () => onOpenForm(form.key) })}
         empty="No forms configured"
         rowKey={(form: FormSummary) => form.id}
       />
@@ -349,6 +430,8 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
   const [status, setStatus] = useState("");
   const [attendanceType, setAttendanceType] = useState("");
   const [attendanceOptions, setAttendanceOptions] = useState<Array<{ value: string; label: string }>>([]);
+  /** `"true"` narrows to forms linked to this event; `""` lets global forms in as well. */
+  const [linkedScope, setLinkedScope] = useState<"" | "true">("true");
   const formsEndpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/forms`;
   const submissionParams = {
     eventSlug,
@@ -370,78 +453,65 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
   }, [eventSlug, purpose]);
 
   return (
-    <div>
-      <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        <label class="visually-hidden" for={`form-response-status-${purpose}`}>
-          Submission status
-        </label>
-        <select
-          id={`form-response-status-${purpose}`}
-          class="form-select form-select-sm adm-filter-select"
+    <div class="pk pk-stack pk-stack--snug">
+      {/* The filters stay above the list because they scope the submissions
+          shown once a form is opened, not the catalogue of forms itself. The
+          bar is a named toolbar, so it is announced as one region rather than
+          as two anonymous combo boxes. */}
+      <Toolbar label="Response filters">
+        <FilterSelect
+          ariaLabel="Submission status"
           value={status}
-          onChange={(event) => setStatus((event.target as HTMLSelectElement).value)}
-        >
-          <option value="">All statuses</option>
-          {purpose === "event_registration" ? (
-            EVENT_REGISTRATION_STATUSES.map((entry) => (
-              <option key={entry} value={entry}>
-                {eventRegistrationStatusLabel(entry)}
-              </option>
-            ))
-          ) : (
-            <>
-              <option value="submitted">Submitted</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-              <option value="withdrawn">Withdrawn</option>
-            </>
-          )}
-        </select>
+          options={statusOptions(purpose)}
+          onChange={setStatus}
+        />
         {purpose === "event_registration" && attendanceOptions.length > 0 && (
-          <>
-            <label class="visually-hidden" for={`form-response-attendance-${purpose}`}>
-              Attendance type
-            </label>
-            <select
-              id={`form-response-attendance-${purpose}`}
-              class="form-select form-select-sm adm-filter-select"
-              value={attendanceType}
-              onChange={(event) => setAttendanceType((event.target as HTMLSelectElement).value)}
-            >
-              <option value="">All attendance</option>
-              {attendanceOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </>
+          <FilterSelect
+            ariaLabel="Attendance type"
+            value={attendanceType}
+            options={[{ value: "", label: "All attendance" }, ...attendanceOptions]}
+            onChange={setAttendanceType}
+          />
         )}
-      </div>
+      </Toolbar>
       {!selectedKey ? (
         <ApiDataTable
+          caption="Forms linked to this event"
           endpoint={formsEndpoint}
           responseSchema={formsListResponseSchema}
           resolve={(response) => response.forms}
           resolvePage={(response) => response.page}
-          params={{ purpose, linkedOnly: "1" }}
+          params={{ purpose, ...(linkedScope ? { linkedOnly: linkedScope } : {}) }}
           paginate
           initialPageSize={25}
           initialSort="title"
           searchPlaceholder="Search event forms…"
+          toolbar={({ resetPage }) => (
+            // The list contract already accepts `linkedOnly`; the toolbar
+            // exposes the scope instead of hiding the catalogue's global
+            // forms with no way to reach them.
+            <FilterSelect
+              ariaLabel="Form scope"
+              value={linkedScope}
+              options={[
+                { value: "true" as "" | "true", label: "Linked to this event" },
+                { value: "" as "" | "true", label: "Linked and global forms" },
+              ]}
+              onChange={(value) => {
+                setLinkedScope(value);
+                resetPage();
+              }}
+            />
+          )}
           columns={[
             { header: "Title", cell: (form: FormSummary) => form.title },
-            { header: "Key", cell: (form: FormSummary) => <span class="mono small">{form.key}</span> },
-            { header: "Responses", cell: (form: FormSummary) => form.submission_count, className: "text-end mono" },
-            {
-              header: "",
-              cell: (form: FormSummary) => (
-                <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setSelectedKey(form.key)}>
-                  Open
-                </button>
-              ),
-            },
+            { header: "Key", cell: (form: FormSummary) => form.key, className: "pk-mono pk-small" },
+            { header: "Responses", cell: (form: FormSummary) => form.submission_count, className: "pk-end pk-mono" },
           ]}
+          rowAction={(form: FormSummary) => ({
+            label: `Open ${form.title}`,
+            onSelect: () => setSelectedKey(form.key),
+          })}
           empty="No linked forms found"
           rowKey={(form: FormSummary) => form.id}
         />

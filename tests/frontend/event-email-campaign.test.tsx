@@ -3,6 +3,10 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
+import {
+  eventEmailCampaignCreateInputSchema,
+  eventEmailCampaignPreviewInputSchema,
+} from "../../assets/shared/schemas/event-email-campaigns";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
@@ -51,6 +55,79 @@ async function inputText(element: HTMLInputElement | HTMLTextAreaElement, value:
   });
 }
 
+function clickButton(container: HTMLElement, label: string): Promise<void> {
+  const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`No button labelled "${label}"`);
+  return act(async () => {
+    button.click();
+  });
+}
+
+const EVENT_PATH = `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}`;
+const CAMPAIGN_PATH = `${EVENT_PATH}/email/campaigns`;
+
+const PREVIEW_BODY = {
+  success: true,
+  recipientCount: 1,
+  batchCount: 1,
+  previewToken: "campaign-preview-token",
+  previewExpiresAt: "2026-08-29T08:10:00.000Z",
+  sampleRecipients: ["attendee@example.test"],
+  subject: "Working group update",
+  html: "<p>Hello</p>",
+  text: "Hello",
+};
+
+interface CapturedRequest {
+  method: string;
+  path: string;
+  body: unknown;
+}
+
+/**
+ * One fetch stub for the whole surface: the template catalog and day list it
+ * loads on mount, plus the two campaign endpoints whose outcome each test
+ * chooses. `previews` and `campaigns` return a Response so a test can hand
+ * back a 4xx/5xx as easily as a success.
+ */
+function stubCampaignFetch(routes: { previews: () => Response; campaigns?: () => Response }): CapturedRequest[] {
+  const requests: CapturedRequest[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = urlOf(input);
+      const method = init.method ?? "GET";
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
+      requests.push({ method, path: url.pathname, body });
+      if (method === "GET" && url.pathname === "/api/v1/email/templates") {
+        return json({ templates: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+      }
+      if (method === "GET" && url.pathname.endsWith("/days")) {
+        return json({ days: [], eventUpdatedAt: "2026-08-29T08:00:00.000Z" });
+      }
+      if (method === "POST" && url.pathname === `${CAMPAIGN_PATH}/previews`) {
+        return routes.previews();
+      }
+      if (method === "POST" && url.pathname === CAMPAIGN_PATH && routes.campaigns) {
+        return routes.campaigns();
+      }
+      throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+    }),
+  );
+  return requests;
+}
+
+/** Fills subject and body, then renders a preview. */
+async function composeAndPreview(container: HTMLElement): Promise<void> {
+  await inputText(
+    container.querySelector<HTMLInputElement>('input[placeholder="Email subject"]')!,
+    "Working group update",
+  );
+  await inputText(container.querySelector<HTMLTextAreaElement>("textarea")!, "Hello {{firstName}}");
+  await clickButton(container, "Preview Email");
+  await settle();
+}
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -61,74 +138,112 @@ afterEach(() => {
 
 describe("event email campaign UI", () => {
   it("previews and creates a campaign through one canonical nested resource", async () => {
-    const eventPath = `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}`;
-    const campaignPath = `${eventPath}/email/campaigns`;
-    const requests: Array<{ method: string; path: string; body: unknown }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = urlOf(input);
-        const method = init.method ?? "GET";
-        const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
-        requests.push({ method, path: url.pathname, body });
-        if (method === "GET" && url.pathname === "/api/v1/email/templates") {
-          return json({ templates: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
-        }
-        if (method === "GET" && url.pathname.endsWith("/days")) {
-          return json({ days: [], eventUpdatedAt: "2026-08-29T08:00:00.000Z" });
-        }
-        if (method === "POST" && url.pathname === `${campaignPath}/previews`) {
-          return json({
-            success: true,
-            recipientCount: 1,
-            batchCount: 1,
-            previewToken: "campaign-preview-token",
-            previewExpiresAt: "2026-08-29T08:10:00.000Z",
-            sampleRecipients: ["attendee@example.test"],
-            subject: "Working group update",
-            html: "<p>Hello</p>",
-            text: "Hello",
-          });
-        }
-        if (method === "POST" && url.pathname === campaignPath) {
-          return json({ success: true, queuedRecipients: 1, queuedBatches: 1, mode: "personal" }, 202);
-        }
-        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
-      }),
-    );
-
-    const container = mount(<EventEmailCampaign campaignsPath={campaignPath} daysPath={`${eventPath}/days`} />);
-    await inputText(
-      container.querySelector<HTMLInputElement>('input[placeholder="Email subject"]')!,
-      "Working group update",
-    );
-    await inputText(container.querySelector<HTMLTextAreaElement>("textarea")!, "Hello {{firstName}}");
-    await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent === "Preview Email")!.click();
+    const requests = stubCampaignFetch({
+      previews: () => json(PREVIEW_BODY),
+      campaigns: () => json({ success: true, queuedRecipients: 1, queuedBatches: 1, mode: "personal" }, 202),
     });
-    await settle();
 
-    expect(requests).toContainEqual(
-      expect.objectContaining({
-        method: "POST",
-        path: `${campaignPath}/previews`,
-        body: expect.objectContaining({ filter: expect.objectContaining({ audience: "attendees" }) }),
-      }),
-    );
+    const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
+    await composeAndPreview(container);
+
+    // Parsed through the shared request contract rather than compared field by
+    // field: a payload the schema rejects is a broken request whatever a
+    // literal comparison of one property says.
+    const previewRequest = requests.find(({ path }) => path === `${CAMPAIGN_PATH}/previews`);
+    const previewInput = eventEmailCampaignPreviewInputSchema.parse(previewRequest?.body);
+    expect(previewInput.filter.audience).toBe("attendees");
+    expect(previewInput.subjectOverride).toBe("Working group update");
+    expect(previewInput.sendMode).toBe("personal");
+
     const confirmation = container.querySelector<HTMLInputElement>("#em-confirm")!;
     await act(async () => confirmation.click());
-    await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent === "Send Email")!.click();
-    });
+    await clickButton(container, "Send Email");
     await settle();
-    expect(requests).toContainEqual(
-      expect.objectContaining({
-        method: "POST",
-        path: campaignPath,
-        body: expect.objectContaining({ previewToken: "campaign-preview-token" }),
-      }),
-    );
+
+    const sendRequest = requests.find(({ method, path }) => method === "POST" && path === CAMPAIGN_PATH);
+    const sendInput = eventEmailCampaignCreateInputSchema.parse(sendRequest?.body);
+    expect(sendInput.previewToken).toBe("campaign-preview-token");
+    expect(sendInput.bodyContent).toBe("Hello {{firstName}}");
     expect(requests.every(({ path }) => !path.startsWith("/api/v1/admin/"))).toBe(true);
+  });
+
+  it("isolates the untrusted preview HTML and names the surface for assistive technology", async () => {
+    stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+
+    const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
+    await composeAndPreview(container);
+
+    // The rendered email is author-supplied HTML. It must stay in a fully
+    // sandboxed srcdoc frame — no scripts, no forms, no same-origin access,
+    // and no network fetch of its own.
+    const frame = container.querySelector("iframe")!;
+    expect(frame.getAttribute("sandbox")).toBe("");
+    expect(frame.getAttribute("srcdoc")).toBe("<p>Hello</p>");
+    expect(frame.hasAttribute("src")).toBe(false);
+    expect(frame.getAttribute("title")).toBe("Rendered campaign email preview");
+
+    // The send outcome is announced rather than only shown.
+    const live = container.querySelector('[role="status"]')!;
+    expect(live.textContent).toContain("Preview ready");
+
+    // The confirmation gate is a real labelled checkbox, not a bare box.
+    const confirmation = container.querySelector<HTMLInputElement>("#em-confirm")!;
+    expect(confirmation.type).toBe("checkbox");
+    expect(confirmation.classList.contains("pk-check__input")).toBe(true);
+    const label = container.querySelector<HTMLLabelElement>('label[for="em-confirm"]')!;
+    expect(label.classList.contains("pk-check__label")).toBe(true);
+    expect(label.textContent).toContain("confirm sending");
+
+    // Every control the surface owns carries a name.
+    const named = [...container.querySelectorAll<HTMLElement>("[id^='event-email-campaign-']")];
+    expect(named.length).toBeGreaterThan(5);
+    for (const control of named) {
+      expect(container.querySelector(`label[for="${control.id}"]`)).not.toBeNull();
+    }
+  });
+
+  it("reports a failed preview and keeps the send gate closed", async () => {
+    const notify = vi.fn();
+    stubCampaignFetch({
+      previews: () => json({ error: { code: "RECIPIENT_QUERY_FAILED", message: "Recipient query failed." } }, 500),
+    });
+
+    const container = mount(
+      <EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} notify={notify} />,
+    );
+    await composeAndPreview(container);
+
+    expect(container.querySelector('[role="status"]')!.textContent).toBe("Recipient query failed.");
+    expect(notify).toHaveBeenCalledWith("Recipient query failed.", "error");
+    // No preview means no confirmation checkbox, and the send button stays
+    // disabled: a failed preview can never become a send.
+    expect(container.querySelector("#em-confirm")).toBeNull();
+    const send = [...container.querySelectorAll("button")].find((button) => button.textContent === "Send Email")!;
+    expect(send.disabled).toBe(true);
+  });
+
+  it("reports a rejected send and leaves the composed message intact", async () => {
+    const notify = vi.fn();
+    stubCampaignFetch({
+      previews: () => json(PREVIEW_BODY),
+      campaigns: () => json({ error: { code: "PREVIEW_TOKEN_EXPIRED", message: "Preview token expired." } }, 422),
+    });
+
+    const container = mount(
+      <EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} notify={notify} />,
+    );
+    await composeAndPreview(container);
+    await act(async () => container.querySelector<HTMLInputElement>("#em-confirm")!.click());
+    await clickButton(container, "Send Email");
+    await settle();
+
+    expect(notify).toHaveBeenCalledWith("Preview token expired.", "error");
+    expect(container.querySelector('[role="status"]')!.textContent).toBe("Preview token expired.");
+    // The draft is not cleared on failure, so the operator can retry.
+    expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Hello {{firstName}}");
+    const send = [...container.querySelectorAll("button")].find((button) => button.textContent === "Send Email")!;
+    expect(send.getAttribute("aria-busy")).toBeNull();
+    expect(send.disabled).toBe(false);
   });
 
   it("does not render campaign management without the server-provided manage capability", () => {

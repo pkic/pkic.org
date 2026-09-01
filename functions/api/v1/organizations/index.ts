@@ -25,7 +25,9 @@ export const OrganizationsList = openApiRoute(organizationManagementListRouteSch
 
 export const OrganizationCreate = openApiRoute(organizationCreateRouteSchema, async (c: AdminContext, data) => {
   const { db, staff } = await requireOrganizationStaffPermission(c, "membership:write");
-  requirePermission(staff, "identities:activate");
+  // Only a request that provides people bypasses the invitation flow by
+  // activating them, so only that request needs the activation permission.
+  if (data.body.identities.length > 0) requirePermission(staff, "identities:activate");
   return json(
     organizationCreateResponseSchema.parse({ organization: await createOrganization(db, staff, data.body) }),
     201,

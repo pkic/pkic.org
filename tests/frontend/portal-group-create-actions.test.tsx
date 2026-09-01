@@ -27,10 +27,48 @@ function mount(node: ComponentChildren): HTMLElement {
   return container;
 }
 
+/**
+ * The create-vote form, located by the name it exposes rather than by an id
+ * on one of its inputs: the design system's Field generates its own id/for
+ * pair, so a hard-coded `#group-vote-title` stops matching anything.
+ */
+function createVoteForm(container: HTMLElement): HTMLFormElement | null {
+  return container.querySelector("form[aria-label='Create vote']");
+}
+
+function findButton(container: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === label);
+}
+
+function clickButton(container: HTMLElement, label: string): Promise<void> {
+  const button = findButton(container, label);
+  expect(button).not.toBeUndefined();
+  return act(async () => {
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+function stubEmptyCollections(): void {
+  const page = { limit: 50, offset: 0, total: 0, hasMore: false };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      if (url.pathname.endsWith("/events")) return json({ events: [], page });
+      if (url.pathname.endsWith("/forms")) return json({ forms: [], page });
+      if (url.pathname.endsWith("/votes")) return json({ votes: [], page });
+      throw new Error(`Unexpected request: ${url.pathname}`);
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -46,55 +84,75 @@ afterEach(() => {
 });
 
 describe("group collection create actions", () => {
-  it("keeps event, form, and vote creation behind each list's create action", async () => {
-    const page = { limit: 50, offset: 0, total: 0, hasMore: false };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        if (url.pathname.endsWith("/events")) return json({ events: [], page });
-        if (url.pathname.endsWith("/forms")) return json({ forms: [], page });
-        if (url.pathname.endsWith("/votes")) return json({ votes: [], page });
-        throw new Error(`Unexpected request: ${url.pathname}`);
-      }),
-    );
+  it("keeps event creation behind the list's create action", async () => {
+    stubEmptyCollections();
 
     const events = mount(<GroupEvents groupId={GROUP_ID} canManage />);
+    await settle();
+
+    expect(events.textContent).not.toContain("New group event");
+    await clickButton(events, "Create event");
+    expect(events.textContent).toContain("New group event");
+    await clickButton(events, "Cancel");
+    expect(events.textContent).not.toContain("New group event");
+  });
+
+  it("sends form and vote creation to their own addresses instead of unfolding inside the list", async () => {
+    stubEmptyCollections();
+
     const forms = mount(<GroupForms groupId={GROUP_ID} canManage />);
     const votes = mount(<GroupVotes groupId={GROUP_ID} canManage canParticipate />);
     await settle();
 
-    expect(events.textContent).not.toContain("New group event");
+    // Nothing is layered over either list to begin with.
     expect(forms.textContent).not.toContain("New group form");
-    expect(votes.querySelector("#group-vote-title")).toBeNull();
+    expect(createVoteForm(votes)).toBeNull();
 
-    function clickButton(container: HTMLElement, label: string): Promise<void> {
-      const candidate = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent?.trim() === label,
-      );
-      expect(candidate).not.toBeUndefined();
-      return act(async () => {
-        candidate?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-    }
-
-    await clickButton(events, "Create event");
     await clickButton(forms, "New form");
-    await clickButton(votes, "Create vote");
-
-    expect(events.textContent).toContain("New group event");
-    expect(forms.textContent).toContain("New group form");
-    expect(votes.querySelector("#group-vote-title")).not.toBeNull();
-
-    await clickButton(events, "Cancel");
-    await clickButton(forms, "Cancel");
-    await clickButton(votes, "Cancel");
-
-    expect(events.textContent).not.toContain("New group event");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/new`);
+    // The action navigates and does nothing else: the editor does not also
+    // open in place, so this mount still shows only the list.
     expect(forms.textContent).not.toContain("New group form");
-    expect(votes.querySelector("#group-vote-title")).toBeNull();
+
+    navigate.mockReset();
+    await clickButton(votes, "Create vote");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/votes/new`);
+    expect(createVoteForm(votes)).toBeNull();
+  });
+
+  it("renders each create segment as a page of its own, with a way back to its list", async () => {
+    stubEmptyCollections();
+
+    const forms = mount(<GroupForms groupId={GROUP_ID} canManage placementSegment="new" />);
+    const votes = mount(<GroupVotes groupId={GROUP_ID} canManage canParticipate voteSegment="new" />);
+    await settle();
+
+    // The create page is the only thing on screen: the table and the toolbar
+    // action that opened it are gone rather than sitting below the form.
+    expect(forms.textContent).toContain("New group form");
+    expect(forms.querySelector("table")).toBeNull();
+    expect(findButton(forms, "New form")).toBeUndefined();
+    expect(createVoteForm(votes)).not.toBeNull();
+    expect(votes.querySelector("table")).toBeNull();
+
+    await clickButton(forms, "← All forms");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms`);
+
+    navigate.mockReset();
+    await clickButton(votes, "← All votes");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/votes`);
+  });
+
+  it("returns a viewer who cannot manage from either create segment to the list", async () => {
+    stubEmptyCollections();
+
+    mount(<GroupForms groupId={GROUP_ID} canManage={false} placementSegment="new" />);
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms`);
+
+    navigate.mockReset();
+    mount(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate voteSegment="new" />);
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/votes`);
   });
 });

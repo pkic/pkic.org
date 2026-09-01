@@ -4,39 +4,57 @@ import {
   organizationCreateResponseSchema,
 } from "../../../../../shared/schemas/organization-management";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
-import { FormActions } from "../../../../components/FormActions";
+import { friendlyErrorMessage } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
 
-interface IdentityDraft {
+interface PersonDraft {
   name: string;
   email: string;
   jobTitle: string;
-  links: string[];
-}
-
-function emptyIdentity(): IdentityDraft {
-  return { name: "", email: "", jobTitle: "", links: [] };
 }
 
 const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
 
-/** Creates one organization aggregate with its initial approved identities. */
-export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+const MAX_PEOPLE = 10;
+
+/**
+ * The create-organization page: one organization aggregate, its web presence,
+ * and — optionally — its first people. It stands in place of the directory
+ * rather than unfolding inside it, so it carries its own way back out — the
+ * same shape the roles and global-forms create views use.
+ *
+ * The form is three fieldsets in one column, each holding one concept: the
+ * record itself, where it lives on the web, and who acts for it. People are
+ * optional — an organization can exist before anyone represents it, and the
+ * roster invites people properly later — so the activation reason only
+ * appears, and is only required, once a person has been added.
+ */
+export function OrganizationCreateForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (organizationId: string) => void;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
   const [description, setDescription] = useState("");
+  const [links, setLinks] = useState<string[]>([]);
   const [membershipCategory, setMembershipCategory] = useState(ORG_TIED_MEMBERSHIP_CATEGORIES[0]);
   const [memberSince, setMemberSince] = useState(() => new Date().toISOString().slice(0, 10));
-  const [identities, setIdentities] = useState<IdentityDraft[]>([emptyIdentity()]);
+  const [people, setPeople] = useState<PersonDraft[]>([]);
   const [activationReason, setActivationReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  function updateIdentity(index: number, patch: Partial<IdentityDraft>) {
-    setIdentities((current) =>
-      current.map((identity, position) => (position === index ? { ...identity, ...patch } : identity)),
-    );
+  function updatePerson(index: number, patch: Partial<PersonDraft>) {
+    setPeople((current) => current.map((person, position) => (position === index ? { ...person, ...patch } : person)));
   }
 
   async function submit(event: Event) {
@@ -44,27 +62,27 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
     setBusy(true);
     setError("");
     try {
-      await postJson(
+      const created = await postJson(
         "/api/v1/organizations",
         {
           name: name.trim(),
           ...(website.trim() ? { website: website.trim() } : {}),
           ...(description.trim() ? { description: description.trim() } : {}),
+          ...(links.length > 0 ? { links } : {}),
           membershipCategory,
           memberSince,
-          identities: identities.map((identity) => ({
-            name: identity.name.trim(),
-            email: identity.email.trim(),
-            ...(identity.jobTitle.trim() ? { jobTitle: identity.jobTitle.trim() } : {}),
-            ...(identity.links.length > 0 ? { links: identity.links } : {}),
+          identities: people.map((person) => ({
+            name: person.name.trim(),
+            email: person.email.trim(),
+            ...(person.jobTitle.trim() ? { jobTitle: person.jobTitle.trim() } : {}),
           })),
           workingGroupSlugs: [],
-          activationReason: activationReason.trim(),
+          ...(people.length > 0 ? { activationReason: activationReason.trim() } : {}),
         },
         organizationCreateResponseSchema,
       );
       toast("Organization created", "success");
-      onCreated();
+      onCreated(created.organization.id);
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
@@ -75,183 +93,192 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
   }
 
   return (
-    <form class="card border-0 shadow-sm mb-3" onSubmit={submit}>
-      <div class="card-header bg-white fw-semibold">Add organization</div>
-      <div class="card-body">
-        <div class="row g-2 mb-2">
-          <div class="col-md-5">
-            <label class="form-label small fw-semibold" for="organization-create-name">
-              Organization name
-            </label>
-            <input
-              id="organization-create-name"
-              class="form-control form-control-sm"
-              value={name}
-              onInput={(event) => setName((event.target as HTMLInputElement).value)}
-              required
-              disabled={busy}
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold" for="organization-create-category">
-              Membership category
-            </label>
-            <select
-              id="organization-create-category"
-              class="form-select form-select-sm"
-              value={membershipCategory}
-              onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
-              disabled={busy}
-            >
-              {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for="organization-create-member-since">
-              Member since
-            </label>
-            <input
-              id="organization-create-member-since"
-              class="form-control form-control-sm"
-              type="date"
-              value={memberSince}
-              onInput={(event) => setMemberSince((event.target as HTMLInputElement).value)}
-              required
-              disabled={busy}
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small" for="organization-create-website">
-              Website
-            </label>
-            <input
-              id="organization-create-website"
-              class="form-control form-control-sm"
-              type="url"
-              value={website}
-              onInput={(event) => setWebsite((event.target as HTMLInputElement).value)}
-              disabled={busy}
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small" for="organization-create-description">
-              Description
-            </label>
-            <input
-              id="organization-create-description"
-              class="form-control form-control-sm"
-              value={description}
-              onInput={(event) => setDescription((event.target as HTMLInputElement).value)}
-              disabled={busy}
-            />
-          </div>
-        </div>
+    <div class="pk pk-stack">
+      {/* The page's way back: creation has its own address, so leaving it is
+          navigation rather than the disappearance of a layer. */}
+      <div class="pk-cluster">
+        <Button size="sm" onClick={onCancel} disabled={busy}>
+          ← All organizations
+        </Button>
+      </div>
+      <Panel aria-label="Add organization">
+        <PanelHeader title="Add organization" headingLevel={2} />
+        <PanelBody>
+          <form class="pk-form" onSubmit={submit}>
+            <fieldset class="pk-fieldset pk-field" disabled={busy}>
+              <legend class="pk-field__label">Organization</legend>
+              <div class="pk-stack pk-stack--snug">
+                <Field label="Organization name" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={name}
+                      onInput={(event) => setName((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Membership category" help="Applied to every identity created for the organization.">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={membershipCategory}
+                      onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
+                    >
+                      {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Member since" required>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="date"
+                      value={memberSince}
+                      onInput={(event) => setMemberSince((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Description">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={description}
+                      onInput={(event) => setDescription((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+              </div>
+            </fieldset>
 
-        <fieldset class="mb-3">
-          <legend class="form-label small fw-semibold">Initial identities</legend>
-          <div class="form-text mb-2">
-            Creating an organization activates these identities immediately and requires identities:activate.
-          </div>
-          {identities.map((identity, index) => (
-            <div class="row g-2 mb-2 align-items-end" key={index}>
-              <div class="col-md-3">
-                <label class="form-label small" for={`organization-create-identity-name-${index}`}>
-                  Name
-                </label>
-                <input
-                  id={`organization-create-identity-name-${index}`}
-                  class="form-control form-control-sm"
-                  value={identity.name}
-                  onInput={(event) => updateIdentity(index, { name: (event.target as HTMLInputElement).value })}
-                  required
-                  disabled={busy}
-                />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small" for={`organization-create-identity-email-${index}`}>
-                  Email
-                </label>
-                <input
-                  id={`organization-create-identity-email-${index}`}
-                  class="form-control form-control-sm"
-                  type="email"
-                  value={identity.email}
-                  onInput={(event) => updateIdentity(index, { email: (event.target as HTMLInputElement).value })}
-                  required
-                  disabled={busy}
-                />
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small" for={`organization-create-identity-title-${index}`}>
-                  Job title
-                </label>
-                <input
-                  id={`organization-create-identity-title-${index}`}
-                  class="form-control form-control-sm"
-                  value={identity.jobTitle}
-                  onInput={(event) => updateIdentity(index, { jobTitle: (event.target as HTMLInputElement).value })}
-                  disabled={busy}
-                />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small">Profile links</label>
+            {/* The website and the other public addresses are one concept, so
+                they live in one group rather than competing across the form. */}
+            <fieldset class="pk-fieldset pk-field" disabled={busy}>
+              <legend class="pk-field__label">Web presence</legend>
+              <div class="pk-stack pk-stack--snug">
+                <Field label="Website">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="url"
+                      value={website}
+                      onInput={(event) => setWebsite((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
                 <ProfileLinksInput
-                  fieldName={`identities.${index}.links`}
-                  value={identity.links}
-                  onChange={(links) => updateIdentity(index, { links })}
+                  fieldName="organization.links"
+                  value={links}
+                  inputAriaLabel="Additional organization URL"
+                  helpText="Additional links for the organization's profile. Each is a plain URL and is labeled automatically by its site — for example, a linkedin.com address shows as LinkedIn."
+                  onChange={setLinks}
                 />
               </div>
-              <div class="col-md-1">
-                {identities.length > 1 && (
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-danger w-100"
-                    disabled={busy}
-                    onClick={() => setIdentities((current) => current.filter((_, position) => position !== index))}
-                    aria-label={`Remove identity ${index + 1}`}
+            </fieldset>
+
+            {/* A fieldset per person, so the repeated "Name" and "Email"
+                labels are announced inside the card they belong to rather
+                than as several identically named controls in one form. */}
+            <fieldset class="pk-fieldset pk-field" disabled={busy}>
+              <legend class="pk-field__label">People</legend>
+              <div class="pk-stack">
+                <p class="pk-small">
+                  Optional. Anyone added here starts acting for the organization immediately, without receiving an
+                  invitation. Profile details such as links are added later on the person.
+                </p>
+                {people.map((person, index) => (
+                  // The frame is load-bearing: it is what keeps a person's
+                  // "Name" from reading as another field of the organization.
+                  <fieldset class="pk-fieldset pk-fieldset--boxed pk-field" key={index}>
+                    <legend class="pk-field__label">Person {index + 1}</legend>
+                    <div class="pk-stack pk-stack--snug">
+                      <Field label="Name" required>
+                        {(control) => (
+                          <TextInput
+                            {...control}
+                            value={person.name}
+                            onInput={(event) => updatePerson(index, { name: (event.target as HTMLInputElement).value })}
+                          />
+                        )}
+                      </Field>
+                      <Field label="Email" required>
+                        {(control) => (
+                          <TextInput
+                            {...control}
+                            type="email"
+                            value={person.email}
+                            onInput={(event) =>
+                              updatePerson(index, { email: (event.target as HTMLInputElement).value })
+                            }
+                          />
+                        )}
+                      </Field>
+                      <Field label="Job title">
+                        {(control) => (
+                          <TextInput
+                            {...control}
+                            value={person.jobTitle}
+                            onInput={(event) =>
+                              updatePerson(index, { jobTitle: (event.target as HTMLInputElement).value })
+                            }
+                          />
+                        )}
+                      </Field>
+                      <div class="pk-cluster pk-cluster--end">
+                        <Button
+                          variant="danger-quiet"
+                          size="sm"
+                          onClick={() => setPeople((current) => current.filter((_, position) => position !== index))}
+                        >
+                          Remove person {index + 1}
+                        </Button>
+                      </div>
+                    </div>
+                  </fieldset>
+                ))}
+                <div class="pk-cluster">
+                  <Button
+                    size="sm"
+                    disabled={people.length >= MAX_PEOPLE}
+                    onClick={() => setPeople((current) => [...current, { name: "", email: "", jobTitle: "" }])}
                   >
-                    ×
-                  </button>
+                    Add person
+                  </Button>
+                </div>
+                {people.length > 0 && (
+                  <Field
+                    label="Reason for activating without an invitation"
+                    required
+                    help="These people skip the usual invitation and acceptance. The reason is recorded in the audit log."
+                  >
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={activationReason}
+                        onInput={(event) => setActivationReason(event.currentTarget.value)}
+                      />
+                    )}
+                  </Field>
                 )}
               </div>
+            </fieldset>
+
+            {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" loading={busy}>
+                {busy ? "Creating…" : "Create organization"}
+              </Button>
+              <Button onClick={onCancel} disabled={busy}>
+                Cancel
+              </Button>
             </div>
-          ))}
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary"
-            disabled={busy || identities.length >= 10}
-            onClick={() => setIdentities((current) => [...current, emptyIdentity()])}
-          >
-            Add identity
-          </button>
-        </fieldset>
-
-        <div class="mb-3">
-          <label class="form-label small fw-semibold" for="organization-create-activation-reason">
-            Immediate activation reason
-          </label>
-          <input
-            id="organization-create-activation-reason"
-            class="form-control form-control-sm"
-            value={activationReason}
-            onInput={(event) => setActivationReason(event.currentTarget.value)}
-            required
-            disabled={busy}
-          />
-        </div>
-
-        <FormActions
-          submitLabel="Create organization"
-          busyLabel="Creating…"
-          busy={busy}
-          onCancel={onCancel}
-          status={error}
-        />
-      </div>
-    </form>
+          </form>
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

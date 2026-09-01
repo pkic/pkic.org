@@ -4,21 +4,39 @@
   <head>
     {{ partial "header.html" . }}
 
-    {{ $sass := resources.Get "scss/main.scss" }}
-    {{ $style := $sass | css.Sass }}
+    {{ $style := partial "site-stylesheet.html" . }}
     {{ if eq hugo.Environment "production" }}{{ $style = $style | resources.Fingerprint }}{{ end }}
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if eq hugo.Environment "production" }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
+    {{- /* Design-system tokens and base layer, emitted by the frontend bundle.
+         Linked in the head rather than injected by script so the first paint
+         already has them; component stylesheets ride their own lazy chunks. */ -}}
+    {{- with index (index hugo.Data "asset-manifest") "loader" -}}
+      {{- $entry := . -}}
+      {{- with index $entry "css" }}<link rel="stylesheet" href="{{ . }}"{{ with index $entry "cssIntegrity" }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}>{{ end -}}
+    {{- end }}
+    {{- /* Per-page accent, as a rule rather than a `style` attribute on <body>.
+         The repository forbids style attributes (assets/AGENTS.md,
+         layouts/AGENTS.md); this is the same two custom properties, declared
+         unlayered on :root so they still beat the layered token sheet, and it
+         costs no extra request the way a generated stylesheet would. */ -}}
+    <style>:root{ {{- $themeVars | safeCSS -}} }</style>
+    {{- /* The reader's saved theme, stamped before the first paint. A file,
+         not an inline script: the CSP is `script-src 'self'` and blocks
+         inline execution — see static/js/theme-init.js for the rest. */ -}}
+    <script src="/js/theme-init.js"></script>
     {{ block "head_extra" . }}{{ end }}
   </head>
-  <body {{ printf "style=%q" $themeVars | safeHTMLAttr }}>
+  <body>
     {{ partial "navbar.html" . }}
     
     {{/* An application shell has no page source for visitors to edit. */}}
     {{ if ne .Type "portal" }}{{ partial "edit-on-github.html" . }}{{ end }}
     <main>
     {{ block "main" . }}
-    <div class="py-5 bg-light">
-        <div class="container">
+    {{/* No `.pk` root: this fallback renders authored markdown whose
+         appearance still comes from the legacy sheet. */}}
+    <div class="pk-section">
+        <div class="pk-container">
             {{ .Content }}
         </div>
     </div>

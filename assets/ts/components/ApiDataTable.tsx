@@ -11,6 +11,8 @@ import {
   type CollectionLoader,
 } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
+import { Button } from "../ui/Button";
+import { Toolbar } from "../ui/Toolbar";
 import { ErrorAlert } from "./ErrorAlert";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { Spinner } from "./Spinner";
@@ -64,11 +66,12 @@ export function ApiDataTable<T, Response = unknown>({
   searchPlaceholder,
   initialPageSize,
   empty,
-  className,
   rowKey,
-  rowClass,
-  onRowClick,
+  rowAction,
   detailRow,
+  selection,
+  caption,
+  showCaption,
   initialSort = "",
   toolbar,
   createAction,
@@ -136,41 +139,47 @@ export function ApiDataTable<T, Response = unknown>({
   });
 
   return (
-    <div>
+    // `pk-table-list` measures the whole list, not only the table: the search
+    // field, the filters, the table and the pager share one edge. Without it
+    // the toolbar stretched across a 2000px screen above a table that had
+    // settled at its own measure, and the pager centred itself under the
+    // screen rather than under the rows it pages.
+    <div class="pk pk-stack pk-stack--snug pk-table-list">
       {(searchPlaceholder || toolbar || createAction) && (
-        <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
-          {searchPlaceholder && (
-            <input
-              type="search"
-              class="form-control form-control-sm w-auto"
-              placeholder={searchPlaceholder}
-              aria-label={searchPlaceholder}
-              value={pendingSearch}
-              onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") applySearch();
-              }}
-            />
-          )}
+        // The toolbar is named after the list it controls, so a page with
+        // several collections does not present several toolbars called
+        // "Toolbar".
+        <Toolbar
+          label={`${caption} controls`}
+          search={
+            searchPlaceholder
+              ? {
+                  value: pendingSearch,
+                  placeholder: searchPlaceholder,
+                  onInput: setPendingSearch,
+                  label: `Search ${caption.toLowerCase()}`,
+                }
+              : undefined
+          }
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key === "Enter") applySearch();
+          }}
+        >
           {toolbar?.(actions)}
+          {/* Default size, not `sm`: these sit on the same row as the search
+              field, which is a full-size control, and a button that is eight
+              pixels shorter than the input beside it reads as shrunken rather
+              than as quiet. `sm` belongs inside a dense row, not next to a
+              full-size control. */}
           {createAction && (
-            <button
-              type="button"
-              class="btn btn-sm btn-success ms-auto"
-              disabled={createAction.disabled}
-              onClick={createAction.onSelect}
-            >
+            <Button onClick={createAction.onSelect} disabled={createAction.disabled}>
               {createAction.label}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            class={`btn btn-sm btn-outline-secondary${createAction ? "" : " ms-auto"}`}
-            onClick={collection.reload}
-          >
-            ↺ Refresh
-          </button>
-        </div>
+          <Button variant="secondary" onClick={() => void collection.reload()}>
+            Refresh
+          </Button>
+        </Toolbar>
       )}
 
       {collection.loading ? (
@@ -180,14 +189,15 @@ export function ApiDataTable<T, Response = unknown>({
       ) : (
         <>
           <DataTable
+            caption={caption}
+            showCaption={showCaption}
             columns={columns}
             data={rows}
             empty={empty}
-            className={className}
             rowKey={rowKey}
-            rowClass={rowClass}
-            onRowClick={onRowClick}
+            rowAction={rowAction}
             detailRow={detailRow}
+            selection={selection}
             currentSort={sort}
             onSort={applySort}
           />

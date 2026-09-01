@@ -8,6 +8,15 @@ import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../shared/time
 import { parseContactText } from "../../shared/invite-parser";
 import { postJson } from "../../shared/api-client";
 import type { ToastType } from "../../shared/ui";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { Textarea, TextInput } from "../../ui/TextControl";
+
+// `pk-framed` on the preview iframe comes from the content stylesheet, which
+// is not in the entry chunk: a class written here is only styled if this
+// module pulls its sheet in.
+import "../../ui/Content.css";
 
 export type BulkInviteType = "attendee" | "speaker";
 
@@ -64,6 +73,7 @@ export function BulkInviteComposer({
   const latestExpiry = event.endsAt ? instantToDateTimeLocal(event.endsAt, event.timezone) : undefined;
   const label = type === "attendee" ? "attendee" : "speaker";
   const validRows = rows.filter((row) => row.email.trim().includes("@"));
+  const confirmId = `invite-confirm-${type}`;
 
   function resetPreview() {
     previewReset(setPreview, setConfirmed, setPreviewStatus);
@@ -168,140 +178,173 @@ export function BulkInviteComposer({
   }
 
   return (
-    <section aria-label={`Send ${label} invitations`} class="d-flex flex-column gap-3">
-      <div>
-        <label class="form-label small fw-semibold" for={`invite-paste-${type}`}>
-          Paste emails and names <span class="text-muted fw-normal">— one per line</span>
-        </label>
-        <textarea
-          id={`invite-paste-${type}`}
-          class="form-control form-control-sm"
-          rows={4}
-          value={pasteText}
-          onInput={(input) => setPasteText(input.currentTarget.value)}
-          placeholder={"alice@example.com\nBob Smith <bob@example.com>"}
-        />
-        <div class="mt-1 d-flex gap-2 align-items-center">
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={parsePastedRows}>
+    <section aria-label={`Send ${label} invitations`} class="pk pk-stack">
+      <div class="pk-stack pk-stack--snug">
+        <Field label="Paste emails and names" help="One address per line. Bob Smith <bob@example.com> also works.">
+          {(control) => (
+            <Textarea
+              {...control}
+              rows={4}
+              value={pasteText}
+              onInput={(input) => setPasteText(input.currentTarget.value)}
+              placeholder={"alice@example.com\nBob Smith <bob@example.com>"}
+            />
+          )}
+        </Field>
+        <div class="pk-cluster">
+          <Button size="sm" onClick={parsePastedRows}>
             Parse
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => fileRef.current?.click()}>
+          </Button>
+          <Button size="sm" onClick={() => fileRef.current?.click()}>
             Upload CSV
-          </button>
-          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" class="d-none" onChange={loadFile} />
+          </Button>
+          {/* The button above is the control a reader reaches; the input
+              itself is taken out of the page rather than merely made
+              invisible, so nothing tabs into an unlabeled file picker. */}
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" hidden onChange={loadFile} />
         </div>
       </div>
-      <div>
+
+      {/* A grid rather than a cluster: a control is full-width by design, so
+          three of them in a wrapping flex row would each take a line of their
+          own. The grid gives them a column each and folds to one column on a
+          narrow viewport without a breakpoint class. */}
+      <div class="pk-stack pk-stack--snug">
         {rows.map((row, index) => (
-          <div key={row.key} class="d-flex gap-1 align-items-center mb-1">
-            <input
-              class="form-control form-control-sm"
+          <div key={row.key} class="pk-grid pk-grid--tight">
+            <TextInput
               aria-label={`${label} ${index + 1} first name`}
               placeholder="First"
               value={row.firstName ?? ""}
               onInput={(input) => updateRow(row.key, { firstName: input.currentTarget.value })}
             />
-            <input
-              class="form-control form-control-sm"
+            <TextInput
               aria-label={`${label} ${index + 1} last name`}
               placeholder="Last"
               value={row.lastName ?? ""}
               onInput={(input) => updateRow(row.key, { lastName: input.currentTarget.value })}
             />
-            <input
-              class="form-control form-control-sm"
+            <TextInput
               aria-label={`${label} ${index + 1} email address`}
               placeholder="email@example.com"
               type="email"
               value={row.email}
               onInput={(input) => updateRow(row.key, { email: input.currentTarget.value })}
             />
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-danger"
-              aria-label={`Remove ${label} row`}
-              onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}
-            >
-              ×
-            </button>
+            {/* The cluster keeps the button at its own width inside its grid
+                cell. Named per row: "Remove attendee row" repeated six times
+                gives a reader no way to tell which one they are on. */}
+            <div class="pk-cluster pk-cluster--end">
+              <Button
+                size="sm"
+                variant="danger-quiet"
+                icon
+                aria-label={`Remove ${label} ${index + 1}`}
+                onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}
+              >
+                <span aria-hidden="true">×</span>
+              </Button>
+            </div>
           </div>
         ))}
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary mt-1"
-          onClick={() => {
-            setRows((current) => [...current, { key: nextKey, email: "" }]);
-            setNextKey((key) => key + 1);
-          }}
-        >
-          Add row
-        </button>
-      </div>
-      <div>
-        <label class="form-label small fw-semibold" for={`invite-deadline-${type}`}>
-          Invitation deadline
-        </label>
-        <input
-          id={`invite-deadline-${type}`}
-          class="form-control form-control-sm"
-          type="datetime-local"
-          value={expiresAt}
-          max={latestExpiry}
-          onInput={(input) => {
-            setExpiresAt(input.currentTarget.value);
-            resetPreview();
-          }}
-        />
-        <div class="form-text">
-          Leave blank to use the event start. A custom deadline cannot be later than the event end.
+        <div class="pk-cluster">
+          <Button
+            size="sm"
+            onClick={() => {
+              setRows((current) => [...current, { key: nextKey, email: "" }]);
+              setNextKey((key) => key + 1);
+            }}
+          >
+            Add row
+          </Button>
         </div>
       </div>
-      <div class="d-flex gap-2 align-items-center flex-wrap">
-        <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void renderPreview()}>
+
+      <Field
+        label="Invitation deadline"
+        help="Leave blank to use the event start. A custom deadline cannot be later than the event end."
+      >
+        {(control) => (
+          <TextInput
+            {...control}
+            type="datetime-local"
+            value={expiresAt}
+            max={latestExpiry}
+            onInput={(input) => {
+              setExpiresAt(input.currentTarget.value);
+              resetPreview();
+            }}
+          />
+        )}
+      </Field>
+
+      <div class="pk-cluster">
+        <Button size="sm" onClick={() => void renderPreview()}>
           Preview email
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-success"
-          disabled={sending || !preview || !confirmed}
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={!preview || !confirmed}
+          loading={sending}
           onClick={() => void send()}
         >
-          Send {type === "attendee" ? "attendee" : "speaker"} invites
-        </button>
-        <span class="small text-muted">{validRows.length} valid</span>
+          Send {label} invites
+        </Button>
+        <span class="pk-small">{validRows.length} valid</span>
       </div>
-      {previewStatus && <div class="small text-muted">{previewStatus}</div>}
-      {sendStatus && (
-        <div class="small" role="status">
-          {sendStatus}
-        </div>
+
+      {/*
+       * These two lines are the only account of what preview and send did, so
+       * they are live regions: a reader who has tabbed past the buttons is
+       * told the result instead of having to go looking for it. Each says what
+       * happened in words, so nothing here is carried by colour alone.
+       */}
+      {previewStatus && (
+        <p class="pk-small" role="status">
+          {previewStatus}
+        </p>
       )}
+      {sendStatus && (
+        <p class="pk-small" role="status">
+          {sendStatus}
+        </p>
+      )}
+
       {preview && (
-        <div class="card border">
-          <div class="card-header small fw-semibold">Email preview</div>
-          <div class="card-body">
-            <div class="small text-muted">Subject</div>
-            <div class="fw-semibold mb-2">{preview.subject}</div>
+        <Panel>
+          <PanelHeader title="Email preview" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <div class="pk-stack pk-stack--tight">
+              <span class="pk-small">Subject</span>
+              <span class="pk-strong">{preview.subject}</span>
+            </div>
+            {/*
+             * The rendered invitation is author-supplied HTML, so it stays in
+             * an iframe with an empty `sandbox`: no scripts, no forms, no
+             * same-origin access, no navigation. Neither may be relaxed.
+             */}
             <iframe
               sandbox=""
               srcdoc={preview.html}
-              class="adm-email-preview-frame"
+              class="pk-framed"
+              height={600}
               title={`${label} invitation preview`}
             />
-            <div class="form-check mt-2">
+            <div class="pk-check">
               <input
-                id={`invite-confirm-${type}`}
-                class="form-check-input"
+                id={confirmId}
+                class="pk-check__input"
                 type="checkbox"
                 checked={confirmed}
                 onChange={(input) => setConfirmed(input.currentTarget.checked)}
               />
-              <label class="form-check-label small" for={`invite-confirm-${type}`}>
+              <label class="pk-check__label pk-small" for={confirmId}>
                 I reviewed this preview and confirm sending this email.
               </label>
             </div>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
     </section>
   );

@@ -1,6 +1,15 @@
-import type { Ref } from "preact";
+import type { ComponentChildren, Ref } from "preact";
 import { ProfileLinksInput, type ProfileLinksHandle } from "./ProfileLinksInput";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
+import { Button } from "../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
+import { Textarea, TextInput } from "../ui/TextControl";
+// `pk-field`, `pk-field__label`, `pk-field__help`, `pk-field__message` and the
+// `pk-check` trio are written here as class names rather than reached through a
+// component, so this module has to pull their stylesheet into its own chunk.
+// `TextInput`/`Textarea` already import it; naming it here keeps the file
+// honest if those two are ever swapped for plain elements.
+import "../ui/Field.css";
 
 export interface SpeakerFieldNames {
   firstName: string;
@@ -26,12 +35,50 @@ interface SpeakerFormCardProps {
   onRemove?: () => void;
 }
 
-function FieldError({ path }: { path: string }) {
-  return <div data-field-error={path} class="invalid-feedback d-block" />;
+interface SpeakerFieldProps {
+  id: string;
+  label: string;
+  /** Annotates the label rather than leaving "optional" to be inferred. */
+  optional?: boolean;
+  help?: string;
+  /** The validation path `applyFieldErrors` writes this control's message to. */
+  errorPath?: string;
+  children: (control: { id: string; "aria-describedby": string | undefined }) => ComponentChildren;
 }
 
-function OptionalHint() {
-  return <span class="text-muted fw-normal small">(optional)</span>;
+/**
+ * One labelled control inside the speaker card.
+ *
+ * The id is supplied by the caller rather than generated, because these cards
+ * are rendered into a plain HTML form whose validation writes each message
+ * into the matching `[data-field-error]` slot after render. That makes the
+ * slot a polite live region, and the control names it through
+ * `aria-describedby` before any message exists — the relationship is markup
+ * rather than runtime wiring, so it is right from the first paint.
+ */
+function SpeakerField({ id, label, optional = false, help, errorPath, children }: SpeakerFieldProps) {
+  const helpId = help ? `${id}-help` : undefined;
+  const errorId = errorPath ? `${id}-error` : undefined;
+  const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
+
+  return (
+    <div class="pk-field">
+      <label class="pk-field__label" for={id}>
+        {label}
+        {optional && <span class="pk-small"> (optional)</span>}
+      </label>
+      {/* The box the state mark is positioned against: `applyFieldErrors`
+          moves this field into a state, and the mark has nowhere to draw
+          without it. */}
+      <div class="pk-field__control">{children({ id, "aria-describedby": describedBy })}</div>
+      {help && (
+        <p class="pk-field__help" id={helpId}>
+          {help}
+        </p>
+      )}
+      {errorPath && <div class="pk-field__message" id={errorId} data-field-error={errorPath} aria-live="polite" />}
+    </div>
+  );
 }
 
 export function SpeakerFormCard({
@@ -47,131 +94,118 @@ export function SpeakerFormCard({
   errorPaths,
   onRemove,
 }: SpeakerFormCardProps) {
+  const roleField = fields.role;
+
   return (
-    <div class="proposal-speaker-card">
-      <div class="proposal-speaker-card-head">
-        <span class="proposal-speaker-card-title">{title}</span>
-        {onRemove && (
-          <button type="button" class="btn btn-link btn-sm text-danger p-0" onClick={onRemove}>
-            Remove
-          </button>
-        )}
-      </div>
-      <div class="row g-3 mt-0">
-        <div class="col-sm-6">
-          <label class="form-label" htmlFor={`${idPrefix}-first`}>
-            First name
-          </label>
-          <input
-            id={`${idPrefix}-first`}
-            name={fields.firstName}
-            type="text"
-            class="form-control"
-            required
-            {...(autocomplete ? { autocomplete: "given-name" } : {})}
-          />
-          {errorPaths?.firstName && <FieldError path={errorPaths.firstName} />}
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" htmlFor={`${idPrefix}-last`}>
-            Last name
-          </label>
-          <input
-            id={`${idPrefix}-last`}
-            name={fields.lastName}
-            type="text"
-            class="form-control"
-            required
-            {...(autocomplete ? { autocomplete: "family-name" } : {})}
-          />
-          {errorPaths?.lastName && <FieldError path={errorPaths.lastName} />}
-        </div>
-        <div class="col-12">
-          <label class="form-label" htmlFor={`${idPrefix}-email`}>
-            Email
-          </label>
-          <input
-            id={`${idPrefix}-email`}
-            name={fields.email}
-            type="email"
-            class="form-control"
-            required
-            {...(autocomplete ? { autocomplete: "email" } : {})}
-          />
-          <div class="form-text">{emailHelp}</div>
-          {errorPaths?.email && <FieldError path={errorPaths.email} />}
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" htmlFor={`${idPrefix}-org`}>
-            Organization <OptionalHint />
-          </label>
-          <input
-            id={`${idPrefix}-org`}
-            name={fields.organizationName}
-            type="text"
-            class="form-control"
-            {...(autocomplete ? { autocomplete: "organization" } : {})}
-          />
-        </div>
-        <div class="col-sm-6">
-          <label class="form-label" htmlFor={`${idPrefix}-title`}>
-            Job title <OptionalHint />
-          </label>
-          <input
-            id={`${idPrefix}-title`}
-            name={fields.jobTitle}
-            type="text"
-            class="form-control"
-            {...(autocomplete ? { autocomplete: "organization-title" } : {})}
-          />
-        </div>
-        <div class="col-12">
-          <label class="form-label" htmlFor={`${idPrefix}-bio`}>
-            Bio
-          </label>
-          <textarea
-            id={`${idPrefix}-bio`}
-            name={fields.bio}
-            rows={4}
-            class="form-control"
-            required
-            minLength={40}
-            maxLength={5000}
-          />
-          <div class="form-text">{bioHelp}</div>
-          {errorPaths?.bio && <FieldError path={errorPaths.bio} />}
-        </div>
-        {fields.role && (
-          <div class="col-12">
-            <label class="form-label">Role</label>
-            <div class="event-flow-role-options" role="group" aria-label="Speaker role">
-              {SPEAKER_ROLE_OPTIONS.map((role, i) => (
-                <>
-                  <input
-                    class="btn-check"
-                    type="radio"
-                    name={fields.role}
-                    id={`role-${idPrefix}-${role.value}`}
-                    value={role.value}
-                    defaultChecked={role.value === defaultRole || (!defaultRole && i === 0)}
-                  />
-                  <label class="btn btn-outline-secondary btn-sm" htmlFor={`role-${idPrefix}-${role.value}`}>
-                    {role.label}
-                  </label>
-                </>
-              ))}
-            </div>
+    <div class="pk">
+      {/* The card names itself as a region, so a reader moving between several
+          speakers lands on "Speaker 2" rather than on an anonymous group. */}
+      <Panel aria-label={title}>
+        <PanelHeader title={title} headingLevel={4}>
+          {onRemove && (
+            <Button variant="danger-quiet" size="sm" onClick={onRemove}>
+              Remove
+            </Button>
+          )}
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <div class="pk-grid">
+            <SpeakerField id={`${idPrefix}-first`} label="First name" errorPath={errorPaths?.firstName}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={fields.firstName}
+                  required
+                  {...(autocomplete ? { autocomplete: "given-name" } : {})}
+                />
+              )}
+            </SpeakerField>
+            <SpeakerField id={`${idPrefix}-last`} label="Last name" errorPath={errorPaths?.lastName}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={fields.lastName}
+                  required
+                  {...(autocomplete ? { autocomplete: "family-name" } : {})}
+                />
+              )}
+            </SpeakerField>
           </div>
-        )}
-        <div class="col-12">
-          <label class="form-label">
-            Profile links <OptionalHint />
-          </label>
-          <div>
+
+          <SpeakerField id={`${idPrefix}-email`} label="Email" help={emailHelp} errorPath={errorPaths?.email}>
+            {(control) => (
+              <TextInput
+                {...control}
+                name={fields.email}
+                type="email"
+                required
+                {...(autocomplete ? { autocomplete: "email" } : {})}
+              />
+            )}
+          </SpeakerField>
+
+          <div class="pk-grid">
+            <SpeakerField id={`${idPrefix}-org`} label="Organization" optional>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={fields.organizationName}
+                  {...(autocomplete ? { autocomplete: "organization" } : {})}
+                />
+              )}
+            </SpeakerField>
+            <SpeakerField id={`${idPrefix}-title`} label="Job title" optional>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={fields.jobTitle}
+                  {...(autocomplete ? { autocomplete: "organization-title" } : {})}
+                />
+              )}
+            </SpeakerField>
+          </div>
+
+          <SpeakerField id={`${idPrefix}-bio`} label="Bio" help={bioHelp} errorPath={errorPaths?.bio}>
+            {(control) => <Textarea {...control} name={fields.bio} rows={4} required minLength={40} maxLength={5000} />}
+          </SpeakerField>
+
+          {roleField && (
+            // A fieldset with a legend names the radio group in the markup,
+            // which is what a reader hears on entering it. The previous
+            // `aria-label` sat on a plain div beside a visible "Role" label
+            // that pointed at no control at all.
+            <fieldset class="pk-fieldset pk-field">
+              <legend class="pk-field__label">Role</legend>
+              <div class="pk-cluster">
+                {SPEAKER_ROLE_OPTIONS.map((role, index) => {
+                  const id = `role-${idPrefix}-${role.value}`;
+                  return (
+                    <label class="pk-check" key={role.value} for={id}>
+                      <input
+                        class="pk-check__input"
+                        type="radio"
+                        name={roleField}
+                        id={id}
+                        value={role.value}
+                        defaultChecked={role.value === defaultRole || (!defaultRole && index === 0)}
+                      />
+                      <span class="pk-check__label">{role.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+
+          <fieldset class="pk-fieldset pk-field">
+            <legend class="pk-field__label">
+              Profile links
+              <span class="pk-small"> (optional)</span>
+            </legend>
             <ProfileLinksInput ref={linksRef} fieldName={linksFieldName} />
-          </div>
-        </div>
-      </div>
+          </fieldset>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

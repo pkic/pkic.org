@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
+import { Button } from "../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { Select, TextInput } from "../../ui/TextControl";
+import { highlightTemplateSyntax } from "../../shared/email-template-syntax";
 import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
@@ -12,10 +16,8 @@ import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-pre
 import {
   HELPER_CATEGORIES,
   PERSONAL_ONLY_HELPERS,
-  SnippetBtn,
   availableHelperLabelsForAudience,
   availablePartialsForAudience,
-  highlightBody,
   type CampaignPayload,
   useDays,
 } from "./event-email-campaign-support";
@@ -28,6 +30,44 @@ import {
 import { ServerSearchSelect } from "../ServerSearchSelect";
 import { requestJson } from "../../shared/api-client";
 import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../shared/email-template-catalog";
+
+// The syntax-highlight backdrop rides this chunk rather than the entry
+// stylesheet, because only the two template editors use it.
+import "../../ui/OverlayEditor.css";
+import "../../ui/Content.css";
+
+/**
+ * One template token, inserted at the caret.
+ *
+ * A tag that reads a recipient's own data cannot be honoured by a single BCC
+ * message, so in broadcast mode the control is disabled rather than removed:
+ * the vocabulary stays visible and the title says why it is unavailable.
+ */
+function SnippetButton({
+  snippet,
+  label,
+  personal,
+  personalOnly,
+  onInsert,
+}: {
+  snippet: string;
+  label: string;
+  personal: boolean;
+  personalOnly?: boolean;
+  onInsert: (snippet: string) => void;
+}) {
+  const unavailable = Boolean(personalOnly) && !personal;
+  return (
+    <Button
+      size="sm"
+      disabled={unavailable}
+      title={unavailable ? "Only available in Personal mode" : snippet}
+      onClick={() => onInsert(snippet)}
+    >
+      {label}
+    </Button>
+  );
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -78,7 +118,7 @@ export function EventEmailCampaign({
 
   // Sync highlight backdrop
   useEffect(() => {
-    if (bodyPreRef.current) bodyPreRef.current.innerHTML = highlightBody(body) + "\n";
+    if (bodyPreRef.current) bodyPreRef.current.innerHTML = `${highlightTemplateSyntax(body)}\n`;
   }, [body]);
 
   function handleBodyScroll() {
@@ -210,79 +250,108 @@ export function EventEmailCampaign({
   }
 
   return (
-    <div>
+    <div class="pk pk-stack">
       {/* Template + mode */}
-      <div class="row g-2 mb-2">
-        <div class="col-md-6">
-          <ServerSearchSelect
-            catalog={emailTemplateCatalog("msg_")}
-            label="Template"
-            value={templateKey}
-            selectedLabel={templateKey}
-            placeholder="Write from scratch"
-            onChange={(template) => void handleTemplateChange(template?.template_key ?? "")}
-          />
+      <div class="pk-grid">
+        <ServerSearchSelect
+          catalog={emailTemplateCatalog("msg_")}
+          label="Template"
+          value={templateKey}
+          selectedLabel={templateKey}
+          placeholder="Write from scratch"
+          onChange={(template) => void handleTemplateChange(template?.template_key ?? "")}
+        />
+        <div class="pk-field">
+          <label class="pk-field__label" for="event-email-campaign-mode">
+            Delivery mode
+          </label>
+          <div class="pk-field__control">
+            <Select
+              id="event-email-campaign-mode"
+              value={mode}
+              onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
+            >
+              <option value="personal">Personal (1:1)</option>
+              <option value="bcc_batch">Broadcast BCC</option>
+            </Select>
+          </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label small mb-1">Delivery mode</label>
-          <select
-            class="form-select form-select-sm"
-            value={mode}
-            onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
-          >
-            <option value="personal">Personal (1:1)</option>
-            <option value="bcc_batch">Broadcast BCC</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small mb-1">Message type</label>
-          <select
-            class="form-select form-select-sm"
-            value={messageType}
-            onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
-          >
-            <option value="transactional">Transactional</option>
-            <option value="promotional">Promotional</option>
-          </select>
+        <div class="pk-field">
+          <label class="pk-field__label" for="event-email-campaign-message-type">
+            Message type
+          </label>
+          <div class="pk-field__control">
+            <Select
+              id="event-email-campaign-message-type"
+              value={messageType}
+              onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+            >
+              <option value="transactional">Transactional</option>
+              <option value="promotional">Promotional</option>
+            </Select>
+          </div>
         </div>
         {!personal && (
-          <div class="col-md-12 col-lg-3">
-            <label class="form-label small mb-1">BCC batch size</label>
-            <input
-              class="form-control form-control-sm"
-              type="number"
-              min={1}
-              max={500}
-              value={batchSize}
-              onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)}
-            />
+          <div class="pk-field">
+            <label class="pk-field__label" for="event-email-campaign-batch-size">
+              BCC batch size
+            </label>
+            <div class="pk-field__control">
+              <TextInput
+                id="event-email-campaign-batch-size"
+                type="number"
+                min={1}
+                max={500}
+                value={batchSize}
+                onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)}
+              />
+            </div>
           </div>
         )}
       </div>
 
       {/* Subject */}
-      <div class="mb-2">
-        <label class="form-label small mb-1">Subject</label>
-        <input
-          class="form-control form-control-sm"
-          type="text"
-          placeholder="Email subject"
-          value={subject}
-          onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
-        />
+      <div class="pk-field">
+        <label class="pk-field__label" for="event-email-campaign-subject">
+          Subject
+        </label>
+        <div class="pk-field__control">
+          <TextInput
+            id="event-email-campaign-subject"
+            type="text"
+            placeholder="Email subject"
+            value={subject}
+            onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+          />
+        </div>
       </div>
 
       {/* Body + variables sidebar */}
-      <div class="row g-2 mb-2">
-        <div class="col-md-8">
-          <label class="form-label small mb-1">
-            Message <span class="text-muted fw-normal">(Markdown, {"{{variables}}"})</span>
+      <div class="pk-grid pk-grid--roomy">
+        <div class="pk-field">
+          <label class="pk-field__label" for="event-email-campaign-body">
+            Message <span class="pk-muted">(Markdown, {"{{variables}}"})</span>
           </label>
-          <div class="adm-email-editor-wrap">
-            <pre ref={bodyPreRef} aria-hidden="true" class="adm-email-backdrop" />
+          {/* The overlay editor is this field's control box as well as the
+              backdrop's positioning context — both want `position: relative`,
+              so they are one element rather than two nested ones. */}
+          <div class="pk-field__control pk-overlay-editor">
+            <pre
+              ref={bodyPreRef}
+              aria-hidden="true"
+              class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
+            />
+            {/*
+             * Written out rather than composed from <Textarea>: the caret
+             * arithmetic in insertSnippet needs the element itself, and a ref
+             * on a Preact function component resolves to the component
+             * instance rather than the DOM node. The classes are exactly the
+             * ones <Textarea> applies.
+             */}
             <textarea
+              id="event-email-campaign-body"
               ref={bodyTextareaRef}
-              class="form-control font-monospace adm-email-body-input"
+              class="pk-input pk-input--textarea pk-mono pk-overlay-editor__input"
               rows={14}
               placeholder="Write your message here, or load a template above."
               value={body}
@@ -291,17 +360,18 @@ export function EventEmailCampaign({
             />
           </div>
         </div>
-        <div class="col-md-4">
-          <div class="card border-0 bg-light h-100 p-2">
+        <Panel>
+          <PanelHeader title="Template helpers" />
+          <PanelBody class="pk-stack pk-stack--snug">
             {HELPER_CATEGORIES.map((category) => {
               const items = TEMPLATE_HELPERS.filter((item) => item.category === category && isHelperVisible(item));
               if (items.length === 0) return null;
               return (
-                <div key={category} class="mb-3">
-                  <div class="small fw-semibold mb-1">{category}</div>
-                  <div class="d-flex gap-1 flex-wrap">
+                <div key={category} class="pk-stack pk-stack--tight">
+                  <span class="pk-small pk-strong">{category}</span>
+                  <div class="pk-cluster">
                     {items.map((item) => (
-                      <SnippetBtn
+                      <SnippetButton
                         key={item.label}
                         snippet={item.snippet}
                         label={item.label}
@@ -314,156 +384,195 @@ export function EventEmailCampaign({
                 </div>
               );
             })}
-            <div class="small fw-semibold mb-1">Partials</div>
-            <div class="d-flex gap-1 flex-wrap mb-2">
-              {TEMPLATE_PARTIALS.filter((partial) => availablePartials.has(partial.name)).map((partial) => (
-                <SnippetBtn
-                  key={partial.name}
-                  snippet={`{{> ${partial.name}}}`}
-                  label={partial.name}
-                  personal={personal}
-                  personalOnly={partial.name === "reg_details"}
-                  onInsert={insertSnippet}
-                />
-              ))}
+            <div class="pk-stack pk-stack--tight">
+              <span class="pk-small pk-strong">Partials</span>
+              <div class="pk-cluster">
+                {TEMPLATE_PARTIALS.filter((partial) => availablePartials.has(partial.name)).map((partial) => (
+                  <SnippetButton
+                    key={partial.name}
+                    snippet={`{{> ${partial.name}}}`}
+                    label={partial.name}
+                    personal={personal}
+                    personalOnly={partial.name === "reg_details"}
+                    onInsert={insertSnippet}
+                  />
+                ))}
+              </div>
             </div>
-            {!personal && (
-              <div class="small text-muted mt-1">Recipient-specific tags are disabled in Broadcast BCC mode.</div>
-            )}
-          </div>
-        </div>
+            {!personal && <p class="pk-small">Recipient-specific tags are disabled in Broadcast BCC mode.</p>}
+          </PanelBody>
+        </Panel>
       </div>
 
       {/* Filters */}
       {audience === "attendees" ? (
-        <div class="row g-2 mb-2">
-          <div class="col-md-3">
-            <label class="form-label small mb-1">Registration status</label>
-            <select
-              class="form-select form-select-sm"
-              value={attendeeStatus}
-              onChange={(e) =>
-                setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
-              }
-            >
-              {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
-                <option key={status} value={status}>
-                  {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small mb-1">Attendance type</label>
-            <select
-              class="form-select form-select-sm"
-              value={attendanceType}
-              onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
-            >
-              <option value="all">All types</option>
-              <option value="in_person">In-person</option>
-              <option value="virtual">Virtual</option>
-              <option value="on_demand">On-demand</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small mb-1">Specific day</label>
-            <select
-              class="form-select form-select-sm"
-              value={dayFilter}
-              onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">All days</option>
-              {days.map((d) => {
-                const dateKey = d.day_date ?? d.date ?? "";
-                return (
-                  <option key={dateKey} value={dateKey}>
-                    {d.label ?? dateKey}
+        <div class="pk-grid">
+          <div class="pk-field">
+            <label class="pk-field__label" for="event-email-campaign-registration-status">
+              Registration status
+            </label>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-registration-status"
+                value={attendeeStatus}
+                onChange={(e) =>
+                  setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
+                }
+              >
+                {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
+                  <option key={status} value={status}>
+                    {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
                   </option>
-                );
-              })}
-            </select>
+                ))}
+              </Select>
+            </div>
           </div>
-          <div class="col-md-3">
-            <label class="form-label small mb-1">Day waitlist</label>
-            <select
-              class="form-select form-select-sm"
-              value={dayWaitlistStatus}
-              onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
-            >
-              <option value="all">Any state</option>
-              <option value="active">Active waitlist</option>
-              <option value="waiting">Waiting</option>
-              <option value="offered">Offer sent</option>
-              <option value="accepted">Accepted offer</option>
-              <option value="none">Not waitlisted</option>
-            </select>
+          <div class="pk-field">
+            <label class="pk-field__label" for="event-email-campaign-attendance-type">
+              Attendance type
+            </label>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-attendance-type"
+                value={attendanceType}
+                onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
+              >
+                <option value="all">All types</option>
+                <option value="in_person">In-person</option>
+                <option value="virtual">Virtual</option>
+                <option value="on_demand">On-demand</option>
+              </Select>
+            </div>
+          </div>
+          <div class="pk-field">
+            <label class="pk-field__label" for="event-email-campaign-day">
+              Specific day
+            </label>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-day"
+                value={dayFilter}
+                onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">All days</option>
+                {days.map((d) => {
+                  const dateKey = d.day_date ?? d.date ?? "";
+                  return (
+                    <option key={dateKey} value={dateKey}>
+                      {d.label ?? dateKey}
+                    </option>
+                  );
+                })}
+              </Select>
+            </div>
+          </div>
+          <div class="pk-field">
+            <label class="pk-field__label" for="event-email-campaign-day-waitlist">
+              Day waitlist
+            </label>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-day-waitlist"
+                value={dayWaitlistStatus}
+                onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
+              >
+                <option value="all">Any state</option>
+                <option value="active">Active waitlist</option>
+                <option value="waiting">Waiting</option>
+                <option value="offered">Offer sent</option>
+                <option value="accepted">Accepted offer</option>
+                <option value="none">Not waitlisted</option>
+              </Select>
+            </div>
           </div>
         </div>
       ) : (
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Speaker status</label>
-            <select
-              class="form-select form-select-sm"
-              value={speakerStatus}
-              onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
-            >
-              <option value="confirmed">Confirmed</option>
-              <option value="all">All active</option>
-              <option value="invited">Invited</option>
-              <option value="pending">Pending</option>
-            </select>
+        <div class="pk-grid">
+          <div class="pk-field">
+            <label class="pk-field__label" for="event-email-campaign-speaker-status">
+              Speaker status
+            </label>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-speaker-status"
+                value={speakerStatus}
+                onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
+              >
+                <option value="confirmed">Confirmed</option>
+                <option value="all">All active</option>
+                <option value="invited">Invited</option>
+                <option value="pending">Pending</option>
+              </Select>
+            </div>
           </div>
         </div>
       )}
 
       {/* Action bar */}
-      <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
-        <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>
+      <div class="pk-cluster">
+        <Button size="sm" onClick={() => void handlePreview()}>
           Preview Email
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => void handleSend()}
           disabled={sending || !previewConfirmed}
+          loading={sending}
         >
           Send Email
-        </button>
-        <span class="small text-muted">{status}</span>
+        </Button>
+        {/*
+         * The only account of what the last preview or send did, so it is a
+         * live region: a screen-reader user who has tabbed past the buttons is
+         * told the result instead of having to go looking for it.
+         */}
+        <span class="pk-small" role="status">
+          {status}
+        </span>
       </div>
 
       {/* Preview panel */}
       {preview && (
-        <div class="card border">
-          <div class="card-header bg-light small fw-semibold">Email Preview</div>
-          <div class="card-body">
-            <div class="small text-muted">Subject</div>
-            <div class="fw-semibold mb-2">{preview.subject}</div>
-            <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>
-            <Tabs
-              items={EMAIL_PREVIEW_TABS}
-              active={previewTab}
-              onChange={(key) => setPreviewTab(key)}
-              className="mb-2"
-            />
-            {previewTab === "html" && <iframe srcdoc={preview.html} sandbox="" class="adm-email-preview-frame" />}
-            {previewTab === "text" && <pre class="json-out adm-email-preview-text">{preview.text}</pre>}
-            <div class="form-check mt-2">
+        <Panel>
+          <PanelHeader title="Email Preview" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <div class="pk-stack pk-stack--tight">
+              <span class="pk-small">Subject</span>
+              <span class="pk-strong">{preview.subject}</span>
+            </div>
+            <span class="pk-small">{preview.recipientCount} recipients</span>
+            <Tabs items={EMAIL_PREVIEW_TABS} active={previewTab} onChange={(key) => setPreviewTab(key)} className="" />
+            {/*
+             * The rendered email is author-supplied HTML, so it stays in an
+             * iframe with an empty `sandbox`: no scripts, no forms, no
+             * same-origin access, no navigation. `srcdoc` keeps it out of a
+             * network fetch. Neither may be relaxed.
+             */}
+            {previewTab === "html" && (
+              <iframe
+                title="Rendered campaign email preview"
+                srcdoc={preview.html}
+                sandbox=""
+                class="pk-framed"
+                height={600}
+              />
+            )}
+            {previewTab === "text" && <pre class="pk-code-block pk-small pk-break">{preview.text}</pre>}
+            <div class="pk-check">
               <input
-                class="form-check-input"
+                class="pk-check__input"
                 type="checkbox"
                 id="em-confirm"
                 checked={previewConfirmed}
                 onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
               />
-              <label class="form-check-label small" for="em-confirm">
+              <label class="pk-check__label pk-small" for="em-confirm">
                 I reviewed this email preview and confirm sending.
               </label>
             </div>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
     </div>
   );

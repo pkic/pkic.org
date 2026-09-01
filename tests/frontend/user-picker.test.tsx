@@ -150,6 +150,37 @@ describe("UserPicker request ordering", () => {
     });
 
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not search users.");
+    // A failed search leaves nothing to choose from, so nothing may be left
+    // behind announcing that there is.
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(container.querySelector('[role="status"]')?.textContent).toBe("");
+  });
+
+  it("names the field, names its suggestion list, and announces that suggestions arrived", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockResolvedValue({ users: [user("ada-id", "ada@example.test")] });
+    const { container, input } = await mountPicker();
+
+    // Every call site puts a heading beside this control, but none of them
+    // owns its id, so without a name of its own the field was announced as an
+    // unlabelled text box.
+    expect(input.getAttribute("aria-label")).toBe("Search for a user");
+    expect(container.querySelector('[role="status"]')?.textContent).toBe("");
+
+    await search(input, "ada");
+    await act(async () => {
+      await flush();
+    });
+
+    // Suggestions appear without the reader asking for them, so their arrival
+    // is announced rather than left to be discovered.
+    expect(container.querySelector('[role="status"]')?.textContent).toBe("1 matching user");
+    // A bare `aria-label` on a `<div>` is discarded; the role is what gives
+    // the name somewhere to land.
+    const suggestions = container.querySelector('[role="group"]');
+    expect(suggestions?.getAttribute("aria-label")).toBe("Matching users");
+    // Each match stays a real control, so it is reachable without a pointer.
+    expect(suggestions?.querySelectorAll("button")).toHaveLength(1);
   });
 
   it("aborts an in-flight search when unmounted", async () => {

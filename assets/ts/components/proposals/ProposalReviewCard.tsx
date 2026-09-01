@@ -1,7 +1,14 @@
 import type { ProposalReview } from "../../../shared/schemas/proposal-reviews";
 import { Markdown } from "../Markdown";
 import { Badge } from "../Badge";
+import { Badge as ToneBadge } from "../../ui/Badge";
+import { Panel, PanelBody } from "../../ui/Panel";
 import { formatDateTime } from "../../shared/ui";
+
+// `pk-code-block` lives in Content.css, which ships in a lazy chunk rather than
+// the entry stylesheet: a module that writes the class name has to import the
+// sheet that defines it, or the block renders unframed.
+import "../../ui/Content.css";
 
 /** Displays one review consistently wherever a program committee works. */
 export function ProposalReviewCard({ review }: { review: ProposalReview }) {
@@ -11,27 +18,39 @@ export function ProposalReviewCard({ review }: { review: ProposalReview }) {
     review.reviewer_user_id;
 
   return (
-    <div class="card mb-2">
-      <div class="card-body py-2 px-3">
-        <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
+    // A program committee reads a column of these. An unnamed <section> is not
+    // exposed as a region at all, so each card names whose review it is and
+    // becomes something a screen reader can jump between.
+    <Panel class="pk" aria-label={`Review by ${reviewer}`}>
+      <PanelBody class="pk-stack pk-stack--snug">
+        <div class="pk-cluster">
           <Badge status={review.recommendation} />
-          {review.score != null && <span class="badge text-bg-light border text-body">Score {review.score}/10</span>}
-          <span class="small text-muted">{reviewer}</span>
-          <span class="small text-muted ms-auto">{formatDateTime(review.updated_at)}</span>
+          {review.score != null && (
+            <ToneBadge tone="neutral" dot={false}>
+              Score {review.score}/10
+            </ToneBadge>
+          )}
+          <span class="pk-small">{reviewer}</span>
+          <span class="pk-small pk-nowrap pk-push">{formatDateTime(review.updated_at)}</span>
         </div>
         {review.reviewer_comment && (
-          <div class="mb-2">
-            <div class="small text-muted fw-semibold mb-1">Internal review notes</div>
-            <Markdown markdown={review.reviewer_comment} className="small mb-0" />
+          <div class="pk-stack pk-stack--tight">
+            <p class="pk-small pk-strong">Internal review notes</p>
+            <Markdown markdown={review.reviewer_comment} className="pk-small" />
           </div>
         )}
         {review.applicant_note && (
-          <div class="adm-applicant-note">
-            <div class="small fw-semibold mb-1">Suggested note to applicant</div>
-            <Markdown markdown={review.applicant_note} className="small mb-0" />
+          <div class="pk-stack pk-stack--tight">
+            <p class="pk-small pk-strong">Suggested note to applicant</p>
+            {/* The note is a draft quoted back to the reader, so it sits in the
+                system's framed block. The legacy amber tint it replaces carried
+                nothing the heading above it does not already say in words. */}
+            <div class="pk-code-block">
+              <Markdown markdown={review.applicant_note} className="pk-small" />
+            </div>
           </div>
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

@@ -9,10 +9,13 @@ import {
 } from "../../assets/shared/schemas/organization-management";
 import { identitiesListResponseSchema, identityCreateSchema } from "../../assets/shared/schemas/identity";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { controlFor, namedGroup, typeInto } from "./helpers/labelled-control";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
 
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", navigate] }));
 
 const mounted: HTMLElement[] = [];
 const organizationId = "00000000-0000-4000-8000-000000000010";
@@ -41,6 +44,17 @@ async function waitForElement<T extends Element>(find: () => T | null): Promise<
     await settle();
   }
   throw new Error("Expected element was not rendered.");
+}
+
+/** Selects one of the record's facets the way a reader does: by its tab. */
+async function openTab(container: HTMLElement, name: string): Promise<void> {
+  const tab = await waitForElement(
+    () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+        (candidate) => candidate.textContent === name,
+      ) ?? null,
+  );
+  await act(async () => tab.click());
 }
 
 function detail() {
@@ -138,6 +152,7 @@ function dialogButton(root: HTMLElement, label: string): HTMLButtonElement {
 }
 
 afterEach(() => {
+  navigate.mockReset();
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -154,8 +169,89 @@ describe("portal System Organizations", () => {
     await settle();
 
     expect(fetchMock).not.toHaveBeenCalled();
+    // Nothing to list, but the one command the account holds is still offered
+    // — and it goes to the create page rather than opening a form here.
     expect(container.textContent).toContain("Add organization");
     expect(container.textContent).not.toContain("No organizations found");
+    const create = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add organization",
+    );
+    await act(async () => {
+      create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith("/organizations/new");
+  });
+
+  it("sends Add organization to its own address instead of unfolding a form above the table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          organizationsListResponseSchema.parse({
+            organizations: [detail().organization],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          }),
+        ),
+      ),
+    );
+
+    const container = mount(<Organizations canRead canCreate />);
+    await settle();
+
+    const create = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add organization",
+    );
+    expect(create).not.toBeUndefined();
+    await act(async () => {
+      create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(navigate).toHaveBeenCalledWith("/organizations/new");
+    // The click navigates and nothing else: this mount still shows the table.
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("tbody tr")).not.toBeNull();
+  });
+
+  it("renders the reserved new segment as the create page, alone on the screen", async () => {
+    const fetchMock = vi.fn(async () => json(detail()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = mount(<Organizations canRead canCreate organizationSegment="new" />);
+    await settle();
+
+    // The create page names what is being created and does not list anything,
+    // so the directory is never fetched while it is open.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Add organization");
+    expect(container.querySelector("table")).toBeNull();
+
+    const back = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "← All organizations",
+    );
+    expect(back).not.toBeUndefined();
+    await act(async () => {
+      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith("/organizations");
+  });
+
+  it("returns an account that cannot create from the new segment to the directory", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          organizationsListResponseSchema.parse({
+            organizations: [],
+            page: { limit: 50, offset: 0, total: 0, hasMore: false },
+          }),
+        ),
+      ),
+    );
+
+    mount(<Organizations canRead canCreate={false} organizationSegment="new" />);
+    await settle();
+
+    expect(navigate).toHaveBeenCalledWith("/organizations");
   });
 
   it("lists through the canonical organization API and hides creation without membership:write", async () => {
@@ -187,6 +283,75 @@ describe("portal System Organizations", () => {
     expect(container.textContent).not.toContain("Add organization");
   });
 
+  it("names the organization table and gives each row a real link to open it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          organizationsListResponseSchema.parse({
+            organizations: [detail().organization],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          }),
+        ),
+      ),
+    );
+
+    const container = mount(<Organizations canRead canCreate={false} />);
+    await settle();
+
+    // Several unnamed tables on a page are announced as several tables.
+    expect(container.querySelector("caption")?.textContent).toBe("Organizations");
+    // The row is activated by a real control that says where it goes, not by
+    // a click handler on the `<tr>` that no keyboard can reach.
+    const rowLink = container.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
+    expect(rowLink?.textContent).toBe("Open Example Organization");
+  });
+
+  it("says an absent category and an absent contact in words, not in a red or grey tint", async () => {
+    const organization = { ...detail().organization, membershipCategory: null, primaryContactName: null };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          organizationsListResponseSchema.parse({
+            organizations: [organization],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          }),
+        ),
+      ),
+    );
+
+    const container = mount(<Organizations canRead canCreate={false} />);
+    await settle();
+
+    const row = container.querySelector("tbody tr");
+    expect(row?.textContent).toContain("Not set");
+    expect(row?.textContent).toContain("None");
+    // Neither absence is carried by a colour class any more.
+    expect(row?.querySelector("[class*='text-danger']")).toBeNull();
+    expect(row?.querySelector("[class*='fst-italic']")).toBeNull();
+  });
+
+  it("announces a failed organization list as a sentence rather than an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "unavailable" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<Organizations canRead canCreate={false} />);
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+  });
+
   it("shows organization mutations only for their exact permissions", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(
@@ -198,26 +363,45 @@ describe("portal System Organizations", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const readOnly = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities={false} />,
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities={false}
+        canReadSponsorships={false}
+      />,
     );
     await settle();
     await settle();
     expect(readOnly.textContent).not.toContain("Edit");
+    expect(readOnly.textContent).not.toContain("Remove");
+    await openTab(readOnly, "Identities");
+    await settle();
     expect(readOnly.textContent).not.toContain("Add new person");
     expect(readOnly.textContent).not.toContain("Link existing user");
-    expect(readOnly.textContent).not.toContain("Remove");
 
-    const writer = mount(<OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />);
+    const writer = mount(
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite
+        canManageIdentities
+        canReadSponsorships={false}
+      />,
+    );
+    await settle();
+    expect(writer.textContent).toContain("Edit");
+    expect(writer.textContent).toContain("Contacts");
+    // Reading another facet is a tab away, and its bounded query runs then.
+    await openTab(writer, "Identities");
     const menuTrigger = await waitForElement(() =>
       writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    expect(writer.textContent).toContain("Edit");
-    expect(writer.textContent).toContain("Contacts");
     expect(writer.textContent).toContain("Add new person");
     expect(writer.textContent).toContain("Link existing user");
     expect(writer.textContent).toContain("Active");
 
-    await act(async () => menuTrigger!.click());
+    await act(async () => menuTrigger.click());
     expect(writer.textContent).toContain("End identity");
   });
 
@@ -251,27 +435,33 @@ describe("portal System Organizations", () => {
     );
 
     const container = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities />,
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities
+        canReadSponsorships={false}
+      />,
     );
     await settle();
+    await openTab(container, "Identities");
     const addButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent?.trim() === "Add new person",
     );
     expect(addButton).toBeTruthy();
     await act(async () => addButton?.click());
 
-    const name = container.querySelector<HTMLInputElement>("#organization-identity-name")!;
-    const email = container.querySelector<HTMLInputElement>("#organization-identity-email")!;
-    const jobTitle = container.querySelector<HTMLInputElement>("#organization-identity-job-title")!;
-    for (const [input, value] of [
-      [name, "Grace Hopper"],
-      [email, "grace@example.test"],
-      [jobTitle, "Engineer"],
+    // The add form's controls are reached through the `<legend>` naming the
+    // group and the `for`/`id` pair on each label, so the lookup fails exactly
+    // when that contract does. The surface no longer hands out hand-written
+    // ids for a test to select on.
+    const addForm = namedGroup(container, "New person");
+    for (const [label, value] of [
+      ["Name", "Grace Hopper"],
+      ["Email", "grace@example.test"],
+      ["Job title", "Engineer"],
     ] as const) {
-      input.value = value;
-      await act(() => {
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
+      await typeInto(controlFor(addForm, label), value);
     }
     await act(async () => {
       container
@@ -311,13 +501,20 @@ describe("portal System Organizations", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />
+        <OrganizationDetail
+          organizationId={organizationId}
+          canRead
+          canWrite
+          canManageIdentities
+          canReadSponsorships={false}
+        />
       </>,
     );
+    await openTab(container, "Identities");
     const menuTrigger = await waitForElement(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    await act(async () => menuTrigger!.click());
+    await act(async () => menuTrigger.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (candidate) => candidate.textContent === "End identity",
     );
@@ -350,13 +547,20 @@ describe("portal System Organizations", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />
+        <OrganizationDetail
+          organizationId={organizationId}
+          canRead
+          canWrite
+          canManageIdentities
+          canReadSponsorships={false}
+        />
       </>,
     );
+    await openTab(container, "Identities");
     const menuTrigger = await waitForElement(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    await act(async () => menuTrigger!.click());
+    await act(async () => menuTrigger.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (candidate) => candidate.textContent === "End identity",
     );

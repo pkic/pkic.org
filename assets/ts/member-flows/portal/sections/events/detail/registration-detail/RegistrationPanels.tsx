@@ -7,9 +7,17 @@ import type { BadgeRoleInfo } from "../../types";
 import { useData } from "../../../../../../hooks/useData";
 import { AuditLogTable } from "../../../../../../components/AuditLogTable";
 import { DetailsSummary } from "../../../../../../components/DetailsSummary";
+import { Button } from "../../../../../../ui/Button";
+import { Field } from "../../../../../../ui/Field";
+import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { registrationBadgeResponseSchema } from "../../../../../../../shared/schemas/participant-roles";
 import { eventRegistrationManagementUpdateResponseSchema } from "../../../../../../../shared/schemas/route-contracts-event-registration-management";
 import { eventRegistrationPath, eventRegistrationResourcePath } from "../registration-paths";
+
+/** "co_speaker" → "Co-speaker". */
+function roleLabel(role: string): string {
+  return role.charAt(0).toUpperCase() + role.slice(1).replace("_", "-");
+}
 
 export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string }) {
   const [info, setInfo] = useState<BadgeRoleInfo | null>(null);
@@ -46,36 +54,49 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
     }
   }
 
-  if (!info) return loading ? <Spinner /> : null;
+  if (!info) return loading ? <Spinner label="Loading the badge role…" /> : null;
 
   return (
-    <div>
-      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-        <span class="small text-muted">Effective:</span>
+    <div class="pk pk-stack pk-stack--snug">
+      {/* Whether the role was forced or worked out from the registration is
+          said in words beside the badge, not carried by the badge's tone. */}
+      <div class="pk-cluster pk-small">
+        <span class="pk-muted">Effective:</span>
         <Badge status={info.effective_role} />
-        {info.admin_override ? (
-          <span class="small text-muted ms-1">(forced; auto would be {info.auto_detected})</span>
-        ) : (
-          <span class="small text-muted fst-italic ms-1">(auto-detected)</span>
-        )}
+        <span class="pk-muted">
+          {info.admin_override
+            ? `Forced by an organizer; auto-detection would give ${roleLabel(info.auto_detected)}.`
+            : "Auto-detected from this registration."}
+        </span>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <select
-          class="form-select form-select-sm adm-filter-select"
-          value={selectedRole}
-          onChange={(e) => setSelectedRole((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">Auto ({info.auto_detected})</option>
-          {info.available_roles.map((r) => (
-            <option key={r} value={r}>
-              {r.charAt(0).toUpperCase() + r.slice(1).replace("_", "-")}
-            </option>
-          ))}
-        </select>
-        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
-          Save
-        </button>
-        {saveStatus && <span class="small text-danger">{saveStatus}</span>}
+
+      <Field
+        label="Role override"
+        help="Leave on Auto to keep following the registration."
+        state={saveStatus ? "invalid" : undefined}
+        message={saveStatus || undefined}
+      >
+        {(control) => (
+          <Select
+            {...control}
+            value={selectedRole}
+            disabled={saving}
+            onChange={(e) => setSelectedRole((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">Auto ({roleLabel(info.auto_detected)})</option>
+            {info.available_roles.map((r) => (
+              <option key={r} value={r}>
+                {roleLabel(r)}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+
+      <div class="pk-cluster">
+        <Button variant="primary" size="sm" loading={saving} onClick={() => void handleSave()}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
       </div>
     </div>
   );
@@ -86,8 +107,11 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
 export function RegistrationAuditLogSection({ slug, regId }: { slug: string; regId: string }) {
   return (
     <AuditLogTable
+      // A registration page carries several tables; this one says whose
+      // history it is rather than being a fourth table called "Audit history".
+      caption="Registration history"
       endpoint={eventRegistrationResourcePath(slug, regId, "audit")}
-      actionCell={(entry) => <code class="small">{entry.action}</code>}
+      actionCell={(entry) => <code class="pk-small">{entry.action}</code>}
       detailsCell={(entry) => <DetailsSummary value={entry.details} />}
     />
   );
@@ -115,19 +139,22 @@ export function RegistrationEmailEditor({
 
   if (!editing) {
     return (
-      <div class="d-flex align-items-center gap-1">
+      <div class="pk pk-cluster">
         <span>{email}</span>
-        <button
-          class="btn btn-link btn-sm p-0 ms-1"
-          title="Change email"
+        {/* The pencil is decoration; the button's name is what a screen reader
+            and a voice-control user actually get. */}
+        <Button
+          variant="link"
+          size="sm"
+          aria-label={`Change the registration email address, currently ${email}`}
           onClick={() => {
             setValue(email);
             setEditing(true);
             setError("");
           }}
         >
-          ✏️
-        </button>
+          <span aria-hidden="true">✏️</span>
+        </Button>
       </div>
     );
   }
@@ -156,37 +183,50 @@ export function RegistrationEmailEditor({
     }
   }
 
+  /*
+   * The consequence of the edit is the field's own advisory message rather
+   * than a colored note beside it: an advisory is announced and described by
+   * the control without claiming the value is invalid, and a real failure
+   * replaces it with a blocking message on the same field.
+   */
   return (
-    <div>
-      <div class="input-group input-group-sm">
-        <input
-          type="email"
-          class="form-control form-control-sm"
-          value={value}
-          onInput={(e) => setValue((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void handleSave();
-            }
-            if (e.key === "Escape") setEditing(false);
-          }}
-          disabled={saving}
-          autoFocus
-        />
-        <button class="btn btn-sm btn-success" onClick={() => void handleSave()} disabled={saving}>
-          {saving ? "…" : "Save"}
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => setEditing(false)} disabled={saving}>
+    <div class="pk pk-stack pk-stack--tight">
+      <Field
+        label="Email address"
+        state={error ? "invalid" : "advisory"}
+        message={
+          error ||
+          (isCancelled
+            ? "Changing the email will restore this cancelled registration and send a confirmation email to the new address."
+            : "Changing the email will require re-confirmation.")
+        }
+      >
+        {(control) => (
+          <TextInput
+            {...control}
+            type="email"
+            value={value}
+            onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void handleSave();
+              }
+              if (e.key === "Escape") setEditing(false);
+            }}
+            disabled={saving}
+            autoFocus
+          />
+        )}
+      </Field>
+      <div class="pk-cluster">
+        <Button variant="primary" size="sm" loading={saving} onClick={() => void handleSave()}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        <Button size="sm" disabled={saving} onClick={() => setEditing(false)}>
           Cancel
-        </button>
+        </Button>
       </div>
-      <div class="form-text text-warning mt-1">
-        {isCancelled
-          ? "Changing the email will restore this cancelled registration and send a confirmation email to the new address."
-          : "Changing the email will require re-confirmation."}
-      </div>
-      {error && <div class="small text-danger mt-1">{error}</div>}
     </div>
   );
 }

@@ -3,7 +3,15 @@
  * the email as the quiet second line — never a monospace identifier leading
  * the row. Falls back to initials when no headshot exists and to the email
  * as the display name when no name is on file.
+ *
+ * The arrangement is the design system's PersonCell. What stays here is the
+ * product's naming policy, which the system cannot own: how a
+ * first/last/email triple resolves into one display name, and what the second
+ * line says when it is not the email. Callers keep passing the record's
+ * fields; they never have to decide which of them is the name.
  */
+
+import { PersonCell as SystemPersonCell } from "../ui/PersonCell";
 
 export function personInitials(displayName: string): string {
   const words = displayName.trim().split(/\s+/).filter(Boolean);
@@ -39,15 +47,11 @@ export function PersonCell({
 }) {
   const name = personDisplayName(firstName, lastName, email);
   const secondLine = secondary === undefined ? (name === email ? null : email) : secondary;
+
+  // `sm` is the 2rem avatar, which is what the portal's list rows already
+  // used. The default `md` is a third larger and would change every row's
+  // height.
   return (
-    <div class="d-flex align-items-center gap-2">
-      <span class="portal-user-avatar portal-user-avatar--table" aria-hidden="true">
-        {headshotUrl ? <img src={headshotUrl} alt="" /> : personInitials(name)}
-      </span>
-      <span class="d-flex flex-column">
-        <span class="fw-semibold">{name}</span>
-        {secondLine && <span class="text-muted small">{secondLine}</span>}
-      </span>
-    </div>
+    <SystemPersonCell name={name} email={secondLine ?? undefined} avatarSrc={headshotUrl ?? undefined} size="sm" />
   );
 }

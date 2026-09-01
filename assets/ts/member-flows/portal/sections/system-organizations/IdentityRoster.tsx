@@ -1,11 +1,16 @@
 import { useRef, useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { identityCreateSchema, identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
+import { EmptyState } from "../../../../components/EmptyState";
 import { FormActions } from "../../../../components/FormActions";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { postValidated } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { TextInput } from "../../../../ui/TextControl";
 import { ActingIdentityDirectory } from "../OrganizationIdentityDirectory";
 import { toast } from "../../ui";
 
@@ -52,14 +57,31 @@ function LinkExistingUserForm({
   }
 
   return (
-    <form class="row g-2 align-items-end" onSubmit={submit}>
-      <div class="col-md-6">
-        <label class="form-label small">Existing user</label>
+    <form class="pk-stack pk-stack--snug" onSubmit={submit}>
+      {/*
+       * `UserPicker` names its own search box, so the heading beside it used to
+       * be a `<label>` pointing at nothing. A `<legend>` names the group the
+       * control belongs to, which is a relationship the markup can express.
+       */}
+      <fieldset class="pk-fieldset pk-field">
+        <legend class="pk-field__label">Existing user</legend>
         <UserPicker value={user} onChange={setUser} disabled={busy} />
-      </div>
-      <div class="col-md-3">
-        <FormActions submitLabel="Link" busyLabel="Linking…" busy={busy || !user} onCancel={onCancel} status={error} />
-      </div>
+      </fieldset>
+      {/*
+       * `busy` used to double as "nothing is picked yet", which labeled an
+       * idle button "Linking…". The two are separate now: `disabled` blocks the
+       * submit, `busy` says a request is in flight. A failure is a `danger`
+       * status, so it is announced rather than left as gray text.
+       */}
+      <FormActions
+        submitLabel="Link"
+        busyLabel="Linking…"
+        busy={busy}
+        disabled={!user}
+        onCancel={onCancel}
+        status={error || undefined}
+        statusVariant="danger"
+      />
     </form>
   );
 }
@@ -110,53 +132,60 @@ function AddIdentityForm({
   }
 
   return (
-    <form class="row g-2 align-items-end" onSubmit={submit}>
-      <div class="col-md-3">
-        <label class="form-label small" for="organization-identity-name">
-          Name
-        </label>
-        <input
-          id="organization-identity-name"
-          class="form-control form-control-sm"
-          value={name}
-          onInput={(event) => setName((event.target as HTMLInputElement).value)}
-          required
-          disabled={busy}
-        />
-      </div>
-      <div class="col-md-3">
-        <label class="form-label small" for="organization-identity-email">
-          Email
-        </label>
-        <input
-          id="organization-identity-email"
-          class="form-control form-control-sm"
-          type="email"
-          value={email}
-          onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
-          required
-          disabled={busy}
-        />
-      </div>
-      <div class="col-md-2">
-        <label class="form-label small" for="organization-identity-job-title">
-          Job title
-        </label>
-        <input
-          id="organization-identity-job-title"
-          class="form-control form-control-sm"
-          value={jobTitle}
-          onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
-          disabled={busy}
-        />
-      </div>
-      <div class="col-md-2">
-        <label class="form-label small">Profile links</label>
-        <ProfileLinksInput fieldName="identity.links" value={links} onChange={setLinks} />
-      </div>
-      <div class="col-md-2">
-        <FormActions submitLabel="Add" busyLabel="Adding…" busy={busy} onCancel={onCancel} status={error} />
-      </div>
+    <form class="pk-stack pk-stack--snug" onSubmit={submit}>
+      {/*
+       * One `disabled` fieldset instead of a `disabled` prop repeated on every
+       * control — including `ProfileLinksInput`, which has no such prop to
+       * take. The legend also names the group, which is what tells "Name" and
+       * "Email" apart from the organization profile form above it on this page.
+       */}
+      <fieldset class="pk-fieldset pk-field" disabled={busy}>
+        <legend class="pk-field__label">New person</legend>
+        <div class="pk-stack pk-stack--snug">
+          <div class="pk-grid pk-grid--tight">
+            <Field label="Name" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={name}
+                  onInput={(event) => setName((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+            <Field label="Email" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="email"
+                  value={email}
+                  onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+            <Field label="Job title">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={jobTitle}
+                  onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+          </div>
+          <fieldset class="pk-fieldset pk-field">
+            <legend class="pk-field__label">Profile links</legend>
+            <ProfileLinksInput fieldName="identity.links" value={links} onChange={setLinks} />
+          </fieldset>
+        </div>
+      </fieldset>
+      <FormActions
+        submitLabel="Add"
+        busyLabel="Adding…"
+        busy={busy}
+        onCancel={onCancel}
+        status={error || undefined}
+        statusVariant="danger"
+      />
     </form>
   );
 }
@@ -180,47 +209,66 @@ export function IdentityRoster({
   };
 
   return (
-    <section class="card border-0 shadow-sm" aria-labelledby="organization-identities-heading">
-      <div class="card-header bg-white fw-semibold d-flex align-items-center justify-content-between gap-2">
-        <span id="organization-identities-heading">Identities</span>
+    // The name is on the section itself rather than on an id-linked span: a
+    // `<section>` is only a named region when it carries one, and `PanelHeader`
+    // owns the heading element.
+    <Panel class="pk" aria-label="Identities">
+      <PanelHeader title="Identities">
         {canManageIdentities && (
-          <div class="d-flex gap-2">
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-success"
+          <>
+            <Button
+              size="sm"
+              aria-expanded={addMode === "link"}
               onClick={() => setAddMode((current) => (current === "link" ? "closed" : "link"))}
             >
               {addMode === "link" ? "Cancel" : "Link existing user"}
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm btn-success"
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              aria-expanded={addMode === "email"}
               onClick={() => setAddMode((current) => (current === "email" ? "closed" : "email"))}
             >
               {addMode === "email" ? "Cancel" : "Add new person"}
-            </button>
-          </div>
+            </Button>
+          </>
         )}
-      </div>
-      {addMode === "link" && canManageIdentities && (
-        <div class="card-body border-bottom p-3">
+      </PanelHeader>
+      <PanelBody class="pk-stack">
+        {addMode === "link" && canManageIdentities && (
           <LinkExistingUserForm organizationId={organization.id} onAdded={afterAdded} onCancel={closeAdd} />
-        </div>
-      )}
-      {addMode === "email" && canManageIdentities && (
-        <div class="card-body border-bottom p-3">
+        )}
+        {addMode === "email" && canManageIdentities && (
           <AddIdentityForm organizationId={organization.id} onAdded={afterAdded} onCancel={closeAdd} />
-        </div>
-      )}
-      <div class="card-body p-3">
+        )}
         <ActingIdentityDirectory
           organizationId={organization.id}
           activeIdentities={organization.identities}
           canManage={canManageIdentities}
           onChanged={onChanged}
           actionsRef={directoryRef}
+          /*
+           * "No identities" in a table cell says a query returned nothing. It
+           * does not say what an identity is, nor what to do about it — and on
+           * a new organization that empty table is the whole page.
+           *
+           * The state names the two controls that fill it rather than
+           * repeating them: both already sit in this panel's header, directly
+           * above, and a second button under the same accessible name is
+           * ambiguous to anyone navigating by name rather than by sight.
+           */
+          empty={
+            <EmptyState
+              title="No identities yet"
+              body={
+                canManageIdentities
+                  ? 'An identity is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
+                  : "An identity is a person who acts for this organization. Nobody does yet."
+              }
+            />
+          }
         />
-      </div>
-    </section>
+      </PanelBody>
+    </Panel>
   );
 }

@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
@@ -112,13 +114,15 @@ async function manageInvitation(
   await page.getByPlaceholder("Search events…").press("Enter");
   const eventRow = page.getByRole("row").filter({ hasText: event.name });
   await expect(eventRow).toBeVisible();
-  await eventRow.getByRole("button", { name: "Details" }).click();
+  await openRow(eventRow, `Open ${event.name}`);
 
   const detail = page.getByRole("region", { name: `${event.name} workspace` });
-  await detail.getByRole("tab", { name: "Invitations" }).click();
+  await tab(detail, "Invitations").click();
   const label = type === "attendee" ? "Attendee" : "Speaker";
   await expect(detail.getByRole("heading", { name: `${label} invitations` })).toBeVisible();
-  const invitations = detail.getByRole("region", { name: `${label} invitations` });
+  // Exact: the panel holds a "Send <type> invitations" composer of its own,
+  // whose name contains this one.
+  const invitations = detail.getByRole("region", { name: `${label} invitations`, exact: true });
   await invitations.getByRole("textbox", { name: /Paste emails and names/i }).fill(`${inviteeName} <${inviteeEmail}>`);
   await invitations.getByRole("button", { name: "Parse" }).click();
   await invitations.getByRole("button", { name: "Preview email" }).click();

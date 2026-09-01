@@ -202,7 +202,10 @@ test("changing your mind replaces your ballot instead of adding one", async ({ p
   const vote = await createVote(page, {
     voteType: "motion",
     title: `Ballot replacement ${suffix}`,
-    closesAt: new Date(Date.now() + 8_000).toISOString(),
+    // The window has to outlast two magic-link sign-ins and both ballots: this
+    // test closes the vote explicitly below, and an eight-second window instead
+    // expired on the clock, so the close transition found nothing open.
+    closesAt: inADay(),
   });
 
   await page.context().clearCookies();

@@ -35,6 +35,8 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
+import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
 import { memberWallResponseSchema, type MemberWallEntry } from "../../shared/schemas/members-directory";
 import type { PublicSponsor } from "../../shared/schemas/public-sponsors";
 import { SPONSOR_DISPLAY_LIMIT, useSponsorDisplay, useSponsorList } from "./sponsors-wall-data";
@@ -84,19 +86,17 @@ function SponsorLogo({
 }
 
 function SponsorLoadError({ message }: { message: string }) {
-  return (
-    <p class="text-danger small mb-0" role="alert">
-      Sponsors could not be loaded: {message}
-    </p>
-  );
+  return <Alert tone="danger">Sponsors could not be loaded: {message}</Alert>;
 }
 
 function SponsorLoadMore({ hasMore, loading, onClick }: { hasMore: boolean; loading: boolean; onClick: () => void }) {
   if (!hasMore) return null;
+  // `loading` rather than `disabled`: a disabled control loses focus, which
+  // throws a keyboard user out of the list they were paging through.
   return (
-    <button type="button" class="btn btn-outline-secondary mt-3" onClick={onClick} disabled={loading}>
+    <Button variant="secondary" loading={loading} onClick={onClick}>
       {loading ? "Loading sponsors…" : "Load more sponsors"}
-    </button>
+    </Button>
   );
 }
 
@@ -157,10 +157,10 @@ function GridMode({
   ));
 
   return (
-    <>
+    <div class="pk-stack">
       <div class="sponsors-list">{rows ? items.map((row, i) => <div key={i}>{row}</div>) : items}</div>
       <SponsorLoadMore hasMore={display.page.hasMore} loading={loadingMore} onClick={() => void loadMore()} />
-    </>
+    </div>
   );
 }
 
@@ -187,27 +187,29 @@ function LevelMode({
   if (error) return <SponsorLoadError message={error} />;
   if (!display || display.groups.length === 0) return null;
 
+  /*
+   * The tier band — a captioned rule with the tier's logos beneath it — was
+   * built out of Bootstrap's grid and position utilities in the markup. It is
+   * now a few class names whose rules live in `assets/scss/sponsors.scss`,
+   * beside the rest of this surface's appearance: the surface is still styled
+   * from the legacy sheet, so moving the layout there keeps one owner rather
+   * than splitting it between a stylesheet and a row of utility classes. The
+   * wrapper the logos each sat in is gone with the grid — the row is a flex
+   * container now, so a logo needs nothing around it to be centered.
+   *
+   * The weight class sits on the band rather than on each image: a tier's rank
+   * sets one logo box that every sponsor in the tier is contained by, which is
+   * a property of the band and not of the images inside it.
+   */
   return (
-    <div class="sponsors container text-center">
+    <div class="sponsors pk-stack pk-center">
       {display.groups.map((group) => (
-        <div key={group.weight} class="row justify-content-center">
-          <div data-weight={group.weight} class="col border-top border-light-subtle m-2 position-relative">
-            <span class="sponsor-level position-absolute top-0 start-50 translate-middle bg-white px-2">
-              {group.tierName}
-            </span>
-            <div class="row">
-              {group.sponsors.map((s) => (
-                <div key={s.id} class="col p-4 align-self-center">
-                  <SponsorLogo
-                    s={s}
-                    level={group.tierName}
-                    eventName={eventName}
-                    logoClass="sponsor-logo"
-                    sizeClass={sponsorWeightClass(group.weight)}
-                  />
-                </div>
-              ))}
-            </div>
+        <div key={group.weight} data-weight={group.weight} class={`sponsors-tier ${sponsorWeightClass(group.weight)}`}>
+          <span class="sponsor-level">{group.tierName}</span>
+          <div class="sponsors-tier-logos">
+            {group.sponsors.map((s) => (
+              <SponsorLogo key={s.id} s={s} level={group.tierName} eventName={eventName} logoClass="sponsor-logo" />
+            ))}
           </div>
         </div>
       ))}
@@ -261,11 +263,7 @@ function StripMode({
 
   return (
     <>
-      {label && (
-        <div class={labelClass ?? "w-100 text-center mb-3 text-white text-uppercase sponsor-strip-default-label"}>
-          {label}
-        </div>
-      )}
+      {label && <div class={labelClass ?? "sponsor-strip-default-label"}>{label}</div>}
       <div class={containerClass}>
         {centered.map(({ s, weight }) => {
           const tier = s.effectiveTier;
@@ -291,19 +289,35 @@ function StripMode({
 
 // ── Wall mode (members/wall.html) ──────────────────────────────────────────
 
-function useWallEntries(apiBase: string, memberLimit: number): MemberWallEntry[] | null {
+/**
+ * What the wall knows about its logos, which is not the same as how many it
+ * has.
+ *
+ * The band reserves a fixed height for the scrolling track, so the difference
+ * between "still fetching" and "there is nothing" has to reach the stylesheet:
+ * collapsing while the logos are on their way would drop the rest of the page
+ * out from under the reader, and holding the space open forever leaves a
+ * silent white hole where the members should be.
+ */
+export type WallState = "loading" | "ready" | "empty" | "error";
+
+function useWallEntries(apiBase: string, memberLimit: number): { entries: MemberWallEntry[] | null; state: WallState } {
   const [entries, setEntries] = useState<MemberWallEntry[] | null>(null);
+  const [state, setState] = useState<WallState>("loading");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const response = await getJson(`${apiBase}/members/wall?memberLimit=${memberLimit}`, memberWallResponseSchema);
-        if (!cancelled) {
-          setEntries(response.entries);
-        }
+        if (cancelled) return;
+        setEntries(response.entries);
+        setState(response.entries.length > 0 ? "ready" : "empty");
       } catch (e) {
         console.error("[sponsors-wall]", e);
+        // A failure is reported, not swallowed into the same blank the
+        // loading state renders.
+        if (!cancelled) setState("error");
       }
     }
     void load();
@@ -312,11 +326,24 @@ function useWallEntries(apiBase: string, memberLimit: number): MemberWallEntry[]
     };
   }, [apiBase, memberLimit]);
 
-  return entries;
+  return { entries, state };
 }
 
-function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: number }) {
-  const entries = useWallEntries(apiBase, memberLimit);
+function WallMode({
+  apiBase,
+  memberLimit,
+  onState,
+}: {
+  apiBase: string;
+  memberLimit: number;
+  /** Reports the state to the mount element, where the stylesheet reads it. */
+  onState?: (state: WallState) => void;
+}) {
+  const { entries, state } = useWallEntries(apiBase, memberLimit);
+
+  useEffect(() => {
+    onState?.(state);
+  }, [onState, state]);
 
   // The marquee/scroll effects (sponsor-banner-marquee.js, members-overview-effects.js)
   // build their tracks by scanning the DOM once — they need to run after these anchors
@@ -324,6 +351,10 @@ function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: numb
   useEffect(() => {
     if (entries) document.dispatchEvent(new CustomEvent("member:wall-rendered"));
   }, [entries]);
+
+  if (state === "error") {
+    return <p class="pk-muted pk-small">Member logos could not be loaded.</p>;
+  }
 
   if (!entries) return null;
 
@@ -366,7 +397,16 @@ function main(): void {
     }
 
     if (mode === "wall") {
-      render(<WallMode apiBase={apiBase} memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? 200))} />, root);
+      render(
+        <WallMode
+          apiBase={apiBase}
+          memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? 200))}
+          onState={(state) => {
+            root.dataset.state = state;
+          }}
+        />,
+        root,
+      );
       return;
     }
 
@@ -377,9 +417,9 @@ function main(): void {
           eventSlug={eventSlug}
           eventName={eventName}
           minWeight={Number(root.dataset.minWeight ?? 5)}
-          containerClass={
-            root.dataset.containerClass ?? "d-flex justify-content-center align-items-center flex-wrap gap-4 my-4"
-          }
+          // A centered, wrapping group: the cluster utility, rather than the
+          // five Bootstrap utilities that used to say the same thing here.
+          containerClass={root.dataset.containerClass ?? "pk-cluster pk-cluster--center"}
           linkClass={root.dataset.linkClass ?? "sponsor-link"}
           logoClass={root.dataset.logoClass ?? "sponsor-logo"}
           label={root.dataset.label}

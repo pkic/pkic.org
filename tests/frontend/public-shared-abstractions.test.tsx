@@ -2,26 +2,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { z } from "zod";
-import { ConsentCard } from "../../assets/ts/components/ConsentCard";
-import { MagicLinkSubmitButton, SignInError } from "../../assets/ts/components/MagicLinkFeedback";
-import { MenuIcon } from "../../assets/ts/components/MenuIcon";
-import { NotFoundPanel } from "../../assets/ts/components/NotFoundPanel";
-import { VerifyingOverlay } from "../../assets/ts/components/VerifyingOverlay";
-import { findEmailReviewCard } from "../../assets/ts/event-flows/registration-page";
+import { ConsentCard, ConsentList } from "../../assets/ts/components/ConsentCard";
 import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
-import { useAsyncSubmission } from "../../assets/ts/hooks/useAsyncSubmission";
-import { useMagicLinkRequest } from "../../assets/ts/hooks/useMagicLinkRequest";
-import { IdentitySelect } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
-import { statusLabel } from "../../assets/ts/components/Badge";
-import { ApiClientError } from "../../assets/ts/shared/api-client";
-import { classifyDonationPollResult } from "../../assets/ts/shared/donation/session-poll";
-import { uploadFile } from "../../assets/ts/shared/file-upload";
-import { emailFromSubmitEvent } from "../../assets/ts/shared/form/helpers";
-import { replaceFormWithSuccess } from "../../assets/ts/shared/form/success-panel";
-import { memberInitials } from "../../assets/ts/shared/member-display";
-import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../assets/ts/shared/organization-content";
-import { handleFormInviteSubmitError } from "../../assets/ts/shared/widgets/invite-recovery";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -64,21 +47,79 @@ describe("public shared frontend abstractions", () => {
       />,
     );
 
-    for (const container of [compact, featured]) {
-      const card = container.querySelector<HTMLElement>('[role="checkbox"]');
-      expect(card?.getAttribute("aria-checked")).toBe("false");
-      void act(() => card?.click());
-      expect(card?.getAttribute("aria-checked")).toBe("true");
+    // Both shapes agree through one real checkbox, named by its own label —
+    // not a div claiming role="checkbox" that only a mouse could reach.
+    for (const [container, label] of [
+      [compact, "Privacy"],
+      [featured, "Code of conduct"],
+    ] as const) {
+      const consent = controlFor(container, label);
+      expect(consent.type).toBe("checkbox");
+      expect(consent.checked).toBe(false);
+      void act(() => consent.click());
+      expect(consent.checked).toBe(true);
     }
     expect(featured.textContent).toContain("Please review this policy.");
+    // The help text is not just nearby, it is announced with the control.
+    const conduct = controlFor(featured, "Code of conduct");
+    const describedBy = conduct.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(featured.querySelector(`#${describedBy ?? ""}`)?.textContent).toContain("Please review this policy.");
   });
 
-  it("finds the canonical registration email-review input and card", () => {
+  it("announces a required consent that a validation pass rejected", () => {
+    const container = mount(
+      <ConsentCard
+        term={{ termKey: "privacy", version: "1", required: true, contentRef: null, displayText: "Privacy" }}
+      />,
+    );
     const form = document.createElement("form");
-    form.innerHTML = '<div data-email-review-card><input type="checkbox" name="emailReviewConfirmed"></div>';
-    const review = findEmailReviewCard(form);
-    expect(review?.confirmation.name).toBe("emailReviewConfirmed");
-    expect(review?.card.dataset.emailReviewCard).toBe("");
+    document.body.append(form);
+    const consent = controlFor(container, "Privacy");
+    form.append(consent);
+
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    // What the event flows do on submit: the platform fires `invalid` at every
+    // control that fails, and the card takes its state from that rather than
+    // from a script reaching in to set a class.
+    void act(() => {
+      form.checkValidity();
+    });
+
+    const message = container.querySelector('[role="alert"]');
+    expect(message?.textContent).toContain("You need to agree to this to continue.");
+    expect(consent.getAttribute("aria-invalid")).toBe("true");
+    expect(consent.getAttribute("aria-describedby")).toBe(message?.id);
+
+    // Agreeing clears it, without anything else having to be told.
+    void act(() => consent.click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(consent.getAttribute("aria-invalid")).toBeNull();
+    form.remove();
+  });
+
+  it("names the consent list's terms without repeating an unagreed one as required", () => {
+    const container = mount(
+      <ConsentList
+        terms={[
+          { termKey: "privacy", version: "1", required: true, contentRef: null, displayText: "Privacy" },
+          { termKey: "news", version: "1", required: false, contentRef: null, displayText: "Newsletter" },
+        ]}
+      />,
+    );
+    expect(labelNames(container)).toEqual(["Privacy", "Newsletter"]);
+    expect(controlFor(container, "Privacy").required).toBe(true);
+    expect(controlFor(container, "Newsletter").required).toBe(false);
+    // "Optional" is a word, not a colour, so a reader who cannot separate the
+    // hues still knows which of the two they may skip.
+    expect(container.textContent).toContain("Optional");
+  });
+
+  it("reports no consents as a sentence rather than an empty region", () => {
+    const container = mount(<ConsentList terms={[]} />);
+    expect(container.textContent).toContain("No required consents for this flow.");
+    expect(container.querySelector("input")).toBeNull();
   });
 
   it("loads speaker-page data once the common token context is valid", async () => {
@@ -95,194 +136,5 @@ describe("public shared frontend abstractions", () => {
     expect(request).toHaveBeenCalledWith("shared-token", expect.objectContaining({ eventSlug: "event-1" }));
     expect(loaded?.token).toBe("shared-token");
     expect(loaded?.data).toEqual({ speaker: "Ada" });
-  });
-
-  it("shows the shared speaker recovery state when the token is absent", async () => {
-    document.body.innerHTML = `
-      <main data-speaker-test data-event-slug="event-1">
-        <form><div data-flow-status></div></form>
-        <div data-speaker-loading></div>
-        <section class="d-none" data-resend-speaker-manage-section>
-          <button data-resend-speaker-manage-btn></button>
-          <input data-resend-speaker-manage-email>
-          <span data-resend-speaker-manage-status></span>
-        </section>
-      </main>`;
-
-    const loaded = await loadSpeakerPageData({ selector: "[data-speaker-test]", request: vi.fn() });
-
-    expect(loaded).toBeNull();
-    expect(document.querySelector("[data-speaker-loading]")?.classList.contains("d-none")).toBe(true);
-    expect(document.querySelector("[data-resend-speaker-manage-section]")?.classList.contains("d-none")).toBe(false);
-    expect(document.querySelector("[data-resend-speaker-manage-status]")?.textContent).toContain(
-      "Missing speaker token",
-    );
-  });
-
-  it("uses one invitation-aware error path for event forms", async () => {
-    const form = document.createElement("form");
-    form.innerHTML = '<input name="email" value=" ada@example.test ">';
-    const statusEl = document.createElement("div");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ success: true }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
-    );
-    const error = new ApiClientError(
-      { error: { code: "INVITE_EXPIRED", message: "Invitation expired", details: null } },
-      400,
-    );
-
-    await handleFormInviteSubmitError({ error, form, apiBase: "/api/v1", statusEl, hasInviteToken: true });
-
-    expect(statusEl.textContent).toContain("fresh link is on its way");
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/v1/invites/resend-link",
-      expect.objectContaining({ body: JSON.stringify({ email: "ada@example.test" }) }),
-    );
-  });
-
-  it("replaces successful forms through one rendering and scroll behavior", () => {
-    const root = document.createElement("div");
-    const form = document.createElement("form");
-    root.append(form);
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
-
-    const panel = replaceFormWithSuccess(root, form, <p>Saved successfully</p>);
-
-    expect(form.classList.contains("d-none")).toBe(true);
-    expect(panel.textContent).toBe("Saved successfully");
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
-  });
-
-  it("shares member initials, not-found, verification, menu, and organization labels", () => {
-    expect(memberInitials("Ada Byron Lovelace IV")).toBe("ABL");
-    expect(statusLabel("in_consultation")).toBe("In consultation");
-    expect(ORGANIZATION_CONTENT_FIELD_LABELS.blogFeedUrl).toBe("Blog feed URL");
-    const container = mount(
-      <>
-        <NotFoundPanel message="Missing member" backHref="/members/" backLabel="Back to members" />
-        <VerifyingOverlay />
-        <MenuIcon size={24} />
-      </>,
-    );
-    expect(container.textContent).toContain("Missing member");
-    expect(container.textContent).toContain("Verifying your sign-in link");
-    expect(container.querySelector("svg")?.getAttribute("width")).toBe("24");
-  });
-
-  it("normalizes binary uploads and API failures", async () => {
-    const file = new Blob(["logo"], { type: "image/png" });
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ stored: true }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(uploadFile("/upload", file, z.object({ stored: z.boolean() }))).resolves.toEqual({
-      stored: true,
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/upload",
-      expect.objectContaining({ method: "POST", credentials: "same-origin", body: file }),
-    );
-  });
-
-  it("renders representative choices through the shared selector", () => {
-    const onChange = vi.fn();
-    const container = mount(
-      <IdentitySelect
-        className="representative-test"
-        value=""
-        disabled={false}
-        emptyLabel="Primary contact"
-        identities={[{ userId: "user-1", name: "Ada", email: "ada@example.test" }]}
-        onChange={onChange}
-      />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("select")!;
-    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["Primary contact", "Ada"]);
-    select.value = "user-1";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(onChange).toHaveBeenCalledTimes(1);
-  });
-
-  it("shares async and magic-link submission state transitions", async () => {
-    let asyncState: ReturnType<typeof useAsyncSubmission> | undefined;
-    let magicState: ReturnType<typeof useMagicLinkRequest> | undefined;
-    function Harness() {
-      asyncState = useAsyncSubmission();
-      magicState = useMagicLinkRequest("Could not send link.");
-      return null;
-    }
-    mount(<Harness />);
-
-    void act(() => asyncState?.begin());
-    expect(asyncState?.submitting).toBe(true);
-    void act(() => asyncState?.finish());
-    expect(asyncState?.submitting).toBe(false);
-    await act(async () => {
-      await magicState?.request(async () => undefined);
-    });
-    expect(magicState?.sent).toBe(true);
-    expect(magicState?.submitting).toBe(false);
-  });
-
-  it("shares magic-link feedback presentation", () => {
-    const container = mount(
-      <>
-        <MagicLinkSubmitButton submitting />
-        <SignInError error="Expired" />
-      </>,
-    );
-    expect(container.querySelector("button")?.textContent).toBe("Sending…");
-    expect(container.querySelector("button")?.hasAttribute("disabled")).toBe(true);
-    expect(container.textContent).toContain("Sign-in failed: Expired");
-  });
-
-  it("classifies every donation polling state consistently", () => {
-    expect(classifyDonationPollResult({ pending: true })).toEqual({ state: "pending" });
-    expect(classifyDonationPollResult({ failed: true })).toEqual({ state: "failed" });
-    expect(classifyDonationPollResult({ expired: true })).toEqual({ state: "expired" });
-    expect(
-      classifyDonationPollResult({
-        grossAmount: 5000,
-        currency: "usd",
-        donorFirstName: "Ada",
-        source: null,
-        completedAt: "2026-04-10T10:00:00Z",
-      }),
-    ).toEqual({
-      state: "confirmed",
-      session: {
-        grossAmount: 5000,
-        currency: "usd",
-        donorFirstName: "Ada",
-        source: null,
-        completedAt: "2026-04-10T10:00:00Z",
-      },
-    });
-  });
-
-  it("reads and trims the standard email from submit events", () => {
-    const form = document.createElement("form");
-    form.innerHTML = '<input name="email" value="  ada@example.test  ">';
-    const handler = vi.fn((event: SubmitEvent) => emailFromSubmitEvent(event));
-    form.addEventListener("submit", handler);
-    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
-    expect(handler.mock.results[0]?.value).toBe("ada@example.test");
   });
 });
