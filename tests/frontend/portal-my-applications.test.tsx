@@ -13,6 +13,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { myApplicationsListResponseSchema, myApplicationDetailSchema } from "../../assets/shared/schemas/me";
+import { memberApplicationFormResponseSchema } from "../../assets/shared/schemas/member-applications";
 import { MyApplications } from "../../assets/ts/member-flows/portal/sections/MyApplications";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000401";
@@ -40,6 +41,23 @@ const detail = {
     { fromStage: "in_review" as const, toStage: "ec_review" as const, note: "Sent to the EC.", createdAt: DECIDED_AT },
   ],
   communications: [{ subject: "We received your application", body: "Thank you.", createdAt: SUBMITTED_AT }],
+};
+
+/** The public category catalog the surface resolves codes through. */
+const categoryCatalog = {
+  categories: [
+    {
+      code: "F" as const,
+      label: "PKI or cryptographic software and device providers",
+      description: null,
+      displayOrder: 60,
+      isIndividual: false,
+      isVoting: true,
+      revision: 0,
+      updatedAt: SUBMITTED_AT,
+    },
+  ],
+  form: null,
 };
 
 let container: HTMLDivElement;
@@ -74,6 +92,9 @@ function stub(options: { list?: () => Response; detail?: () => Response } = {}) 
         location.origin,
       );
       requests.push({ method: init?.method ?? "GET", url });
+      if (url.pathname === "/api/v1/members/applications/form") {
+        return json(memberApplicationFormResponseSchema.parse(categoryCatalog));
+      }
       if (/\/applications\/[^/]+$/.test(url.pathname)) {
         return (options.detail ?? (() => json(myApplicationDetailSchema.parse(detail))))();
       }
@@ -112,14 +133,26 @@ describe("my applications", () => {
 
     const root = mount();
     await settle();
+    // A second flush lets the category catalog — fetched only once rows are
+    // on screen — resolve into words.
+    await settle();
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.url.pathname).toBe("/api/v1/users/current/applications");
-    expect(requests[0]?.url.searchParams.get("sort")).toBe("-createdAt");
-    expect(requests[0]?.url.searchParams.get("limit")).toBe("50");
-    expect(requests[0]?.url.searchParams.get("offset")).toBe("0");
+    // One bounded collection request; the only other traffic is the public
+    // category catalog that turns the row's code into words.
+    const collection = requests.filter((request) => request.url.pathname === "/api/v1/users/current/applications");
+    expect(collection).toHaveLength(1);
+    expect(
+      requests.every((r) =>
+        ["/api/v1/users/current/applications", "/api/v1/members/applications/form"].includes(r.url.pathname),
+      ),
+    ).toBe(true);
+    expect(collection[0]?.url.searchParams.get("sort")).toBe("-createdAt");
+    expect(collection[0]?.url.searchParams.get("limit")).toBe("50");
+    expect(collection[0]?.url.searchParams.get("offset")).toBe("0");
     // The list is rendered from what the server returned, not filtered here.
     expect(root.textContent).toContain("EC review");
+    // The category reads as the catalog's words, never a bare letter code.
+    expect(root.textContent).toContain("PKI or cryptographic software and device providers (F)");
   });
 
   it("names the table and its columns, so it is identifiable among the tables on the page", async () => {

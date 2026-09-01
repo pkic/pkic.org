@@ -82,9 +82,13 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
             </>
           )}
 
-          <p class="pk-muted">Enter your email to receive a sign-in link.</p>
+          {/* The instruction only makes sense while the field is on screen;
+              after the send it contradicted the confirmation below it. */}
+          {!magicLink.sent && <p class="pk-muted">Enter your email to receive a sign-in link.</p>}
           {magicLink.sent ? (
-            <Alert tone="ok">If this address has portal access, you&apos;ll receive a sign-in link shortly.</Alert>
+            <Alert tone="ok" title="Check your email">
+              If this address has portal access, you&apos;ll receive a sign-in link shortly.
+            </Alert>
           ) : (
             <form
               class="pk-stack"

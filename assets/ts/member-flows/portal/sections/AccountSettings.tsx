@@ -12,6 +12,7 @@ import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
 import type { NotificationPreferences, PortalSession } from "../types";
 import { toast } from "../ui";
+import { useMembershipCategoryLabels } from "../../../hooks/useMembershipCategoryLabels";
 import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
 import {
   identitiesListResponseSchema,
@@ -155,6 +156,7 @@ function grantScopeLabel(grant: { contextType: string | null; contextId: string 
 function AccessSummaryCard({ session }: { session: PortalSession }) {
   const memberships = session.member ? (profile.value?.activeIdentities ?? []) : [];
   const staff = session.staff;
+  const categories = useMembershipCategoryLabels(memberships.length > 0);
 
   return (
     <Panel>
@@ -173,7 +175,11 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
                   ) : (
                     "Individual membership"
                   )}
-                  <Badge tone="neutral">Category {membership.membershipCategory}</Badge>
+                  {/* The category speaks its catalog label — a bare code told
+                      a member nothing about their own standing. Plain text,
+                      not a Badge: the pill's nowrap would push a long catalog
+                      label past a phone's edge. */}
+                  <span class="pk-muted"> — {categories.label(membership.membershipCategory)}</span>
                 </li>
               ))}
             </ul>

@@ -22,6 +22,7 @@ import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
 import { EmptyState } from "../../../ui/EmptyState";
 import { Field } from "../../../ui/Field";
 import { Pager } from "../../../ui/Pager";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Spinner } from "../../../ui/Spinner";
 import { TextInput, Textarea } from "../../../ui/TextControl";
@@ -153,11 +154,15 @@ function OrganizationProfileCard({
   reload: () => Promise<void>;
 }) {
   const links = URL_FIELD_ORDER.filter((key) => org[key]);
+  const hasWords = Boolean(org.slogan || org.description || links.length > 0);
 
   return (
     <Panel>
-      <PanelHeader title={org.name} />
-      <PanelBody class="pk-grid pk-grid--tight">
+      <PanelHeader title="Public profile" />
+      {/* Two columns only when there are words to fill the second one — a
+          grid cell holding nothing beside the logo read as a half-empty
+          layout, which the anatomy forbids. */}
+      <PanelBody class={hasWords ? "pk-grid pk-grid--tight" : undefined}>
         <div class="pk-stack pk-stack--snug">
           {org.logoUrl ? (
             <img src={org.logoUrl} alt={`${org.name} logo`} class="portal-organization-logo" />
@@ -168,24 +173,26 @@ function OrganizationProfileCard({
           )}
           {org.isOrgContact && <LogoUploader organizationId={organizationId} org={org} reload={reload} />}
         </div>
-        <div class="pk-stack pk-stack--snug">
-          {org.slogan && <p class="pk-lede">{org.slogan}</p>}
-          {org.description && <p>{org.description}</p>}
-          {links.length > 0 && (
-            <dl class="pk-datalist pk-small">
-              {links.map((key) => (
-                <Fragment key={key}>
-                  <dt>{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
-                  <dd class="pk-break">
-                    <a href={org[key] as string} target="_blank" rel="noreferrer">
-                      {org[key]}
-                    </a>
-                  </dd>
-                </Fragment>
-              ))}
-            </dl>
-          )}
-        </div>
+        {hasWords && (
+          <div class="pk-stack pk-stack--snug">
+            {org.slogan && <p class="pk-lede">{org.slogan}</p>}
+            {org.description && <p>{org.description}</p>}
+            {links.length > 0 && (
+              <dl class="pk-datalist pk-small">
+                {links.map((key) => (
+                  <Fragment key={key}>
+                    <dt>{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
+                    <dd class="pk-break">
+                      <a href={org[key] as string} target="_blank" rel="noreferrer">
+                        {org[key]}
+                      </a>
+                    </dd>
+                  </Fragment>
+                ))}
+              </dl>
+            )}
+          </div>
+        )}
       </PanelBody>
     </Panel>
   );
@@ -525,8 +532,16 @@ export function MyOrganization({ organizationId: requestedOrganizationId }: { or
   }
   if (error) {
     return (
-      <div class="pk">
-        {errorCode === "NO_ORGANIZATION" ? <Alert tone="info">{error}</Alert> : <ErrorNotice error={error} />}
+      <div class="pk pk-stack">
+        <PageHeader title="My organization" />
+        {errorCode === "NO_ORGANIZATION" ? (
+          <EmptyState
+            title="Your membership is individual."
+            body="You participate in the consortium in your own name rather than for an organization, and everything works just the same. If your organization joins later, its page appears here."
+          />
+        ) : (
+          <ErrorNotice error={error} />
+        )}
       </div>
     );
   }
@@ -534,6 +549,7 @@ export function MyOrganization({ organizationId: requestedOrganizationId }: { or
 
   return (
     <div class="pk pk-stack content-width-lg">
+      <PageHeader title={org.name} />
       <OrganizationProfileCard organizationId={organizationId} org={org} reload={reload} />
       {org.isOrgContact && <ContentEditorCard organizationId={organizationId} org={org} reload={reload} />}
       {org.isOrgContact && (
