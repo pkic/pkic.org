@@ -62,6 +62,8 @@ const scanned = [
   "assets/ts/components/Table.tsx",
   "assets/ts/components/ApiDataTable.tsx",
   "assets/ts/components/Pager.tsx",
+  "assets/ts/components/Tabs.tsx",
+  "assets/ts/components/EmptyState.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage.tsx",
   "assets/ts/components/proposals/ProposalSpeakerCard.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/RegistrationDetailPage.tsx",

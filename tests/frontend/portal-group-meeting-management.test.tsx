@@ -7,6 +7,7 @@ import { GroupMeetingSeriesDetail } from "../../assets/ts/member-flows/portal/se
 import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -386,10 +387,8 @@ describe("portal group meeting management", () => {
       <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
     );
 
-    const settingsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Series settings",
-    );
-    expect(settingsTab?.getAttribute("aria-selected")).toBe("true");
+    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings");
+    expect(isCurrentTab(settingsTab)).toBe(true);
     expect(container.textContent).toContain("Save series");
   });
 
@@ -404,9 +403,9 @@ describe("portal group meeting management", () => {
       <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
     );
 
-    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(1);
-    const occurrencesTab = container.querySelector('[role="tab"]');
-    expect(occurrencesTab?.getAttribute("aria-selected")).toBe("true");
+    expect(tabs(container)).toHaveLength(1);
+    const occurrencesTab = tabs(container)[0];
+    expect(isCurrentTab(occurrencesTab)).toBe(true);
     expect(occurrencesTab?.textContent).toBe("Occurrences");
   });
 
@@ -419,9 +418,7 @@ describe("portal group meeting management", () => {
 
     const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
 
-    const settingsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Series settings",
-    )!;
+    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings")!;
     expect(settingsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${series.id}/settings`);
 
     await act(async () => {

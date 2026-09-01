@@ -9,6 +9,7 @@ import { GroupForms } from "../../assets/ts/member-flows/portal/sections/managem
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
+import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -534,10 +535,7 @@ describe("portal selected-group collections", () => {
     expect(container.textContent).not.toContain("Attendees");
     expect(container.textContent).not.toContain("Manage meeting series");
 
-    const tab = (label: string) =>
-      Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-        (item) => item.textContent?.trim() === label,
-      );
+    const tab = (label: string) => tabs(container).find((item) => item.textContent?.trim() === label);
 
     // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
     // spy here, so the resulting tab is verified below through the URL it

@@ -9,6 +9,7 @@ import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
 import { proposalPatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -316,7 +317,7 @@ describe("group event proposal portal", () => {
       await settle();
       await settle();
 
-      const activeTab = container.querySelector(".nav-link.active");
+      const activeTab = tabs(container).find(isCurrentTab);
       expect(activeTab?.textContent).toBe("Reviews (0)");
     } finally {
       window.location.hash = previousHash;

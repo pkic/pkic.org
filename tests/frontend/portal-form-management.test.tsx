@@ -17,6 +17,7 @@ import {
   FormManagementList,
 } from "../../assets/ts/components/forms/management/FormManagement";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
 
@@ -243,7 +244,7 @@ describe("portal form management", () => {
       const container = mount(<FormManagementDetail formKey="member-feedback" canWrite={false} onBack={vi.fn()} />);
       await settle();
 
-      const activeTab = container.querySelector(".nav-link.active");
+      const activeTab = tabs(container).find(isCurrentTab);
       expect(activeTab?.textContent).toBe("Responses");
     } finally {
       window.location.hash = previousHash;

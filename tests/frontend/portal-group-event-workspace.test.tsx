@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -43,7 +44,7 @@ async function settle(): Promise<void> {
 }
 
 function tabButtons(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]'));
+  return tabs(container);
 }
 
 function tabLabels(container: HTMLElement): string[] {
@@ -97,8 +98,8 @@ describe("group event workspace", () => {
     const event = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
 
-    expect(tab(container, "Overview")?.getAttribute("aria-selected")).toBe("true");
-    expect(tab(container, "Settings")?.getAttribute("aria-selected")).not.toBe("true");
+    expect(isCurrentTab(tab(container, "Overview"))).toBe(true);
+    expect(isCurrentTab(tab(container, "Settings"))).toBe(false);
     expect(container.textContent).not.toContain("Manage meeting series");
     expect(container.querySelector("dl")).not.toBeNull();
   });
@@ -207,7 +208,7 @@ describe("group event workspace", () => {
     await settle();
     await settle();
 
-    expect(tab(container, "Team")?.getAttribute("aria-selected")).toBe("true");
+    expect(isCurrentTab(tab(container, "Team"))).toBe(true);
     expect(container.textContent).toContain("crew@example.test");
   });
 
@@ -269,7 +270,7 @@ describe("group event workspace", () => {
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="not-a-real-tab" />);
 
     expect(container.textContent).not.toContain("not available to your current identity");
-    expect(tab(container, "Overview")?.getAttribute("aria-selected")).toBe("true");
+    expect(isCurrentTab(tab(container, "Overview"))).toBe(true);
   });
 
   it("threads the group event's tab through GroupEvents so a proposals deep link opens the proposals tab", async () => {
@@ -319,7 +320,7 @@ describe("group event workspace", () => {
     await settle();
     await settle();
 
-    expect(tab(container, "Proposals")?.getAttribute("aria-selected")).toBe("true");
+    expect(isCurrentTab(tab(container, "Proposals"))).toBe(true);
     expect(container.textContent).toContain("Proposal program");
   });
 });

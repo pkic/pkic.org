@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -282,14 +283,10 @@ describe("URL-addressed group sub-resources", () => {
     await settle();
     await settle();
 
-    const responsesTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent?.trim() === "Responses",
-    );
-    expect(responsesTab?.getAttribute("aria-selected")).toBe("true");
+    const responsesTab = tabs(container).find((item) => item.textContent?.trim() === "Responses");
+    expect(isCurrentTab(responsesTab)).toBe(true);
 
-    const statisticsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent?.trim() === "Statistics",
-    )!;
+    const statisticsTab = tabs(container).find((item) => item.textContent?.trim() === "Statistics")!;
     expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${placementId}/statistics`);
     await act(async () => {
       statisticsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));

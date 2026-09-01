@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupFormDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupFormDetail";
 import { GroupFormEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormEditor";
 import { controlFor, typeInto } from "./helpers/labelled-control";
+import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -260,10 +261,8 @@ describe("group form management", () => {
     );
     await settle();
 
-    const responsesTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Responses",
-    );
-    expect(responsesTab?.getAttribute("aria-selected")).toBe("true");
+    const responsesTab = tabs(container).find((item) => item.textContent === "Responses");
+    expect(isCurrentTab(responsesTab)).toBe(true);
   });
 
   it("navigates to the canonical placement tab URL when a tab is clicked", async () => {
@@ -277,9 +276,7 @@ describe("group form management", () => {
     );
     await settle();
 
-    const statisticsTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
-      (item) => item.textContent === "Statistics",
-    )!;
+    const statisticsTab = tabs(container).find((item) => item.textContent === "Statistics")!;
     expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${PLACEMENT_ID}/statistics`);
 
     await act(async () => statisticsTab.click());

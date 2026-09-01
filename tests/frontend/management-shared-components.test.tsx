@@ -16,6 +16,7 @@ import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/eve
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
+import { tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
 
@@ -180,23 +181,23 @@ describe("shared management presentation components", () => {
         onChange={onChange}
       />,
     );
-    const tabs = [...container.querySelectorAll<HTMLButtonElement>("[role='tab']")];
-    tabs[0].focus();
+    const rendered = tabs(container);
+    rendered[0].focus();
     void act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+      rendered[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
     });
     expect(onChange).toHaveBeenLastCalledWith("attendance");
-    expect(document.activeElement).toBe(tabs[2]);
+    expect(document.activeElement).toBe(rendered[2]);
     void act(() => {
-      tabs[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      rendered[2].dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
     });
     expect(onChange).toHaveBeenLastCalledWith("settings");
-    expect(document.activeElement).toBe(tabs[0]);
+    expect(document.activeElement).toBe(rendered[0]);
     void act(() => {
-      tabs[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+      rendered[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     });
     expect(onChange).toHaveBeenLastCalledWith("attendance");
-    expect(document.activeElement).toBe(tabs[2]);
+    expect(document.activeElement).toBe(rendered[2]);
   });
 
   it("renders shared audit columns while preserving domain-specific cells", async () => {

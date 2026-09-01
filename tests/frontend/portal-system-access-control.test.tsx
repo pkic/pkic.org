@@ -10,6 +10,7 @@ import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-c
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
+import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -135,7 +136,7 @@ describe("portal system access control", () => {
 
   it("navigates the top-level tabs to their canonical /system/access-control/:tab URLs", () => {
     const container = mount(<AccessControl canGrant canRevoke resourceId="roles" />);
-    const tabButtons = Array.from(container.querySelectorAll('[role="tab"]'));
+    const tabButtons = Array.from(tabs(container));
     expect(tabButtons.map((button) => button.textContent)).toEqual(["Access Grants", "Roles", "People"]);
 
     const peopleTab = tabButtons.find((button) => button.textContent === "People")!;

@@ -1,8 +1,11 @@
 /*
- * Tabs.
+ * Tabs and TabList.
  *
- * Real links, not ARIA tabs. The active link gets an underline and accent
- * colour. Separators are between items but not at the edges.
+ * Two components, one appearance. `Tabs` navigates - real links, marked with
+ * `aria-current="page"`. `TabList` switches panels in place - real buttons,
+ * marked with `aria-selected`. They look identical on purpose; what differs is
+ * what activating one does, and that is carried by the markup rather than by
+ * the styling.
  */
 
 @layer components {
@@ -25,6 +28,10 @@
 
   .pk-tabs__link {
     position: relative;
+    /* A tab may be a button, which brings its own chrome and font. */
+    background: none;
+    border: 0;
+    font: inherit;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -38,11 +45,12 @@
     cursor: pointer;
   }
 
-  .pk-tabs__link:hover:not([aria-current]) {
+  .pk-tabs__link:hover:not([aria-current], [aria-selected="true"]) {
     color: var(--pk-ink);
   }
 
-  .pk-tabs__link[aria-current="page"] {
+  .pk-tabs__link[aria-current="page"],
+  .pk-tabs__link[aria-selected="true"] {
     color: var(--pk-accent-ink);
     border-bottom: 2px solid var(--pk-accent);
     padding-bottom: calc(0.5rem - 2px);

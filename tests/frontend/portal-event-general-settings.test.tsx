@@ -290,7 +290,8 @@ describe("admin event general settings", () => {
 
     expect(container.textContent).not.toContain("Event name");
     expect(container.textContent).toContain("managed by a meeting series");
-    const link = container.querySelector<HTMLAnchorElement>("a:not([role='tab'])");
+    // Tabs are links too now, so "not a tab" is what excludes them, not a role.
+    const link = container.querySelector<HTMLAnchorElement>("a:not(.pk-tabs__link)");
     expect(link?.getAttribute("href")).toBe(
       "#/groups/20000000-0000-4000-8000-000000000001/meetings/60000000-0000-4000-8000-000000000001",
     );
@@ -306,7 +307,7 @@ describe("admin event general settings", () => {
     await settle();
 
     expect(container.textContent).toContain("could not be determined");
-    expect(container.querySelector("a:not([role='tab'])")).toBeNull();
+    expect(container.querySelector("a:not(.pk-tabs__link)")).toBeNull();
   });
 
   it("keeps sponsor tiers and team working for a meeting-series event", async () => {
