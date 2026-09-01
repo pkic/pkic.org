@@ -339,22 +339,24 @@ test.describe("Portal management browser-verification pass", () => {
     // then pick its (only) sponsorship from the resulting list.
     await page.locator("tr").filter({ hasText: contactName }).click();
     await page.locator(".list-group-item").first().click();
-    const detail = page.locator(".card").filter({ has: page.getByRole("heading", { name: contactName }) });
+    // The detail panel names itself after the sponsor, so it is located by
+    // that name rather than by the container class it happens to carry.
+    const detail = page.getByRole("region", { name: contactName });
     await expect(detail).toBeVisible();
     // New sponsorships default to pipeline_stage='new_inquiry' (migration
     // 0034) — assert via the stage badge specifically, since "Advance to
     // stage" is a <select> whose <option>s (incl. "payment pending") are
     // also present in the DOM but hidden.
-    await expect(detail.locator("span.badge", { hasText: "new inquiry" })).toBeVisible();
+    await expect(detail.locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
 
-    await detail.locator('div:has(> label:text-is("Notes")) > input').fill("E2E verification note");
+    await detail.getByLabel("Notes").fill("E2E verification note");
     await detail.getByRole("button", { name: "Save fields" }).click();
     await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
 
-    await detail.locator("select").selectOption("contacted");
+    await detail.getByLabel("Advance to stage").selectOption("contacted");
     await detail.getByRole("button", { name: "Advance" }).click();
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
-    await expect(detail.locator("span.badge", { hasText: "contacted" })).toBeVisible();
+    await expect(detail.locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
     await expect(detail.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
     expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsors/companies"]));
     expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsors"))).toBe(true);

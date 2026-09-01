@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   FORM_FIELD_TYPES,
   FORM_PURPOSES,
@@ -18,6 +18,15 @@ import {
   type FieldType,
   type VisualizationConfig,
 } from "./FormFieldConfigEditor";
+import { Alert } from "../../ui/Alert";
+import { Badge } from "../../ui/Badge";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody } from "../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../ui/TextControl";
+// `pk-mono` is a Content.css class, and component CSS ships in lazy chunks —
+// without this import the key inputs render in the body face.
+import "../../ui/Content.css";
 
 export interface EditableFormDetail {
   form: {
@@ -222,7 +231,6 @@ export function FormDefinitionEditor({
   onCancel: () => void;
   onError?: (message: string) => void;
 }) {
-  const fieldIdPrefix = useId();
   const [draft, setDraft] = useState<FormDraft>(() => detailToDraft(detail, purposes));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -276,203 +284,211 @@ export function FormDefinitionEditor({
   }
 
   return (
-    <form onSubmit={(e) => void save(e)}>
-      <div class="row g-2 mb-3">
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-key`}>
-            Key
-          </label>
-          <input
-            id={`${fieldIdPrefix}-key`}
-            class="form-control form-control-sm mono"
-            value={draft.key}
-            disabled={mode === "edit"}
-            required
-            pattern="[a-z][a-z0-9-]*"
-            onInput={(e) => {
-              const value = e.currentTarget.value;
-              setDraft((current) => ({ ...current, key: value }));
-            }}
-          />
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-purpose`}>
-            Purpose
-          </label>
-          <select
-            id={`${fieldIdPrefix}-purpose`}
-            class="form-select form-select-sm"
-            value={draft.purpose}
-            onChange={(e) => {
-              const value = e.currentTarget.value as FormPurpose;
-              setDraft((current) => ({ ...current, purpose: value }));
-            }}
-            disabled={mode === "edit"}
-          >
-            {purposes.map((purpose) => (
-              <option key={purpose} value={purpose}>
-                {purpose.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-title`}>
-            Title
-          </label>
-          <input
-            id={`${fieldIdPrefix}-title`}
-            class="form-control form-control-sm"
-            value={draft.title}
-            required
-            onInput={(e) => {
-              const value = e.currentTarget.value;
-              setDraft((current) => ({ ...current, title: value }));
-            }}
-          />
-        </div>
-        <div class="col-md-2">
-          <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-status`}>
-            Status
-          </label>
-          <select
-            id={`${fieldIdPrefix}-status`}
-            class="form-select form-select-sm"
-            value={draft.status}
-            onChange={(e) => {
-              const value = e.currentTarget.value as FormStatus;
-              setDraft((current) => ({ ...current, status: value }));
-            }}
-          >
-            {FORM_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status[0].toUpperCase() + status.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
+    <form class="pk pk-stack" onSubmit={(e) => void save(e)}>
+      <div class="pk-grid pk-grid--tight">
+        <Field label="Key">
+          {(control) => (
+            <TextInput
+              {...control}
+              class="pk-mono"
+              value={draft.key}
+              disabled={mode === "edit"}
+              required
+              pattern="[a-z][a-z0-9-]*"
+              onInput={(e) => {
+                const value = e.currentTarget.value;
+                setDraft((current) => ({ ...current, key: value }));
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Purpose">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.purpose}
+              disabled={mode === "edit"}
+              onChange={(e) => {
+                const value = e.currentTarget.value as FormPurpose;
+                setDraft((current) => ({ ...current, purpose: value }));
+              }}
+            >
+              {purposes.map((purpose) => (
+                <option key={purpose} value={purpose}>
+                  {purpose.replace(/_/g, " ")}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Title">
+          {(control) => (
+            <TextInput
+              {...control}
+              value={draft.title}
+              required
+              onInput={(e) => {
+                const value = e.currentTarget.value;
+                setDraft((current) => ({ ...current, title: value }));
+              }}
+            />
+          )}
+        </Field>
+        <Field label="Status">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.status}
+              onChange={(e) => {
+                const value = e.currentTarget.value as FormStatus;
+                setDraft((current) => ({ ...current, status: value }));
+              }}
+            >
+              {FORM_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {status[0].toUpperCase() + status.slice(1)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
 
-      <div class="mb-3">
-        <label class="form-label small fw-semibold" for={`${fieldIdPrefix}-description`}>
-          Description
-        </label>
-        <textarea
-          id={`${fieldIdPrefix}-description`}
-          class="form-control form-control-sm"
-          rows={2}
-          value={draft.description}
-          onInput={(e) => {
-            const value = e.currentTarget.value;
-            setDraft((current) => ({ ...current, description: value }));
-          }}
-        />
-      </div>
+      <Field label="Description">
+        {(control) => (
+          <Textarea
+            {...control}
+            rows={2}
+            value={draft.description}
+            onInput={(e) => {
+              const value = e.currentTarget.value;
+              setDraft((current) => ({ ...current, description: value }));
+            }}
+          />
+        )}
+      </Field>
 
-      <div class="d-flex align-items-center gap-2 mb-2">
-        <h6 class="mb-0">Fields</h6>
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary ms-auto"
+      <div class="pk-cluster pk-cluster--between">
+        <h4>Fields</h4>
+        <Button
+          size="sm"
           onClick={() =>
             setDraft((current) => ({ ...current, fields: [...current.fields, emptyField(current.fields.length)] }))
           }
         >
           Add field
-        </button>
+        </Button>
       </div>
 
-      <div class="d-flex flex-column gap-2 mb-3">
-        {draft.fields.map((field, index) => (
-          <div class="card adm-field-card" key={index}>
-            <div class="adm-field-card-head">
-              <span class="adm-field-num">{index + 1}</span>
-              <input
-                class="form-control form-control-sm mono adm-fkey-input"
-                value={field.key}
-                pattern="[a-z][a-z0-9_]*"
-                required
-                placeholder="field_key"
-                title="Field key (lowercase, letters, digits, underscores)"
-                aria-label="Field key (lowercase, letters, digits, underscores)"
-                onInput={(e) => updateField(index, { key: (e.target as HTMLInputElement).value })}
-              />
-              <input
-                class="form-control form-control-sm adm-flabel-input"
-                value={field.label}
-                required
-                placeholder="Field label"
-                aria-label="Field label"
-                onInput={(e) => updateField(index, { label: (e.target as HTMLInputElement).value })}
-              />
-              <select
-                class="form-select form-select-sm adm-ftype-select"
-                value={field.fieldType}
-                onChange={(e) => updateField(index, { fieldType: (e.target as HTMLSelectElement).value as FieldType })}
-              >
-                {FORM_FIELD_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type.replace(/_/g, " ")}
-                  </option>
-                ))}
-              </select>
-              <div class="form-check mb-0">
-                <input
-                  id={`ffr-${index}`}
-                  type="checkbox"
-                  class="form-check-input"
-                  checked={field.required}
-                  onChange={(e) => updateField(index, { required: (e.target as HTMLInputElement).checked })}
-                />
-                <label class="form-check-label small" for={`ffr-${index}`}>
-                  Required
-                </label>
-              </div>
-              <div class="d-flex gap-1 ms-auto">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-secondary adm-field-move-btn"
-                  onClick={() => moveField(index, -1)}
-                  disabled={index === 0}
-                  title="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-secondary adm-field-move-btn"
-                  onClick={() => moveField(index, 1)}
-                  disabled={index === draft.fields.length - 1}
-                  title="Move down"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-danger adm-field-move-btn"
-                  onClick={() => removeField(index)}
-                  disabled={draft.fields.length === 1}
-                  title="Remove field"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-            <div class="card-body p-3">
-              <FieldConfigEditor field={field} index={index} updateField={updateField} />
-            </div>
-          </div>
-        ))}
+      <div class="pk-stack pk-stack--snug">
+        {draft.fields.map((field, index) => {
+          const position = String(index + 1);
+          return (
+            // Position is the only stable identity while a key is still being
+            // typed, so it names the region as well as ordering it.
+            <Panel key={index} aria-label={`Field ${position}`}>
+              <PanelBody class="pk-stack pk-stack--snug">
+                <div class="pk-cluster">
+                  <Badge tone="neutral" dot={false}>
+                    {position}
+                  </Badge>
+                  <label class="pk-check">
+                    <input
+                      class="pk-check__input"
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={(e) => updateField(index, { required: (e.target as HTMLInputElement).checked })}
+                    />
+                    <span class="pk-check__label">Required</span>
+                  </label>
+                  <span class="pk-cluster pk-push">
+                    <Button
+                      size="sm"
+                      icon
+                      aria-label={`Move field ${position} up`}
+                      onClick={() => moveField(index, -1)}
+                      disabled={index === 0}
+                    >
+                      <span aria-hidden="true">↑</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      icon
+                      aria-label={`Move field ${position} down`}
+                      onClick={() => moveField(index, 1)}
+                      disabled={index === draft.fields.length - 1}
+                    >
+                      <span aria-hidden="true">↓</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      icon
+                      variant="danger-quiet"
+                      aria-label={`Remove field ${position}`}
+                      onClick={() => removeField(index)}
+                      disabled={draft.fields.length === 1}
+                    >
+                      <span aria-hidden="true">✕</span>
+                    </Button>
+                  </span>
+                </div>
+
+                {/*
+                 * The key, label and type sit in one compact row rather than
+                 * three labelled Fields: their names are carried by aria-label
+                 * so the row stays readable at a glance, and every control
+                 * still reports one.
+                 */}
+                <div class="pk-grid pk-grid--tight">
+                  <TextInput
+                    class="pk-mono"
+                    value={field.key}
+                    pattern="[a-z][a-z0-9_]*"
+                    required
+                    placeholder="field_key"
+                    aria-label="Field key (lowercase, letters, digits, underscores)"
+                    onInput={(e) => updateField(index, { key: (e.target as HTMLInputElement).value })}
+                  />
+                  <TextInput
+                    value={field.label}
+                    required
+                    placeholder="Field label"
+                    aria-label="Field label"
+                    onInput={(e) => updateField(index, { label: (e.target as HTMLInputElement).value })}
+                  />
+                  <Select
+                    value={field.fieldType}
+                    aria-label="Field type"
+                    onChange={(e) =>
+                      updateField(index, { fieldType: (e.target as HTMLSelectElement).value as FieldType })
+                    }
+                  >
+                    {FORM_FIELD_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <FieldConfigEditor field={field} index={index} updateField={updateField} />
+              </PanelBody>
+            </Panel>
+          );
+        })}
       </div>
 
-      <div class="d-flex gap-2 align-items-center">
-        <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
+      {/* The save failure is announced where it happened rather than left as
+          quiet red text beside the button. */}
+      {error && <Alert tone="danger">{error}</Alert>}
+
+      <div class="pk-cluster">
+        <Button type="submit" variant="primary" size="sm" loading={saving}>
           {saving ? "Saving..." : mode === "create" ? "Create form" : "Save form"}
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel} disabled={saving}>
+        </Button>
+        <Button size="sm" onClick={onCancel} disabled={saving}>
           Cancel
-        </button>
-        {error && <span class="small text-danger">{error}</span>}
+        </Button>
       </div>
     </form>
   );

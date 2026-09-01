@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { EventFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+import { controlFor, typeInto } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -269,11 +270,8 @@ describe("portal event form placement management", () => {
       card.textContent?.includes("New proposal submission form"),
     );
     expect(editor).toBeDefined();
-    const inputs = editor!.querySelectorAll<HTMLInputElement>(".row.g-2.mb-3 input");
-    inputs[0].value = "proposal-form";
-    inputs[0].dispatchEvent(new InputEvent("input", { bubbles: true }));
-    inputs[1].value = "Proposal form";
-    inputs[1].dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await typeInto(controlFor(editor!, "Key"), "proposal-form");
+    await typeInto(controlFor(editor!, "Title"), "Proposal form");
     await settle();
     await act(async () => {
       editor!

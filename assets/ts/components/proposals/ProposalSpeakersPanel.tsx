@@ -60,7 +60,7 @@ export function ProposalSpeakersPanel({
           ↺ Refresh
         </button>
       </div>
-      <div class="card-body">
+      <div class="card-body pk-stack pk-stack--snug">
         {access.canFinalize && inviteEndpoint && inviteWindow && (
           <ProposalCoSpeakerInviteForm
             endpoint={inviteEndpoint}

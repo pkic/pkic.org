@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+import { controlFor, typeInto } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -415,13 +416,8 @@ describe("portal event management", () => {
     const editor = Array.from(container.querySelectorAll<HTMLElement>(".card")).find(
       (card) => card.querySelector<HTMLElement>(":scope > .card-header")?.textContent === "New registration form",
     )!;
-    const definitionInputs = editor.querySelectorAll<HTMLInputElement>(".row.g-2.mb-3 input");
-    await act(async () => {
-      definitionInputs[0].value = "workshop-registration";
-      definitionInputs[0].dispatchEvent(new InputEvent("input", { bubbles: true }));
-      definitionInputs[1].value = "Workshop registration";
-      definitionInputs[1].dispatchEvent(new InputEvent("input", { bubbles: true }));
-    });
+    await typeInto(controlFor(editor, "Key"), "workshop-registration");
+    await typeInto(controlFor(editor, "Title"), "Workshop registration");
     await settle();
     await act(async () => {
       editor.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

@@ -25,11 +25,13 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   await signInToPortal(page, e2eAdminEmail("portal-organizations"));
   await page.goto("/portal/#/organizations");
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
-  await page.locator("#organization-create-name").fill(organizationName);
-  await page.locator("#organization-create-category").selectOption("F");
-  await page.locator("#organization-create-member-since").fill("2026-01-15");
-  await page.locator("#organization-create-identity-name-0").fill("Logo Representative");
-  await page.locator("#organization-create-identity-email-0").fill(`svg-logo-${suffix}@example.invalid`);
+  const createForm = page.getByRole("region", { name: "Add organization" });
+  await createForm.getByLabel("Organization name").fill(organizationName);
+  await createForm.getByLabel("Membership category").selectOption("F");
+  await createForm.getByLabel("Member since").fill("2026-01-15");
+  const firstIdentity = createForm.getByRole("group", { name: "Identity 1" });
+  await firstIdentity.getByLabel("Name").fill("Logo Representative");
+  await firstIdentity.getByLabel("Email").fill(`svg-logo-${suffix}@example.invalid`);
   await page.getByRole("button", { name: "Create organization" }).click();
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
 

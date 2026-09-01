@@ -4,6 +4,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { SponsorshipDetail } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail";
 import { useSponsorshipEventHistory } from "../../assets/ts/member-flows/portal/sections/sponsors/management/useSponsorshipEventHistory";
+import { buttonNamed, controlFor, groupNames, typeInto } from "./helpers/labelled-control";
 
 type HistoryState = ReturnType<typeof useSponsorshipEventHistory>;
 
@@ -65,6 +66,17 @@ function sponsorshipResponse(id: string) {
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * The pipeline-history region, addressed by the heading it points at. The
+ * surface's own root is a Panel — itself a `<section>` — so `querySelector`
+ * on the element name would return the panel instead.
+ */
+function historySection(container: HTMLElement, id: string): HTMLElement {
+  const section = container.querySelector<HTMLElement>(`section[aria-labelledby="sponsorship-history-heading-${id}"]`);
+  if (!section) throw new Error("pipeline history region was not rendered");
+  return section;
 }
 
 describe("sponsorship event history", () => {
@@ -205,7 +217,7 @@ describe("sponsorship event history", () => {
     expect(historyRequests).toBe(2);
     expect(container.querySelector("[role='alert']")).toBeNull();
     expect(container.textContent).toContain("No pipeline history has been recorded.");
-    expect(container.querySelector("section")?.getAttribute("aria-busy")).toBe("false");
+    expect(historySection(container, id).getAttribute("aria-busy")).toBe("false");
     void act(() => render(null, container));
   });
 
@@ -223,11 +235,77 @@ describe("sponsorship event history", () => {
     await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
     await act(flush);
 
-    const section = container.querySelector("section");
-    expect(section?.getAttribute("aria-labelledby")).toBe(`sponsorship-history-heading-${id}`);
-    expect(section?.querySelectorAll("ol > li")).toHaveLength(1);
-    expect(section?.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-21T12:00:00.000Z");
-    expect(section?.querySelector("[aria-live='polite']")?.textContent).toContain("1 history entry loaded");
+    const section = historySection(container, id);
+    expect(container.querySelector(`#sponsorship-history-heading-${id}`)?.textContent).toBe("Pipeline history");
+    expect(section.querySelectorAll("ol > li")).toHaveLength(1);
+    expect(section.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-21T12:00:00.000Z");
+    expect(section.querySelector("[aria-live='polite']")?.textContent).toContain("1 history entry loaded");
+    void act(() => render(null, container));
+  });
+
+  it("names the sponsorship region and wires every editable field to its own label", async () => {
+    const id = "000000000000000000000000000000aa";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        input.toString().split("?", 1)[0].endsWith("/events") ? historyResponse([]) : sponsorshipResponse(id),
+      ),
+    );
+    const container = document.createElement("div");
+    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
+    await act(flush);
+
+    // The surface is addressable by name rather than by its container's
+    // class, which is what the end-to-end spec now relies on.
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Acme Sponsor");
+
+    for (const [label, tag] of [
+      ["Assigned staff user ID", "INPUT"],
+      ["Renewal date", "INPUT"],
+      ["Notes", "INPUT"],
+      ["Advance to stage", "SELECT"],
+      ["Note (optional)", "INPUT"],
+    ] as const) {
+      expect(controlFor(container, label).tagName).toBe(tag);
+    }
+    // The two write groups are named, so the repeated note fields are
+    // announced inside the group they belong to.
+    expect(groupNames(container)).toEqual(["Sponsorship record", "Pipeline stage"]);
+    void act(() => render(null, container));
+  });
+
+  it("reports a failed stage advance without losing the note the reader typed", async () => {
+    const id = "000000000000000000000000000000aa";
+    const toastArea = document.createElement("div");
+    toastArea.id = "portal-toast-area";
+    document.body.append(toastArea);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = input.toString();
+        if (url.split("?", 1)[0].endsWith("/events")) return historyResponse([]);
+        if (url.endsWith("/stage")) {
+          return Response.json({ error: { code: "STAGE_REJECTED", message: "Stage change refused" } }, { status: 409 });
+        }
+        return sponsorshipResponse(id);
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
+    await act(flush);
+
+    await typeInto(controlFor(container, "Note (optional)"), "Waiting on signature");
+
+    const advance = buttonNamed(container, "Advance");
+    await act(async () => {
+      advance.click();
+      await flush();
+    });
+
+    expect(toastArea.textContent).toContain("Stage change refused");
+    expect(controlFor(container, "Note (optional)").value).toBe("Waiting on signature");
+    expect(advance.getAttribute("aria-busy")).toBeNull();
     void act(() => render(null, container));
   });
 });

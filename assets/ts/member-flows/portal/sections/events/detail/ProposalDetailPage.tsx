@@ -28,8 +28,28 @@ import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
 import { proposalResourcePath } from "./proposal-detail/proposal-api";
 import { ProposalSpeakersPanel } from "../../../../../components/proposals/ProposalSpeakersPanel";
+import { Alert } from "../../../../../ui/Alert";
+import { Button } from "../../../../../ui/Button";
+import { Field } from "../../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { StatCard } from "../../../../../ui/StatCard";
+import { Textarea } from "../../../../../ui/TextControl";
+// `pk-mono` and `pk-answer-pre` are written here as class names rather than
+// reached through a component, so this module has to pull their stylesheet
+// into its own chunk.
+import "../../../../../ui/Content.css";
 
 const DETAIL_TABS: DetailTab[] = ["submission", "speakers", "reviews", "presentation", "audit-log", "decision"];
+
+/**
+ * The reader-facing label for a stored vocabulary value. Bootstrap's
+ * `text-capitalize` did this in CSS, which meant the words on screen and the
+ * words a screen reader announced were two different strings; doing it here
+ * keeps them the same one.
+ */
+function vocabularyLabel(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -211,132 +231,116 @@ export function ProposalDetailPage({
   }
 
   return (
-    <div>
+    <div class="pk pk-stack">
       {/* ── Header ── */}
-      <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}
-        >
+      <div class="pk-cluster">
+        <Button size="sm" onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}>
           ← Back
-        </button>
-        {contextLabel && <span class="text-muted small">{contextLabel}</span>}
-        <h5 class="mb-0 me-1">{proposal.title}</h5>
+        </Button>
+        {contextLabel && <span class="pk-small">{contextLabel}</span>}
+        <h2>{proposal.title}</h2>
         <Badge status={proposal.status} />
         {proposal.decision_status && <Badge status={proposal.decision_status} />}
-        <span class="text-muted small ms-1">{proposer}</span>
-        <span class="text-muted small">·</span>
-        <span class="mono small text-muted">{fmt(proposal.submitted_at)}</span>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
+        <span class="pk-small">{proposer}</span>
+        <span class="pk-small" aria-hidden="true">
+          ·
+        </span>
+        <span class="pk-mono pk-small">{fmt(proposal.submitted_at)}</span>
+        <Button size="sm" class="pk-push" onClick={() => void reload()}>
           ↺ Refresh
-        </button>
+        </Button>
       </div>
 
       {/* ── Stat cards ── */}
-      <div class="row g-2 mb-3">
-        <div class="col-sm-6 col-md-3">
-          <div class="card card-body p-3 h-100">
-            <div class="small text-muted mb-1">Proposer</div>
-            <div class="fw-semibold">{proposer}</div>
-            <div class="small text-muted">{proposal.proposer_email}</div>
+      <Panel>
+        <PanelBody>
+          <div class="pk-grid pk-grid--tight">
+            <StatCard label="Proposer" value={proposer} note={proposal.proposer_email} />
+            <StatCard
+              label="Type"
+              value={vocabularyLabel(proposal.proposal_type)}
+              note={`Submitted ${fmt(proposal.submitted_at)}`}
+            />
+            {/* The quorum verdict is a word, not a colour: StatCard's tinted
+                note variants say "trending up", which is not what a met
+                quorum means. */}
+            <StatCard
+              label="Reviews"
+              value={`${loadingSub ? "…" : reviewCount} / ${minReviewsRequired} required`}
+              note={quorumMet ? "Quorum met" : "Quorum not met"}
+            />
+            <StatCard
+              label="Decision"
+              value={proposal.decision_status ? vocabularyLabel(proposal.decision_status) : "Pending"}
+              note={
+                proposal.decision_decided_at ? `Recorded ${fmt(proposal.decision_decided_at)}` : "No final decision yet"
+              }
+            />
           </div>
-        </div>
-        <div class="col-sm-6 col-md-3">
-          <div class="card card-body p-3 h-100">
-            <div class="small text-muted mb-1">Type</div>
-            <div class="text-capitalize">{proposal.proposal_type.replace(/_/g, " ")}</div>
-            <div class="small text-muted">Submitted {fmt(proposal.submitted_at)}</div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-md-3">
-          <div class="card card-body p-3 h-100">
-            <div class="small text-muted mb-1">Reviews</div>
-            <div>
-              {loadingSub ? "…" : reviewCount} / {minReviewsRequired} required
-            </div>
-            <div class={`small ${quorumMet ? "text-success" : "text-warning"}`}>
-              {quorumMet ? "Quorum met ✓" : "Quorum not met"}
-            </div>
-          </div>
-        </div>
-        <div class="col-sm-6 col-md-3">
-          <div class="card card-body p-3 h-100">
-            <div class="small text-muted mb-1">Decision</div>
-            <div class="text-capitalize">
-              {proposal.decision_status ? proposal.decision_status.replace(/[_-]/g, " ") : "Pending"}
-            </div>
-            <div class="small text-muted">
-              {proposal.decision_decided_at ? `Recorded ${fmt(proposal.decision_decided_at)}` : "No final decision yet"}
-            </div>
-          </div>
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
 
       {/* ── Two-column layout ── */}
-      <div class="row g-3">
+      <div class="pk-grid pk-grid--roomy">
         {/* Main content */}
-        <div class="col-lg-8">
-          <Tabs
-            items={tabItems}
-            active={activeTab}
-            onChange={(key) => setActiveTab(key as DetailTab)}
-            className="mb-3"
-          />
+        <div class="pk-stack">
+          <Tabs items={tabItems} active={activeTab} onChange={(key) => setActiveTab(key as DetailTab)} />
 
           {/* ── Submission tab ── */}
           {activeTab === "submission" && (
-            <div class="card">
-              <div class="card-header d-flex align-items-center gap-2">
-                <h6 class="mb-0">Abstract</h6>
+            <Panel>
+              <PanelHeader title="Abstract">
                 {canEditAbstract && !editingAbstract && (
-                  <button
-                    class="btn btn-sm btn-outline-secondary ms-auto"
+                  <Button
+                    size="sm"
                     onClick={() => {
                       setAbstractDraft(proposal.abstract);
                       setEditingAbstract(true);
                     }}
                   >
                     Edit
-                  </button>
+                  </Button>
                 )}
-              </div>
-              <div class="card-body">
+              </PanelHeader>
+              <PanelBody>
                 {editingAbstract ? (
-                  <form onSubmit={(e) => void handleSaveAbstract(e)}>
-                    <textarea
-                      class="form-control mb-3"
-                      rows={8}
-                      value={abstractDraft}
-                      onInput={(e) => setAbstractDraft((e.target as HTMLTextAreaElement).value)}
-                    />
-                    <div class="d-flex gap-2">
-                      <button type="submit" class="btn btn-primary" disabled={savingAbstract}>
+                  <form class="pk-stack" onSubmit={(e) => void handleSaveAbstract(e)}>
+                    <Field label="Abstract">
+                      {(control) => (
+                        <Textarea
+                          {...control}
+                          rows={8}
+                          value={abstractDraft}
+                          onInput={(e) => setAbstractDraft((e.target as HTMLTextAreaElement).value)}
+                        />
+                      )}
+                    </Field>
+                    <div class="pk-cluster">
+                      <Button type="submit" variant="primary" loading={savingAbstract}>
                         {savingAbstract ? "Saving…" : "Save"}
-                      </button>
-                      <button type="button" class="btn btn-outline-secondary" onClick={() => setEditingAbstract(false)}>
+                      </Button>
+                      <Button type="button" onClick={() => setEditingAbstract(false)}>
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 ) : (
-                  <div class="adm-pre-wrap">{proposal.abstract || "—"}</div>
+                  <p class="pk-answer-pre">{proposal.abstract || "—"}</p>
                 )}
-              </div>
+              </PanelBody>
 
               {proposal.details && Object.keys(proposal.details).length > 0 && (
                 <>
-                  <div class="card-header border-top">
-                    <h6 class="mb-0 small">
-                      Submission Answers
-                      {form?.title && <span class="text-muted fw-normal ms-2">— {form.title}</span>}
-                    </h6>
-                  </div>
-                  <div class="card-body p-0">
+                  <PanelHeader
+                    headingLevel={4}
+                    title={form?.title ? `Submission Answers — ${form.title}` : "Submission Answers"}
+                  />
+                  <PanelBody>
                     <FormAnswerTable answers={proposal.details} fields={form?.fields} />
-                  </div>
+                  </PanelBody>
                 </>
               )}
-            </div>
+            </Panel>
           )}
 
           {/* ── Speakers tab ── */}
@@ -355,7 +359,7 @@ export function ProposalDetailPage({
                 inviteWindow={data.event}
               />
             ) : (
-              <p class="text-muted fst-italic">Speaker access requires proposal read permission.</p>
+              <Alert tone="info">Speaker access requires proposal read permission.</Alert>
             ))}
 
           {/* ── Presentation tab ── */}
@@ -392,14 +396,12 @@ export function ProposalDetailPage({
 
           {/* ── Audit log tab ── */}
           {activeTab === "audit-log" && (
-            <div class="card">
-              <div class="card-header">
-                <h6 class="mb-0">Audit Log</h6>
-              </div>
-              <div class="card-body p-0">
+            <Panel>
+              <PanelHeader title="Audit Log" />
+              <PanelBody>
                 <AuditLogSection proposalId={proposalId} enabled={access.canReview} />
-              </div>
-            </div>
+              </PanelBody>
+            </Panel>
           )}
 
           {/* ── Decision and accepted-session cancellation ── */}

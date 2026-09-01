@@ -21,14 +21,18 @@ test("permitted staff manage organizations through the canonical domain API", as
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
-  await page.locator("#organization-create-name").fill(organizationName);
-  await page.locator("#organization-create-category").selectOption("F");
-  await page.locator("#organization-create-member-since").fill("2026-01-15");
-  await page.locator("#organization-create-website").fill("https://example.invalid");
-  await page.locator("#organization-create-identity-name-0").fill("Primary Representative");
-  await page.locator("#organization-create-identity-email-0").fill(primaryEmail);
-  await page.locator("#organization-create-identity-title-0").fill("Security Engineer");
-  await page.locator("#organization-create-activation-reason").fill("E2E organization setup");
+  // Located by the names the form announces — the region, its per-identity
+  // groups, and each control's label — rather than by generated ids.
+  const createForm = page.getByRole("region", { name: "Add organization" });
+  await createForm.getByLabel("Organization name").fill(organizationName);
+  await createForm.getByLabel("Membership category").selectOption("F");
+  await createForm.getByLabel("Member since").fill("2026-01-15");
+  await createForm.getByLabel("Website").fill("https://example.invalid");
+  const firstIdentity = createForm.getByRole("group", { name: "Identity 1" });
+  await firstIdentity.getByLabel("Name").fill("Primary Representative");
+  await firstIdentity.getByLabel("Email").fill(primaryEmail);
+  await firstIdentity.getByLabel("Job title").fill("Security Engineer");
+  await createForm.getByLabel("Immediate activation reason").fill("E2E organization setup");
 
   const createResponse = page.waitForResponse(
     (response) =>

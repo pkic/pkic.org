@@ -13,8 +13,19 @@ import type {
   SponsorshipPipelineStage,
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { Badge, statusLabel } from "../../../../../components/Badge";
+import { Alert } from "../../../../../ui/Alert";
+import { Button } from "../../../../../ui/Button";
+import { EmptyState } from "../../../../../ui/EmptyState";
+import { Field } from "../../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { Select, TextInput } from "../../../../../ui/TextControl";
 import { SponsorshipLogo } from "./SponsorshipLogo";
 import { useSponsorshipEventHistory } from "./useSponsorshipEventHistory";
+
+/** What the sponsorship is called, falling through the names it may carry. */
+function sponsorTitle(sponsorship: Sponsorship): string {
+  return sponsorship.organizationName ?? sponsorship.nonMemberName ?? sponsorship.contactName ?? "Sponsor";
+}
 
 export function SponsorshipDetail({
   id,
@@ -107,148 +118,166 @@ export function SponsorshipDetail({
   if (error) return <ErrorAlert error={error} />;
   if (!sponsorship) return null;
 
+  const title = sponsorTitle(sponsorship);
+
   return (
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start mb-2">
-          <div>
-            <h6 class="mb-1">
-              {sponsorship.organizationName ?? sponsorship.nonMemberName ?? sponsorship.contactName ?? "Sponsor"}
-            </h6>
-            <p class="text-muted small mb-0">
-              {sponsorship.sponsorType} · {sponsorship.tier ?? "no tier"}
-              {sponsorship.eventName && <> · {sponsorship.eventName}</>}
-            </p>
-          </div>
+    <div class="pk">
+      <Panel aria-label={title}>
+        <PanelHeader title={title} headingLevel={2}>
           <Badge status={sponsorship.pipelineStage} />
-        </div>
-
-        {sponsorship.contactEmail && (
-          <p class="small mb-3">
-            Contact: {sponsorship.contactName ?? sponsorship.contactEmail} &lt;{sponsorship.contactEmail}&gt;
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <p class="pk-small">
+            {sponsorship.sponsorType} · {sponsorship.tier ?? "no tier"}
+            {sponsorship.eventName && <> · {sponsorship.eventName}</>}
           </p>
-        )}
 
-        {canWrite && !sponsorship.organizationId && <SponsorshipLogo sponsorship={sponsorship} onChanged={load} />}
-
-        {canWrite && (
-          <div class="row g-2 mb-3">
-            <div class="col-sm-4">
-              <label class="form-label small">Assigned staff user ID</label>
-              <input
-                class="form-control form-control-sm"
-                value={assignedToUserId}
-                onInput={(e) => setAssignedToUserId((e.target as HTMLInputElement).value)}
-              />
-              {sponsorship.assignedToName && <div class="form-text">{sponsorship.assignedToName}</div>}
-            </div>
-            <div class="col-sm-3">
-              <label class="form-label small">Renewal date</label>
-              <input
-                type="date"
-                class="form-control form-control-sm"
-                value={renewalDate}
-                onInput={(e) => setRenewalDate((e.target as HTMLInputElement).value)}
-              />
-            </div>
-            <div class="col-sm-5">
-              <label class="form-label small">Notes</label>
-              <input
-                class="form-control form-control-sm"
-                value={notes}
-                onInput={(e) => setNotes((e.target as HTMLInputElement).value)}
-              />
-            </div>
-          </div>
-        )}
-        {canWrite && (
-          <button type="button" class="btn btn-outline-primary btn-sm mb-3" disabled={busy} onClick={saveFields}>
-            Save fields
-          </button>
-        )}
-
-        {canWrite && <hr />}
-
-        {canWrite && (
-          <div class="row g-2 align-items-end mb-3">
-            <div class="col-sm-4">
-              <label class="form-label small">Advance to stage</label>
-              <select
-                class="form-select form-select-sm"
-                value={nextStage}
-                onChange={(e) => setNextStage((e.target as HTMLSelectElement).value as SponsorshipPipelineStage)}
-              >
-                {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
-                  <option value={s} key={s}>
-                    {statusLabel(s)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div class="col-sm-5">
-              <label class="form-label small">Note (optional)</label>
-              <input
-                class="form-control form-control-sm"
-                value={stageNote}
-                onInput={(e) => setStageNote((e.target as HTMLInputElement).value)}
-              />
-            </div>
-            <div class="col-sm-3">
-              <button type="button" class="btn btn-primary btn-sm w-100" disabled={busy} onClick={advanceStage}>
-                Advance
-              </button>
-            </div>
-          </div>
-        )}
-
-        <section
-          aria-labelledby={`sponsorship-history-heading-${id}`}
-          aria-busy={history.loading || history.loadingMore}
-        >
-          <h6 id={`sponsorship-history-heading-${id}`} class="small text-uppercase text-muted mb-2">
-            Pipeline history
-          </h6>
-          <div class="visually-hidden" aria-live="polite">
-            {history.announcement}
-          </div>
-          {history.loading && <Spinner />}
-          {history.error && (
-            <div class="alert alert-danger" role="alert">
-              <span>{history.error}</span>{" "}
-              <button type="button" class="btn btn-link btn-sm p-0 align-baseline" onClick={history.retry}>
-                Retry history
-              </button>
-            </div>
+          {sponsorship.contactEmail && (
+            <p class="pk-small">
+              Contact: {sponsorship.contactName ?? sponsorship.contactEmail} &lt;{sponsorship.contactEmail}&gt;
+            </p>
           )}
-          {!history.loading && history.events.length === 0 && !history.error && (
-            <p class="small text-muted mb-0">No pipeline history has been recorded.</p>
+
+          {canWrite && !sponsorship.organizationId && <SponsorshipLogo sponsorship={sponsorship} onChanged={load} />}
+
+          {canWrite && (
+            <fieldset class="pk-fieldset pk-stack pk-stack--snug">
+              <legend class="pk-field__label">Sponsorship record</legend>
+              <div class="pk-grid pk-grid--tight">
+                <Field label="Assigned staff user ID" help={sponsorship.assignedToName ?? undefined}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={assignedToUserId}
+                      disabled={busy}
+                      onInput={(e) => setAssignedToUserId((e.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Renewal date">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="date"
+                      value={renewalDate}
+                      disabled={busy}
+                      onInput={(e) => setRenewalDate((e.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Notes">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={notes}
+                      disabled={busy}
+                      onInput={(e) => setNotes((e.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+              </div>
+              <div class="pk-cluster">
+                <Button size="sm" loading={busy} onClick={() => void saveFields()}>
+                  Save fields
+                </Button>
+              </div>
+            </fieldset>
           )}
-          <ol id={`sponsorship-history-${id}`} class="list-unstyled small mb-0">
-            {history.events.map((ev: SponsorshipEvent) => (
-              <li key={ev.id} class="mb-1">
-                <time class="text-muted" dateTime={ev.createdAt}>
-                  {fmt(ev.createdAt)}
-                </time>{" "}
-                — {ev.fromStage ? `${statusLabel(ev.fromStage)} → ` : ""}
-                <strong>{statusLabel(ev.toStage)}</strong>
-                {ev.actorName && <span class="text-muted"> by {ev.actorName}</span>}
-                {ev.note && <div class="text-muted fst-italic">{ev.note}</div>}
-              </li>
-            ))}
-          </ol>
-          {history.page?.hasMore && !history.error && (
-            <button
-              type="button"
-              class="btn btn-outline-secondary btn-sm mt-2"
-              aria-controls={`sponsorship-history-${id}`}
-              disabled={history.loadingMore}
-              onClick={history.loadMore}
-            >
-              {history.loadingMore ? "Loading…" : "Load older history"}
-            </button>
+
+          {canWrite && (
+            <fieldset class="pk-fieldset pk-stack pk-stack--snug">
+              <legend class="pk-field__label">Pipeline stage</legend>
+              <div class="pk-grid pk-grid--tight">
+                <Field label="Advance to stage">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={nextStage}
+                      disabled={busy}
+                      onChange={(e) => setNextStage((e.target as HTMLSelectElement).value as SponsorshipPipelineStage)}
+                    >
+                      {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
+                        <option value={s} key={s}>
+                          {statusLabel(s)}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Note (optional)">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={stageNote}
+                      disabled={busy}
+                      onInput={(e) => setStageNote((e.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+              </div>
+              <div class="pk-cluster">
+                <Button variant="primary" size="sm" loading={busy} onClick={() => void advanceStage()}>
+                  Advance
+                </Button>
+              </div>
+            </fieldset>
           )}
-        </section>
-      </div>
+
+          <section
+            class="pk-stack pk-stack--snug"
+            aria-labelledby={`sponsorship-history-heading-${id}`}
+            aria-busy={history.loading || history.loadingMore}
+          >
+            <h3 id={`sponsorship-history-heading-${id}`} class="pk-small pk-strong">
+              Pipeline history
+            </h3>
+            <div class="pk-sr-only" aria-live="polite">
+              {history.announcement}
+            </div>
+            {history.loading && <Spinner />}
+            {history.error && (
+              <Alert tone="danger">
+                {history.error}{" "}
+                <Button variant="link" size="sm" onClick={history.retry}>
+                  Retry history
+                </Button>
+              </Alert>
+            )}
+            {!history.loading && history.events.length === 0 && !history.error && (
+              <EmptyState title="No pipeline history has been recorded." />
+            )}
+            <ol id={`sponsorship-history-${id}`} class="pk-stack pk-stack--tight pk-small">
+              {history.events.map((ev: SponsorshipEvent) => (
+                <li key={ev.id}>
+                  <time class="pk-muted" dateTime={ev.createdAt}>
+                    {fmt(ev.createdAt)}
+                  </time>{" "}
+                  — {ev.fromStage ? `${statusLabel(ev.fromStage)} → ` : ""}
+                  <strong>{statusLabel(ev.toStage)}</strong>
+                  {ev.actorName && <span class="pk-muted"> by {ev.actorName}</span>}
+                  {ev.note && (
+                    <div class="pk-muted">
+                      <em>{ev.note}</em>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {history.page?.hasMore && !history.error && (
+              <div class="pk-cluster">
+                <Button
+                  size="sm"
+                  aria-controls={`sponsorship-history-${id}`}
+                  loading={history.loadingMore}
+                  onClick={history.loadMore}
+                >
+                  {history.loadingMore ? "Loading…" : "Load older history"}
+                </Button>
+              </div>
+            )}
+          </section>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

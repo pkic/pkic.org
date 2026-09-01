@@ -4,8 +4,13 @@ import {
   organizationCreateResponseSchema,
 } from "../../../../../shared/schemas/organization-management";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
-import { FormActions } from "../../../../components/FormActions";
+import { friendlyErrorMessage } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
 
 interface IdentityDraft {
@@ -75,183 +80,178 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
   }
 
   return (
-    <form class="card border-0 shadow-sm mb-3" onSubmit={submit}>
-      <div class="card-header bg-white fw-semibold">Add organization</div>
-      <div class="card-body">
-        <div class="row g-2 mb-2">
-          <div class="col-md-5">
-            <label class="form-label small fw-semibold" for="organization-create-name">
-              Organization name
-            </label>
-            <input
-              id="organization-create-name"
-              class="form-control form-control-sm"
-              value={name}
-              onInput={(event) => setName((event.target as HTMLInputElement).value)}
-              required
-              disabled={busy}
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold" for="organization-create-category">
-              Membership category
-            </label>
-            <select
-              id="organization-create-category"
-              class="form-select form-select-sm"
-              value={membershipCategory}
-              onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
-              disabled={busy}
-            >
-              {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for="organization-create-member-since">
-              Member since
-            </label>
-            <input
-              id="organization-create-member-since"
-              class="form-control form-control-sm"
-              type="date"
-              value={memberSince}
-              onInput={(event) => setMemberSince((event.target as HTMLInputElement).value)}
-              required
-              disabled={busy}
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small" for="organization-create-website">
-              Website
-            </label>
-            <input
-              id="organization-create-website"
-              class="form-control form-control-sm"
-              type="url"
-              value={website}
-              onInput={(event) => setWebsite((event.target as HTMLInputElement).value)}
-              disabled={busy}
-            />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small" for="organization-create-description">
-              Description
-            </label>
-            <input
-              id="organization-create-description"
-              class="form-control form-control-sm"
-              value={description}
-              onInput={(event) => setDescription((event.target as HTMLInputElement).value)}
-              disabled={busy}
-            />
-          </div>
-        </div>
-
-        <fieldset class="mb-3">
-          <legend class="form-label small fw-semibold">Initial identities</legend>
-          <div class="form-text mb-2">
-            Creating an organization activates these identities immediately and requires identities:activate.
-          </div>
-          {identities.map((identity, index) => (
-            <div class="row g-2 mb-2 align-items-end" key={index}>
-              <div class="col-md-3">
-                <label class="form-label small" for={`organization-create-identity-name-${index}`}>
-                  Name
-                </label>
-                <input
-                  id={`organization-create-identity-name-${index}`}
-                  class="form-control form-control-sm"
-                  value={identity.name}
-                  onInput={(event) => updateIdentity(index, { name: (event.target as HTMLInputElement).value })}
-                  required
-                  disabled={busy}
-                />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small" for={`organization-create-identity-email-${index}`}>
-                  Email
-                </label>
-                <input
-                  id={`organization-create-identity-email-${index}`}
-                  class="form-control form-control-sm"
-                  type="email"
-                  value={identity.email}
-                  onInput={(event) => updateIdentity(index, { email: (event.target as HTMLInputElement).value })}
-                  required
-                  disabled={busy}
-                />
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small" for={`organization-create-identity-title-${index}`}>
-                  Job title
-                </label>
-                <input
-                  id={`organization-create-identity-title-${index}`}
-                  class="form-control form-control-sm"
-                  value={identity.jobTitle}
-                  onInput={(event) => updateIdentity(index, { jobTitle: (event.target as HTMLInputElement).value })}
-                  disabled={busy}
-                />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small">Profile links</label>
-                <ProfileLinksInput
-                  fieldName={`identities.${index}.links`}
-                  value={identity.links}
-                  onChange={(links) => updateIdentity(index, { links })}
-                />
-              </div>
-              <div class="col-md-1">
-                {identities.length > 1 && (
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-danger w-100"
+    <div class="pk">
+      <Panel aria-label="Add organization">
+        <PanelHeader title="Add organization" headingLevel={2} />
+        <PanelBody>
+          <form class="pk-stack" onSubmit={submit}>
+            <div class="pk-grid pk-grid--tight">
+              <Field label="Organization name" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={name}
                     disabled={busy}
-                    onClick={() => setIdentities((current) => current.filter((_, position) => position !== index))}
-                    aria-label={`Remove identity ${index + 1}`}
-                  >
-                    ×
-                  </button>
+                    onInput={(event) => setName((event.target as HTMLInputElement).value)}
+                  />
                 )}
-              </div>
+              </Field>
+              <Field label="Membership category" help="Applied to every identity created with the organization.">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={membershipCategory}
+                    disabled={busy}
+                    onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
+                  >
+                    {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Member since" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="date"
+                    value={memberSince}
+                    disabled={busy}
+                    onInput={(event) => setMemberSince((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Website">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="url"
+                    value={website}
+                    disabled={busy}
+                    onInput={(event) => setWebsite((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Description">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={description}
+                    disabled={busy}
+                    onInput={(event) => setDescription((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
             </div>
-          ))}
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-secondary"
-            disabled={busy || identities.length >= 10}
-            onClick={() => setIdentities((current) => [...current, emptyIdentity()])}
-          >
-            Add identity
-          </button>
-        </fieldset>
 
-        <div class="mb-3">
-          <label class="form-label small fw-semibold" for="organization-create-activation-reason">
-            Immediate activation reason
-          </label>
-          <input
-            id="organization-create-activation-reason"
-            class="form-control form-control-sm"
-            value={activationReason}
-            onInput={(event) => setActivationReason(event.currentTarget.value)}
-            required
-            disabled={busy}
-          />
-        </div>
+            {/* A fieldset per identity, so the repeated "Name" and "Email"
+                labels are announced inside the group they belong to rather
+                than as several identically named controls in one form. */}
+            <fieldset class="pk-fieldset pk-stack">
+              <legend class="pk-field__label">Initial identities</legend>
+              <p class="pk-small">
+                Creating an organization activates these identities immediately and requires identities:activate.
+              </p>
+              {identities.map((identity, index) => (
+                <fieldset class="pk-fieldset pk-stack pk-stack--snug" key={index}>
+                  <legend class="pk-field__label">Identity {index + 1}</legend>
+                  <div class="pk-grid pk-grid--tight">
+                    <Field label="Name" required>
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          value={identity.name}
+                          disabled={busy}
+                          onInput={(event) => updateIdentity(index, { name: (event.target as HTMLInputElement).value })}
+                        />
+                      )}
+                    </Field>
+                    <Field label="Email" required>
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          type="email"
+                          value={identity.email}
+                          disabled={busy}
+                          onInput={(event) =>
+                            updateIdentity(index, { email: (event.target as HTMLInputElement).value })
+                          }
+                        />
+                      )}
+                    </Field>
+                    <Field label="Job title">
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          value={identity.jobTitle}
+                          disabled={busy}
+                          onInput={(event) =>
+                            updateIdentity(index, { jobTitle: (event.target as HTMLInputElement).value })
+                          }
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  <div class="pk-stack pk-stack--tight">
+                    <span class="pk-field__label">Profile links</span>
+                    <ProfileLinksInput
+                      fieldName={`identities.${String(index)}.links`}
+                      value={identity.links}
+                      inputAriaLabel={`Profile URL for identity ${String(index + 1)}`}
+                      onChange={(links) => updateIdentity(index, { links })}
+                    />
+                  </div>
+                  {identities.length > 1 && (
+                    <div class="pk-cluster pk-cluster--end">
+                      <Button
+                        variant="danger-quiet"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setIdentities((current) => current.filter((_, position) => position !== index))}
+                      >
+                        Remove identity {index + 1}
+                      </Button>
+                    </div>
+                  )}
+                </fieldset>
+              ))}
+              <div class="pk-cluster">
+                <Button
+                  size="sm"
+                  disabled={busy || identities.length >= 10}
+                  onClick={() => setIdentities((current) => [...current, emptyIdentity()])}
+                >
+                  Add identity
+                </Button>
+              </div>
+            </fieldset>
 
-        <FormActions
-          submitLabel="Create organization"
-          busyLabel="Creating…"
-          busy={busy}
-          onCancel={onCancel}
-          status={error}
-        />
-      </div>
-    </form>
+            <Field label="Immediate activation reason" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={activationReason}
+                  disabled={busy}
+                  onInput={(event) => setActivationReason(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+
+            {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" loading={busy}>
+                {busy ? "Creating…" : "Create organization"}
+              </Button>
+              <Button onClick={onCancel} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

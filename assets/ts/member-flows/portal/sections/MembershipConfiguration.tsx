@@ -19,15 +19,35 @@ import {
 } from "../../../../shared/schemas/membership-application-form";
 import type { FormDefinitionUpdateInput } from "../../../../shared/schemas/forms";
 import { ErrorAlert } from "../../../components/ErrorAlert";
-import { Badge } from "../../../components/Badge";
+import { Badge as StatusBadge } from "../../../components/Badge";
 import { Spinner } from "../../../components/Spinner";
 import { FormDefinitionEditor, type EditableFormDetail } from "../../../components/forms/FormDefinitionEditor";
+import { Badge } from "../../../ui/Badge";
+import { Button } from "../../../ui/Button";
+import { Field } from "../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { Textarea, TextInput } from "../../../ui/TextControl";
 import { getJson, patchJson } from "../../../shared/api-client";
 import { toast } from "../ui";
 
 const SETTINGS_API = "/api/v1/membership/settings";
 const CATEGORIES_API = "/api/v1/membership/categories";
 const APPLICATION_FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
+
+/** The three review deadlines, each bounded by the shared settings schema. */
+const WINDOW_FIELDS: ReadonlyArray<{ key: keyof typeof MEMBERSHIP_WINDOW_DAY_LIMITS; label: string }> = [
+  { key: "consultationWindowDays", label: "Consultation window (days)" },
+  { key: "ecReviewWindowDays", label: "Executive Council review window (days)" },
+  { key: "onHoldResponseDeadlineDays", label: "On-hold response deadline (days)" },
+];
+
+type RecipientKey = "consultationEmailRecipients" | "ecEmailRecipients" | "ccApplicantEmails";
+
+const RECIPIENT_FIELDS: ReadonlyArray<{ key: RecipientKey; label: string }> = [
+  { key: "consultationEmailRecipients", label: "Consultation email recipients" },
+  { key: "ecEmailRecipients", label: "Executive Council email recipients" },
+  { key: "ccApplicantEmails", label: "CC on applicant emails" },
+];
 
 function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {
   const [detail, setDetail] = useState<EditableFormDetail | null>(null);
@@ -72,30 +92,27 @@ function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {
   }
 
   return (
-    <section class="card border-0 shadow-sm mb-4" aria-labelledby="membership-application-form-heading">
-      <div class="card-body">
-        <h5 id="membership-application-form-heading" class="card-title">
-          Membership application form
-        </h5>
-        <p class="small text-muted">
+    <Panel aria-label="Membership application form">
+      <PanelHeader title="Membership application form" />
+      <PanelBody class="pk-stack">
+        <p class="pk-small">
           Configure the additional questions shown after email verification and category selection. Identity,
           organization, category, and required policy fields remain owned by the membership workflow.
         </p>
         {loading ? (
-          <Spinner />
+          <Spinner label="Loading the membership application form…" />
         ) : error ? (
           <ErrorAlert error={error} />
         ) : detail ? (
           <>
-            <div class="mb-3">
-              <h6>Required policy acknowledgements</h6>
-              <p class="small text-muted">
-                These workflow-owned consent fields are mandatory and cannot be changed here.
-              </p>
-              <ul class="list-group list-group-flush" aria-label="Required policy acknowledgements">
+            <div class="pk-stack pk-stack--snug">
+              <h4>Required policy acknowledgements</h4>
+              <p class="pk-small">These workflow-owned consent fields are mandatory and cannot be changed here.</p>
+              <ul class="pk-stack pk-stack--tight" aria-label="Required policy acknowledgements">
                 {policyFields.map((field) => (
-                  <li class="list-group-item px-0" key={field.key}>
-                    {field.label} <span class="badge text-bg-primary ms-2">Required</span>
+                  <li class="pk-cluster pk-cluster--start" key={field.key}>
+                    <span>{field.label}</span>
+                    <Badge tone="info">Required</Badge>
                   </li>
                 ))}
               </ul>
@@ -111,17 +128,19 @@ function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {
                 onError={(message) => toast(message, "error")}
               />
             ) : (
-              <div>
-                <div class="d-flex gap-2 align-items-center mb-2">
+              <div class="pk-stack pk-stack--snug">
+                <div class="pk-cluster">
                   <strong>{detail.form.title}</strong>
-                  <Badge status={detail.form.status} />
+                  <StatusBadge status={detail.form.status} />
                 </div>
-                {detail.form.description && <p class="small text-muted">{detail.form.description}</p>}
-                <ul class="list-group list-group-flush" aria-label="Membership application form fields">
+                {detail.form.description && <p class="pk-small">{detail.form.description}</p>}
+                <ul class="pk-stack pk-stack--tight" aria-label="Membership application form fields">
                   {detail.fields.map((field) => (
-                    <li class="list-group-item px-0" key={field.key}>
-                      {field.label} <span class="text-muted">({field.fieldType})</span>
-                      {field.required && <span class="badge text-bg-primary ms-2">Required</span>}
+                    <li class="pk-cluster pk-cluster--start" key={field.key}>
+                      <span>
+                        {field.label} <span class="pk-muted">({field.fieldType})</span>
+                      </span>
+                      {field.required && <Badge tone="info">Required</Badge>}
                     </li>
                   ))}
                 </ul>
@@ -129,8 +148,8 @@ function MembershipApplicationFormEditor({ canWrite }: { canWrite: boolean }) {
             )}
           </>
         ) : null}
-      </div>
-    </section>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -166,88 +185,69 @@ function MembershipSettingsForm({ initial, canWrite }: { initial: MembershipSett
   }
 
   return (
-    <form onSubmit={save} class="card border-0 shadow-sm mb-4" autocomplete="off">
-      <div class="card-body">
-        <h5 class="card-title">Application workflow</h5>
-        <p class="small text-muted">Configure review deadlines and operational notification recipients.</p>
-        <div class="row g-3">
-          {[
-            ["consultation-window-days", "Consultation window (days)", "consultationWindowDays"],
-            ["ec-review-window-days", "Executive Council review window (days)", "ecReviewWindowDays"],
-            ["on-hold-deadline-days", "On-hold response deadline (days)", "onHoldResponseDeadlineDays"],
-          ].map(([id, label, key]) => {
-            const limit = MEMBERSHIP_WINDOW_DAY_LIMITS[key as keyof typeof MEMBERSHIP_WINDOW_DAY_LIMITS];
-            return (
-              <div class="col-lg-4" key={String(key)}>
-                <label class="form-label" for={String(id)}>
-                  {label}
-                </label>
-                <input
-                  id={String(id)}
-                  type="number"
-                  min={limit.min}
-                  max={limit.max}
-                  class="form-control"
-                  value={settings[key as keyof MembershipSettings] as number}
+    <form onSubmit={save} autocomplete="off">
+      <Panel>
+        <PanelHeader title="Application workflow" />
+        <PanelBody class="pk-stack">
+          <p class="pk-small">Configure review deadlines and operational notification recipients.</p>
+          <div class="pk-grid pk-grid--tight">
+            {WINDOW_FIELDS.map(({ key, label }) => {
+              const limit = MEMBERSHIP_WINDOW_DAY_LIMITS[key];
+              return (
+                <Field key={key} label={label} help={`Between ${String(limit.min)} and ${String(limit.max)} days.`}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="number"
+                      min={limit.min}
+                      max={limit.max}
+                      value={settings[key]}
+                      disabled={!canWrite || saving}
+                      onInput={(inputEvent) =>
+                        setSettings({ ...settings, [key]: Number((inputEvent.target as HTMLInputElement).value) })
+                      }
+                    />
+                  )}
+                </Field>
+              );
+            })}
+          </div>
+          {RECIPIENT_FIELDS.map(({ key, label }) => (
+            <Field key={key} label={label} help="One or more email addresses, separated by commas.">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  maxlength={MEMBERSHIP_EMAIL_RECIPIENTS_MAX_LENGTH}
+                  value={settings[key]}
                   disabled={!canWrite || saving}
                   onInput={(inputEvent) =>
-                    setSettings({
-                      ...settings,
-                      [key as string]: Number((inputEvent.target as HTMLInputElement).value),
-                    })
+                    setSettings({ ...settings, [key]: (inputEvent.target as HTMLInputElement).value })
                   }
                 />
-              </div>
-            );
-          })}
-          {[
-            ["consultation-recipients", "Consultation email recipients", "consultationEmailRecipients"],
-            ["ec-recipients", "Executive Council email recipients", "ecEmailRecipients"],
-            ["applicant-email-cc", "CC on applicant emails", "ccApplicantEmails"],
-          ].map(([id, label, key]) => (
-            <div class="col-12" key={key}>
-              <label class="form-label" for={id}>
-                {label}
-              </label>
-              <input
-                id={id}
-                class="form-control"
-                maxlength={MEMBERSHIP_EMAIL_RECIPIENTS_MAX_LENGTH}
-                value={settings[key as keyof MembershipSettings] as string}
-                disabled={!canWrite || saving}
-                onInput={(inputEvent) =>
-                  setSettings({ ...settings, [key]: (inputEvent.target as HTMLInputElement).value })
-                }
-              />
-            </div>
+              )}
+            </Field>
           ))}
-          <div class="col-12">
-            <div class="form-check">
-              <input
-                id="auto-reminder-on-holds"
-                class="form-check-input"
-                type="checkbox"
-                checked={settings.autoReminderOnHolds}
-                disabled={!canWrite || saving}
-                onChange={(inputEvent) =>
-                  setSettings({
-                    ...settings,
-                    autoReminderOnHolds: (inputEvent.target as HTMLInputElement).checked,
-                  })
-                }
-              />
-              <label class="form-check-label" for="auto-reminder-on-holds">
-                Send automatic reminders three days before an on-hold deadline
-              </label>
+          <label class="pk-check">
+            <input
+              class="pk-check__input"
+              type="checkbox"
+              checked={settings.autoReminderOnHolds}
+              disabled={!canWrite || saving}
+              onChange={(inputEvent) =>
+                setSettings({ ...settings, autoReminderOnHolds: (inputEvent.target as HTMLInputElement).checked })
+              }
+            />
+            <span class="pk-check__label">Send automatic reminders three days before an on-hold deadline</span>
+          </label>
+          {canWrite && (
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" size="sm" loading={saving}>
+                {saving ? "Saving…" : "Save workflow settings"}
+              </Button>
             </div>
-          </div>
-        </div>
-        {canWrite && (
-          <button type="submit" class="btn btn-primary btn-sm mt-3" disabled={saving}>
-            {saving ? "Saving…" : "Save workflow settings"}
-          </button>
-        )}
-      </div>
+          )}
+        </PanelBody>
+      </Panel>
     </form>
   );
 }
@@ -291,86 +291,75 @@ function MembershipCategoryEditor({
     }
   }
 
-  const fieldPrefix = `membership-category-${category.code.toLowerCase()}`;
   return (
-    <form onSubmit={save} class="card border-0 shadow-sm" autocomplete="off">
-      <div class="card-body">
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-          <h6 class="mb-0">Category {category.code}</h6>
-          <span class="badge text-bg-secondary">{category.isIndividual ? "Individual" : "Organization"}</span>
-          <span class={`badge ${draft.isVoting ? "text-bg-success" : "text-bg-light"}`}>
-            {draft.isVoting ? "Voting" : "Non-voting"}
-          </span>
-        </div>
-        <div class="row g-3">
-          <div class="col-lg-8">
-            <label class="form-label" for={`${fieldPrefix}-label`}>
-              Label
-            </label>
-            <input
-              id={`${fieldPrefix}-label`}
-              class="form-control"
-              maxlength={MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH}
-              value={draft.label}
-              disabled={!canWrite || saving}
-              onInput={(event) => setDraft({ ...draft, label: (event.target as HTMLInputElement).value })}
-            />
+    <form onSubmit={save} autocomplete="off">
+      <Panel>
+        <PanelHeader title={`Category ${category.code}`} headingLevel={4}>
+          <Badge tone="neutral">{category.isIndividual ? "Individual" : "Organization"}</Badge>
+          <Badge tone={draft.isVoting ? "ok" : "neutral"}>{draft.isVoting ? "Voting" : "Non-voting"}</Badge>
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <div class="pk-grid">
+            <Field label="Label">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  maxlength={MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH}
+                  value={draft.label}
+                  disabled={!canWrite || saving}
+                  onInput={(event) => setDraft({ ...draft, label: (event.target as HTMLInputElement).value })}
+                />
+              )}
+            </Field>
+            <Field label="Display order">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="number"
+                  min={0}
+                  value={draft.displayOrder}
+                  disabled={!canWrite || saving}
+                  onInput={(event) =>
+                    setDraft({ ...draft, displayOrder: Number((event.target as HTMLInputElement).value) })
+                  }
+                />
+              )}
+            </Field>
           </div>
-          <div class="col-lg-4">
-            <label class="form-label" for={`${fieldPrefix}-order`}>
-              Display order
-            </label>
-            <input
-              id={`${fieldPrefix}-order`}
-              type="number"
-              min={0}
-              class="form-control"
-              value={draft.displayOrder}
-              disabled={!canWrite || saving}
-              onInput={(event) =>
-                setDraft({ ...draft, displayOrder: Number((event.target as HTMLInputElement).value) })
-              }
-            />
-          </div>
-          <div class="col-12">
-            <label class="form-label" for={`${fieldPrefix}-description`}>
-              Description
-            </label>
-            <textarea
-              id={`${fieldPrefix}-description`}
-              class="form-control"
-              rows={2}
-              maxlength={MEMBERSHIP_CATEGORY_DESCRIPTION_MAX_LENGTH}
-              value={draft.description ?? ""}
-              disabled={!canWrite || saving}
-              onInput={(event) => {
-                const value = (event.target as HTMLTextAreaElement).value;
-                setDraft({ ...draft, description: value || null });
-              }}
-            />
-          </div>
-          <div class="col-12">
-            <div class="form-check">
-              <input
-                id={`${fieldPrefix}-voting`}
-                class="form-check-input"
-                type="checkbox"
-                checked={draft.isVoting}
+          <Field label="Description">
+            {(control) => (
+              <Textarea
+                {...control}
+                rows={2}
+                maxlength={MEMBERSHIP_CATEGORY_DESCRIPTION_MAX_LENGTH}
+                value={draft.description ?? ""}
                 disabled={!canWrite || saving}
-                onChange={(event) => setDraft({ ...draft, isVoting: (event.target as HTMLInputElement).checked })}
+                onInput={(event) => {
+                  const value = (event.target as HTMLTextAreaElement).value;
+                  setDraft({ ...draft, description: value || null });
+                }}
               />
-              <label class="form-check-label" for={`${fieldPrefix}-voting`}>
-                This category has consortium and group voting rights
-              </label>
+            )}
+          </Field>
+          <label class="pk-check">
+            <input
+              class="pk-check__input"
+              type="checkbox"
+              checked={draft.isVoting}
+              disabled={!canWrite || saving}
+              onChange={(event) => setDraft({ ...draft, isVoting: (event.target as HTMLInputElement).checked })}
+            />
+            <span class="pk-check__label">This category has consortium and group voting rights</span>
+          </label>
+          {canWrite && (
+            <div class="pk-cluster">
+              <Button type="submit" size="sm" loading={saving}>
+                {saving ? "Saving…" : `Save category ${category.code}`}
+              </Button>
             </div>
-          </div>
-        </div>
-        {canWrite && (
-          <button type="submit" class="btn btn-outline-primary btn-sm mt-3" disabled={saving}>
-            {saving ? "Saving…" : `Save category ${category.code}`}
-          </button>
-        )}
-      </div>
+          )}
+        </PanelBody>
+      </Panel>
     </form>
   );
 }
@@ -400,24 +389,24 @@ export function MembershipConfiguration({ canWrite }: { canWrite: boolean }) {
 
   useEffect(() => void load(), [load]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading membership configuration…" />;
   if (error) return <ErrorAlert error={error} />;
   if (!settings) return null;
 
   return (
-    <div>
+    <div class="pk pk-stack">
       <MembershipSettingsForm initial={settings} canWrite={canWrite} />
       <MembershipApplicationFormEditor canWrite={canWrite} />
-      <div class="mb-3">
-        <h5>Membership categories</h5>
-        <p class="small text-muted mb-1">
+      <div class="pk-stack pk-stack--tight">
+        <h3>Membership categories</h3>
+        <p class="pk-small">
           Category codes and organization/individual classification are structural and cannot be changed here.
         </p>
-        <p class="small text-warning mb-0">
-          Voting-right changes take effect immediately for consultation concerns and open ballots.
+        <p class="pk-warning-note">
+          Caution: voting-right changes take effect immediately for consultation concerns and open ballots.
         </p>
       </div>
-      <div class="d-grid gap-3">
+      <div class="pk-stack">
         {categories.map((category) => (
           <MembershipCategoryEditor
             key={category.code}

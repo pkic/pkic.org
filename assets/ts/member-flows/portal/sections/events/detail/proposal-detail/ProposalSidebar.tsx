@@ -68,7 +68,10 @@ export function ProposalSidebar({
   }
 
   return (
-    <div class="col-lg-4">
+    // The parent lays these out with `pk-grid --roomy`, so the cell is already
+    // the right width. The `col-lg-4` that used to be here then took a third of
+    // THAT, which is a third of a third above 992px.
+    <div class="pk-stack pk-stack--snug">
       {access.canFinalize && (
         <div class="card mb-3">
           <div class="card-header">

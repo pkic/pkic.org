@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { speakerRoleSchema } from "../../../shared/schemas/registration";
 import { isEligibleReplacementProposerStatus } from "../../../shared/schemas/proposal-status";
 import { proposalSpeakerPatchResponseSchema, type ProposalSpeaker } from "../../../shared/schemas/proposal-speakers";
@@ -10,7 +10,15 @@ import { ProfileLinksInput, type ProfileLinksHandle } from "../ProfileLinksInput
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { requestJson } from "../../shared/api-client";
 import { formatDateTime, type ToastType } from "../../shared/ui";
+import { Badge as ToneBadge } from "../../ui/Badge";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody } from "../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../ui/TextControl";
 import { ProposalSpeakerHeadshotManager } from "./ProposalSpeakerHeadshotManager";
+// `pk-answer-pre` is written here as a class name rather than reached through a
+// component, so this module has to pull its stylesheet into its own chunk.
+import "../../ui/Content.css";
 
 export type { ProposalSpeaker };
 
@@ -69,6 +77,9 @@ export function ProposalSpeakerCard({
   const [removing, setRemoving] = useState(false);
   const [replacementProposerUserId, setReplacementProposerUserId] = useState("");
   const linksRef = useRef<ProfileLinksHandle>(null);
+  // ProfileLinksInput labels its own controls, so the group takes its name from
+  // the visible heading rather than a `for`/`id` pair pointing at nothing.
+  const linksLabelId = `${useId()}-profile-links`;
   const name = [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
   const speakerPath = (suffix = "") => endpoints.speakerPath(proposalId, speaker.userId, suffix);
 
@@ -161,10 +172,10 @@ export function ProposalSpeakerCard({
 
   const profileLinks = normalizeProfileLinks(speaker.links);
   return (
-    <div class="card mb-3">
-      <div class="card-body">
-        <div class="d-flex gap-3 align-items-start">
-          <div class="flex-shrink-0">
+    <div class="pk">
+      <Panel>
+        <PanelBody class="pk-stack pk-stack--snug">
+          <div class="pk-cluster pk-cluster--start">
             <ProposalSpeakerHeadshotManager
               speaker={speaker}
               proposalId={proposalId}
@@ -175,186 +186,187 @@ export function ProposalSpeakerCard({
               onSaved={onSaved}
               notify={notify}
             />
-          </div>
-          <div class="flex-fill min-w-0">
-            <div class="d-flex gap-2 align-items-center flex-wrap mb-1">
-              <strong>{name}</strong>
-              {name !== speaker.email && <span class="text-muted small">{speaker.email}</span>}
-              <Badge status={speaker.role} />
-              <Badge status={speaker.status} />
-            </div>
-            {(speaker.organizationName || speaker.jobTitle) && (
-              <div class="small text-muted mb-1">
-                {[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}
+            <div class="pk-stack pk-stack--tight">
+              <div class="pk-cluster">
+                <strong>{name}</strong>
+                {name !== speaker.email && <span class="pk-small">{speaker.email}</span>}
+                <Badge status={speaker.role} />
+                <Badge status={speaker.status} />
               </div>
-            )}
-            <div class="d-flex gap-2 flex-wrap">
-              {speaker.confirmedAt && (
-                <span class="small text-success">✓ Confirmed {formatDateTime(speaker.confirmedAt)}</span>
+              {(speaker.organizationName || speaker.jobTitle) && (
+                <div class="pk-small">{[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}</div>
               )}
-              {speaker.declinedAt && (
-                <span class="small text-danger">✗ Declined {formatDateTime(speaker.declinedAt)}</span>
-              )}
-              {speaker.status === "invited" && speaker.inviteExpiresAt && (
-                <span class="small text-muted">Invitation expires {formatDateTime(speaker.inviteExpiresAt)}</span>
-              )}
-            </div>
-            {speaker.declineReason && <div class="small text-muted mt-1">Decline reason: {speaker.declineReason}</div>}
-            {!editing && speaker.biography && (
-              <p class="small text-muted mt-2 mb-0 adm-pre-wrap">{speaker.biography}</p>
-            )}
-            {!editing && profileLinks.length > 0 && (
-              <div class="small mt-2 d-flex flex-column gap-1">
-                {profileLinks.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noreferrer">
-                    {url}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-          <div class="flex-shrink-0 d-flex flex-column gap-1 align-items-end">
-            {!speaker.hasBio && <span class="badge text-bg-warning">No bio</span>}
-            {!speaker.hasHeadshot && <span class="badge text-bg-warning">No headshot</span>}
-            {canEdit && (
-              <button class="btn btn-sm btn-outline-secondary" onClick={() => setEditing((current) => !current)}>
-                {editing ? "Cancel" : "Edit profile"}
-              </button>
-            )}
-            {canFinalize && (
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                title="Send profile completion reminder"
-                onClick={() => void sendReminder("profile")}
-              >
-                ✉ Profile reminder
-              </button>
-            )}
-            {canFinalize && requiresPresentation && decisionStatus === "accepted" && (
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                title="Send presentation upload reminder"
-                onClick={() => void sendReminder("presentation")}
-              >
-                ✉ Presentation reminder
-              </button>
-            )}
-            {canFinalize && replacementSpeakers.length > 0 && (
-              <>
-                {isCurrentProposer && (
-                  <select
-                    class="form-select form-select-sm"
-                    data-replacement-proposer
-                    aria-label="Replacement proposer"
-                    value={replacementProposerUserId}
-                    onChange={(event) => setReplacementProposerUserId((event.target as HTMLSelectElement).value)}
-                  >
-                    <option value="">Choose replacement proposer…</option>
-                    {replacementSpeakers.map((replacement) => (
-                      <option key={replacement.userId} value={replacement.userId}>
-                        {replacement.label}
-                      </option>
-                    ))}
-                  </select>
+              {/* The lifecycle badge beside the name already carries the state
+                  and its tone; these lines only say when it happened, so they
+                  stay plain text instead of repeating the colour. */}
+              <div class="pk-cluster">
+                {speaker.confirmedAt && <span class="pk-small">Confirmed {formatDateTime(speaker.confirmedAt)}</span>}
+                {speaker.declinedAt && <span class="pk-small">Declined {formatDateTime(speaker.declinedAt)}</span>}
+                {speaker.status === "invited" && speaker.inviteExpiresAt && (
+                  <span class="pk-small">Invitation expires {formatDateTime(speaker.inviteExpiresAt)}</span>
                 )}
-                <button
-                  class="btn btn-sm btn-outline-danger"
-                  data-remove-proposal-speaker
-                  disabled={removing || (isCurrentProposer && !replacementProposerUserId)}
-                  onClick={() => void removeSpeaker()}
-                >
-                  {removing ? "Removing…" : "Remove speaker"}
-                </button>
-              </>
-            )}
-            {canFinalize && replacementSpeakers.length === 0 && (
-              <span class="small text-muted text-end">
-                Add an invited or confirmed replacement speaker. Otherwise, ask the proposer to use the separate
-                Withdraw proposal action; every proposal must retain its speaker roster.
-              </span>
-            )}
-          </div>
-        </div>
-        {editing && (
-          <form onSubmit={(event) => void handleSave(event)} class="mt-3 border-top pt-3">
-            <div class="row g-3">
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">First name</label>
-                <input
-                  class="form-control"
-                  value={firstName}
-                  onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
-                />
               </div>
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">Last name</label>
-                <input
-                  class="form-control"
-                  value={lastName}
-                  onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
-                />
-              </div>
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">Organization</label>
-                <input
-                  class="form-control"
-                  value={organizationName}
-                  onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
-                />
-              </div>
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">Job title</label>
-                <input
-                  class="form-control"
-                  value={jobTitle}
-                  onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
-                />
-              </div>
-              <div class="col-12">
-                <label class="form-label fw-semibold">Role</label>
-                <select
-                  class="form-select"
-                  value={role}
-                  onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
-                >
-                  {isCurrentProposer ? (
-                    <option value="proposer">Proposer</option>
-                  ) : (
-                    <>
-                      <option value="speaker">Speaker</option>
-                      <option value="co_speaker">Co-speaker</option>
-                      <option value="moderator">Moderator</option>
-                      <option value="panelist">Panelist</option>
-                    </>
-                  )}
-                </select>
-              </div>
-              <div class="col-12">
-                <label class="form-label fw-semibold">Biography</label>
-                <textarea
-                  class="form-control"
-                  rows={4}
-                  value={bio}
-                  onInput={(event) => setBio((event.target as HTMLTextAreaElement).value)}
-                  placeholder="Speaker biography…"
-                />
-              </div>
-              <div class="col-12">
-                <label class="form-label fw-semibold">Profile links</label>
-                <ProfileLinksInput ref={linksRef} fieldName={`speakerProfileLink.${speaker.userId}`} />
-              </div>
-              <div class="col-12">
-                <button type="submit" class="btn btn-primary" disabled={saving}>
-                  {saving ? "Saving…" : "Save profile"}
-                </button>
-                <button type="button" class="btn btn-outline-secondary ms-2" onClick={() => setEditing(false)}>
-                  Cancel
-                </button>
-              </div>
+              {speaker.declineReason && <div class="pk-small">Decline reason: {speaker.declineReason}</div>}
             </div>
-          </form>
-        )}
-      </div>
+            <div class="pk-cluster pk-cluster--end pk-push">
+              {!speaker.hasBio && <ToneBadge tone="warn">No bio</ToneBadge>}
+              {!speaker.hasHeadshot && <ToneBadge tone="warn">No headshot</ToneBadge>}
+              {canEdit && (
+                <Button size="sm" onClick={() => setEditing((current) => !current)}>
+                  {editing ? "Cancel" : "Edit profile"}
+                </Button>
+              )}
+              {canFinalize && (
+                <Button size="sm" title="Send profile completion reminder" onClick={() => void sendReminder("profile")}>
+                  ✉ Profile reminder
+                </Button>
+              )}
+              {canFinalize && requiresPresentation && decisionStatus === "accepted" && (
+                <Button
+                  size="sm"
+                  title="Send presentation upload reminder"
+                  onClick={() => void sendReminder("presentation")}
+                >
+                  ✉ Presentation reminder
+                </Button>
+              )}
+              {canFinalize && replacementSpeakers.length > 0 && (
+                <>
+                  {isCurrentProposer && (
+                    <Select
+                      data-replacement-proposer
+                      aria-label="Replacement proposer"
+                      value={replacementProposerUserId}
+                      onChange={(event) => setReplacementProposerUserId((event.target as HTMLSelectElement).value)}
+                    >
+                      <option value="">Choose replacement proposer…</option>
+                      {replacementSpeakers.map((replacement) => (
+                        <option key={replacement.userId} value={replacement.userId}>
+                          {replacement.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="danger-quiet"
+                    data-remove-proposal-speaker
+                    disabled={removing || (isCurrentProposer && !replacementProposerUserId)}
+                    onClick={() => void removeSpeaker()}
+                  >
+                    {removing ? "Removing…" : "Remove speaker"}
+                  </Button>
+                </>
+              )}
+              {canFinalize && replacementSpeakers.length === 0 && (
+                <span class="pk-small">
+                  Add an invited or confirmed replacement speaker. Otherwise, ask the proposer to use the separate
+                  Withdraw proposal action; every proposal must retain its speaker roster.
+                </span>
+              )}
+            </div>
+          </div>
+          {!editing && speaker.biography && <p class="pk-small pk-answer-pre">{speaker.biography}</p>}
+          {!editing && profileLinks.length > 0 && (
+            <div class="pk-stack pk-stack--tight pk-small">
+              {profileLinks.map((url) => (
+                <a key={url} href={url} target="_blank" rel="noreferrer">
+                  {url}
+                </a>
+              ))}
+            </div>
+          )}
+          {editing && (
+            <form onSubmit={(event) => void handleSave(event)} class="pk-stack">
+              <div class="pk-grid pk-grid--tight">
+                <Field label="First name">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={firstName}
+                      onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Last name">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={lastName}
+                      onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Organization">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={organizationName}
+                      onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+                <Field label="Job title">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      value={jobTitle}
+                      onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
+                    />
+                  )}
+                </Field>
+              </div>
+              <Field label="Role">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={role}
+                    onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
+                  >
+                    {isCurrentProposer ? (
+                      <option value="proposer">Proposer</option>
+                    ) : (
+                      <>
+                        <option value="speaker">Speaker</option>
+                        <option value="co_speaker">Co-speaker</option>
+                        <option value="moderator">Moderator</option>
+                        <option value="panelist">Panelist</option>
+                      </>
+                    )}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Biography">
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    rows={4}
+                    value={bio}
+                    onInput={(event) => setBio((event.target as HTMLTextAreaElement).value)}
+                    placeholder="Speaker biography…"
+                  />
+                )}
+              </Field>
+              <div class="pk-stack pk-stack--tight">
+                <span class="pk-strong" id={linksLabelId}>
+                  Profile links
+                </span>
+                <div role="group" aria-labelledby={linksLabelId}>
+                  <ProfileLinksInput ref={linksRef} fieldName={`speakerProfileLink.${speaker.userId}`} />
+                </div>
+              </div>
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" loading={saving}>
+                  {saving ? "Saving…" : "Save profile"}
+                </Button>
+                <Button type="button" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

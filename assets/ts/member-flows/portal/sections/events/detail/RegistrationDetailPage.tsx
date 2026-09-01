@@ -7,6 +7,11 @@ import { getJson, postJson } from "../../../../../shared/api-client";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../../components/forms/FormResponseViews";
+import { Alert } from "../../../../../ui/Alert";
+import { Button } from "../../../../../ui/Button";
+import { Field } from "../../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { TextInput } from "../../../../../ui/TextControl";
 import {
   eventRegistrationDetailResponseSchema,
   type EventRegistrationDetailResponse,
@@ -21,20 +26,29 @@ import {
   RegistrationAuditLogSection,
   RegistrationEmailEditor,
 } from "./registration-detail/RegistrationPanels";
-import { RegistrationActionCard } from "./registration-detail/RegistrationActionCard";
+import { attendanceTypeLabel } from "../attendance";
 import { eventRegistrationPath, eventRegistrationResourcePath, eventRegistrationsViewPath } from "./registration-paths";
+import "../../../../../ui/Content.css";
 
-function attendanceTypeLabel(t: string): string {
-  return { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" }[t] ?? t;
+/**
+ * The outcome of a background action, as the reader sees it.
+ *
+ * The Bootstrap surface told a queued email and a rejected one apart with
+ * `text-success` and `text-danger` on the same span, so the two outcomes
+ * differed only by hue. An Alert carries the tone and the role together —
+ * `status` for a success, `alert` for a failure — and the sentence says which
+ * happened without anyone having to decode a colour.
+ */
+interface ActionOutcome {
+  tone: "ok" | "danger";
+  message: string;
 }
-
-// ─── Day attendance table ─────────────────────────────────────────────────────
-
-// ─── Main detail page ─────────────────────────────────────────────────────────
 
 export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; regId: string; onBack?: () => void }) {
   const [, navigate] = usePortalHashLocation();
-  const [resendStatus, setResendStatus] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendOutcome, setResendOutcome] = useState<ActionOutcome | null>(null);
+  const [copyStatus, setCopyStatus] = useState("");
   const [openingManage, setOpeningManage] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -46,8 +60,9 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
   const reg = data?.registration;
   const form = data?.form ?? null;
 
-  async function handleResend() {
-    setResendStatus("Sending…");
+  async function handleResend(): Promise<void> {
+    setResending(true);
+    setResendOutcome(null);
     try {
       await postJson(
         eventRegistrationResourcePath(slug, regId, "notifications"),
@@ -55,15 +70,17 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
         eventRegistrationNotificationResponseSchema,
       );
       toast("Confirmation email queued", "success");
-      setResendStatus("✓ Queued");
+      setResendOutcome({ tone: "ok", message: "Confirmation email queued." });
     } catch (e) {
-      const msg = (e as Error).message;
-      setResendStatus(msg);
-      toast(msg, "error");
+      const message = (e as Error).message;
+      setResendOutcome({ tone: "danger", message });
+      toast(message, "error");
+    } finally {
+      setResending(false);
     }
   }
 
-  async function handleOpenManage() {
+  async function handleOpenManage(): Promise<void> {
     setOpeningManage(true);
     try {
       const { manageUrl } = await postJson(
@@ -79,7 +96,7 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
     }
   }
 
-  async function handleRegenerateBadge() {
+  async function handleRegenerateBadge(): Promise<void> {
     setRegenerating(true);
     try {
       await postJson(
@@ -95,7 +112,22 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
     }
   }
 
-  if (loading) return <Spinner />;
+  /*
+   * Copying can be refused — an insecure origin, a browser that withholds the
+   * clipboard, a denied permission — and the old surface fired and forgot, so
+   * a refusal looked exactly like a success. Both endings are announced, and
+   * the failure says what to do instead.
+   */
+  async function handleCopyReferralLink(url: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyStatus("Referral link copied to the clipboard.");
+    } catch {
+      setCopyStatus("Could not copy the referral link. Select the field above and copy it manually.");
+    }
+  }
+
+  if (loading) return <Spinner label="Loading this registration…" />;
   if (error) return <ErrorAlert error={error} />;
   if (!reg) return null;
 
@@ -103,148 +135,125 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
   const ogBadgeUrl = reg.referral_code
     ? `${window.location.origin}/api/v1/registrations/referrals/${reg.referral_code}/badge`
     : null;
-  const name = reg.display_name ?? reg.user_email ?? "—";
+  const name = reg.display_name ?? reg.user_email ?? "This registration";
+  const answersTitle = form?.title ? `Registration answers — ${form.title}` : "Registration answers";
 
   return (
-    <div>
-      {/* Back + header */}
-      <div class="d-flex align-items-center gap-2 mb-3">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          onClick={() => (onBack ? onBack() : navigate(eventRegistrationsViewPath(slug)))}
-        >
+    <div class="pk pk-stack">
+      <div class="pk-cluster">
+        <Button size="sm" onClick={() => (onBack ? onBack() : navigate(eventRegistrationsViewPath(slug)))}>
           ← Back
-        </button>
-        <h5 class="mb-0">{name}</h5>
+        </Button>
+        <h2>{name}</h2>
         <Badge status={reg.status} />
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
+        <Button size="sm" class="pk-push" onClick={() => void reload()}>
           ↺ Refresh
-        </button>
+        </Button>
       </div>
 
-      {/* Summary row */}
-      <div class="row g-3 mb-3">
-        <div class="col-md-3">
-          <div class="card card-body p-3">
-            <div class="small text-muted mb-1">Email</div>
-            <RegistrationEmailEditor
-              email={reg.user_email ?? "—"}
-              slug={slug}
-              regId={regId}
-              isCancelled={reg.status === "cancelled"}
-              onSaved={() => void reload()}
-            />
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card card-body p-3">
-            <div class="small text-muted mb-1">Attendance</div>
-            <div>{reg.attendance_type ? attendanceTypeLabel(reg.attendance_type) : "—"}</div>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card card-body p-3">
-            <div class="small text-muted mb-1">Source</div>
-            <div>{reg.source_type ?? "—"}</div>
-          </div>
-        </div>
-        <div class="col-md-3">
-          <div class="card card-body p-3">
-            <div class="small text-muted mb-1">Registered</div>
-            <div class="mono small">{fmt(reg.created_at)}</div>
-          </div>
-        </div>
-      </div>
+      <Panel>
+        <PanelHeader title="Registration summary" />
+        <PanelBody>
+          <dl class="pk-datalist pk-small">
+            <dt>Email</dt>
+            <dd>
+              <RegistrationEmailEditor
+                email={reg.user_email ?? "Not recorded"}
+                slug={slug}
+                regId={regId}
+                isCancelled={reg.status === "cancelled"}
+                onSaved={() => void reload()}
+              />
+            </dd>
+            <dt>Attendance</dt>
+            <dd>{attendanceTypeLabel(reg.attendance_type)}</dd>
+            <dt>Source</dt>
+            <dd>{reg.source_type}</dd>
+            <dt>Registered</dt>
+            <dd class="pk-mono">{fmt(reg.created_at)}</dd>
+          </dl>
+        </PanelBody>
+      </Panel>
 
-      {/* Linked form responses */}
       {(form || (reg.customAnswers && Object.keys(reg.customAnswers).length > 0)) && (
-        <div class="card mb-3">
-          <div class="card-header">
-            <h6 class="mb-0">
-              Registration Answers
-              {form?.title && <span class="text-muted fw-normal ms-2">— {form.title}</span>}
-            </h6>
-          </div>
-          <div class="card-body p-0">
+        <Panel>
+          <PanelHeader title={answersTitle} />
+          <PanelBody>
             <FormAnswerTable answers={reg.customAnswers} fields={form?.fields} />
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
 
-      {/* Actions row */}
-      <div class="row g-3 mb-3">
-        <RegistrationActionCard title="Manage" description="Opens the registrant-facing manage page in a new tab.">
-          <button class="btn btn-sm btn-primary" onClick={() => void handleOpenManage()} disabled={openingManage}>
-            {openingManage ? "Opening…" : "Open Manage Page ↗"}
-          </button>
-        </RegistrationActionCard>
-
-        <RegistrationActionCard title="Confirmation Email" description="Rotates the token and re-queues the email.">
-          <button class="btn btn-sm btn-outline-primary" onClick={() => void handleResend()}>
-            Resend Email
-          </button>
-          {resendStatus && (
-            <div class={`mt-2 small ${resendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>
-              {resendStatus}
+      <div class="pk-grid pk-grid--roomy">
+        <Panel>
+          <PanelHeader title="Manage" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <p class="pk-small">Opens the registrant-facing manage page in a new tab.</p>
+            <div class="pk-cluster">
+              <Button size="sm" variant="primary" loading={openingManage} onClick={() => void handleOpenManage()}>
+                {openingManage ? "Opening…" : "Open manage page ↗"}
+              </Button>
             </div>
-          )}
-        </RegistrationActionCard>
+          </PanelBody>
+        </Panel>
 
-        <RegistrationActionCard title="Social Promo Kit">
-          {shareUrl ? (
-            <>
-              <div class="mb-2">
-                <label class="form-label small fw-semibold mb-1">Referral Link</label>
-                <div class="input-group input-group-sm">
-                  <input type="text" class="form-control form-control-sm mono" value={shareUrl} readOnly />
-                  <button
-                    class="btn btn-outline-secondary"
-                    onClick={() => void navigator.clipboard.writeText(shareUrl)}
-                    title="Copy link"
-                  >
-                    📋
-                  </button>
+        <Panel>
+          <PanelHeader title="Confirmation email" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <p class="pk-small">Rotates the token and re-queues the email.</p>
+            <div class="pk-cluster">
+              <Button size="sm" loading={resending} onClick={() => void handleResend()}>
+                {resending ? "Sending…" : "Resend email"}
+              </Button>
+            </div>
+            {resendOutcome && <Alert tone={resendOutcome.tone}>{resendOutcome.message}</Alert>}
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Social promo kit" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            {shareUrl && ogBadgeUrl ? (
+              <>
+                <Field label="Referral link" help="Share this link so registrations are credited to this attendee.">
+                  {(control) => <TextInput {...control} class="pk-mono" value={shareUrl} readOnly />}
+                </Field>
+                <div class="pk-cluster">
+                  <Button size="sm" onClick={() => void handleCopyReferralLink(shareUrl)}>
+                    Copy link
+                  </Button>
+                  <a class="pk-btn pk-btn--secondary pk-btn--sm" href={ogBadgeUrl} target="_blank" rel="noopener">
+                    View badge ↗
+                  </a>
+                  <Button size="sm" loading={regenerating} onClick={() => void handleRegenerateBadge()}>
+                    {regenerating ? "Regenerating…" : "Regenerate badge"}
+                  </Button>
                 </div>
-              </div>
-              <div class="d-flex flex-wrap gap-1">
-                <a href={ogBadgeUrl!} target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
-                  View Badge 📷
-                </a>
-                <button
-                  class="btn btn-sm btn-outline-secondary"
-                  onClick={() => void handleRegenerateBadge()}
-                  disabled={regenerating}
-                >
-                  {regenerating ? "Regenerating…" : "Regenerate Badge 🔄"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <p class="small text-muted fst-italic mb-0">No referral code.</p>
-          )}
-        </RegistrationActionCard>
+                <p class="pk-small" role="status">
+                  {copyStatus}
+                </p>
+              </>
+            ) : (
+              <p class="pk-small">This registration has no referral code, so there is no promo kit to share.</p>
+            )}
+          </PanelBody>
+        </Panel>
       </div>
 
-      {/* Badge role */}
-      <div class="card mb-3">
-        <div class="card-header">
-          <h6 class="mb-0">Badge Role</h6>
-        </div>
-        <div class="card-body">
-          <p class="small text-muted mb-2">Set the role shown on the attendee's promotional badge.</p>
+      <Panel>
+        <PanelHeader title="Badge role" />
+        <PanelBody class="pk-stack pk-stack--snug">
+          <p class="pk-small">Set the role shown on the attendee's promotional badge.</p>
           <BadgeRolePanel slug={slug} regId={regId} />
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
 
-      {/* Audit log */}
-      <div class="card mb-3">
-        <div class="card-header">
-          <h6 class="mb-0">Audit Log</h6>
-        </div>
-        <div class="card-body">
+      <Panel>
+        <PanelHeader title="Audit log" />
+        <PanelBody>
           <RegistrationAuditLogSection slug={slug} regId={regId} />
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

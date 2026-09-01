@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupFormDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupFormDetail";
 import { GroupFormEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormEditor";
+import { controlFor, typeInto } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
 
@@ -49,6 +50,10 @@ function setValue(element: HTMLInputElement, value: string): void {
   element.value = value;
   element.dispatchEvent(new Event("input", { bubbles: true }));
 }
+
+/** The per-field row names its controls with aria-label, not a visible label. */
+const FIELD_KEY_INPUT = 'input[aria-label="Field key (lowercase, letters, digits, underscores)"]';
+const FIELD_LABEL_INPUT = 'input[aria-label="Field label"]';
 
 function detail(ownerGroupId: string, capabilities: string[]) {
   return {
@@ -123,13 +128,13 @@ describe("group form management", () => {
       <GroupFormEditor groupId={GROUP_ID} detail={null} onSaved={() => undefined} onCancel={() => undefined} />,
     );
     await settle();
-    setValue(container.querySelector<HTMLInputElement>("input.mono:not(.adm-fkey-input)")!, "member-survey");
+    await typeInto(controlFor(container, "Key"), "member-survey");
     await settle();
-    setValue(container.querySelector<HTMLInputElement>(".col-md-4 input")!, "Member survey");
+    await typeInto(controlFor(container, "Title"), "Member survey");
     await settle();
-    setValue(container.querySelector<HTMLInputElement>(".adm-fkey-input")!, "priority");
+    setValue(container.querySelector<HTMLInputElement>(FIELD_KEY_INPUT)!, "priority");
     await settle();
-    setValue(container.querySelector<HTMLInputElement>(".adm-flabel-input")!, "Priority");
+    setValue(container.querySelector<HTMLInputElement>(FIELD_LABEL_INPUT)!, "Priority");
     await settle();
     await act(async () => {
       container
@@ -156,7 +161,7 @@ describe("group form management", () => {
 
     expect(container.textContent).toContain("Save availability");
     expect(container.textContent).not.toContain("Edit form");
-    expect(container.querySelector(".adm-fkey-input")).toBeNull();
+    expect(container.querySelector(FIELD_KEY_INPUT)).toBeNull();
   });
 
   it("does not fetch statistics for the default respond tab", async () => {

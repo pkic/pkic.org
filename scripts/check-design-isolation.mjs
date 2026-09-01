@@ -62,6 +62,15 @@ const scanned = [
   "assets/ts/components/Table.tsx",
   "assets/ts/components/ApiDataTable.tsx",
   "assets/ts/components/Pager.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage.tsx",
+  "assets/ts/components/proposals/ProposalSpeakerCard.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/RegistrationDetailPage.tsx",
+  "assets/ts/member-flows/portal/sections/management/EventDaysEditor.tsx",
+  "assets/ts/member-flows/portal/sections/MembershipConfiguration.tsx",
+  "assets/ts/components/forms/FormDefinitionEditor.tsx",
+  "assets/ts/member-flows/portal/sections/system-organizations/OrganizationCreateForm.tsx",
+  "assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile.tsx",
+  "assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

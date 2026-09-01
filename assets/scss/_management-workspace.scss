@@ -377,50 +377,8 @@ $adm-danger: #dc3545;
 
   // ── Bar charts ──────────────────────────────────────────────────────────────
 
-  .bar-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-  }
-
-  .bar-lbl {
-    width: 130px;
-    font-size: 0.78rem;
-    color: $adm-muted;
-    flex-shrink: 0;
-  }
-
-  .bar-progress {
-    flex: 1;
-    height: 6px;
-    appearance: none;
-    border: 0;
-    border-radius: 3px;
-    overflow: hidden;
-
-    &::-webkit-progress-bar {
-      background: #e9ecef;
-    }
-    &::-webkit-progress-value {
-      background: $adm-green;
-    }
-    &::-moz-progress-bar {
-      background: $adm-green;
-    }
-  }
-
   .adm-email-batch-limit {
     width: 90px;
-  }
-
-  .bar-cnt {
-    width: 30px;
-    font-size: 0.75rem;
-    color: $adm-muted;
-    text-align: right;
-    flex-shrink: 0;
-    font-family: monospace;
   }
 
   // ── Form response statistics ───────────────────────────────────────────────
@@ -648,10 +606,6 @@ $adm-danger: #dc3545;
     }
 
     .adm-form-stat-bars {
-      .bar-row {
-        height: 1.75rem;
-      }
-
       .adm-form-meter {
         height: 0.65rem;
       }
@@ -970,11 +924,6 @@ $adm-danger: #dc3545;
     font-size: 1rem;
     flex-shrink: 0;
   }
-  .adm-table-label-col {
-    width: 30%;
-    min-width: 100px;
-  }
-
   // ── Pagination ──────────────────────────────────────────────────────────────
 
   .adm-pager {
@@ -992,16 +941,6 @@ $adm-danger: #dc3545;
         border-color: $adm-green;
       }
     }
-  }
-
-  .adm-pager-range {
-    font-family: "Courier New", monospace;
-    font-size: 0.75rem;
-  }
-
-  .adm-pager-size {
-    width: auto;
-    font-size: 0.75rem;
   }
 
   // ── Promoters leaderboard ──────────────────────────────────────────────────
@@ -1265,109 +1204,6 @@ $adm-danger: #dc3545;
 
   // ── Form field editor ────────────────────────────────────────────────────────
 
-  // Compact, single-row card header for form field cards
-  .adm-field-card {
-    border: 1px solid $adm-border;
-    border-radius: 0.5rem;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  }
-
-  .adm-field-card-head {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    background: #f8f9fa;
-    border-bottom: 1px solid $adm-border;
-    flex-wrap: wrap;
-  }
-
-  .adm-field-num {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: $adm-muted;
-    background: #e9ecef;
-    border-radius: 0.25rem;
-    padding: 0.15rem 0.4rem;
-    flex-shrink: 0;
-    font-family: "Courier New", monospace;
-  }
-
-  .adm-fkey-input {
-    width: 130px;
-    flex-shrink: 0;
-    font-family: "Courier New", monospace;
-    font-size: 0.8rem;
-  }
-
-  .adm-flabel-input {
-    flex: 1;
-    min-width: 120px;
-  }
-
-  .adm-ftype-select {
-    width: 120px;
-    flex-shrink: 0;
-  }
-
-  .adm-field-move-btn {
-    width: 2rem;
-    height: 2rem;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    flex-shrink: 0;
-  }
-
-  // Visual / JSON mode segmented toggle
-  .adm-field-mode-toggle {
-    display: inline-flex;
-    border: 1px solid $adm-border;
-    border-radius: 0.375rem;
-    overflow: hidden;
-  }
-
-  .adm-field-mode-btn {
-    padding: 0.2rem 0.65rem;
-    font-size: 0.78rem;
-    font-weight: 500;
-    border: none;
-    background: transparent;
-    color: $adm-muted;
-    cursor: pointer;
-    transition:
-      background 0.12s,
-      color 0.12s;
-
-    &:hover:not(.active) {
-      background: #f0f0f0;
-    }
-
-    &.active {
-      background: $adm-green;
-      color: #fff;
-    }
-  }
-
-  // Raw JSON textarea
-  .adm-field-raw-json {
-    font-family: "Courier New", monospace;
-    font-size: 0.78rem;
-    background: #1e1e2e;
-    color: #cdd6f4;
-    border-color: #313244;
-    border-radius: 0.375rem;
-
-    &:focus {
-      background: #1e1e2e;
-      color: #cdd6f4;
-      border-color: $adm-green;
-      box-shadow: 0 0 0 0.2rem rgba($adm-green, 0.2);
-    }
-  }
 }
 
 .adm-due-work-limit {

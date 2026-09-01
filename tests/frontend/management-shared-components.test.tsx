@@ -12,7 +12,6 @@ import { FormActions } from "../../assets/ts/components/FormActions";
 import { MembershipCategoryPicker } from "../../assets/ts/components/MembershipCategoryPicker";
 import { TimeZoneSelect } from "../../assets/ts/components/TimeZoneSelect";
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
-import { RegistrationActionCard } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationActionCard";
 import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SettingsEditor";
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
@@ -144,19 +143,6 @@ describe("shared management presentation components", () => {
     expect(submit.disabled).toBe(true);
     expect(cancel.disabled).toBe(true);
     expect(container.textContent).toContain("Waiting");
-  });
-
-  it("renders registration actions in the common card structure", () => {
-    const container = mount(
-      <div class="row">
-        <RegistrationActionCard title="Confirmation Email" description="Re-queues the email.">
-          <button>Resend</button>
-        </RegistrationActionCard>
-      </div>,
-    );
-    expect(container.querySelector(".card-header")?.textContent).toContain("Confirmation Email");
-    expect(container.textContent).toContain("Re-queues the email.");
-    expect(container.querySelector("button")?.textContent).toBe("Resend");
   });
 
   it("renders one settings shell for loading, errors, actions, and content", () => {
