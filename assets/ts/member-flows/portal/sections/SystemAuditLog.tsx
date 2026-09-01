@@ -4,7 +4,11 @@ import { ApiDataTable } from "../../../components/ApiDataTable";
 import { DetailsSummary } from "../../../components/DetailsSummary";
 import { EntityLink } from "../../../components/EntityLink";
 import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
+import { Button } from "../../../ui/Button";
+import { Field } from "../../../ui/Field";
+import { TextInput } from "../../../ui/TextControl";
 import { portalEntityHref } from "../entity-links";
+import "../../../ui/Content.css";
 
 interface AuditFilters {
   entityType: string;
@@ -24,18 +28,11 @@ function AuditFilterInput({
   placeholder: string;
 }) {
   return (
-    <div>
-      <label class="form-label small mb-1" for={`system-audit-${name}`}>
-        {label}
-      </label>
-      <input
-        id={`system-audit-${name}`}
-        name={name}
-        type="search"
-        class="form-control form-control-sm"
-        placeholder={placeholder}
-      />
-    </div>
+    // `Field` owns the label/control `for`+`id` pair, so the filter can no
+    // longer end up with a label pointing at an id that is not there.
+    <Field label={label}>
+      {(control) => <TextInput {...control} name={name} type="search" placeholder={placeholder} />}
+    </Field>
   );
 }
 
@@ -59,7 +56,8 @@ export function SystemAuditLog() {
       }}
       toolbar={({ resetPage }) => (
         <form
-          class="d-flex gap-2 align-items-end flex-wrap"
+          class="pk-stack pk-stack--snug"
+          aria-label="Audit log filters"
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -71,22 +69,31 @@ export function SystemAuditLog() {
             resetPage();
           }}
         >
-          <AuditFilterInput name="entityType" label="Entity type" placeholder="e.g. event" />
-          <AuditFilterInput name="actorType" label="Actor type" placeholder="e.g. user" />
-          <AuditFilterInput name="action" label="Action" placeholder="e.g. event_updated" />
-          <button type="submit" class="btn btn-sm btn-outline-secondary">
-            Apply filters
-          </button>
-          <button
-            type="reset"
-            class="btn btn-sm btn-link"
-            onClick={() => {
-              setFilters(EMPTY_FILTERS);
-              resetPage();
-            }}
-          >
-            Clear
-          </button>
+          {/* A grid rather than a flex row: three filters and two buttons wrap
+              into a readable shape on a phone without a breakpoint class each,
+              and the buttons keep their own line instead of floating against
+              the middle of a taller field. */}
+          <div class="pk-grid pk-grid--tight">
+            <AuditFilterInput name="entityType" label="Entity type" placeholder="e.g. event" />
+            <AuditFilterInput name="actorType" label="Actor type" placeholder="e.g. user" />
+            <AuditFilterInput name="action" label="Action" placeholder="e.g. event_updated" />
+          </div>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" size="sm">
+              Apply filters
+            </Button>
+            <Button
+              type="reset"
+              variant="link"
+              size="sm"
+              onClick={() => {
+                setFilters(EMPTY_FILTERS);
+                resetPage();
+              }}
+            >
+              Clear
+            </Button>
+          </div>
         </form>
       )}
       columns={[
@@ -94,7 +101,7 @@ export function SystemAuditLog() {
           header: "When",
           cell: (entry) =>
             new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
-          className: "text-nowrap small text-muted",
+          className: "pk-nowrap pk-small pk-muted",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {
@@ -102,33 +109,33 @@ export function SystemAuditLog() {
           cell: (entry) => (
             <>
               {entry.actor_type === "system" ? (
-                <span class="text-muted">System</span>
+                <span class="pk-muted">System</span>
               ) : (
                 <EntityLink href={entry.actor_id ? portalEntityHref(entry.actor_type, entry.actor_id) : null}>
                   {entry.actor_display ? (
                     entry.actor_display
                   ) : entry.actor_id ? (
-                    <span class="text-muted small mono">{entry.actor_id}</span>
+                    <span class="pk-small pk-mono">{entry.actor_id}</span>
                   ) : (
-                    <span class="text-muted">{entry.actor_type}</span>
+                    <span class="pk-muted">{entry.actor_type}</span>
                   )}
                 </EntityLink>
               )}
-              <div class="text-muted small">{entry.actor_type}</div>
+              <div class="pk-small">{entry.actor_type}</div>
             </>
           ),
-          className: "small",
+          className: "pk-small",
           sort: { asc: "actor", desc: "-actor" },
         },
         {
           header: "Action",
-          cell: (entry) => <code class="small">{entry.action}</code>,
+          cell: (entry) => <code class="pk-small">{entry.action}</code>,
           sort: { asc: "action", desc: "-action" },
         },
         {
           header: "Entity",
           cell: (entry) => <Badge status={entry.entity_type} label={entry.entity_type} />,
-          className: "small text-muted",
+          className: "pk-small pk-muted",
           sort: { asc: "entity_type", desc: "-entity_type" },
         },
         {
@@ -139,7 +146,7 @@ export function SystemAuditLog() {
             ) : (
               "—"
             ),
-          className: "mono small text-muted",
+          className: "pk-mono pk-small pk-muted",
         },
         {
           header: "Details",

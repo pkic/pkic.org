@@ -1,21 +1,34 @@
 import { fmt } from "../../ui";
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+// `pk-mono` is defined in Content.css, which ships in a lazy chunk, so the
+// module that writes the class name has to import the stylesheet itself.
+import "../../../../ui/Content.css";
 
 export function ApplicationConcernsCard({ detail }: { detail: MembershipApplicationDetail }) {
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Consultation concerns</div>
-      <div class="card-body">
-        <ul class="list-unstyled small mb-0">
-          {detail.concerns.map((c) => (
-            <li key={c.id} class="mb-2">
-              {c.concernText}
-              <div class="mono text-muted small">{fmt(c.createdAt)}</div>
-            </li>
-          ))}
-          {detail.concerns.length === 0 && <li class="text-muted">None submitted.</li>}
-        </ul>
-      </div>
+    <div class="pk">
+      <Panel aria-label="Consultation concerns">
+        <PanelHeader title="Consultation concerns" />
+        <PanelBody>
+          {detail.concerns.length === 0 ? (
+            // An empty list used to be a muted `<li>` reading "None submitted."
+            // — a list item that is not an item. EmptyState says it in a
+            // `role="status"` region instead, and the list disappears with it.
+            <EmptyState title="No concerns submitted." />
+          ) : (
+            <ul class="pk-stack pk-stack--snug pk-small">
+              {detail.concerns.map((concern) => (
+                <li key={concern.id}>
+                  {concern.concernText}
+                  <div class="pk-mono pk-muted pk-small">{fmt(concern.createdAt)}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

@@ -314,6 +314,49 @@ describe("portal group creation and category policy", () => {
       ],
     });
     expect(onUpdated).toHaveBeenCalled();
+
+    // The matrix names itself and every control in it, so a reader moving
+    // through the grid always knows which category a checkbox belongs to
+    // without a visible row header to read back.
+    expect(container.querySelector("table caption")?.textContent).toBe("Membership category eligibility");
+    expect(
+      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((input) =>
+        input.getAttribute("aria-label"),
+      ),
+    ).toEqual([
+      "Organization member may join",
+      "Organization member automatic enrollment",
+      "Student may join",
+      "Student automatic enrollment",
+    ]);
+    // The confirmation is announced as well as tinted, so the outcome reaches
+    // a reader who never sees the tone.
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Membership category rules updated.");
+
+    await act(() => render(null, container));
+    container.remove();
+  });
+
+  it("announces a failed category-rules load as an alert and shows no matrix to edit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("category rules unavailable", { status: 503 }))),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(<GroupCategoryRulesEditor groupId={GROUP_ID} onUpdated={async () => undefined} />, container),
+    );
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).not.toBe("");
+    // With nothing loaded there is nothing to save, so the affirmative action
+    // is out of play rather than offering to write an empty policy.
+    expect(buttonNamed(container, "Save category rules").disabled).toBe(true);
+    expect(container.textContent).toContain("No membership categories are configured.");
+
     await act(() => render(null, container));
     container.remove();
   });

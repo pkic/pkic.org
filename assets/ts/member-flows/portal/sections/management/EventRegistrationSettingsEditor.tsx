@@ -11,6 +11,9 @@ import {
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Select } from "../../../../ui/TextControl";
 import { getJson, putJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { EventFormPlacementEditor } from "./EventFormPlacementEditor";
@@ -74,53 +77,52 @@ export function EventRegistrationSettingsEditor({
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading registration settings…" />;
   if (!settings && error) return <ErrorAlert error={error} />;
   if (!settings) return null;
 
   return (
-    <div class="d-flex flex-column gap-3">
-      <p class="small text-muted mb-0">
-        Enable registration after configuring at least one required attendee term. Custom registration questions are
-        optional.
-      </p>
-      <div>
-        <label class="form-label small fw-semibold" for={`event-registration-policy-${eventId}`}>
-          Registration policy
-        </label>
-        <select
-          id={`event-registration-policy-${eventId}`}
-          class="form-select form-select-sm"
-          value={registrationPolicy}
-          disabled={saving}
-          onChange={(event) => setRegistrationPolicy(event.currentTarget.value as EventRegistrationPolicy)}
+    <div class="pk pk-stack pk-stack--loose">
+      <div class="pk-stack">
+        {/* The sentence is the policy control's guidance, so it hangs off the
+            control through aria-describedby rather than sitting above it as
+            prose a screen reader never connects to the choice. */}
+        <Field
+          label="Registration policy"
+          help="Enable registration after configuring at least one required attendee term. Custom registration questions are optional."
         >
-          {EVENT_REGISTRATION_POLICIES.map((policy) => (
-            <option key={policy} value={policy}>
-              {EVENT_REGISTRATION_POLICY_LABELS[policy]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <button
-        type="button"
-        class="btn btn-sm btn-success align-self-start"
-        disabled={saving}
-        onClick={() => void saveSettings()}
-      >
-        {saving ? "Saving…" : "Save registration settings"}
-      </button>
-      {error && <ErrorAlert error={error} />}
-      {showFormConfiguration && (
-        <div class="border-top pt-3">
-          <EventFormPlacementEditor
-            groupId={groupId}
-            eventId={eventId}
-            purpose="event_registration"
-            expectedUpdatedAt={expectedUpdatedAt}
-            onRevision={onRevision}
-          />
+          {(control) => (
+            <Select
+              {...control}
+              value={registrationPolicy}
+              disabled={saving}
+              onChange={(event) => setRegistrationPolicy(event.currentTarget.value as EventRegistrationPolicy)}
+            >
+              {EVENT_REGISTRATION_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {EVENT_REGISTRATION_POLICY_LABELS[policy]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <div class="pk-cluster">
+          <Button variant="primary" size="sm" loading={saving} onClick={() => void saveSettings()}>
+            {saving ? "Saving…" : "Save registration settings"}
+          </Button>
         </div>
+        {error && <ErrorAlert error={error} />}
+      </div>
+      {/* The rule that used to separate the two halves is gone: the parent's
+          gap says the same thing without a border on an inner element. */}
+      {showFormConfiguration && (
+        <EventFormPlacementEditor
+          groupId={groupId}
+          eventId={eventId}
+          purpose="event_registration"
+          expectedUpdatedAt={expectedUpdatedAt}
+          onRevision={onRevision}
+        />
       )}
     </div>
   );

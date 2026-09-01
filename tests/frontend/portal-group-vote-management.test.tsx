@@ -7,7 +7,10 @@ import {
   groupVoteCreateInputSchema,
   groupVoteVisibilityUpdateInputSchema,
 } from "../../assets/shared/schemas/group-vote-management";
-import { groupVoteProposalRejectSchema } from "../../assets/shared/schemas/group-vote-proposals";
+import {
+  groupVoteProposalCreateSchema,
+  groupVoteProposalRejectSchema,
+} from "../../assets/shared/schemas/group-vote-proposals";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
 import { GroupVoteManagementControls } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
@@ -366,20 +369,23 @@ describe("selected-group vote management", () => {
         ) as HTMLButtonElement
       ).click(),
     );
+    // Resolved through the label's `for` and the control's `id`: the form no
+    // longer hand-writes ids, and the pair is what a reader actually gets.
     await act(() => {
-      setValue(container.querySelector("#group-vote-proposal-title") as HTMLInputElement, "Architecture proposal");
-      setValue(
-        container.querySelector("#group-vote-proposal-description") as HTMLTextAreaElement,
-        "Adopt the architecture.",
-      );
+      setValue(labeledControl(container, "Title"), "Architecture proposal");
+      setValue(labeledControl<HTMLTextAreaElement>(container, "Description"), "Adopt the architecture.");
     });
-    await act(() => (container.querySelector("form button[type='submit']") as HTMLButtonElement).click());
+    await act(() => buttonNamed(container, "Submit proposal").click());
     await settle();
 
     const submission = requests.find((request) => request.method === "POST");
-    expect(submission).toMatchObject({
-      path: `/api/v1/groups/${GROUP_ID}/vote-proposals`,
-      body: { title: "Architecture proposal", description: "Adopt the architecture.", voteType: "motion" },
+    expect(submission?.path).toBe(`/api/v1/groups/${GROUP_ID}/vote-proposals`);
+    // Parsed through the shared request contract rather than compared to a
+    // literal, so the assertion fails if the payload stops being a valid one.
+    expect(groupVoteProposalCreateSchema.parse(submission?.body)).toMatchObject({
+      title: "Architecture proposal",
+      description: "Adopt the architecture.",
+      voteType: "motion",
     });
     expect(submission?.body).not.toHaveProperty("ownerGroupId");
   });

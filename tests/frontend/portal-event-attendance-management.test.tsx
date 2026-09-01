@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { eventAttendanceRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
 import { GroupEventRegistrations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrations";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -273,5 +274,132 @@ describe("portal event attendance management", () => {
     });
     expect(container.textContent).toContain("VIP override applied");
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin/"))).toBe(false);
+  });
+
+  it("names the roster and every one of its columns", async () => {
+    installApi(false);
+    const container = mount();
+    await settle();
+
+    expect(container.querySelector("caption")?.textContent).toBe("Event attendees");
+    const headers = [...container.querySelectorAll("thead th")].map((cell) =>
+      (cell.textContent ?? "").replace(/[↑↓↕]/g, "").trim(),
+    );
+    expect(headers).toEqual(["Name / email", "Status", "Attendance", "Registered", "Manage"]);
+    // The column that used to have a blank header now has one.
+    for (const header of headers) expect(header).not.toBe("");
+  });
+
+  it("gives each row's toggle a name that says whose attendance it opens", async () => {
+    installApi(false);
+    const container = mount();
+    await settle();
+
+    const toggle = Array.from(container.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "Manage attendance",
+    );
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle?.getAttribute("aria-label")).toBe("Manage attendance for Group Member");
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle?.getAttribute("aria-label")).toBe("Hide attendance for Group Member");
+  });
+
+  it("serves the roster the shared list contract describes", async () => {
+    const captured: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith(`/events/${EVENT_ID}/registrations`)) {
+          const body = registrationList();
+          captured.push(body);
+          return Promise.resolve(json(body));
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+    const container = mount();
+    await settle();
+
+    // The fixture is held to the shared response contract rather than to a
+    // shape this test invented.
+    for (const body of captured) expect(() => eventAttendanceRegistrationsListResponseSchema.parse(body)).not.toThrow();
+    expect(container.textContent).toContain("Group Member");
+  });
+
+  it("states the failure when the roster cannot be loaded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ error: { code: "server_error", message: "HTTP 500" } }), {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          }),
+        ),
+      ),
+    );
+    const container = mount();
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Something went wrong on our side.");
+    // The heading stays, so the reader still knows what failed to load.
+    expect(container.querySelector("h3")?.textContent).toBe("Attendees");
+  });
+
+  it("names the opened attendance region and states its type in the shared words", async () => {
+    installApi(false);
+    const container = mount();
+    await openAttendance(container);
+
+    // The expanded region names itself, so it is reachable as a region rather
+    // than being an unlabelled run of text inside a table row.
+    const region = container.querySelector<HTMLElement>('section[aria-label="Attendance for Group Member"]');
+    expect(region).not.toBeNull();
+    expect(region?.querySelector("h4")?.textContent).toBe("Group Member");
+    expect(region?.textContent).toContain("member@example.test");
+    // The shared vocabulary rather than an underscore-stripping replace, so
+    // "in_person" reads as "In-person" here exactly as it does on the roster.
+    expect(region?.textContent).toContain("In-person");
+    expect(region?.textContent).not.toContain("in person");
+  });
+
+  it("states the failure when one registration's attendance cannot be loaded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === REGISTRATION_ENDPOINT) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "That registration is gone." } }), {
+              status: 404,
+              headers: { "content-type": "application/json" },
+            }),
+          );
+        }
+        return Promise.resolve(json(registrationList()));
+      }),
+    );
+    const container = mount();
+    await openAttendance(container);
+
+    // The detail row says why it is empty instead of collapsing to nothing,
+    // and the roster behind it is untouched.
+    const alerts = [...container.querySelectorAll('[role="alert"]')].map((node) => node.textContent ?? "");
+    expect(alerts.some((text) => text.includes("That registration is gone."))).toBe(true);
+    expect(container.textContent).toContain("Group Member");
   });
 });

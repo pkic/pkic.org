@@ -466,6 +466,83 @@ describe("portal group meeting management", () => {
     expect(controlFor(container, "Affiliation").required).toBe(false);
   });
 
+  it("draws the series' active switch as a real check block, and names the generate panel", () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ series })),
+    );
+
+    const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+
+    // All three parts, or the browser draws its own box in its own accent —
+    // which no gate can see and which looks like a bug beside our controls.
+    const active = container.querySelector<HTMLLabelElement>("label.pk-check")!;
+    expect(active.querySelector("input.pk-check__input")).not.toBeNull();
+    expect(active.querySelector("span.pk-check__label")?.textContent).toBe("Active series");
+    expect(container.querySelector<HTMLInputElement>(`#meeting-series-active-${series.id}`)).not.toBeNull();
+
+    // The generation panel is a named region, not an unlabelled box among the
+    // several this editor stacks up.
+    const panel = [...container.querySelectorAll("section.pk-panel")].at(-1);
+    const headingId = panel?.getAttribute("aria-labelledby");
+    expect(headingId).toBeTruthy();
+    expect(container.querySelector(`[id="${headingId!}"]`)?.textContent).toBe("Generate recurring occurrences");
+
+    // And its one control is named by a real for/id pair.
+    expect(controlFor(container, "Generate through").tagName.toLowerCase()).toBe("input");
+  });
+
+  it("keeps the series form open and announces a rejected save as an alert", async () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "conflict" }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+    await typeInto(controlFor(container, "Meeting name"), "Renamed call");
+    await act(async () => {
+      container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert).not.toBeNull();
+    // The reader is told what happened in a sentence, not by a status code or
+    // a red border, and the draft they typed is still there to retry.
+    expect(alert?.textContent).toContain("Someone else changed this at the same time.");
+    expect(controlFor<HTMLInputElement>(container, "Meeting name").value).toBe("Renamed call");
+    expect(buttonNamed(container, "Save series")).toBeDefined();
+  });
+
+  it("names each series panel after the series it belongs to, and links no tab to a missing id", async () => {
+    const series = baseSeries();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+
+    // The tabs navigate, so they are links marked `aria-current` — not the
+    // ARIA tab pattern, and so the regions below are named sections rather
+    // than tabpanels pointing at ids no link carries.
+    expect(container.querySelector("[role='tabpanel']")).toBeNull();
+    const region = container.querySelector("section[aria-label]");
+    expect(region?.getAttribute("aria-label")).toBe("Architecture call occurrences");
+    for (const element of container.querySelectorAll("[aria-labelledby]")) {
+      const target = element.getAttribute("aria-labelledby")!;
+      expect(container.querySelector(`[id="${target}"]`)).not.toBeNull();
+    }
+  });
+
   it("opens the tab given by an initial resourceTab", async () => {
     const series = baseSeries();
     vi.stubGlobal(

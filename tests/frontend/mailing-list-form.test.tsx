@@ -3,7 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
-import type { MembershipCategory } from "../../assets/shared/schemas/membership-categories";
+import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { MailingListForm } from "../../assets/ts/components/mailing-lists/MailingListForm";
 import { emptyMailingListDraft, mailingListDraftToPayload } from "../../assets/ts/components/mailing-lists/model";
 import { controlFor, labelNames, typeInto } from "./helpers/labelled-control";
@@ -184,12 +184,19 @@ describe("shared mailing-list form model", () => {
     const container = mount(<MailingListForm draft={emptyMailingListDraft()} onChange={vi.fn()} />);
 
     const checks = [...container.querySelectorAll("label.pk-check")];
-    expect(checks).toHaveLength(2);
+    // One per membership category the picker offers, then the form's own two
+    // switches. Counting all of them keeps the picker inside the same
+    // guarantee: a `pk-check` label with no `pk-check__input` renders the
+    // operating system's own box, which no gate can see.
+    expect(checks).toHaveLength(MEMBERSHIP_CATEGORIES.length + 2);
     for (const check of checks) {
       expect(check.querySelector("input.pk-check__input")).not.toBeNull();
       expect(check.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
     }
-    expect(checks.map((check) => check.textContent)).toEqual(["Primary discussion", "Active"]);
+    expect(checks.slice(0, MEMBERSHIP_CATEGORIES.length).map((check) => check.textContent)).toEqual([
+      ...MEMBERSHIP_CATEGORIES,
+    ]);
+    expect(checks.slice(-2).map((check) => check.textContent)).toEqual(["Primary discussion", "Active"]);
   });
 
   it("reports an edit that still satisfies the shared create contract", async () => {

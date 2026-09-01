@@ -1,12 +1,15 @@
-import { useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 import { VoteDetails } from "../Votes/VoteDetails";
 import { GroupVoteCreateForm } from "./GroupVoteCreateForm";
@@ -26,6 +29,9 @@ export function GroupVotes({
   canParticipate: boolean;
   initialVoteId?: string;
 }) {
+  const idBase = useId();
+  const tabIdPrefix = `${idBase}-tab`;
+  const panelId = `${idBase}-panel`;
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(initialVoteId ?? null);
   const [showCreate, setShowCreate] = useState(false);
@@ -46,132 +52,149 @@ export function GroupVotes({
   }
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-body">
-        <ul class="nav nav-tabs mb-3">
-          <li class="nav-item">
-            <button type="button" class={`nav-link${tab === "votes" ? " active" : ""}`} onClick={() => setTab("votes")}>
-              All votes
-            </button>
-          </li>
-          <li class="nav-item">
-            <button
-              type="button"
-              class={`nav-link${tab === "proposals" ? " active" : ""}`}
-              onClick={() => setTab("proposals")}
-            >
-              Proposals
-            </button>
-          </li>
-        </ul>
-        {tab === "proposals" ? (
-          <GroupVoteProposals groupId={groupId} canParticipate={canParticipate} />
-        ) : (
-          <>
-            {showCreate && (
-              <GroupVoteCreateForm
-                groupId={groupId}
-                onCreated={async () => {
-                  setShowCreate(false);
-                  await tableActions.current?.reload();
-                }}
-                onCancel={() => setShowCreate(false)}
-              />
-            )}
-            <ApiDataTable
-              caption="All votes"
-              endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes`}
-              responseSchema={groupVotesListResponseSchema}
-              resolve={(response) => response.votes}
-              resolvePage={(response) => response.page}
-              paginate
-              createAction={canManage ? { label: "Create vote", onSelect: () => setShowCreate(true) } : undefined}
-              searchPlaceholder="Search votes…"
-              initialSort="-closes_at"
-              actionsRef={tableActions}
-              columns={[
-                {
-                  header: "Vote",
-                  cell: (vote) => (
-                    <div>
-                      <div class="fw-semibold">{vote.title}</div>
-                      {vote.description && <div class="small text-muted">{vote.description}</div>}
-                    </div>
-                  ),
-                  sort: { asc: "title", desc: "-title" },
-                },
-                { header: "Type", cell: (vote) => <Badge status={vote.voteType} /> },
-                {
-                  header: "Status",
-                  cell: (vote) => <Badge status={vote.status} />,
-                  sort: { asc: "status", desc: "-status" },
-                },
-                {
-                  header: "Closes",
-                  cell: (vote) => fmt(vote.closesAt),
-                  className: "text-nowrap",
-                  sort: { asc: "closes_at", desc: "-closes_at", defaultDirection: "desc" },
-                },
-                { header: "Access", cell: (vote) => <ResourceCapabilities capabilities={vote.capabilities} /> },
-                {
-                  header: "",
-                  className: "text-end",
-                  cell: (vote) => (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-secondary"
-                      aria-expanded={selectedVoteId === vote.id}
-                      onClick={() => setSelectedVoteId((current) => (current === vote.id ? null : vote.id))}
-                    >
-                      {selectedVoteId === vote.id ? "Hide" : "Details"}
-                    </button>
-                  ),
-                },
-              ]}
-              empty={
-                canManage ? (
-                  <EmptyState title="No votes yet" body="Create a vote to get started." />
-                ) : (
-                  "No votes are available through this group."
-                )
-              }
-              rowKey={(vote) => vote.id}
-              detailRow={(vote) => {
-                if (selectedVoteId !== vote.id) return null;
-                if (detail.loading) return <Spinner label="Loading vote…" />;
-                if (detail.error) return <ErrorAlert error={detail.error} />;
-                if (detail.data?.vote.id !== vote.id) return null;
-                return (
-                  <div class="p-3 bg-body-tertiary">
-                    {detail.data.vote.capabilities.includes("manage") && (
-                      <>
-                        {detail.data.vote.ownerGroupId === groupId && (
-                          <ResourceSharingEditor
-                            kind="vote"
-                            groupId={groupId}
-                            resourceId={detail.data.vote.id}
-                            ownerGroupId={detail.data.vote.ownerGroupId}
-                          />
+    <div class="pk">
+      <Panel aria-label="Votes">
+        {/* The strip was a `<ul>` of buttons wearing `nav-link`: it looked
+            like a tab set and announced itself as a list, so nothing told a
+            screen reader which of the two was showing or that the arrows
+            move between them. Nothing here navigates — both panels are on
+            this page — so it is the WAI-ARIA tab pattern, with the panel
+            pointing back at the tab that opened it. */}
+        <PanelBody class="pk-stack">
+          <Tabs
+            label="Vote sections"
+            idPrefix={tabIdPrefix}
+            active={tab}
+            onChange={(key) => setTab(key as "votes" | "proposals")}
+            items={[
+              { key: "votes", label: "All votes", panelId },
+              { key: "proposals", label: "Proposals", panelId },
+            ]}
+          />
+          <div id={panelId} role="tabpanel" aria-labelledby={`${tabIdPrefix}-${tab}`} class="pk-stack">
+            {tab === "proposals" ? (
+              <GroupVoteProposals groupId={groupId} canParticipate={canParticipate} />
+            ) : (
+              <>
+                {showCreate && (
+                  <GroupVoteCreateForm
+                    groupId={groupId}
+                    onCreated={async () => {
+                      setShowCreate(false);
+                      await tableActions.current?.reload();
+                    }}
+                    onCancel={() => setShowCreate(false)}
+                  />
+                )}
+                <ApiDataTable
+                  caption="All votes"
+                  endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes`}
+                  responseSchema={groupVotesListResponseSchema}
+                  resolve={(response) => response.votes}
+                  resolvePage={(response) => response.page}
+                  paginate
+                  createAction={canManage ? { label: "Create vote", onSelect: () => setShowCreate(true) } : undefined}
+                  searchPlaceholder="Search votes…"
+                  initialSort="-closes_at"
+                  actionsRef={tableActions}
+                  columns={[
+                    {
+                      header: "Vote",
+                      cell: (vote) => (
+                        <div class="pk-stack pk-stack--tight">
+                          <span class="pk-strong">{vote.title}</span>
+                          {vote.description && <span class="pk-small">{vote.description}</span>}
+                        </div>
+                      ),
+                      sort: { asc: "title", desc: "-title" },
+                    },
+                    { header: "Type", cell: (vote) => <Badge status={vote.voteType} /> },
+                    {
+                      header: "Status",
+                      cell: (vote) => <Badge status={vote.status} />,
+                      sort: { asc: "status", desc: "-status" },
+                    },
+                    {
+                      header: "Closes",
+                      cell: (vote) => fmt(vote.closesAt),
+                      className: "pk-nowrap",
+                      sort: { asc: "closes_at", desc: "-closes_at", defaultDirection: "desc" },
+                    },
+                    { header: "Access", cell: (vote) => <ResourceCapabilities capabilities={vote.capabilities} /> },
+                    {
+                      header: "",
+                      className: "pk-end",
+                      cell: (vote) => (
+                        // The control names the vote it belongs to: a page of
+                        // rows otherwise offers a column of buttons all
+                        // called "Details".
+                        <Button
+                          size="sm"
+                          aria-label={`${selectedVoteId === vote.id ? "Hide" : "Details"} for ${vote.title}`}
+                          aria-expanded={selectedVoteId === vote.id}
+                          onClick={() => setSelectedVoteId((current) => (current === vote.id ? null : vote.id))}
+                        >
+                          {selectedVoteId === vote.id ? "Hide" : "Details"}
+                        </Button>
+                      ),
+                    },
+                  ]}
+                  empty={
+                    canManage ? (
+                      // An empty list a manager can act on hands them the
+                      // action rather than naming what is absent and stopping.
+                      <EmptyState
+                        title="No votes yet"
+                        body="Create a vote to get started."
+                        action={{ label: "Create vote", onSelect: () => setShowCreate(true) }}
+                      />
+                    ) : (
+                      "No votes are available through this group."
+                    )
+                  }
+                  rowKey={(vote) => vote.id}
+                  detailRow={(vote) => {
+                    if (selectedVoteId !== vote.id) return null;
+                    if (detail.loading) return <Spinner label="Loading vote…" />;
+                    if (detail.error) return <ErrorAlert error={detail.error} />;
+                    if (detail.data?.vote.id !== vote.id) return null;
+                    return (
+                      // The expanded cell has no padding of its own — DataTable
+                      // zeroes it so the row's owner decides — so the panel body
+                      // supplies it on the space scale, and its `gap` replaces
+                      // the margins the stacked editors each used to carry.
+                      <PanelBody class="pk-stack">
+                        {detail.data.vote.capabilities.includes("manage") && (
+                          <>
+                            {detail.data.vote.ownerGroupId === groupId && (
+                              <ResourceSharingEditor
+                                kind="vote"
+                                groupId={groupId}
+                                resourceId={detail.data.vote.id}
+                                ownerGroupId={detail.data.vote.ownerGroupId}
+                              />
+                            )}
+                            <GroupVoteManagementControls
+                              groupId={groupId}
+                              vote={detail.data.vote}
+                              onChanged={reloadSelectedVote}
+                            />
+                          </>
                         )}
-                        <GroupVoteManagementControls
-                          groupId={groupId}
+                        <VoteDetails
                           vote={detail.data.vote}
+                          ballotEndpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(vote.id)}/ballots`}
                           onChanged={reloadSelectedVote}
                         />
-                      </>
-                    )}
-                    <VoteDetails
-                      vote={detail.data.vote}
-                      ballotEndpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(vote.id)}/ballots`}
-                      onChanged={reloadSelectedVote}
-                    />
-                  </div>
-                );
-              }}
-            />
-          </>
-        )}
-      </div>
+                      </PanelBody>
+                    );
+                  }}
+                />
+              </>
+            )}
+          </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

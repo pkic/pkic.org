@@ -1,7 +1,7 @@
 {{- $page := .page -}} {{- $fieldKey := .fieldKey -}}
 <section class="membership-legal-card" data-membership-legal-field="{{ $fieldKey }}">
   <header class="membership-legal-card-header">
-    <p class="mb-0">
+    <p>
       Review the
       <a href="{{ $page.RelPermalink }}" target="_blank" rel="noopener noreferrer">{{ $page.Title }}</a>, scroll to the
       bottom, and confirm your agreement.
@@ -13,21 +13,25 @@
       <h3>{{ .Title }}</h3>
       {{ .Content }} {{- end }} {{ $page.Content }}
     </article>
-    <div class="membership-legal-acceptance">
-      <div class="form-check">
+    {{/* All three parts of the checkbox pattern: the block on the wrapper, the
+         element class on the input, and the element class on its label. The
+         input keeps its own `data-` hooks, which is what join-form.tsx and the
+         end-to-end spec locate it by. */}}
+    <div class="membership-legal-acceptance pk-stack pk-stack--snug">
+      <div class="pk-check">
         <input
-          class="form-check-input"
+          class="pk-check__input"
           type="checkbox"
           id="custom-{{ $fieldKey }}"
           name="custom.{{ $fieldKey }}"
           data-membership-legal-input
           required
         />
-        <label class="form-check-label fw-semibold" for="custom-{{ $fieldKey }}" data-membership-legal-label
+        <label class="pk-check__label pk-strong" for="custom-{{ $fieldKey }}" data-membership-legal-label
           >I agree to the membership terms in this document</label
         >
-        <div class="invalid-feedback d-block" data-field-error="{{ $fieldKey }}"></div>
       </div>
+      <div class="pk-field__message" data-field-error="{{ $fieldKey }}"></div>
     </div>
   </div>
 </section>

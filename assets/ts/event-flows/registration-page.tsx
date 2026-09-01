@@ -31,9 +31,8 @@ import {
 } from "../components/RegistrationDayStatusSummary";
 import { optionsFor } from "../shared/form/custom-field-rules";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
+import { installEmailReviewCard, resetEmailReviewConfirmation } from "./registration-email-review";
 type RegistrationSubmitResponse = RegistrationSubmissionResponse;
-
-const EMAIL_REVIEW_FIELD = "emailReviewConfirmed";
 
 type CustomAnswerValue = string | number | boolean | string[] | { start: string; end: string };
 
@@ -74,7 +73,7 @@ function showSuccessPanel(
     title = `Check your email to finish registration${firstName ? `, ${firstName}` : ""}`;
     body = (
       <>
-        <div class="event-flow-pending-alert text-start" role="alert">
+        <div class="event-flow-pending-alert pk-start" role="alert">
           <span class="event-flow-review-warning-marker" aria-hidden="true">
             !
           </span>
@@ -93,19 +92,19 @@ function showSuccessPanel(
             </ul>
           </div>
         </div>
-        <div class="event-flow-submission-review text-start">
+        <div class="event-flow-submission-review pk-start">
           <p class="event-flow-submission-review-label">Confirmation email sent to</p>
           <p class="event-flow-submission-review-value">{email}</p>
           {result.manageUrl && (
             <div class="event-flow-submission-action">
-              <p class="small mb-0">Wrong email address?</p>
-              <a href={result.manageUrl} class="btn btn-outline-success">
+              <p class="pk-small">Wrong email address?</p>
+              <a href={result.manageUrl} class="pk-btn pk-btn--secondary">
                 Edit email address
               </a>
             </div>
           )}
         </div>
-        <p class="text-muted small mb-0">
+        <p class="pk-small">
           If the email does not arrive after a few minutes, check your spam folder and confirm that the address above is
           correct.
         </p>
@@ -117,15 +116,16 @@ function showSuccessPanel(
     showShare = !!result.shareUrl;
     body = (
       <>
-        <p class="event-flow-success-body">
-          Your overall registration is confirmed, but one or more selected in-person days are still pending because
-          those rooms are at capacity.
-          {result.manageUrl && (
-            <a href={result.manageUrl} class="d-block mt-2">
-              Review or change registration
-            </a>
-          )}
-        </p>
+        {/* The link is a sibling of the sentence rather than a block-level
+            anchor inside it: the stack's gap is what separates them, and a
+            paragraph is no longer asked to contain a block. */}
+        <div class="pk-stack pk-stack--snug">
+          <p class="event-flow-success-body">
+            Your overall registration is confirmed, but one or more selected in-person days are still pending because
+            those rooms are at capacity.
+          </p>
+          {result.manageUrl && <a href={result.manageUrl}>Review or change registration</a>}
+        </div>
         <RegistrationDayStatusSummary dayAttendance={result.dayAttendance} dayWaitlist={result.dayWaitlist} />
       </>
     );
@@ -390,58 +390,6 @@ function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, cust
   if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
 }
 
-export function findEmailReviewCard(form: HTMLFormElement): {
-  confirmation: HTMLInputElement;
-  card: HTMLElement;
-} | null {
-  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (!(confirmation instanceof HTMLInputElement)) return null;
-  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
-  return card ? { confirmation, card } : null;
-}
-
-function resetEmailReviewConfirmation(form: HTMLFormElement): void {
-  const review = findEmailReviewCard(form);
-  if (!review) return;
-  review.confirmation.checked = false;
-  syncEmailReviewCard(form);
-}
-
-function syncEmailReviewCard(form: HTMLFormElement): void {
-  const review = findEmailReviewCard(form);
-  if (!review) return;
-  const { confirmation, card } = review;
-
-  card.classList.toggle("is-checked", confirmation.checked);
-  card.classList.toggle("is-invalid", form.classList.contains("was-validated") && !confirmation.checked);
-  card.setAttribute("aria-checked", String(confirmation.checked));
-}
-
-function installEmailReviewCard(form: HTMLFormElement): void {
-  const review = findEmailReviewCard(form);
-  if (!review) return;
-  const { confirmation, card } = review;
-
-  const toggle = (): void => {
-    confirmation.checked = !confirmation.checked;
-    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
-    syncEmailReviewCard(form);
-  };
-
-  card.addEventListener("click", (event) => {
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest("label, input")) return;
-    toggle();
-  });
-  card.addEventListener("keydown", (event) => {
-    if (event.key !== " " && event.key !== "Enter") return;
-    event.preventDefault();
-    toggle();
-  });
-  confirmation.addEventListener("change", () => syncEmailReviewCard(form));
-  syncEmailReviewCard(form);
-}
-
 async function applyGeolocationCountryHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
   try {
     const geolocationCountry = await getJson(`${apiBase}/geolocation/country`, geolocationCountryResponseSchema);
@@ -539,7 +487,8 @@ async function main(): Promise<void> {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     updateRegistrationReview(boot.root, form, customFieldDefs);
-    form.classList.add("was-validated");
+    // `validateBeforeSubmit` below is what marks the form as validated; adding
+    // the class here as well was a second owner for the same state.
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) {
       return;

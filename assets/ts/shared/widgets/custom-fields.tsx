@@ -4,6 +4,11 @@ import type { FormField } from "../types";
 import type { AttendanceType } from "../../../shared/schemas/registration";
 import { isFieldVisible, readRules, type FieldRules } from "../form/custom-field-rules";
 import { CustomFieldInput } from "../form/custom-field-widgets";
+// `pk-field__label` and `pk-field__message` are written here as class names
+// rather than reached through `Field` — the control itself is rendered by
+// `CustomFieldInput`, which owns its own markup — so this module has to pull
+// their stylesheet into its own chunk.
+import "../../ui/Field.css";
 
 type FieldValue = string | number | boolean | string[] | { start: string; end: string };
 
@@ -14,8 +19,12 @@ export interface VisibilityContext {
 
 // ── Preact components ─────────────────────────────────────────────────────
 
-function HelpText({ text }: { text: string }) {
-  return <div class="form-text">{text}</div>;
+function HelpText({ id, text }: { id: string; text: string }) {
+  return (
+    <p class="pk-small" id={id}>
+      {text}
+    </p>
+  );
 }
 
 function CustomFieldRow({
@@ -32,9 +41,21 @@ function CustomFieldRow({
   initialValue?: unknown;
 }) {
   const isBoolean = field.fieldType === "boolean";
-  const className = [isBoolean ? "form-check mb-3" : "mb-3", !visible ? "visually-hidden" : ""]
+  // A boolean is a control and its word on one line; everything else is a
+  // label above its control. Neither carries a bottom margin any more — both
+  // callers stack this list, so the gap is theirs to decide once.
+  const className = [isBoolean ? "pk-cluster" : "pk-stack pk-stack--tight", !visible ? "pk-sr-only" : ""]
     .filter(Boolean)
     .join(" ");
+
+  const helpId = `custom-${field.key}-help`;
+  const linkId = `custom-${field.key}-link`;
+  const errorId = `custom-${field.key}-error`;
+  const hasHelp = Boolean(rules.helpText?.trim());
+  // The error slot is always described: a validator writes into it after the
+  // fact, and a describedby added only once it has text would be added too
+  // late for the control that already has focus.
+  const describedBy = [hasHelp ? helpId : null, rules.referenceLink ? linkId : null, errorId].filter(Boolean).join(" ");
 
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -47,6 +68,11 @@ function CustomFieldRow({
     );
     for (const el of Array.from(fields)) {
       el.disabled = !visible;
+      // The help sentence, the reference link and the error slot sat beside
+      // the control with nothing tying them to it, so none of the three was
+      // announced. `CustomFieldInput` renders the control, so the wiring has
+      // to happen here rather than as a prop.
+      el.setAttribute("aria-describedby", describedBy);
     }
     if (!visible) {
       for (const el of Array.from(fields)) {
@@ -63,12 +89,12 @@ function CustomFieldRow({
       const errors = row.querySelectorAll<HTMLElement>("[data-field-error]");
       for (const err of Array.from(errors)) err.textContent = "";
     }
-  }, [visible]);
+  }, [visible, describedBy]);
 
   const widget = <CustomFieldInput field={field} geoHint={geoHint} initialValue={initialValue} />;
 
   const label = (
-    <label class={isBoolean ? "form-check-label" : "form-label"} for={`custom-${field.key}`}>
+    <label class="pk-field__label" for={`custom-${field.key}`}>
       {field.label}
     </label>
   );
@@ -92,15 +118,18 @@ function CustomFieldRow({
           {widget}
         </>
       )}
-      {rules.helpText?.trim() && <HelpText text={rules.helpText} />}
+      {hasHelp && <HelpText id={helpId} text={rules.helpText ?? ""} />}
       {rules.referenceLink && (
-        <div class="form-text">
+        <p class="pk-small" id={linkId}>
           <a href={rules.referenceLink.href} target="_blank" rel="noopener noreferrer">
             {rules.referenceLink.label}
           </a>
-        </div>
+        </p>
       )}
-      <div class="invalid-feedback d-block" data-field-error={field.key} />
+      {/* The validators write into this slot after render, so it is a live
+          region: a message that appears silently is a message nobody who is
+          not looking at it will ever get. */}
+      <div class="pk-field__message" id={errorId} data-field-error={field.key} aria-live="polite" />
     </div>
   );
 }

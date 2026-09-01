@@ -3,6 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { recurrenceRuleSchema } from "../../assets/shared/schemas/event-series";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 import {
   ADVANCED_RECURRENCE_MODE,
   MAX_RECURRENCE_INTERVAL,
@@ -224,4 +225,72 @@ describe("RecurrenceEditor component", () => {
     expect(container.querySelector<HTMLSelectElement>("#series-recurrence")?.disabled).toBe(true);
     expect(container.querySelector<HTMLInputElement>("#series-recurrence-interval")?.disabled).toBe(true);
   });
+
+  it("binds every structured control to a visible label, including its unit", () => {
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU" onChange={vi.fn()} />,
+    );
+
+    // The ordinal and weekday choices used to carry only an aria-label, and
+    // the interval's unit was a bare span announced to nobody.
+    expect(labelNames(container)).toEqual(["Repeats", "Repeat every (months)", "Week of the month", "Weekday"]);
+    expect(controlFor<HTMLSelectElement>(container, "Repeats").id).toBe("series-recurrence");
+    expect(controlFor(container, "Repeat every (months)").id).toBe("series-recurrence-interval");
+    expect(controlFor<HTMLSelectElement>(container, "Week of the month").value).toBe("2");
+    expect(controlFor<HTMLSelectElement>(container, "Weekday").value).toBe("TU");
+  });
+
+  it("says weeks rather than months once the shape is weekly", () => {
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=3" onChange={vi.fn()} />,
+    );
+
+    expect(labelNames(container)).toEqual(["Repeats", "Repeat every (weeks)"]);
+  });
+
+  it("announces the plain-English summary with the control that sets it", () => {
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=3" onChange={vi.fn()} />,
+    );
+
+    const select = controlFor<HTMLSelectElement>(container, "Repeats");
+    const summary = container.querySelector(`#${select.getAttribute("aria-describedby")!}`);
+    expect(summary?.textContent).toBe("Repeats every 3 weeks.");
+  });
+
+  it("names the custom rule and hangs the RFC reference off it", () => {
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={vi.fn()} />,
+    );
+
+    const advanced = controlFor(container, "Custom rule");
+    expect(advanced.id).toBe("series-recurrence-advanced");
+    // In custom mode there is no structured shape, so the select describes
+    // nothing rather than pointing at a summary that is not rendered.
+    expect(controlFor<HTMLSelectElement>(container, "Repeats").getAttribute("aria-describedby")).toBeNull();
+    const help = container.querySelector(`#${advanced.getAttribute("aria-describedby")!}`);
+    expect(help?.textContent).toContain("RFC 5545 recurrence rule");
+  });
+
+  it("keeps an unparsable interval out of the rule and leaves the control showing it", () => {
+    const onChange = vi.fn();
+    const container = mount(
+      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
+    );
+
+    // Above MAX_RECURRENCE_INTERVAL, and a non-number: neither may reach the
+    // caller as a rule the shared schema would then have to reject.
+    typeInterval(container, String(MAX_RECURRENCE_INTERVAL + 1));
+    typeInterval(container, "not-a-number");
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
+
+/** Types a value into the interval control the way the browser would. */
+function typeInterval(container: HTMLElement, value: string): void {
+  const interval = container.querySelector<HTMLInputElement>("#series-recurrence-interval")!;
+  interval.value = value;
+  void act(() => {
+    interval.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}

@@ -297,15 +297,30 @@ $pkic-page-hero-themes: (
 
 .pkic-recent-posts {
   background: $gray-100;
+
+  // The heading shares a cluster with the "all posts" link, so its rhythm
+  // comes from the section's own padding rather than from `main h2`'s
+  // margins — which would otherwise push the whole row out of alignment.
+  h2 {
+    margin: 0;
+  }
 }
 
 // Blog post cards on the homepage reuse the .blog-card styles from _blog.scss
 
 // ── Join CTA section ────────────────────────────────────────────────────────
 
+// The join CTA carries `.pk`, so the design system's base layer owns the
+// element's own `background` and `color` and the size of the heading inside
+// it. All three are re-pointed through the tokens that layer reads rather than
+// declared again here, which a later layer would win: `--pk-canvas` paints the
+// ground, and `--pk-ink` / `--pk-ink-muted` set the two weights of text. The
+// heading's display size is re-pointed the same way, on the heading itself, so
+// only that element sees it: `base.css` sizes every `h2` from `--pk-text-xl`.
 .pkic-join-cta {
-  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
-  color: #fff;
+  --pk-canvas: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
+  --pk-ink: #fff;
+  --pk-ink-muted: rgba(255, 255, 255, 0.88);
   padding-top: 3rem;
   padding-bottom: 3rem;
 
@@ -316,22 +331,21 @@ $pkic-page-hero-themes: (
 
   // Override the gradient-text rule applied to all main h2 elements
   h2 {
+    --pk-text-xl: 2.25rem;
     background: none !important;
     -webkit-background-clip: unset !important;
     background-clip: unset !important;
     -webkit-text-fill-color: #fff !important;
     color: #fff !important;
-    font-size: 2.25rem;
-    margin-top: 0;
   }
 
-  .lead {
-    opacity: 0.88;
-    font-size: 1.2rem;
-  }
-
+  // Was `lead mx-auto` on the markup. The measure and the centring are the
+  // paragraph's own properties; the size reads the type scale.
   .pkic-join-cta-body {
     max-width: 560px;
+    margin-inline: auto;
+    font-size: var(--pk-text-xl);
+    color: var(--pk-ink-muted);
   }
 }
 
@@ -346,6 +360,10 @@ $pkic-page-hero-themes: (
 
 // WG spotlight card container
 .pkic-wg-spotlight {
+  // Equal heights across a row belong to the card, not to a utility class every
+  // caller has to remember. The grids that hold these cards stretch their
+  // items, so a full-height card fills whatever cell it lands in.
+  height: 100%;
   background: #fff;
   border-radius: 14px;
   overflow: hidden;
@@ -792,6 +810,11 @@ $pkic-page-hero-themes: (
 }
 
 .pkic-wg-card {
+  // Carries what Bootstrap's `.card` used to supply — surface, frame and
+  // column flow — so the shortcode's markup needs no framework classes.
+  display: flex;
+  flex-direction: column;
+  background: #fff;
   border-radius: 0.85rem;
   overflow: hidden;
   border: none;
@@ -805,16 +828,32 @@ $pkic-page-hero-themes: (
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
   }
 
-  .card-title {
+  .pkic-card-image {
+    width: 100%;
+    display: block;
+  }
+
+  .pkic-card-body {
+    flex: 1 1 auto;
+    padding: var(--pk-4);
+  }
+
+  .pkic-card-title {
+    font-size: 1.05rem;
     font-weight: 700;
   }
-  .card-text {
+  .pkic-card-text {
     color: $gray-600;
     font-size: 0.9rem;
+
+    p:last-child {
+      margin-bottom: 0;
+    }
   }
 }
 
 .pkic-card-header {
+  padding: var(--pk-3) var(--pk-4);
   background: linear-gradient(135deg, #0a1f14, #0d3d24);
   color: #fff;
   font-weight: 600;
@@ -826,6 +865,7 @@ $pkic-page-hero-themes: (
 }
 
 .pkic-card-footer {
+  padding: var(--pk-3) var(--pk-4);
   background: $gray-100;
   font-size: 0.85rem;
   border-top: 1px solid $gray-200;

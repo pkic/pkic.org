@@ -33,14 +33,15 @@ export function parseLookupParams(search: string): LookupParams | null {
   return { id, token };
 }
 
-function StatusSummary({ data }: { data: ApplicationStatus }) {
+/** Exported so the rendered summary can be asserted on without the page. */
+export function StatusSummary({ data }: { data: ApplicationStatus }) {
   return (
-    <div class="event-flow-success">
-      <h2 class="h4">Application status</h2>
+    <div class="pk pk-stack pk-stack--snug">
+      <h2>Application status</h2>
       <p>
         <Badge status={data.stage} />
       </p>
-      <p class="text-muted small">
+      <p class="pk-small">
         Submitted {new Date(data.createdAt).toLocaleDateString()} — last updated{" "}
         {new Date(data.stageEnteredAt).toLocaleDateString()}.
       </p>
@@ -54,8 +55,8 @@ async function showStatus(root: HTMLElement, apiBase: string, { id, token }: Loo
   const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
   if (!resultContainer || !statusEl) return;
 
-  lookupForm?.classList.add("d-none");
-  resultContainer.classList.remove("d-none");
+  if (lookupForm) lookupForm.hidden = true;
+  resultContainer.hidden = false;
 
   try {
     const data = await getJson(
@@ -75,8 +76,8 @@ async function showStatus(root: HTMLElement, apiBase: string, { id, token }: Loo
       "We couldn't find an application matching that ID and token. Please check the link from your confirmation email.",
       true,
     );
-    lookupForm?.classList.remove("d-none");
-    resultContainer.classList.add("d-none");
+    if (lookupForm) lookupForm.hidden = false;
+    resultContainer.hidden = true;
   }
 }
 

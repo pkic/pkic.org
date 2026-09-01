@@ -11,6 +11,8 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Pager } from "../../../components/Pager";
 import { Spinner } from "../../../components/Spinner";
 import { useApiPage } from "../../../hooks/useApiPage";
+import { Button } from "../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { ApiClientError } from "../../../shared/api-client";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalSession } from "../state";
@@ -37,12 +39,12 @@ function MemberGroupCatalog() {
   }
   if (!catalog.data) return <Spinner />;
   if (groups.length === 0 && !catalog.data.page.hasMore) {
-    return <p class="text-muted">No groups are available right now.</p>;
+    return <EmptyState title="No groups are available right now." />;
   }
 
   return (
     <>
-      <p class="text-muted small">
+      <p class="pk-small">
         Join or leave groups using the Member affiliations you currently represent. All eligible affiliations are
         selected by default; clear one to join for an explicit subset.
       </p>
@@ -63,9 +65,9 @@ function MemberGroupCatalog() {
 
 function AllGroups({ onCreate }: { onCreate?: () => void }) {
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">All groups</div>
-      <div class="card-body">
+    <Panel aria-label="All groups">
+      <PanelHeader title="All groups" />
+      <PanelBody>
         <ApiDataTable
           caption="All groups"
           urlState="groups"
@@ -82,15 +84,31 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
               header: "Group",
               cell: (group: Group) => (
                 <div>
-                  <div class="fw-semibold">{group.name}</div>
-                  <div class="small text-muted">{group.type.singularLabel}</div>
+                  <div class="pk-strong">{group.name}</div>
+                  <div class="pk-small">{group.type.singularLabel}</div>
                 </div>
               ),
               sort: { asc: "name", desc: "-name", defaultDirection: "asc" },
             },
             {
               header: "Status",
-              cell: (group: Group) => (group.active ? <span class="text-muted">—</span> : <Badge status="inactive" />),
+              /*
+               * An active group used to be a faint dash and nothing else — a
+               * status carried by looking quiet, which a screen reader cannot
+               * hear. The dash stays as the visual, and the word goes beside
+               * it for anyone not reading the greys.
+               */
+              cell: (group: Group) =>
+                group.active ? (
+                  <>
+                    <span class="pk-muted" aria-hidden="true">
+                      —
+                    </span>
+                    <span class="pk-sr-only">Active</span>
+                  </>
+                ) : (
+                  <Badge status="inactive" />
+                ),
             },
           ]}
           empty={
@@ -106,8 +124,8 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
             href: `#/groups/${encodeURIComponent(group.id)}/overview`,
           })}
         />
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -119,11 +137,11 @@ export function Groups() {
 
   if (creating && canCreateGroups) {
     return (
-      <div class="d-flex flex-column gap-3 content-width-schedule">
-        <div>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setCreating(false)}>
-            ← All groups
-          </button>
+      <div class="pk pk-stack content-width-schedule">
+        <div class="pk-cluster">
+          <Button variant="secondary" size="sm" onClick={() => setCreating(false)}>
+            <span aria-hidden="true">←</span> All groups
+          </Button>
         </div>
         <GroupCreateForm
           onCreated={(created) => {
@@ -136,12 +154,12 @@ export function Groups() {
   }
 
   return (
-    <div class="d-flex flex-column gap-3 content-width-schedule">
+    <div class="pk pk-stack content-width-schedule">
       {canCreateGroups && session?.member && (
-        <div class="d-flex justify-content-end">
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
+        <div class="pk-cluster pk-cluster--end">
+          <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
             New group
-          </button>
+          </Button>
         </div>
       )}
       {session?.member && <MemberGroupCatalog />}

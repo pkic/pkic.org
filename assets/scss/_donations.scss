@@ -315,10 +315,8 @@
   }
 }
 
-.support-cta-btn-primary {
-  padding: 0.6rem 1.75rem;
-  font-size: 0.95rem;
-}
+/* The primary action is a Button now, which brings its own padding and type
+   size, so the class that used to override Bootstrap's is gone. */
 
 .support-cta-link {
   color: rgba(255, 255, 255, 0.6);

@@ -20,7 +20,10 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0;
 
-  .container {
+  // Both layouts that render this nav — `wg/section.html` and
+  // `wg/sub-navigation.html` — are on `.pk-container` now. The rail must keep
+  // its horizontal scroll.
+  .pk-container {
     overflow-x: auto;
     scrollbar-width: none;
     &::-webkit-scrollbar {
@@ -159,11 +162,22 @@
 // ─── WG sub-pages explore cards ───────────────────────────────────────
 
 .wg-explore-card {
+  // The card owns what its markup used to ask Bootstrap for: it fills its grid
+  // cell, it is a column with one rhythm between its lines, and it is a link
+  // that does not underline. Both callers — `subpage-card.html` and the
+  // "Explore this Working Group" grid in `wg/section.html` — get all of it,
+  // including a working `pk-push-block` on the arrow, without repeating a
+  // layout class each.
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-1);
   padding: 1.25rem;
   border-radius: 0.85rem;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: #fff;
   color: inherit;
+  text-decoration: none;
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease,
@@ -186,7 +200,6 @@
   font-size: 0.95rem;
   font-weight: 700;
   color: #111;
-  margin-bottom: 0.25rem;
 }
 
 .wg-explore-desc {

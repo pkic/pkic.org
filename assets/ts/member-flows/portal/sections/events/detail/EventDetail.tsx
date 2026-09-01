@@ -9,6 +9,8 @@ import { eventManagementDetailResponseSchema } from "../../../../../../shared/sc
 import { toast } from "../../../ui";
 import type { EventDetail } from "../types";
 import { currentEvent } from "../state";
+import { Button } from "../../../../../ui/Button";
+import "../../../../../ui/Content.css";
 
 const Settings = lazy(() => import("./Settings").then((module) => ({ default: module.Settings })));
 const Registrations = lazy(() => import("./Registrations").then((module) => ({ default: module.Registrations })));
@@ -68,29 +70,31 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
   const tab = visibleTabs.find(({ key }) => key === requestedTab)?.key ?? visibleTabs[0]?.key ?? "registrations";
 
   return (
-    <div>
-      {/* Header */}
-      <div class="d-flex align-items-start gap-2 mb-3 flex-wrap">
-        <div>
-          <h5 class="mb-1">{event.name}</h5>
-          <div class="text-muted small">
-            <span class="mono">{event.slug}</span>
+    <div class="pk pk-stack">
+      {/* Header. `--start` keeps the refresh button level with the event's
+          name rather than centered against a two-line title block. */}
+      <div class="pk-cluster pk-cluster--start">
+        <div class="pk-stack pk-stack--tight">
+          <h2>{event.name}</h2>
+          <p class="pk-small">
+            <span class="pk-mono">{event.slug}</span>
             {event.startsAt && <> · {event.startsAt.substring(0, 10)}</>}
             {event.venue && <> · {event.venue}</>}
-          </div>
+          </p>
         </div>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
+        <Button class="pk-push" size="sm" onClick={() => void load()}>
           ↺ Refresh
-        </button>
+        </Button>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs. Named, because the page carries more than one set of them once
+          a tab's own sub-navigation renders below. */}
       <Tabs
         items={visibleTabs}
         active={tab}
+        label="Event sections"
         onChange={(key) => navigate(`/events/${slug}/${key}`)}
         hrefFor={(key) => `/events/${slug}/${key}`}
-        className="mb-3 flex-wrap"
       />
 
       <Suspense fallback={<Spinner />}>

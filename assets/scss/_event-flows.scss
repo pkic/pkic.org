@@ -738,7 +738,11 @@
   }
 
   // ── Required but unchecked after a validation attempt ─────────────────────
-  &.is-invalid {
+  // Selected through the ARIA attribute rather than a class, so the state that
+  // is announced and the state that is drawn are the same one. `is-invalid`
+  // was also Bootstrap's spelling, which the isolation gate rejects in a
+  // migrated surface.
+  &[aria-invalid="true"] {
     border-color: var(--bs-danger);
     background: var(--bs-danger-bg-subtle);
     box-shadow: 0 0 0 3px rgba(var(--bs-danger-rgb), 0.12);

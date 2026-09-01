@@ -10,6 +10,7 @@ import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-c
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
+import { controlFor } from "./helpers/labelled-control";
 import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
@@ -433,7 +434,10 @@ describe("portal system access control", () => {
       )!;
       void act(() => editButton.click());
 
-      const descriptionInput = container.querySelector<HTMLInputElement>("#access-control-role-edit-description")!;
+      // Reached through the `for`/`id` pair the Field emits rather than a
+      // hand-written id, so the lookup fails exactly when the label stops
+      // naming its control.
+      const descriptionInput = controlFor(container, "Description");
       void act(() => {
         descriptionInput.value = "Updated description";
         descriptionInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -450,6 +454,57 @@ describe("portal system access control", () => {
       const parsed = roleUpdateSchema.parse(patchBody!.body);
       expect(parsed.revision).toBe(ROLE.updatedAt);
       expect(parsed.description).toBe("Updated description");
+    });
+
+    it("keeps a refused edit on screen beside the form instead of a toast that fades", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = new URL(
+            typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+            location.origin,
+          );
+          if (url.pathname === `/api/v1/roles/${ROLE.id}` && init?.method === "PATCH") {
+            return new Response(
+              JSON.stringify({ error: { code: "CONFLICT", message: "Someone else changed this role." } }),
+              { status: 409, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (url.pathname === `/api/v1/roles/${ROLE.id}/assignments`) {
+            return json({ assignments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+          }
+          return json({ role: ROLE });
+        }),
+      );
+
+      const container = mount(<Roles canGrant canRevoke roleSegment={ROLE.id} onNavigate={vi.fn()} />);
+      await settle();
+      void act(() =>
+        Array.from(container.querySelectorAll("button"))
+          .find((button) => button.textContent === "Edit")!
+          .click(),
+      );
+
+      // The name is required, so the form refuses to submit an empty one
+      // before it ever reaches the server.
+      const name = controlFor(container, "Name");
+      expect(name.required).toBe(true);
+      const describedBy = name.getAttribute("aria-describedby");
+      expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain("must start with a letter");
+
+      const saveForm = Array.from(container.querySelectorAll("form")).find((form) =>
+        form.textContent?.includes("Save changes"),
+      )!;
+      await act(async () => {
+        saveForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // The failure is announced and stays put; the editor keeps the values
+      // that were rejected rather than closing over them.
+      const alert = container.querySelector('[role="alert"]');
+      expect(alert?.textContent).toContain("Someone else changed this role.");
+      expect(controlFor(container, "Name").value).toBe(ROLE.name);
     });
 
     it("surfaces a load error for an unknown role instead of a blank detail", async () => {

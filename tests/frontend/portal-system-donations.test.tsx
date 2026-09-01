@@ -481,4 +481,70 @@ describe("portal system donations", () => {
     expect(failed.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side");
     expect(captions(failed)).toEqual([]);
   });
+
+  it("presents the donation record as a term/value list a screen reader can walk", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              donationDetailResponseSchema.parse({
+                donation: { ...donation(), organization: "Analytical Engines Ltd", payment_intent_id: "pi_test_1" },
+              }),
+            ),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const detail = mount(<DonationDetailPage donationId="donation-1" />);
+    await settle();
+
+    // The record is one named region, not an unlabeled div of divs.
+    const record = detail.querySelector('[aria-label="Donation from Ada Lovelace"]');
+    expect(record).not.toBeNull();
+    const terms = [...detail.querySelectorAll("dl.pk-datalist > dt")].map((term) => term.textContent);
+    expect(terms).toEqual([
+      "Email",
+      "Organization",
+      "Gross",
+      "Net",
+      "Method",
+      "Source",
+      "Session ID",
+      "Payment intent",
+      "Created",
+      "Completed",
+    ]);
+    expect(detail.querySelectorAll("dl.pk-datalist > dd")).toHaveLength(terms.length);
+    // The badge is fetched from a URL, so it stays a link rather than a button.
+    const badge = detail.querySelector<HTMLAnchorElement>("a[download]");
+    expect(badge?.textContent).toBe("Download badge");
+  });
+
+  it("states a permission refusal in words and asks the API for nothing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const denied = mount(<DonationDetailPage donationId="donation-1" canRead={false} />);
+    await settle();
+
+    const alert = denied.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("donations:read");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("states a failed donation fetch as a sentence rather than the record it could not load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => serverError()),
+    );
+
+    const detail = mount(<DonationDetailPage donationId="donation-1" />);
+    await settle();
+
+    expect(detail.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side");
+    expect(detail.querySelector("dl.pk-datalist")).toBeNull();
+  });
 });

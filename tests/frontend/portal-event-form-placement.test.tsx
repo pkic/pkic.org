@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { EventFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -116,6 +116,77 @@ afterEach(() => {
 });
 
 describe("portal event form placement management", () => {
+  it("names the selector through a for/id pair and keeps its actions reachable while saving", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/available")) return json(availableForms());
+        return json(eventForm("proposal_submission"));
+      }),
+    );
+
+    const container = mount(
+      <EventFormPlacementEditor
+        groupId={GROUP_ID}
+        eventId={EVENT_ID}
+        purpose="proposal_submission"
+        expectedUpdatedAt={NOW}
+        onRevision={() => undefined}
+      />,
+    );
+    await settle();
+    await settle();
+
+    // The selector is named by a real label, not by a placeholder option.
+    expect(controlFor<HTMLSelectElement>(container, "Proposal submission questions").tagName.toLowerCase()).toBe(
+      "select",
+    );
+    // Each disclosure button says whether the thing it opens is open.
+    const create = buttonNamed(container, "Create proposal form");
+    expect(create.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => create.click());
+    expect(buttonNamed(container, "Cancel new form").getAttribute("aria-expanded")).toBe("true");
+    // The panel it opened names itself with a heading.
+    expect([...container.querySelectorAll(".pk-panel__title")].map((title) => title.textContent)).toContain(
+      "New proposal submission form",
+    );
+  });
+
+  it("announces a failed load as a sentence instead of an empty editor", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "unavailable" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(
+      <EventFormPlacementEditor
+        groupId={GROUP_ID}
+        eventId={EVENT_ID}
+        purpose="event_registration"
+        expectedUpdatedAt={NOW}
+        onRevision={() => undefined}
+      />,
+    );
+    await settle();
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    // No selector is drawn for a placement that was never read.
+    expect(container.querySelector("select")).toBeNull();
+  });
+
   it("selects an available form through the server-backed catalog", async () => {
     const requests: Array<{ path: string; method: string; body?: unknown }> = [];
     vi.stubGlobal(
@@ -150,7 +221,7 @@ describe("portal event form placement management", () => {
     select.value = "30000000-0000-4000-8000-000000000002";
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
-    await act(async () => container.querySelector<HTMLButtonElement>("button.btn-success")!.click());
+    await act(async () => buttonNamed(container, "Save proposal form").click());
     await settle();
     expect(requests.find(({ method }) => method === "PUT")).toMatchObject({
       path: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/forms/proposal_submission`,
@@ -205,7 +276,7 @@ describe("portal event form placement management", () => {
     select.value = "";
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
-    await act(async () => container.querySelector<HTMLButtonElement>("button.btn-success")!.click());
+    await act(async () => buttonNamed(container, "Save registration form").click());
     await settle();
     expect(requests.find(({ method }) => method === "PUT")).toMatchObject({
       path: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/forms/event_registration`,
@@ -268,8 +339,10 @@ describe("portal event form placement management", () => {
 
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
     await settle();
-    const editor = Array.from(container.querySelectorAll<HTMLElement>(".card")).find((card) =>
-      card.textContent?.includes("New proposal submission form"),
+    // Located by the heading that names the panel, not by a framework class:
+    // the name is the thing the surface actually promises a reader.
+    const editor = Array.from(container.querySelectorAll<HTMLElement>("section.pk-panel")).find(
+      (panel) => panel.querySelector(".pk-panel__title")?.textContent === "New proposal submission form",
     );
     expect(editor).toBeDefined();
     await typeInto(controlFor(editor!, "Key"), "proposal-form");

@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
 import { ApplicationsList } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList";
+import { ApplicationTimelineCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationTimelineCard";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000201";
@@ -109,6 +110,64 @@ describe("portal membership-application management", () => {
     // was unreachable by keyboard.
     void act(() => (page.querySelector("tbody .pk-table__row-link") as HTMLElement).click());
     expect(open).toHaveBeenCalledWith(APPLICATION_ID);
+  });
+
+  it("names the stage filter and sends the chosen stage to the collection query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return json({ applications: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
+    await settle();
+
+    // A toolbar filter with no visible label still says which list it filters.
+    const filter = page.querySelector<HTMLSelectElement>("select[aria-label='Filter applications by stage']")!;
+    expect(filter).not.toBeNull();
+    // And the table it controls names itself, so several tables on one page
+    // are told apart.
+    expect(page.querySelector("caption")?.textContent).toBe("Membership applications");
+
+    filter.value = "in_consultation";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("stage") === "in_consultation")).toBe(true);
+    // The consultation banner is a status region, announced without stealing
+    // focus from the filter that revealed it.
+    expect(page.querySelector('[role="status"].pk-alert')?.textContent).toContain("queued for member consultation");
+  });
+
+  it("states a refused application listing as a sentence instead of an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ message: "no" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
+    await settle();
+
+    const alert = page.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(alert?.textContent).not.toContain("HTTP 403");
+    expect(page.querySelector("table")).toBeNull();
   });
 
   it("heads the detail view with the applicant's name and a way back to the list", async () => {
@@ -312,5 +371,47 @@ describe("portal membership-application management", () => {
       method: "POST",
       pathname: `/api/v1/members/applications/${APPLICATION_ID}/approve`,
     });
+  });
+});
+
+describe("the application timeline card", () => {
+  it("reads each stage change in the product's own words, not in stored keys", () => {
+    const card = mount(
+      <ApplicationTimelineCard
+        detail={{
+          ...detail,
+          events: [
+            { fromStage: null, toStage: "pending", actorUserId: null, note: null, createdAt: NOW },
+            {
+              fromStage: "in_review",
+              toStage: "ec_review",
+              actorUserId: null,
+              note: "Escalated",
+              createdAt: NOW,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const entries = [...card.querySelectorAll("li")].map((item) => item.textContent);
+    expect(entries[0]).toContain("Not yet in a stage");
+    expect(entries[0]).toContain("Pending");
+    expect(entries[1]).toContain("In review");
+    expect(entries[1]).toContain("EC review");
+    expect(card.textContent).not.toContain("ec_review");
+    // The arrow is decorative; a word carries the direction for anyone who
+    // cannot see it.
+    expect(card.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe("→");
+    expect(card.querySelector(".pk-sr-only")?.textContent).toBe("to");
+    // The card is a named region among the several this screen renders.
+    expect(card.querySelector('[aria-label="Timeline"]')).not.toBeNull();
+  });
+
+  it("announces an application with no history as a status region rather than an empty list", () => {
+    const card = mount(<ApplicationTimelineCard detail={{ ...detail, events: [] }} />);
+
+    expect(card.querySelector('[role="status"].pk-empty-state')?.textContent).toContain("No stage changes yet.");
+    expect(card.querySelector("ul")).toBeNull();
   });
 });

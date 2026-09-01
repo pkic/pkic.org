@@ -5,12 +5,26 @@ import {
   type SponsorshipTierConfig,
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { managedSponsorTiersResponseSchema } from "../../../../../../shared/schemas/sponsors";
+import { statusLabel } from "../../../../../components/Badge";
+import { EmptyState } from "../../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
+import { Button } from "../../../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { TextInput } from "../../../../../ui/TextControl";
 import { getJson, patchJson } from "../../../../../shared/api-client";
 import { toast } from "../../../ui";
+// The `pk-check` trio below is written as class names rather than reached
+// through a component, so this module names their stylesheet itself. `TextInput`
+// already imports it; saying so here keeps the file honest if it is ever
+// swapped for a plain input.
+import "../../../../../ui/Field.css";
 
 const TIER_CONFIG_ENDPOINT = "/api/v1/sponsors/tiers";
+
+/** The row's edit form, which every control in the row submits through. */
+const formIdFor = (tier: SponsorshipTierConfig) => `sponsorship-tier-${tier.id}`;
 
 export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
   const [tiers, setTiers] = useState<SponsorshipTierConfig[]>([]);
@@ -59,101 +73,108 @@ export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
     }
   }
 
+  const columns: ReadonlyArray<DataTableColumn<SponsorshipTierConfig>> = [
+    // `statusLabel` is the repository's one string-to-label formatter, so the
+    // type reads as "Consortium" without a `text-capitalize` class deciding it
+    // in CSS — where a screen reader never sees the capitalization anyway.
+    { id: "type", header: "Type", cell: (tier) => statusLabel(tier.sponsorType) },
+    { id: "tier", header: "Tier", cell: (tier) => tier.tier },
+    {
+      id: "amount",
+      header: "Amount (cents)",
+      cell: (tier) =>
+        canWrite ? (
+          <form id={formIdFor(tier)} onSubmit={(event) => void save(tier, event)}>
+            <TextInput
+              name="amountCents"
+              type="number"
+              min="0"
+              defaultValue={tier.amountCents}
+              aria-label={`${tier.tier} amount in cents`}
+            />
+          </form>
+        ) : (
+          tier.amountCents
+        ),
+    },
+    {
+      id: "currency",
+      header: "Currency",
+      cell: (tier) =>
+        canWrite ? (
+          <TextInput
+            form={formIdFor(tier)}
+            name="currency"
+            defaultValue={tier.currency}
+            maxLength={3}
+            aria-label={`${tier.tier} currency`}
+          />
+        ) : (
+          tier.currency
+        ),
+    },
+    {
+      id: "active",
+      header: "Active",
+      cell: (tier) =>
+        canWrite ? (
+          /*
+           * All three parts of the check block. The name comes from real label
+           * text rather than an `aria-label`, so it survives translation and
+           * matches what a speech-input user would say; the text is hidden
+           * because the column header already carries it visually.
+           */
+          <label class="pk-check">
+            <input
+              form={formIdFor(tier)}
+              name="active"
+              type="checkbox"
+              class="pk-check__input"
+              defaultChecked={tier.active}
+            />
+            <span class="pk-check__label pk-sr-only">{`${tier.tier} active`}</span>
+          </label>
+        ) : tier.active ? (
+          "Yes"
+        ) : (
+          "No"
+        ),
+    },
+    ...(canWrite
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            headerHidden: true,
+            align: "end" as const,
+            cell: (tier: SponsorshipTierConfig) => (
+              <Button form={formIdFor(tier)} type="submit" variant="secondary" size="sm">
+                Save
+              </Button>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <section class="card border-0 shadow-sm mb-3" aria-labelledby="sponsorship-tier-config-heading">
-      <div class="card-header bg-white fw-semibold" id="sponsorship-tier-config-heading">
-        Sponsorship tier pricing
-      </div>
-      <div class="card-body">
-        {loading && <Spinner />}
-        {!loading && error && <ErrorAlert error={error} />}
-        {!loading && !error && tiers.length === 0 && <p class="text-muted mb-0">No tier pricing is configured.</p>}
-        {!loading && !error && tiers.length > 0 && (
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead>
-                <tr>
-                  <th scope="col">Type</th>
-                  <th scope="col">Tier</th>
-                  <th scope="col">Amount (cents)</th>
-                  <th scope="col">Currency</th>
-                  <th scope="col">Active</th>
-                  {canWrite && (
-                    <th scope="col">
-                      <span class="visually-hidden">Actions</span>
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {tiers.map((tier) => (
-                  <tr key={tier.id}>
-                    <td class="text-capitalize">{tier.sponsorType}</td>
-                    <td>{tier.tier}</td>
-                    <td colSpan={canWrite ? 1 : 1}>
-                      {canWrite ? (
-                        <form id={`sponsorship-tier-${tier.id}`} onSubmit={(event) => void save(tier, event)}>
-                          <input
-                            name="amountCents"
-                            type="number"
-                            min="0"
-                            class="form-control form-control-sm"
-                            defaultValue={tier.amountCents}
-                            aria-label={`${tier.tier} amount in cents`}
-                          />
-                        </form>
-                      ) : (
-                        tier.amountCents
-                      )}
-                    </td>
-                    <td>
-                      {canWrite ? (
-                        <input
-                          form={`sponsorship-tier-${tier.id}`}
-                          name="currency"
-                          class="form-control form-control-sm"
-                          defaultValue={tier.currency}
-                          maxLength={3}
-                          aria-label={`${tier.tier} currency`}
-                        />
-                      ) : (
-                        tier.currency
-                      )}
-                    </td>
-                    <td>
-                      {canWrite ? (
-                        <input
-                          form={`sponsorship-tier-${tier.id}`}
-                          name="active"
-                          type="checkbox"
-                          class="form-check-input"
-                          defaultChecked={tier.active}
-                          aria-label={`${tier.tier} active`}
-                        />
-                      ) : tier.active ? (
-                        "Yes"
-                      ) : (
-                        "No"
-                      )}
-                    </td>
-                    {canWrite && (
-                      <td>
-                        <button
-                          form={`sponsorship-tier-${tier.id}`}
-                          type="submit"
-                          class="btn btn-sm btn-outline-primary"
-                        >
-                          Save
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </section>
+    <div class="pk">
+      <Panel aria-label="Sponsorship tier pricing">
+        <PanelHeader title="Sponsorship tier pricing" />
+        <PanelBody>
+          {loading && <Spinner />}
+          {!loading && error && <ErrorAlert error={error} />}
+          {!loading && !error && (
+            <DataTable
+              caption="Sponsorship tier pricing"
+              columns={columns}
+              rows={tiers}
+              rowKey={(tier) => tier.id}
+              empty={<EmptyState title="No tier pricing is configured." />}
+            />
+          )}
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

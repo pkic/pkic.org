@@ -245,6 +245,55 @@ describe("group form management", () => {
     expect(listRequest?.searchParams.get("sort")).toBe("-submitted_at");
   });
 
+  it("names the form panel and its tab strip, and points the tabs at real URLs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(detail(GROUP_ID, ["view_definition", "manage", "view_responses", "submit"]))),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    // The panel is labelled by the heading that names the form, so the row it
+    // expands inside is not an unnamed region among the others.
+    const panel = container.querySelector("section")!;
+    const headingId = panel.getAttribute("aria-labelledby")!;
+    expect(container.querySelector(`[id="${headingId}"]`)?.textContent).toContain("Architecture survey");
+
+    // The strip says which set of tabs it is; a page can hold several.
+    expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe("Architecture survey sections");
+    expect(tabs(container).length).toBeGreaterThan(1);
+  });
+
+  it("says a form could not be loaded instead of rendering an empty shell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "This form is no longer placed." } }), {
+            status: 404,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    expect(container.querySelector("nav")).toBeNull();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("This form is no longer placed.");
+  });
+
+  it("explains a form nothing can be done with rather than showing a bare strip", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ ...detail(GROUP_ID, ["view_definition"]), acceptingResponses: false })),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    const status = container.querySelector('[role="status"]')!;
+    expect(status.textContent).toContain("No actions are available for this form.");
+  });
+
   it("opens the tab given by an initial resourceTab", async () => {
     vi.stubGlobal(
       "fetch",

@@ -479,7 +479,9 @@ $wg-colors: (
     display: none;
   }
 
-  .container {
+  // `members/nav.html` is the only thing that renders this bar, and it is on
+  // `.pk-container` now. The rail must keep its links in one non-wrapping row.
+  .pk-container {
     display: flex;
     align-items: stretch;
     white-space: nowrap;
@@ -544,7 +546,7 @@ $wg-colors: (
 // .member-card-link is no longer used (cards use stretched-link pattern)
 
 .member-card {
-  position: relative; // required for Bootstrap stretched-link
+  position: relative; // the positioned ancestor `.pk-stretched` covers
   border-radius: 1rem;
   padding: 1.25rem;
   background: #fff;
@@ -648,6 +650,9 @@ $wg-colors: (
   }
 
   .member-card-wgs {
+    // Above the stretched link, so the tags are not swallowed by it.
+    position: relative;
+    z-index: 2;
     margin-top: 0.75rem;
     display: flex;
     flex-wrap: wrap;
@@ -667,8 +672,14 @@ $wg-colors: (
   }
 
   .member-card-social {
+    position: relative;
+    z-index: 2;
     margin-top: 0.6rem;
     align-self: center;
+    // social.html no longer pads its own anchors; the row owns the spacing.
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
     background: rgba(255, 255, 255, 0.92);
     border-radius: 999px;
     padding: 0.2rem 0.4rem;
@@ -692,6 +703,8 @@ $wg-colors: (
   }
 
   .member-card-sponsor-footer {
+    position: relative;
+    z-index: 2;
     align-self: stretch;
     // Break out of the card's padding to sit flush with the card edges
     margin: auto -1.25rem -1.25rem;

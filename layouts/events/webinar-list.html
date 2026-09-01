@@ -20,39 +20,35 @@
   {{- end -}}
 {{- end -}}
 
-<div class="container py-5">
+<div class="pk-container pk-section pk-stack pk-stack--loose">
 
   {{ if $upcoming }}
-  <section class="mb-5">
-    <div class="events-section-header mb-4">
+  <section class="pk-stack">
+    <div class="events-section-header">
       <h2 class="events-section-title">
         <span class="events-section-title-badge events-section-title-badge--upcoming">Upcoming</span>
         Webinars
       </h2>
     </div>
-    <div class="row g-4">
+    <div class="pk-grid pk-grid--roomy">
       {{ range $upcoming }}
-      <div class="col-md-6 col-lg-4">
-        {{ partial "events/webinar-card.html" . }}
-      </div>
+      {{ partial "events/webinar-card.html" . }}
       {{ end }}
     </div>
   </section>
   {{ end }}
 
   {{ if $past }}
-  <section>
-    <div class="events-section-header mb-4">
+  <section class="pk-stack">
+    <div class="events-section-header">
       <h2 class="events-section-title">{{ if $upcoming }}Past Webinars{{ else }}All Webinars{{ end }}</h2>
     </div>
 
     {{/* Paginate past webinars */}}
     {{- $pager := .Paginate $past 9 -}}
-    <div class="row g-4">
+    <div class="pk-grid pk-grid--roomy">
       {{ range $pager.Pages }}
-      <div class="col-md-6 col-lg-4">
-        {{ partial "events/webinar-card.html" . }}
-      </div>
+      {{ partial "events/webinar-card.html" . }}
       {{ end }}
     </div>
 
@@ -61,7 +57,7 @@
   {{ end }}
 
   {{ if and (not $upcoming) (not $past) }}
-  <p class="text-muted">No webinars found.</p>
+  <p class="pk-muted">No webinars found.</p>
   {{ end }}
 
 </div>

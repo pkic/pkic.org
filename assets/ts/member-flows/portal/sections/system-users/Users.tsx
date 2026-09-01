@@ -10,11 +10,15 @@ export function Users({ userId, permissions }: { userId?: string; permissions: U
   }
 
   if (!permissions.canRead) {
-    return <p class="text-muted">User records require the users:read permission.</p>;
+    return (
+      <div class="pk">
+        <p class="pk-muted">User records require the users:read permission.</p>
+      </div>
+    );
   }
 
   return (
-    <section>
+    <section class="pk">
       <UsersList
         canWrite={permissions.canWrite}
         canGrantAccess={permissions.canGrantAccess}

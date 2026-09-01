@@ -372,7 +372,10 @@ async function main(): Promise<void> {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    form.classList.add("was-validated");
+    // `validateBeforeSubmit` marks the form as validated itself; adding the
+    // class here as well was a second owner for the same state. Consent cards
+    // draw their own error from the platform's `invalid` event, which
+    // `syncConsentValidation` triggers, so nothing here depended on the class.
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) return;
 

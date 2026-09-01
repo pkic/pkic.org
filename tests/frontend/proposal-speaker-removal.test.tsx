@@ -12,7 +12,7 @@ import {
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
-import { ProposalManageSpeakerCard } from "../../assets/ts/event-flows/proposal-manage-page";
+import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/event-flows/proposal-manage-page";
 import { buttonNamed, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
 
 let container: HTMLElement | null = null;
@@ -155,7 +155,14 @@ describe("proposal speaker removal UI", () => {
       body: JSON.stringify({ kind: "profile" }),
     });
 
-    await act(() => (root.querySelector('button[type="button"].adm-headshot-btn') as HTMLButtonElement).click());
+    // Located by the name the reader hears, not by the layout class the button
+    // used to carry: the class is gone and a name cannot silently disappear
+    // without the control becoming unusable anyway.
+    const fetchGravatar = [...root.querySelectorAll("button")].find(
+      (button) => button.textContent === "🌐 Fetch from Gravatar",
+    );
+    expect(fetchGravatar).toBeDefined();
+    await act(() => fetchGravatar!.click());
     await settle();
     expect(requests[1]).toMatchObject({
       url: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
@@ -338,5 +345,82 @@ describe("proposal speaker removal UI", () => {
     expect(notify).toHaveBeenCalledWith("Another editor saved first", "error");
     // The form stays open, so the refused edit is still there to correct.
     expect((controlFor(root, "Biography") as HTMLTextAreaElement).value).toBe("A biography the server will refuse.");
+  });
+
+  it("names the managed speaker's card and ties its biography guidance to the control", () => {
+    const root = mount(
+      <ProposalManageSpeakerCard
+        speaker={managedSpeaker()}
+        token="manage-token"
+        apiBase="/api/v1"
+        isCurrentProposer={false}
+        onReload={async () => {}}
+        onStatus={() => {}}
+      />,
+    );
+
+    // A proposal can carry several of these; an unnamed <section> is not
+    // exposed as a region at all, so each card says whose it is.
+    const card = root.querySelector("section");
+    expect(card?.getAttribute("aria-label")).toBe("Speaker Casey Speaker");
+    expect(labelNames(root)).toEqual(["First name", "Last name", "Role", "Organization", "Job title", "Biography"]);
+
+    const biography = controlFor<HTMLTextAreaElement>(root, "Biography");
+    const help = root.querySelector(`#${biography.getAttribute("aria-describedby")!}`);
+    expect(help?.textContent).toBe("Visible to attendees on the event program.");
+  });
+
+  it("keeps the removal control focusable while the request is in flight", async () => {
+    let resolveRemoval: (() => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Promise<Response>((resolve) => {
+            resolveRemoval = () => resolve(Response.json({ success: true }));
+          }),
+      ),
+    );
+    vi.stubGlobal("confirm", () => true);
+
+    const root = mount(
+      <ProposalManageSpeakerCard
+        speaker={managedSpeaker()}
+        token="manage-token"
+        apiBase="/api/v1"
+        isCurrentProposer={false}
+        onReload={async () => {}}
+        onStatus={() => {}}
+      />,
+    );
+
+    const remove = root.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]")!;
+    void act(() => remove.click());
+
+    // A `disabled` control loses focus, which throws a screen-reader user out
+    // of the card mid-request; the busy state is announced instead.
+    expect(remove.disabled).toBe(false);
+    expect(remove.getAttribute("aria-disabled")).toBe("true");
+    expect(remove.getAttribute("aria-busy")).toBe("true");
+    expect(remove.textContent).toBe("Removing…");
+
+    resolveRemoval?.();
+    await settle();
+  });
+
+  it("says the roster is empty in words rather than rendering nothing", () => {
+    const root = mount(
+      <SpeakerList
+        speakers={[]}
+        token="manage-token"
+        apiBase="/api/v1"
+        proposerUserId="proposer-1"
+        onReload={async () => {}}
+        onStatus={() => {}}
+      />,
+    );
+
+    const status = root.querySelector('[role="status"]');
+    expect(status?.textContent).toContain("No speakers added yet");
   });
 });

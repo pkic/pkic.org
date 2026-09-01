@@ -1,8 +1,14 @@
 // ── Event countdown timer ─────────────────────────────────────────────────
+// The block owns its own outer margin (it used to ask Bootstrap for `my-5`)
+// and feeds the page accent into `--pk-accent`, so the design-system primary
+// button inside it derives the same colour `.btn-page-accent` used to paint.
 .event-countdown {
+  --pk-accent: var(--page-accent, #{$green});
+
   background: linear-gradient(135deg, $gray-900 0%, #1a3a5c 100%);
   border-radius: 1.5rem;
   padding: 2.5rem 1.5rem 2rem;
+  margin-block: var(--pk-7);
   text-align: center;
   color: #fff;
   box-shadow:
@@ -60,8 +66,16 @@
     padding-top: 0.05em;
   }
 
+  // The row owns the gap between its buttons and its distance from the
+  // counter, replacing the `mt-4` / `ms-2` the markup used to carry.
   .countdown-cta {
-    .btn {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--pk-3);
+    margin-top: var(--pk-5);
+
+    .pk-btn {
       font-weight: 700;
       letter-spacing: 0.03em;
     }
@@ -791,6 +805,52 @@ self-assessment {
 
   .pkimm-tabs {
     z-index: 150 !important; // below wg-section-nav (1030) so its dropdowns render on top
+  }
+}
+
+// ── Live stream shortcode ────────────────────────────────────────────────
+// Replaces the `row g-0 / col-lg-8 order-lg-1 sticky-lg-top / ratio-16x9 /
+// col-lg-4` grid the markup used to ask Bootstrap for. One grid declaration
+// on the surface, gaps from the space scale, and `aspect-ratio` for the
+// player instead of the padding-top ratio hack.
+.livestream-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-4);
+  align-items: start;
+}
+
+.livestream-player {
+  aspect-ratio: 16 / 9;
+}
+
+// The chat has no intrinsic ratio; it is a column beside the player, and on a
+// narrow screen a readable slice below it.
+.livestream-chat {
+  height: 60vh;
+}
+
+.livestream-player iframe,
+.livestream-chat iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@media (min-width: 992px) {
+  .livestream-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  }
+
+  // What `sticky-lg-top` did: the player stays put while the chat scrolls.
+  .livestream-player {
+    position: sticky;
+    top: var(--pkic-navbar-height, 57px);
+  }
+
+  .livestream-chat {
+    height: calc(100vh - var(--pkic-navbar-height, 57px) - 2rem);
   }
 }
 

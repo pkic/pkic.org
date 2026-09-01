@@ -7,6 +7,8 @@ import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/
 import { Settings } from "../../assets/ts/member-flows/portal/sections/events/detail/Settings";
 import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
 import { eventDetailTabsForCapabilities } from "../../assets/ts/member-flows/portal/sections/events/detail/EventDetail";
+import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
+import { controlFor } from "./helpers/labelled-control";
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
@@ -255,13 +257,56 @@ describe("admin event general settings", () => {
     await settle();
     await settle();
 
+    // The row is taken out of play by the `disabled` attribute on the
+    // `<fieldset>` that groups it, which is what puts every control inside it
+    // — including ones a child component renders — out of reach in one place.
+    // `:disabled` is the state a user meets; `.disabled` only reflects the
+    // attribute on the input itself, which is no longer where it lives.
     const tierName = [...container.querySelectorAll<HTMLInputElement>("input")].find(
       (input) => input.value === "Community",
     );
-    expect(tierName?.disabled).toBe(true);
+    expect(tierName).toBeDefined();
+    expect(tierName!.matches(":disabled")).toBe(true);
     expect(container.textContent).not.toContain("+ Add tier");
     expect(container.textContent).not.toContain("Remove");
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Save")).toBe(false);
+
+    // Each tier is a named group whose name input is reached through its own
+    // label, so a reader is not left with an unlabelled row of text boxes.
+    const group = container.querySelector("fieldset");
+    expect(group?.querySelector("legend")?.textContent).toBe("Tier 1");
+    expect(controlFor(container, "Tier name").value).toBe("Community");
+  });
+
+  it("reports a refused sponsor-tier save as a failure, not as a mild caution", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          return new Response(JSON.stringify({ error: { code: "CONFLICT", message: "Tiers changed elsewhere." } }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return json({ tiers: [{ tierName: "Community", hasAttendeeDataAccess: false }] });
+      }),
+    );
+
+    const container = mount(<SponsorTiersTab slug="portal-workshop" canWrite />);
+    await settle();
+    await settle();
+
+    const save = [...container.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+    await act(async () => {
+      save.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // A failure interrupts; the tick that means "saved" does not. Both carry
+    // the words, so neither rests on its colour.
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Tiers changed elsewhere.");
+    expect(container.textContent).not.toContain("✓ Saved");
   });
 
   it("does not expose event read projections without event read capability", () => {

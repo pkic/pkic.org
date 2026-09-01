@@ -281,6 +281,21 @@
 // Blog sidebar
 // ============================================================
 
+// The article/sidebar split. Replaces the `row` + `col-lg-9`/`col-lg-3` pair:
+// one grid declaration instead of a breakpoint class on each column.
+.blog-post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-6);
+  align-items: start;
+}
+
+@media (min-width: 992px) {
+  .blog-post-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(15rem, 1fr);
+  }
+}
+
 .blog-sidebar {
   padding-left: 1.5rem;
 
@@ -460,9 +475,10 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  // social.html renders .linkArea anchors with px-1 Bootstrap padding;
-  // nudge them left so icons sit snug against the name
-  margin-left: -0.1rem;
+  // social.html used to space its icons with a `px-1` on each anchor, which
+  // this rule then had to cancel with a negative margin. One gap here is the
+  // single decision that replaces both.
+  gap: var(--pk-2);
 
   a.linkArea {
     color: $gray-400;
@@ -655,6 +671,13 @@
   border-radius: 1rem;
   border: 1px solid $gray-200;
   z-index: 100; // stay well below the navbar (1040)
+
+  // Replaces `sticky-lg-top` and its inline `top` offset, which the site's
+  // strict CSP and the no-style-attribute rule both forbid.
+  @media (min-width: 992px) {
+    position: sticky;
+    top: 76px; // clears the fixed navbar
+  }
 }
 
 .blog-sidebar-sponsors-intro {
@@ -884,6 +907,10 @@
 }
 
 .news-card-domain {
+  // The headline's stretched link covers the whole card, so the domain link
+  // has to sit above that overlay to stay clickable.
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;

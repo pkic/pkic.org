@@ -1,9 +1,16 @@
 import { usePortalHashLocation } from "../../../hash-location";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { Badge } from "../../../../../components/Badge";
-import { DataTable } from "../../../../../components/Table";
 import { Tabs } from "../../../../../components/Tabs";
+import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
+import { EmptyState } from "../../../../../ui/EmptyState";
+import { Meter } from "../../../../../ui/Meter";
+import { PersonCell } from "../../../../../ui/PersonCell";
+import { StatCard } from "../../../../../ui/StatCard";
+// `pk-mono` and `pk-strong` are written here as class names rather than
+// reached through a component, so this module pulls the sheet that defines
+// `pk-mono` into its own chunk.
+import "../../../../../ui/Content.css";
 import {
   buildCollectionResetKey,
   useCollectionOffset,
@@ -13,112 +20,94 @@ import {
 import { Pager } from "../../../../../components/Pager";
 import {
   eventPromotersListResponseSchema,
-  type EventPromoter as PromoterEntry,
+  type EventPromoter,
+  type EventReferralCode,
 } from "../../../../../../shared/schemas/event-promoters";
-import { promoterRankCardClass, promoterRankTier } from "../../../../../shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../../../../hooks/useOffsetPager";
 import { getJson } from "../../../../../shared/api-client";
 
 const loadEventPromoters: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
-function conversionColor(rate: number): string {
-  if (rate >= 50) return "high";
-  if (rate >= 25) return "mid";
-  return "low";
+/** One promoter, with the rank the server's ordering gives them on this page. */
+interface RankedPromoter extends EventPromoter {
+  rank: number;
 }
 
-function impactColor(score: number): string {
-  if (score >= 10) return "text-success";
-  if (score >= 5) return "text-primary";
-  return "";
+function promoterName(promoter: EventPromoter): string {
+  return [promoter.firstName, promoter.lastName].filter(Boolean).join(" ") || promoter.email || "Unknown promoter";
 }
 
-function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
-  const name = [p.firstName, p.lastName].filter(Boolean).join(" ") || p.email || "Unknown promoter";
-  const subtitle = [p.jobTitle, p.organization].filter(Boolean).join(" · ");
-  const conversion = p.inviteConversionRate ?? 0;
-  const initials = [p.firstName?.[0], p.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
-
-  return (
-    <div class={`adm-promoter-card ${promoterRankCardClass(rank)}`}>
-      <div class="adm-promoter-avatar-wrap">
-        {p.headshotUrl ? (
-          <img class="adm-promoter-avatar" src={p.headshotUrl ?? undefined} alt={name} />
-        ) : (
-          <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
-        )}
-        <span class={`adm-promoter-rank-badge ${promoterRankTier(rank)}`}>{rank}</span>
-      </div>
-
-      <div class="adm-promoter-info">
-        {p.email ? (
-          <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>
-            {name}
-          </a>
-        ) : (
-          <span class="name">{name}</span>
-        )}
-        {subtitle && <div class="subtitle">{subtitle}</div>}
-      </div>
-
-      <div class="adm-promoter-stats">
-        {p.invitesSent > 0 && (
-          <div class="adm-promoter-group">
-            <div class="adm-promoter-group-label">Invites</div>
-            <div class="d-flex gap-3">
-              <div class="adm-promoter-stat">
-                <div class="val">{p.invitesSent}</div>
-                <div class="lbl">Sent</div>
-              </div>
-              <div class="adm-promoter-stat">
-                <div class="val text-success">{p.invitesAccepted}</div>
-                <div class="lbl">Accepted</div>
-              </div>
-              <div class="adm-promoter-stat">
-                <div class="val">{conversion}%</div>
-                <div class="lbl">Rate</div>
-                <progress
-                  class={`adm-promoter-conversion ${conversionColor(conversion)}`}
-                  value={Math.min(conversion, 100)}
-                  max={100}
-                  aria-label={`${conversion}% invite conversion`}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {p.referralClicks > 0 && (
-          <div class="adm-promoter-group">
-            <div class="adm-promoter-group-label">Referrals</div>
-            <div class="d-flex gap-3">
-              <div class="adm-promoter-stat">
-                <div class="val">{p.referralClicks}</div>
-                <div class="lbl">Clicks</div>
-              </div>
-              <div class="adm-promoter-stat">
-                <div class="val text-success">{p.referralConversions}</div>
-                <div class="lbl">Registered</div>
-              </div>
-            </div>
-          </div>
+/**
+ * The leaderboard as a table rather than a column of cards.
+ *
+ * Every figure on the card carried a two- or three-letter label — "Sent",
+ * "Rate", "lbl" — that only made sense beside its neighbours, and the top
+ * three places were signalled by a gold/silver/bronze tint that nobody who
+ * cannot separate those hues could read. A captioned table gives each number
+ * a real column header, and the rank is a number in its own column instead of
+ * a colour.
+ */
+const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoter>> = [
+  { id: "rank", header: "Rank", align: "end", cell: (row) => row.rank, cellClass: "pk-nowrap" },
+  {
+    id: "promoter",
+    header: "Promoter",
+    cell: (row) => (
+      <div class="pk-stack pk-stack--tight">
+        <PersonCell name={promoterName(row)} avatarSrc={row.headshotUrl ?? undefined} size="sm" />
+        {row.email && <a href={`mailto:${row.email}`}>{row.email}</a>}
+        {[row.jobTitle, row.organization].filter(Boolean).length > 0 && (
+          <span class="pk-small">{[row.jobTitle, row.organization].filter(Boolean).join(" · ")}</span>
         )}
       </div>
+    ),
+  },
+  { id: "invitesSent", header: "Invites sent", align: "end", cell: (row) => row.invitesSent },
+  { id: "invitesAccepted", header: "Invites accepted", align: "end", cell: (row) => row.invitesAccepted },
+  {
+    id: "conversion",
+    header: "Invite conversion",
+    cell: (row) => {
+      const conversion = row.inviteConversionRate ?? 0;
+      return (
+        // The bar repeats what the figure beside it says; a reader who cannot
+        // judge the fill still gets the number.
+        <Meter
+          value={Math.min(conversion, 100)}
+          label={`${String(conversion)}% invite conversion for ${promoterName(row)}`}
+          showValue
+        />
+      );
+    },
+  },
+  { id: "invitesDeclined", header: "Declined", align: "end", cell: (row) => row.invitesDeclined },
+  { id: "invitesExpired", header: "Expired", align: "end", cell: (row) => row.invitesExpired },
+  { id: "referralClicks", header: "Link clicks", align: "end", cell: (row) => row.referralClicks },
+  { id: "referralConversions", header: "Link registrations", align: "end", cell: (row) => row.referralConversions },
+  {
+    id: "impactScore",
+    header: "Impact",
+    align: "end",
+    cell: (row) => <span class="pk-strong">{row.impactScore.toFixed(0)}</span>,
+  },
+];
 
-      <div class="adm-promoter-stat adm-promoter-impact">
-        <div class={`val fw-semibold ${impactColor(p.impactScore)}`}>{p.impactScore.toFixed(0)}</div>
-        <div class="lbl">Impact</div>
-      </div>
-
-      {(p.invitesDeclined > 0 || p.invitesExpired > 0) && (
-        <div class="d-flex gap-1 flex-shrink-0">
-          {p.invitesDeclined > 0 && <Badge status="declined" label={`${p.invitesDeclined} declined`} />}
-          {p.invitesExpired > 0 && <Badge status="expired" label={`${p.invitesExpired} expired`} />}
-        </div>
-      )}
-    </div>
-  );
-}
+const REFERRAL_CODE_COLUMNS: ReadonlyArray<DataTableColumn<EventReferralCode>> = [
+  { id: "code", header: "Code", cell: (row) => row.code, cellClass: "pk-mono pk-nowrap" },
+  {
+    id: "owner",
+    header: "Owner",
+    cell: (row) => [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") || row.ownerEmail || "—",
+  },
+  { id: "clicks", header: "Clicks", align: "end", cell: (row) => row.clicks },
+  { id: "conversions", header: "Conversions", align: "end", cell: (row) => row.conversions },
+  {
+    id: "createdAt",
+    header: "Created",
+    cell: (row) => row.createdAt.substring(0, 10),
+    cellClass: "pk-mono pk-small pk-nowrap",
+  },
+];
 
 export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = usePortalHashLocation();
@@ -141,89 +130,79 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
     load: loadEventPromoters,
   });
 
-  if (loading) return <Spinner />;
+  if (loading)
+    return (
+      <div class="pk">
+        <Spinner label="Loading promoters…" />
+      </div>
+    );
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
 
   const { promoters, referralCodes, summary, page } = data;
+  const ranked: RankedPromoter[] = promoters.map((promoter, index) => ({
+    ...promoter,
+    rank: page.offset + index + 1,
+  }));
+  const inviteConversion =
+    summary.totalInvitesSent > 0
+      ? `${((summary.totalInvitesAccepted / summary.totalInvitesSent) * 100).toFixed(0)}% conversion`
+      : undefined;
+
   return (
-    <div>
+    <div class="pk pk-stack">
       {tab === "promoters" && summary.activePromoters > 0 && (
-        <div class="stat-grid mb-3">
-          <div class="stat-card ok">
-            <div class="val">{summary.activePromoters}</div>
-            <div class="lbl">Active Promoters</div>
-            <div class="note">{summary.promotersWithRegistrations} with registrations</div>
-          </div>
-          <div class="stat-card">
-            <div class="val">{summary.totalInvitesSent}</div>
-            <div class="lbl">Invites Sent</div>
-          </div>
-          <div class="stat-card ok">
-            <div class="val">{summary.totalInvitesAccepted}</div>
-            <div class="lbl">Invite Accepted</div>
-            {summary.totalInvitesSent > 0 && (
-              <div class="note">
-                {((summary.totalInvitesAccepted / summary.totalInvitesSent) * 100).toFixed(0)}% conversion
-              </div>
-            )}
-          </div>
-          <div class="stat-card">
-            <div class="val">{summary.totalReferralClicks}</div>
-            <div class="lbl">Link Clicks</div>
-          </div>
-          <div class="stat-card ok">
-            <div class="val">{summary.totalReferralConversions}</div>
-            <div class="lbl">Link Registrations</div>
-          </div>
+        <div class="pk-grid pk-grid--tight">
+          <StatCard
+            label="Active promoters"
+            value={String(summary.activePromoters)}
+            note={`${String(summary.promotersWithRegistrations)} with registrations`}
+          />
+          <StatCard label="Invites sent" value={String(summary.totalInvitesSent)} />
+          <StatCard label="Invites accepted" value={String(summary.totalInvitesAccepted)} note={inviteConversion} />
+          <StatCard label="Link clicks" value={String(summary.totalReferralClicks)} />
+          <StatCard label="Link registrations" value={String(summary.totalReferralConversions)} />
         </div>
       )}
 
       <Tabs
+        label="Promotion views"
         items={[
-          { key: "promoters", label: `Active Promoters (${summary.activePromoters})` },
-          { key: "codes", label: `Referral Codes (${summary.referralCodeCount})` },
+          { key: "promoters", label: `Active promoters (${String(summary.activePromoters)})` },
+          { key: "codes", label: `Referral codes (${String(summary.referralCodeCount)})` },
         ]}
         active={tab}
         onChange={(key) => navigate(`/events/${slug}/promoters/${key === "promoters" ? "" : key}`)}
         hrefFor={(key) => `/events/${slug}/promoters/${key === "promoters" ? "" : key}`}
       />
 
-      {tab === "promoters" &&
-        (promoters.length === 0 ? (
-          <div class="text-muted text-center py-4">No promoter activity yet</div>
-        ) : (
-          <div class="d-flex flex-column gap-2 mt-2">
-            {promoters.map((p, i) => (
-              <PromoterCard key={p.userId} p={p} rank={page.offset + i + 1} />
-            ))}
-          </div>
-        ))}
+      {tab === "promoters" && (
+        <DataTable
+          caption="Promoters, ranked by impact"
+          columns={PROMOTER_COLUMNS}
+          rows={ranked}
+          rowKey={(row) => row.userId}
+          empty={
+            <EmptyState
+              title="No promoter activity yet"
+              body="Promoters appear here once someone sends an invitation or shares a referral link."
+            />
+          }
+        />
+      )}
 
       {tab === "codes" && (
         <DataTable
           caption="Referral codes"
-          columns={[
-            { header: "Code", cell: (c) => <span class="adm-referral-code">{c.code}</span> },
-            {
-              header: "Owner",
-              cell: (c) => [c.ownerFirstName, c.ownerLastName].filter(Boolean).join(" ") || c.ownerEmail || "—",
-            },
-            { header: { label: "Clicks", className: "text-end" }, cell: (c) => c.clicks, className: "mono text-end" },
-            {
-              header: { label: "Conversions", className: "text-end" },
-              cell: (c) => c.conversions,
-              className: "mono text-end",
-            },
-            {
-              header: "Created",
-              cell: (c) => c.createdAt.substring(0, 10),
-              className: "mono small",
-            },
-          ]}
-          data={referralCodes}
-          empty="No referral codes issued"
-          rowKey={(c) => c.code}
+          columns={REFERRAL_CODE_COLUMNS}
+          rows={referralCodes}
+          rowKey={(row) => row.code}
+          empty={
+            <EmptyState
+              title="No referral codes issued"
+              body="A referral code is created when a promoter shares this event."
+            />
+          }
         />
       )}
 

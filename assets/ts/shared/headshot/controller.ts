@@ -54,7 +54,12 @@ export function wireHeadshotController(options: HeadshotControllerOptions): void
   function updatePreview(url: string | null | undefined): void {
     currentUrl = url ?? null;
     renderHeadshotPreview(options.preview, currentUrl, options.previewOptions);
-    deleteButton?.classList.toggle("d-none", !currentUrl || !options.deleteHeadshot);
+    // The platform attribute is what the migrated templates use; the `d-none`
+    // toggle is still needed by the surfaces that have not moved yet, and is
+    // harmless on the ones that have.
+    const hideDelete = !currentUrl || !options.deleteHeadshot;
+    if (deleteButton) deleteButton.hidden = hideDelete;
+    deleteButton?.classList.toggle("d-none", hideDelete);
   }
 
   function reportError(error: unknown, action: HeadshotAction): void {

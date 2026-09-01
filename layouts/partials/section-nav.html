@@ -48,7 +48,7 @@
 {{- $current  := $.Page.RelPermalink -}}
 {{- $rootHref := $navRoot.RelPermalink -}}
 <nav class="wg-section-nav" id="sectionNav" aria-label="Page sections">
-  <div class="container d-flex gap-1">
+  <div class="pk-container pk-cluster">
     <a class="wg-nav-link{{ if eq $current $rootHref }} is-active{{ end }}"
        href="{{ $rootHref }}">{{ $navRoot.LinkTitle }}</a>
     {{- range $subPages }}

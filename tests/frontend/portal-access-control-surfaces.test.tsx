@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The two access-control surfaces that have adopted the design system:
- * `Grants` and `roles/RoleDetail`.
+ * The access-control surfaces that have adopted the design system: `Grants`,
+ * `roles/RoleList` and `roles/RoleDetail`.
  *
  * What is asserted here is deliberately what a visual review cannot see and
  * the isolation gate cannot either — the label/control pairs, the table
@@ -14,8 +14,12 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Grants } from "../../assets/ts/member-flows/portal/sections/access-control/Grants";
+import { RoleAssignForm } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleAssignForm";
 import { RoleDetail } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleDetail";
-import { accessGrantCreateSchema } from "../../assets/shared/schemas/access-control";
+import { RoleList } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleList";
+import { PermissionCheckboxes } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RolePermissions";
+import { PERMISSIONS, type Permission } from "../../assets/shared/schemas/permissions";
+import { accessGrantCreateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -343,5 +347,184 @@ describe("RoleDetail on the design system", () => {
     expect(back.getAttribute("type")).toBe("button");
     void act(() => back.click());
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the role assign form", () => {
+  /** Records every request, so a refused submission can be shown to send nothing. */
+  function stubAssignApi(assign?: Response) {
+    const requests: Array<{ method: string; path: string; body?: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = pathOf(input);
+        const method = init?.method ?? "GET";
+        requests.push({ method, path, body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
+        if (path === "/api/v1/permissions/subjects") {
+          return json({ users: [CANDIDATE], page: { limit: 8, offset: 0, total: 1, hasMore: false } });
+        }
+        if (path === `/api/v1/users/${CANDIDATE.id}/roles` && method === "POST") {
+          return (
+            assign ??
+            json({
+              role: {
+                ...ASSIGNMENT,
+                id: ASSIGNMENT.userRoleId,
+                roleId: ROLE.id,
+                roleName: ROLE.name,
+                userId: CANDIDATE.id,
+              },
+            })
+          );
+        }
+        throw new Error(`Unexpected request: ${method} ${path}`);
+      }),
+    );
+    return requests;
+  }
+
+  function submitAssignForm(container: HTMLElement): Promise<void> {
+    const form = container.querySelector<HTMLFormElement>('form[aria-label="Assign this role"]')!;
+    return act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  it("names each group it is made of, rather than pointing three labels at nothing", () => {
+    stubAssignApi();
+    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={vi.fn()} />);
+
+    // The three headings used to be <label> elements with no `for` — a label
+    // pointing at nothing names nothing.
+    expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent)).toEqual(["User", "Target"]);
+    const expires = controlFor(container, "Expires (optional)");
+    expect(expires.getAttribute("type")).toBe("datetime-local");
+    const describedBy = expires.getAttribute("aria-describedby");
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
+      "Leave empty for an assignment that never expires.",
+    );
+    expect(container.querySelector("form")?.getAttribute("aria-label")).toBe("Assign this role");
+  });
+
+  it("refuses an assignment with no user in a live region and sends nothing", async () => {
+    const requests = stubAssignApi();
+    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={vi.fn()} />);
+
+    await submitAssignForm(container);
+
+    // The reason stays beside the form; a toast would have faded before the
+    // reader reached the control it was about.
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Pick a user first.");
+    expect(requests.some((request) => request.method === "POST")).toBe(false);
+  });
+
+  it("keeps a rejected assignment's reason on the form and does not clear the picker", async () => {
+    stubAssignApi(apiError("FORBIDDEN", "You cannot assign that role.", 403));
+    const onAssigned = vi.fn();
+    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={onAssigned} />);
+    await pickCandidate(container);
+
+    await submitAssignForm(container);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("You cannot assign that role.");
+    expect(onAssigned).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')?.value).toBe(
+      CANDIDATE.email,
+    );
+  });
+
+  it("posts a body the shared userRoleAssignSchema accepts and reloads the list", async () => {
+    const requests = stubAssignApi();
+    const onAssigned = vi.fn();
+    const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={onAssigned} />);
+    await pickCandidate(container);
+
+    await submitAssignForm(container);
+
+    const posted = requests.find((request) => request.method === "POST");
+    expect(posted?.path).toBe(`/api/v1/users/${CANDIDATE.id}/roles`);
+    // Parsed through the canonical contract rather than compared to a literal.
+    const parsed = userRoleAssignSchema.parse(posted!.body);
+    expect(parsed.roleId).toBe(ROLE.id);
+    expect(parsed.contextType).toBeNull();
+    expect(onAssigned).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the permission bundle grid", () => {
+  it("renders every permission as a real check block, not a bare label", () => {
+    const container = mount(
+      <PermissionCheckboxes selected={new Set<Permission>([PERMISSIONS[0]])} onToggle={vi.fn()} />,
+    );
+
+    const blocks = [...container.querySelectorAll("label.pk-check")];
+    expect(blocks).toHaveLength(PERMISSIONS.length);
+    // All three parts, every time: a label carrying only `pk-check` renders
+    // the operating system's own checkbox and no gate catches it.
+    for (const block of blocks) {
+      expect(block.querySelector("input.pk-check__input")).not.toBeNull();
+      expect(block.querySelector("span.pk-check__label")).not.toBeNull();
+    }
+    // The label wraps its control, so there is no `for` left to point nowhere.
+    expect(container.querySelector("label[for]")).toBeNull();
+    const first = blocks[0].querySelector<HTMLInputElement>("input");
+    expect(first?.checked).toBe(true);
+    expect(blocks[0].textContent).toBe(PERMISSIONS[0]);
+  });
+
+  it("reports a toggle once and takes every control out of play while a save is in flight", () => {
+    const onToggle = vi.fn();
+    const container = mount(<PermissionCheckboxes selected={new Set<Permission>()} onToggle={onToggle} disabled />);
+
+    const inputs = [...container.querySelectorAll<HTMLInputElement>("input.pk-check__input")];
+    expect(inputs.every((input) => input.disabled)).toBe(true);
+    // A disabled control reports nothing, so the in-flight save cannot be
+    // raced by a second toggle.
+    void act(() => inputs[0].click());
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+});
+
+describe("the roles list on the design system", () => {
+  const ROLE = {
+    id: "role-custom-1",
+    name: "custom_reviewer",
+    description: "Reviews things",
+    isSystemRole: false,
+    permissions: ["events:read"],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("names the roles table and every row control after the role it acts on", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ roles: [ROLE], page: { limit: 50, offset: 0, total: 1, hasMore: false } })),
+    );
+    const container = mount(<RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={vi.fn()} />);
+    await settle();
+
+    // A page of rows used to offer a column of buttons all called "Open" and
+    // a column of menus all called "Row actions".
+    expect(container.querySelector("caption")?.textContent).toBe("Roles");
+    expect(container.querySelector('button[aria-label="Open custom_reviewer"]')).toBeTruthy();
+    expect(container.querySelector('button[aria-label="Actions for custom_reviewer"]')).toBeTruthy();
+  });
+
+  it("offers the way out of an empty roles list to a caller who can create one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ roles: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    const onCreateNew = vi.fn();
+    const container = mount(<RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={onCreateNew} />);
+    await settle();
+
+    const empty = container.querySelector('[role="status"]')!;
+    expect(empty.textContent).toContain("No roles yet");
+    const action = Array.from(empty.querySelectorAll("button")).find((button) => button.textContent === "New role")!;
+    void act(() => action.click());
+    expect(onCreateNew).toHaveBeenCalled();
   });
 });

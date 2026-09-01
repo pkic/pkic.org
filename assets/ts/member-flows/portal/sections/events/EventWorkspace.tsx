@@ -68,8 +68,11 @@ function OwnerGroupGate({
 
 function WorkspaceSection({ title, children }: { title: string; children: ComponentChildren }) {
   return (
-    <div class="portal-section">
-      <h4 class="portal-section-title">{title}</h4>
+    // The gap under the title comes from the stack rather than from
+    // `portal-section-title`'s margin: inside `.pk` the base layer zeroes
+    // heading margins, so a legacy margin-bottom would no longer apply.
+    <div class="pk pk-stack portal-section">
+      <h4>{title}</h4>
       {children}
     </div>
   );
@@ -91,7 +94,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
   if (props.view === "list") {
     title = "Events";
     content = (
-      <div class="d-flex flex-column gap-3">
+      <div class="pk-stack">
         <EventList />
         {eventListShowsProposalPrograms(portalSession.value) && <ProposalPrograms />}
       </div>

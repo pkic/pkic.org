@@ -11,7 +11,11 @@ import { render } from "preact";
 import { useMemo, useState } from "preact/hooks";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { EmptyState } from "../components/EmptyState";
 import { Pager } from "../components/Pager";
+import { Button } from "../ui/Button";
+import { Field } from "../ui/Field";
+import { TextInput } from "../ui/TextControl";
 import { membersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { useApiPage } from "../hooks/useApiPage";
 import { memberInitials } from "../shared/member-display";
@@ -39,7 +43,7 @@ function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBas
 
   return (
     <div class="member-card bento-card">
-      <a class="stretched-link" href={href} aria-label={member.name}></a>
+      <a class="pk-stretched" href={href} aria-label={member.name}></a>
       <div class="member-card-logo-wrap">
         {member.logoUrl ? (
           <img class="member-card-logo" src={member.logoUrl} alt={`${member.name} logo`} loading="lazy" />
@@ -83,12 +87,20 @@ function DirectoryGrid({
   const presentLetters = letters.filter((l) => buckets.has(l));
 
   if (members.length === 0) {
-    return <p class="text-muted fst-italic text-center mt-3">No members found matching your search.</p>;
+    return (
+      <EmptyState
+        title="No members found."
+        body="No member matches your search. Try a shorter term, or clear the search to see everyone."
+      />
+    );
   }
 
   return (
     <div class="members-layout">
-      <nav class="members-az-sidebar d-none d-lg-flex flex-column" aria-label="Jump to letter">
+      {/* When the rail appears is a property of the rail, so it lives with
+          the rest of its shape in `_members-directory.scss` rather than as a
+          responsive display class here. */}
+      <nav class="members-az-sidebar" aria-label="Jump to letter">
         {hasNum && (
           <a class="az-sidebar-link" href={`#${prefix}-NUM`}>
             #
@@ -141,7 +153,7 @@ function DirectoryGrid({
   );
 }
 
-function MemberDirectory({
+export function MemberDirectory({
   apiBase,
   group,
   prefix,
@@ -173,37 +185,41 @@ function MemberDirectory({
   }
 
   return (
-    <>
-      <div class="py-3">
-        <div class="container">
-          <form class="members-search-bar mx-auto" onSubmit={submitSearch}>
-            <div class="input-group input-group-lg">
-              <span class="input-group-text bg-white border-end-0 text-muted">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.868-3.834zm-5.242 1.406a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z" />
-                </svg>
-              </span>
-              <input
+    <div class="pk-section pk-stack">
+      <div class="pk-container">
+        {/*
+         * `.pk` goes on the form and not on the page root: the form's
+         * appearance is now the design system's, while the cards, the A-Z
+         * rail and the letter headings are still styled by `assets/scss`, and
+         * the base layer beats `legacy` — it would resize the letter headings
+         * and recolor the rail. The layout utilities are unscoped, so the
+         * page still gets its measure and rhythm from them.
+         */}
+        <form class="pk pk-stack pk-stack--snug members-search-bar" onSubmit={submitSearch}>
+          <Field label={`Search ${label}`}>
+            {(control) => (
+              <TextInput
+                {...control}
                 type="search"
-                class="form-control border-start-0 ps-0"
                 placeholder={`Search ${label}…`}
-                aria-label={`Search ${label}`}
                 autocomplete="off"
                 value={searchInput}
                 onInput={(e) => setSearchInput((e.target as HTMLInputElement).value)}
               />
-              <button class="btn btn-primary" type="submit">
-                Search
-              </button>
-            </div>
-          </form>
-        </div>
+            )}
+          </Field>
+          <div class="pk-cluster pk-cluster--end">
+            <Button type="submit" variant="primary">
+              Search
+            </Button>
+          </div>
+        </form>
       </div>
-      <div class="container-fluid px-2 px-md-4 pb-5">
+      <div class="pk-container pk-container--wide">
         <DirectoryGrid members={members} prefix={prefix} detailBase={detailBase} />
         {listing.pagerProps && <Pager {...listing.pagerProps} />}
       </div>
-    </>
+    </div>
   );
 }
 

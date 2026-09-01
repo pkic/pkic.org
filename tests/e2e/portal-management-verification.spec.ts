@@ -339,7 +339,13 @@ test.describe("Portal management browser-verification pass", () => {
     // name, so it groups under its contact name. Drill into that company,
     // then pick its (only) sponsorship from the resulting list.
     await page.locator("tr").filter({ hasText: contactName }).click();
-    await page.locator(".list-group-item").first().click();
+    // The company's sponsorships are a table now, and each row activates
+    // through a control named after what it opens — located by that name
+    // rather than by the list class the markup happens to carry.
+    await page
+      .getByRole("button", { name: /^Show / })
+      .first()
+      .click();
     // The detail panel names itself after the sponsor, so it is located by
     // that name rather than by the container class it happens to carry.
     const detail = page.getByRole("region", { name: contactName });
@@ -371,10 +377,15 @@ test.describe("Portal management browser-verification pass", () => {
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/sponsor-tiers`);
     await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
 
+    // Located by role and accessible name rather than by class. Each tier is
+    // a `<fieldset>` named by its `<legend>`, so the row is a group and the
+    // two controls inside it are reached by the names a reader hears — which
+    // will not break the next time the surface is restyled.
+    const tierRows = page.getByRole("group", { name: /^Tier \d+$/ });
     await page.getByRole("button", { name: "+ Add tier" }).click();
-    const newRow = page.locator("div.row.g-2.align-items-center.mb-2").last();
-    await newRow.locator("input.form-control-sm").fill(tierName);
-    await newRow.locator("input[type=checkbox]").check();
+    const newRow = tierRows.last();
+    await newRow.getByRole("textbox", { name: "Tier name" }).fill(tierName);
+    await newRow.getByRole("checkbox", { name: "Attendee data access" }).check();
 
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("✓ Saved")).toBeVisible();
@@ -383,19 +394,16 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
     // `hasText`/getByText can't see an <input>'s value (it isn't a text
     // node), and Playwright has no getByDisplayValue — find the matching
-    // tier-name input by its live .value via evaluateAll, then walk up to
-    // the row to check its sibling checkbox.
-    const tierInputs = page.locator("input.form-control-sm");
+    // tier-name input by its live .value via evaluateAll, then take the row
+    // at the same position to check its checkbox.
+    const tierInputs = page.getByRole("textbox", { name: "Tier name" });
     await expect(tierInputs.first()).toBeVisible({ timeout: 15_000 });
     const index = await tierInputs.evaluateAll(
       (els, name) => els.findIndex((el) => (el as HTMLInputElement).value === name),
       tierName,
     );
     expect(index, "saved tier not found after reload").toBeGreaterThanOrEqual(0);
-    const savedRow = tierInputs
-      .nth(index)
-      .locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' row ')][1]");
-    await expect(savedRow.locator("input[type=checkbox]")).toBeChecked();
+    await expect(tierRows.nth(index).getByRole("checkbox", { name: "Attendee data access" })).toBeChecked();
   });
 
   test("event team: assign and revoke a role through the canonical event resource", async ({ page }) => {
@@ -645,10 +653,11 @@ test.describe("Portal management browser-verification pass", () => {
     await primaryRow.click();
     await expect(page.getByText(`Primary User ${stamp}`)).toBeVisible({ timeout: 10_000 });
 
-    const emailPanel = page
-      .locator(".card")
-      .filter({ has: page.locator(".card-header", { hasText: "Email addresses" }) });
-    await emailPanel.locator("input[type=email]").fill(extraEmail);
+    // Located by role and accessible name rather than by `.card`/`.card-header`:
+    // the panel is a named region now, and a role does not break the next time
+    // the markup around it is restyled.
+    const emailPanel = page.getByRole("region", { name: "Email addresses" });
+    await emailPanel.getByLabel("Add a secondary email").fill(extraEmail);
     await emailPanel.getByRole("button", { name: "Add email" }).click();
     await expect(page.locator(".my-toast", { hasText: "Email added" })).toBeVisible();
     await expect(emailPanel.getByText(extraEmail)).toBeVisible();

@@ -33,7 +33,8 @@ import { Button } from "../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Toolbar } from "../../../ui/Toolbar";
 import { FormDefinitionEditor, type EditableFormDetail } from "../FormDefinitionEditor";
-import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "../FormResponseViews";
+import { FormResponseStats, type ServerFieldStat } from "../FormResponseStats";
+import { FormSubmissionsTable } from "../FormResponseViews";
 // `pk-mono` lives in the design system's Content.css, which ships in a lazy
 // chunk: a surface that writes the class name has to import the stylesheet
 // itself, or the identifier renders in the body face once Bootstrap is gone.

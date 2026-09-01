@@ -12,8 +12,15 @@
 {{- $currentPath := .RelPermalink -}}
 {{- $isIndep     := hasPrefix $currentPath "/members/independent" -}}
 
+{{/*
+  The bar itself is deliberately not given the `pk` root: its ~40 lines of
+  styling are still legacy (a black bar with white links), and the base layer
+  beats the legacy layer, so `.pk` would recolour the links to accent ink on
+  black. The measured column inside it is a design-system utility, which
+  carries no such opinion.
+*/}}
 <div class="members-section-nav">
-  <div class="container">
+  <div class="pk-container">
     <a class="members-nav-link{{ if not $isIndep }} is-active{{ end }}" href="/members/">
       Members
     </a>

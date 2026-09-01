@@ -7,14 +7,12 @@
  * a "parting gift" success state.
  */
 
-import { render } from "preact";
 import { setButtonLoading, resetButton } from "./shared/form/button-loading";
-import { INVITE_FORWARD_LIMIT, inviteDeclineSchema } from "../shared/schemas/registration";
+import { inviteDeclineSchema } from "../shared/schemas/registration";
 import { inviteDeclineInfoResponseSchema, inviteDeclineResponseSchema } from "../shared/schemas/invites";
 import { getJson, postJson, ApiClientError } from "./shared/api-client";
-import { parseContactText } from "./shared/invite-parser";
-import type { ParsedContact } from "./shared/invite-parser";
 import { showManageLinkRecoveryForm } from "./shared/widgets/link-recovery";
+import { wireForwardList } from "./invite-decline-forward-list";
 import type { z } from "zod";
 
 type DeclineInfo = z.infer<typeof inviteDeclineInfoResponseSchema>;
@@ -28,6 +26,17 @@ const VIRTUAL_PIVOT_REASONS = new Set(["travel_not_possible"]);
 const CONVINCE_BOSS_REASONS = new Set(["organization_policy"]);
 const TOPIC_GAP_REASONS = new Set(["content_not_relevant"]);
 const ON_DEMAND_REASONS = new Set(["schedule_conflict"]);
+
+/**
+ * The Alert modifier for each status the flow can land on. Full class names
+ * per entry rather than a suffix interpolated into `pk-alert--${...}`, so
+ * every design-system class this module writes is one a stylesheet defines.
+ */
+const STATUS_TONE_CLASS: Record<"warning" | "danger" | "info", string> = {
+  warning: "pk-alert--warn",
+  danger: "pk-alert--danger",
+  info: "pk-alert--info",
+};
 
 // ── Copy variants (attendee vs speaker) ───────────────────────────────────────
 
@@ -153,7 +162,10 @@ function boot(): void {
     hide(formWrapEl);
     const alertEl = $("[data-status-alert]", root!);
     if (alertEl) {
-      alertEl.className = `alert alert-${type}`;
+      // The shortcode renders this banner as a design-system Alert, so the
+      // script must repaint it in the same vocabulary. Assigning Bootstrap
+      // here wiped `pk-alert` and left the banner unstyled.
+      alertEl.className = `pk-alert ${STATUS_TONE_CLASS[type]}`;
     }
     const titleEl = $("[data-status-title]", root!);
     if (titleEl) titleEl.textContent = title;
@@ -253,7 +265,7 @@ function boot(): void {
 
     buildNpsButtons();
     wireReasonRadios(info);
-    wireForwardToggle();
+    wireForwardList(root!);
     wireSubmit(tok, base, info, inviteIdQuery);
 
     show(formWrapEl);
@@ -282,14 +294,23 @@ function boot(): void {
   // ── NPS buttons ─────────────────────────────────────────────────────────────
 
   function buildNpsButtons(): void {
-    root!.querySelectorAll<HTMLButtonElement>("[data-nps]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        root!.querySelectorAll("[data-nps]").forEach((b) => b.classList.remove("btn-primary", "active"));
-        root!.querySelectorAll("[data-nps]").forEach((b) => b.classList.add("btn-outline-secondary"));
-        btn.classList.remove("btn-outline-secondary");
-        btn.classList.add("btn-primary", "active");
+    const scores = root!.querySelectorAll<HTMLButtonElement>("[data-nps]");
+    // The chosen score was signalled by fill alone, which says nothing to a
+    // reader who cannot see it. `aria-pressed` states it, and the fill
+    // follows from the design system's own primary/secondary variants.
+    scores.forEach((button) => {
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        scores.forEach((other) => {
+          other.classList.remove("pk-btn--primary");
+          other.classList.add("pk-btn--secondary");
+          other.setAttribute("aria-pressed", "false");
+        });
+        button.classList.remove("pk-btn--secondary");
+        button.classList.add("pk-btn--primary");
+        button.setAttribute("aria-pressed", "true");
         const hidden = $("[data-nps-value]", root!) as HTMLInputElement | null;
-        if (hidden) hidden.value = btn.dataset.nps ?? "";
+        if (hidden) hidden.value = button.dataset.nps ?? "";
       });
     });
   }
@@ -340,114 +361,17 @@ function boot(): void {
 
         // Note field: required for "other", optional otherwise
         if (noteOptional) {
+          // The words carry it; the colour only agrees with them.
           noteOptional.textContent = isOther ? " (required)" : " (optional)";
-          noteOptional.className = isOther ? "fw-normal text-danger" : "text-muted fw-normal";
+          noteOptional.className = isOther ? "pk-required" : "pk-muted";
         }
+        // And the control itself says so, rather than leaving the requirement
+        // in a span the field is not described by.
+        $("[data-reason-note]", root!)?.setAttribute("aria-required", isOther ? "true" : "false");
         hide(noteError);
         hide($("[data-reason-error]", root!));
       });
     });
-  }
-
-  // ── Forward section ─────────────────────────────────────────────────────────
-
-  const configuredForwardLimit = parseInt(root.dataset.forwardMax ?? "", 10);
-  const MAX_FORWARDS = Number.isFinite(configuredForwardLimit)
-    ? Math.max(0, Math.min(configuredForwardLimit, INVITE_FORWARD_LIMIT))
-    : INVITE_FORWARD_LIMIT;
-  let forwardCount = 0;
-
-  function wireForwardToggle(): void {
-    const toggleBtn = $("[data-forward-toggle]", root!);
-    const forwardEntries = $("[data-forward-entries]", root!);
-    const arrowEl = $("[data-forward-arrow]", root!);
-
-    toggleBtn?.addEventListener("click", () => {
-      const expanded = toggleBtn.getAttribute("aria-expanded") === "true";
-      toggleBtn.setAttribute("aria-expanded", String(!expanded));
-      if (arrowEl) arrowEl.textContent = !expanded ? "▼" : "▶";
-      if (!expanded) {
-        show(forwardEntries);
-        if (forwardCount === 0) addForwardRow();
-      } else {
-        hide(forwardEntries);
-      }
-    });
-
-    // Wire paste textarea
-    const pasteArea = $("[data-decline-forward-paste]", root!) as HTMLTextAreaElement | null;
-    pasteArea?.addEventListener("change", () => {
-      const raw = pasteArea.value.trim();
-      if (!raw) return;
-      const entries = parseContactText(raw);
-      for (const entry of entries) {
-        if (forwardCount >= MAX_FORWARDS) break;
-        addForwardRow(entry);
-      }
-      pasteArea.value = "";
-    });
-
-    $("[data-add-forward]", root!)?.addEventListener("click", () => addForwardRow());
-  }
-
-  function addForwardRow(prefill?: ParsedContact): void {
-    if (forwardCount >= MAX_FORWARDS) return;
-    forwardCount++;
-
-    const forwardList = $("[data-forward-list]", root!);
-    if (!forwardList) return;
-
-    const row = document.createElement("div");
-    row.className = "event-flow-invite-row";
-    row.dataset.forwardRow = "";
-    render(
-      <>
-        <input
-          type="text"
-          class="form-control form-control-sm"
-          placeholder="First name"
-          data-fw="firstName"
-          autocomplete="off"
-          value={prefill?.firstName ?? ""}
-        />
-        <input
-          type="text"
-          class="form-control form-control-sm"
-          placeholder="Last name"
-          data-fw="lastName"
-          autocomplete="off"
-          value={prefill?.lastName ?? ""}
-        />
-        <input
-          type="email"
-          class="form-control form-control-sm"
-          placeholder="Email *"
-          data-fw="email"
-          autocomplete="off"
-          value={prefill?.email ?? ""}
-        />
-        <button type="button" class="event-flow-invite-remove-btn" aria-label="Remove contact" data-remove-row>
-          &times;
-        </button>
-      </>,
-      row,
-    );
-
-    row.querySelector("[data-remove-row]")?.addEventListener("click", () => {
-      row.remove();
-      forwardCount--;
-      const addBtn = $("[data-add-forward]", root!);
-      if (addBtn) addBtn.removeAttribute("disabled");
-    });
-
-    forwardList.appendChild(row);
-
-    const addBtn = $("[data-add-forward]", root!);
-    if (forwardCount >= MAX_FORWARDS && addBtn) addBtn.setAttribute("disabled", "");
-
-    if (!prefill) {
-      (row.querySelector("[data-fw='firstName']") as HTMLInputElement | null)?.focus();
-    }
   }
 
   // ── Submit ──────────────────────────────────────────────────────────────────

@@ -1,25 +1,29 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
-<div class="py-2 bg-light">
-</div>
-
-<div class="{{ if not .Params.fullwidth }}container{{ else }}container-fluid{{ end }}">
-    <div class="row">
-        {{- if $.Page.FirstSection.Param "sideMenu" -}}
-        <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse">
-            <div class="position-sticky p-3 sidebar-sticky">
-                {{ partial "menu.html" . }}
-            </div>
-        </nav>
-        <div id="content" class="col-md-8 ms-sm-auto col-lg-9 p-4" data-pagefind-body>
-        {{- else -}}
-        <div id="content" class="p-4" data-pagefind-body>
-        {{- end -}}
-
-            {{ .Content }}
+{{/* The sidebar split reuses `events-page-layout` / `events-page-menu` /
+     `events-page-menu-sticky` from assets/scss/_events-listing.scss, written
+     for exactly this `col-md-4 … d-md-block collapse` pattern when
+     layouts/events/list.html migrated. No `.pk` root: the page body is
+     authored markdown still styled by the legacy sheet. */}}
+{{- $container := cond (default false .Params.fullwidth) "pk-container pk-container--wide" "pk-container" -}}
+{{- if $.Page.FirstSection.Param "sideMenu" -}}
+<div class="{{ $container }} pk-section events-page-layout">
+    <nav id="sidebarMenu" class="events-page-menu" aria-label="Section navigation">
+        <div class="events-page-menu-sticky">
+            {{ partial "menu.html" . }}
         </div>
+    </nav>
+    <div id="content" data-pagefind-body>
+        {{ .Content }}
     </div>
 </div>
+{{- else -}}
+<div class="{{ $container }} pk-section">
+    <div id="content" data-pagefind-body>
+        {{ .Content }}
+    </div>
+</div>
+{{- end -}}
 
 {{ end }}

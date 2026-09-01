@@ -117,3 +117,62 @@ describe("portal System Users list permissions", () => {
     expect(onViewUser).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
   });
 });
+
+describe("portal System Users list controls", () => {
+  it("names the table and both toolbar filters, and sends the chosen role to the query", async () => {
+    const requested: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requested.push(new URL(String(input), location.origin));
+        return new Response(JSON.stringify({ users: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<UsersList canWrite canGrantAccess onViewUser={vi.fn()} />, container));
+    await settle();
+
+    // Several tables can share a page, so this one says which it is.
+    expect(container.querySelector("caption")?.textContent).toBe("User accounts");
+    const filters = [...container.querySelectorAll("select")].map((select) => select.getAttribute("aria-label"));
+    expect(filters).toEqual(expect.arrayContaining(["Filter by role", "Filter by participation"]));
+
+    const role = container.querySelector<HTMLSelectElement>("select[aria-label='Filter by role']")!;
+    role.value = "admin";
+    await act(async () => {
+      role.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requested.some((url) => url.searchParams.get("role") === "admin")).toBe(true);
+  });
+
+  it("states a refused user listing as a sentence rather than an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ message: "no" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<UsersList canWrite canGrantAccess onViewUser={vi.fn()} />, container));
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(alert?.textContent).not.toContain("HTTP 403");
+    expect(container.querySelector("table")).toBeNull();
+  });
+});

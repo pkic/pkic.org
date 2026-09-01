@@ -10,6 +10,8 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt, toast } from "../../ui";
 import { MeetingOccurrenceDetail } from "./MeetingOccurrenceDetail";
 import { MeetingOccurrenceFields, type MeetingOccurrenceDraft } from "./MeetingOccurrenceFields";
@@ -78,29 +80,42 @@ export function MeetingOccurrences({
   }
 
   return (
-    <div class="d-flex flex-column gap-3">
+    <div class="pk pk-stack">
       {canManage && (
-        <div>
-          <button type="button" class="btn btn-sm btn-primary" onClick={() => setShowCreate((shown) => !shown)}>
+        <div class="pk-cluster">
+          <Button
+            size="sm"
+            variant="primary"
+            aria-expanded={showCreate}
+            onClick={() => setShowCreate((shown) => !shown)}
+          >
             {showCreate ? "Hide occurrence form" : "Add occurrence"}
-          </button>
+          </Button>
         </div>
       )}
       {canManage && showCreate && (
-        <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={(event) => void create(event)}>
-          <MeetingOccurrenceFields
-            idPrefix={`meeting-occurrence-create-${series.id}`}
-            draft={draft}
-            disabled={saving}
-            onChange={setDraft}
-          />
-          <div class="d-flex gap-2 align-items-center">
-            <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
-              {saving ? "Creating…" : "Create occurrence"}
-            </button>
-            {error && <ErrorAlert error={error} />}
-          </div>
-        </form>
+        <Panel>
+          <PanelHeader title="New occurrence" />
+          <PanelBody class="pk-stack">
+            <form class="pk-stack" onSubmit={(event) => void create(event)}>
+              <MeetingOccurrenceFields
+                idPrefix={`meeting-occurrence-create-${series.id}`}
+                draft={draft}
+                disabled={saving}
+                onChange={setDraft}
+              />
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
+                  {saving ? "Creating…" : "Create occurrence"}
+                </Button>
+              </div>
+              {/* Below the actions rather than beside them: an alert is a
+                  block, and sharing the button's row pushed the button off
+                  the line as soon as the message ran to a second one. */}
+              {error && <ErrorAlert error={error} />}
+            </form>
+          </PanelBody>
+        </Panel>
       )}
       <ApiDataTable
         caption={`Scheduled occurrences of ${series.eventName}`}
@@ -129,18 +144,20 @@ export function MeetingOccurrences({
           ...(canManage || canManageAttendance
             ? [
                 {
-                  header: "",
-                  className: "text-end",
+                  header: "Actions",
+                  className: "pk-end",
                   cell: (occurrence: EventOccurrence) => (
-                    <button
-                      type="button"
-                      class="btn btn-sm btn-outline-secondary"
+                    // A disclosure, not a navigation: the detail row opens in
+                    // place, so the control keeps aria-expanded/aria-controls
+                    // and the row itself stays a plain row.
+                    <Button
+                      size="sm"
                       aria-expanded={selectedId === occurrence.id}
                       aria-controls={`meeting-occurrence-detail-${occurrence.id}`}
                       onClick={() => setSelectedId((current) => (current === occurrence.id ? null : occurrence.id))}
                     >
                       {selectedId === occurrence.id ? "Hide" : "Manage"}
-                    </button>
+                    </Button>
                   ),
                 },
               ]

@@ -1,4 +1,5 @@
-import { useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
+import { Button } from "../ui/Button";
 import { confirmAction } from "./ConfirmDialog";
 
 export interface LogoManagerProps {
@@ -13,6 +14,12 @@ export interface LogoManagerProps {
   accept?: string;
   /** One-line policy hint rendered under the file input. */
   hint?: string;
+  /**
+   * Names the file input. It had no name at all before — a bare
+   * `<input type="file">` announces as "file upload button" and nothing else
+   * — so it defaults to whichever of the two things activating it does.
+   */
+  uploadLabel?: string;
   onUpload: (file: File) => Promise<unknown>;
   onRemove: () => Promise<unknown>;
   onChanged: () => void;
@@ -24,6 +31,9 @@ export function LogoManager(props: LogoManagerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const centered = props.layout === "centered";
+  const inputId = useId();
+  const hintId = `${inputId}-hint`;
+  const uploadLabel = props.uploadLabel ?? (props.imageUrl ? "Replace logo" : "Upload logo");
 
   async function upload(file: File) {
     setBusy(true);
@@ -59,29 +69,47 @@ export function LogoManager(props: LogoManagerProps) {
   }
 
   return (
-    <div class={centered ? "text-center" : "d-flex align-items-center gap-3 mb-3"}>
+    // Centered stacks the picture over its controls; inline puts them side by
+    // side. Both take their spacing from the parent's gap rather than from a
+    // margin on the picture.
+    <div class={centered ? "pk pk-stack pk-stack--snug pk-center" : "pk pk-cluster"}>
       {props.imageUrl ? (
         <img src={props.imageUrl} alt={props.alt} class={props.imageClass} />
       ) : (
         <div class={props.placeholderClass}>No logo</div>
       )}
-      <div class={centered ? "d-flex gap-2 justify-content-center" : "d-flex flex-column gap-1"}>
+      <div class="pk-stack pk-stack--tight">
+        <label class="pk-field__label" for={inputId}>
+          {uploadLabel}
+        </label>
         <input
           ref={fileInputRef}
+          id={inputId}
           type="file"
           accept={props.accept ?? "image/jpeg,image/png,image/webp"}
-          class={`form-control form-control-sm${centered ? " w-auto" : ""}`}
+          class="pk-input"
           disabled={busy}
+          // The policy is tied to the control it constrains rather than left
+          // as a line of prose underneath it.
+          aria-describedby={props.hint ? hintId : undefined}
           onChange={(event) => {
             const file = (event.target as HTMLInputElement).files?.[0];
             if (file) void upload(file);
           }}
         />
-        {props.hint && <div class="form-text">{props.hint}</div>}
+        {props.hint && (
+          <p id={hintId} class="pk-field__help">
+            {props.hint}
+          </p>
+        )}
         {props.imageUrl && (
-          <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void remove()}>
-            {props.removeLabel}
-          </button>
+          <div class={centered ? "pk-cluster pk-cluster--center" : "pk-cluster"}>
+            {/* `loading` rather than `disabled`: a disabled control loses
+                focus, which throws a screen-reader user out of the form. */}
+            <Button variant="danger-quiet" size="sm" loading={busy} onClick={() => void remove()}>
+              {props.removeLabel}
+            </Button>
+          </div>
         )}
       </div>
     </div>

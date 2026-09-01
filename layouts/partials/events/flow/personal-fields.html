@@ -1,31 +1,37 @@
 {{/*
   Renders the re-usable personal-detail field group (first name, last name,
-  organisation, job title). Used by both the registration and manage shortcodes
-  so the HTML and labels stay in sync automatically.
+  organization, job title), so the HTML and labels stay in sync wherever an
+  event flow asks for them.
 
   Accepts an optional .prefix dict key to namespace element IDs when the same
   partial is embedded more than once on a page (defaults to "flow").
+
+  No `.pk` root of its own: this is a fragment, and its caller
+  (layouts/shortcodes/event-registration-manage.html) already opens one.
+  Spacing comes from the stack and grid gaps rather than per-element margins.
 */}}
 {{- $prefix := .prefix | default "flow" -}}
-<div class="row g-2">
-  <div class="col-sm-6">
-    <label for="{{ $prefix }}-first-name" class="form-label">First name</label>
-    <input id="{{ $prefix }}-first-name" name="firstName" type="text" class="form-control" autocomplete="given-name">
-    <div data-field-error="firstName" class="invalid-feedback d-block"></div>
+<div class="pk-stack pk-stack--snug">
+  <div class="pk-grid">
+    <div class="pk-field">
+      <label for="{{ $prefix }}-first-name" class="pk-field__label">First name</label>
+      <input id="{{ $prefix }}-first-name" name="firstName" type="text" class="pk-input" autocomplete="given-name">
+      <div data-field-error="firstName" class="pk-field__message"></div>
+    </div>
+    <div class="pk-field">
+      <label for="{{ $prefix }}-last-name" class="pk-field__label">Last name</label>
+      <input id="{{ $prefix }}-last-name" name="lastName" type="text" class="pk-input" autocomplete="family-name">
+      <div data-field-error="lastName" class="pk-field__message"></div>
+    </div>
   </div>
-  <div class="col-sm-6">
-    <label for="{{ $prefix }}-last-name" class="form-label">Last name</label>
-    <input id="{{ $prefix }}-last-name" name="lastName" type="text" class="form-control" autocomplete="family-name">
-    <div data-field-error="lastName" class="invalid-feedback d-block"></div>
+  <div class="pk-field">
+    <label for="{{ $prefix }}-org" class="pk-field__label">Organization <span class="pk-small">(optional)</span></label>
+    <input id="{{ $prefix }}-org" name="organizationName" type="text" class="pk-input" autocomplete="organization">
+    <div data-field-error="organizationName" class="pk-field__message"></div>
   </div>
-  <div class="col-12">
-    <label for="{{ $prefix }}-org" class="form-label">Organization <span class="text-muted fw-normal">(optional)</span></label>
-    <input id="{{ $prefix }}-org" name="organizationName" type="text" class="form-control" autocomplete="organization">
-    <div data-field-error="organizationName" class="invalid-feedback d-block"></div>
-  </div>
-  <div class="col-12">
-    <label for="{{ $prefix }}-job" class="form-label">Job title <span class="text-muted fw-normal">(optional)</span></label>
-    <input id="{{ $prefix }}-job" name="jobTitle" type="text" class="form-control" autocomplete="organization-title">
-    <div data-field-error="jobTitle" class="invalid-feedback d-block"></div>
+  <div class="pk-field">
+    <label for="{{ $prefix }}-job" class="pk-field__label">Job title <span class="pk-small">(optional)</span></label>
+    <input id="{{ $prefix }}-job" name="jobTitle" type="text" class="pk-input" autocomplete="organization-title">
+    <div data-field-error="jobTitle" class="pk-field__message"></div>
   </div>
 </div>

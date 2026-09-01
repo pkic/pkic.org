@@ -7,10 +7,17 @@ import {
   type GroupEventSeries,
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody } from "../../../../ui/Panel";
+import { TextInput } from "../../../../ui/TextControl";
 import { patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
 import { defaultFutureDate, isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
+// The `pk-check` trio below is written as class names rather than reached
+// through a component, so this module names their stylesheet itself.
+import "../../../../ui/Field.css";
 
 function draftFromSeries(series: GroupEventSeries): MeetingSeriesDraft {
   return {
@@ -118,9 +125,12 @@ export function MeetingSeriesSettings({
     }
   }
 
+  const activeId = `meeting-series-active-${series.id}`;
+  const generateHeadingId = `meeting-series-generate-${series.id}`;
+
   return (
-    <div class="d-flex flex-column gap-3">
-      <form class="d-flex flex-column gap-3" onSubmit={(event) => void save(event)}>
+    <div class="pk pk-stack">
+      <form class="pk-stack" onSubmit={(event) => void save(event)}>
         <MeetingSeriesFields
           idPrefix={`meeting-series-settings-${series.id}`}
           draft={draft}
@@ -129,57 +139,59 @@ export function MeetingSeriesSettings({
           onChange={setDraft}
         />
         {series.occurrenceCount > 0 && (
-          <div class="form-text">
+          <p class="pk-field__help">
             The recurring schedule is locked after occurrences are generated. Mutable policy, profile, name, location,
             and active state remain editable.
-          </div>
+          </p>
         )}
-        <div>
-          <div class="form-check">
-            <input
-              id={`meeting-series-active-${series.id}`}
-              type="checkbox"
-              class="form-check-input"
-              checked={active}
-              onChange={(e) => setActive(e.currentTarget.checked)}
-            />
-            <label class="form-check-label" for={`meeting-series-active-${series.id}`}>
-              Active series
-            </label>
-          </div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
+        {/* All three parts of the check block: `pk-check` on the label alone
+            renders the operating system's own control, in its accent rather
+            than ours, and no gate can see it. */}
+        <label class="pk-check" for={activeId}>
+          <input
+            id={activeId}
+            type="checkbox"
+            class="pk-check__input"
+            checked={active}
+            onChange={(e) => setActive(e.currentTarget.checked)}
+          />
+          <span class="pk-check__label">Active series</span>
+        </label>
+        {/* `loading` rather than `disabled`: a disabled control loses focus,
+            which throws a screen-reader user out of the form mid-save. */}
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" size="sm" loading={saving}>
             {saving ? "Saving…" : "Save series"}
-          </button>
-          {error && <ErrorAlert error={error} />}
+          </Button>
         </div>
+        {error && <ErrorAlert error={error} />}
       </form>
-      <div class="border-top pt-3">
-        <h6>Generate recurring occurrences</h6>
-        <div class="d-flex flex-wrap align-items-end gap-2">
-          <div>
-            <label class="form-label small fw-semibold" for={`meeting-series-through-${series.id}`}>
-              Generate through
-            </label>
-            <input
-              id={`meeting-series-through-${series.id}`}
-              type="datetime-local"
-              class="form-control form-control-sm"
-              value={through}
-              onInput={(e) => setThrough(e.currentTarget.value)}
-            />
+      {/* The rule the Bootstrap version drew with `border-top` is the panel's
+          own edge, and the padding that followed it is the panel body's. */}
+      <Panel aria-labelledby={generateHeadingId}>
+        <PanelBody class="pk-stack pk-stack--snug">
+          {/* The heading stays an h6 rather than moving to PanelHeader's h3:
+              this editor already sits under the shell's h4 section title and a
+              series' own h5, and a panel that jumped back to h3 would read as
+              a sibling of the page rather than a part of this form. */}
+          <h6 id={generateHeadingId}>Generate recurring occurrences</h6>
+          <Field label="Generate through">
+            {(control) => (
+              <TextInput
+                {...control}
+                type="datetime-local"
+                value={through}
+                onInput={(e) => setThrough(e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <div class="pk-cluster">
+            <Button variant="secondary" size="sm" loading={materializing} onClick={() => void materialize()}>
+              {materializing ? "Generating…" : "Generate occurrences"}
+            </Button>
           </div>
-          <button
-            type="button"
-            class="btn btn-sm btn-outline-primary"
-            disabled={materializing}
-            onClick={() => void materialize()}
-          >
-            {materializing ? "Generating…" : "Generate occurrences"}
-          </button>
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

@@ -9,14 +9,15 @@ import { usePortalHashLocation } from "../hash-location";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 
 type UserOrganization = z.infer<typeof userOrganizationsListResponseSchema>["organizations"][number];
 
 export function RepresentedOrganizations() {
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Your organizations</div>
-      <div class="card-body">
+    <Panel>
+      <PanelHeader title="Your organizations" />
+      <PanelBody>
         <ApiDataTable
           caption="Your organizations"
           endpoint="/api/v1/users/current/organizations"
@@ -30,10 +31,10 @@ export function RepresentedOrganizations() {
             {
               header: "Organization",
               cell: (organization: UserOrganization) => (
-                <div>
-                  <div class="fw-semibold">{organization.name}</div>
+                <div class="pk-stack pk-stack--tight">
+                  <div class="pk-strong">{organization.name}</div>
                   {organization.membershipCategory && (
-                    <div class="small text-muted">Category {organization.membershipCategory}</div>
+                    <div class="pk-small">Category {organization.membershipCategory}</div>
                   )}
                 </div>
               ),
@@ -47,12 +48,15 @@ export function RepresentedOrganizations() {
                 ) : organization.isOrgContact ? (
                   <Badge status="active" label="Contact" />
                 ) : (
-                  <span class="small text-muted">Representative</span>
+                  <span class="pk-small">Representative</span>
                 ),
             },
             {
-              header: "",
-              className: "text-end",
+              // A blank `th` is announced as an unnamed column. The badge in
+              // it is about the organization's pending content review, so the
+              // column says so.
+              header: "Review",
+              className: "pk-end",
               cell: (organization: UserOrganization) =>
                 organization.hasPendingReview ? <Badge status="pending" label="Review pending" /> : null,
             },
@@ -64,7 +68,7 @@ export function RepresentedOrganizations() {
             href: usePortalHashLocation.hrefs(`/organizations/${encodeURIComponent(organization.organizationId)}`),
           })}
         />
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

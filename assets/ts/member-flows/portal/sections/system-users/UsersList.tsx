@@ -1,6 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { FilterSelect } from "../../../../components/FilterSelect";
 import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
 import { patchJson } from "../../../../shared/api-client";
@@ -80,34 +81,37 @@ export function UsersList({
       params={{ ...(roleFilter ? { role: roleFilter } : {}), ...(typeFilter ? { type: typeFilter } : {}) }}
       toolbar={({ resetPage }) => (
         <>
-          <select
-            class="form-select form-select-sm w-auto"
-            aria-label="Filter by role"
+          {/* A toolbar has no room for a stacked label, so each filter keeps
+              its name in `aria-label` — through the shared control, which is
+              the one place that decision is made. */}
+          <FilterSelect
+            ariaLabel="Filter by role"
             value={roleFilter}
-            onChange={(event) => {
-              setRoleFilter((event.target as HTMLSelectElement).value);
+            options={[
+              { value: "", label: "All roles" },
+              { value: "admin", label: "Administrators" },
+              { value: "user", label: "Users" },
+              { value: "guest", label: "Guests" },
+            ]}
+            onChange={(value) => {
+              setRoleFilter(value);
               resetPage();
             }}
-          >
-            <option value="">All roles</option>
-            <option value="admin">Administrators</option>
-            <option value="user">Users</option>
-            <option value="guest">Guests</option>
-          </select>
-          <select
-            class="form-select form-select-sm w-auto"
-            aria-label="Filter by participation"
+          />
+          <FilterSelect
+            ariaLabel="Filter by participation"
             value={typeFilter}
-            onChange={(event) => {
-              setTypeFilter((event.target as HTMLSelectElement).value);
+            options={[
+              { value: "", label: "All types" },
+              { value: "member", label: "Members" },
+              { value: "event_attendee", label: "Event attendees" },
+              { value: "contact_only", label: "Contacts only" },
+            ]}
+            onChange={(value) => {
+              setTypeFilter(value);
               resetPage();
             }}
-          >
-            <option value="">All types</option>
-            <option value="member">Members</option>
-            <option value="event_attendee">Event attendees</option>
-            <option value="contact_only">Contacts only</option>
-          </select>
+          />
         </>
       )}
       columns={[
@@ -128,7 +132,7 @@ export function UsersList({
           cell: (user) => {
             if (user.activeIdentityCount > 0) {
               return (
-                <span class="small">
+                <span class="pk-small">
                   Member · {user.activeIdentityCount} active{" "}
                   {user.activeIdentityCount === 1 ? "identity" : "identities"}
                 </span>
@@ -136,18 +140,18 @@ export function UsersList({
             }
             if (user.type === "event_attendee") {
               return (
-                <span class="small">
+                <span class="pk-small">
                   Event attendee · {user.eventParticipationCount} event{user.eventParticipationCount === 1 ? "" : "s"}
                 </span>
               );
             }
-            return <span class="text-muted small">Contact only</span>;
+            return <span class="pk-muted pk-small">Contact only</span>;
           },
         },
         {
           header: "Since",
           cell: (user) => fmtDate(user.created_at),
-          className: "small text-muted",
+          className: "pk-small pk-muted pk-nowrap",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {

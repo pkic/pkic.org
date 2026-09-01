@@ -3,9 +3,39 @@
     text-decoration: none;
   }
 
+  // ── One tier band ─────────────────────────────────────────────────────────
+  // A rule separating this tier from the one above, with the tier's name
+  // sitting on it. The markup used to build this out of Bootstrap's grid and
+  // position utilities; it lives here instead, because this surface's other
+  // styling does, and because a page being taken off the framework cannot keep
+  // depending on `position-absolute top-0 start-50` to place a label.
+  .sponsors-tier {
+    position: relative;
+    border-top: 1px solid var(--pk-line-soft);
+    margin: var(--pk-2);
+    padding-top: var(--pk-4);
+  }
+
   .sponsor-level {
-    color: #bbb;
+    color: var(--pk-ink-muted);
     font-size: 0.7em;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    // The ground the rule is drawn on, so the label reads as a gap in it.
+    background: var(--pk-surface);
+    padding-inline: var(--pk-2);
+  }
+
+  // The logos in a tier, centered and wrapping. Each one's own spacing comes
+  // from this gap rather than padding on a wrapper per logo.
+  .sponsors-tier-logos {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: var(--pk-5);
   }
 
   .sponsor-logo {
@@ -49,10 +79,21 @@
   max-width: calc(60px * var(--sponsor-weight, 1));
 }
 
+// The strip's own label, when a caller supplies none of its own. Its width,
+// centring, spacing, case and colour were five Bootstrap utility classes
+// written into `sponsors-wall.tsx`; they belong beside the rest of the label's
+// appearance instead.
 .sponsor-strip-default-label {
+  width: 100%;
+  margin-bottom: var(--pk-3);
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   opacity: 0.6;
+  text-align: center;
+  text-transform: uppercase;
+  // The strip sits over the hero's dark media, so the label takes the ink
+  // meant for a solid ground rather than the page's body colour.
+  color: var(--pk-on-solid);
 }
 
 .sponsor-strip-default-logo {

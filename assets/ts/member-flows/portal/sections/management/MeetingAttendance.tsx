@@ -6,6 +6,7 @@ import {
   type EventOccurrence,
 } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { Button } from "../../../../ui/Button";
 import { putJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 
@@ -47,11 +48,11 @@ export function MeetingAttendance({ base, occurrence }: { base: string; occurren
           header: "Attendee",
           cell: (entry) => (
             <>
-              <span class="fw-semibold">{entry.name}</span>
+              <span class="pk-strong">{entry.name}</span>
               {entry.affiliation && (
                 <>
                   <br />
-                  <span class="small text-muted">{entry.affiliation}</span>
+                  <span class="pk-small pk-muted">{entry.affiliation}</span>
                 </>
               )}
             </>
@@ -71,17 +72,22 @@ export function MeetingAttendance({ base, occurrence }: { base: string; occurren
         },
         {
           header: "",
-          className: "text-end",
+          className: "pk-end",
           cell: (entry) =>
             entry.attendanceVerifiedAt ? null : (
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-success"
+              // Named after the row it verifies: a column of controls all
+              // reading "Verify" is nothing to choose between when the
+              // controls are listed on their own.
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={pendingId === entry.id}
                 disabled={pendingId === entry.id}
+                aria-label={`Verify attendance for ${entry.name}`}
                 onClick={() => void verify(entry.id)}
               >
                 {pendingId === entry.id ? "Verifying…" : "Verify"}
-              </button>
+              </Button>
             ),
         },
       ]}

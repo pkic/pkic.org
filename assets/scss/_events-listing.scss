@@ -394,6 +394,24 @@
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+  // `.event-webinar-title a::after` covers the whole card body, so the register
+  // link has to sit above it to stay clickable. This used to be an inline
+  // `style` attribute on the anchor, which the repository forbids.
+  position: relative;
+  z-index: 2;
+  // `btn-page-accent` carried the per-page accent through Bootstrap's
+  // `--bs-btn-*` variables. The design system's primary button reads its own
+  // token, so the accent reaches it the same way `.pkic-hero-media__scrim`
+  // hands it to the hero button.
+  --pk-accent-strong: var(--page-accent, #{$green});
+}
+
+// The sidebar's webinar cards used to carry `mb-4` each. One gap on the list is
+// one decision instead of one per card.
+.events-webinar-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-4);
 }
 
 // ── Past webinars sub-heading ─────────────────────────────────────────────────

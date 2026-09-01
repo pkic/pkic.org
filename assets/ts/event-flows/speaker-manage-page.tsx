@@ -1,4 +1,5 @@
 import { render } from "preact";
+import { Alert } from "../ui/Alert";
 import { getJson, patchJson } from "../shared/api-client";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
@@ -7,7 +8,7 @@ import { withLoadingButton } from "../shared/form/submit";
 import { setStatus } from "./boot";
 import { wireTokenHeadshotSection } from "./registration-manage-headshot";
 import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
-import { formatStatusLabel, statusBadgeClass, findSubmitButton } from "../shared/form/helpers";
+import { formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
 import {
   speakerSelfServiceReadResponseSchema,
@@ -37,7 +38,7 @@ async function main(): Promise<void> {
   if (proposalType) proposalType.textContent = data.proposal.proposalType.replace(/_/g, " ");
   if (proposalStatus) {
     proposalStatus.textContent = formatStatusLabel(data.proposal.status);
-    proposalStatus.className = `badge rounded-pill px-2 py-1 ${statusBadgeClass(data.proposal.status)}`;
+    proposalStatus.className = statusBadgeToneClass(data.proposal.status);
   }
   if (deadlineRow) {
     if (data.proposal.presentationDeadline) {
@@ -57,29 +58,36 @@ async function main(): Promise<void> {
   const profileSection = boot.root.querySelector<HTMLElement>("[data-profile-section]");
   const presentationLink = boot.root.querySelector<HTMLElement>("[data-presentation-link]");
 
+  /*
+   * Visibility is the `hidden` attribute, which is what the template now
+   * carries on every panel this module reveals. The class it replaces was
+   * Bootstrap's `d-none`, and a `display: none !important` utility cannot be
+   * out-ranked by the attribute — so the two had to move together or the
+   * panels would have become unhideable.
+   */
   function toggleEditableSections(isEnabled: boolean): void {
-    headshotSection?.classList.toggle("d-none", !isEnabled);
-    profileSection?.classList.toggle("d-none", !isEnabled);
+    if (headshotSection) headshotSection.hidden = !isEnabled;
+    if (profileSection) profileSection.hidden = !isEnabled;
   }
 
   if (speakerStatusBadge) {
     speakerStatusBadge.textContent = formatStatusLabel(data.speaker.status);
-    speakerStatusBadge.className = `badge rounded-pill px-2 py-1 ${statusBadgeClass(data.speaker.status)}`;
+    speakerStatusBadge.className = statusBadgeToneClass(data.speaker.status);
   }
 
   if (data.speaker.status === "invited") {
-    confirmPanel?.classList.remove("d-none");
+    if (confirmPanel) confirmPanel.hidden = false;
     toggleEditableSections(false);
   } else if (data.speaker.status === "confirmed") {
-    confirmedMsg?.classList.remove("d-none");
+    if (confirmedMsg) confirmedMsg.hidden = false;
     toggleEditableSections(true);
     if (data.proposal.status === "accepted") {
       const anchor = presentationLink?.querySelector<HTMLAnchorElement>("a");
       if (anchor && data.proposal.presentationUrl) anchor.href = data.proposal.presentationUrl;
-      presentationLink?.classList.remove("d-none");
+      if (presentationLink) presentationLink.hidden = false;
     }
   } else if (data.speaker.status === "declined") {
-    declinedMsg?.classList.remove("d-none");
+    if (declinedMsg) declinedMsg.hidden = false;
     toggleEditableSections(false);
   }
 
@@ -98,13 +106,16 @@ async function main(): Promise<void> {
       renderConsentInputs(consentContainer, speakerTerms);
     } catch (error) {
       console.error("Failed to load speaker terms", error);
-      render(<p class="text-danger small mb-0">Could not load required terms right now.</p>, consentContainer);
+      render(<Alert tone="danger">Could not load required terms right now.</Alert>, consentContainer);
     }
   }
 
   confirmForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    confirmForm.classList.add("was-validated");
+    // `syncConsentValidation` is what shows an unaccepted term: it calls
+    // `checkValidity()`, and each consent card listens for the platform's own
+    // `invalid` event. Nothing on this form was ever drawn by Bootstrap's
+    // `was-validated`, so the class went rather than being translated.
     syncConsentValidation(confirmForm);
 
     const consents = readConsentValues(confirmForm);
@@ -135,10 +146,10 @@ async function main(): Promise<void> {
   const declineReason = boot.root.querySelector<HTMLTextAreaElement>("#decline-reason");
 
   declineOpen?.addEventListener("click", () => {
-    declinePanel?.classList.remove("d-none");
+    if (declinePanel) declinePanel.hidden = false;
   });
   declineCancel?.addEventListener("click", () => {
-    declinePanel?.classList.add("d-none");
+    if (declinePanel) declinePanel.hidden = true;
   });
   declineConfirm?.addEventListener("click", async () => {
     await withLoadingButton(declineConfirm, async () => {
@@ -173,14 +184,14 @@ async function main(): Promise<void> {
   let linksWidget: ProfileLinksWidget | null = null;
 
   function showProfileEditForm(): void {
-    profileSavedState?.classList.add("d-none");
-    profileFormWrap?.classList.remove("d-none");
+    if (profileSavedState) profileSavedState.hidden = true;
+    if (profileFormWrap) profileFormWrap.hidden = false;
     firstNameField?.focus();
   }
 
   function showProfileSavedState(): void {
-    profileFormWrap?.classList.add("d-none");
-    profileSavedState?.classList.remove("d-none");
+    if (profileFormWrap) profileFormWrap.hidden = true;
+    if (profileSavedState) profileSavedState.hidden = false;
   }
 
   profileEditButton?.addEventListener("click", showProfileEditForm);
@@ -222,11 +233,9 @@ async function main(): Promise<void> {
   });
 
   if (data.speaker.status === "declined") {
-    headshotSection?.classList.add("d-none");
-    profileSection?.classList.add("d-none");
+    toggleEditableSections(false);
   } else {
-    headshotSection?.classList.remove("d-none");
-    profileSection?.classList.remove("d-none");
+    toggleEditableSections(true);
     wireTokenHeadshotSection({
       root: boot.root,
       initialHeadshotUrl: data.profile.headshotUrl,
@@ -240,8 +249,8 @@ async function main(): Promise<void> {
     });
   }
 
-  if (loadingEl) loadingEl.classList.add("d-none");
-  if (contentEl) contentEl.classList.remove("d-none");
+  if (loadingEl) loadingEl.hidden = true;
+  if (contentEl) contentEl.hidden = false;
 }
 
 void main();

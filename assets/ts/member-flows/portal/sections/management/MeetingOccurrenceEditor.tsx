@@ -6,6 +6,7 @@ import {
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { patchJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
 import { toast } from "../../ui";
 import { MeetingOccurrenceFields, type MeetingOccurrenceDraft } from "./MeetingOccurrenceFields";
 import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
@@ -75,7 +76,7 @@ export function MeetingOccurrenceEditor({
   }
 
   return (
-    <form class="d-flex flex-column gap-3" onSubmit={(event) => void save(event)}>
+    <form class="pk pk-stack" onSubmit={(event) => void save(event)}>
       <MeetingOccurrenceFields
         idPrefix={`meeting-occurrence-settings-${occurrence.id}`}
         draft={draft}
@@ -84,12 +85,15 @@ export function MeetingOccurrenceEditor({
         disabled={saving}
         onChange={setDraft}
       />
-      <div class="d-flex gap-2 align-items-center">
-        <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
+      <div class="pk-cluster">
+        <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
           {saving ? "Saving…" : "Save occurrence"}
-        </button>
-        {error && <ErrorAlert error={error} />}
+        </Button>
       </div>
+      {/* The failure sits below the actions rather than beside them: an alert
+          is a block, and sharing the button's row pushed the button off the
+          line as soon as the message ran to a second one. */}
+      {error && <ErrorAlert error={error} />}
     </form>
   );
 }

@@ -10,8 +10,13 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Badge } from "../../../../components/Badge";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { FilterSelect } from "../../../../components/FilterSelect";
+import { Alert } from "../../../../ui/Alert";
+import { Field } from "../../../../ui/Field";
 import type { MenuItem } from "../../../../ui/Menu";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
+import { TextInput } from "../../../../ui/TextControl";
 import { postJson } from "../../../../shared/api-client";
 import { fmt, fmtDate, toast } from "../../ui";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
@@ -109,132 +114,139 @@ export function GroupEventInvitations({
   }
 
   return (
-    <section class="border-top pt-3" aria-label={`${label} invitations`}>
-      <h6 class="small fw-semibold">{label} invitations</h6>
-      <BulkInviteComposer
-        type={inviteType}
-        event={{ endsAt: event.endsAt, timezone: event.timezone }}
-        endpoints={eventInviteEndpoints(base, inviteType)}
-        notify={toast}
-        onSent={() => tableActions.current?.reload()}
-      />
-      <div class="mb-3">
-        <label class="form-label small fw-semibold" for={`group-event-invite-deadline-${event.id}-${inviteType}`}>
-          Resend deadline
-        </label>
-        <input
-          id={`group-event-invite-deadline-${event.id}-${inviteType}`}
-          class="form-control form-control-sm"
-          type="datetime-local"
-          value={expiresAt}
-          max={latestExpiry}
-          onInput={(inputEvent) => setExpiresAt((inputEvent.target as HTMLInputElement).value)}
-        />
-        <div class="form-text">
-          Leave blank to use the event start. A custom deadline cannot be later than the event end
-          {latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""}.
-        </div>
-      </div>
-      {message && (
-        <div class="alert alert-success small py-2" role="status" aria-live="polite">
-          {message}
-        </div>
-      )}
-      <ErrorAlert error={error} />
-      <ApiDataTable
-        caption={`${label} invitations`}
-        actionsRef={tableActions}
-        endpoint={endpoint}
-        responseSchema={
-          inviteType === "attendee" ? eventAttendeeInvitesListResponseSchema : eventInvitesListResponseSchema
-        }
-        resolve={(response) => response.invites}
-        resolvePage={(response) => response.page}
-        paginate
-        searchPlaceholder="Search invitations…"
-        initialSort="-created_at"
-        params={status ? { status } : undefined}
-        toolbar={({ resetPage }) => (
-          <select
-            class="form-select form-select-sm w-auto"
-            aria-label="Invitation status"
-            value={status}
-            onChange={(event) => {
-              setStatus((event.target as HTMLSelectElement).value as InviteStatusFilter);
-              resetPage();
-            }}
+    // Attendee and speaker invitations are two of these stacked on one tab,
+    // so each is a named panel rather than a rule across the page followed by
+    // a bare heading. Its body owns the rhythm; the `mb-3` the deadline field
+    // carried is gone.
+    <div class="pk">
+      <Panel aria-label={`${label} invitations`}>
+        <PanelHeader title={`${label} invitations`} headingLevel={4} />
+        <PanelBody class="pk-stack">
+          <BulkInviteComposer
+            type={inviteType}
+            event={{ endsAt: event.endsAt, timezone: event.timezone }}
+            endpoints={eventInviteEndpoints(base, inviteType)}
+            notify={toast}
+            onSent={() => tableActions.current?.reload()}
+          />
+          {/* The two panels used to offer two controls both called "Resend
+              deadline", which is indistinguishable to anyone moving between
+              form controls. The name says which set it belongs to, and the
+              sentence under it is the Field's `help` so it is announced with
+              the control rather than sitting beside it. */}
+          <Field
+            label={`${label} resend deadline`}
+            help={`Leave blank to use the event start. A custom deadline cannot be later than the event end${
+              latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""
+            }.`}
           >
-            {INVITE_STATUS_FILTERS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        )}
-        columns={[
-          {
-            header: "Invitee",
-            cell: (invite) => (
-              <div>
-                <div class="fw-semibold">{inviteeLabel(invite)}</div>
-                {inviteeLabel(invite) !== invite.inviteeEmail && (
-                  <div class="small text-muted">{invite.inviteeEmail}</div>
-                )}
-              </div>
-            ),
-            sort: { asc: "invitee_email", desc: "-invitee_email", defaultDirection: "asc" },
-          },
-          {
-            header: "Status",
-            cell: (invite) => <Badge status={invite.status} />,
-            sort: { asc: "status", desc: "-status" },
-          },
-          {
-            header: "Sent",
-            cell: (invite) => fmtDate(invite.createdAt),
-            className: "text-nowrap",
-            sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
-          },
-          {
-            header: "Deadline",
-            cell: (invite) => (invite.expiresAt ? fmt(invite.expiresAt) : "—"),
-            className: "text-nowrap",
-          },
-          {
-            header: "Accepted",
-            cell: (invite) => (invite.acceptedAt ? fmt(invite.acceptedAt) : "—"),
-            className: "text-nowrap",
-            sort: { asc: "accepted_at", desc: "-accepted_at", defaultDirection: "desc" },
-          },
-          {
-            header: "",
-            className: "text-end",
-            cell: (invite) => {
-              const busy = busyInviteId === invite.id;
-              const actions: MenuItem[] = [];
-              if (invite.actions.resend) {
-                actions.push({
-                  id: "resend",
-                  label: "Resend invitation",
-                  onSelect: () => void runAction(invite, "resend"),
-                  disabled: busy,
-                });
-              }
-              if (invite.actions.revoke) {
-                actions.push({
-                  id: "revoke",
-                  label: "Revoke invitation",
-                  onSelect: () => void runAction(invite, "revoke"),
-                  disabled: busy,
-                });
-              }
-              return <RowActions label={`Actions for ${inviteeLabel(invite)}`} actions={actions} />;
-            },
-          },
-        ]}
-        empty={`No ${inviteType} invitations for this event.`}
-        rowKey={(invite) => invite.id}
-      />
-    </section>
+            {(control) => (
+              <TextInput
+                {...control}
+                type="datetime-local"
+                value={expiresAt}
+                max={latestExpiry}
+                onInput={(inputEvent) => setExpiresAt((inputEvent.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
+          {/* An outcome, not decoration: the Alert carries `role="status"`
+              itself, so the surface no longer hand-rolls the live region. */}
+          {message && <Alert tone="ok">{message}</Alert>}
+          <ErrorAlert error={error} />
+          <ApiDataTable
+            caption={`${label} invitations`}
+            actionsRef={tableActions}
+            endpoint={endpoint}
+            responseSchema={
+              inviteType === "attendee" ? eventAttendeeInvitesListResponseSchema : eventInvitesListResponseSchema
+            }
+            resolve={(response) => response.invites}
+            resolvePage={(response) => response.page}
+            paginate
+            searchPlaceholder="Search invitations…"
+            initialSort="-created_at"
+            params={status ? { status } : undefined}
+            toolbar={({ resetPage }) => (
+              // Two of these panels sit on one tab, so the filter says which
+              // set of invitations it narrows rather than offering two
+              // controls both called "Invitation status".
+              <FilterSelect
+                ariaLabel={`${label} invitation status`}
+                value={status}
+                options={INVITE_STATUS_FILTERS}
+                onChange={(next) => {
+                  setStatus(next);
+                  resetPage();
+                }}
+              />
+            )}
+            columns={[
+              {
+                header: "Invitee",
+                cell: (invite) => (
+                  <div class="pk-stack pk-stack--tight">
+                    <span class="pk-strong">{inviteeLabel(invite)}</span>
+                    {inviteeLabel(invite) !== invite.inviteeEmail && (
+                      <span class="pk-small">{invite.inviteeEmail}</span>
+                    )}
+                  </div>
+                ),
+                sort: { asc: "invitee_email", desc: "-invitee_email", defaultDirection: "asc" },
+              },
+              {
+                header: "Status",
+                cell: (invite) => <Badge status={invite.status} />,
+                sort: { asc: "status", desc: "-status" },
+              },
+              {
+                header: "Sent",
+                cell: (invite) => fmtDate(invite.createdAt),
+                className: "pk-nowrap",
+                sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+              },
+              {
+                header: "Deadline",
+                cell: (invite) => (invite.expiresAt ? fmt(invite.expiresAt) : "—"),
+                className: "pk-nowrap",
+              },
+              {
+                header: "Accepted",
+                cell: (invite) => (invite.acceptedAt ? fmt(invite.acceptedAt) : "—"),
+                className: "pk-nowrap",
+                sort: { asc: "accepted_at", desc: "-accepted_at", defaultDirection: "desc" },
+              },
+              {
+                header: "",
+                className: "pk-end",
+                cell: (invite) => {
+                  const busy = busyInviteId === invite.id;
+                  const actions: MenuItem[] = [];
+                  if (invite.actions.resend) {
+                    actions.push({
+                      id: "resend",
+                      label: "Resend invitation",
+                      onSelect: () => void runAction(invite, "resend"),
+                      disabled: busy,
+                    });
+                  }
+                  if (invite.actions.revoke) {
+                    actions.push({
+                      id: "revoke",
+                      label: "Revoke invitation",
+                      onSelect: () => void runAction(invite, "revoke"),
+                      disabled: busy,
+                    });
+                  }
+                  return <RowActions label={`Actions for ${inviteeLabel(invite)}`} actions={actions} />;
+                },
+              },
+            ]}
+            empty={`No ${inviteType} invitations for this event.`}
+            rowKey={(invite) => invite.id}
+          />
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

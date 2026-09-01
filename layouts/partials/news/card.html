@@ -37,7 +37,7 @@
     <div class="blog-card-header-content">
       <h2 class="blog-card-title">
         <a href="{{ $post.link }}" target="_blank" rel="noopener noreferrer"
-           class="stretched-link">{{ $post.title | plainify | htmlUnescape }}</a>
+           class="pk-stretched">{{ $post.title | plainify | htmlUnescape }}</a>
       </h2>
       <p class="blog-card-date">
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
@@ -72,8 +72,11 @@
         <span class="news-card-member-name">{{ $memberName }}</span>
         {{ end }}
       </div>
+      {{/* Stacked above the headline's `pk-stretched` overlay so this second
+           link stays clickable — a property of the link, so it lives in
+           `.news-card-domain` rather than in a `style` attribute here. */}}
       <a href="https://{{ $url.Host }}/" target="_blank" rel="noopener noreferrer"
-         class="news-card-domain" style="position:relative;z-index:2;">
+         class="news-card-domain">
         {{ $url.Host }}
         <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
              fill="none" stroke="currentColor" stroke-width="2.5"

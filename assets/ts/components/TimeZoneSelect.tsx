@@ -1,3 +1,5 @@
+import { TextInput } from "../ui/TextControl";
+
 /** Falls back to a small, always-valid set when the runtime cannot enumerate IANA zones. */
 const FALLBACK_TIME_ZONES = ["UTC", "Europe/Amsterdam", "America/New_York", "Asia/Singapore"] as const;
 
@@ -39,13 +41,24 @@ export function TimeZoneSelect({
   const listId = `${id}-options`;
   const helpId = help ? `${id}-help` : undefined;
   return (
-    <div>
-      <label class="form-label small fw-semibold" for={id}>
+    // The caller supplies the control's `id`, which is why the label is
+    // written here rather than delegated to `ui/Field`: `Field` generates the
+    // id itself, and two sources for one id is how a `for` attribute ends up
+    // pointing at nothing. Same shape as `EnumSelect` and `EventScheduleFields`.
+    <div class="pk-stack pk-stack--tight">
+      <label class="pk-field__label" for={id}>
         {label}
+        {required && (
+          // The asterisk is decorative; the word behind it is what a screen
+          // reader announces. Same split as `ui/Field`'s required marker.
+          <span class="pk-field__required">
+            <span aria-hidden="true">*</span>
+            <span class="pk-field__sr">(required)</span>
+          </span>
+        )}
       </label>
-      <input
+      <TextInput
         id={id}
-        class="form-control"
         type="text"
         list={listId}
         value={value}
@@ -61,9 +74,9 @@ export function TimeZoneSelect({
         ))}
       </datalist>
       {help && (
-        <div id={helpId} class="form-text">
+        <p id={helpId} class="pk-field__help">
           {help}
-        </div>
+        </p>
       )}
     </div>
   );

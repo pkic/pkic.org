@@ -1,4 +1,8 @@
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../shared/schemas/membership-categories";
+// `pk-field__label`, `pk-field__help` and the `pk-check` trio are written here
+// as class names rather than reached through a component, so this module has to
+// pull their stylesheet into its own chunk.
+import "../ui/Field.css";
 
 /**
  * Checkbox picker over the fixed membership-category vocabulary
@@ -37,31 +41,36 @@ export function MembershipCategoryPicker({
   }
 
   return (
-    <fieldset class="border-0 p-0 m-0" disabled={disabled} aria-describedby={helpId}>
-      <legend class="small fw-semibold mb-1">{label}</legend>
-      <div class="d-flex flex-wrap gap-2">
+    // `pk-fieldset` carries the reset the element needs — no groove border, no
+    // user-agent padding, and `min-inline-size: 0` so it can shrink inside a
+    // flex or grid parent. The spacing between the legend, the boxes and the
+    // help text is the stack's gap rather than a margin on each of them.
+    <fieldset class="pk-fieldset pk-stack pk-stack--tight" disabled={disabled} aria-describedby={helpId}>
+      <legend class="pk-field__label">{label}</legend>
+      <div class="pk-cluster">
         {MEMBERSHIP_CATEGORIES.map((category) => {
           const id = `${idPrefix}-${category}`;
           return (
-            <div class="form-check form-check-inline m-0" key={category}>
+            // All three parts of the block: without `pk-check__input` on the
+            // input the browser draws its own control, in the operating
+            // system's accent rather than ours, and no gate can see it.
+            <label class="pk-check" key={category} for={id}>
               <input
                 id={id}
-                class="form-check-input"
+                class="pk-check__input"
                 type="checkbox"
                 checked={selectedSet.has(category)}
                 disabled={disabled}
                 onChange={(event) => toggle(category, (event.target as HTMLInputElement).checked)}
               />
-              <label class="form-check-label small" for={id}>
-                {category}
-              </label>
-            </div>
+              <span class="pk-check__label">{category}</span>
+            </label>
           );
         })}
       </div>
-      <div id={helpId} class="form-text">
+      <p id={helpId} class="pk-field__help">
         {help}
-      </div>
+      </p>
     </fieldset>
   );
 }

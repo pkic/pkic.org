@@ -39,10 +39,10 @@ function recommendationSummary(proposal: EventProposalSummary) {
     ["reject", "Reject", proposal.recommendation_reject_count],
   ] as const;
   const visible = entries.filter(([, , count]) => count > 0);
-  if (visible.length === 0) return <span class="text-muted small">—</span>;
+  if (visible.length === 0) return <span class="pk-muted pk-small">—</span>;
 
   return (
-    <div class="d-flex gap-1 flex-wrap">
+    <div class="pk-cluster">
       {visible.map(([status, label, count]) => (
         <Badge key={status} status={status} label={`${label} ${count}`} />
       ))}
@@ -104,7 +104,7 @@ export function EventProposalsTable({
   }, [storageKey, statusFilter, recommendationFilter]);
 
   return (
-    <div>
+    <div class="pk pk-stack pk-stack--snug">
       {stats && <ProposalStatsSummary stats={stats} />}
       <ApiDataTable
         caption="Event proposals"
@@ -162,7 +162,7 @@ export function EventProposalsTable({
         columns={[
           {
             header: "Title",
-            cell: (proposal) => <span class="small">{proposal.title}</span>,
+            cell: (proposal) => <span class="pk-small">{proposal.title}</span>,
             sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
           },
           {
@@ -173,9 +173,9 @@ export function EventProposalsTable({
                 proposal.proposer_email;
               return (
                 <>
-                  <span class="small">{proposer}</span>
+                  <span class="pk-small">{proposer}</span>
                   {proposer !== proposal.proposer_email && (
-                    <div class="text-muted small">{proposal.proposer_email}</div>
+                    <div class="pk-muted pk-small">{proposal.proposer_email}</div>
                   )}
                 </>
               );
@@ -185,7 +185,7 @@ export function EventProposalsTable({
           {
             header: "Type",
             cell: (proposal) => proposal.proposal_type,
-            className: "small",
+            className: "pk-small",
             sort: { asc: "type", desc: "-type", defaultDirection: "asc" },
           },
           {
@@ -199,14 +199,14 @@ export function EventProposalsTable({
               proposal.decision_status ? (
                 <Badge status={proposal.decision_status} />
               ) : (
-                <span class="text-muted small">—</span>
+                <span class="pk-muted pk-small">—</span>
               ),
             sort: { asc: "decision", desc: "-decision", defaultDirection: "asc" },
           },
           {
             header: "Avg. score",
             cell: (proposal) => formatAverageScore(proposal.average_review_score),
-            className: "mono text-end",
+            className: "pk-mono pk-end",
             sort: { asc: "score", desc: "-score" },
           },
           {
@@ -217,13 +217,13 @@ export function EventProposalsTable({
           {
             header: "Reviews",
             cell: (proposal) => proposal.review_count,
-            className: "mono text-end",
+            className: "pk-mono pk-end",
             sort: { asc: "reviews", desc: "-reviews" },
           },
           {
             header: "Submitted",
             cell: (proposal) => formatDateTime(proposal.submitted_at),
-            className: "small",
+            className: "pk-small pk-nowrap",
             sort: { asc: "submittedAt", desc: "-submittedAt" },
           },
         ]}
@@ -236,20 +236,26 @@ export function EventProposalsTable({
 }
 
 function ProposalStatsSummary({ stats }: { stats: ProposalStats }) {
+  // The counts used to be tinted green and amber. The tint was the only thing
+  // saying which of them mattered, which is the one signal a reader cannot be
+  // assumed to see — and the label beside each number already says it. So the
+  // words carry the meaning and the numbers are one colour.
   const entries = [
-    ["Total", stats.total, ""],
-    ["Submitted", stats.byStatus.submitted ?? 0, ""],
-    ["Under review", stats.byStatus.under_review ?? 0, ""],
-    ["Accepted", stats.byStatus.accepted ?? 0, "text-success"],
-    ["Needs work", stats.byStatus["needs-work"] ?? 0, "text-warning"],
-    ["Reviewed", stats.reviewedCount, ""],
-    ["No reviews", stats.unreviewedCount, "text-warning"],
+    ["Total", stats.total],
+    ["Submitted", stats.byStatus.submitted ?? 0],
+    ["Under review", stats.byStatus.under_review ?? 0],
+    ["Accepted", stats.byStatus.accepted ?? 0],
+    ["Needs work", stats.byStatus["needs-work"] ?? 0],
+    ["Reviewed", stats.reviewedCount],
+    ["No reviews", stats.unreviewedCount],
   ] as const;
   return (
-    <div class="d-flex gap-3 flex-wrap mb-3 small" aria-label="Proposal statistics">
-      {entries.map(([label, value, className]) => (
+    // `role="group"` so the name is actually exposed: `aria-label` on a bare
+    // div names nothing.
+    <div class="pk-cluster pk-small" role="group" aria-label="Proposal statistics">
+      {entries.map(([label, value]) => (
         <span key={label}>
-          <strong class={className}>{value}</strong> {label.toLowerCase()}
+          <strong>{value}</strong> {label.toLowerCase()}
         </span>
       ))}
     </div>

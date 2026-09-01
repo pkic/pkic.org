@@ -464,4 +464,79 @@ describe("portal Operations command visibility", () => {
       ),
     ).toBe(false);
   });
+
+  it("names the panel, its read-only state, and the batch-size control", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(json({ items: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }))),
+    );
+    mountToastArea();
+    const host = document.createElement("div");
+    container = host;
+    document.body.append(host);
+    await act(async () => {
+      render(
+        <ScheduledWork
+          canManageEmail={false}
+          canRunRetention={false}
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
+        host,
+      );
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Scheduled Work");
+    // The read-only state is a word, not only a grey chip.
+    expect(container.querySelector(".pk-badge")?.textContent).toBe("Read only");
+
+    // The batch-size control owns a real label/for pair and its guidance is
+    // wired to it by aria-describedby rather than sitting loose beside it.
+    const label = [...container.querySelectorAll("label")].find((candidate) =>
+      candidate.textContent?.startsWith("Reminder batch size"),
+    );
+    expect(label).toBeDefined();
+    const input = container.querySelector<HTMLInputElement>(`#${label?.htmlFor ?? ""}`);
+    expect(input?.type).toBe("number");
+    const describedBy = input?.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`#${describedBy ?? ""}`)?.textContent).toContain("Between 1 and 500");
+  });
+
+  it("keeps the panel and its controls usable when the retention list fails to load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(apiError(500, "server_error", "HTTP 500"))),
+    );
+    mountToastArea();
+    const host = document.createElement("div");
+    container = host;
+    document.body.append(host);
+    await act(async () => {
+      render(
+        <ScheduledWork
+          canManageEmail
+          canRunRetention
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
+        host,
+      );
+      await Promise.resolve();
+    });
+    await settle();
+
+    // The failure is stated in plain words, not raw transport phrasing.
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side.");
+    // And the surface around it survives, so the reader can retry.
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Scheduled Work");
+    const label = [...container.querySelectorAll("label")].find((candidate) =>
+      candidate.textContent?.startsWith("Reminder batch size"),
+    );
+    expect(container.querySelector<HTMLInputElement>(`#${label?.htmlFor ?? ""}`)?.disabled).toBe(false);
+  });
 });

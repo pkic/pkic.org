@@ -5,6 +5,10 @@ import {
 } from "../../../../../shared/schemas/group-vote-proposals";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 
 export function GroupVoteProposalForm({ groupId, onCreated }: { groupId: string; onCreated: () => Promise<void> }) {
   const [title, setTitle] = useState("");
@@ -45,85 +49,86 @@ export function GroupVoteProposalForm({ groupId, onCreated }: { groupId: string;
   }
 
   return (
-    <form class="border rounded p-3 mb-3" onSubmit={(event) => void submit(event)}>
-      <h6>Propose a vote</h6>
-      <p class="small text-muted">Proposals are opened for endorsement under this group's voting policy.</p>
-      <ErrorAlert error={error} />
-      <div class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label" for="group-vote-proposal-title">
-            Title
-          </label>
-          <input
-            id="group-vote-proposal-title"
-            class="form-control"
-            required
-            maxLength={300}
-            value={title}
-            disabled={saving}
-            onInput={(event) => setTitle(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="group-vote-proposal-type">
-            Type
-          </label>
-          <select
-            id="group-vote-proposal-type"
-            class="form-select"
-            value={voteType}
-            disabled={saving}
-            onChange={(event) => setVoteType(event.currentTarget.value as typeof voteType)}
-          >
-            <option value="motion">Motion</option>
-            <option value="consultation">Consultation</option>
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="group-vote-proposal-description">
-            Description
-          </label>
-          <textarea
-            id="group-vote-proposal-description"
-            class="form-control"
-            rows={4}
-            required
-            maxLength={10000}
-            value={description}
-            disabled={saving}
-            onInput={(event) => setDescription(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="group-vote-proposal-opens">
-            Proposed opening time (optional)
-          </label>
-          <input
-            id="group-vote-proposal-opens"
-            type="datetime-local"
-            class="form-control"
-            value={proposedOpensAt}
-            disabled={saving}
-            onInput={(event) => setProposedOpensAt(event.currentTarget.value)}
-          />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="group-vote-proposal-closes">
-            Proposed closing time (optional)
-          </label>
-          <input
-            id="group-vote-proposal-closes"
-            type="datetime-local"
-            class="form-control"
-            value={proposedClosesAt}
-            disabled={saving}
-            onInput={(event) => setProposedClosesAt(event.currentTarget.value)}
-          />
-        </div>
-      </div>
-      <button type="submit" class="btn btn-success mt-3" disabled={saving}>
-        {saving ? "Submitting…" : "Submit proposal"}
-      </button>
+    <form class="pk" aria-label="Propose a vote" onSubmit={(event) => void submit(event)}>
+      <Panel>
+        <PanelHeader title="Propose a vote" />
+        <PanelBody class="pk-stack">
+          <p class="pk-small">Proposals are opened for endorsement under this group&rsquo;s voting policy.</p>
+          <ErrorAlert error={error} />
+          {/* One disabled fieldset takes every field out of play while the
+              submit is in flight. The button stays outside it so the control
+              the reader just pressed is not disabled from under them. */}
+          <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+            <div class="pk-grid pk-grid--roomy">
+              <Field label="Title" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    maxLength={300}
+                    value={title}
+                    onInput={(event) => setTitle(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Type">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={voteType}
+                    onChange={(event) => setVoteType(event.currentTarget.value as typeof voteType)}
+                  >
+                    <option value="motion">Motion</option>
+                    <option value="consultation">Consultation</option>
+                  </Select>
+                )}
+              </Field>
+            </div>
+            {/* The description runs the full width rather than sharing a grid
+                row: a four-row textarea in a half column is unusable. */}
+            <Field label="Description" required>
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={4}
+                  maxLength={10000}
+                  value={description}
+                  onInput={(event) => setDescription(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+            <div class="pk-grid pk-grid--roomy">
+              {/* "(optional)" moves out of the label and into the help text:
+                  the label names the control, the help says what is expected
+                  of it, and only the required fields carry a marker. */}
+              <Field label="Proposed opening time" help="Leave empty to let the group decide when to open.">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="datetime-local"
+                    value={proposedOpensAt}
+                    onInput={(event) => setProposedOpensAt(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Proposed closing time" help="Leave empty to let the group decide when to close.">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="datetime-local"
+                    value={proposedClosesAt}
+                    onInput={(event) => setProposedClosesAt(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+            </div>
+          </fieldset>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" loading={saving} disabled={saving}>
+              {saving ? "Submitting…" : "Submit proposal"}
+            </Button>
+          </div>
+        </PanelBody>
+      </Panel>
     </form>
   );
 }

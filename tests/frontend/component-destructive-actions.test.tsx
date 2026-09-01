@@ -109,6 +109,56 @@ describe("LogoManager confirmation", () => {
     expect(onRemove).not.toHaveBeenCalled();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
+
+  it("names the file input and ties the upload policy to it", () => {
+    const container = mount(<LogoManager {...props({ hint: "SVG only. The logo is sanitized automatically." })} />);
+
+    // A bare <input type="file"> announces as "file upload button" and nothing
+    // else, which is what this was. The label resolves through for/id.
+    const input = controlFor(container, "Replace logo");
+    expect(input.getAttribute("type")).toBe("file");
+    expect(container.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toBe(
+      "SVG only. The logo is sanitized automatically.",
+    );
+  });
+
+  it("names the input after what activating it does when there is no logo yet", () => {
+    const container = mount(<LogoManager {...props({ imageUrl: null })} />);
+
+    expect(controlFor(container, "Upload logo").getAttribute("type")).toBe("file");
+    // With nothing to remove, no dead removal control is offered.
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Remove logo");
+    expect(container.textContent).toContain("No logo");
+  });
+
+  it("reports a refused upload through the caller's notifier and clears the chosen file", async () => {
+    const toast = vi.fn();
+    const onChanged = vi.fn();
+    const container = mount(
+      <LogoManager
+        {...props({
+          toast,
+          onChanged,
+          onUpload: vi.fn(async () => {
+            throw new Error("That file is not an SVG.");
+          }),
+        })}
+      />,
+    );
+
+    const input = controlFor<HTMLInputElement>(container, "Replace logo");
+    const file = new File(["<svg />"], "logo.svg", { type: "image/svg+xml" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(toast).toHaveBeenCalledWith("That file is not an SVG.", "error");
+    expect(onChanged).not.toHaveBeenCalled();
+    // The rejected file is not left sitting in the control as though it took.
+    expect(input.value).toBe("");
+  });
 });
 
 describe("PasskeySettings confirmation and row actions", () => {

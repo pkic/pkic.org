@@ -1,5 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 
+import { Select, TextInput } from "../ui/TextControl";
+// `pk-mono` is written here as a class name rather than reached through a
+// component, so this module has to pull its stylesheet into its own chunk.
+import "../ui/Content.css";
+
 /**
  * Recurrence shapes the backend expansion (ICAL.Recur, driven by
  * `functions/_lib/services/event-series/recurrence.ts`) understands as plain
@@ -271,103 +276,138 @@ export function RecurrenceEditor({
   }
 
   const helpId = `${id}-help`;
-  const intervalUnit = mode === "weekly" ? "week(s)" : "month(s)";
+  const summaryId = `${id}-summary`;
+  const intervalUnit = mode === "weekly" ? "weeks" : "months";
   const currentShape = mode === ADVANCED_RECURRENCE_MODE ? null : shapeFor(mode, interval, ordinalWeekday);
 
+  /*
+   * The label/control/help triple is written out with `Field`'s own classes
+   * rather than reached through the `Field` component, because `Field`
+   * generates the control's id with `useId` and these ids belong to the
+   * caller: `MeetingSeriesFields` derives every one of them from its own
+   * prefix so a page can hold two series editors at once. It is the same
+   * shape `EnumSelect` and `EventScheduleFields` already use, and
+   * `TextControl` imports Field.css so the classes ride this module's chunk.
+   *
+   * The ordinal and weekday choices used to carry an `aria-label` and no
+   * visible label at all, and the interval's unit was a bare span beside the
+   * box — announced to nobody. Each control now has a real label naming both
+   * the choice and its unit.
+   */
   return (
-    <div>
-      <label class="form-label small fw-semibold" for={id}>
-        Repeats
-      </label>
-      <select
-        id={id}
-        class="form-select"
-        value={mode}
-        disabled={disabled}
-        onChange={(event) =>
-          selectMode((event.target as HTMLSelectElement).value as RecurrenceMode | typeof ADVANCED_RECURRENCE_MODE)
-        }
-      >
-        {RECURRENCE_MODES.map((candidate) => (
-          <option key={candidate} value={candidate}>
-            {RECURRENCE_MODE_LABELS[candidate]}
-          </option>
-        ))}
-        <option value={ADVANCED_RECURRENCE_MODE}>Custom rule</option>
-      </select>
+    <div class="pk pk-stack pk-stack--snug">
+      <div class="pk-stack pk-stack--tight">
+        <label class="pk-field__label" for={id}>
+          Repeats
+        </label>
+        <Select
+          id={id}
+          value={mode}
+          disabled={disabled}
+          // The plain-English summary below is what the chosen shape actually
+          // means, so it is announced with the control that sets it rather
+          // than left as loose prose underneath.
+          aria-describedby={currentShape ? summaryId : undefined}
+          onChange={(event) =>
+            selectMode((event.target as HTMLSelectElement).value as RecurrenceMode | typeof ADVANCED_RECURRENCE_MODE)
+          }
+        >
+          {RECURRENCE_MODES.map((candidate) => (
+            <option key={candidate} value={candidate}>
+              {RECURRENCE_MODE_LABELS[candidate]}
+            </option>
+          ))}
+          <option value={ADVANCED_RECURRENCE_MODE}>Custom rule</option>
+        </Select>
+      </div>
+
       {mode !== ADVANCED_RECURRENCE_MODE && mode !== "none" && (
-        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-          <label class="form-label small mb-0" for={`${id}-interval`}>
-            Every
-          </label>
-          <input
-            id={`${id}-interval`}
-            type="number"
-            class="form-control form-control-sm"
-            style="width: 5rem"
-            min={1}
-            max={MAX_RECURRENCE_INTERVAL}
-            value={interval}
-            disabled={disabled}
-            onInput={(event) => updateInterval((event.target as HTMLInputElement).value)}
-          />
-          <span class="small text-muted">{intervalUnit}</span>
+        <div class="pk-grid pk-grid--tight">
+          <div class="pk-stack pk-stack--tight">
+            <label class="pk-field__label" for={`${id}-interval`}>
+              Repeat every ({intervalUnit})
+            </label>
+            <TextInput
+              id={`${id}-interval`}
+              type="number"
+              min={1}
+              max={MAX_RECURRENCE_INTERVAL}
+              value={interval}
+              disabled={disabled}
+              onInput={(event) => updateInterval((event.target as HTMLInputElement).value)}
+            />
+          </div>
           {mode === "monthly_by_ordinal_weekday" && (
             <>
-              <select
-                id={`${id}-ordinal`}
-                aria-label="Ordinal week of the month"
-                class="form-select form-select-sm w-auto"
-                value={ordinalWeekday.ordinal}
-                disabled={disabled}
-                onChange={(event) =>
-                  updateOrdinalWeekday({
-                    ordinal: Number((event.target as HTMLSelectElement).value) as RecurrenceOrdinal,
-                  })
-                }
-              >
-                {RECURRENCE_ORDINALS.map((ordinal) => (
-                  <option key={ordinal} value={ordinal}>
-                    {ORDINAL_LABELS[ordinal]}
-                  </option>
-                ))}
-              </select>
-              <select
-                id={`${id}-weekday`}
-                aria-label="Weekday"
-                class="form-select form-select-sm w-auto"
-                value={ordinalWeekday.weekday}
-                disabled={disabled}
-                onChange={(event) =>
-                  updateOrdinalWeekday({ weekday: (event.target as HTMLSelectElement).value as RecurrenceWeekday })
-                }
-              >
-                {RECURRENCE_WEEKDAYS.map((weekday) => (
-                  <option key={weekday} value={weekday}>
-                    {WEEKDAY_LABELS[weekday]}
-                  </option>
-                ))}
-              </select>
+              <div class="pk-stack pk-stack--tight">
+                <label class="pk-field__label" for={`${id}-ordinal`}>
+                  Week of the month
+                </label>
+                <Select
+                  id={`${id}-ordinal`}
+                  value={ordinalWeekday.ordinal}
+                  disabled={disabled}
+                  onChange={(event) =>
+                    updateOrdinalWeekday({
+                      ordinal: Number((event.target as HTMLSelectElement).value) as RecurrenceOrdinal,
+                    })
+                  }
+                >
+                  {RECURRENCE_ORDINALS.map((ordinal) => (
+                    <option key={ordinal} value={ordinal}>
+                      {ORDINAL_LABELS[ordinal]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div class="pk-stack pk-stack--tight">
+                <label class="pk-field__label" for={`${id}-weekday`}>
+                  Weekday
+                </label>
+                <Select
+                  id={`${id}-weekday`}
+                  value={ordinalWeekday.weekday}
+                  disabled={disabled}
+                  onChange={(event) =>
+                    updateOrdinalWeekday({ weekday: (event.target as HTMLSelectElement).value as RecurrenceWeekday })
+                  }
+                >
+                  {RECURRENCE_WEEKDAYS.map((weekday) => (
+                    <option key={weekday} value={weekday}>
+                      {WEEKDAY_LABELS[weekday]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </>
           )}
         </div>
       )}
-      {currentShape && <p class="form-text mb-0">{describeRecurrenceShape(currentShape)}</p>}
+
+      {currentShape && (
+        <p class="pk-field__help" id={summaryId}>
+          {describeRecurrenceShape(currentShape)}
+        </p>
+      )}
+
       {mode === ADVANCED_RECURRENCE_MODE && (
-        <>
-          <input
+        <div class="pk-stack pk-stack--tight">
+          <label class="pk-field__label" for={`${id}-advanced`}>
+            Custom rule
+          </label>
+          <TextInput
             id={`${id}-advanced`}
-            class="form-control font-monospace mt-2"
+            class="pk-mono"
             value={advancedValue}
             required={required}
             disabled={disabled}
             aria-describedby={helpId}
             onInput={(event) => updateAdvanced((event.target as HTMLInputElement).value)}
           />
-          <div id={helpId} class="form-text">
+          <p class="pk-field__help" id={helpId}>
             RFC 5545 recurrence rule, for schedules the structured choices cannot express.
-          </div>
-        </>
+          </p>
+        </div>
       )}
     </div>
   );

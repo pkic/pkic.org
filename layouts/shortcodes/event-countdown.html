@@ -16,7 +16,12 @@
 {{- $secText       := .Get "secondary_text" -}}
 {{- $secLink       := .Get "secondary_link" -}}
 
-<div class="event-countdown my-5">
+{{/* No `.pk` root: `.event-countdown` is a dark legacy-styled panel, and the
+     base layer would repaint its background and paragraph rhythm. Its own
+     stylesheet owns the block's outer margin and the CTA row's spacing, and
+     sets `--pk-accent` from the page accent so the primary button follows the
+     page theme the way `.btn-page-accent` used to. */}}
+<div class="event-countdown">
   <p class="countdown-label">{{ $label }}</p>
   <div class="countdown-units" data-countdown="{{ $target }}">
     <div class="countdown-unit">
@@ -39,10 +44,10 @@
       <span class="countdown-text">sec</span>
     </div>
   </div>
-  <div class="countdown-cta mt-4">
-    <a href="{{ $ctaLink }}" class="btn btn-page-accent btn-lg px-5">{{ $ctaText }}</a>
+  <div class="countdown-cta">
+    <a href="{{ $ctaLink }}" class="pk-btn pk-btn--primary pk-btn--lg">{{ $ctaText }}</a>
     {{ with $secText }}
-    <a href="{{ $secLink }}" class="btn btn-outline-light btn-lg px-4 ms-2">{{ . }}</a>
+    <a href="{{ $secLink }}" class="pk-btn pk-btn--secondary pk-btn--lg">{{ . }}</a>
     {{ end }}
   </div>
 </div>

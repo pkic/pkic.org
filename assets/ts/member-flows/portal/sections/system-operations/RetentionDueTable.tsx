@@ -5,7 +5,12 @@ import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { getJson } from "../../../../shared/api-client";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
+// `pk-mono` on the context line comes from Content.css, which ships in a lazy
+// chunk rather than the entry stylesheet, so the module that writes the class
+// name has to pull the stylesheet in itself.
+import "../../../../ui/Content.css";
 
 const loadPortalCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
@@ -22,25 +27,27 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
         <>
           <strong>{row.title}</strong>
           <br />
-          <span class="mono text-muted small">{row.context}</span>
+          <span class="pk-mono pk-small">{row.context}</span>
         </>
       ),
       sort: { asc: "title", desc: "-title" },
     },
-    { header: "Registrations", cell: (row) => row.subtitle ?? "—", className: "small" },
-    { header: "Policy", cell: (row) => row.detail ?? "—", className: "small text-muted" },
+    { header: "Registrations", cell: (row) => row.subtitle ?? "—", className: "pk-small" },
+    { header: "Policy", cell: (row) => row.detail ?? "—", className: "pk-small pk-muted" },
     {
       header: "Ended",
       cell: (row) => (row.dueAt ? fmt(row.dueAt) : "—"),
-      className: "mono small text-nowrap",
+      className: "pk-mono pk-small pk-nowrap",
       sort: { asc: "dueAt", desc: "-dueAt", defaultDirection: "asc" },
     },
   ];
 
   return (
-    <div class="mt-4">
-      <div class="border rounded p-3">
-        <p class="small text-muted mb-2">
+    // The rule and padding the Bootstrap version drew by hand are the panel's
+    // own edge, and the gap between the note and the table is the stack's.
+    <Panel>
+      <PanelBody class="pk-stack pk-stack--snug">
+        <p class="pk-small">
           Events whose configured retention window has elapsed and whose identifying registration data has not yet been
           redacted.
         </p>
@@ -60,7 +67,7 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
           columns={columns}
           empty="Nothing is due for retention redaction."
         />
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

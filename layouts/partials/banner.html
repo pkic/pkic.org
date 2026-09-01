@@ -21,23 +21,40 @@
 {{- $statLabel := $d.statLabel | default "" -}}
 {{- $links     := $d.links     | default slice -}}
 
+{{/*
+  The join variant carries the `pk` root: its ground and its ink are re-pointed
+  through the tokens the base layer reads (see `.pkic-join-cta` in
+  assets/scss/_homepage.scss), so the base layer paints the gradient instead of
+  winning against it. Its only link is a Button, whose own layer sits after
+  base, so nothing here is recoloured by adopting the root.
+*/}}
 {{- if eq $style "join" -}}
-<section class="pkic-join-cta">
-  <div class="container text-center">
+<section class="pk pkic-join-cta">
+  <div class="pk-container pk-stack pk-center">
     {{- if $heading }}
-    <h2 class="fw-bold mb-3">{{ $heading }}</h2>
+    <h2>{{ $heading }}</h2>
     {{- end }}
     {{- if $body }}
-    <p class="lead mb-4 mx-auto pkic-join-cta-body">{{ $body }}</p>
+    <p class="pkic-join-cta-body">{{ $body }}</p>
     {{- end }}
-    {{- range $links }}
-    <a href="{{ .url }}" class="btn btn-light btn-lg rounded-pill px-5 fw-bold">{{ .text }}</a>
+    {{- if $links }}
+    <div class="pk-cluster pk-cluster--center">
+      {{- range $links }}
+      <a href="{{ .url }}" class="pk-btn pk-btn--secondary pk-btn--lg">{{ .text }}</a>
+      {{- end }}
+    </div>
     {{- end }}
   </div>
 </section>
 {{- else if $heading -}}
+{{/*
+  No `pk` root on the support variant: the card's ink and its secondary link
+  are still coloured by `assets/scss`, and the base layer beats that sheet, so
+  adopting the root would recolour the link on a dark card. The measured
+  column is a utility, which carries no such opinion.
+*/}}
 <div class="support-cta support-cta--{{ $style }}" data-reveal>
-  <div class="{{ if eq $style "banner" }}container{{ else }}support-cta-card{{ end }}">
+  <div class="{{ if eq $style "banner" }}pk-container{{ else }}support-cta-card{{ end }}">
     <div class="support-cta-inner">
       {{- if $stat }}
       <div class="support-cta-stat-col">
@@ -54,7 +71,7 @@
         <div class="support-cta-actions">
           {{- range $links }}
           {{- $primary := .primary | default false -}}
-          {{- $class := cond $primary "btn btn-pkic support-cta-btn-primary" "support-cta-link" -}}
+          {{- $class := cond $primary "pk-btn pk-btn--primary" "support-cta-link" -}}
           <a href="{{ .url }}" class="{{ $class }}">{{ .text }}{{ if not $primary }} &rarr;{{ end }}</a>
           {{- end }}
         </div>

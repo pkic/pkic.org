@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SystemAuditLog } from "../../assets/ts/member-flows/portal/sections/SystemAuditLog";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 
 let container: HTMLElement | null = null;
 
@@ -73,18 +74,23 @@ describe("portal system audit log", () => {
     expect(requests[0]?.pathname.startsWith("/api/v1/admin/")).toBe(false);
     expect(requests[0]?.pathname.startsWith("/api/v1/system/audit-log")).toBe(false);
 
-    const entityType = container.querySelector<HTMLInputElement>("#system-audit-entityType");
-    const actorType = container.querySelector<HTMLInputElement>("#system-audit-actorType");
-    const action = container.querySelector<HTMLInputElement>("#system-audit-action");
-    const form = entityType?.form;
-    expect(entityType).not.toBeNull();
-    expect(actorType).not.toBeNull();
-    expect(action).not.toBeNull();
+    // The filters are resolved through the `for`/`id` pair rather than through
+    // ids the surface used to hand-write, so the lookup fails exactly when the
+    // labelling is broken — which is the part worth asserting.
+    expect(labelNames(container)).toEqual(expect.arrayContaining(["Entity type", "Actor type", "Action"]));
+    const entityType = controlFor(container, "Entity type");
+    const actorType = controlFor(container, "Actor type");
+    const action = controlFor(container, "Action");
+    const form = entityType.form;
     expect(form).not.toBeNull();
 
-    entityType!.value = "custom_interest";
-    actorType!.value = "automation";
-    action!.value = "catalog_reconciled";
+    // The table names itself, so a page carrying several is not announced as
+    // several tables all called "table".
+    expect(container.querySelector("table caption")?.textContent).toBe("System audit log");
+
+    entityType.value = "custom_interest";
+    actorType.value = "automation";
+    action.value = "catalog_reconciled";
     await act(async () => {
       form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
@@ -94,5 +100,24 @@ describe("portal system audit log", () => {
     expect(requests[1]?.searchParams.get("entityType")).toBe("custom_interest");
     expect(requests[1]?.searchParams.get("actorType")).toBe("automation");
     expect(requests[1]?.searchParams.get("action")).toBe("catalog_reconciled");
+  });
+
+  it("announces a failed load as an alert rather than an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("upstream exploded", { status: 500 }))),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<SystemAuditLog />, container!));
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).not.toBe("");
+    // The empty-state sentence would claim the filters matched nothing, which
+    // is a different and wrong thing to tell a reader about a failed request.
+    expect(container.textContent).not.toContain("No entries match the current filters.");
   });
 });

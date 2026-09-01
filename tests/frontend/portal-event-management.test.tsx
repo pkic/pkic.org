@@ -483,7 +483,10 @@ describe("portal event management", () => {
     );
     await settle();
 
-    const policy = container.querySelector<HTMLSelectElement>(`#event-registration-policy-${responseEvent.id}`)!;
+    // Resolved through the label's own for/id pair rather than through an id
+    // the surface happened to compose, so the lookup fails exactly when the
+    // labelling contract is broken.
+    const policy = controlFor<HTMLSelectElement>(container, "Registration policy");
     policy.value = "optional";
     policy.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
@@ -506,8 +509,10 @@ describe("portal event management", () => {
       .find((button) => button.textContent === "Create registration form")!
       .click();
     await settle();
-    const editor = Array.from(container.querySelectorAll<HTMLElement>(".card")).find(
-      (card) => card.querySelector<HTMLElement>(":scope > .card-header")?.textContent === "New registration form",
+    // Located by the heading that names the panel, not by a framework class:
+    // the name is what the surface actually promises a reader.
+    const editor = Array.from(container.querySelectorAll<HTMLElement>("section.pk-panel")).find(
+      (panel) => panel.querySelector(".pk-panel__title")?.textContent === "New registration form",
     )!;
     await typeInto(controlFor(editor, "Key"), "workshop-registration");
     await typeInto(controlFor(editor, "Title"), "Workshop registration");

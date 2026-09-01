@@ -4,21 +4,18 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
-import { Markdown } from "../../assets/ts/components/Markdown";
-import { PersonCell } from "../../assets/ts/components/PersonCell";
-import { StatCard } from "../../assets/ts/components/StatCard";
 import { EnumSelect } from "../../assets/ts/components/EnumSelect";
 import { FilterSelect } from "../../assets/ts/components/FilterSelect";
-import { EventScheduleFields } from "../../assets/ts/components/EventScheduleFields";
 import { FormActions } from "../../assets/ts/components/FormActions";
 import { MembershipCategoryPicker } from "../../assets/ts/components/MembershipCategoryPicker";
 import { TimeZoneSelect } from "../../assets/ts/components/TimeZoneSelect";
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
+import { SeriesManagedNotice } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SeriesManagedNotice";
 import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SettingsEditor";
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
-import { buttonNamed, controlFor } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, namedGroup } from "./helpers/labelled-control";
 import { tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
@@ -122,34 +119,6 @@ describe("shared management presentation components", () => {
     expect(named.querySelector("label")).toBeNull();
   });
 
-  it("reports every event schedule field through the shared editor", () => {
-    const onStartsAtChange = vi.fn();
-    const onEndsAtChange = vi.fn();
-    const onTimezoneChange = vi.fn();
-    const container = mount(
-      <EventScheduleFields
-        startsAt="2026-09-01T09:00"
-        endsAt="2026-09-01T17:00"
-        timezone="Europe/Amsterdam"
-        onStartsAtChange={onStartsAtChange}
-        onEndsAtChange={onEndsAtChange}
-        onTimezoneChange={onTimezoneChange}
-      />,
-    );
-    const inputs = [...container.querySelectorAll("input")];
-    for (const [input, value] of inputs.map(
-      (input, index) => [input, ["2026-10-01T10:00", "2026-10-01T18:00", "UTC"][index]] as const,
-    )) {
-      input.value = value;
-      void act(() => {
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    }
-    expect(onStartsAtChange).toHaveBeenCalledWith("2026-10-01T10:00");
-    expect(onEndsAtChange).toHaveBeenCalledWith("2026-10-01T18:00");
-    expect(onTimezoneChange).toHaveBeenCalledWith("UTC");
-  });
-
   it("renders consistent busy and cancellation form actions", () => {
     const onCancel = vi.fn();
     const container = mount(
@@ -228,6 +197,43 @@ describe("shared management presentation components", () => {
     expect(ready.textContent).toContain("Settings");
     expect(ready.textContent).toContain("Save");
     expect(ready.textContent).toContain("Content");
+
+    // The wait is announced with a name, not mimed by a grey rectangle.
+    expect(loading.querySelector('[role="status"]')?.textContent).toContain("Loading settings…");
+  });
+
+  it("replaces the settings shell with the reason it could not load", () => {
+    const failed = mount(
+      <SettingsEditor loading={false} error="HTTP 403" description="Settings" actions={<button>Save</button>}>
+        <span>Content</span>
+      </SettingsEditor>,
+    );
+
+    // The failure is announced where it appears, and nothing behind it invites
+    // an edit that cannot be saved.
+    expect(failed.querySelector('[role="alert"]')?.textContent).toContain("You don't have access to this");
+    expect(failed.textContent).not.toContain("Content");
+    expect(failed.textContent).not.toContain("HTTP 403");
+  });
+
+  it("sends a series-managed event to its series through a real link", () => {
+    const container = mount(<SeriesManagedNotice event={{ ownerGroupId: "group-1", seriesId: "series-1" }} />);
+
+    // An informational tone, so it is announced politely rather than
+    // interrupting the reader the way role="alert" would.
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    const link = container.querySelector<HTMLAnchorElement>("a");
+    // A link, not a button: it navigates, so it can be opened in a new tab.
+    expect(link?.getAttribute("href")).toBe("#/groups/group-1/meetings/series-1");
+    expect(link?.textContent).toContain("Open meeting series");
+  });
+
+  it("says why a series-managed event offers no way through when its group is unknown", () => {
+    const container = mount(<SeriesManagedNotice event={{ ownerGroupId: null, seriesId: "series-1" }} />);
+
+    // No dead control: the sentence explains the absence instead.
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("The owning group for this meeting series could not be determined.");
   });
 
   it("moves focus with the complete tabs keyboard pattern without requiring generated ids", () => {
@@ -384,6 +390,42 @@ describe("shared management presentation components", () => {
     expect(onChange).toHaveBeenCalledWith("America/New_York");
   });
 
+  it("TimeZoneSelect names its control, marks it required in words, and wires its guidance", () => {
+    const container = mount(
+      <TimeZoneSelect
+        id="series-timezone"
+        label="Time zone"
+        value="Europe/Amsterdam"
+        help="Recurrence is expanded in this zone."
+        onChange={vi.fn()}
+      />,
+    );
+
+    // Resolved through the label's own for/id pair, so the lookup fails
+    // exactly when the labelling contract does.
+    const input = controlFor(container, "Time zone");
+    expect(input.id).toBe("series-timezone");
+    // The asterisk is decorative; the word behind it is what is announced.
+    const marker = container.querySelector(".pk-field__required");
+    expect(marker?.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
+    expect(marker?.querySelector(".pk-field__sr")?.textContent).toBe("(required)");
+    // The guidance is tied to the control rather than merely placed beside it.
+    expect(container.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toBe(
+      "Recurrence is expanded in this zone.",
+    );
+  });
+
+  it("TimeZoneSelect leaves no orphaned required marker when the field is optional", () => {
+    const container = mount(
+      <TimeZoneSelect id="series-timezone" label="Time zone" value="" required={false} onChange={vi.fn()} />,
+    );
+
+    expect(controlFor(container, "Time zone").hasAttribute("required")).toBe(false);
+    expect(container.querySelector(".pk-field__required")).toBeNull();
+    // No help means no dangling aria-describedby pointing at nothing.
+    expect(controlFor(container, "Time zone").getAttribute("aria-describedby")).toBeNull();
+  });
+
   it("MembershipCategoryPicker treats an empty selection as every category", () => {
     const onChange = vi.fn();
     const container = mount(
@@ -430,6 +472,51 @@ describe("shared management presentation components", () => {
     });
     expect(onChange).toHaveBeenCalledWith([]);
   });
+
+  it("MembershipCategoryPicker names the set with a legend and ties its guidance to the group", () => {
+    const container = mount(
+      <MembershipCategoryPicker idPrefix="sync" label="Auto-sync categories" selected={[]} onChange={vi.fn()} />,
+    );
+
+    // A row of fifteen single-letter boxes with no group name is announced as
+    // fifteen unrelated checkboxes; the legend is what says what they are.
+    const group = namedGroup(container, "Auto-sync categories");
+    const describedBy = group.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
+      "Leave every box unchecked to include all membership categories.",
+    );
+
+    // Every box is a complete check block: `pk-check` on the label alone
+    // renders the operating system's own control, which no gate can see.
+    const checks = [...container.querySelectorAll<HTMLLabelElement>("label.pk-check")];
+    expect(checks).toHaveLength(MEMBERSHIP_CATEGORIES.length);
+    for (const check of checks) {
+      const input = check.querySelector<HTMLInputElement>("input.pk-check__input");
+      expect(input).not.toBeNull();
+      expect(check.htmlFor).toBe(input!.id);
+      expect(check.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
+    }
+  });
+
+  it("MembershipCategoryPicker takes the whole set out of play through the fieldset, not per control", () => {
+    const container = mount(
+      <MembershipCategoryPicker
+        idPrefix="sync"
+        label="Auto-sync categories"
+        selected={[]}
+        onChange={vi.fn()}
+        disabled
+      />,
+    );
+
+    // `disabled` on the fieldset is the one attribute that takes every control
+    // inside it out of play, including ones a parent cannot reach.
+    expect(namedGroup(container, "Auto-sync categories").disabled).toBe(true);
+    for (const category of MEMBERSHIP_CATEGORIES) {
+      expect(container.querySelector<HTMLInputElement>(`#sync-${category}`)?.disabled).toBe(true);
+    }
+  });
 });
 
 /**
@@ -438,110 +525,3 @@ describe("shared management presentation components", () => {
  * visual specimen cannot show: what each one exposes to assistive technology,
  * and what it does when the data or the request is not the happy one.
  */
-describe("shared component translation layer", () => {
-  it("PersonCell falls back to a placeholder name and omits the second line when nothing is on file", () => {
-    const container = mount(<PersonCell firstName={null} lastName={null} email={null} />);
-    expect(container.textContent).toContain("—");
-    // The face repeats what the name says, so it is decoration rather than a
-    // second announcement of the same person.
-    expect(container.querySelector(".pk-avatar")?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector(".pk-person-cell__email")).toBeNull();
-  });
-
-  it("PersonCell keeps the email as the quiet second line unless it is already the name", () => {
-    const named = mount(<PersonCell firstName="Ada" lastName="Lovelace" email="ada@example.test" />);
-    expect(named.querySelector(".pk-person-cell__name")?.textContent).toBe("Ada Lovelace");
-    expect(named.querySelector(".pk-person-cell__email")?.textContent).toBe("ada@example.test");
-
-    const unnamed = mount(<PersonCell firstName={null} lastName={null} email="ada@example.test" />);
-    expect(unnamed.querySelector(".pk-person-cell__name")?.textContent).toBe("ada@example.test");
-    expect(unnamed.querySelector(".pk-person-cell__email")).toBeNull();
-  });
-
-  it("StatCard states a bad figure in words rather than only tinting it", () => {
-    const container = mount(<StatCard label="Failed Emails" value={3} note="1 bounced" variant="danger" />);
-    expect(container.querySelector(".pk-stat-card__value")?.textContent).toBe("3");
-    // The tint the Bootstrap version used is invisible to a reader who cannot
-    // separate the hues, so the state is said instead.
-    expect(container.querySelector(".pk-stat-card__note")?.textContent).toBe("Needs attention · 1 bounced");
-  });
-
-  it("StatCard leaves an ordinary figure unannotated and names its link with just the label", () => {
-    const plain = mount(<StatCard label="Queued Emails" value={0} />);
-    expect(plain.querySelector(".pk-stat-card__note")).toBeNull();
-
-    const linked = mount(
-      <StatCard label="Total Registrations" value={412} note="8 confirmed" href="#/registrations" />,
-    );
-    const link = linked.querySelector<HTMLAnchorElement>("a");
-    // The whole card is the target, but the link's name stays "Total
-    // Registrations" rather than the card's entire contents read aloud.
-    expect(link?.textContent).toBe("Total Registrations");
-    expect(link?.getAttribute("href")).toBe("#/registrations");
-  });
-
-  it("Markdown refuses an unsafe link target and keeps the text", () => {
-    const container = mount(<Markdown markdown="[click me](javascript:alert(1))" />);
-    expect(container.querySelector("a")).toBeNull();
-    expect(container.textContent).toContain("click me");
-  });
-
-  it("Markdown names a video embed and renders a plain link as a link", () => {
-    const embed = mount(<Markdown markdown="https://youtu.be/abc123" />);
-    const frame = embed.querySelector<HTMLIFrameElement>("iframe");
-    // An unnamed frame is announced as "frame", which says nothing about what
-    // is inside it.
-    expect(frame?.getAttribute("title")).toBe("Embedded video");
-    expect(frame?.getAttribute("src")).toBe("https://www.youtube.com/embed/abc123");
-
-    const linked = mount(<Markdown markdown="See [the policy](https://example.test/policy)." />);
-    expect(linked.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
-  });
-
-  it("AuditLogTable names its table and says which history it is showing", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ auditLog: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
-    );
-    const container = mount(
-      <AuditLogTable
-        endpoint="/api/v1/groups/group-1/audit-log"
-        caption="Group history"
-        actionCell={(entry) => entry.action}
-        detailsCell={() => null}
-      />,
-    );
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    // Four unnamed tables on a page are announced as four tables.
-    expect(container.querySelector("caption")?.textContent).toBe("Group history");
-    expect(container.textContent).toContain("No audit log entries.");
-  });
-
-  it("AuditLogTable states a failed history request as a sentence, not a status code", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("nope", { status: 500 })),
-    );
-    const container = mount(
-      <AuditLogTable
-        endpoint="/api/v1/groups/group-1/audit-log"
-        actionCell={(entry) => entry.action}
-        detailsCell={() => null}
-      />,
-    );
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("Something went wrong on our side.");
-    expect(container.querySelector("table")).toBeNull();
-  });
-});

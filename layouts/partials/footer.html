@@ -2,7 +2,9 @@
          application shell where stray logos under the content read as
          clutter (most visibly beneath the sign-in card on mobile). */}}
     {{ if ne .Type "portal" }}
-    <div class="pk pk-container members footer-member-wall pk-center">
+    {{/* No `pk` root: the member wall sits on the page's own ground, and
+         `.pk` would paint `--pk-canvas` behind it. */}}
+    <div class="pk-container members footer-member-wall pk-center">
         <div class="banner">
             {{ partialCached "members/wall.html" . }}
         </div>
@@ -12,7 +14,12 @@
     <footer id="site-footer">
 
         {{/* ── CTA bar ───────────────────────────────────────────── */}}
-        <div id="participate" class="pk pk-section">
+        {{/* No `pk` root here. This bar is painted black by
+             `_footer-and-edit.scss`, which is in the legacy layer, and
+             `.pk { background: var(--pk-canvas) }` in the base layer beats it
+             at any specificity — the bar came out pale grey. The utilities are
+             unscoped, so `pk-section` and `pk-container` work without it. */}}
+        <div id="participate" class="pk-section">
             <div class="pk-container">
                 Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions, <a href="/join/">join</a> the consortium, and <a href="/donate/" class="footer-cta-donate">support us with a donation</a>
             </div>

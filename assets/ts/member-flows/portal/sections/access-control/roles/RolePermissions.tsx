@@ -1,6 +1,17 @@
 import { PERMISSIONS, type Permission } from "../../../../../../shared/schemas/permissions";
+// `pk-check`, `pk-check__input` and `pk-check__label` come from Field.css and
+// `pk-mono` from Content.css. Both are written here as class names rather than
+// reached through a component, so this module pulls the stylesheets into its
+// own chunk: a label carrying only `pk-check` renders an operating-system
+// default checkbox, and nothing complains.
+import "../../../../../ui/Field.css";
+import "../../../../../ui/Content.css";
 
-/** Shared permission-bundle checkbox grid used by both role creation and editing. */
+/**
+ * Shared permission-bundle checkbox grid used by both role creation and
+ * editing. Both callers wrap it in a `<fieldset>` whose `<legend>` names the
+ * group, so this renders the controls and nothing else.
+ */
 export function PermissionCheckboxes({
   selected,
   onToggle,
@@ -11,21 +22,23 @@ export function PermissionCheckboxes({
   disabled?: boolean;
 }) {
   return (
-    <div class="d-flex flex-wrap gap-2 mb-2 p-2 border rounded portal-access-role-permissions">
+    // The frame and the inset moved into `.portal-access-role-permissions`
+    // beside the scroll behaviour they belong with; the markup keeps only the
+    // arrangement.
+    <div class="pk-cluster portal-access-role-permissions">
       {PERMISSIONS.map((permission) => (
-        <div key={permission} class="form-check">
+        // The label wraps the control, so the two are bound without a `for`/`id`
+        // pair to keep in step.
+        <label key={permission} class="pk-check">
           <input
-            class="form-check-input"
+            class="pk-check__input"
             type="checkbox"
-            id={`perm-${permission}`}
             checked={selected.has(permission)}
             onChange={() => onToggle(permission)}
             disabled={disabled}
           />
-          <label class="form-check-label small mono" for={`perm-${permission}`}>
-            {permission}
-          </label>
-        </div>
+          <span class="pk-check__label pk-mono pk-small">{permission}</span>
+        </label>
       ))}
     </div>
   );

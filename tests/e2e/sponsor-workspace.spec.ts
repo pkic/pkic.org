@@ -221,8 +221,10 @@ test.describe("portal sponsor workspace", () => {
     await page.goto("/");
     await page.goto(`/portal/#/sponsors/access?event=${encodeURIComponent(EVENT_SLUG)}`);
     await expect(page.getByRole("heading", { name: "Sponsor access" })).toBeVisible();
-    await page.locator("#sp-inp-email").fill(contactEmail);
-    await expect(page.locator("#sp-inp-event")).toHaveValue(EVENT_SLUG);
+    // By accessible name rather than by id: the two controls are design-system
+    // Fields now, which own their own `for`/`id` pair.
+    await page.getByLabel("Email").fill(contactEmail);
+    await expect(page.getByLabel("Event")).toHaveValue(EVENT_SLUG);
     await page.getByRole("button", { name: "Send sign-in link" }).click();
     await expect(page.getByText(/you'll receive a sign-in link shortly/i)).toBeVisible();
 

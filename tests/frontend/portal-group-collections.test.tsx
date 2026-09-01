@@ -518,9 +518,15 @@ describe("portal selected-group collections", () => {
 
     const container = mount(<GroupEvents groupId={GROUP_ID} />);
     await settle();
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    // The whole row opens the event now: the "Details" button in a nameless
+    // last column was a control no keyboard could reach the row through, so
+    // the table's own `rowAction` renders the link and stretches it.
+    const open = Array.from(container.querySelectorAll("a, button")).find(
+      (control) => control.textContent === `Open ${event.name}`,
+    );
+    expect(open).toBeDefined();
     await act(async () => {
-      details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      open?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     await settle();

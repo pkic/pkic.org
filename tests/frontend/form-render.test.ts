@@ -9,6 +9,18 @@ import { controlFor } from "./helpers/labelled-control";
 
 const option = (value: string) => ({ value, label: value, active: true });
 
+/** A minimal custom field; each case overrides only what it is about. */
+const base = (key: string, label: string) => ({
+  key,
+  label,
+  fieldType: "text" as const,
+  required: false,
+  sortOrder: 1,
+  optionSource: null,
+  options: [],
+  validation: {},
+});
+
 describe("frontend field rendering", () => {
   it("renders display text for terms and serializes accepted consent values", () => {
     const host = document.createElement("div");
@@ -146,6 +158,112 @@ describe("frontend field rendering", () => {
     expect(npsError).toBeTruthy();
   });
 
+  it("dresses every custom widget in the design system's control classes", () => {
+    const host = document.createElement("div");
+    renderCustomFields(host, [
+      { ...base("agree", "Agree to the code of conduct"), fieldType: "boolean" },
+      {
+        ...base("track", "Preferred track"),
+        fieldType: "select",
+        options: [option("Standards"), option("Deployment")],
+      },
+      { ...base("bio", "Short biography"), fieldType: "textarea" },
+      { ...base("company", "Company") },
+      {
+        ...base("dietary", "Dietary"),
+        fieldType: "multi_select",
+        options: [option("Vegan")],
+        validation: { uiWidget: "checkboxes" },
+      },
+    ]);
+
+    expect(host.querySelector("input[name='custom.agree']")?.className).toBe("pk-check__input");
+    expect(host.querySelector("select[name='custom.track']")?.className).toBe("pk-input pk-input--select");
+    expect(host.querySelector("textarea[name='custom.bio']")?.className).toBe("pk-input pk-input--textarea");
+    expect(host.querySelector("input[name='custom.company']")?.className).toBe("pk-input");
+
+    // All three parts of the check block, not just the outer one: a label
+    // carrying `pk-check` alone renders the operating system's own control.
+    const check = host.querySelector("label.pk-check");
+    expect(check?.querySelector("input.pk-check__input")).not.toBeNull();
+    expect(check?.querySelector("span.pk-check__label")?.textContent).toBe("Vegan");
+  });
+
+  it("names each set of choices as the question it answers", () => {
+    const host = document.createElement("div");
+    renderCustomFields(host, [
+      {
+        ...base("dietary", "Dietary"),
+        fieldType: "multi_select",
+        options: [option("Vegan"), option("Halal")],
+        validation: { uiWidget: "checkboxes" },
+      },
+      { ...base("nps", "How likely are you to return?"), fieldType: "number", validation: { uiWidget: "nps" } },
+      { ...base("availability", "Availability"), validation: { format: "date_range" } },
+    ]);
+
+    const groups = [...host.querySelectorAll('[role="group"]')].map((group) => group.getAttribute("aria-label"));
+    expect(groups).toEqual(["Dietary", "How likely are you to return?"]);
+
+    // The two date inputs cannot share the row's label, so each names itself.
+    expect(host.querySelector("input[name='custom.availability.start']")?.getAttribute("aria-label")).toBe(
+      "Availability — start date",
+    );
+    expect(host.querySelector("input[name='custom.availability.end']")?.getAttribute("aria-label")).toBe(
+      "Availability — end date",
+    );
+  });
+
+  it("states the chosen rating rather than leaving it to the fill", () => {
+    const host = document.createElement("div");
+    renderCustomFields(host, [{ ...base("nps", "NPS"), fieldType: "number", validation: { uiWidget: "nps" } }]);
+
+    const scores = [...host.querySelectorAll<HTMLButtonElement>("button[data-value]")];
+    expect(scores.every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
+    for (const button of scores) expect(button.className).toBe("pk-btn pk-btn--sm pk-btn--secondary");
+
+    const nine = scores.find((button) => button.dataset.value === "9");
+    nine?.click();
+
+    expect(nine?.getAttribute("aria-pressed")).toBe("true");
+    expect(nine?.classList.contains("pk-btn--primary")).toBe(true);
+    expect(nine?.classList.contains("pk-btn--secondary")).toBe(false);
+    expect(scores.filter((button) => button.getAttribute("aria-pressed") === "true")).toHaveLength(1);
+  });
+
+  it("refuses a tag outside the suggested list and says why on the control", () => {
+    const host = document.createElement("div");
+    renderCustomFields(host, [
+      {
+        ...base("interests", "Interests"),
+        fieldType: "multi_select",
+        options: [option("PKI")],
+        validation: { uiWidget: "tags", allowCustom: false },
+      },
+    ]);
+
+    // The row's label points at the text box, which is the only control a
+    // reader can actually type into.
+    const label = [...host.querySelectorAll("label")].find((candidate) => candidate.htmlFor === "custom-interests");
+    const text = host.querySelector<HTMLInputElement>("#custom-interests");
+    expect(label?.textContent).toBe("Interests");
+    expect(text?.className).toBe("pk-input");
+    if (!text) throw new Error("no tag text input");
+
+    text.reportValidity = () => true;
+    void act(() => {
+      text.value = "Something else";
+      text.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const add = [...host.querySelectorAll("button")].find((button) => button.textContent === "Add");
+    void act(() => {
+      add?.click();
+    });
+
+    expect(text.validationMessage).toBe("Please select a value from the suggested list.");
+    expect(host.querySelectorAll(".event-flow-tag-pill")).toHaveLength(0);
+  });
+
   it("hides conditional questions when attendance conditions are not met", () => {
     const host = document.createElement("div");
     const controller = renderCustomFields(host, [
@@ -171,15 +289,38 @@ describe("frontend field rendering", () => {
       dayAttendance: [{ attendanceType: "virtual" }],
       eventAttendanceType: "virtual",
     });
-    expect(row.classList.contains("visually-hidden")).toBe(true);
+    // `pk-sr-only` is the design system's visually-hidden pattern, which is
+    // what `visually-hidden` was doing here.
+    expect(row.classList.contains("pk-sr-only")).toBe(true);
+    expect(row.getAttribute("aria-hidden")).toBe("true");
     expect(field.disabled).toBe(true);
 
     controller.updateVisibility({
       dayAttendance: [{ attendanceType: "in_person" }],
       eventAttendanceType: "in_person",
     });
-    expect(row.classList.contains("visually-hidden")).toBe(false);
+    expect(row.classList.contains("pk-sr-only")).toBe(false);
+    expect(row.getAttribute("aria-hidden")).toBe("false");
     expect(field.disabled).toBe(false);
+
+    // The help, the reference link and the error slot are tied to the control
+    // rather than merely sitting beside it, so a screen reader reaches all
+    // three. The error slot is named even before a validator writes into it.
+    expect(field.getAttribute("aria-describedby")).toBe("custom-dietary_restrictions-error");
+    const errorSlot = host.querySelector<HTMLElement>("#custom-dietary_restrictions-error")!;
+    expect(errorSlot.getAttribute("aria-live")).toBe("polite");
+    expect(errorSlot.dataset.fieldError).toBe("dietary_restrictions");
+
+    // A validator's message for a question that then becomes irrelevant is
+    // cleared with the answer, so a hidden field cannot keep asserting an
+    // error against a value nobody can see or correct.
+    errorSlot.textContent = "Please choose at least one.";
+    controller.updateVisibility({
+      dayAttendance: [{ attendanceType: "virtual" }],
+      eventAttendanceType: "virtual",
+    });
+    expect(errorSlot.textContent).toBe("");
+    expect(field.value).toBe("");
   });
 
   it("maps native field names to namespaced error targets", () => {

@@ -1,24 +1,34 @@
-<div data-application-status data-module="member-flows/application-status-page" data-api-base="/api/v1">
-  <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
+{{/*
+  application-status — the token-gated membership application status check.
 
-  <div data-lookup-form>
-    <p class="form-text">
+  `data-flow-status` carries `pk-alert pk-sr-only` because `setStatus()`
+  (assets/ts/shared/form/helpers.ts) branches on `pk-alert`: it drops
+  `pk-sr-only` and adds the tone modifier. Renaming either class here without
+  that helper is what makes a status banner nothing ever reveals.
+*/}}
+<div class="pk pk-stack" data-application-status data-module="member-flows/application-status-page" data-api-base="/api/v1">
+  <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
+
+  <div data-lookup-form class="pk-stack">
+    <p class="pk-small">
       Enter the application ID and token from your confirmation email to check your application's status.
     </p>
-    <div class="row g-2 align-items-end mb-2">
-      <div class="col-12 col-sm-6">
-        <label class="form-label" for="lookup-application-id">Application ID</label>
-        <input id="lookup-application-id" type="text" class="form-control" data-lookup-id />
+    <div class="pk-grid">
+      <div class="pk-field">
+        <label class="pk-field__label" for="lookup-application-id">Application ID</label>
+        <input id="lookup-application-id" type="text" class="pk-input" data-lookup-id />
       </div>
-      <div class="col-12 col-sm-6">
-        <label class="form-label" for="lookup-token">Token</label>
-        <input id="lookup-token" type="text" class="form-control" data-lookup-token />
+      <div class="pk-field">
+        <label class="pk-field__label" for="lookup-token">Token</label>
+        <input id="lookup-token" type="text" class="pk-input" data-lookup-token />
       </div>
     </div>
-    <button type="button" class="btn btn-primary" data-lookup-submit>Check status</button>
+    <div class="pk-cluster">
+      <button type="button" class="pk-btn pk-btn--primary" data-lookup-submit>Check status</button>
+    </div>
   </div>
 
-  <div data-status-result class="d-none">
-    <p class="form-text">Loading your application…</p>
+  <div data-status-result hidden>
+    <p class="pk-small">Loading your application…</p>
   </div>
 </div>

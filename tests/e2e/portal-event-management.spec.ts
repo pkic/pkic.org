@@ -93,7 +93,9 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   expect((await registrationSettingsSaved).status()).toBe(200);
 
   await policySection.getByRole("button", { name: "Create registration form" }).click();
-  const formEditor = policySection.locator(".card").filter({ hasText: "New registration form" });
+  // Located by the region's accessible name rather than a framework class,
+  // so the spec keeps working the next time this surface is restyled.
+  const formEditor = policySection.getByRole("region", { name: "New registration form" });
   const formKey = `workshop-registration-${unique}`;
   await formEditor.getByLabel("Key", { exact: true }).fill(formKey);
   await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);

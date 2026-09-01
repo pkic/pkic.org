@@ -1,5 +1,11 @@
+import { Fragment } from "preact";
+
 import { AuditLogTable } from "../AuditLogTable";
 import type { AuditLogEntry } from "../../../shared/schemas/audit-log";
+// `pk-answer-pre` is written here as a class name rather than reached through
+// a component, so this module has to pull its stylesheet into its own chunk.
+// Without the import the deltas render unwrapped and nothing complains.
+import "../../ui/Content.css";
 
 interface AuditDelta {
   from: unknown;
@@ -76,27 +82,38 @@ export function proposalAuditActionLabel(entry: AuditLogEntry): string {
 
 export function ProposalAuditDetails({ details }: { details: Record<string, unknown> | null | undefined }) {
   if (!details || Object.keys(details).length === 0) return null;
+  // A term and its value per row, so each key is announced with the value it
+  // belongs to rather than as one run-on paragraph reading "keyA: x → y keyB:
+  // …". The pairs are direct children of the `dl`: `pk-datalist` is a grid
+  // over `dl > dt` and `dl > dd`, so a wrapper between them takes both out of
+  // it. `pk-answer-pre` on the value keeps a delta's own line breaks and lets
+  // a long identifier wrap instead of widening the column.
   return (
-    <div class="small text-body-secondary d-flex flex-column gap-1">
+    <dl class="pk-datalist pk-small">
       {Object.entries(details).map(([key, value]) => (
-        <div key={key} class="adm-pre-wrap">
-          <strong>{key}</strong>
-          {": "}
-          {isAuditDelta(value)
-            ? `${formatAuditValue(value.from)} → ${formatAuditValue(value.to)}`
-            : formatAuditValue(value)}
-        </div>
+        <Fragment key={key}>
+          <dt>{key}</dt>
+          <dd class="pk-answer-pre">
+            {isAuditDelta(value)
+              ? `${formatAuditValue(value.from)} → ${formatAuditValue(value.to)}`
+              : formatAuditValue(value)}
+          </dd>
+        </Fragment>
       ))}
-    </div>
+    </dl>
   );
 }
 
 /** Shared, server-paginated audit rendering for a single proposal. */
 export function ProposalAuditLog({ endpoint }: { endpoint: string }) {
   return (
+    // The proposal detail page stacks several tables, so the history says
+    // whose history it is rather than sharing the generic default caption
+    // with every other audit table on the page.
     <AuditLogTable
+      caption="Proposal history"
       endpoint={endpoint}
-      actionCell={(entry) => <span class="small">{proposalAuditActionLabel(entry)}</span>}
+      actionCell={(entry) => <span class="pk-small">{proposalAuditActionLabel(entry)}</span>}
       detailsCell={(entry) => <ProposalAuditDetails details={entry.details} />}
     />
   );

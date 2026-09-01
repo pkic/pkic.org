@@ -1,6 +1,19 @@
+import { useId } from "preact/hooks";
 import { eventFormCatalog } from "../../../../../../shared/management-catalogs";
 import { ServerSearchSelect } from "../../../../../../components/ServerSearchSelect";
 
+/**
+ * One form picker on the event's General tab.
+ *
+ * The width used to come from `col-md-6` here while the parent also laid the
+ * pickers out, so the column was sized twice. The parent's stack owns the
+ * layout now and this owns only the picker and the sentence explaining it.
+ *
+ * `ServerSearchSelect` labels its own control, so the help cannot be handed to
+ * it as a `Field`'s `help`. The pair is a named group described by the
+ * sentence instead, which keeps the association programmatic rather than
+ * leaving the text floating below an unrelated control.
+ */
 export function EventFormLinkSelect({
   eventSlug,
   purpose,
@@ -20,8 +33,10 @@ export function EventFormLinkSelect({
   autoSelectFirst?: boolean;
   onChange: (value: string) => void;
 }) {
+  const helpId = `${useId()}-help`;
+
   return (
-    <div class="col-md-6">
+    <div class="pk pk-stack pk-stack--tight" role="group" aria-label={label} aria-describedby={helpId}>
       <ServerSearchSelect
         catalog={eventFormCatalog(eventSlug, purpose, "active")}
         label={label}
@@ -32,7 +47,9 @@ export function EventFormLinkSelect({
         autoSelectFirst={autoSelectFirst}
         onChange={(form) => onChange(form?.key ?? "")}
       />
-      <div class="form-text">{help}</div>
+      <p class="pk-small" id={helpId}>
+        {help}
+      </p>
     </div>
   );
 }

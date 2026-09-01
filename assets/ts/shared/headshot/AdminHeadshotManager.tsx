@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "preact/hooks";
+import { Button } from "../../ui/Button";
 import { wireHeadshotController } from "./controller";
 import type { HeadshotDisclaimerOptions } from "./upload";
 import type { HeadshotPreviewOptions } from "./preview";
@@ -61,32 +62,24 @@ export function AdminHeadshotManager({
   const previewRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const deleteRef = useRef<HTMLButtonElement>(null);
+  // The controller wires the delete control imperatively, so it needs the
+  // element. The button is a `Button`, which owns its own markup, so the
+  // element is found through the group it renders into rather than by putting
+  // a ref on the component and hoping it forwards one.
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     wireHeadshotController({
       preview: previewRef.current,
       status: statusRef.current,
       fileInput: fileRef.current,
-      deleteButton: deleteRef.current,
+      deleteButton: actionsRef.current?.querySelector<HTMLButtonElement>("[data-headshot-delete]") ?? null,
       initialUrl,
-      previewOptions: {
-        alt,
-        emptyLabel,
-        containerClass: "adm-headshot-preview",
-        imageClass: ["rounded-circle", "border", "shadow-sm", "adm-headshot-preview-img"],
-        placeholderClass: [
-          "rounded-circle",
-          "border",
-          "bg-light",
-          "d-flex",
-          "align-items-center",
-          "justify-content-center",
-          "mx-auto",
-          "adm-headshot-placeholder",
-        ],
-        ...previewOptions,
-      },
+      // The extra class lists are gone rather than translated: the round
+      // frame, the border, the cover-fit image and the centered placeholder
+      // are all already `pkic-headshot-preview`'s own rules, so the Bootstrap
+      // names were decorating a shape that did not depend on them.
+      previewOptions: { alt, emptyLabel, ...previewOptions },
       disclaimerOptions: {
         title: disclaimerTitle,
         texts: disclaimerTexts,
@@ -127,30 +120,37 @@ export function AdminHeadshotManager({
   }, [statusText]);
 
   return (
-    <div class="mb-3 text-center">
-      <div ref={previewRef} class="mb-2"></div>
+    <div class="pk pk-stack pk-stack--snug pk-center">
+      <div ref={previewRef}></div>
       {!readOnly && (
-        <div class="d-flex flex-column gap-2 align-items-center">
-          <label class="btn btn-sm btn-outline-primary w-100 adm-headshot-btn">
+        // A group rather than a bare div: the three controls act on one thing,
+        // and the name says which one when the page carries several.
+        <div ref={actionsRef} class="pk-stack pk-stack--snug" role="group" aria-label={`Photo for ${alt}`}>
+          {/* The button is the control and the file input is opened through
+              it, so there is one focusable thing carrying one accessible name
+              — rather than a label wrapping an input a class has hidden. */}
+          <Button size="sm" block onClick={() => fileRef.current?.click()}>
             {uploadLabel}
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" class="d-none" />
-          </label>
+          </Button>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden />
           {onFetchGravatar && (
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn"
-              onClick={() => void onFetchGravatar()}
-            >
+            <Button variant="secondary" size="sm" block onClick={() => void onFetchGravatar()}>
               {fetchLabel}
-            </button>
+            </Button>
           )}
-          <button ref={deleteRef} type="button" class="btn btn-sm btn-outline-danger w-100 adm-headshot-btn d-none">
+          {/* `hidden` until there is something to remove. The controller sets
+              the attribute; it also still toggles a legacy `d-none` for the
+              surfaces that have not migrated, which agrees with `hidden`
+              rather than fighting it. */}
+          <Button data-headshot-delete variant="danger-quiet" size="sm" block hidden>
             {deleteLabel}
-          </button>
+          </Button>
         </div>
       )}
-      {helpText && <div class="form-text mt-2 text-start">{helpText}</div>}
-      <div ref={statusRef} class="mt-2 small text-muted"></div>
+      {helpText && <p class="pk-small pk-start">{helpText}</p>}
+      {/* The controller writes the outcome here with `textContent`, which no
+          reader is told about unless the region announces itself. */}
+      <div ref={statusRef} class="pk-small" role="status"></div>
     </div>
   );
 }

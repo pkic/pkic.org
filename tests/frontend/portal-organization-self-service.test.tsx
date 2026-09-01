@@ -7,6 +7,7 @@ import { organizationContentReviewCreateSchema } from "../../assets/shared/schem
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { MyOrganization } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
 import { profile } from "../../assets/ts/member-flows/portal/state";
+import { controlFor } from "./helpers/labelled-control";
 
 const organizationId = "00000000-0000-4000-8000-000000000210";
 const userId = "00000000-0000-4000-8000-000000000211";
@@ -351,5 +352,114 @@ describe("portal organization self-service", () => {
     expect(container.querySelector("table")?.getAttribute("aria-busy")).toBeNull();
     // The empty region announces itself instead of being an unexplained blank.
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No past submissions.");
+  });
+
+  /** The governance and sponsorship cards, with the sponsorship answer chosen. */
+  function stubGovernance(organization: Record<string, unknown>, sponsorship: Response | Record<string, unknown>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === `/api/v1/organizations/${organizationId}/profile`) return json({ organization });
+        if (url.pathname === `/api/v1/organizations/${organizationId}/content/reviews`) {
+          return json({ reviews: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
+        if (url.pathname === `/api/v1/organizations/${organizationId}/sponsors/current`) {
+          return sponsorship instanceof Response ? sponsorship : json(sponsorship);
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+  }
+
+  function withIdentities(): void {
+    profile.value = {
+      ...profile.value!,
+      organizationIdentities: [
+        {
+          identityId,
+          userId,
+          name: "Contact Person",
+          email: "contact@example.test",
+          showOnOrgProfile: true,
+          isPrimaryContact: true,
+          isSecondaryContact: false,
+        },
+        {
+          identityId: "00000000-0000-4000-8000-000000000214",
+          userId: "00000000-0000-4000-8000-000000000215",
+          name: "Second Person",
+          email: "second@example.test",
+          showOnOrgProfile: true,
+          isPrimaryContact: false,
+          isSecondaryContact: false,
+        },
+      ],
+    };
+  }
+
+  it("binds the secondary-contact nomination to a label and its explanation", async () => {
+    withIdentities();
+    stubGovernance(organizationProfile(), { sponsorship: { tier: null, startDate: null } });
+
+    void act(() => render(<MyOrganization />, container));
+    await settle();
+
+    // The selector used to carry no name at all — a heading above it is not a
+    // label, so the control announced itself as an unnamed combo box.
+    const select = controlFor<HTMLSelectElement>(container, "Nominated secondary contact");
+    expect(select.tagName).toBe("SELECT");
+    expect([...select.options].map((option) => option.textContent)).toEqual(["None", "Second Person"]);
+
+    // The guidance is tied to the control rather than left as loose prose
+    // beside it, so it is announced with the field.
+    const described = container.querySelector(`#${select.getAttribute("aria-describedby")!}`);
+    expect(described?.textContent).toContain("held until confirmed by staff");
+  });
+
+  it("states the pending nomination in a sentence for a member who cannot change it", async () => {
+    withIdentities();
+    stubGovernance(
+      organizationProfile({
+        isPrimaryContact: false,
+        pendingSecondaryContactUserId: "00000000-0000-4000-8000-000000000215",
+      }),
+      { sponsorship: { tier: null, startDate: null } },
+    );
+
+    void act(() => render(<MyOrganization />, container));
+    await settle();
+
+    expect(container.textContent).toContain("Pending: Second Person");
+    expect(() => controlFor(container, "Nominated secondary contact")).toThrow();
+  });
+
+  it("says the sponsorship tier in words rather than by a text transform", async () => {
+    stubGovernance(organizationProfile(), { sponsorship: { tier: "gold", startDate: "2026-02-01" } });
+
+    void act(() => render(<MyOrganization />, container));
+    // The sponsorship is fetched by the card itself, one tick behind the
+    // profile the surface waits on, so the wait resolves a settle later.
+    await settle();
+    await settle();
+
+    // The capitalization is in the text, so the word reaches a screen reader
+    // the same way it reaches the screen.
+    expect(container.textContent).toContain("Active Gold sponsor since");
+  });
+
+  it("reports a refused sponsorship lookup as a sentence, not a status code", async () => {
+    stubGovernance(organizationProfile(), new Response("", { status: 500 }));
+
+    void act(() => render(<MyOrganization />, container));
+    await settle();
+    await settle();
+
+    const alerts = [...container.querySelectorAll('[role="alert"]')].map((node) => node.textContent ?? "");
+    expect(alerts.some((text) => text.includes("Something went wrong on our side"))).toBe(true);
+    expect(container.textContent).not.toContain("HTTP 500");
   });
 });

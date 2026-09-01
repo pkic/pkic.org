@@ -8,6 +8,7 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
 import { EmptyState } from "../../../components/EmptyState";
+import { Badge } from "../../../ui/Badge";
 import { type MenuItem } from "../../../ui/Menu";
 import { RowActions } from "../../../ui/RowActions";
 import { confirmAction } from "../../../components/ConfirmDialog";
@@ -19,12 +20,15 @@ import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalAvatarInitials } from "../shell/PortalNavigationShell";
 import { portalSession } from "../state";
 import { toast } from "../ui";
+// `pk-mono` on the email line comes from Content.css, which ships in a lazy
+// chunk rather than the entry stylesheet, so this module imports it.
+import "../../../ui/Content.css";
 
 /** The person's name links into user administration when the viewer may see it. */
 function IdentityName({ userId, name }: { userId: string; name: string }) {
   if (!portalHasGlobalPermission(portalSession.value, "users:read")) return <strong>{name}</strong>;
   return (
-    <Link href={`/users/${encodeURIComponent(userId)}`} class="fw-bold">
+    <Link href={`/users/${encodeURIComponent(userId)}`} class="pk-strong">
       {name}
     </Link>
   );
@@ -53,13 +57,15 @@ export interface ActiveActingIdentity {
 
 function ContactRole({ identity }: { identity?: ActiveActingIdentity }) {
   if (!identity?.isPrimaryContact && !identity?.isSecondaryContact) {
-    return <span class="text-muted">—</span>;
+    return <span class="pk-muted">—</span>;
   }
+  // The gap between the two badges is the cluster's, not a margin on the
+  // first one, and each badge still says which role it is in words.
   return (
-    <>
-      {identity.isPrimaryContact && <span class="badge text-bg-primary me-1">Primary</span>}
-      {identity.isSecondaryContact && <span class="badge text-bg-info">Secondary</span>}
-    </>
+    <span class="pk-cluster">
+      {identity.isPrimaryContact && <Badge tone="accent">Primary</Badge>}
+      {identity.isSecondaryContact && <Badge tone="info">Secondary</Badge>}
+    </span>
   );
 }
 
@@ -86,12 +92,12 @@ function activeColumns(): Column<ActiveActingIdentity>[] {
     {
       header: "Name",
       cell: (identity) => (
-        <div class="d-flex align-items-center gap-2">
+        <div class="pk-cluster">
           <IdentityAvatar name={identity.name ?? identity.email} headshotUrl={identity.headshotUrl} />
-          <div>
+          <div class="pk-stack pk-stack--tight">
             <IdentityName userId={identity.userId} name={identity.name ?? identity.email} />
-            <div class="mono text-muted small">{identity.email}</div>
-            {identity.jobTitle && <div class="small text-muted">{identity.jobTitle}</div>}
+            <div class="pk-mono pk-small">{identity.email}</div>
+            {identity.jobTitle && <div class="pk-small">{identity.jobTitle}</div>}
           </div>
         </div>
       ),
@@ -239,12 +245,12 @@ export function ActingIdentityDirectory({
           cell: (identity) => {
             const active = activeByIdentityId.get(identity.id);
             return (
-              <div class="d-flex align-items-center gap-2">
+              <div class="pk-cluster">
                 <IdentityAvatar name={identity.userName} headshotUrl={identity.headshotUrl} />
-                <div>
+                <div class="pk-stack pk-stack--tight">
                   <IdentityName userId={identity.userId} name={identity.userName} />
-                  <div class="mono text-muted small">{identity.email}</div>
-                  {active?.jobTitle && <div class="small text-muted">{active.jobTitle}</div>}
+                  <div class="pk-mono pk-small">{identity.email}</div>
+                  {active?.jobTitle && <div class="pk-small">{active.jobTitle}</div>}
                 </div>
               </div>
             );
@@ -266,12 +272,14 @@ export function ActingIdentityDirectory({
             statusLabel(identity) === "Active" ? (
               <span>{identity.showOnOrganizationProfile ? "Shown on profile" : "Hidden"}</span>
             ) : (
-              <span class="text-muted">—</span>
+              <span class="pk-muted">—</span>
             ),
         },
         {
-          header: "",
-          className: "text-end",
+          // A blank `th` is announced as an unnamed column; this one holds the
+          // per-row action menu, so it says so.
+          header: "Actions",
+          className: "pk-end",
           cell: (identity) => {
             const actions = rowActions(identity);
             if (actions.length === 0) return null;

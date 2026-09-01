@@ -7,6 +7,10 @@ import { postJson } from "../../shared/api-client";
 import type { ToastType } from "../../shared/ui";
 import { ErrorAlert } from "../ErrorAlert";
 import { statusLabel } from "../Badge";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody } from "../../ui/Panel";
+import { Select, TextInput } from "../../ui/TextControl";
 import type { z } from "zod";
 
 const INVITABLE_ROLES = PROPOSAL_SPEAKER_ROLES.filter(
@@ -33,8 +37,13 @@ export function ProposalCoSpeakerInviteForm({
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const fieldPrefix = `proposal-${proposalId}-speaker-invite`;
+  // A stable handle for the surrounding page; the controls' own ids belong to
+  // the `Field`s that pair them with their labels.
+  const formId = `proposal-${proposalId}-speaker-invite`;
   const latestExpiry = event.endsAt ? instantToDateTimeLocal(event.endsAt, event.timezone) : undefined;
+  const deadlineHelp = `Leave blank to use the event start. A custom deadline cannot be later than the event end${
+    latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""
+  }.`;
 
   async function submit(formEvent: Event): Promise<void> {
     formEvent.preventDefault();
@@ -69,88 +78,89 @@ export function ProposalCoSpeakerInviteForm({
   }
 
   return (
-    <form class="border rounded p-3 mb-3" onSubmit={(event) => void submit(event)}>
-      <h6>Invite a co-speaker</h6>
-      <div class="row g-2">
-        <div class="col-12 col-lg-5">
-          <label class="form-label" for={`${fieldPrefix}-email`}>
-            Email address
-          </label>
-          <input
-            id={`${fieldPrefix}-email`}
-            class="form-control"
-            type="email"
-            autocomplete="email"
-            required
-            value={email}
-            onInput={(inputEvent) => setEmail((inputEvent.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-6 col-lg-3">
-          <label class="form-label" for={`${fieldPrefix}-first-name`}>
-            First name
-          </label>
-          <input
-            id={`${fieldPrefix}-first-name`}
-            class="form-control"
-            autocomplete="given-name"
-            value={firstName}
-            onInput={(inputEvent) => setFirstName((inputEvent.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-6 col-lg-4">
-          <label class="form-label" for={`${fieldPrefix}-last-name`}>
-            Last name
-          </label>
-          <input
-            id={`${fieldPrefix}-last-name`}
-            class="form-control"
-            autocomplete="family-name"
-            value={lastName}
-            onInput={(inputEvent) => setLastName((inputEvent.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label" for={`${fieldPrefix}-role`}>
-            Proposal role
-          </label>
-          <select
-            id={`${fieldPrefix}-role`}
-            class="form-select"
-            value={role}
-            onChange={(changeEvent) =>
-              setRole((changeEvent.target as HTMLSelectElement).value as Exclude<ProposalSpeakerRole, "proposer">)
-            }
-          >
-            {INVITABLE_ROLES.map((option) => (
-              <option key={option} value={option}>
-                {statusLabel(option)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div class="col-12 col-md-8">
-          <label class="form-label" for={`${fieldPrefix}-expires-at`}>
-            Invitation deadline
-          </label>
-          <input
-            id={`${fieldPrefix}-expires-at`}
-            class="form-control"
-            type="datetime-local"
-            value={expiresAt}
-            max={latestExpiry}
-            onInput={(inputEvent) => setExpiresAt((inputEvent.target as HTMLInputElement).value)}
-          />
-          <div class="form-text">
-            Leave blank to use the event start. A custom deadline cannot be later than the event end
-            {latestExpiry ? ` (${latestExpiry.replace("T", " ")} ${event.timezone})` : ""}.
+    // The frame and padding the Bootstrap version drew by hand are the
+    // panel's. The controls sit in a fieldset so the whole set goes out of
+    // play in one attribute while the invitation is in flight, and its legend
+    // names the group instead of a loose heading inside the form.
+    <Panel>
+      <PanelBody>
+        <form id={formId} class="pk-stack" onSubmit={(event) => void submit(event)}>
+          <fieldset class="pk-fieldset pk-stack" disabled={submitting}>
+            <legend class="pk-strong">Invite a co-speaker</legend>
+            <div class="pk-grid">
+              <Field label="Email address" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="email"
+                    autocomplete="email"
+                    value={email}
+                    onInput={(inputEvent) => setEmail((inputEvent.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="First name">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    autocomplete="given-name"
+                    value={firstName}
+                    onInput={(inputEvent) => setFirstName((inputEvent.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Last name">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    autocomplete="family-name"
+                    value={lastName}
+                    onInput={(inputEvent) => setLastName((inputEvent.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Proposal role">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={role}
+                    onChange={(changeEvent) =>
+                      setRole(
+                        (changeEvent.target as HTMLSelectElement).value as Exclude<ProposalSpeakerRole, "proposer">,
+                      )
+                    }
+                  >
+                    {INVITABLE_ROLES.map((option) => (
+                      <option key={option} value={option}>
+                        {statusLabel(option)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Invitation deadline" help={deadlineHelp}>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="datetime-local"
+                    value={expiresAt}
+                    max={latestExpiry}
+                    onInput={(inputEvent) => setExpiresAt((inputEvent.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+            </div>
+          </fieldset>
+          <ErrorAlert error={error} />
+          <div class="pk-cluster">
+            {/* `loading` keeps the control focusable and says it is busy;
+                `disabled` is what stops a second submit. */}
+            <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
+              {submitting ? "Queueing invitation…" : "Invite co-speaker"}
+            </Button>
           </div>
-        </div>
-      </div>
-      <ErrorAlert error={error} />
-      <button type="submit" class="btn btn-primary mt-3" disabled={submitting}>
-        {submitting ? "Queueing invitation…" : "Invite co-speaker"}
-      </button>
-    </form>
+        </form>
+      </PanelBody>
+    </Panel>
   );
 }

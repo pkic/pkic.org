@@ -146,8 +146,26 @@
   color: #fff;
 }
 
+// The wall is decorative and the logos are unreadable on a phone, so the
+// members index asks for it only from the large breakpoint up. It was
+// `d-none d-lg-block` on the shortcode call; the breakpoint is a property of
+// the wall, so it lives here as a modifier the call site names.
+.members-overview--wide-only {
+  display: none;
+}
+
+@media (min-width: 992px) {
+  .members-overview--wide-only {
+    display: block;
+  }
+}
+
 .members-overview {
   background: #fff;
+  // The wall's inset used to be four responsive padding utilities on the
+  // markup. It is one decision, so it lives with the rest of the frame.
+  padding-block: var(--pk-5);
+  padding-inline: var(--pk-3);
 
   // Viewport: clips the scrolling track to a fixed visible height
   .members {

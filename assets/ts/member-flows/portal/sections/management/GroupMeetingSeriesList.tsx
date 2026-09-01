@@ -4,6 +4,7 @@ import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/eve
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
+import { Button } from "../../../../ui/Button";
 import { fmt } from "../../ui";
 import { GroupMeetingSeriesDetail } from "./GroupMeetingSeriesDetail";
 import { ResourceCapabilities } from "./ResourceCapabilities";
@@ -52,9 +53,9 @@ export function GroupMeetingSeriesList({
         {
           header: "Meeting series",
           cell: (series) => (
-            <div>
-              <div class="fw-semibold">{series.eventName}</div>
-              {series.location && <div class="small text-muted">{series.location}</div>}
+            <div class="pk-stack pk-stack--tight">
+              <span class="pk-strong">{series.eventName}</span>
+              {series.location && <span class="pk-small">{series.location}</span>}
             </div>
           ),
           sort: { asc: "event_name", desc: "-event_name" },
@@ -63,34 +64,44 @@ export function GroupMeetingSeriesList({
         {
           header: "Next",
           cell: (series) => fmt(series.nextOccurrenceAt ?? series.startsAt),
-          className: "text-nowrap",
+          className: "pk-nowrap",
           sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
         },
         {
+          // An active series used to be a grey em dash and an inactive one a
+          // pill, so the difference between the two was a shape nobody could
+          // name and a colour nobody could hear. Both states say their word.
           header: "Status",
-          cell: (series) => (series.active ? <span class="text-muted">—</span> : <Badge status="inactive" />),
+          cell: (series) => <Badge status={series.active ? "active" : "inactive"} />,
         },
         { header: "Access", cell: (series) => <ResourceCapabilities capabilities={series.capabilities} /> },
         {
           header: "",
-          className: "text-end",
+          className: "pk-end",
           cell: (series) => (
-            <div class="d-flex justify-content-end gap-2">
+            // Both controls name the series they belong to: a page of rows
+            // otherwise offers a list of controls all called "Calendar". The
+            // visible word leads the accessible name, so speaking it still
+            // activates the right one.
+            <div class="pk-cluster pk-cluster--end">
+              {/* A file to fetch, not an action, so it stays an anchor and
+                  merely borrows the button's appearance. */}
               <a
-                class="btn btn-sm btn-outline-secondary"
+                class="pk-btn pk-btn--secondary pk-btn--sm"
+                aria-label={`Calendar for ${series.eventName}`}
                 href={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}/calendar.ics`}
               >
                 Calendar
               </a>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-secondary"
+              <Button
+                size="sm"
+                aria-label={`${selectedSeriesId === series.id ? "Hide" : "Details"} for ${series.eventName}`}
                 aria-expanded={selectedSeriesId === series.id}
                 aria-controls={`meeting-series-detail-${series.id}`}
                 onClick={() => selectSeries(selectedSeriesId === series.id ? null : series.id)}
               >
                 {selectedSeriesId === series.id ? "Hide" : "Details"}
-              </button>
+              </Button>
             </div>
           ),
         },

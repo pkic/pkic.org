@@ -1,22 +1,23 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
-<div class="py-5">
-  <div class="container">
-    <div class="row g-4 align-items-start">
+{{/*
+  Each card is the grid item itself. With the old `col-*` wrapper every card
+  was the sole child of its column, so the `.blog-card:nth-child(6n + N)`
+  gradient cycling in _blog.scss always resolved to variant one.
+*/}}
+<div class="pk-section">
+  <div class="pk-container pk-stack pk-stack--loose">
+    <div class="pk-grid pk-grid--roomy">
       {{ range .Paginator.Pages }}
-      <div class="col-sm-6 col-lg-4">
-        {{ partial "blog/card.html" . }}
-      </div>
+      {{ partial "blog/card.html" . }}
       {{ end }}
     </div>
 
     {{/* Pagination */}}
-    <div class="mt-5 d-flex justify-content-center">
-      <nav aria-label="Blog pagination">
-        {{ template "_internal/pagination.html" . }}
-      </nav>
-    </div>
+    <nav class="pk-cluster pk-cluster--center" aria-label="Blog pagination">
+      {{ template "_internal/pagination.html" . }}
+    </nav>
   </div>
 </div>
 {{ end }}

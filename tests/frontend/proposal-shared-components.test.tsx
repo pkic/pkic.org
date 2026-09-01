@@ -7,8 +7,10 @@ import {
   ProposalReviewsPanel,
   type ProposalReviewDraft,
 } from "../../assets/ts/components/proposals/ProposalReviewsPanel";
+import { ProposalReviewCard } from "../../assets/ts/components/proposals/ProposalReviewCard";
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
 import { ProposalCoSpeakerInviteForm } from "../../assets/ts/components/proposals/ProposalCoSpeakerInviteForm";
+import { coSpeakerInviteSchema } from "../../assets/shared/schemas/proposal-management";
 import { proposalReviewUpsertSchema, type ProposalReview } from "../../assets/shared/schemas/proposal-reviews";
 import { buttonNamed, chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 
@@ -79,6 +81,53 @@ function reviewPanel(overrides: Partial<Parameters<typeof ProposalReviewsPanel>[
     />
   );
 }
+
+describe("one review card", () => {
+  it("names the card after its reviewer so a column of them can be navigated", () => {
+    const root = mount(<ProposalReviewCard review={review} />);
+
+    // An unnamed <section> is not exposed as a region at all, which is what a
+    // column of review cards used to be: one undifferentiated run of text.
+    const card = root.querySelector("section");
+    expect(card?.getAttribute("aria-label")).toBe("Review by Review Owner");
+  });
+
+  it("states the recommendation and the score in words, not in colour", () => {
+    const root = mount(<ProposalReviewCard review={review} />);
+
+    // Roughly one man in twelve cannot separate the accept and reject hues, so
+    // the badge's tone is never the only thing carrying the recommendation.
+    expect(root.textContent).toContain("Accept");
+    expect(root.textContent).toContain("Score 9/10");
+  });
+
+  it("falls back to an identifier when the reviewer record carries no name", () => {
+    const root = mount(
+      <ProposalReviewCard
+        review={{ ...review, reviewer_first_name: null, reviewer_last_name: null, reviewer_email: null }}
+      />,
+    );
+
+    // A review with an incomplete reviewer record still has to say whose it is
+    // rather than rendering an empty byline and an unnamed region.
+    expect(root.textContent).toContain("reviewer-1");
+    expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Review by reviewer-1");
+  });
+
+  it("omits both note blocks when the review carries neither", () => {
+    const root = mount(<ProposalReviewCard review={{ ...review, reviewer_comment: null, applicant_note: null }} />);
+
+    expect(root.textContent).not.toContain("Internal review notes");
+    expect(root.textContent).not.toContain("Suggested note to applicant");
+  });
+
+  it("labels the applicant draft rather than distinguishing it by tint alone", () => {
+    const root = mount(<ProposalReviewCard review={{ ...review, applicant_note: "Please shorten the abstract." }} />);
+
+    expect(root.textContent).toContain("Suggested note to applicant");
+    expect(root.textContent).toContain("Please shorten the abstract.");
+  });
+});
 
 describe("shared proposal management components", () => {
   it("shows review content without exposing a write form to non-reviewers", () => {
@@ -223,6 +272,68 @@ describe("shared proposal management components", () => {
     expect(onCanceled).toHaveBeenCalledWith(2);
   });
 
+  it("names the comment control, draws a real checkbox, and states the consequences in words", () => {
+    const root = mount(
+      <AcceptedProposalCancellationPanel
+        proposal={{ status: "accepted", canceled_at: null, cancellation_comment: null }}
+        canCancel
+        onCancel={async () => ({ notifiedSpeakerCount: 0 })}
+        onCanceled={() => {}}
+        onError={() => {}}
+      />,
+    );
+
+    // The textarea is reached through the label's `for` and the control's
+    // `id`, which is the pair that names it to a reader.
+    expect(labelNames(root)).toContain("Comment to speakers");
+    expect(controlFor<HTMLTextAreaElement>(root, "Comment to speakers").required).toBe(true);
+
+    // All three check parts, or the browser draws its own control: the block
+    // on the label, the input class, and the label class.
+    const check = root.querySelector("label.pk-check")!;
+    expect(check.querySelector("input.pk-check__input")).not.toBeNull();
+    expect(check.querySelector(".pk-check__label")?.textContent).toContain("every speaker linked to this proposal");
+
+    // The red border used to be the only thing saying this was destructive.
+    // The consequences are stated, and announced, instead.
+    const warning = root.querySelector('[role="alert"]');
+    expect(warning?.textContent).toContain("emails every speaker");
+  });
+
+  it("hands a failed cancellation to its caller and leaves the form usable", async () => {
+    const failure = new Error("The proposal is no longer accepted.");
+    const onError = vi.fn();
+    const onCanceled = vi.fn();
+    const root = mount(
+      <AcceptedProposalCancellationPanel
+        proposal={{ status: "accepted", canceled_at: null, cancellation_comment: null }}
+        canCancel
+        onCancel={() => Promise.reject(failure)}
+        onCanceled={onCanceled}
+        onError={onError}
+      />,
+    );
+
+    const comment = controlFor<HTMLTextAreaElement>(root, "Comment to speakers");
+    const confirmation = root.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await act(async () => {
+      comment.value = "Speaker unavailable";
+      comment.dispatchEvent(new Event("input", { bubbles: true }));
+      confirmation.checked = true;
+      confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(onCanceled).not.toHaveBeenCalled();
+    const submit = root.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(submit?.disabled).toBe(false);
+    expect(submit?.hasAttribute("aria-busy")).toBe(false);
+  });
+
   it("renders cancellation history without showing a second mutation form", () => {
     const root = mount(
       <AcceptedProposalCancellationPanel
@@ -344,12 +455,109 @@ describe("shared proposal management components", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0].url).toBe("/api/v1/proposals/proposal-1/speakers");
     expect(requests[0].url).not.toContain("/api/v1/admin");
-    expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({
-      email: "speaker@example.test",
-      role: "panelist",
-      expiresAt: "2027-01-01T12:00:00.000Z",
-    });
+    // Parsed through the shared request schema rather than compared to a
+    // literal, so the case follows the contract as it moves.
+    const invited = coSpeakerInviteSchema.parse(JSON.parse(String(requests[0].init?.body)));
+    expect(invited.email).toBe("speaker@example.test");
+    expect(invited.role).toBe("panelist");
+    expect(invited.expiresAt).toBe("2027-01-01T12:00:00.000Z");
     expect(onInvited).toHaveBeenCalledOnce();
     expect(email.value).toBe("");
+  });
+
+  it("pairs every co-speaker label with its control and names the set", () => {
+    const root = mount(
+      <ProposalCoSpeakerInviteForm
+        endpoint="/api/v1/proposals/proposal-1/speakers"
+        proposalId="proposal-1"
+        event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
+        onInvited={vi.fn()}
+      />,
+    );
+
+    // The legend names the group, so the five controls are announced as one
+    // question rather than as loose inputs after a styled heading.
+    expect(root.querySelector("fieldset > legend")?.textContent).toBe("Invite a co-speaker");
+    expect(root.querySelector("form")?.id).toBe("proposal-proposal-1-speaker-invite");
+
+    const labels = [...root.querySelectorAll<HTMLLabelElement>("label.pk-field__label")];
+    expect(labels.map((label) => label.textContent?.replace(/\*\(required\)$/, ""))).toEqual([
+      "Email address",
+      "First name",
+      "Last name",
+      "Proposal role",
+      "Invitation deadline",
+    ]);
+    for (const label of labels) {
+      // Every label points at a control that actually exists.
+      expect(root.querySelector(`#${label.htmlFor}`)).not.toBeNull();
+    }
+
+    const email = root.querySelector<HTMLInputElement>('input[type="email"]');
+    expect(email?.required).toBe(true);
+
+    // The deadline's rule is tied to the control, not a sentence beside it.
+    const deadline = root.querySelector<HTMLInputElement>('input[type="datetime-local"]');
+    const describedBy = deadline?.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(root.querySelector(`#${describedBy ?? ""}`)?.textContent).toContain("cannot be later than the event end");
+  });
+
+  it("states a rejected invitation and takes the controls out of play while it is in flight", async () => {
+    // Captured through a holder rather than a bare `let`, so the assignment
+    // inside the executor is visible to the type checker.
+    const held: { release: (() => void) | null } = { release: null };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            held.release = () =>
+              resolve(
+                new Response(JSON.stringify({ error: { code: "conflict", message: "Already invited." } }), {
+                  status: 409,
+                  headers: { "content-type": "application/json" },
+                }),
+              );
+          }),
+      ),
+    );
+    const notify = vi.fn();
+    const onInvited = vi.fn();
+    const root = mount(
+      <ProposalCoSpeakerInviteForm
+        endpoint="/api/v1/proposals/proposal-1/speakers"
+        proposalId="proposal-1"
+        event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
+        notify={notify}
+        onInvited={onInvited}
+      />,
+    );
+
+    const email = root.querySelector<HTMLInputElement>('input[type="email"]')!;
+    await act(() => {
+      email.value = "speaker@example.test";
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    // One attribute takes the whole set out of play, and the submit stays
+    // focusable so a screen-reader user is not thrown out of the form.
+    expect(root.querySelector("fieldset")?.disabled).toBe(true);
+    const submit = root.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(submit?.getAttribute("aria-busy")).toBe("true");
+
+    held.release?.();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain("Already invited.");
+    expect(notify).toHaveBeenCalledWith("Already invited.", "error");
+    expect(onInvited).not.toHaveBeenCalled();
+    expect(root.querySelector("fieldset")?.disabled).toBe(false);
   });
 });

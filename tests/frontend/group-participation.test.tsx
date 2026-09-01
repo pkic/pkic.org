@@ -449,8 +449,89 @@ describe("staff groups collection", () => {
     const inactiveRow = rows.find((row) => row.textContent?.includes("Retired Group"));
     if (!activeRow || !inactiveRow) throw new Error("missing expected group rows");
 
+    // An active group is quiet on the page — no pill — but not silent to a
+    // screen reader: the dash that stands in for the badge is decoration, and
+    // the word beside it is what carries the state.
     expect(activeRow.querySelector(".pk-badge")).toBeNull();
-    expect(activeRow.textContent).not.toContain("Active");
+    expect(activeRow.querySelector("[aria-hidden='true']")?.textContent).toBe("—");
+    expect(activeRow.querySelector(".pk-sr-only")?.textContent).toBe("Active");
     expect(inactiveRow.querySelector(".pk-badge")?.textContent).toBe("Inactive");
+  });
+
+  it("names the staff table and its region, so it is not one card among several unnamed ones", async () => {
+    portalSession.value = portalSessionFixture({ staff: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              groups: [group({ id: "10000000-0000-4000-8000-000000000012", name: "Architecture Group" })],
+              page: { limit: 25, offset: 0, total: 1, hasMore: false },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<Groups />, container));
+    await settle();
+
+    expect(container.querySelector("section.pk-panel")?.getAttribute("aria-label")).toBe("All groups");
+    expect(container.querySelector("caption")?.textContent).toBe("All groups");
+    // The row is activated by a real link, not a handler on the `<tr>`.
+    const rowLink = container.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
+    expect(rowLink?.textContent).toBe("Open Architecture Group");
+    expect(rowLink?.getAttribute("href")).toContain("/groups/10000000-0000-4000-8000-000000000012/overview");
+  });
+
+  it("announces a failed member catalog as a sentence rather than an empty column", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "unavailable" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<Groups />, container));
+    await settle();
+
+    const alert = container.querySelector("[role='alert']");
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+  });
+
+  it("says the catalog is empty in an announced region rather than a muted line", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<Groups />, container));
+    await settle();
+
+    const empty = container.querySelector("[role='status']");
+    expect(empty?.textContent).toContain("No groups are available right now.");
   });
 });

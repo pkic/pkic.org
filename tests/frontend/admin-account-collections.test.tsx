@@ -6,6 +6,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-control/UserRoles";
 import { UserEmailAddressesPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAccountPanels";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { buttonNamed, controlFor, labelNames } from "./helpers/labelled-control";
+import { toast } from "../../assets/ts/member-flows/portal/ui";
+
+// The toast area is mounted by the portal shell, not by a panel under test,
+// so the outcome is observed where the panel actually reports it.
+vi.mock("../../assets/ts/member-flows/portal/ui", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../assets/ts/member-flows/portal/ui")>()),
+  toast: vi.fn(),
+}));
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000002";
@@ -203,6 +212,66 @@ describe("portal access-control collection pagination", () => {
     await settle();
     expect(requests.at(-1)?.searchParams.get("q")).toBe("alias");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("names the panel as a region and the add-email control through a for/id pair", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(jsonResponse({ emails: [], page: page(requestUrl(input), 0, 0) })),
+      ),
+    );
+
+    const container = mount(<UserEmailAddressesPanel userId={USER_ID} primaryEmail="primary@example.test" canWrite />);
+    await settle();
+
+    // A user record carries several panels. This one is a named region, so a
+    // reader can reach "Email addresses" instead of one of several unnamed
+    // sections — and the e2e spec locates it the same way.
+    const region = container.querySelector("section");
+    const labelledBy = region?.getAttribute("aria-labelledby");
+    expect(labelledBy).not.toBeNull();
+    expect(container.querySelector(`#${labelledBy!}`)?.textContent).toBe("Email addresses");
+
+    // The input had a placeholder and no label, so it was announced as an
+    // unnamed edit field.
+    expect(labelNames(container)).toContain("Add a secondary email");
+    const input = controlFor(container, "Add a secondary email");
+    expect(input.type).toBe("email");
+    expect(buttonNamed(container, "Add email").disabled).toBe(true);
+
+    // The table names itself rather than being a second nameless "table".
+    expect(container.querySelector("table caption")?.textContent).toBe("Secondary email addresses");
+  });
+
+  it("reports a rejected add without claiming the address was stored", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if ((init?.method ?? "GET") === "POST") {
+          return Promise.resolve(new Response("That address is already in use.", { status: 409 }));
+        }
+        return Promise.resolve(jsonResponse({ emails: [], page: page(requestUrl(input), 0, 0) }));
+      }),
+    );
+
+    const container = mount(<UserEmailAddressesPanel userId={USER_ID} primaryEmail="primary@example.test" canWrite />);
+    await settle();
+
+    const input = controlFor(container, "Add a secondary email");
+    dispatchInput(input, "alias@example.test");
+    await act(async () => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // The failure is reported through the portal's live toast region rather
+    // than swallowed, and the typed address is kept so the reader does not
+    // have to retype it.
+    expect(toast).toHaveBeenCalledWith(expect.any(String), "error");
+    expect(toast).not.toHaveBeenCalledWith("Email added", "success");
+    expect(controlFor(container, "Add a secondary email").value).toBe("alias@example.test");
+    expect(buttonNamed(container, "Add email").hasAttribute("aria-busy")).toBe(false);
   });
 
   it("only removes a secondary email through the confirm dialog when the removal is confirmed", async () => {

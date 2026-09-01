@@ -109,7 +109,9 @@ test("invited external guest verifies the separate mailbox code before meeting e
     await expect(guestPage.getByText("E2E Guest Organization", { exact: true })).toHaveCount(0);
 
     const codeEmail = await waitForCapturedEmail(guestEmail, "verification code", { since: codeSince });
-    await guestPage.locator("#meeting-guest-code").fill(extractVerificationCode(codeEmail));
+    // Located by its accessible name: the code input's id belongs to the
+    // design system's Field now, and a name survives the next migration too.
+    await guestPage.getByLabel("Verification code").fill(extractVerificationCode(codeEmail));
     await guestPage.getByRole("button", { name: "Verify invitation" }).click();
 
     await expect(guestPage.getByRole("heading", { name: eventName })).toBeVisible();

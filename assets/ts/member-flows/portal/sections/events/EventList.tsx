@@ -2,6 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
+import { Chip } from "../../../../ui/Chip";
 import { RowActions } from "../../../../ui/RowActions";
 import type { MenuItem } from "../../../../ui/Menu";
 import {
@@ -66,23 +67,16 @@ type Scope = "upcoming" | "past";
 
 function ScopeToggle({ scope, onChange }: { scope: Scope; onChange: (scope: Scope) => void }) {
   return (
-    <div class="btn-group btn-group-sm" role="group" aria-label="Events scope">
-      <button
-        type="button"
-        class={`btn btn-outline-secondary${scope === "upcoming" ? " active" : ""}`}
-        aria-pressed={scope === "upcoming"}
-        onClick={() => onChange("upcoming")}
-      >
+    // Two applied-filter toggles, which is what `Chip` is: each is a real
+    // button carrying `aria-pressed`, and the pressed state is drawn rather
+    // than announced only by an `active` class the design system never had.
+    <div class="pk-cluster" role="group" aria-label="Events scope">
+      <Chip pressed={scope === "upcoming"} onToggle={() => onChange("upcoming")}>
         Upcoming
-      </button>
-      <button
-        type="button"
-        class={`btn btn-outline-secondary${scope === "past" ? " active" : ""}`}
-        aria-pressed={scope === "past"}
-        onClick={() => onChange("past")}
-      >
+      </Chip>
+      <Chip pressed={scope === "past"} onToggle={() => onChange("past")}>
         Past
-      </button>
+      </Chip>
     </div>
   );
 }
@@ -124,7 +118,7 @@ export function EventList() {
               return (
                 <>
                   {eventWhen(e)}
-                  {relative && <span class="text-muted ms-2">({relative})</span>}
+                  {relative && <span class="pk-muted"> ({relative})</span>}
                 </>
               );
             },
@@ -136,7 +130,7 @@ export function EventList() {
               !isAudienceEvent(e) && e.ownerGroupId ? (
                 <a href={`#/groups/${encodeURIComponent(e.ownerGroupId)}`}>{e.ownerGroupName ?? e.ownerGroupId}</a>
               ) : (
-                <span class="text-muted">—</span>
+                <span class="pk-muted">—</span>
               ),
           },
           {

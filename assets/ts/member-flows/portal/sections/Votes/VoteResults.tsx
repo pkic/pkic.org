@@ -1,28 +1,34 @@
 import { useCallback } from "preact/hooks";
 import type { VoteCandidate, ElectionVoteResult, MotionVoteResult } from "../../types";
 import { Badge } from "../../../../components/Badge";
+import { Badge as ToneBadge } from "../../../../ui/Badge";
+// `pk-answer-list` is defined in Content.css, which ships in a lazy chunk, so
+// the module that writes the class name has to import the stylesheet itself.
+import "../../../../ui/Content.css";
 
 export function MotionResultView({ result }: { result: MotionVoteResult }) {
   return (
-    <div>
-      <span class="me-2">
+    <div class="pk pk-stack pk-stack--tight">
+      {/* The cluster's gap separates the outcome pill from the tally, so the
+          pill no longer carries a margin of its own. */}
+      <div class="pk-cluster">
         <Badge status={result.outcome} />
-      </span>
-      <span class="text-muted small">
-        {result.counts.in_favor} in favor · {result.counts.opposed} opposed · {result.counts.abstain} abstained (
-        {result.totalBallots} ballots cast)
-      </span>
+        <span class="pk-small">
+          {result.counts.in_favor} in favor · {result.counts.opposed} opposed · {result.counts.abstain} abstained (
+          {result.totalBallots} ballots cast)
+        </span>
+      </div>
       {result.quorum && (
-        <div class="text-muted small">
+        <p class="pk-small">
           Turnout {result.totalBallots} of {result.quorum.eligible} eligible; {result.quorum.percent}% required{" "}
           {result.quorum.required} {result.quorum.required === 1 ? "ballot" : "ballots"}.
-        </div>
+        </p>
       )}
       {result.castingVote && (
-        <div class="text-muted small">
+        <p class="pk-small">
           Tied, settled by the {result.castingVote.role === "lead" ? "chair" : "vice chair"}&rsquo;s deciding vote
           {result.castingVote.choice === "in_favor" ? " in favor" : " against"}.
-        </div>
+        </p>
       )}
     </div>
   );
@@ -39,22 +45,27 @@ export function ElectionResultView({
   const winner = result.winnerCandidateId ? nameOf(result.winnerCandidateId) : null;
 
   return (
-    <div>
+    <div class="pk pk-stack pk-stack--snug">
       {winner && (
-        <p class="mb-2">
-          <span class="badge text-bg-success me-2">Elected</span>
-          <span class="fw-semibold">{winner}</span>
+        <p class="pk-cluster">
+          {/* The tone carries the outcome and the word "Elected" says it, so
+              the result does not rest on the green alone. */}
+          <ToneBadge tone="ok">Elected</ToneBadge>
+          <span class="pk-strong">{winner}</span>
         </p>
       )}
-      <div class="d-flex flex-column gap-2">
+      <div class="pk-stack pk-stack--snug">
         {result.rounds.map((round) => (
-          <div key={round.round} class="small">
-            <div class="text-muted">Round {round.round}</div>
-            <ul class="mb-0">
+          // The round label is a heading, not a muted div: it names the list
+          // under it, so the tallies are reachable as structure rather than as
+          // an unlabeled list among several identical ones.
+          <div key={round.round} class="pk-small">
+            <h6 class="pk-muted">Round {round.round}</h6>
+            <ul class="pk-answer-list">
               {Object.entries(round.counts).map(([candidateId, count]) => (
                 <li key={candidateId}>
                   {nameOf(candidateId)}: {count}
-                  {round.eliminatedCandidateIds.includes(candidateId) && <span class="text-muted"> (eliminated)</span>}
+                  {round.eliminatedCandidateIds.includes(candidateId) && <span class="pk-muted"> (eliminated)</span>}
                 </li>
               ))}
             </ul>

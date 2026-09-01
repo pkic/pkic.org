@@ -3,12 +3,16 @@ import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
 import type { Column } from "../../../../components/Table";
+import { Badge } from "../../../../ui/Badge";
 import {
   organizationsListResponseSchema,
   type OrganizationSummary,
 } from "../../../../../shared/schemas/organization-management";
 import { fmtDate } from "../../ui";
 import { OrganizationCreateForm } from "./OrganizationCreateForm";
+// `pk-mono` is defined in Content.css, which rides a lazy chunk: a surface
+// that writes the class name has to pull the stylesheet in itself.
+import "../../../../ui/Content.css";
 
 export function Organizations({ canRead, canCreate }: { canRead: boolean; canCreate: boolean }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -16,7 +20,7 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
 
   if (!canRead) {
     return canCreate ? (
-      <section>
+      <section class="pk pk-stack">
         <OrganizationCreateForm onCreated={() => setShowCreate(false)} onCancel={() => setShowCreate(false)} />
       </section>
     ) : null;
@@ -28,18 +32,26 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
       cell: (organization) => (
         <>
           <strong>{organization.name}</strong>
-          {organization.slogan && <div class="small text-muted">{organization.slogan}</div>}
+          {organization.slogan && <div class="pk-small">{organization.slogan}</div>}
         </>
       ),
       sort: { asc: "name", desc: "-name" },
     },
     {
       header: "Category",
+      /*
+       * The category is a label, not a healthy status, so it takes the neutral
+       * tone rather than the green this cell used to paint every value. An
+       * absent one reads as absent in words — "Not set" — instead of resting
+       * on red text nobody can rely on seeing.
+       */
       cell: (organization) =>
         organization.membershipCategory ? (
-          <span class="badge text-bg-success mono">{organization.membershipCategory}</span>
+          <Badge tone="neutral" dot={false}>
+            {organization.membershipCategory}
+          </Badge>
         ) : (
-          <span class="text-danger fst-italic">Not set</span>
+          <em class="pk-muted">Not set</em>
         ),
       sort: { asc: "membership_category", desc: "-membership_category" },
     },
@@ -49,16 +61,16 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         organization.primaryContactName ? (
           <>
             {organization.primaryContactName}
-            <div class="mono text-muted small">{organization.primaryContactEmail}</div>
+            <div class="pk-mono pk-muted pk-small">{organization.primaryContactEmail}</div>
           </>
         ) : (
-          <span class="text-muted fst-italic">None</span>
+          <em class="pk-muted">None</em>
         ),
     },
     {
       header: "Active identities",
       cell: (organization) => organization.activeIdentityCount,
-      className: "text-center",
+      className: "pk-center",
       sort: { asc: "identity_count", desc: "-identity_count" },
     },
     {
@@ -71,18 +83,18 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         ) : (
           "—"
         ),
-      className: "small",
+      className: "pk-small",
     },
     {
       header: "Created",
       cell: (organization) => fmtDate(organization.createdAt),
-      className: "mono small text-nowrap",
+      className: "pk-mono pk-small pk-nowrap",
       sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
     },
   ];
 
   return (
-    <section>
+    <section class="pk pk-stack">
       {showCreate && canCreate && (
         <OrganizationCreateForm
           onCreated={() => {

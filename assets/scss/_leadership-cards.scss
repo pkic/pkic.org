@@ -255,6 +255,12 @@
   &--small {
     --avatar-px: 72px;
   }
+
+  // The `size: "lg"` person-card. Named here rather than written into the
+  // markup as `style="--avatar-px: 96px"`, which the CSP blocks.
+  &--large {
+    --avatar-px: 96px;
+  }
 }
 
 .person-card-avatar {

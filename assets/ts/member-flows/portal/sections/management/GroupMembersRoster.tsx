@@ -5,6 +5,11 @@ import { Pager } from "../../../../components/Pager";
 import { PersonCell } from "../../../../components/PersonCell";
 import { Spinner } from "../../../../components/Spinner";
 import { useApiPage } from "../../../../hooks/useApiPage";
+import { Button } from "../../../../ui/Button";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { TextInput } from "../../../../ui/TextControl";
 
 /**
  * Read-only roster shown to a participant who cannot manage the group: who
@@ -27,52 +32,76 @@ export function GroupMembersRoster({ groupId }: { groupId: string }) {
   if (!page.data && page.loading) return <Spinner label="Loading group members…" />;
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Members</div>
-      <div class="card-body d-flex flex-column gap-3">
-        <form
-          class="d-flex gap-2 portal-management-search"
-          role="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSearch(pendingSearch.trim());
-          }}
-        >
-          <label class="visually-hidden" for="group-roster-search">
-            Search members
-          </label>
-          <input
-            id="group-roster-search"
-            type="search"
-            class="form-control"
-            placeholder="Search name or organization…"
-            value={pendingSearch}
-            onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-          />
-          <button type="submit" class="btn btn-outline-secondary">
-            Search
-          </button>
-        </form>
-        {page.error && <ErrorAlert error={page.error.message} />}
-        {page.data && page.data.memberships.length === 0 ? (
-          <p class="text-muted mb-0">No matching members.</p>
-        ) : (
-          <ul class="list-unstyled d-flex flex-column gap-3 mb-0">
-            {page.data?.memberships.map((participant, index) => (
-              <li key={`${participant.userId}-${index}`}>
-                <PersonCell
-                  firstName={participant.name}
-                  lastName={null}
-                  email={null}
-                  headshotUrl={participant.headshotUrl}
-                  secondary={participant.organizationName}
+    // The panel names itself: a group workspace stacks several of these, and
+    // an unnamed <section> is announced as nothing at all. Its body's `gap`
+    // is what separates the search, the roster and the pager — each of those
+    // carried its own margin before.
+    <div class="pk">
+      <Panel aria-label="Members">
+        <PanelHeader title="Members" />
+        <PanelBody class="pk-stack">
+          {/* The search runs on submit rather than on every keystroke, so the
+              field and its button are stacked rather than clustered: the label
+              sits above the control, which no cluster can align a button to
+              without guessing at the label's height. The name used to be
+              visually hidden, which is a name a sighted reader cannot use
+              either. */}
+          <form
+            class="pk-stack pk-stack--snug"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSearch(pendingSearch.trim());
+            }}
+          >
+            <Field label="Search members" help="Matches a member's name or the organization they represent.">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="search"
+                  placeholder="Search name or organization…"
+                  value={pendingSearch}
+                  onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
                 />
-              </li>
-            ))}
-          </ul>
-        )}
-        {page.pagerProps && <Pager {...page.pagerProps} />}
-      </div>
+              )}
+            </Field>
+            <div class="pk-cluster">
+              <Button type="submit" size="sm">
+                Search
+              </Button>
+            </div>
+          </form>
+          {/* A failed load replaces the roster rather than sitting above an
+              empty one: "No matching members" is a claim about the group, and
+              the surface does not know that when the request did not arrive. */}
+          {page.error ? (
+            <ErrorAlert error={page.error.message} />
+          ) : page.data && page.data.memberships.length === 0 ? (
+            <EmptyState title="No matching members." body="Nobody in this group matches this search." />
+          ) : (
+            /* A list, and announced as one, but not a `<ul>`: the base layer
+               restores the marker and the 1.2rem indent that Bootstrap's
+               `list-unstyled` used to remove, and a bullet beside a person's
+               face is not what this is. The roles keep the semantics — "list,
+               12 items" — without a stylesheet reset that only this surface
+               would need. */
+            <div class="pk-stack" role="list">
+              {page.data?.memberships.map((participant, index) => (
+                <div key={`${participant.userId}-${index}`} role="listitem">
+                  <PersonCell
+                    firstName={participant.name}
+                    lastName={null}
+                    email={null}
+                    headshotUrl={participant.headshotUrl}
+                    secondary={participant.organizationName}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {page.pagerProps && <Pager {...page.pagerProps} />}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

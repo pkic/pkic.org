@@ -263,4 +263,54 @@ describe("portal event list", () => {
       false,
     );
   });
+
+  it("names the scope group and reports each scope's pressed state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ events: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+
+    const scope = container.querySelector('[role="group"][aria-label="Events scope"]')!;
+    expect(scope).not.toBeNull();
+    const toggles = [...scope.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")];
+    expect(toggles.map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+      ["Upcoming", "true"],
+      ["Past", "false"],
+    ]);
+
+    // The table renames itself with the scope, so the two lists are told apart.
+    expect(container.querySelector("caption")?.textContent).toBe("Upcoming events");
+    await act(async () => {
+      toggles[1].click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+    expect(container.querySelector("caption")?.textContent).toBe("Past events");
+  });
+
+  it("states a refused event listing as a sentence rather than an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ message: "no" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(alert?.textContent).not.toContain("HTTP 403");
+    expect(container.querySelector("table")).toBeNull();
+  });
 });

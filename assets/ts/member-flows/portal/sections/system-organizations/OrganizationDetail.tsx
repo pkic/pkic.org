@@ -7,6 +7,7 @@ import {
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { getJson } from "../../../../shared/api-client";
+import { Button } from "../../../../ui/Button";
 import { OrganizationLogo } from "./OrganizationLogo";
 import { OrganizationProfile } from "./OrganizationProfile";
 import { IdentityRoster } from "./IdentityRoster";
@@ -56,26 +57,22 @@ export function OrganizationDetail({
   if (!organization) return null;
 
   return (
-    <section aria-labelledby="organization-detail-heading">
-      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => navigate("/organizations")}>
+    <section class="pk pk-stack" aria-labelledby="organization-detail-heading">
+      <div class="pk-cluster">
+        <Button size="sm" onClick={() => navigate("/organizations")}>
           ← Back to organizations
-        </button>
-        <h5 id="organization-detail-heading" class="mb-0">
-          {organization.name}
-        </h5>
-        <span class="text-muted small">
+        </Button>
+        {/* The organization's name heads the record, so it is a real heading
+            rather than a styled span, and the section is labelled by it. */}
+        <h2 id="organization-detail-heading">{organization.name}</h2>
+        <span class="pk-small">
           {organization.activeIdentityCount} active {organization.activeIdentityCount === 1 ? "identity" : "identities"}
         </span>
       </div>
 
-      <div class="row g-4 mb-4">
-        <div class="col-md-3">
-          <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
-        </div>
-        <div class="col-md-9">
-          <OrganizationProfile organization={organization} canWrite={canWrite} onSaved={load} />
-        </div>
+      <div class="pk-grid pk-grid--roomy">
+        <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
+        <OrganizationProfile organization={organization} canWrite={canWrite} onSaved={load} />
       </div>
 
       <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />

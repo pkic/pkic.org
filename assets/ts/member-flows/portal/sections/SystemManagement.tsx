@@ -1,8 +1,9 @@
 import { lazy, Suspense } from "preact/compat";
-import { Link } from "wouter";
 import type { PortalSession } from "../types";
 import { portalHasGlobalPermission, portalSystemNavigationItems } from "../shell/portal-navigation";
+import { EmptyState } from "../../../components/EmptyState";
 import { Spinner } from "../../../components/Spinner";
+import { Tabs } from "../../../components/Tabs";
 
 const OrganizationContentReviews = lazy(() =>
   import("./OrganizationContentReviews").then((module) => ({ default: module.OrganizationContentReviews })),
@@ -35,29 +36,36 @@ export function SystemManagement({
   const selected = requestedPath ? items.find((item) => item.path === requestedPath) : items[0];
 
   if (!selected) {
+    // A permission-shaped dead end is still an empty state: EmptyState names
+    // what is absent inside a `role="status"` region, where the bare muted
+    // paragraph it replaces was announced as nothing at all.
     return (
-      <p class="text-muted">
-        {items.length === 0
-          ? "No system-management permissions are assigned to this account."
-          : "This system-management section is not available to your account."}
-      </p>
+      <EmptyState
+        title={
+          items.length === 0
+            ? "No system-management permissions are assigned to this account."
+            : "This system-management section is not available to your account."
+        }
+      />
     );
   }
 
+  /*
+   * Each section is a URL, so the strip is navigation: links marked
+   * `aria-current="page"`, which is what the portal's Tabs renders when it is
+   * handed `hrefFor`. The route is what selects the section — wouter's Link
+   * has already navigated by the time `onChange` runs — so there is no local
+   * state for it to set.
+   */
   return (
-    <div>
-      <nav class="nav nav-tabs mb-3" aria-label="System management">
-        {items.map((item) => (
-          <Link
-            key={item.path}
-            href={item.path}
-            class={`nav-link${selected.path === item.path ? " active" : ""}`}
-            aria-current={selected.path === item.path ? "page" : undefined}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+    <div class="pk pk-stack">
+      <Tabs
+        items={items.map((item) => ({ key: item.path, label: item.label }))}
+        active={selected.path}
+        label="System management"
+        onChange={() => undefined}
+        hrefFor={(path) => path}
+      />
       <Suspense fallback={<Spinner />}>
         {selected.path === "/system/analytics" ? (
           <SystemAnalytics initialTab={resourceId} />
@@ -66,10 +74,10 @@ export function SystemManagement({
         ) : selected.path === "/system/organization-content-reviews" ? (
           <OrganizationContentReviews />
         ) : selected.path === "/system/audit-log" ? (
-          <section aria-labelledby="system-audit-log-heading">
-            <h5 id="system-audit-log-heading" class="mb-3">
-              System Audit Log
-            </h5>
+          <section aria-labelledby="system-audit-log-heading" class="pk-stack">
+            {/* h5 because PortalShell already renders the section title as an
+                h4; the margin this carried is now the stack's gap. */}
+            <h5 id="system-audit-log-heading">System Audit Log</h5>
             <SystemAuditLog />
           </section>
         ) : selected.path === "/system/email-templates" ? (

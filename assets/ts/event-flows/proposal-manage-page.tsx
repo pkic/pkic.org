@@ -6,14 +6,13 @@ import { normalizeValidation } from "../shared/form/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import {
-  readField,
-  setField,
-  formatStatusLabel,
-  statusBadgeToneClass,
-  q,
-  findSubmitButton,
-} from "../shared/form/helpers";
+import { readField, setField, formatStatusLabel, q, findSubmitButton } from "../shared/form/helpers";
+import { statusTone } from "../components/Badge";
+import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
+import { Panel, PanelBody } from "../ui/Panel";
+import { Select, Textarea, TextInput } from "../ui/TextControl";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../shared/widgets/profile-links";
@@ -177,11 +176,14 @@ export function ProposalManageSpeakerCard({
     await requestJson(headshotEndpoint, successResponseSchema, { method: "DELETE" });
   }
 
-  const roleLabel = speaker.role.replace(/_/g, " ");
+  // The shared option labels rather than an underscore-stripping replace, so
+  // a role reads the same in the badge as it does in the select below it.
+  const roleLabel = SPEAKER_ROLE_OPTIONS.find((option) => option.value === speaker.role)?.label ?? speaker.role;
+  const bioHelpId = `speaker-bio-help-${speaker.userId}`;
 
   return (
-    <div class="pk-panel" data-speaker-card data-speaker-email={speaker.email}>
-      <div class="pk-panel__body">
+    <Panel data-speaker-card data-speaker-email={speaker.email} aria-label={`Speaker ${speakerName}`}>
+      <PanelBody>
         <div class="pk-stack">
           <div>
             <AdminHeadshotManager
@@ -211,32 +213,30 @@ export function ProposalManageSpeakerCard({
           <div class="pk-cluster">
             <strong>{speakerName}</strong>
             {speakerName !== speaker.email && <span class="pk-small">&lt;{speaker.email}&gt;</span>}
-            <span class="pk-badge pk-badge--neutral">{roleLabel}</span>
-            <span class={statusBadgeToneClass(speaker.status)}>{formatStatusLabel(speaker.status)}</span>
+            <Badge tone="neutral">{roleLabel}</Badge>
+            <Badge tone={statusTone(speaker.status)}>{formatStatusLabel(speaker.status)}</Badge>
             {(speaker.status === "invited" || speaker.status === "confirmed") && (
-              <button
-                type="button"
-                class="pk-btn pk-btn--secondary pk-btn--sm"
-                disabled={reminding}
-                onClick={() => void sendReminder()}
-              >
+              // `loading` rather than `disabled`: a disabled control loses
+              // focus, which throws a screen-reader user out of the card they
+              // were working in mid-request.
+              <Button variant="secondary" size="sm" loading={reminding} onClick={() => void sendReminder()}>
                 {reminding
                   ? "Sending…"
                   : speaker.status === "invited"
                     ? "Send invitation reminder"
                     : "Request speaker to review or update their profile"}
-              </button>
+              </Button>
             )}
             {!isCurrentProposer && (
-              <button
-                type="button"
-                class="pk-btn pk-btn--danger-quiet pk-btn--sm"
+              <Button
+                variant="danger-quiet"
+                size="sm"
                 data-remove-proposal-speaker
-                disabled={removing}
+                loading={removing}
                 onClick={() => void removeSpeaker()}
               >
                 {removing ? "Removing…" : "Remove speaker"}
-              </button>
+              </Button>
             )}
           </div>
 
@@ -246,9 +246,8 @@ export function ProposalManageSpeakerCard({
                 <label class="pk-field__label" for={`speaker-first-name-${speaker.userId}`}>
                   First name
                 </label>
-                <input
+                <TextInput
                   id={`speaker-first-name-${speaker.userId}`}
-                  class="pk-input"
                   value={firstName}
                   onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
                 />
@@ -257,9 +256,8 @@ export function ProposalManageSpeakerCard({
                 <label class="pk-field__label" for={`speaker-last-name-${speaker.userId}`}>
                   Last name
                 </label>
-                <input
+                <TextInput
                   id={`speaker-last-name-${speaker.userId}`}
-                  class="pk-input"
                   value={lastName}
                   onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
                 />
@@ -268,9 +266,8 @@ export function ProposalManageSpeakerCard({
                 <label class="pk-field__label" for={`speaker-role-${speaker.userId}`}>
                   Role
                 </label>
-                <select
+                <Select
                   id={`speaker-role-${speaker.userId}`}
-                  class="pk-input pk-input--select"
                   value={role}
                   onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                 >
@@ -281,15 +278,14 @@ export function ProposalManageSpeakerCard({
                       </option>
                     ),
                   )}
-                </select>
+                </Select>
               </div>
               <div class="pk-field">
                 <label class="pk-field__label" for={`speaker-organization-${speaker.userId}`}>
                   Organization
                 </label>
-                <input
+                <TextInput
                   id={`speaker-organization-${speaker.userId}`}
-                  class="pk-input"
                   value={organizationName}
                   onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
                 />
@@ -298,9 +294,8 @@ export function ProposalManageSpeakerCard({
                 <label class="pk-field__label" for={`speaker-job-title-${speaker.userId}`}>
                   Job title
                 </label>
-                <input
+                <TextInput
                   id={`speaker-job-title-${speaker.userId}`}
-                  class="pk-input"
                   value={jobTitle}
                   onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
                 />
@@ -310,31 +305,34 @@ export function ProposalManageSpeakerCard({
               <label class="pk-field__label" for={`speaker-bio-${speaker.userId}`}>
                 Biography
               </label>
-              <textarea
+              <Textarea
                 id={`speaker-bio-${speaker.userId}`}
-                class="pk-input pk-input--textarea"
                 rows={4}
                 value={biography}
+                // Wired to the control rather than merely sitting under it, so
+                // the guidance is announced with the field it is about.
+                aria-describedby={bioHelpId}
                 onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
               />
-              <div class="pk-field__help">Visible to attendees on the event program.</div>
+              <p class="pk-field__help" id={bioHelpId}>
+                Visible to attendees on the event program.
+              </p>
             </div>
-            <div>
-              <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
-            </div>
+            <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
             <div class="pk-cluster">
-              <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm" disabled={saving}>
+              <Button type="submit" variant="primary" size="sm" loading={saving}>
                 {saving ? "Saving…" : "Save speaker details"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
-function SpeakerList({
+/** Exported so the empty state can be asserted without booting the page. */
+export function SpeakerList({
   speakers,
   token,
   apiBase,
@@ -350,10 +348,11 @@ function SpeakerList({
   onStatus: (message: string, isError?: boolean) => void;
 }) {
   if (!speakers.length) {
-    return <p class="pk-small">No speakers added yet.</p>;
+    return <EmptyState title="No speakers added yet" body="Invite a co-speaker to add one to this proposal." />;
   }
   return (
-    <div>
+    // The gap belongs to the list, not to a margin on each card.
+    <div class="pk-stack">
       {speakers.map((speaker) => (
         <ProposalManageSpeakerCard
           key={speaker.userId}
@@ -452,7 +451,9 @@ async function main(): Promise<void> {
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    boot.form.classList.add("was-validated");
+    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
+    // in the one case it means anything — a submission that failed — and
+    // setting it up front marked a form the reader had not got wrong yet.
     if (!validateBeforeSubmit(boot.form, boot.statusEl)) return;
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {

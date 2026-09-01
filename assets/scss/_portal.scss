@@ -29,6 +29,14 @@ $portal-sidebar-width: 240px;
 .portal-access-role-permissions {
   max-height: 180px;
   overflow-y: auto;
+
+  // The frame and the inset were `p-2 border rounded` in the markup. They
+  // belong with the scroll behaviour that is already this box's own shape,
+  // and they read design-system tokens so the box matches every other
+  // framed region rather than choosing its own border and radius.
+  padding: var(--pk-2);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
 }
 
 .portal-leadership-date,

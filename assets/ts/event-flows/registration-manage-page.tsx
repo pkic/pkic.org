@@ -1,4 +1,4 @@
-import { render } from "preact";
+import { Fragment, render } from "preact";
 import { getJson, patchJson } from "../shared/api-client";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
@@ -26,6 +26,13 @@ import {
   hasPendingRegistrationDayWaitlist,
   isPendingRegistrationDayWaitlistStatus,
 } from "../components/RegistrationDayStatusSummary";
+import { Badge, type BadgeTone } from "../ui/Badge";
+import { Kicker } from "../ui/Kicker";
+// `pk-datalist` is defined in Content.css, which ships in a lazy chunk rather
+// than the entry stylesheet. `pk-btn` and `pk-badge` are written by the two
+// imperative branches below and ship with the entry, because the public
+// shortcodes this page renders into write them too.
+import "../ui/Content.css";
 
 function attendanceTypeLabel(attendanceType: string): string {
   switch (attendanceType) {
@@ -40,6 +47,20 @@ function attendanceTypeLabel(attendanceType: string): string {
   }
 }
 
+/** The tone of a day-waitlist entry. The words beside it carry the meaning. */
+function waitlistTone(status: string): BadgeTone {
+  if (status === "offered") return "info";
+  if (status === "accepted") return "ok";
+  return "neutral";
+}
+
+/** What one day's waitlist state says, and the tone that agrees with it. */
+function dayConfirmation(waitlistStatus: string | undefined): { label: string; tone: BadgeTone } {
+  if (waitlistStatus === "offered") return { label: "Spot available", tone: "info" };
+  if (waitlistStatus === "waiting") return { label: "Waitlisted", tone: "warn" };
+  return { label: "Confirmed", tone: "ok" };
+}
+
 function RegistrationStatusBanner({
   dayAttendance,
   dayWaitlist,
@@ -52,73 +73,68 @@ function RegistrationStatusBanner({
   const waitlistByDay = new Map(activeDayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
 
   return (
-    <>
-      <strong>Registration status:</strong>{" "}
-      {offeredDayWaitlist.length > 0 ? (
-        <>
-          <span class="badge text-bg-info">Spot available</span> An in-person spot is available for one or more
-          waitlisted days. Use the claim button below while the offer is active.
-        </>
-      ) : (
-        <>
-          <span class="badge text-bg-success">Confirmed</span> Your registration is active and confirmed.
-        </>
-      )}
+    <div class="pk pk-stack pk-stack--snug">
+      <p>
+        <strong>Registration status:</strong>{" "}
+        {offeredDayWaitlist.length > 0 ? (
+          <>
+            <Badge tone="info">Spot available</Badge> An in-person spot is available for one or more waitlisted days.
+            Use the claim button below while the offer is active.
+          </>
+        ) : (
+          <>
+            <Badge tone="ok">Confirmed</Badge> Your registration is active and confirmed.
+          </>
+        )}
+      </p>
       {dayAttendance.length > 0 && (
-        <div class="mt-2">
-          <div class="small text-uppercase fw-semibold text-muted mb-1">How you are attending each day</div>
-          <ul class="list-unstyled mb-0">
+        <div class="pk-stack pk-stack--tight">
+          <Kicker as="p">How you are attending each day</Kicker>
+          {/* A day and what is confirmed for it are a term and its value, so
+              they are a description list rather than a stripped `ul` whose
+              every row re-derives the same flex declarations. */}
+          <dl class="pk-datalist">
             {dayAttendance.map((day) => {
               const dayLabel = day.label ?? day.dayDate;
               const attLabel = attendanceTypeLabel(day.attendanceType);
               const waitlistStatus = waitlistByDay.get(day.dayDate);
-              const confirmationLabel =
-                waitlistStatus === "offered"
-                  ? "Spot available"
-                  : waitlistStatus === "waiting"
-                    ? "Waitlisted"
-                    : "Confirmed";
-              const statusClass =
-                waitlistStatus === "offered"
-                  ? "text-bg-info"
-                  : waitlistStatus === "waiting"
-                    ? "text-bg-warning"
-                    : "text-bg-success";
+              const confirmation = dayConfirmation(waitlistStatus);
               return (
-                <li key={day.dayDate} class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                  <span>
-                    <strong>{dayLabel}:</strong> {attLabel}
-                  </span>
-                  <span class={`badge ${statusClass}`}>{confirmationLabel}</span>
-                </li>
+                <Fragment key={day.dayDate}>
+                  <dt>{dayLabel}</dt>
+                  <dd class="pk-cluster">
+                    <span>{attLabel}</span>
+                    <Badge tone={confirmation.tone}>{confirmation.label}</Badge>
+                  </dd>
+                </Fragment>
               );
             })}
-          </ul>
+          </dl>
         </div>
       )}
       {activeDayWaitlist.length > 0 && (
-        <div class="mt-2 small">
+        <p class="pk-small">
           Some day-specific entries still need attention. If that no longer works for you, update the selections below
           or cancel the registration.
-        </div>
+        </p>
       )}
-    </>
+    </div>
   );
 }
 
 function statusLabel(status: string, cancellationReasonCode: string | null): { label: string; cssClass: string } {
   switch (status) {
     case "registered":
-      return { label: "Confirmed", cssClass: "bg-success" };
+      return { label: "Confirmed", cssClass: "pk-badge--ok" };
     case "pending_email_confirmation":
-      return { label: "Pending confirmation", cssClass: "bg-secondary" };
+      return { label: "Pending confirmation", cssClass: "pk-badge--neutral" };
     case "cancelled":
       return {
         label: cancellationReasonCode === "unauthorized_registration" ? "Cancelled (unauthorized)" : "Cancelled",
-        cssClass: "bg-danger",
+        cssClass: "pk-badge--danger",
       };
     default:
-      return { label: status, cssClass: "bg-secondary" };
+      return { label: status, cssClass: "pk-badge--neutral" };
   }
 }
 
@@ -181,7 +197,7 @@ async function main(): Promise<void> {
   if (statusBanner) {
     if (hasPendingRegistrationDayWaitlist(dayWaitlist ?? [])) {
       render(<RegistrationStatusBanner dayAttendance={dayAttendance} dayWaitlist={dayWaitlist ?? []} />, statusBanner);
-      statusBanner.classList.remove("d-none");
+      statusBanner.hidden = false;
     }
   }
 
@@ -192,8 +208,8 @@ async function main(): Promise<void> {
       : `Your registration for ${eventName}`;
     const { label, cssClass } = statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
-    statusBadge.className = `badge ${cssClass}`;
-    greetingEl.classList.remove("d-none");
+    statusBadge.className = `pk-badge ${cssClass}`;
+    greetingEl.hidden = false;
   }
 
   // ── Pre-fill personal details ─────────────────────────────────────────────
@@ -210,7 +226,7 @@ async function main(): Promise<void> {
   if (emailInput && emailChangeNotice) {
     emailInput.addEventListener("input", () => {
       const changed = emailInput.value.trim().toLowerCase() !== originalEmail;
-      emailChangeNotice.classList.toggle("d-none", !changed);
+      emailChangeNotice.hidden = !changed;
     });
   }
 
@@ -231,7 +247,7 @@ async function main(): Promise<void> {
     });
   } else if (customFieldsSection) {
     // Hide the section entirely when there are no event-specific questions.
-    customFieldsSection.classList.add("d-none");
+    customFieldsSection.hidden = true;
   }
 
   // ── Day attendance ────────────────────────────────────────────────────────
@@ -253,11 +269,13 @@ async function main(): Promise<void> {
       render(
         <>
           {offeredDayDates.length > 0 && (
-            <div class="event-flow-day-waitlist-offer mb-2">
-              <p class="mb-2">An in-person spot is available. Claim it before the offer expires.</p>
+            <div class="event-flow-day-waitlist-offer pk-stack pk-stack--snug">
+              <p>An in-person spot is available. Claim it before the offer expires.</p>
+              {/* Class names rather than the `Button` component, because
+                  `withLoadingButton` drives this control imperatively. */}
               <button
                 type="button"
-                class="btn btn-sm btn-info"
+                class="pk-btn pk-btn--sm pk-btn--primary"
                 onClick={(event) => {
                   const button = event.currentTarget as HTMLButtonElement;
                   void withLoadingButton(button, async () => {
@@ -284,7 +302,7 @@ async function main(): Promise<void> {
               </button>
             </div>
           )}
-          <div class="event-flow-day-waitlist d-flex flex-wrap gap-2">
+          <div class="event-flow-day-waitlist pk-cluster">
             {activeDayWaitlist.map((entry) => {
               const expiry = entry.offerExpiresAt
                 ? `, offer expires ${new Date(entry.offerExpiresAt).toLocaleString()}`
@@ -292,20 +310,19 @@ async function main(): Promise<void> {
               const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
               const statusText = entry.status === "offered" ? "In-person spot available" : "Waiting for in-person seat";
               return (
-                <span
-                  key={entry.dayDate}
-                  class={`badge text-bg-${entry.status === "offered" ? "info" : entry.status === "accepted" ? "success" : "secondary"}`}
-                >
+                // The state is spelled out inside the badge, so the tone only
+                // agrees with the words rather than carrying them.
+                <Badge key={entry.dayDate} tone={waitlistTone(entry.status)}>
                   {dayLabel}: {statusText} ({entry.priorityLane}
                   {expiry})
-                </span>
+                </Badge>
               );
             })}
           </div>
         </>,
         dayWaitlistContainer,
       );
-      dayWaitlistSection.classList.remove("d-none");
+      dayWaitlistSection.hidden = false;
     }
   }
 
@@ -334,7 +351,7 @@ async function main(): Promise<void> {
       // Email verified but registration cancelled for other reason → offer simple restore
       const restoreBtn = document.createElement("button");
       restoreBtn.type = "button";
-      restoreBtn.className = "btn btn-primary mt-2";
+      restoreBtn.className = "pk-btn pk-btn--primary";
       restoreBtn.textContent = "Restore Registration";
       let restoring = false;
       restoreBtn.onclick = async (e) => {
@@ -367,6 +384,9 @@ async function main(): Promise<void> {
           restoreBtn.disabled = false;
         }
       };
+      // The gap between the banner and the button is the parent's, replacing
+      // the `mt-2` the button used to carry: one decision instead of two.
+      statusEl?.parentElement?.classList.add("pk-stack", "pk-stack--snug");
       statusEl?.parentElement?.insertBefore(restoreBtn, statusEl?.nextSibling);
       setStatus(statusEl, "This registration has been cancelled. Your email address is verified.", true);
     } else {
@@ -384,8 +404,8 @@ async function main(): Promise<void> {
   }
 
   // ── Show the form ─────────────────────────────────────────────────────────
-  if (loadingEl) loadingEl.classList.add("d-none");
-  if (manageFormEl) manageFormEl.classList.remove("d-none");
+  if (loadingEl) loadingEl.hidden = true;
+  if (manageFormEl) manageFormEl.hidden = false;
 
   // ── Share panel ───────────────────────────────────────────────────────────
   const sharePanelEl = root.querySelector<HTMLElement>("[data-manage-share]");
@@ -407,7 +427,7 @@ async function main(): Promise<void> {
     });
   } else {
     const headshotSection = root.querySelector<HTMLElement>("[data-headshot-section]");
-    headshotSection?.classList.add("d-none");
+    if (headshotSection) headshotSection.hidden = true;
   }
 
   // Re-apply custom field visibility when day attendance changes.
@@ -428,7 +448,9 @@ async function main(): Promise<void> {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (isCancelled) return;
-    form.classList.add("was-validated");
+    // `was-validated` is not set here any more: `validateBeforeSubmit` adds it
+    // in the one case it means anything — a submission that failed — and
+    // setting it up front marked a form the reader had not got wrong yet.
     if (!validateBeforeSubmit(form, statusEl)) return;
 
     const submitBtn = findSubmitButton(form);
@@ -477,13 +499,13 @@ async function main(): Promise<void> {
   cancelBtn?.addEventListener("click", () => {
     if (isCancelled) return;
     if (cancelEventNameEl) cancelEventNameEl.textContent = eventName;
-    if (manageFormEl) manageFormEl.classList.add("d-none");
-    cancelConfirmPanel?.classList.remove("d-none");
+    if (manageFormEl) manageFormEl.hidden = true;
+    if (cancelConfirmPanel) cancelConfirmPanel.hidden = false;
   });
 
   root.querySelector<HTMLButtonElement>("[data-confirm-cancel-no]")?.addEventListener("click", () => {
-    cancelConfirmPanel?.classList.add("d-none");
-    if (manageFormEl) manageFormEl.classList.remove("d-none");
+    if (cancelConfirmPanel) cancelConfirmPanel.hidden = true;
+    if (manageFormEl) manageFormEl.hidden = false;
   });
 
   root.querySelector<HTMLButtonElement>("[data-confirm-cancel-yes]")?.addEventListener("click", async () => {
@@ -498,7 +520,7 @@ async function main(): Promise<void> {
           { action: "cancel" },
           registrationManageUpdateResponseSchema,
         );
-        cancelConfirmPanel?.classList.add("d-none");
+        if (cancelConfirmPanel) cancelConfirmPanel.hidden = true;
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
             title: "Registration cancelled",
@@ -507,8 +529,8 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         const normalized = normalizeValidation(error);
-        cancelConfirmPanel?.classList.add("d-none");
-        if (manageFormEl) manageFormEl.classList.remove("d-none");
+        if (cancelConfirmPanel) cancelConfirmPanel.hidden = true;
+        if (manageFormEl) manageFormEl.hidden = false;
         setStatus(statusEl, normalized.globalMessage, true);
         if (noBtn) noBtn.disabled = false;
       }
@@ -518,13 +540,13 @@ async function main(): Promise<void> {
   // ── Report unauthorized flow ──────────────────────────────────────────────
   root.querySelector<HTMLButtonElement>("[data-action='report-unauthorized']")?.addEventListener("click", () => {
     if (isCancelled) return;
-    if (manageFormEl) manageFormEl.classList.add("d-none");
-    unauthorizedPanel?.classList.remove("d-none");
+    if (manageFormEl) manageFormEl.hidden = true;
+    if (unauthorizedPanel) unauthorizedPanel.hidden = false;
   });
 
   root.querySelector<HTMLButtonElement>("[data-unauthorized-no]")?.addEventListener("click", () => {
-    unauthorizedPanel?.classList.add("d-none");
-    if (manageFormEl) manageFormEl.classList.remove("d-none");
+    if (unauthorizedPanel) unauthorizedPanel.hidden = true;
+    if (manageFormEl) manageFormEl.hidden = false;
   });
 
   root.querySelector<HTMLButtonElement>("[data-unauthorized-yes]")?.addEventListener("click", async () => {
@@ -539,7 +561,7 @@ async function main(): Promise<void> {
           { action: "report_unauthorized" },
           registrationManageUpdateResponseSchema,
         );
-        unauthorizedPanel?.classList.add("d-none");
+        if (unauthorizedPanel) unauthorizedPanel.hidden = true;
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
             title: "Report received",
@@ -550,8 +572,8 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         const normalized = normalizeValidation(error);
-        unauthorizedPanel?.classList.add("d-none");
-        if (manageFormEl) manageFormEl.classList.remove("d-none");
+        if (unauthorizedPanel) unauthorizedPanel.hidden = true;
+        if (manageFormEl) manageFormEl.hidden = false;
         setStatus(statusEl, normalized.globalMessage, true);
         if (noBtn) noBtn.disabled = false;
       }

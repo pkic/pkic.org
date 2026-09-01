@@ -1,53 +1,68 @@
-{{- $eventSlug := partial "events/flow/slug.html" . -}}
-{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
-<div class="event-flow" data-event-speaker-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/speaker-manage-page">
-
+{{- $eventSlug := partial "events/flow/slug.html" . -}} {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
+{{/* Every panel on this page is shown or hidden by the platform's `hidden` attribute rather than a class, and
+speaker-manage-page.tsx sets `.hidden` to match — the two sides moved together. Spacing is the parent stack's gap, so no
+panel carries a margin of its own. */}}
+<div
+  class="event-flow pk"
+  data-event-speaker-manage
+  data-event-slug="{{ $eventSlug }}"
+  data-event-page-path="{{ $eventPagePath }}"
+  data-api-base="/api/v1"
+  data-module="event-flows/speaker-manage-page"
+>
   {{/* ── Resend manage link fallback (missing/invalid token) ─────────── */}}
-  <div data-resend-speaker-manage-section class="d-none">
-    <p class="pk-field__help">Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.</p>
-    <div class="pk-grid align-items-end">
-      <div>
+  <div data-resend-speaker-manage-section class="pk-stack" hidden>
+    <p class="pk-field__help">
+      Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.
+    </p>
+    <div class="pk-grid">
+      <div class="pk-field">
         <label class="pk-field__label" for="resend-speaker-manage-email">Your email address</label>
-        <input id="resend-speaker-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-speaker-manage-email>
+        <input
+          id="resend-speaker-manage-email"
+          type="email"
+          class="pk-input"
+          autocomplete="email"
+          placeholder="you@example.com"
+          data-resend-speaker-manage-email
+        />
       </div>
     </div>
-    <button type="button" class="pk-btn pk-btn--primary" data-resend-speaker-manage-btn>Send my speaker link</button>
-    <p data-resend-speaker-manage-status></p>
+    <div class="pk-cluster">
+      <button type="button" class="pk-btn pk-btn--primary" data-resend-speaker-manage-btn>Send my speaker link</button>
+    </div>
+    <p data-resend-speaker-manage-status class="pk-small"></p>
   </div>
 
   {{/* ── Loading ───────────────────────────────────────────────────────── */}}
   <p data-speaker-loading class="pk-field__help">Loading your speaker details…</p>
 
   {{/* ── Main content (shown after data loads) ────────────────────────── */}}
-  <div data-speaker-content class="d-none">
-
+  <div data-speaker-content class="pk-stack pk-stack--loose" hidden>
     {{/* ── Proposal summary ──────────────────────────────────────────── */}}
-    <div data-proposal-summary>
-      <h3 class="h5" data-proposal-title></h3>
+    <div class="pk-stack pk-stack--tight" data-proposal-summary>
+      <h3 data-proposal-title></h3>
       <p class="pk-muted">
-        Session type: <span data-proposal-type></span> &middot;
-        Status: <span class="pk-badge" data-proposal-status-badge></span>
+        Session type: <span data-proposal-type></span> &middot; Status:
+        <span class="pk-badge" data-proposal-status-badge></span>
       </p>
       <p class="pk-muted" data-presentation-deadline-row></p>
     </div>
 
     {{/* ── Participation status + confirm/decline ─────────────────────── */}}
-    <div data-participation-section>
-      <h4 class="h6 pk-strong">Your participation</h4>
-      <p>
-        Status: <span class="pk-badge" data-speaker-status-badge></span>
-      </p>
+    <div class="pk-stack pk-stack--snug" data-participation-section>
+      <h4>Your participation</h4>
+      <p>Status: <span class="pk-badge" data-speaker-status-badge></span></p>
 
       {{/* -- Confirm panel (shown when status = invited) -- */}}
-      <div data-confirm-panel class="d-none">
+      <div class="pk-stack pk-stack--snug" data-confirm-panel hidden>
         <p class="pk-muted">
-          Please confirm whether you would like to participate in this session.
-          Once the programme committee accepts the proposal, you&rsquo;ll be asked to upload
-          a bio, headshot, and your presentation.
+          Please confirm whether you would like to participate in this session. Once the programme committee accepts the
+          proposal, you&rsquo;ll be asked to upload a bio, headshot, and your presentation.
         </p>
         <form data-confirm-form class="pk-grid" novalidate>
-          <div>
-            <h5 class="h6">Speaker terms and conditions</h5>
+          <div class="pk-stack pk-stack--snug">
+            <h5>Speaker terms and conditions</h5>
             <div data-speaker-consents>
               <p class="pk-field__help">Loading required terms…</p>
             </div>
@@ -60,73 +75,122 @@
       </div>
 
       {{/* -- Decline panel -- */}}
-      <div data-decline-panel class="d-none">
-        <label class="pk-field__label" for="decline-reason">Reason (optional)</label>
-        <textarea id="decline-reason" class="pk-input pk-input--textarea" rows="3" maxlength="2000" placeholder="Let the proposer know why you cannot participate…"></textarea>
+      <div class="pk-stack pk-stack--snug" data-decline-panel hidden>
+        <div class="pk-field">
+          <label class="pk-field__label" for="decline-reason">Reason (optional)</label>
+          <textarea
+            id="decline-reason"
+            class="pk-input pk-input--textarea"
+            rows="3"
+            maxlength="2000"
+            placeholder="Let the proposer know why you cannot participate…"
+          ></textarea>
+        </div>
         <div class="pk-cluster">
-          <button type="button" data-decline-confirm class="pk-btn pk-btn--danger pk-btn--sm">Confirm — I cannot participate</button>
+          <button type="button" data-decline-confirm class="pk-btn pk-btn--danger pk-btn--sm">
+            Confirm — I cannot participate
+          </button>
           <button type="button" data-decline-cancel class="pk-btn pk-btn--secondary pk-btn--sm">Go back</button>
         </div>
       </div>
 
       {{/* -- Already responded messages -- */}}
-      <div data-confirmed-msg class="d-none">
-        <p class="text-success">You have confirmed your participation. Thank you!</p>
-      </div>
-      <div data-declined-msg class="d-none">
-        <p class="text-danger">You have declined participation in this session.</p>
-      </div>
+      <p class="pk-alert pk-alert--ok" data-confirmed-msg hidden>You have confirmed your participation. Thank you!</p>
+      <p class="pk-alert pk-alert--danger" data-declined-msg hidden>You have declined participation in this session.</p>
     </div>
 
     {{/* ── Your photo ─────────────────────────────────────────────────── */}}
-    <div class="d-none" data-headshot-section>
-      <h4 class="h6 pk-strong">Your photo</h4>
-      <p class="pk-muted">Upload a professional headshot photo. It will appear on the event website alongside your session.</p>
+    <div class="pk-stack pk-stack--snug" data-headshot-section hidden>
+      <h4>Your photo</h4>
+      <p class="pk-muted">
+        Upload a professional headshot photo. It will appear on the event website alongside your session.
+      </p>
       <div data-headshot-preview class="pkic-speaker-headshot-preview"></div>
       <p data-headshot-status class="pk-field__help"></p>
-      <div class="pk-cluster align-items-center flex-wrap">
+      <div class="pk-cluster">
         <label class="pk-btn pk-btn--sm pk-btn--secondary" for="speaker-headshot-file">Upload photo</label>
-        <input type="file" id="speaker-headshot-file" accept="image/jpeg,image/png,image/webp" class="pk-sr-only" data-headshot-file>
-        <button type="button" class="pk-btn pk-btn--sm pk-btn--secondary d-none" data-headshot-delete>Remove photo</button>
+        <input
+          type="file"
+          id="speaker-headshot-file"
+          accept="image/jpeg,image/png,image/webp"
+          class="pk-sr-only"
+          data-headshot-file
+        />
+        <button type="button" class="pk-btn pk-btn--sm pk-btn--secondary" data-headshot-delete hidden>
+          Remove photo
+        </button>
       </div>
     </div>
 
     {{/* ── Bio & links ─────────────────────────────────────────────────── */}}
-    <div class="d-none" data-profile-section>
-      <h4 class="h6 pk-strong">Bio &amp; links</h4>
-      <div data-profile-saved-state class="alert alert-success d-none">
-        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
+    <div class="pk-stack pk-stack--snug" data-profile-section hidden>
+      <h4>Bio &amp; links</h4>
+      <div class="pk-alert pk-alert--ok" data-profile-saved-state hidden>
+        <div class="pk-cluster pk-cluster--between">
           <p>Profile saved.</p>
           <button type="button" class="pk-btn pk-btn--sm pk-btn--secondary" data-profile-edit>Edit profile</button>
         </div>
       </div>
       <div data-profile-form-wrap>
         <form data-profile-form class="pk-grid" novalidate>
-          <div>
+          <div class="pk-field">
             <label for="speaker-first-name" class="pk-field__label">First name</label>
-            <input id="speaker-first-name" name="firstName" type="text" maxlength="80" class="pk-input" placeholder="Your first name">
+            <input
+              id="speaker-first-name"
+              name="firstName"
+              type="text"
+              maxlength="80"
+              class="pk-input"
+              placeholder="Your first name"
+            />
           </div>
-          <div>
+          <div class="pk-field">
             <label for="speaker-last-name" class="pk-field__label">Last name</label>
-            <input id="speaker-last-name" name="lastName" type="text" maxlength="120" class="pk-input" placeholder="Your last name">
+            <input
+              id="speaker-last-name"
+              name="lastName"
+              type="text"
+              maxlength="120"
+              class="pk-input"
+              placeholder="Your last name"
+            />
           </div>
-          <div>
+          <div class="pk-field">
             <label for="speaker-organization" class="pk-field__label">Organization</label>
-            <input id="speaker-organization" name="organizationName" type="text" maxlength="160" class="pk-input" placeholder="Organization name">
+            <input
+              id="speaker-organization"
+              name="organizationName"
+              type="text"
+              maxlength="160"
+              class="pk-input"
+              placeholder="Organization name"
+            />
           </div>
-          <div>
+          <div class="pk-field">
             <label for="speaker-job-title" class="pk-field__label">Job title</label>
-            <input id="speaker-job-title" name="jobTitle" type="text" maxlength="120" class="pk-input" placeholder="Job title">
+            <input
+              id="speaker-job-title"
+              name="jobTitle"
+              type="text"
+              maxlength="120"
+              class="pk-input"
+              placeholder="Job title"
+            />
           </div>
-          <div>
+          <div class="pk-field">
             <label for="speaker-bio" class="pk-field__label">Biography</label>
-            <textarea id="speaker-bio" name="biography" rows="5" maxlength="10000" class="pk-input pk-input--textarea" placeholder="A short professional bio for the programme and website…"></textarea>
+            <textarea
+              id="speaker-bio"
+              name="biography"
+              rows="5"
+              maxlength="10000"
+              class="pk-input pk-input--textarea"
+              placeholder="A short professional bio for the programme and website…"
+            ></textarea>
             <div class="pk-field__help">Visible to attendees on the event programme.</div>
           </div>
-          <div data-profile-links-container>
-            {{/* Profile links widget injected by JS */}}
-          </div>
-          <div>
+          <div data-profile-links-container>{{/* Profile links widget injected by JS */}}</div>
+          <div class="pk-cluster">
             <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm">Save profile</button>
           </div>
         </form>
@@ -134,14 +198,15 @@
     </div>
 
     {{/* ── Presentation link (shown only after proposal is accepted) ── */}}
-    <div class="border-top d-none" data-presentation-link>
-      <p class="pk-muted">Your proposal has been accepted. When your profile is complete, you can upload your presentation slides.</p>
-      <a href="presentation/">Go to presentation upload &rarr;</a>
+    <div class="pk-stack pk-stack--snug" data-presentation-link hidden>
+      <p class="pk-muted">
+        Your proposal has been accepted. When your profile is complete, you can upload your presentation slides.
+      </p>
+      <p><a href="presentation/">Go to presentation upload &rarr;</a></p>
     </div>
 
     {{/* ── Status message ─────────────────────────────────────────────── */}}
-    <p data-flow-status class="alert pk-sr-only" role="status" aria-live="polite"></p>
-
+    <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite"></p>
   </div>
 </div>
 {{ partial "headshot-modals.html" . }}

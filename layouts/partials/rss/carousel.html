@@ -1,40 +1,39 @@
+{{/*
+  rss/carousel.html — the 25 most recent items across every configured feed.
+
+  NOTE: this partial is no longer a carousel. Its rotation was Bootstrap's
+  `carousel` component, driven entirely by that framework's JavaScript
+  (`data-bs-ride`, `data-bs-slide`), and there is no design-system equivalent
+  to move it onto — a Carousel is not one of the primitives. Nothing in the
+  repository calls this partial, so nothing regressed when the rotation went;
+  the items now render as a plain list of cards. It is a candidate for deletion
+  rather than for a hand-written replacement.
+
+  `Panel` and the layout utilities ship with the entry stylesheet, so this
+  markup is styled on a server-rendered page without waiting for a lazy chunk.
+*/}}
 {{- $items := partialCached "rss/index.html" . "global" -}}
 {{- $items = sort $items "pubDate" "desc" -}}
 
-<div id="rssfeedcarousel" class="carousel slide" data-bs-ride="carousel">
-  <a class="carousel-control-prev" style="width: 20px;" href="#rssfeedcarousel" role="button" data-bs-slide="prev">
-    <span class="visually-hidden">Previous</span>
-  </a>
-
-  <div class="col carousel-inner">
-    {{- range $i, $post := first 25 $items -}}
-      {{- $url := urls.Parse $post.link -}}
-            <div class="carousel-item{{ if lt $i 1 }} active{{ end }}">
-
-              <div class="card">
-                <div class="row g-0">
-                  {{- with $post.image -}}
-                  <div class="col-lg-3">
-                    <img src="{{ $post.image.url }}" title="{{ $post.image.title }}">
-                  </div>
-                  {{- end -}}
-                  <div class="col">
-                    <div class="card-body">
-                      <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" title="{{ $post.description | plainify | htmlUnescape }}" class="text-truncate text-nowrap">{{ $post.title | plainify | htmlUnescape }}</a></h5>
-                      <p class="card-text">
-                        <span class="d-inline-block text-truncate" style="max-width: 98%;">{{ $post.description | plainify | htmlUnescape }}</span>
-                        <small class="py-2 text-muted float-end">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }} at <a href="https://{{ $url.Host }}/" target="_blank">{{ $url.Host }}</a></small>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-    {{- end -}}
-  </div>
-
-  <a class="carousel-control-next" style="width: 20px;" href="#rssfeedcarousel" role="button" data-bs-slide="next">
-    <span class="visually-hidden">Next</span>
-  </a>
+<div class="pk pk-stack" id="rssfeedcarousel">
+  {{- range first 25 $items -}}
+    {{- $url := urls.Parse .link -}}
+    <article class="pk-panel">
+      <div class="pk-panel__body pk-cluster pk-cluster--start">
+        {{- with .image -}}
+        <img src="{{ .url }}" alt="" width="160">
+        {{- end -}}
+        <div class="pk-stack pk-stack--snug">
+          <h3 class="pk-panel__title">
+            <a href="{{ .link }}" target="_blank" rel="noopener noreferrer">{{ .title | plainify | htmlUnescape }}</a>
+          </h3>
+          <p>{{ .description | plainify | htmlUnescape }}</p>
+          <p class="pk-small">
+            Published on {{ dateFormat "Monday January 2, 2006" .pubDate }} at
+            <a href="https://{{ $url.Host }}/" target="_blank" rel="noopener noreferrer">{{ $url.Host }}</a>
+          </p>
+        </div>
+      </div>
+    </article>
+  {{- end -}}
 </div>
