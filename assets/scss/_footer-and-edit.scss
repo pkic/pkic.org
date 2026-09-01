@@ -40,6 +40,10 @@
 // ── Main footer body ───────────────────────────────────────────────────────
 .footer-body {
   border-top: 1px solid rgba(#fff, 0.06);
+  // Breathing room between the rule and the brand column: the logo was
+  // sitting directly against the border, which reads as a collision rather
+  // than a section break.
+  padding-block: var(--pk-6);
 }
 
 // Four columns on a desktop footer: the brand and the three link lists.
