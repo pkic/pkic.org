@@ -20,6 +20,12 @@ describe("base layer rules that are global on purpose", () => {
     expect(base).toMatch(/\n\s*\*,\n\s*\*::before,\n\s*\*::after\s*\{\s*\n\s*box-sizing: border-box;/);
   });
 
+  it("takes the user agent's gutter off the document", () => {
+    // Bootstrap's reboot used to do this for the whole page; without it every
+    // full-bleed band stops 8px short of the viewport edge.
+    expect(base).toMatch(/\n\s*body\s*\{\s*\n\s*margin: 0;/);
+  });
+
   it("hides [hidden] everywhere, strongly enough to beat a component's display", () => {
     const rule = /(^|\n)\s*:where\(\[hidden\]\)\s*\{\s*\n\s*display: none !important;/;
     expect(base).toMatch(rule);

@@ -46,6 +46,20 @@
     box-sizing: border-box;
   }
 
+  /*
+   * No gutter around the document.
+   *
+   * The user agent gives `body` an 8px margin, and Bootstrap's reboot used to
+   * take it away for the whole page. Removing the framework put it back, so
+   * every full-bleed band — the hero, the stats bar, the member wall, the
+   * footer — stopped at 8px from each edge and the site rendered inside a thin
+   * empty frame. Obvious on a wide display, easy to miss on a laptop, and not
+   * something any component can fix from the inside.
+   */
+  body {
+    margin: 0;
+  }
+
   .pk h1,
   .pk h2,
   .pk h3,
