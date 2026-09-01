@@ -18,6 +18,12 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   webServer: {
     command: "sh scripts/e2e-start.sh",
+    /*
+     * The seeded database and the Wrangler state go wherever `E2E_STATE_ROOT`
+     * says, defaulting to the system temp directory. On this machine that is
+     * the nearly-full internal disk, so a caller can point it at roomier
+     * storage without editing the script.
+     */
     url: e2eBaseUrl,
     // Always start fresh so Wrangler uses the seeded state dir.
     reuseExistingServer: Boolean(process.env.REUSE_SERVER),
@@ -25,7 +31,14 @@ export default defineConfig({
   },
   use: {
     baseURL: e2eBaseUrl,
-    video: "on",
+    /*
+     * Recorded only for the runs that need explaining. `video: "on"` wrote a
+     * film of all 111 tests every run — 280MB an run into the system temp
+     * directory, which is on the internal disk and is what ran it out of space
+     * mid-suite, taking the test server down with it. A passing test's video
+     * is watched by nobody.
+     */
+    video: "retain-on-failure",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     // Slow down actions locally so each step is visible; set PWSLOW=0 to disable.

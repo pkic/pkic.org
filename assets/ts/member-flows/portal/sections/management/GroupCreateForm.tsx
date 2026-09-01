@@ -69,7 +69,14 @@ function draftFromType(type: GroupType | null): GroupCreateDraft {
   };
 }
 
-export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => void }) {
+export function GroupCreateForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (group: Group) => void;
+  /** Leaves the create page without creating anything; omitted where there is nowhere to return to. */
+  onCancel?: () => void;
+}) {
   const capability = useData(
     () => getJson("/api/v1/groups/creation-capabilities", groupCreationCapabilitiesResponseSchema),
     [],
@@ -274,6 +281,11 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
               <Button type="submit" variant="primary" loading={saving} disabled={!draft.typeKey || !draft.name.trim()}>
                 {saving ? "Creating…" : "Create group"}
               </Button>
+              {onCancel && (
+                <Button onClick={onCancel} disabled={saving}>
+                  Cancel
+                </Button>
+              )}
             </div>
           </form>
         </PanelBody>

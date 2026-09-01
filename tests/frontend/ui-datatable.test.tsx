@@ -247,6 +247,60 @@ describe("DataTable", () => {
     expect(filled.textContent).not.toContain("No members yet");
   });
 
+  /*
+   * Column width.
+   *
+   * `#portal-main` has no width of its own, so on a 2000px screen the table
+   * was handed 1670px and `table-layout: auto` shared the leftover between the
+   * columns in proportion to what each one needed: a date two words long took
+   * as big a share as the person it dated, and the row stopped reading as a
+   * row. A column that says `fit` takes none of it — which is a fact about the
+   * COLUMN, so it has to reach the header and every cell beneath it, including
+   * the placeholders that stand in while the page loads.
+   */
+  describe("column width", () => {
+    const dated: DataTableColumn<Member>[] = [
+      ...columns,
+      { id: "joined", header: "Joined", cell: () => "2024-02-11", width: "fit" },
+    ];
+
+    it("marks the header and every cell of a fit column, and nothing else", () => {
+      const container = mount(<DataTable caption="Members" columns={dated} rows={rows} rowKey={(r) => r.id} />);
+      const marked = headers(container).map((header) => header.className.includes("pk-table__col--fit"));
+      expect(marked).toEqual([false, false, true]);
+
+      const cells = [...container.querySelectorAll("tbody td:nth-child(3)")];
+      expect(cells).toHaveLength(rows.length);
+      for (const cell of cells) expect(cell.className).toContain("pk-table__col--fit");
+      expect(container.querySelector("tbody td:nth-child(1)")?.className ?? "").not.toContain("pk-table__col--fit");
+    });
+
+    it("keeps the width on the loading placeholders, so the columns do not jump", () => {
+      const container = mount(
+        <DataTable caption="Members" columns={dated} rows={[]} rowKey={(r) => r.id} loading loadingRows={1} />,
+      );
+      const placeholder = container.querySelector(".pk-table__placeholder td:nth-child(3)");
+      expect(placeholder?.className).toContain("pk-table__col--fit");
+    });
+
+    it("carries alignment and cell utilities alongside the width", () => {
+      const container = mount(
+        <DataTable
+          caption="Members"
+          columns={[
+            { id: "count", header: "Reviews", cell: () => 3, align: "end", width: "fit", cellClass: "pk-mono" },
+          ]}
+          rows={rows}
+          rowKey={(r) => r.id}
+        />,
+      );
+      const cell = container.querySelector("tbody td");
+      expect(cell?.className).toContain("pk-end");
+      expect(cell?.className).toContain("pk-table__col--fit");
+      expect(cell?.className).toContain("pk-mono");
+    });
+  });
+
   it("keeps a hidden header readable by assistive technology", () => {
     const container = mount(
       <DataTable

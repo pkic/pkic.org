@@ -207,7 +207,7 @@ export function GroupWorkspace({
                 key={`${group.id}:${resourceId ?? ""}`}
                 groupId={group.id}
                 canManage={canManage}
-                initialPlacementId={resourceId}
+                placementSegment={resourceId}
                 initialPlacementTab={resourceTab}
               />
             )}
@@ -217,7 +217,7 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 canParticipate={canParticipate}
-                initialVoteId={resourceId}
+                voteSegment={resourceId}
               />
             )}
             {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}

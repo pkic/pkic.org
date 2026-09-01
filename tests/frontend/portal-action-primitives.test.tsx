@@ -202,6 +202,25 @@ describe("RowActions", () => {
     expect(anonymous.querySelector("button")?.hasAttribute("aria-label")).toBe(false);
   });
 
+  it("gives a lone action the affordance of a control, not of a sentence", () => {
+    // `ghost` is transparent and inked in `--pk-ink-muted`, which is the same
+    // treatment the row's own quiet values already carry: "Grant administrator
+    // role" read as another remark about the person rather than as the thing
+    // that changes them.
+    const ordinary = mount(
+      <RowActions subject="Ada" actions={[{ id: "grant", label: "Grant", onSelect: () => {} }]} />,
+    );
+    const button = ordinary.querySelector("button");
+    expect(button?.className).toContain("pk-btn--secondary");
+    expect(button?.className).not.toContain("pk-btn--ghost");
+
+    // Destructive keeps its own quiet weight, which already has a border.
+    const destructive = mount(
+      <RowActions subject="Ada" actions={[{ id: "remove", label: "Remove", danger: true, onSelect: () => {} }]} />,
+    );
+    expect(destructive.querySelector("button")?.className).toContain("pk-btn--danger-quiet");
+  });
+
   it("renders status alone when there are no actions", () => {
     const container = mount(<RowActions status="Removed" actions={[]} />);
     expect(container.textContent).toContain("Removed");

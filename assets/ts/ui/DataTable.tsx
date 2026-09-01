@@ -22,20 +22,56 @@ import "./Content.css";
 
 export type SortDirection = "asc" | "desc";
 
+/**
+ * How wide a column is allowed to be.
+ *
+ * `content` is the default and is what a table does on its own: the column is
+ * as wide as its content wants, and whatever width the row has left over is
+ * shared between the content columns in proportion to what each one needs.
+ *
+ * `fit` says the column's content has a bounded length — a date, a count, a
+ * status, the row's actions. It hugs that content and never wraps, so it takes
+ * no share of the leftover width and the columns holding real prose get it
+ * instead. Say this on the column rather than writing `pk-nowrap` on its cells:
+ * the utility stops the value breaking in two but still lets the column claim
+ * space it has no use for, which is how a date ended up a third of the way
+ * across a wide screen from the row it dates.
+ */
+export type DataTableColumnWidth = "content" | "fit";
+
 export interface DataTableColumn<Row> {
   id: string;
   header: string;
   /** Omit to render nothing for this column. */
   cell: (row: Row) => ComponentChildren;
   sortable?: boolean;
+  /**
+   * Which edge the column reads from.
+   *
+   * Text and dates stay at the start: they are read left to right, and a date
+   * is a label rather than a magnitude. Numbers a reader compares down the
+   * column — counts, amounts, sizes — take `end`, so their units line up under
+   * each other. The table sets `tabular-nums`, so digits line up either way.
+   */
   align?: "start" | "center" | "end";
+  /** See DataTableColumnWidth. Defaults to `content`. */
+  width?: DataTableColumnWidth;
   /**
    * Utilities for the cells in this column - `pk-mono` for identifiers,
-   * `pk-small`, `pk-muted`, `pk-nowrap`. Design-system classes only; the
-   * isolation gate rejects anything else in an adopted surface.
+   * `pk-small` and `pk-muted` to mark the column as the row's secondary
+   * information. Design-system classes only; the isolation gate rejects
+   * anything else in an adopted surface. How wide the column is is not one of
+   * these — see `width`.
    */
   cellClass?: string;
-  /** Renders the header for assistive technology only, e.g. an actions column. */
+  /**
+   * Renders the header for assistive technology only.
+   *
+   * The one column that needs this is the row's actions: a visible "Actions"
+   * label names a column the reader can already see is full of buttons, but a
+   * `<th>` with nothing in it leaves a screen reader announcing each of those
+   * buttons under a column with no name at all.
+   */
   headerHidden?: boolean;
 }
 
@@ -123,6 +159,20 @@ function alignClass(align: DataTableColumn<unknown>["align"]): string | undefine
   return undefined;
 }
 
+/*
+ * Width is the table's own class, not a utility: it is a rule about the column,
+ * so it has to land on the `<th>` and on every `<td>` beneath it, and it means
+ * nothing anywhere else on the page.
+ */
+function widthClass(width: DataTableColumn<unknown>["width"]): string | undefined {
+  return width === "fit" ? "pk-table__col--fit" : undefined;
+}
+
+function classList(...names: Array<string | undefined>): string | undefined {
+  const used = names.filter(Boolean);
+  return used.length > 0 ? used.join(" ") : undefined;
+}
+
 function nextDirection(sort: DataTableProps<unknown>["sort"], columnId: string): SortDirection {
   if (!sort || sort.columnId !== columnId) return "asc";
   return sort.direction === "asc" ? "desc" : "asc";
@@ -190,7 +240,7 @@ export function DataTable<Row>({
                 <th
                   key={column.id}
                   scope="col"
-                  class={alignClass(column.align)}
+                  class={classList(alignClass(column.align), widthClass(column.width))}
                   aria-sort={sorted ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
                   {column.sortable && onSort ? (
@@ -239,7 +289,7 @@ export function DataTable<Row>({
                   {columns.map((column, index) => (
                     <td
                       key={column.id}
-                      class={[alignClass(column.align), column.cellClass].filter(Boolean).join(" ") || undefined}
+                      class={classList(alignClass(column.align), widthClass(column.width), column.cellClass)}
                     >
                       {/* The stretched control goes in the first cell so it
                           precedes the row's content in the tab order, and so a
@@ -270,8 +320,10 @@ export function DataTable<Row>({
                     <span class="pk-table__skeleton" />
                   </td>
                 )}
+                {/* The width hints ride the placeholders too, so the columns
+                    do not jump the moment the real rows land. */}
                 {columns.map((column) => (
-                  <td key={column.id}>
+                  <td key={column.id} class={widthClass(column.width)}>
                     <span class="pk-table__skeleton" />
                   </td>
                 ))}

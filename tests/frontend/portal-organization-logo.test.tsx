@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrganizationDetail } from "../../assets/shared/schemas/organization-management";
 import { OrganizationLogo } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationLogo";
+import { controlFor } from "./helpers/labelled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -67,20 +68,43 @@ describe("OrganizationLogo", () => {
     expect(root.innerHTML).toBe("");
   });
 
-  it("frames the empty placeholder with design-system classes only", () => {
+  it("puts the value the field already has, and its absence, in the field's own preview", () => {
     const root = mount(
       <OrganizationLogo organization={organization(null)} canWrite onChanged={() => Promise.resolve()} />,
     );
 
-    const placeholder = [...root.querySelectorAll<HTMLElement>("div")].find(
-      (element) => element.textContent === "No logo",
-    );
-    expect(placeholder).toBeDefined();
-    expect(placeholder?.classList.contains("pk-framed")).toBe(true);
-    expect(placeholder?.classList.contains("pk-cluster--center")).toBe(true);
-    for (const name of placeholder?.classList ?? []) {
-      expect(name.startsWith("pk-") || name.startsWith("adm-")).toBe(true);
+    // The frame around a logo belongs to the file field, not to this surface:
+    // the control and the thing it replaces are one component now, so no page
+    // invents a box — or a class — for its own logo.
+    const preview = root.querySelector<HTMLElement>(".pk-file__preview");
+    expect(preview?.textContent).toBe("No logo");
+    // The field names the command after what activating it does, and the name
+    // resolves to the real input through the for/id pair.
+    expect(controlFor<HTMLInputElement>(root, "Upload logo").type).toBe("file");
+    for (const element of root.querySelectorAll<HTMLElement>("[class]")) {
+      for (const name of element.classList) {
+        expect(name === "pk" || name.startsWith("pk-") || name.startsWith("adm-")).toBe(true);
+      }
     }
+  });
+
+  it("offers replacing and removing as one control over one subject", () => {
+    const root = mount(
+      <OrganizationLogo organization={organization("/logo.svg")} canWrite onChanged={() => Promise.resolve()} />,
+    );
+
+    // All three used to be siblings with nothing holding them together: a raw
+    // browser file control, a red button floating beside it, and the policy
+    // centred underneath. They are one field now, over one picture.
+    const field = root.querySelector<HTMLElement>(".pk-field");
+    expect(field?.querySelector("img")?.getAttribute("alt")).toBe("Example Corp logo");
+    expect(field?.querySelector('input[type="file"]')).not.toBeNull();
+    expect([...(field?.querySelectorAll("button") ?? [])].map((button) => button.textContent)).toContain("Remove");
+
+    // The policy reaches the input through describedby rather than sitting as
+    // loose prose beneath the row.
+    const input = controlFor<HTMLInputElement>(root, "Replace logo");
+    expect(root.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toContain("SVG only.");
   });
 
   it("reports an upload failure to the reader instead of silently keeping the old logo", async () => {

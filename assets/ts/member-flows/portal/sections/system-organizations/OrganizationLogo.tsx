@@ -1,11 +1,12 @@
 /**
  * An organization's logo: read-only for viewers, managed for editors.
  *
- * The framing follows the portal's own logo block in `MyOrganization`: the
- * base layer already keeps an image inside its column (`max-width: 100%`), so
- * the picture needs nothing but its size cap, and only the empty placeholder
- * is drawn as a frame. The border, padding and white fill the Bootstrap
- * version painted behind every logo are gone with it.
+ * Both readings are a panel, so the mark sits in the record's supporting
+ * column as a named region rather than as a loose picture floating above the
+ * page. The managed reading is a single `Field` — `LogoManager` owns that
+ * composition — and `FileInput`'s preview slot draws the frame and caps the
+ * picture, so this surface no longer passes a class in to say how big a logo
+ * is or what an empty one looks like.
  */
 import { logoUploadResponseSchema } from "../../../../../shared/schemas/images";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
@@ -13,16 +14,11 @@ import { LogoManager } from "../../../../components/LogoManager";
 import { deleteJson } from "../../../../shared/api-client";
 import { replaceFile } from "../../../../shared/file-upload";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { toast } from "../../ui";
-// `pk-framed` on the placeholder is defined in Content.css, which ships in a
-// lazy chunk rather than the entry stylesheet, so the module that writes the
-// class name has to pull the stylesheet in itself.
-import "../../../../ui/Content.css";
 
-/** The size caps still live in the admin stylesheet; everything else is ours. */
+/** The size cap for the read-only picture still lives in the admin stylesheet. */
 const LOGO_CLASS = "adm-organization-logo";
-const LOGO_PLACEHOLDER_CLASS =
-  "pk-framed pk-cluster pk-cluster--center pk-muted pk-small adm-organization-logo-placeholder";
 
 export function OrganizationLogo({
   organization,
@@ -33,36 +29,46 @@ export function OrganizationLogo({
   canWrite: boolean;
   onChanged: () => Promise<void>;
 }) {
-  if (!canWrite) {
-    return organization.logoUrl ? (
-      <img class={LOGO_CLASS} src={organization.logoUrl} alt={`${organization.name} logo`} />
-    ) : null;
-  }
+  const logoUrl = organization.logoUrl;
+
+  // A viewer with no logo to see gets no region at all: a panel headed "Logo"
+  // holding an empty frame announces something missing where nothing is.
+  if (!canWrite && !logoUrl) return null;
 
   return (
-    <LogoManager
-      imageUrl={organization.logoUrl}
-      alt={`${organization.name} logo`}
-      layout="centered"
-      imageClass={LOGO_CLASS}
-      placeholderClass={LOGO_PLACEHOLDER_CLASS}
-      removeConfirmation="Remove this organization's logo?"
-      removeLabel="Remove"
-      accept="image/svg+xml"
-      hint="SVG only. The logo is sanitized, cropped to its content, and made responsive automatically."
-      onUpload={(file) =>
-        replaceFile(
-          `/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`,
-          file,
-          logoUploadResponseSchema,
-          "Could not upload the organization logo.",
-        )
-      }
-      onRemove={() =>
-        deleteJson(`/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`, successResponseSchema)
-      }
-      onChanged={onChanged}
-      toast={toast}
-    />
+    <Panel aria-label="Logo">
+      <PanelHeader title="Logo" />
+      <PanelBody>
+        {canWrite ? (
+          <LogoManager
+            imageUrl={logoUrl}
+            alt={`${organization.name} logo`}
+            removeConfirmation="Remove this organization's logo?"
+            removeLabel="Remove"
+            accept="image/svg+xml"
+            hint="SVG only. The logo is sanitized, cropped to its content, and made responsive automatically."
+            onUpload={(file) =>
+              replaceFile(
+                `/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`,
+                file,
+                logoUploadResponseSchema,
+                "Could not upload the organization logo.",
+              )
+            }
+            onRemove={() =>
+              deleteJson(`/api/v1/organizations/${encodeURIComponent(organization.id)}/logo`, successResponseSchema)
+            }
+            onChanged={onChanged}
+            toast={toast}
+          />
+        ) : (
+          logoUrl && (
+            <div class="pk-cluster pk-cluster--center">
+              <img class={LOGO_CLASS} src={logoUrl} alt={`${organization.name} logo`} />
+            </div>
+          )
+        )}
+      </PanelBody>
+    </Panel>
   );
 }

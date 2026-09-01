@@ -1,5 +1,5 @@
 /** Generic self-service participation view shared by every configured group type. */
-import { useState } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 import type { z } from "zod";
 import { usePortalHashLocation } from "../hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
@@ -22,6 +22,17 @@ import { GroupCreateForm } from "./management/GroupCreateForm";
 
 type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
 type Group = z.infer<typeof groupSchema>;
+
+/** Reserved group-id segment that routes to the creation page instead of a group's workspace. */
+const NEW_GROUP_SEGMENT = "new";
+
+const GROUPS_PATH = "/groups";
+
+/** Redirects back to the catalog from an effect, not render — see its call site below. */
+function GroupsRedirect({ navigate }: { navigate: (path: string) => void }) {
+  useEffect(() => navigate(GROUPS_PATH), [navigate]);
+  return null;
+}
 
 function MemberGroupCatalog() {
   const catalog = useApiPage<SelfGroupsPage>(
@@ -129,25 +140,41 @@ function AllGroups({ onCreate }: { onCreate?: () => void }) {
   );
 }
 
-export function Groups() {
+/**
+ * Portal route adapter for the groups surface: the catalog, and — under the
+ * reserved `new` segment — the create page. Creation is a place with its own
+ * address, so it survives a reload and the browser's Back button closes it.
+ */
+export function Groups({
+  groupSegment,
+}: {
+  /** `undefined` for the catalog, `"new"` for the create page. */
+  groupSegment?: string;
+} = {}) {
   const [, navigate] = usePortalHashLocation();
-  const [creating, setCreating] = useState(false);
   const session = portalSession.value;
   const canCreateGroups = portalHasGlobalPermission(session, "groups:write");
 
-  if (creating && canCreateGroups) {
+  function openCreatePage(): void {
+    navigate(`${GROUPS_PATH}/${NEW_GROUP_SEGMENT}`);
+  }
+
+  if (groupSegment === NEW_GROUP_SEGMENT) {
+    // Navigating away belongs in an effect, not in render.
+    if (!canCreateGroups) return <GroupsRedirect navigate={navigate} />;
     return (
       <div class="pk pk-stack content-width-schedule">
         <div class="pk-cluster">
-          <Button variant="secondary" size="sm" onClick={() => setCreating(false)}>
+          <Button variant="secondary" size="sm" onClick={() => navigate(GROUPS_PATH)}>
             <span aria-hidden="true">←</span> All groups
           </Button>
         </div>
         <GroupCreateForm
           onCreated={(created) => {
             refreshPortalSidebarGroups();
-            navigate(`/groups/${encodeURIComponent(created.id)}/settings`);
+            navigate(`${GROUPS_PATH}/${encodeURIComponent(created.id)}/settings`);
           }}
+          onCancel={() => navigate(GROUPS_PATH)}
         />
       </div>
     );
@@ -157,15 +184,13 @@ export function Groups() {
     <div class="pk pk-stack content-width-schedule">
       {canCreateGroups && session?.member && (
         <div class="pk-cluster pk-cluster--end">
-          <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+          <Button variant="primary" size="sm" onClick={openCreatePage}>
             New group
           </Button>
         </div>
       )}
       {session?.member && <MemberGroupCatalog />}
-      {session?.staff && !session.member && (
-        <AllGroups onCreate={canCreateGroups ? () => setCreating(true) : undefined} />
-      )}
+      {session?.staff && !session.member && <AllGroups onCreate={canCreateGroups ? openCreatePage : undefined} />}
     </div>
   );
 }

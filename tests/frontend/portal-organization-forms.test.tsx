@@ -151,7 +151,10 @@ describe("portal organization create form", () => {
       workingGroupSlugs: [],
       activationReason: "Initial setup",
     });
+    // The create page needs the created record's address, so the callback
+    // carries the id the response returned rather than a bare signal.
     expect(onCreated).toHaveBeenCalledTimes(1);
+    expect(onCreated).toHaveBeenCalledWith(detail().organization.id);
   });
 
   it("adds and removes identity groups, each announced by its own legend", async () => {
@@ -214,20 +217,20 @@ describe("portal organization profile", () => {
     const list = container.querySelector("dl");
     expect(list?.className).toContain("pk-datalist");
     const terms = [...container.querySelectorAll("dt")].map((term) => term.textContent);
-    expect(terms).toEqual([
-      "Membership category",
-      "Website",
-      "Slogan",
-      "Description",
-      "Blog",
-      "Press",
-      "Careers",
-      "Member since",
-      "Created",
-    ]);
+    // The membership category is not among them: it qualifies the record's
+    // subject, so the page states it once, as a badge beside the organization's
+    // name. `portal-organization-detail-shell` holds that end of the contract.
+    expect(terms).toEqual(["Website", "Slogan", "Description", "Blog", "Press", "Careers", "Member since", "Created"]);
     expect(container.querySelectorAll("dd")).toHaveLength(terms.length);
-    // The category reads as a word, not as a colour: the badge carries text.
-    expect(container.querySelector(".pk-badge")?.textContent).toBe("F");
+    // An absent value is a dash rather than an empty cell, and the list — not
+    // this surface — decides what one looks like. The fixture has no slogan.
+    const slogan = container.querySelectorAll("dd")[1];
+    expect(slogan?.textContent).toBe("—");
+    // A stored URL is the link it is, so the record is navigable rather than
+    // eight lines of text to copy out by hand.
+    expect(container.querySelector<HTMLAnchorElement>("dd a")?.href).toBe("https://example.test/");
+    // Contacts are a separate, secondary region the page places itself; the
+    // record panel no longer renders them from the inside.
     expect(container.textContent).not.toContain("Contacts");
     expect(container.querySelector("table")).toBeNull();
   });

@@ -24,9 +24,11 @@ import { Breadcrumb } from "../../assets/ts/ui/Breadcrumb";
 import { Button } from "../../assets/ts/ui/Button";
 import { Chip } from "../../assets/ts/ui/Chip";
 import { DataTable } from "../../assets/ts/ui/DataTable";
+import { DescriptionList } from "../../assets/ts/ui/DescriptionList";
 import { Dialog } from "../../assets/ts/ui/Dialog";
 import { EmptyState } from "../../assets/ts/ui/EmptyState";
 import { Field } from "../../assets/ts/ui/Field";
+import { FileInput } from "../../assets/ts/ui/FileInput";
 import { Kicker } from "../../assets/ts/ui/Kicker";
 import { Menu } from "../../assets/ts/ui/Menu";
 import { Meter } from "../../assets/ts/ui/Meter";
@@ -130,6 +132,19 @@ const primitives: ReadonlyArray<[string, () => string]> = [
     () => render(<Pager page={1} pageCount={3} total={42} rangeStart={1} rangeEnd={20} onSelect={() => undefined} />),
   ],
   ["Meter", () => render(<Meter label="Level" value={3} max={5} />)],
+  [
+    "Field with a file input",
+    () =>
+      render(
+        <Field label="Charter" help="PDF, up to 5 MB.">
+          {(control) => <FileInput {...control} accept="application/pdf" />}
+        </Field>,
+      ),
+  ],
+  [
+    "DescriptionList",
+    () => render(<DescriptionList items={[{ term: "Legal name", value: "SecureCA Inc" }, { term: "Slogan" }]} />),
+  ],
   ["Toast", () => render(<Toast tone="ok" message="Saved." />)],
   [
     "Dialog, closed",

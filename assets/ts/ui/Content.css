@@ -58,7 +58,15 @@
    */
   .pk-datalist {
     display: grid;
-    grid-template-columns: max-content 1fr;
+    /*
+     * `minmax(0, …)` on both tracks rather than the bare `max-content 1fr` this
+     * started as. A grid track's automatic minimum is its content's minimum, so
+     * one unbreakable value — a URL, which is most of what these lists hold —
+     * made the value column wider than the list and pushed the terms off their
+     * own left edge. Floored at zero the track can be as narrow as the space
+     * allows, and the value wraps inside it instead.
+     */
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
     gap: var(--pk-1) var(--pk-3);
     margin: 0;
   }
@@ -69,7 +77,28 @@
 
   .pk-datalist > dd {
     margin: 0;
+    min-width: 0;
     color: var(--pk-ink);
+    /* The other half of the floored track: the column may end up narrow, so a
+       long URL has to be allowed to break rather than to overflow. */
+    overflow-wrap: anywhere;
+  }
+
+  /*
+   * On a phone there is no width to share. Two columns leave a term like
+   * "Certificate practice statement" holding most of the line and its value
+   * broken across four, so the pairs stack and each term sits above its value.
+   */
+  @media (max-width: 30rem) {
+    .pk-datalist {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* Stacked, every row is one gap from the next and the pairs stop reading
+       as pairs. The space goes between the groups instead. */
+    .pk-datalist > dt:not(:first-of-type) {
+      margin-top: var(--pk-2);
+    }
   }
 
   .pk-answer-list {

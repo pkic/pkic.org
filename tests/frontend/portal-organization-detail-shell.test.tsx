@@ -134,6 +134,19 @@ describe("organization detail shell", () => {
     // The identity count reads as a sentence rather than a bare number, and
     // the singular is not "1 identities".
     expect(container.textContent).toContain("1 active identity");
+
+    // The heading's supporting facts are badges beside the name rather than a
+    // line of small text above everything. The membership category is stated
+    // here, and only here, so the record's own list does not repeat it.
+    const header = container.querySelector("header");
+    const badges = [...(header?.querySelectorAll(".pk-badge") ?? [])].map((badge) => badge.textContent);
+    expect(badges).toEqual(["Category F", "1 active identity"]);
+
+    // The way back is a trail, so a reader sees where this record sits rather
+    // than only that there is a button pointing away from it.
+    const trail = container.querySelector('[aria-label="Breadcrumb"]');
+    expect(trail?.querySelector("a")?.getAttribute("href")).toBe("#/organizations");
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("Example Organization");
   });
 
   it("announces a failed load as an alert instead of an empty record", async () => {

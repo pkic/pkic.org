@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useMemo, useRef, useState, type MutableRef } from "preact/hooks";
 import { usePortalHashLocation } from "../hash-location";
 import {
@@ -120,6 +121,7 @@ export function ActingIdentityDirectory({
   onChanged,
   actionsRef,
   createAction,
+  empty,
 }: {
   organizationId: string;
   activeIdentities: ActiveActingIdentity[];
@@ -129,6 +131,15 @@ export function ActingIdentityDirectory({
   actionsRef?: MutableRef<ApiTableActions | null>;
   /** The directory's create affordance, rendered in its own toolbar row alongside search and refresh. */
   createAction?: { label: string; onSelect: () => void };
+  /**
+   * What an empty directory says.
+   *
+   * A surface that offers adding an identity from its own panel header —
+   * rather than through `createAction` — knows the words for it and which
+   * controls carry it out; this directory knows neither. Given one it renders
+   * it, and otherwise falls back to naming the absence.
+   */
+  empty?: ComponentChildren;
 }) {
   const localTableRef = useRef<ApiTableActions | null>(null);
   const tableRef = actionsRef ?? localTableRef;
@@ -144,7 +155,7 @@ export function ActingIdentityDirectory({
         caption="Organization identities"
         columns={activeColumns()}
         data={activeIdentities}
-        empty="No identities yet"
+        empty={empty ?? "No identities yet"}
         rowKey={(identity) => identity.userId}
         rowAction={(identity) => identityRowAction(identity.userId, identity.name ?? identity.email)}
       />
@@ -288,14 +299,15 @@ export function ActingIdentityDirectory({
         },
       ]}
       empty={
-        createAction ? (
+        empty ??
+        (createAction ? (
           // The same `createAction` is already the toolbar's button, so this
           // state names it rather than rendering it a second time under the
           // same accessible name.
           <EmptyState title="No identities yet" body={`Use ${createAction.label} above to get started.`} />
         ) : (
           "No identities"
-        )
+        ))
       }
       rowKey={(identity) => identity.id}
     />

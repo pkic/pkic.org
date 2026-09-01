@@ -151,7 +151,12 @@ export function UsersList({
         {
           header: "Since",
           cell: (user) => fmtDate(user.created_at),
-          className: "pk-small pk-muted pk-nowrap",
+          // A date has a bounded length, so the column says that rather than
+          // wearing `pk-nowrap` and still claiming a share of a wide screen.
+          // It also keeps the table's own ink and size: the row already shows
+          // one line of quiet grey under the name, and a second one left
+          // nothing in the row reading as the record's own data.
+          width: "fit",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {

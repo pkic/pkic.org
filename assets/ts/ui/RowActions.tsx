@@ -89,11 +89,19 @@ export function RowActions({ status, actions, subject }: RowActionsProps) {
        * The threshold lives here rather than at each call site so no surface
        * has to remember it, and so a row that grows a second action turns
        * into a menu on its own.
+       *
+       * `secondary`, not `ghost`. A ghost button is transparent and inked in
+       * `--pk-ink-muted` — which inside a table row is exactly the treatment
+       * the row's own quiet values already have, so "Grant administrator role"
+       * read as another sentence about the person rather than as the control
+       * that changes them. A row's action is the one thing in the row a reader
+       * can operate, so it carries the border that says so. Destructive stays
+       * `danger-quiet`, which has a border of its own.
        */}
       {actions.length === 1 && only && (
         <Button
           size="sm"
-          variant={only.danger ? "danger-quiet" : "ghost"}
+          variant={only.danger ? "danger-quiet" : "secondary"}
           disabled={only.disabled}
           aria-label={subject === undefined ? undefined : rowActionName(only.label, subject)}
           onClick={() => only.onSelect()}

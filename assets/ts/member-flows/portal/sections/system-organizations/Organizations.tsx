@@ -1,6 +1,6 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
 import type { Column } from "../../../../components/Table";
 import { Badge } from "../../../../ui/Badge";
@@ -14,14 +14,62 @@ import { OrganizationCreateForm } from "./OrganizationCreateForm";
 // that writes the class name has to pull the stylesheet in itself.
 import "../../../../ui/Content.css";
 
-export function Organizations({ canRead, canCreate }: { canRead: boolean; canCreate: boolean }) {
-  const [showCreate, setShowCreate] = useState(false);
-  const actionsRef = useRef<ApiTableActions | null>(null);
+/** Reserved organization-id segment that routes to the creation page instead of a record's detail. */
+const NEW_ORGANIZATION_SEGMENT = "new";
+
+const ORGANIZATIONS_PATH = "/organizations";
+
+/** Redirects back to the directory from an effect, not render — see its call site below. */
+function OrganizationsRedirect({ navigate }: { navigate: (path: string) => void }) {
+  useEffect(() => navigate(ORGANIZATIONS_PATH), [navigate]);
+  return null;
+}
+
+/**
+ * Portal route adapter for the organization directory: the list, and — under
+ * the reserved `new` segment — the create page, which is a place with its own
+ * address rather than a panel that unfolds above the table.
+ */
+export function Organizations({
+  canRead,
+  canCreate,
+  organizationSegment,
+}: {
+  canRead: boolean;
+  canCreate: boolean;
+  /** `undefined` for the directory, `"new"` for the create page. */
+  organizationSegment?: string;
+}) {
+  const [, navigate] = usePortalHashLocation();
+
+  function openCreatePage(): void {
+    navigate(`${ORGANIZATIONS_PATH}/${NEW_ORGANIZATION_SEGMENT}`);
+  }
+
+  if (organizationSegment === NEW_ORGANIZATION_SEGMENT) {
+    // Navigating away belongs in an effect, not in render.
+    if (!canCreate) return <OrganizationsRedirect navigate={navigate} />;
+    // The create page supplies its own `pk` root, its heading, and its way
+    // back, so nothing is wrapped around it here.
+    return (
+      <OrganizationCreateForm
+        onCreated={(organizationId) => navigate(`${ORGANIZATIONS_PATH}/${encodeURIComponent(organizationId)}`)}
+        onCancel={() => navigate(ORGANIZATIONS_PATH)}
+      />
+    );
+  }
 
   if (!canRead) {
+    // A membership writer without `organizations:read` has nothing to list,
+    // but still has somewhere to go: the state names what is missing and
+    // carries the one command the account holds.
     return canCreate ? (
       <section class="pk pk-stack">
-        <OrganizationCreateForm onCreated={() => setShowCreate(false)} onCancel={() => setShowCreate(false)} />
+        <EmptyState
+          title="The organization directory is not visible to your account."
+          body="You can still add an organization."
+          action={{ label: "Add organization", onSelect: openCreatePage }}
+        />
       </section>
     ) : null;
   }
@@ -95,16 +143,6 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
 
   return (
     <section class="pk pk-stack">
-      {showCreate && canCreate && (
-        <OrganizationCreateForm
-          onCreated={() => {
-            setShowCreate(false);
-            void actionsRef.current?.reload();
-          }}
-          onCancel={() => setShowCreate(false)}
-        />
-      )}
-
       <ApiDataTable
         caption="Organizations"
         urlState="organizations"
@@ -113,9 +151,8 @@ export function Organizations({ canRead, canCreate }: { canRead: boolean; canCre
         resolve={(data) => data.organizations}
         resolvePage={(data) => data.page}
         paginate
-        actionsRef={actionsRef}
         searchPlaceholder="organization name"
-        createAction={canCreate ? { label: "Add organization", onSelect: () => setShowCreate(true) } : undefined}
+        createAction={canCreate ? { label: "Add organization", onSelect: openCreatePage } : undefined}
         columns={columns}
         empty={
           canCreate ? (

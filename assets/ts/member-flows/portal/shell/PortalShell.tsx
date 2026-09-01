@@ -1,18 +1,14 @@
 /** Capability-derived portal shell shared by member and management identities. */
-import { type ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
-import { useEffect } from "preact/hooks";
 import { Router, Route, Switch } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
 import { clearAuth, portalSession, profile } from "../state";
 import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
-import { EmptyState } from "../../../components/EmptyState";
 import { Spinner } from "../../../components/Spinner";
-import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
+import { PortalRouteFallback, PortalRouteRedirect, ScrollResetOnNavigate, SectionWrapper } from "./PortalRouteChrome";
 import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
-  portalCapacityFallbackPath,
   portalDefaultPath,
   portalHasAnyGlobalPermission,
   portalHasGlobalPermission,
@@ -77,57 +73,6 @@ function LazyEventWorkspace(props: EventWorkspaceProps) {
   );
 }
 
-function SectionWrapper({ title, children }: { title?: string; children: ComponentChildren }) {
-  return (
-    <div class="portal-section">
-      {title && <h4 class="portal-section-title">{title}</h4>}
-      {children}
-    </div>
-  );
-}
-
-function PortalRouteFallback({ session }: { session: PortalSession | null }) {
-  const [location, navigate] = usePortalHashLocation();
-  const fallbackPath = portalCapacityFallbackPath(session, location);
-
-  useEffect(() => {
-    if (fallbackPath) navigate(fallbackPath);
-  }, [fallbackPath, navigate]);
-
-  if (fallbackPath) return null;
-  // A section that does not exist is a dead end, so it says what to do next
-  // rather than stating the fact and stopping.
-  return (
-    <div class="pk pk-section">
-      <EmptyState title="Section not found." body="The link may be out of date, or the section may have moved." />
-    </div>
-  );
-}
-
-function PortalRouteRedirect({ to }: { to: string }) {
-  const [, navigate] = usePortalHashLocation();
-  useEffect(() => navigate(to), [navigate, to]);
-  return null;
-}
-
-// Hash navigation keeps the document's scroll position — and the browser's
-// automatic scroll restoration re-applies remembered offsets to revisited
-// hash entries — so moving from a scrolled list to another section would
-// land the reader mid-page. The portal owns its scroll instead.
-function ScrollResetOnNavigate() {
-  const [path] = usePortalHashLocation();
-  useEffect(() => {
-    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-  }, []);
-  useEffect(() => {
-    // "instant" sidesteps the site's `scroll-behavior: smooth`, whose
-    // animation the route swap cancels before it reaches the top.
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    document.getElementById("portal-main")?.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [path]);
-  return null;
-}
-
 export function PortalShell() {
   const session = portalSession.value;
   const hasGroupsAccess = portalSectionEnabled(session, "groups");
@@ -137,6 +82,11 @@ export function PortalShell() {
   const hasMemberCapacity = portalSectionEnabled(session, "profile");
   const hasOrganizationsAccess = portalSectionEnabled(session, "organizations");
   const hasOrganizationsDirectory = portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]);
+  // Creating an organization activates its initial identities at once, so it
+  // takes both permissions. Named once, because the directory route and the
+  // create route have to agree on who may reach the create page.
+  const canCreateOrganizations =
+    portalHasGlobalPermission(session, "membership:write") && portalHasGlobalPermission(session, "identities:activate");
   const hasMembershipQueue = portalSectionEnabled(session, "membership");
   const hasUsersDirectory = portalSectionEnabled(session, "users");
   const hasDonationsAccess = portalSectionEnabled(session, "donations");
@@ -248,6 +198,28 @@ export function PortalShell() {
               />
             )}
             {hasOrganizationsAccess && (
+              // Creation has its own address, so it survives a reload and Back
+              // closes it. Must stay above `/organizations/:organizationId`:
+              // wouter's <Switch> renders the first match, and the detail route
+              // would otherwise open a record whose id is the word "new".
+              <Route
+                path="/organizations/new"
+                component={() =>
+                  hasOrganizationsDirectory && canCreateOrganizations ? (
+                    <SectionWrapper title="Organizations">
+                      <Organizations
+                        canRead={portalHasGlobalPermission(session, "organizations:read")}
+                        canCreate
+                        organizationSegment="new"
+                      />
+                    </SectionWrapper>
+                  ) : (
+                    <PortalRouteRedirect to="/organizations" />
+                  )
+                }
+              />
+            )}
+            {hasOrganizationsAccess && (
               <Route
                 path="/organizations/:organizationId"
                 component={({ params }: { params: { organizationId: string } }) =>
@@ -276,10 +248,7 @@ export function PortalShell() {
                     <SectionWrapper title="Organizations">
                       <Organizations
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
-                        canCreate={
-                          portalHasGlobalPermission(session, "membership:write") &&
-                          portalHasGlobalPermission(session, "identities:activate")
-                        }
+                        canCreate={canCreateOrganizations}
                       />
                     </SectionWrapper>
                   ) : (
@@ -451,6 +420,19 @@ export function PortalShell() {
                 component={() => (
                   <SectionWrapper title="Home">
                     <Home />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {hasGroupsAccess && (
+              // Same reservation as the organizations create route: this must
+              // stay above `/groups/:groupId/*?`, which would otherwise load a
+              // group workspace for the id "new".
+              <Route
+                path="/groups/new"
+                component={() => (
+                  <SectionWrapper title="Groups">
+                    <Groups groupSegment="new" />
                   </SectionWrapper>
                 )}
               />

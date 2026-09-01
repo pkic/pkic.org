@@ -212,7 +212,7 @@ describe("URL-addressed group sub-resources", () => {
       }),
     );
 
-    const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} initialPlacementId={placementId} />);
+    const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} placementSegment={placementId} />);
     await settle();
     await settle();
 
@@ -276,7 +276,7 @@ describe("URL-addressed group sub-resources", () => {
       <GroupForms
         groupId={GROUP_ID}
         canManage={false}
-        initialPlacementId={placementId}
+        placementSegment={placementId}
         initialPlacementTab="responses"
       />,
     );

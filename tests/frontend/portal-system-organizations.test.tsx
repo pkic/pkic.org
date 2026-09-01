@@ -13,7 +13,9 @@ import { controlFor, namedGroup, typeInto } from "./helpers/labelled-control";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 import { Organizations } from "../../assets/ts/member-flows/portal/sections/system-organizations/Organizations";
 
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", navigate] }));
 
 const mounted: HTMLElement[] = [];
 const organizationId = "00000000-0000-4000-8000-000000000010";
@@ -139,6 +141,7 @@ function dialogButton(root: HTMLElement, label: string): HTMLButtonElement {
 }
 
 afterEach(() => {
+  navigate.mockReset();
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -155,8 +158,89 @@ describe("portal System Organizations", () => {
     await settle();
 
     expect(fetchMock).not.toHaveBeenCalled();
+    // Nothing to list, but the one command the account holds is still offered
+    // — and it goes to the create page rather than opening a form here.
     expect(container.textContent).toContain("Add organization");
     expect(container.textContent).not.toContain("No organizations found");
+    const create = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add organization",
+    );
+    await act(async () => {
+      create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith("/organizations/new");
+  });
+
+  it("sends Add organization to its own address instead of unfolding a form above the table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          organizationsListResponseSchema.parse({
+            organizations: [detail().organization],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          }),
+        ),
+      ),
+    );
+
+    const container = mount(<Organizations canRead canCreate />);
+    await settle();
+
+    const create = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add organization",
+    );
+    expect(create).not.toBeUndefined();
+    await act(async () => {
+      create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(navigate).toHaveBeenCalledWith("/organizations/new");
+    // The click navigates and nothing else: this mount still shows the table.
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("tbody tr")).not.toBeNull();
+  });
+
+  it("renders the reserved new segment as the create page, alone on the screen", async () => {
+    const fetchMock = vi.fn(async () => json(detail()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = mount(<Organizations canRead canCreate organizationSegment="new" />);
+    await settle();
+
+    // The create page names what is being created and does not list anything,
+    // so the directory is never fetched while it is open.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Add organization");
+    expect(container.querySelector("table")).toBeNull();
+
+    const back = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "← All organizations",
+    );
+    expect(back).not.toBeUndefined();
+    await act(async () => {
+      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith("/organizations");
+  });
+
+  it("returns an account that cannot create from the new segment to the directory", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          organizationsListResponseSchema.parse({
+            organizations: [],
+            page: { limit: 50, offset: 0, total: 0, hasMore: false },
+          }),
+        ),
+      ),
+    );
+
+    mount(<Organizations canRead canCreate={false} organizationSegment="new" />);
+    await settle();
+
+    expect(navigate).toHaveBeenCalledWith("/organizations");
   });
 
   it("lists through the canonical organization API and hides creation without membership:write", async () => {

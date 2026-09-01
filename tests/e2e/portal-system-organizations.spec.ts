@@ -23,6 +23,24 @@ test("permitted staff manage organizations through the canonical domain API", as
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+
+  // Creation is its own view: the directory table is gone, not layered above
+  // the form, and "new" is a reserved id in the /organizations/:id route.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+  await expect(page.locator("tbody tr")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add organization", exact: true })).toHaveCount(0);
+
+  // The way back leaves the page without creating anything, and the browser's
+  // Back button does the same, because creation has an address of its own.
+  await page.getByRole("button", { name: "← All organizations", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+
   // Located by the names the form announces — the region, its per-identity
   // groups, and each control's label — rather than by generated ids.
   const createForm = page.getByRole("region", { name: "Add organization" });
@@ -43,9 +61,9 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.getByRole("button", { name: "Create organization" }).click();
   expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: new RegExp(organizationName) })).toBeVisible();
 
-  await page.getByRole("cell", { name: new RegExp(organizationName) }).click();
+  // Success navigates straight to the created organization's own detail view.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/[0-9a-fA-F-]{36}$/);
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 

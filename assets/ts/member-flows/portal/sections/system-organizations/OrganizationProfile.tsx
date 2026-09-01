@@ -1,4 +1,3 @@
-import { Fragment } from "preact";
 import { useState } from "preact/hooks";
 import {
   orgTiedMembershipCategorySchema,
@@ -9,12 +8,12 @@ import { friendlyErrorMessage } from "../../../../components/ErrorAlert";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
-import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
-import { fmt, toast } from "../../ui";
+import { fmt, fmtDate, toast } from "../../ui";
 import "../../../../ui/Content.css";
 
 const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
@@ -188,7 +187,17 @@ const CONTACT_FIELDS = [
   ["Secondary contact", "secondaryContactUserId"],
 ] as const;
 
-function Contacts({ organization, onSaved }: { organization: OrganizationDetail; onSaved: () => Promise<void> }) {
+/**
+ * Who to talk to. Secondary to the record itself, so the page gives it the
+ * supporting column rather than a third panel of equal weight.
+ */
+export function OrganizationContacts({
+  organization,
+  onSaved,
+}: {
+  organization: OrganizationDetail;
+  onSaved: () => Promise<void>;
+}) {
   const [busy, setBusy] = useState<(typeof CONTACT_FIELDS)[number][1] | null>(null);
   const [error, setError] = useState("");
 
@@ -253,40 +262,45 @@ function Contacts({ organization, onSaved }: { organization: OrganizationDetail;
   );
 }
 
-/** The read-only metadata block. A term/value list, not a table: there is one
- *  record and no columns to compare across. */
+/**
+ * A stored URL, rendered as the link it is.
+ *
+ * `null` comes back as `undefined` rather than as a dash: `DescriptionList`
+ * owns what an absent value looks like, and a surface that writes its own dash
+ * is the reason the portal had four of them.
+ */
+function profileLink(url: string | null) {
+  if (!url) return undefined;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer">
+      {url}
+    </a>
+  );
+}
+
+/**
+ * The record's facts. A term/value list, not a table: there is one record and
+ * no columns to compare across.
+ *
+ * The membership category is not repeated here — it is a badge beside the
+ * organization's name, where the page states what this record is.
+ */
 function ProfileSummary({ organization }: { organization: OrganizationDetail }) {
-  const rows: ReadonlyArray<readonly [string, string | null]> = [
-    ["Website", organization.website],
-    ["Slogan", organization.slogan],
-    ["Description", organization.description],
-    ["Blog", organization.blogUrl],
-    ["Press", organization.pressUrl],
-    ["Careers", organization.careersUrl],
-    ["Member since", fmt(organization.memberSince)],
-    ["Created", fmt(organization.createdAt)],
+  const items: DescriptionListItem[] = [
+    { term: "Website", value: profileLink(organization.website) },
+    { term: "Slogan", value: organization.slogan },
+    { term: "Description", value: organization.description },
+    { term: "Blog", value: profileLink(organization.blogUrl) },
+    { term: "Press", value: profileLink(organization.pressUrl) },
+    { term: "Careers", value: profileLink(organization.careersUrl) },
+    // A calendar date, not an instant: the contract is `z.iso.date()`, and
+    // `fmt` would widen it into a moment with a time of day and a zone that
+    // the value never carried. AGENTS.md forbids that widening explicitly.
+    { term: "Member since", value: fmtDate(organization.memberSince) },
+    { term: "Created", value: fmt(organization.createdAt) },
   ];
 
-  return (
-    <dl class="pk-datalist pk-small">
-      <dt>Membership category</dt>
-      <dd>
-        {organization.membershipCategory ? (
-          <Badge tone="neutral" dot={false}>
-            <span class="pk-mono">{organization.membershipCategory}</span>
-          </Badge>
-        ) : (
-          "—"
-        )}
-      </dd>
-      {rows.map(([label, value]) => (
-        <Fragment key={label}>
-          <dt>{label}</dt>
-          <dd>{value || "—"}</dd>
-        </Fragment>
-      ))}
-    </dl>
-  );
+  return <DescriptionList items={items} density="compact" />;
 }
 
 export function OrganizationProfile({
@@ -300,32 +314,32 @@ export function OrganizationProfile({
 }) {
   const [editing, setEditing] = useState(false);
 
+  // The panel is the record itself, and nothing else. Contacts used to be
+  // rendered from inside here, which meant the page could not decide that one
+  // of the two mattered more than the other.
   return (
-    <div class="pk pk-stack">
-      <Panel aria-label="Profile">
-        <PanelHeader title="Profile">
-          {canWrite && !editing && (
-            <Button size="sm" onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-          )}
-        </PanelHeader>
-        <PanelBody>
-          {editing ? (
-            <OrganizationProfileForm
-              organization={organization}
-              onSaved={async () => {
-                setEditing(false);
-                await onSaved();
-              }}
-              onCancel={() => setEditing(false)}
-            />
-          ) : (
-            <ProfileSummary organization={organization} />
-          )}
-        </PanelBody>
-      </Panel>
-      {canWrite && <Contacts organization={organization} onSaved={onSaved} />}
-    </div>
+    <Panel aria-label="Profile">
+      <PanelHeader title="Profile">
+        {canWrite && !editing && (
+          <Button size="sm" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+        )}
+      </PanelHeader>
+      <PanelBody>
+        {editing ? (
+          <OrganizationProfileForm
+            organization={organization}
+            onSaved={async () => {
+              setEditing(false);
+              await onSaved();
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <ProfileSummary organization={organization} />
+        )}
+      </PanelBody>
+    </Panel>
   );
 }

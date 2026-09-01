@@ -15,13 +15,69 @@
 
 @layer components {
   /*
+   * THE MEASURE — how wide a list is allowed to get.
+   *
+   * The design system's own examples are drawn inside a 66rem column, and they
+   * look like a table. The portal's `#portal-main` has no width at all, so on a
+   * 2000px screen the same component was handed 1670px: `table-layout: auto`
+   * shares leftover width between the columns IN PROPORTION to what each one
+   * needs, so every column inflated by two thirds and the row stopped reading
+   * as a row. A person sat at the far left, their date at 60%, and the button
+   * that acts on them a third of a metre away at the right edge.
+   *
+   * So the list is measured, at the same 66rem its own specimens use. The
+   * controls, the table and the pager all read it, so the three share one edge
+   * instead of the toolbar spanning the screen above a narrower table.
+   */
+  .pk-table-list,
+  .pk-table__scroll {
+    --pk-table-measure: 66rem;
+  }
+
+  /*
+   * The list block: search and filters, the table, the pager.
+   *
+   * `fit-content` rather than a `max-width`, so a table with more columns than
+   * the measure allows still gets the room it needs instead of being forced to
+   * scroll on a screen that had the space.
+   */
+  .pk-table-list {
+    width: fit-content;
+    min-width: min(100%, var(--pk-table-measure));
+    max-width: 100%;
+  }
+
+  /*
    * A data table is denser and quieter than a table in prose: more rows on a
    * screen, headers that read as column labels rather than sentences, and a
    * ground it can rely on because it is always drawn inside a `Panel`.
+   *
+   * `width` overrides the shared skin's `100%` for the reason above. The skin
+   * keeps `100%` because a table in prose sits in a measured article already.
+   *
+   * `tabular-nums` so a column of dates, counts or amounts lines up digit under
+   * digit whichever way the column is aligned. Proportional figures make a
+   * column of numbers look ragged even when every value has the same length.
    */
   .pk-table {
+    width: fit-content;
+    min-width: min(100%, var(--pk-table-measure, 66rem));
     font-size: var(--pk-text-sm);
     color: var(--pk-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * One leading for the whole table, so a row's height is its type scale plus
+   * `--pk-row-y` and nothing else. It is the same 1.35 `PersonCell` sets on the
+   * two lines it stacks, which is what stops a row with a face in it drifting
+   * out of rhythm with a row of plain values. The document's 1.55 is a reading
+   * measure for prose and made every wrapped cell a third taller than it needed
+   * to be.
+   */
+  .pk-table th,
+  .pk-table td {
+    line-height: 1.35;
   }
 
   .pk-table th {
@@ -35,6 +91,23 @@
   .pk-table td {
     border-bottom-color: var(--pk-line-soft);
     vertical-align: middle;
+  }
+
+  /*
+   * A column whose content has a bounded length — a date, a count, a status,
+   * the row's actions. It hugs that content and never wraps, so it takes none
+   * of the row's leftover width and the columns that hold real prose get it
+   * instead. `width: 1px` is the table-layout idiom for "as narrow as this
+   * column's content allows"; the `nowrap` is what makes that the whole value
+   * rather than its longest word.
+   *
+   * This is why a column says `width: "fit"` on its definition rather than
+   * writing `pk-nowrap` on its cells: wrapping is a symptom, and the utility
+   * only ever treated the symptom.
+   */
+  .pk-table__col--fit {
+    width: 1px;
+    white-space: nowrap;
   }
 
   .pk-table tbody tr:last-child td {
@@ -165,8 +238,11 @@
     pointer-events: none;
   }
 
+  /* `min-width` because a placeholder in a `fit` column has no content to be
+     as wide as, and a skeleton nobody can see is not a loading state. */
   .pk-table__skeleton {
     display: block;
+    min-width: var(--pk-7);
     height: 0.7rem;
     border-radius: var(--pk-radius-sm);
     background: linear-gradient(90deg, var(--pk-line-soft) 25%, var(--pk-line) 37%, var(--pk-line-soft) 63%);

@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
@@ -10,56 +10,85 @@ import { GroupFormDetail } from "./GroupFormDetail";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { ResourceCapabilities } from "./ResourceCapabilities";
 
+/** Reserved placement segment that routes to the creation page instead of a placement's detail. */
+const NEW_GROUP_FORM_SEGMENT = "new";
+
+/** Returns to the forms list from an effect, not render — see its call site below. */
+function GroupFormsRedirect({ onLeave }: { onLeave: () => void }) {
+  useEffect(() => onLeave(), [onLeave]);
+  return null;
+}
+
 export function GroupForms({
   groupId,
   canManage,
-  initialPlacementId,
+  placementSegment,
   initialPlacementTab,
 }: {
   groupId: string;
   canManage: boolean;
-  initialPlacementId?: string;
-  /** The URL-addressed tab segment for `initialPlacementId`'s detail view. */
+  /** `undefined` for the list, `"new"` for the create page, or a placement id for its detail. */
+  placementSegment?: string;
+  /** The URL-addressed tab segment for `placementSegment`'s detail view. */
   initialPlacementTab?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
-  const [showCreate, setShowCreate] = useState(false);
-  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(initialPlacementId ?? null);
+  const creating = placementSegment === NEW_GROUP_FORM_SEGMENT;
+  const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(
+    creating ? null : (placementSegment ?? null),
+  );
   const tableActions = useRef<ApiTableActions | null>(null);
+  const formsPath = `/groups/${encodeURIComponent(groupId)}/forms`;
+
+  function placementPath(placementId: string): string {
+    return `${formsPath}/${encodeURIComponent(placementId)}`;
+  }
 
   function selectPlacement(placementId: string | null): void {
     setSelectedPlacementId(placementId);
-    navigate(
-      placementId
-        ? `/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`
-        : `/groups/${encodeURIComponent(groupId)}/forms`,
+    navigate(placementId ? placementPath(placementId) : formsPath);
+  }
+
+  function leaveCreatePage(): void {
+    navigate(formsPath);
+  }
+
+  if (creating) {
+    // Navigating away belongs in an effect, not in render.
+    if (!canManage) return <GroupFormsRedirect onLeave={leaveCreatePage} />;
+    return (
+      // Creation is a page of its own: a heading that names what is being
+      // created, a way back, and no list competing for the same screen.
+      <div class="pk pk-stack">
+        <div class="pk-cluster">
+          <Button size="sm" onClick={leaveCreatePage}>
+            ← All forms
+          </Button>
+        </div>
+        <Panel aria-label="New group form">
+          <PanelHeader title="New group form" headingLevel={2} />
+          <PanelBody>
+            <GroupFormEditor
+              groupId={groupId}
+              detail={null}
+              onSaved={(createdPlacementId) =>
+                navigate(createdPlacementId ? placementPath(createdPlacementId) : formsPath)
+              }
+              onCancel={leaveCreatePage}
+            />
+          </PanelBody>
+        </Panel>
+      </div>
     );
   }
 
   return (
     // The outer card had no header of its own, so the panel carries the name
     // as a label rather than inventing a second heading above the workspace
-    // tab that already announces this section. The body's gap replaces the
-    // `mb-3` the create form used to carry.
+    // tab that already announces this section.
     <div class="pk">
       <Panel aria-label="Group forms">
         <PanelBody class="pk-stack">
-          {showCreate && (
-            <Panel aria-label="New group form">
-              <PanelHeader title="New group form" headingLevel={4} />
-              <PanelBody>
-                <GroupFormEditor
-                  groupId={groupId}
-                  detail={null}
-                  onSaved={async () => {
-                    setShowCreate(false);
-                    await tableActions.current?.reload();
-                  }}
-                  onCancel={() => setShowCreate(false)}
-                />
-              </PanelBody>
-            </Panel>
-          )}
           <ApiDataTable
             caption="Group forms"
             endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/forms`}
@@ -68,7 +97,11 @@ export function GroupForms({
             resolvePage={(response) => response.page}
             paginate
             actionsRef={tableActions}
-            createAction={canManage ? { label: "New form", onSelect: () => setShowCreate(true) } : undefined}
+            createAction={
+              canManage
+                ? { label: "New form", onSelect: () => navigate(`${formsPath}/${NEW_GROUP_FORM_SEGMENT}`) }
+                : undefined
+            }
             searchPlaceholder="Search forms…"
             initialSort="title"
             columns={[

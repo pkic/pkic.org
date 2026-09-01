@@ -1,6 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { identityCreateSchema, identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
+import { EmptyState } from "../../../../components/EmptyState";
 import { FormActions } from "../../../../components/FormActions";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
@@ -246,6 +247,26 @@ export function IdentityRoster({
           canManage={canManageIdentities}
           onChanged={onChanged}
           actionsRef={directoryRef}
+          /*
+           * "No identities" in a table cell says a query returned nothing. It
+           * does not say what an identity is, nor what to do about it — and on
+           * a new organization that empty table is the whole page.
+           *
+           * The state names the two controls that fill it rather than
+           * repeating them: both already sit in this panel's header, directly
+           * above, and a second button under the same accessible name is
+           * ambiguous to anyone navigating by name rather than by sight.
+           */
+          empty={
+            <EmptyState
+              title="No identities yet"
+              body={
+                canManageIdentities
+                  ? 'An identity is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
+                  : "An identity is a person who acts for this organization. Nobody does yet."
+              }
+            />
+          }
         />
       </PanelBody>
     </Panel>

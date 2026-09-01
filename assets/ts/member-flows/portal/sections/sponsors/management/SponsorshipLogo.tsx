@@ -18,9 +18,6 @@ export function SponsorshipLogo({ sponsorship, onChanged }: { sponsorship: Spons
     <LogoManager
       imageUrl={sponsorship.nonMemberLogoUrl}
       alt={`${sponsorship.nonMemberName ?? "Sponsor"} logo`}
-      layout="inline"
-      imageClass="border rounded p-1 bg-white sponsorship-management-logo"
-      placeholderClass="d-flex align-items-center justify-content-center border rounded bg-light text-muted small sponsorship-management-logo-placeholder"
       removeConfirmation="Remove this sponsor's logo?"
       removeLabel="Remove logo"
       accept="image/svg+xml"

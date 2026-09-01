@@ -25,6 +25,8 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   await signInToPortal(page, e2eAdminEmail("portal-organizations"));
   await page.goto("/portal/#/organizations");
   await page.getByRole("button", { name: "Add organization", exact: true }).click();
+  // Creation is its own routed view, not a panel above the directory.
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
   const createForm = page.getByRole("region", { name: "Add organization" });
   await createForm.getByLabel("Organization name").fill(organizationName);
   await createForm.getByLabel("Membership category").selectOption("F");
@@ -44,7 +46,7 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
 
-  await page.getByRole("cell", { name: new RegExp(organizationName) }).click();
+  // Success lands on the created organization's own detail view.
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   const organizationId = decodeURIComponent(page.url().split("/organizations/")[1].split(/[/?#]/)[0]);
 

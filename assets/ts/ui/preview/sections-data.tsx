@@ -2,14 +2,22 @@ import { useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
 import { Breadcrumb } from "../Breadcrumb";
 import { DataTable } from "../DataTable";
+import { DescriptionList } from "../DescriptionList";
 import { Field } from "../Field";
+import { FileInput } from "../FileInput";
 import { Menu, type MenuItem } from "../Menu";
 import { Meter } from "../Meter";
 import { Pager } from "../Pager";
 import { Panel, PanelBody, PanelHeader } from "../Panel";
+import { PersonCell } from "../PersonCell";
+import { RowActions } from "../RowActions";
 import { Select, Textarea, TextInput } from "../TextControl";
 import { Tabs } from "../Tabs";
 import { Toast } from "../Toast";
+
+/** Stands in for an uploaded logo, so the preview page fetches nothing. */
+const LOGO_SPECIMEN =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 40'%3E%3Crect fill='%234c51bf' width='120' height='40' rx='6'/%3E%3Ctext x='60' y='25' fill='%23ffffff' font-family='sans-serif' font-size='14' text-anchor='middle'%3ESecureCA%3C/text%3E%3C/svg%3E";
 
 interface Member {
   id: string;
@@ -80,7 +88,76 @@ export const dataSections: PreviewSection[] = [
           <Field label="Biography" required state="invalid" message="Biography must be at least 10 characters.">
             {(props) => <Textarea {...props} placeholder="Tell us about your expertise…" />}
           </Field>
+
+          <Field label="Supporting document" help="PDF, up to 5 MB.">
+            {(props) => <FileInput {...props} accept="application/pdf" />}
+          </Field>
+
+          {/* The preview slot: a field that already has a value shows it
+              inside the control rather than beside it. */}
+          <Field label="Organization logo" help="SVG or PNG. Replaces the current logo once approved.">
+            {(props) => (
+              <FileInput
+                {...props}
+                accept="image/svg+xml,image/png"
+                buttonLabel="Replace logo"
+                preview={<img src={LOGO_SPECIMEN} alt="Current logo" />}
+              />
+            )}
+          </Field>
+
+          <Field label="Charter" state="invalid" message="Choose a file to upload.">
+            {(props) => <FileInput {...props} />}
+          </Field>
+
+          <Field label="Signed agreement" help="Locked until the application is approved.">
+            {(props) => <FileInput {...props} disabled />}
+          </Field>
         </div>
+      </div>
+    ),
+  },
+
+  {
+    id: "details",
+    title: "Detail lists",
+    note: "Term and value pairs for a record: two densities, wrapping values, and an em dash where a value is missing.",
+    render: () => (
+      <div class="pk-preview__shelf--stack">
+        <Panel>
+          <PanelHeader title="Profile" />
+          <PanelBody>
+            <DescriptionList
+              items={[
+                { term: "Legal name", value: "SecureCA Inc" },
+                { term: "Membership", value: "Full member since 2021" },
+                {
+                  term: "Certification practice statement",
+                  value: (
+                    <a href="#cps">https://policy.example.test/repository/certification-practice-statement/current</a>
+                  ),
+                },
+                { term: "Slogan" },
+                { term: "Headquarters", value: "Trondheim, Norway" },
+              ]}
+            />
+          </PanelBody>
+        </Panel>
+
+        <Panel>
+          <PanelHeader title="Submission (compact)" />
+          <PanelBody>
+            <DescriptionList
+              density="compact"
+              items={[
+                { term: "Submitted", value: "2026-08-14" },
+                { term: "Reviewer", value: "Alice Chen" },
+                { term: "Decision" },
+                { term: "Notes", value: "Awaiting confirmation from the applicant's sponsoring organization." },
+              ]}
+            />
+          </PanelBody>
+        </Panel>
       </div>
     ),
   },
@@ -151,6 +228,63 @@ export const dataSections: PreviewSection[] = [
               },
             }}
           />
+
+          {/*
+           * A roster, in the shape the portal's lists actually take: a face and
+           * a second line, a phrase, a date, and something the row can do.
+           *
+           * It is here because the specimens above are four columns of short
+           * even strings, which is the one shape whose columns never drift —
+           * and so the portal's tables drifted for a year without this page
+           * showing it. `pk-table-list` is what a real list is drawn in, so
+           * the measure the portal gets is the measure on this page too.
+           */}
+          <div class="pk-stack pk-stack--snug pk-table-list">
+            <DataTable<Member>
+              caption="Members and what can be done to them"
+              columns={[
+                {
+                  id: "person",
+                  header: "Person",
+                  sortable: true,
+                  cell: (row) => <PersonCell name={row.name} email={row.email} size="sm" />,
+                },
+                { id: "organization", header: "Capacity", cell: (row) => row.organization },
+                // A date has a bounded length: it hugs, so the columns that
+                // hold prose keep the width instead.
+                { id: "joined", header: "Joined", cell: (row) => row.joined, sortable: true, width: "fit" },
+                {
+                  id: "actions",
+                  header: "Actions",
+                  headerHidden: true,
+                  align: "end",
+                  cell: (row) => (
+                    <RowActions
+                      subject={row.name}
+                      status={row.id === "m1" ? "Chair" : undefined}
+                      actions={
+                        row.id === "m2"
+                          ? memberItems
+                          : [{ id: "remove", label: "Remove from group", onSelect: () => {} }]
+                      }
+                    />
+                  ),
+                },
+              ]}
+              rows={MEMBERS}
+              rowKey={(row) => row.id}
+              rowAction={(row) => ({ label: `Open ${row.name}`, href: `#${row.id}` })}
+            />
+            <Pager
+              label="Roster pagination"
+              page={1}
+              pageCount={4}
+              total={14}
+              rangeStart={1}
+              rangeEnd={4}
+              onSelect={() => {}}
+            />
+          </div>
 
           <DataTable<Member>
             caption="Loading members"

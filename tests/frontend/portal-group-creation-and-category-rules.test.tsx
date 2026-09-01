@@ -4,10 +4,19 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupCategoryRulesEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupCategoryRulesEditor";
 import { GroupCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupCreateForm";
+import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 import { groupCreateSchema } from "../../assets/shared/schemas/groups";
 import { buttonNamed, chooseOption, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
+
+const navigate = vi.fn();
+
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["/groups", navigate],
+}));
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...props }: JSX.HTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -27,7 +36,25 @@ async function settle(): Promise<void> {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+const mounted: HTMLElement[] = [];
+
+function mountGroupsAt(groupSegment?: string): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  void act(() => render(<Groups groupSegment={groupSegment} />, container));
+  return container;
+}
+
+afterEach(() => {
+  portalSession.value = null;
+  navigate.mockReset();
+  for (const container of mounted.splice(0)) {
+    void act(() => render(null, container));
+    container.remove();
+  }
+  vi.unstubAllGlobals();
+});
 
 describe("portal group creation and category policy", () => {
   it("loads group types and posts the complete canonical group-create contract", async () => {
@@ -359,5 +386,82 @@ describe("portal group creation and category policy", () => {
 
     await act(() => render(null, container));
     container.remove();
+  });
+});
+
+describe("group creation is a page, not a layer over the catalog", () => {
+  function stubEmptyCatalog(): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+  }
+
+  it("sends New group to its own address instead of swapping the catalog for a form", async () => {
+    stubEmptyCatalog();
+    portalSession.value = portalSessionFixture({ member: true, staff: true });
+    const container = mountGroupsAt();
+    await settle();
+
+    const create = [...container.querySelectorAll("button")].find((button) => button.textContent === "New group");
+    expect(create).not.toBeUndefined();
+    await act(async () => {
+      create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(navigate).toHaveBeenCalledWith("/groups/new");
+    // The click navigates and nothing else: this mount still shows the catalog.
+    expect(container.textContent).not.toContain("Create a group");
+  });
+
+  it("renders the reserved new segment as the create page, with a way back and a cancel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/groups/creation-capabilities") {
+          return new Response(JSON.stringify({ canCreate: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ groupTypes: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+    portalSession.value = portalSessionFixture({ member: true, staff: true });
+    const container = mountGroupsAt("new");
+    await settle();
+
+    expect(container.textContent).toContain("Create a group");
+    // The catalog is gone rather than sitting below the form.
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("New group");
+
+    const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel");
+    expect(cancel).not.toBeUndefined();
+    await act(async () => {
+      cancel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith("/groups");
+  });
+
+  it("returns an identity without groups:write from the create page to the catalog", async () => {
+    stubEmptyCatalog();
+    portalSession.value = portalSessionFixture({ member: true });
+    mountGroupsAt("new");
+    await settle();
+
+    expect(navigate).toHaveBeenCalledWith("/groups");
   });
 });

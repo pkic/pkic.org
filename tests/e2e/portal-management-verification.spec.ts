@@ -207,14 +207,31 @@ test.describe("Portal management browser-verification pass", () => {
     await page.goto(`/portal/#/groups/${groupId}/votes`);
     await page.getByRole("button", { name: "Create vote" }).click();
 
+    // Creation is its own view: the votes table is gone, not layered above the
+    // form, and "new" is a reserved id in the group's votes route.
+    await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/new$`));
+    await expect(page.locator("tbody tr")).toHaveCount(0);
+
+    // The way back leaves without creating anything, and so does the browser's
+    // Back button, because the create page has an address of its own.
+    await page.getByRole("button", { name: "← All votes", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes$`));
+    await page.getByRole("button", { name: "Create vote" }).click();
+    await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/new$`));
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes$`));
+    await page.getByRole("button", { name: "Create vote" }).click();
+
     const form = page.locator("form").filter({ hasText: "Create vote" });
     await form.getByLabel("Title").fill(title);
     await form.getByLabel("Closes at").fill(closesAtLocal);
     await form.getByRole("button", { name: "Create vote", exact: true }).click();
 
+    // Success navigates to the created vote's own address, which opens its
+    // detail beneath the row rather than leaving the reader to find it.
+    await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/[0-9a-fA-F-]{36}$`));
     const row = page.getByRole("row").filter({ hasText: title });
     await expect(row).toBeVisible();
-    await row.getByRole("button", { name: "Details" }).click();
     const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
 

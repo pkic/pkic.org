@@ -26,8 +26,19 @@ function emptyIdentity(): IdentityDraft {
 
 const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
 
-/** Creates one organization aggregate with its initial approved identities. */
-export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+/**
+ * The create-organization page: one organization aggregate with its initial
+ * approved identities. It stands in place of the directory rather than
+ * unfolding inside it, so it carries its own way back out — the same shape the
+ * roles and global-forms create views use.
+ */
+export function OrganizationCreateForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (organizationId: string) => void;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
   const [description, setDescription] = useState("");
@@ -49,7 +60,7 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
     setBusy(true);
     setError("");
     try {
-      await postJson(
+      const created = await postJson(
         "/api/v1/organizations",
         {
           name: name.trim(),
@@ -69,7 +80,7 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
         organizationCreateResponseSchema,
       );
       toast("Organization created", "success");
-      onCreated();
+      onCreated(created.organization.id);
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
@@ -80,7 +91,14 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
   }
 
   return (
-    <div class="pk">
+    <div class="pk pk-stack">
+      {/* The page's way back: creation has its own address, so leaving it is
+          navigation rather than the disappearance of a layer. */}
+      <div class="pk-cluster">
+        <Button size="sm" onClick={onCancel} disabled={busy}>
+          ← All organizations
+        </Button>
+      </div>
       <Panel aria-label="Add organization">
         <PanelHeader title="Add organization" headingLevel={2} />
         <PanelBody>

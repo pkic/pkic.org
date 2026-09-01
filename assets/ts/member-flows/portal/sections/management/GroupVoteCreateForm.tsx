@@ -40,7 +40,8 @@ export function GroupVoteCreateForm({
   onCancel,
 }: {
   groupId: string;
-  onCreated: () => Promise<void>;
+  /** Receives the created vote's id, so a create page can go to the record it just made. */
+  onCreated: (createdVoteId: string) => void | Promise<void>;
   onCancel?: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -75,7 +76,7 @@ export function GroupVoteCreateForm({
     setSaving(true);
     setError(null);
     try {
-      await postValidated(
+      const created = await postValidated(
         `/api/v1/groups/${encodeURIComponent(groupId)}/votes`,
         groupVoteCreateInputSchema,
         {
@@ -103,7 +104,7 @@ export function GroupVoteCreateForm({
       setQuorumPercent("");
       setTieBreakMode("none");
       setClosesAt("");
-      await onCreated();
+      await onCreated(created.vote.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error("Could not create the vote."));
     } finally {

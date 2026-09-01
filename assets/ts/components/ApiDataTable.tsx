@@ -138,7 +138,12 @@ export function ApiDataTable<T, Response = unknown>({
   });
 
   return (
-    <div class="pk pk-stack pk-stack--snug">
+    // `pk-table-list` measures the whole list, not only the table: the search
+    // field, the filters, the table and the pager share one edge. Without it
+    // the toolbar stretched across a 2000px screen above a table that had
+    // settled at its own measure, and the pager centred itself under the
+    // screen rather than under the rows it pages.
+    <div class="pk pk-stack pk-stack--snug pk-table-list">
       {(searchPlaceholder || toolbar || createAction) && (
         // The toolbar is named after the list it controls, so a page with
         // several collections does not present several toolbars called
