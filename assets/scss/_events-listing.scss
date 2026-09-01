@@ -237,7 +237,9 @@
 // ── Webinar card (sidebar) ────────────────────────────────────────────────────
 
 .event-webinar-card {
-  background: #fff;
+  // `--pk-surface` rather than white: the reader can choose the dark theme now,
+  // and a hard-coded ground turns into a light island with near-white text.
+  background: var(--pk-surface);
   border: 1px solid $gray-200;
   border-radius: 0.875rem;
   overflow: hidden;

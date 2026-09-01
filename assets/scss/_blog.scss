@@ -3,7 +3,9 @@
 // ============================================================
 
 .blog-card {
-  background: #fff;
+  // `--pk-surface` rather than white: the reader can choose the dark theme now,
+  // and a hard-coded ground turns into a light island with near-white text on it.
+  background: var(--pk-surface);
   border-radius: 1rem;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -475,9 +477,9 @@
 // ============================================================
 
 .blog-post-nav {
-  border-top: 1px solid $gray-200;
+  border-top: 1px solid var(--pk-line);
   padding: 2rem 0;
-  background: #fff;
+  background: var(--pk-surface);
 }
 
 .blog-post-nav-inner {

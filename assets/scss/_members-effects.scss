@@ -166,7 +166,9 @@
 }
 
 .members-overview {
-  background: #fff;
+  // `--pk-surface` rather than white: the reader can choose the dark theme now,
+  // and a hard-coded ground turns into a light island with near-white text on it.
+  background: var(--pk-surface);
   // The wall's inset used to be four responsive padding utilities on the
   // markup. It is one decision, so it lives with the rest of the frame.
   padding-block: var(--pk-5);

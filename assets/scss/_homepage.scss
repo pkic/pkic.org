@@ -313,7 +313,8 @@ $pkic-page-hero-themes: (
 }
 
 .pkic-recent-posts {
-  background: $gray-100;
+  // A band that sits back from the page, from the token that knows both themes.
+  background: var(--pk-surface-sunk);
 
   // The heading shares a cluster with the "all posts" link, so its rhythm
   // comes from the section's own padding rather than from `main h2`'s
@@ -389,7 +390,9 @@ $pkic-page-hero-themes: (
   // caller has to remember. The grids that hold these cards stretch their
   // items, so a full-height card fills whatever cell it lands in.
   height: 100%;
-  background: #fff;
+  // `--pk-surface` rather than white: the reader can choose the dark theme now,
+  // and a hard-coded ground turns into a light island with near-white text.
+  background: var(--pk-surface);
   border-radius: 14px;
   overflow: hidden;
   box-shadow:
