@@ -1,12 +1,31 @@
-import { ActivityChartCard } from "../../../../components/analytics/ActivityChartCard";
+/**
+ * System Analytics — the Overview tab.
+ *
+ * Migrated off Bootstrap onto the design system. The three `card` blocks are
+ * Panels, so their titles are real headings rather than a `h6` carrying its own
+ * type scale (`text-uppercase small fw-bold text-muted`); the `row`/`col-md-6`
+ * pair and the legacy `stat-grid` are the system's responsive grid, which has
+ * no breakpoint classes at all; and the spacing that was on each child
+ * (`mb-3`, `mb-4`, `mt-3`) is one `gap` on the parent stack.
+ *
+ * The "Activity — last 30 days" card was a one-consumer wrapper component
+ * (`components/analytics/ActivityChartCard`) whose whole body was Bootstrap
+ * markup. It is a Panel here, in the surface that renders it, rather than a
+ * component indirection around three elements.
+ */
+
 import { fmtMoney, recentActivityChart, statusBars } from "../../../../ui/chart";
 import { DataTable } from "../../../../components/Table";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
 import { StatCard } from "../../../../components/StatCard";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { analyticsSummaryResponseSchema } from "../../../../../shared/schemas/analytics";
+// `pk-mono` is defined in Content.css, which ships in a lazy chunk. A module
+// that writes the class name imports the stylesheet itself.
+import "../../../../ui/Content.css";
 
 export function AnalyticsOverview() {
   const state = useData(() => getJson("/api/v1/analytics/summary", analyticsSummaryResponseSchema), []);
@@ -22,8 +41,8 @@ export function AnalyticsOverview() {
   const donationExpired = donations.byStatus.expired ?? 0;
 
   return (
-    <div>
-      <div class="stat-grid mb-4">
+    <div class="pk pk-stack">
+      <div class="pk-grid pk-grid--tight">
         <StatCard
           label="Total Registrations"
           value={registrations.total}
@@ -57,44 +76,45 @@ export function AnalyticsOverview() {
         />
       </div>
 
-      <div class="row g-3">
-        <div class="col-md-6">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations by Status</h6>
-              <div dangerouslySetInnerHTML={{ __html: statusBars(registrations.byStatus, registrations.total) }} />
-            </div>
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase small fw-bold text-muted mb-3">Top Events</h6>
-              <DataTable
-                caption="Top events by registrations"
-                columns={[
-                  { header: "Event", cell: (event) => event.name },
-                  {
-                    header: { label: "Confirmed", className: "text-end" },
-                    cell: (event) => event.confirmed,
-                    className: "mono text-end",
-                  },
-                  {
-                    header: { label: "Total", className: "text-end" },
-                    cell: (event) => event.total,
-                    className: "mono text-end",
-                  },
-                ]}
-                data={state.data.topEvents}
-                empty="No event registration activity yet"
-                rowKey={(event) => event.slug}
-              />
-            </div>
-          </div>
-        </div>
+      <div class="pk-grid pk-grid--roomy">
+        <Panel>
+          <PanelHeader title="Registrations by Status" headingLevel={2} />
+          <PanelBody>
+            <div dangerouslySetInnerHTML={{ __html: statusBars(registrations.byStatus, registrations.total) }} />
+          </PanelBody>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Top Events" headingLevel={2} />
+          <PanelBody>
+            <DataTable
+              caption="Top events by registrations"
+              columns={[
+                { header: "Event", cell: (event) => event.name },
+                {
+                  header: { label: "Confirmed", className: "pk-end" },
+                  cell: (event) => event.confirmed,
+                  className: "pk-mono pk-end",
+                },
+                {
+                  header: { label: "Total", className: "pk-end" },
+                  cell: (event) => event.total,
+                  className: "pk-mono pk-end",
+                },
+              ]}
+              data={state.data.topEvents}
+              empty="No event registration activity yet"
+              rowKey={(event) => event.slug}
+            />
+          </PanelBody>
+        </Panel>
       </div>
 
-      <ActivityChartCard chart={recentActivityChart(state.data.recentActivity)} />
+      <Panel>
+        <PanelHeader title="Activity — last 30 days" headingLevel={2} />
+        <PanelBody>
+          <div dangerouslySetInnerHTML={{ __html: recentActivityChart(state.data.recentActivity) }} />
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

@@ -147,6 +147,14 @@
     text-align: end;
   }
 
+  /* The third of the trio. A surface does not choose start alignment for fun
+     — it chooses it to opt back out of an ancestor that centered everything,
+     which `SuccessPanel` does to the panels rendered inside it. Without this
+     the only way back is an inline `style`, which the repository forbids. */
+  .pk-start {
+    text-align: start;
+  }
+
   .pk-strong {
     font-weight: 700;
   }

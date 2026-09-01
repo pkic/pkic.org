@@ -17,11 +17,16 @@ test("permitted staff use focused platform analytics through the System portal",
   await page.goto("/portal/#/system/analytics");
   await expect(page.getByRole("heading", { name: "System Analytics" })).toBeVisible();
   await expect(page.getByText("Total Registrations", { exact: true })).toBeVisible();
-  await expect(page.getByText("Top Events", { exact: true })).toBeVisible();
+  // Each analytics card is a Panel now, so its title is a real heading. The
+  // period tables carry the same wording as their panel's title, so locating
+  // by role rather than by text keeps this to the one element it means.
+  await expect(page.getByRole("heading", { name: "Top Events", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Registrations", exact: true }).last().click();
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics\/registrations$/);
-  await expect(page.getByText("Registrations — Weekly (last 12 weeks)", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Registrations — Weekly (last 12 weeks)", exact: true }),
+  ).toBeVisible();
 
   // Donation analytics now live under Donations → Stats, not here — the
   // System Analytics tab strip only offers Overview and Registrations.

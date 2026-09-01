@@ -9,16 +9,45 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { FilterSelect } from "../../../components/FilterSelect";
 import { Spinner } from "../../../components/Spinner";
+import { DataTable } from "../../../components/Table";
 import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
+import { Button } from "../../../ui/Button";
+import { Field } from "../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { Textarea } from "../../../ui/TextControl";
 import { fmt, toast } from "../ui";
+// `pk-answer-pre` is written here as a class name rather than reached through a
+// component, so this module has to pull its stylesheet into its own chunk.
+import "../../../ui/Content.css";
 
 const API_BASE = "/api/v1/organizations/content-reviews";
 type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
 
+const REVIEWER_NOTE_REQUIRED = "A reviewer note is required to reject";
+
 function formatDiffValue(value: unknown): string {
   return Array.isArray(value) ? value.join("\n") : String(value ?? "");
+}
+
+function isEmptyValue(value: unknown): boolean {
+  return value == null || value === "" || (Array.isArray(value) && value.length === 0);
+}
+
+/**
+ * One side of a field diff. A multi-line proposal keeps its line breaks —
+ * `links` arrives as an array joined by newlines — so the value renders as
+ * wrapping preformatted text rather than collapsing into one run-on line.
+ */
+function DiffValue({ value }: { value: unknown }) {
+  if (isEmptyValue(value)) return <em class="pk-muted">(empty)</em>;
+  return <p class="pk-answer-pre pk-break">{formatDiffValue(value)}</p>;
+}
+
+function statusLabel(value: ReviewStatus): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: () => Promise<void> }) {
@@ -26,6 +55,7 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewerNote, setReviewerNote] = useState("");
+  const [noteError, setNoteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -51,10 +81,15 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   async function decide(action: "approve" | "reject") {
     const note = reviewerNote.trim();
     if (action === "reject" && !note) {
-      toast("A reviewer note is required to reject", "error");
+      // The refusal is attached to the control that caused it, so a screen
+      // reader hears which field is blocking rather than only a toast that has
+      // already gone by the time focus returns to the form.
+      setNoteError("Write the reason for the rejection before rejecting this submission.");
+      toast(REVIEWER_NOTE_REQUIRED, "error");
       return;
     }
 
+    setNoteError(null);
     setBusy(true);
     setError(null);
     try {
@@ -74,94 +109,73 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading this submission…" />;
   if (!detail) return error ? <ErrorAlert error={error} /> : null;
 
   return (
-    <section class="card border-0 shadow-sm mt-3" aria-labelledby="organization-content-review-title">
-      <div class="card-body">
-        <h5 id="organization-content-review-title" class="mb-1">
-          {detail.organizationName}
-        </h5>
-        <p class="text-muted small mb-3">
+    // The panel names itself after the organization under review, so a page
+    // holding a queue and one open submission offers two distinguishable
+    // regions rather than an unnamed box below a table.
+    <Panel aria-label={detail.organizationName}>
+      <PanelHeader title={detail.organizationName} headingLevel={2} />
+      <PanelBody class="pk-stack pk-stack--snug">
+        <p class="pk-muted pk-small">
           Submitted by {detail.submitterName} ({detail.submitterEmail}) on {fmt(detail.submittedAt)}
         </p>
         {error && <ErrorAlert error={error} />}
-        {detail.hasLogoChange && <p class="mb-2">Includes a proposed logo change.</p>}
+        {detail.hasLogoChange && <p>Includes a proposed logo change.</p>}
 
-        {detail.diff.length === 0 ? (
-          <p class="text-muted small">No field changes (logo only).</p>
-        ) : (
-          <div class="table-responsive">
-            <table class="table table-sm align-middle">
-              <thead>
-                <tr>
-                  <th scope="col">Field</th>
-                  <th scope="col">Current</th>
-                  <th scope="col">Proposed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.diff.map((entry) => (
-                  <tr key={entry.field}>
-                    <th scope="row">{ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field}</th>
-                    <td class="text-muted text-break text-pre-wrap">
-                      {entry.current == null ||
-                      entry.current === "" ||
-                      (Array.isArray(entry.current) && entry.current.length === 0) ? (
-                        <em>(empty)</em>
-                      ) : (
-                        formatDiffValue(entry.current)
-                      )}
-                    </td>
-                    <td class="text-break text-pre-wrap">{formatDiffValue(entry.proposed)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          caption={`Proposed changes for ${detail.organizationName}`}
+          columns={[
+            {
+              header: "Field",
+              cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
+              className: "pk-nowrap",
+            },
+            { header: "Current", cell: (entry) => <DiffValue value={entry.current} />, className: "pk-muted" },
+            { header: "Proposed", cell: (entry) => <DiffValue value={entry.proposed} /> },
+          ]}
+          data={detail.diff}
+          rowKey={(entry) => entry.field}
+          empty="No field changes (logo only)."
+        />
 
         {detail.status === "pending" ? (
-          <div class="mt-3">
-            <label class="form-label small" for="organization-content-review-note">
-              Reviewer note (required to reject)
-            </label>
-            <textarea
-              id="organization-content-review-note"
-              class="form-control"
-              rows={3}
-              maxlength={2000}
-              value={reviewerNote}
-              onInput={(event) => setReviewerNote((event.target as HTMLTextAreaElement).value)}
-            />
-            <div class="d-flex gap-2 mt-2">
-              <button
-                type="button"
-                class="btn btn-success btn-sm"
-                disabled={busy}
-                onClick={() => void decide("approve")}
-              >
+          <>
+            <Field
+              label="Reviewer note"
+              help="Required to reject. Sent to the organization with the decision."
+              state={noteError ? "invalid" : undefined}
+              message={noteError ?? undefined}
+            >
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={3}
+                  maxlength={2000}
+                  value={reviewerNote}
+                  onInput={(event) => setReviewerNote((event.target as HTMLTextAreaElement).value)}
+                />
+              )}
+            </Field>
+            <div class="pk-cluster">
+              <Button variant="primary" size="sm" loading={busy} onClick={() => void decide("approve")}>
                 Approve
-              </button>
-              <button
-                type="button"
-                class="btn btn-outline-danger btn-sm"
-                disabled={busy}
-                onClick={() => void decide("reject")}
-              >
+              </Button>
+              <Button variant="danger-quiet" size="sm" loading={busy} onClick={() => void decide("reject")}>
                 Reject
-              </button>
+              </Button>
             </div>
-          </div>
+          </>
         ) : (
-          <p class="small mb-0 mt-3">
+          <div class="pk-cluster">
             <Badge status={detail.status} />
-            {detail.reviewerNote && <span class="text-muted ms-2">{detail.reviewerNote}</span>}
-          </p>
+            {detail.reviewerNote && <span class="pk-muted pk-small">{detail.reviewerNote}</span>}
+          </div>
         )}
-      </div>
-    </section>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -171,7 +185,7 @@ export function OrganizationContentReviews() {
   const tableActions = useRef<ApiTableActions | null>(null);
 
   return (
-    <div>
+    <div class="pk pk-stack">
       <ApiDataTable
         caption="Organization content reviews"
         endpoint={API_BASE}
@@ -184,36 +198,21 @@ export function OrganizationContentReviews() {
         params={{ status }}
         actionsRef={tableActions}
         toolbar={({ resetPage }) => (
-          <div>
-            <label class="visually-hidden" for="organization-content-review-status">
-              Review status
-            </label>
-            <select
-              id="organization-content-review-status"
-              class="form-select form-select-sm"
-              value={status}
-              onChange={(event) => {
-                setStatus((event.target as HTMLSelectElement).value as ReviewStatus);
-                setSelectedId(null);
-                resetPage();
-              }}
-            >
-              {CONTENT_REVIEW_STATUSES.map((value) => (
-                <option key={value} value={value}>
-                  {value.charAt(0).toUpperCase() + value.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            label="Review status"
+            value={status}
+            options={CONTENT_REVIEW_STATUSES.map((value) => ({ value, label: statusLabel(value) }))}
+            onChange={(next) => {
+              setStatus(next);
+              setSelectedId(null);
+              resetPage();
+            }}
+          />
         )}
         columns={[
           {
             header: "Organization",
-            cell: (review) => (
-              <button type="button" class="btn btn-link btn-sm p-0 text-start" onClick={() => setSelectedId(review.id)}>
-                {review.organizationName}
-              </button>
-            ),
+            cell: (review) => review.organizationName,
             sort: { asc: "organizationName", desc: "-organizationName" },
           },
           {
@@ -221,7 +220,7 @@ export function OrganizationContentReviews() {
             cell: (review) => (
               <>
                 <div>{review.submitterName}</div>
-                <div class="small text-muted">{review.submitterEmail}</div>
+                <div class="pk-small pk-muted">{review.submitterEmail}</div>
               </>
             ),
             sort: { asc: "submitterName", desc: "-submitterName" },
@@ -234,10 +233,18 @@ export function OrganizationContentReviews() {
           {
             header: "Submitted",
             cell: (review) => fmt(review.submittedAt),
-            className: "text-nowrap small text-muted",
+            className: "pk-nowrap pk-small pk-muted",
             sort: { asc: "submittedAt", desc: "-submittedAt", defaultDirection: "desc" },
           },
         ]}
+        // Opening a submission is the row's action, so the whole row is the
+        // target and it is a real control with a name that says what it opens.
+        // The version this replaces put the handler on a link-styled button
+        // inside one cell, which left the rest of the row inert.
+        rowAction={(review) => ({
+          label: `Open the content review for ${review.organizationName}`,
+          onSelect: () => setSelectedId(review.id),
+        })}
         empty={`No ${status} organization content submissions.`}
         rowKey={(review) => review.id}
       />

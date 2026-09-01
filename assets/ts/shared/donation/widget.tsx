@@ -5,8 +5,24 @@
  * `[data-donation-checkout]` markup. Dynamic placements that inject the
  * widget at runtime (e.g. the post-registration donation CTA) use this
  * instead of duplicating the markup.
+ *
+ * `initDonationForm()` in `./form` owns everything this markup does after it
+ * is in the document: it fills the currency list, renders the preset amount
+ * buttons into `[data-donation-presets]`, and drives the status line. This
+ * module therefore builds the shell and the controls that behaviour needs to
+ * find, and nothing that behaviour immediately replaces.
+ *
+ * Design system notes (phase 5): the surface is built from `Field`, the
+ * `TextControl` inputs and `Button`, so it carries no Bootstrap and no
+ * `donation-*` presentational classes. `pk-start` is here because the widget
+ * is injected into `.event-flow-donation-cta-inner`, which centres its
+ * children — the form's labels need to run from the start edge.
  */
 import { render } from "preact";
+import { useId } from "preact/hooks";
+import { Button } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Select, TextInput } from "../../ui/TextControl";
 
 export interface DonationWidgetOptions {
   extraClasses?: string;
@@ -21,133 +37,103 @@ export interface DonationWidgetOptions {
 
 function IdentityFields() {
   return (
-    <div class="donation-form-identity">
-      <div class="mb-2">
-        <label for="donation-donor-name" class="form-label donation-form-label">
-          Full name{" "}
-          <span class="text-danger" aria-hidden="true">
-            *
-          </span>
-        </label>
-        <input
-          type="text"
-          id="donation-donor-name"
-          class="form-control form-control-sm"
-          data-donation-name-input
-          placeholder="Your full name"
-          required
-          autocomplete="name"
-          aria-required="true"
-        />
-      </div>
-      <div class="mb-2">
-        <label for="donation-donor-email" class="form-label donation-form-label">
-          Email
-        </label>
-        <input
-          type="email"
-          id="donation-donor-email"
-          class="form-control form-control-sm"
-          data-donation-email-input
-          placeholder="your@email.com"
-          autocomplete="email"
-        />
-      </div>
-      <div class="mb-3">
-        <label for="donation-donor-org" class="form-label donation-form-label">
-          Organization <span class="text-muted small">(optional)</span>
-        </label>
-        <input
-          type="text"
-          id="donation-donor-org"
-          class="form-control form-control-sm"
-          data-donation-org-input
-          placeholder="Your company or organization"
-          autocomplete="organization"
-        />
-      </div>
+    <div class="pk-stack pk-stack--snug">
+      <Field label="Full name" required>
+        {(control) => (
+          <TextInput {...control} data-donation-name-input placeholder="Your full name" autocomplete="name" />
+        )}
+      </Field>
+      <Field label="Email">
+        {(control) => (
+          <TextInput
+            {...control}
+            type="email"
+            data-donation-email-input
+            placeholder="your@email.com"
+            autocomplete="email"
+          />
+        )}
+      </Field>
+      <Field label="Organization (optional)">
+        {(control) => (
+          <TextInput
+            {...control}
+            data-donation-org-input
+            placeholder="Your company or organization"
+            autocomplete="organization"
+          />
+        )}
+      </Field>
     </div>
   );
 }
 
-function CurrencyRow({ visible }: { visible: boolean }) {
-  if (!visible) return null;
+function CurrencyRow() {
   return (
-    <div class="donation-form-currency-row">
-      <label for="donation-currency" class="form-label donation-form-currency-label">
-        Currency
-      </label>
-      <select
-        id="donation-currency"
-        class="form-select form-select-sm donation-form-currency-select"
-        data-donation-currency
-      >
-        <option value="usd">USD ($) — US Dollar</option>
-      </select>
-    </div>
+    <Field label="Currency">
+      {(control) => (
+        <Select {...control} data-donation-currency>
+          <option value="usd">USD ($) — US Dollar</option>
+        </Select>
+      )}
+    </Field>
   );
 }
 
 function CompactCurrencySelect() {
   return (
-    <div class="event-flow-donation-cta-currency">
-      <select data-donation-currency class="form-select form-select-sm" aria-label="Select currency">
-        <option value="usd">USD ($) — US Dollar</option>
-      </select>
-    </div>
+    <Select data-donation-currency aria-label="Currency">
+      <option value="usd">USD ($) — US Dollar</option>
+    </Select>
   );
 }
 
 function SharedControls() {
+  const customId = useId();
+
   return (
     <>
-      <div data-donation-presets class="donation-form-presets">
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="50">
-          $50
-        </button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="100">
-          $100
-        </button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="250">
-          $250
-        </button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="500">
-          $500
-        </button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="1000">
-          $1,000
-        </button>
+      {/* Empty by design: `initDonationForm` renders the preset buttons here
+          with amounts converted into the selected currency. A second, static
+          set of USD amounts in this file was both duplication and wrong the
+          moment a donor picked another currency. */}
+      <div class="pk-cluster" data-donation-presets />
+
+      {/*
+        Hand-rolled rather than a `Field`, because the label carries the live
+        currency symbol: `initDonationForm` rewrites the span's text whenever
+        the currency changes, and `Field` takes its label as a string. Naming
+        the control "Or enter a custom amount ($)" also beats the `aria-label`
+        this replaces, which said "Custom donation amount" while the symbol sat
+        in a separate box the name never mentioned.
+      */}
+      <div class="pk-stack pk-stack--tight">
+        <label class="pk-field__label" for={customId}>
+          Or enter a custom amount (<span data-donation-currency-prefix>$</span>)
+        </label>
+        <TextInput id={customId} type="number" data-donation-custom-input placeholder="Other amount" min={1} step={1} />
       </div>
-      <div class="donation-form-custom mt-2">
-        <div class="input-group input-group-sm">
-          <span class="input-group-text" data-donation-currency-prefix>
-            $
-          </span>
-          <input
-            type="number"
-            class="form-control"
-            data-donation-custom-input
-            placeholder="Or other amount"
-            min={1}
-            step={1}
-            aria-label="Custom donation amount"
-          />
-        </div>
-      </div>
-      <button type="button" class="btn btn-page-accent w-100 mt-3" data-donation-submit>
+
+      <Button variant="primary" block data-donation-submit>
         Donate
-      </button>
-      <p class="donation-form-status small mt-2" data-donation-status hidden />
+      </Button>
+
+      {/* `initDonationForm` writes the outcome here. The role is on the
+          element rather than added with the message, so the region exists
+          before there is anything to announce. */}
+      <p class="pk-small" role="status" data-donation-status hidden />
     </>
   );
 }
 
 function CheckoutOverlay() {
   return (
-    <div class="donation-checkout-overlay" data-donation-checkout hidden>
-      <button type="button" class="btn btn-sm btn-outline-secondary donation-checkout-back mb-3" data-donation-back>
-        ← Back
-      </button>
+    <div class="pk-stack pk-stack--snug" data-donation-checkout hidden>
+      <div class="pk-cluster">
+        <Button size="sm" data-donation-back>
+          <span aria-hidden="true">←</span> Back
+        </Button>
+      </div>
       <div data-donation-checkout-mount />
     </div>
   );
@@ -169,19 +155,10 @@ function DonationWidgetInner({
     hideIdentityFields,
   } = opts;
 
-  const formData: Record<string, string> = {};
-  formData.donationForm = "";
-  if (successPath) formData.donationSuccessPath = successPath;
-  if (cancelPath) formData.donationCancelPath = cancelPath;
-  if (name) formData.donationName = name;
-  if (email) formData.donationEmail = email;
-  if (organizationName) formData.donationOrganization = organizationName;
-  if (source) formData.donationSource = source;
-
   return (
-    <div class="donation-widget">
+    <div class="pk pk-start">
       <div
-        class={["donation-form", extraClasses].filter(Boolean).join(" ")}
+        class={["pk-stack", "pk-stack--snug", extraClasses].filter(Boolean).join(" ")}
         data-donation-form=""
         data-donation-success-path={successPath || undefined}
         data-donation-cancel-path={cancelPath || undefined}
@@ -200,7 +177,7 @@ function DonationWidgetInner({
         ) : (
           <>
             <IdentityFields />
-            <CurrencyRow visible />
+            <CurrencyRow />
           </>
         )}
         <SharedControls />
@@ -211,8 +188,8 @@ function DonationWidgetInner({
 }
 
 /**
- * Builds and returns a `.donation-widget` element containing the form and
- * checkout overlay. Call `initDonationForm()` after appending to the DOM.
+ * Builds and returns the widget element containing the form and checkout
+ * overlay. Call `initDonationForm()` after appending to the DOM.
  */
 export function buildDonationWidget(opts: DonationWidgetOptions = {}): HTMLElement {
   const wrapper = document.createElement("div");

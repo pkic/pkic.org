@@ -38,6 +38,20 @@ function mount(node: preact.ComponentChildren): HTMLElement {
   return container;
 }
 
+/**
+ * A control located the way a reader locates it — through the label that names
+ * it. `Field` mints its own ids, so a hand-written id is no longer there to
+ * select on, and the `for`/`id` pair is the thing worth asserting anyway.
+ */
+function labeledControl<T extends HTMLElement>(container: HTMLElement, label: string): T {
+  const element = [...container.querySelectorAll("label")].find((candidate) =>
+    candidate.textContent?.startsWith(label),
+  );
+  const control = element?.htmlFor ? container.querySelector<T>(`[id="${element.htmlFor}"]`) : null;
+  if (!control) throw new Error(`no control labeled: ${label}`);
+  return control;
+}
+
 function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
   if (!button) throw new Error(`missing button: ${label}`);
@@ -259,7 +273,7 @@ describe("portal system access control", () => {
       const onNavigate = vi.fn();
       const container = mount(<Roles canGrant roleSegment="new" onNavigate={onNavigate} />);
 
-      const nameInput = container.querySelector<HTMLInputElement>("#access-control-role-name")!;
+      const nameInput = labeledControl<HTMLInputElement>(container, "Name");
       void act(() => {
         nameInput.value = "brand_new";
         nameInput.dispatchEvent(new Event("input", { bubbles: true }));

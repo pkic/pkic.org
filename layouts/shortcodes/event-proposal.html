@@ -152,7 +152,11 @@
         Each speaker receives a personal link by email to confirm their participation, complete
         their profile, and upload a headshot once the proposal is accepted.
       </p>
-      <div data-proposal-speakers></div>
+      {{/* Each speaker card is appended here inside its own wrapper, so the
+           rhythm between cards is this container's gap. It used to be a margin
+           on the legacy `.proposal-speaker-card`, and left with that class when
+           the card moved onto Panel. */}}
+      <div data-proposal-speakers class="pk-stack"></div>
       <div class="pk-cluster">
         <button type="button" data-add-speaker class="pk-btn pk-btn--secondary pk-btn--sm">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></svg>

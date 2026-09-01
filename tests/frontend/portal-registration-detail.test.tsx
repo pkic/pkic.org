@@ -173,8 +173,9 @@ describe("registration detail", () => {
     expect(badgeLink?.getAttribute("href")).toBe(`${location.origin}/api/v1/registrations/referrals/abc123/badge`);
     expect(badgeLink?.getAttribute("rel")).toBe("noopener");
 
-    // The history table names itself rather than being announced as "table".
-    expect(container.querySelector("caption")?.textContent).toContain("Audit history");
+    // The history table says whose history it is, so a page carrying several
+    // tables does not announce two of them under the same generic name.
+    expect(container.querySelector("caption")?.textContent).toContain("Registration history");
   });
 
   it("sends the shared notification contract and announces the queued email", async () => {

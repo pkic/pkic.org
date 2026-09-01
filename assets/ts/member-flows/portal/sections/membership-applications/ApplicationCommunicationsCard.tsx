@@ -1,7 +1,40 @@
 import { useState } from "preact/hooks";
 import { fmt } from "../../ui";
-import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
+import type {
+  MembershipApplicationCommunication,
+  MembershipApplicationDetail,
+} from "../../../../../shared/schemas/membership-application-management";
+import { Alert } from "../../../../ui/Alert";
+import { Badge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { DataTable } from "../../../../ui/DataTable";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Textarea, TextInput } from "../../../../ui/TextControl";
+// `pk-mono` is written here as a class name rather than reached through a
+// component, so this module has to pull its stylesheet into its own chunk.
+import "../../../../ui/Content.css";
 
+/** What a record on this timeline is. The word carries it; the tone repeats it. */
+const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
+  communication: "Emailed",
+  note: "Internal note",
+};
+
+/**
+ * The staff-only timeline for one application, and the two forms that add to
+ * it.
+ *
+ * The record list is a captioned table rather than the unnamed bulleted list
+ * it used to be: these are three fields repeated per row, and the caption is
+ * what tells a reader which of the page's several tables they have landed in.
+ *
+ * Both forms used to fail silently — a blank subject returned from the submit
+ * handler with nothing said, and a rejected send left the fields full with no
+ * explanation. Each control now names itself through a Field, an empty
+ * required value is reported on the control it belongs to, and a failed
+ * request is announced instead of discarded.
+ */
 export function ApplicationCommunicationsCard({
   detail,
   canWrite,
@@ -15,78 +48,171 @@ export function ApplicationCommunicationsCard({
 }) {
   const [commSubject, setCommSubject] = useState("");
   const [commBody, setCommBody] = useState("");
-  const [noteBody, setNoteBody] = useState("");
+  const [commAttempted, setCommAttempted] = useState(false);
+  const [commSending, setCommSending] = useState(false);
+  const [commError, setCommError] = useState("");
 
-  async function submitCommunication(e: Event) {
-    e.preventDefault();
+  const [noteBody, setNoteBody] = useState("");
+  const [noteAttempted, setNoteAttempted] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState("");
+
+  const subjectMissing = commAttempted && commSubject.trim() === "";
+  const bodyMissing = commAttempted && commBody.trim() === "";
+  const noteMissing = noteAttempted && noteBody.trim() === "";
+
+  async function submitCommunication(event: Event) {
+    event.preventDefault();
+    // A loading Button stays focusable and therefore clickable, so the guard
+    // against sending the same message twice belongs here rather than on it.
+    if (commSending) return;
+    setCommAttempted(true);
+    setCommError("");
     if (!commSubject.trim() || !commBody.trim()) return;
-    await onSendCommunication({ subject: commSubject, body: commBody });
-    setCommSubject("");
-    setCommBody("");
+    setCommSending(true);
+    try {
+      await onSendCommunication({ subject: commSubject.trim(), body: commBody.trim() });
+      setCommSubject("");
+      setCommBody("");
+      setCommAttempted(false);
+    } catch (error) {
+      setCommError((error as Error).message);
+    } finally {
+      setCommSending(false);
+    }
   }
 
-  async function submitNote(e: Event) {
-    e.preventDefault();
+  async function submitNote(event: Event) {
+    event.preventDefault();
+    if (noteSaving) return;
+    setNoteAttempted(true);
+    setNoteError("");
     if (!noteBody.trim()) return;
-    await onAddNote(noteBody);
-    setNoteBody("");
+    setNoteSaving(true);
+    try {
+      await onAddNote(noteBody.trim());
+      setNoteBody("");
+      setNoteAttempted(false);
+    } catch (error) {
+      setNoteError((error as Error).message);
+    } finally {
+      setNoteSaving(false);
+    }
   }
 
   return (
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white fw-semibold">Communications &amp; notes</div>
-      <div class="card-body">
-        <ul class="list-unstyled small mb-3">
-          {[...detail.communications].map((c) => (
-            <li key={c.id} class="mb-2 pb-2 border-bottom">
-              <span class="badge text-bg-secondary me-1">{c.kind}</span>
-              {c.subject && <strong>{c.subject}</strong>}
-              <div class="text-muted">{c.body}</div>
-              <div class="mono text-muted small">{fmt(c.createdAt)}</div>
-            </li>
-          ))}
-          {detail.communications.length === 0 && <li class="text-muted">None yet.</li>}
-        </ul>
-        {canWrite && (
-          <>
-            <form onSubmit={(e) => void submitCommunication(e)} class="mb-2">
-              <div class="mb-1 fw-semibold small">Send communication</div>
-              <input
-                class="form-control form-control-sm mb-1"
-                placeholder="Subject"
-                aria-label="Communication subject"
-                value={commSubject}
-                onInput={(e) => setCommSubject((e.target as HTMLInputElement).value)}
-              />
-              <textarea
-                class="form-control form-control-sm mb-1"
-                rows={2}
-                placeholder="Message"
-                aria-label="Communication message"
-                value={commBody}
-                onInput={(e) => setCommBody((e.target as HTMLTextAreaElement).value)}
-              />
-              <button type="submit" class="btn btn-sm btn-outline-primary">
-                Send
-              </button>
-            </form>
-            <form onSubmit={(e) => void submitNote(e)}>
-              <div class="mb-1 fw-semibold small">Add internal note</div>
-              <textarea
-                class="form-control form-control-sm mb-1"
-                rows={2}
-                placeholder="Note (never emailed)"
-                aria-label="Internal note"
-                value={noteBody}
-                onInput={(e) => setNoteBody((e.target as HTMLTextAreaElement).value)}
-              />
-              <button type="submit" class="btn btn-sm btn-outline-secondary">
-                Add note
-              </button>
-            </form>
-          </>
-        )}
-      </div>
+    <div class="pk">
+      <Panel aria-label="Communications and notes">
+        <PanelHeader title="Communications and notes" />
+        <PanelBody class="pk-stack">
+          <DataTable
+            caption="Communication and note history"
+            rows={detail.communications}
+            rowKey={(record) => record.id}
+            empty="Nothing has been emailed or noted on this application yet."
+            columns={[
+              {
+                id: "kind",
+                header: "Kind",
+                cell: (record) => (
+                  <Badge tone={record.kind === "communication" ? "info" : "neutral"}>{KIND_LABEL[record.kind]}</Badge>
+                ),
+                cellClass: "pk-nowrap",
+              },
+              {
+                id: "message",
+                header: "Message",
+                cell: (record) => (
+                  <div class="pk-stack pk-stack--tight">
+                    {record.subject && <strong>{record.subject}</strong>}
+                    <span class="pk-break">{record.body}</span>
+                  </div>
+                ),
+              },
+              {
+                id: "recorded",
+                header: "Recorded",
+                cell: (record) => fmt(record.createdAt),
+                cellClass: "pk-mono pk-small pk-nowrap",
+              },
+            ]}
+          />
+
+          {canWrite && (
+            <>
+              <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submitCommunication(event)}>
+                <h4>Send communication</h4>
+                <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={commSending}>
+                  <Field
+                    label="Subject"
+                    required
+                    state={subjectMissing ? "invalid" : undefined}
+                    message={subjectMissing ? "Enter a subject for the email." : undefined}
+                  >
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={commSubject}
+                        onInput={(event) => setCommSubject((event.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                  <Field
+                    label="Message"
+                    required
+                    help="Emailed to the applicant and recorded on this timeline."
+                    state={bodyMissing ? "invalid" : undefined}
+                    message={bodyMissing ? "Enter the message to send." : undefined}
+                  >
+                    {(control) => (
+                      <Textarea
+                        {...control}
+                        rows={2}
+                        value={commBody}
+                        onInput={(event) => setCommBody((event.target as HTMLTextAreaElement).value)}
+                      />
+                    )}
+                  </Field>
+                </fieldset>
+                {commError && <Alert tone="danger">{commError}</Alert>}
+                <div class="pk-cluster">
+                  <Button type="submit" variant="primary" size="sm" loading={commSending}>
+                    {commSending ? "Sending…" : "Send"}
+                  </Button>
+                </div>
+              </form>
+
+              <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submitNote(event)}>
+                <h4>Add internal note</h4>
+                <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={noteSaving}>
+                  <Field
+                    label="Internal note"
+                    required
+                    help="Never emailed. Visible to staff only."
+                    state={noteMissing ? "invalid" : undefined}
+                    message={noteMissing ? "Enter the note to record." : undefined}
+                  >
+                    {(control) => (
+                      <Textarea
+                        {...control}
+                        rows={2}
+                        value={noteBody}
+                        onInput={(event) => setNoteBody((event.target as HTMLTextAreaElement).value)}
+                      />
+                    )}
+                  </Field>
+                </fieldset>
+                {noteError && <Alert tone="danger">{noteError}</Alert>}
+                <div class="pk-cluster">
+                  <Button type="submit" size="sm" loading={noteSaving}>
+                    {noteSaving ? "Adding…" : "Add note"}
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

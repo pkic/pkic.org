@@ -355,7 +355,10 @@ async function fillProposal(
   await page.getByRole("button", { name: /Continue/i }).click();
 
   if (options.proposerPresenting) {
-    const proposerCard = page.locator(".proposal-speaker-card").filter({ hasText: "You — as a speaker" });
+    // Located by the region name the card exposes, not by a class: the class
+    // was a legacy stylesheet's and left with the Bootstrap migration, and a
+    // name is what a reader actually uses to tell the cards apart.
+    const proposerCard = page.getByRole("region", { name: "You — as a speaker", exact: true });
     await expect(proposerCard).toBeVisible();
     await expect(proposerCard.locator('input[name="proposerSpeakerRole"][value="moderator"]')).toBeChecked();
     await proposerCard
@@ -365,7 +368,7 @@ async function fillProposal(
 
   if (options.addPanelist) {
     await page.locator("[data-add-speaker]").click();
-    const panelistCard = page.locator(".proposal-speaker-card").filter({ hasText: "Speaker 1" });
+    const panelistCard = page.getByRole("region", { name: "Speaker 1", exact: true });
     await expect(panelistCard).toBeVisible();
     await panelistCard.locator('input[name="speaker.1.firstName"]').fill("Panelist");
     await panelistCard.locator('input[name="speaker.1.lastName"]').fill("One");

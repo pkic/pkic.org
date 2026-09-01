@@ -5,13 +5,74 @@ import {
 } from "../../../../../shared/schemas/groups";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { RowActions } from "../../../../ui/RowActions";
 import { Spinner } from "../../../../components/Spinner";
+import { Button } from "../../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { PersonCell } from "../../../../ui/PersonCell";
+import { RowActions } from "../../../../ui/RowActions";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson } from "../../../../shared/api-client";
 import { fmt } from "../../ui";
 import { GroupLeadershipAssignmentForm } from "./GroupLeadershipAssignmentForm";
 import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
+
+/**
+ * Where an assignment comes from, in words.
+ *
+ * This used to be a run-on line of separators — the role, then "· inherited
+ * from X", then "· expires …" — so the one fact that decides whether a row can
+ * be removed sat mid-sentence in muted small text. It is a column of its own
+ * now, and it says "Local" or names the source group, so the distinction never
+ * rests on the row merely lacking an actions menu.
+ */
+function sourceLabel(assignment: GroupLeadershipAssignment): string {
+  return assignment.inherited ? `Inherited from ${assignment.sourceGroup.name}` : "Local";
+}
+
+function leadershipColumns(
+  revokingId: string | null,
+  onRevoke: (assignment: GroupLeadershipAssignment) => void,
+): ReadonlyArray<DataTableColumn<GroupLeadershipAssignment>> {
+  return [
+    {
+      id: "person",
+      header: "Person",
+      cell: (assignment) => <PersonCell name={assignment.userName} email={assignment.email} size="sm" />,
+    },
+    { id: "role", header: "Role", cell: (assignment) => GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId] },
+    { id: "source", header: "Source", cell: sourceLabel },
+    {
+      id: "expires",
+      header: "Expires",
+      cellClass: "pk-nowrap",
+      cell: (assignment) => (assignment.expiresAt ? fmt(assignment.expiresAt) : "—"),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      headerHidden: true,
+      align: "end",
+      // Inherited leadership has no local assignment to remove, so its row
+      // carries no menu at all rather than a menu that refuses.
+      cell: (assignment) =>
+        assignment.inherited ? null : (
+          <RowActions
+            label={`Actions for ${assignment.userName}`}
+            actions={[
+              {
+                id: "remove",
+                label: revokingId === assignment.userRoleId ? "Removing…" : "Remove",
+                onSelect: () => onRevoke(assignment),
+                disabled: revokingId !== null,
+              },
+            ]}
+          />
+        ),
+    },
+  ];
+}
 
 export function GroupLeadership({ groupId }: { groupId: string }) {
   const leadership = useData(
@@ -54,60 +115,45 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
   if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
-        <span class="fw-semibold">Effective leadership</span>
-        <div class="d-flex align-items-center gap-2">
-          {leadership.data && (
-            <span class="small text-muted">
-              {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
-            </span>
-          )}
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setShowAddForm(true)}>
-            Add leadership
-          </button>
-        </div>
-      </div>
-      <div class="card-body d-flex flex-column gap-3">
-        <p class="text-muted small mb-0">
+    // The panel names itself: a group workspace stacks several of these, and
+    // an unnamed <section> is announced as nothing at all.
+    <Panel class="pk" aria-label="Effective leadership">
+      <PanelHeader title="Effective leadership">
+        {leadership.data && (
+          <span class="pk-small">
+            {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
+          </span>
+        )}
+        <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
+          Add leadership
+        </Button>
+      </PanelHeader>
+      <PanelBody class="pk-stack">
+        <p class="pk-muted pk-small">
           Parent leadership manages descendants by default. Local assignments extend inherited leadership; inherited
           rows must be changed at their source group.
         </p>
-        {leadership.error && <ErrorAlert error={leadership.error} />}
         {mutationError && <ErrorAlert error={mutationError} />}
-        {leadership.data?.assignments.length === 0 && <p class="text-muted mb-0">No effective leadership.</p>}
-        <div class="d-flex flex-column gap-2">
-          {leadership.data?.assignments.map((assignment) => (
-            <div
-              key={assignment.userRoleId}
-              class="d-flex flex-wrap align-items-center justify-content-between gap-3 border rounded p-3"
-            >
-              <div>
-                <div class="fw-semibold">
-                  {assignment.userName} <span class="text-muted fw-normal">({assignment.email})</span>
-                </div>
-                <div class="small text-muted">
-                  {GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId]}
-                  {assignment.inherited ? ` · inherited from ${assignment.sourceGroup.name}` : " · local"}
-                  {assignment.expiresAt ? ` · expires ${fmt(assignment.expiresAt)}` : ""}
-                </div>
-              </div>
-              {!assignment.inherited && (
-                <RowActions
-                  label={`Actions for ${assignment.userName}`}
-                  actions={[
-                    {
-                      id: "remove",
-                      label: revokingId === assignment.userRoleId ? "Removing…" : "Remove",
-                      onSelect: () => void revoke(assignment),
-                      disabled: revokingId !== null,
-                    },
-                  ]}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+        {/* A failed load replaces the table rather than sitting above an empty
+            one: "No effective leadership" is a claim about the group, and the
+            surface does not know that when the request did not arrive. */}
+        {leadership.error ? (
+          <ErrorAlert error={leadership.error} />
+        ) : (
+          <DataTable
+            caption="Effective leadership of this group"
+            columns={leadershipColumns(revokingId, (assignment) => void revoke(assignment))}
+            rows={leadership.data?.assignments ?? []}
+            rowKey={(assignment) => assignment.userRoleId}
+            loading={leadership.loading}
+            empty={
+              <EmptyState
+                title="No effective leadership."
+                body="Nobody leads this group yet, and no parent group's leadership reaches it."
+              />
+            }
+          />
+        )}
         {showAddForm && (
           <GroupLeadershipAssignmentForm
             groupId={groupId}
@@ -118,7 +164,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
             onCancel={() => setShowAddForm(false)}
           />
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

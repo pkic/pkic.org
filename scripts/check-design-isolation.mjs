@@ -132,6 +132,35 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/management/MeetingSeriesFields.tsx",
   "assets/ts/member-flows/portal/shell/McpAuthorization.tsx",
   "assets/ts/member-flows/portal/shell/Login.tsx",
+  "layouts/partials/hero.html",
+  "layouts/index.html",
+  "assets/ts/member-flows/portal/sections/management/GroupLeadership.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm.tsx",
+  "layouts/shortcodes/agenda.html",
+  "layouts/shortcodes/event-speaker-presentation.html",
+  "assets/ts/member-flows/portal/sections/system-analytics/AnalyticsOverview.tsx",
+  "assets/ts/member-flows/portal/sections/system-analytics/RegistrationAnalytics.tsx",
+  "assets/ts/member-flows/portal/sections/system-analytics/Tables.tsx",
+  "assets/ts/member-flows/portal/sections/membership-applications/ApplicationCommunicationsCard.tsx",
+  "assets/ts/member-flows/portal/sections/membership-applications/ApplicationOverviewCard.tsx",
+  "assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupMailingListManager.tsx",
+  "assets/ts/components/mailing-lists/MailingListForm.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupEventEditor.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupEventWorkspace.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupVoteProposals.tsx",
+  "assets/ts/member-flows/portal/sections/OrganizationContentReviews.tsx",
+  "assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationPanels.tsx",
+  "assets/ts/components/SpeakerFormCard.tsx",
+  "assets/ts/components/proposals/ProposalSpeakersPanel.tsx",
+  "assets/ts/components/proposals/ProposalInternalCommentsPanel.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupOverview.tsx",
+  "assets/ts/member-flows/portal/sections/access-control/roles/RoleCreate.tsx",
+  "assets/ts/member-flows/portal/sections/access-control/UserRoles.tsx",
+  "assets/ts/shared/widgets/share-panel.tsx",
+  "assets/ts/shared/donation/widget.tsx",
+  "assets/ts/shared/donation/form.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */
@@ -243,6 +272,24 @@ function inspect(file) {
         for (const token of classList.split(/\s+/)) {
           if (!token.startsWith("pk-") || known.has(token)) continue;
           report(file, lineNumber, line, `references "${token}", which no stylesheet defines`);
+        }
+      }
+
+      /*
+       * Classes assigned at runtime, which no `class=` attribute check sees.
+       *
+       * A module that writes `element.className = "small mt-2 text-danger"` or
+       * calls `classList.add("btn-primary")` puts Bootstrap back into markup
+       * the gate has just certified as clean, after the page has rendered.
+       * This is not hypothetical: the donation form was repainting a migrated
+       * status line and re-emitting Bootstrap preset buttons on every currency
+       * change, into a surface that read zero.
+       */
+      for (const match of code.matchAll(
+        /(?:className\s*=\s*|classList\.(?:add|remove|toggle|replace)\()\s*[`"']([^`"']*)[`"']/g,
+      )) {
+        if (isBootstrapClassList(match[1])) {
+          report(file, lineNumber, line, "assigns a Bootstrap class at runtime");
         }
       }
 
@@ -394,4 +441,8 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`[design-isolation] ${scanned.join(", ")} contain no Bootstrap references or hard-coded values`);
+// The list is over a hundred entries now, so print the count and let
+// `--report` say what is left rather than reciting what is done.
+console.log(
+  `[design-isolation] ${String(scanned.length)} adopted surfaces contain no Bootstrap references or hard-coded values`,
+);

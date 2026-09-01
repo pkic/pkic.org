@@ -1,13 +1,22 @@
 // @vitest-environment jsdom
-import { render } from "preact";
+import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
 import type { MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { MailingListForm } from "../../assets/ts/components/mailing-lists/MailingListForm";
 import { emptyMailingListDraft, mailingListDraftToPayload } from "../../assets/ts/components/mailing-lists/model";
+import { controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
+
+function mount(node: ComponentChildren): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  void act(() => render(node, container));
+  return container;
+}
 
 afterEach(() => {
   for (const container of mounted.splice(0)) {
@@ -130,5 +139,84 @@ describe("shared mailing-list form model", () => {
     });
 
     expect(onChange).toHaveBeenCalledWith({ autoSyncCategories: ["A", "B"] });
+  });
+
+  it("names every control through a for/id pair rather than by position", () => {
+    const container = mount(<MailingListForm draft={emptyMailingListDraft()} onChange={vi.fn()} />);
+
+    // The names a screen reader reads out, in order, up to the category
+    // checkboxes the picker contributes.
+    const names = labelNames(container);
+    expect(names.slice(0, 7)).toEqual([
+      "Email",
+      "Label",
+      "Purpose",
+      "Ownership",
+      "Default subscription",
+      "Posting policy",
+      "Moderation policy",
+    ]);
+    expect(names.slice(-2)).toEqual(["Primary discussion", "Active"]);
+
+    // Resolving through the pair fails exactly when the pair is broken.
+    expect(controlFor(container, "Email").type).toBe("email");
+    expect(controlFor<HTMLSelectElement>(container, "Purpose").tagName).toBe("SELECT");
+    expect(controlFor(container, "Ownership").readOnly).toBe(true);
+  });
+
+  it("marks the blocking fields required and points the read-only field at its explanation", () => {
+    const container = mount(<MailingListForm draft={emptyMailingListDraft()} onChange={vi.fn()} />);
+
+    expect(controlFor(container, "Email").required).toBe(true);
+    expect(controlFor(container, "Label").required).toBe(true);
+    // Nothing is invalid until it has been checked, so no control claims to be.
+    expect(container.querySelector("[aria-invalid]")).toBeNull();
+
+    const ownership = controlFor(container, "Ownership");
+    const describedBy = ownership.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
+      "Set by the group this list belongs to.",
+    );
+  });
+
+  it("draws each choice control with all three check parts, not an operating-system default", () => {
+    const container = mount(<MailingListForm draft={emptyMailingListDraft()} onChange={vi.fn()} />);
+
+    const checks = [...container.querySelectorAll("label.pk-check")];
+    expect(checks).toHaveLength(2);
+    for (const check of checks) {
+      expect(check.querySelector("input.pk-check__input")).not.toBeNull();
+      expect(check.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
+    }
+    expect(checks.map((check) => check.textContent)).toEqual(["Primary discussion", "Active"]);
+  });
+
+  it("reports an edit that still satisfies the shared create contract", async () => {
+    const onChange = vi.fn();
+    const draft = { ...emptyMailingListDraft(), label: "Architecture" };
+    const container = mount(<MailingListForm draft={draft} onChange={onChange} />);
+
+    await typeInto(controlFor(container, "Email"), "architecture@example.test");
+
+    expect(onChange).toHaveBeenCalledWith({ email: "architecture@example.test" });
+    const patch = onChange.mock.calls.at(-1)![0] as Partial<typeof draft>;
+    expect(groupMailingListCreateSchema.parse(mailingListDraftToPayload({ ...draft, ...patch }))).toMatchObject({
+      email: "architecture@example.test",
+      label: "Architecture",
+    });
+  });
+
+  it("rejects an edit that empties a required field", async () => {
+    const onChange = vi.fn();
+    const draft = { ...emptyMailingListDraft(), email: "architecture@example.test", label: "Architecture" };
+    const container = mount(<MailingListForm draft={draft} onChange={onChange} />);
+
+    await typeInto(controlFor(container, "Label"), "   ");
+
+    const patch = onChange.mock.calls.at(-1)![0] as Partial<typeof draft>;
+    const result = groupMailingListCreateSchema.safeParse(mailingListDraftToPayload({ ...draft, ...patch }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path.join("."))).toContain("label");
   });
 });

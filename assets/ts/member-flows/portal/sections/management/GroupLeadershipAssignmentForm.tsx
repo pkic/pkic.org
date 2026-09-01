@@ -9,6 +9,11 @@ import {
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { ApiClientError, postJson } from "../../../../shared/api-client";
 import type { ServerCatalog } from "../../../../shared/server-catalog";
 import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
@@ -52,7 +57,9 @@ export function GroupLeadershipAssignmentForm({
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
-    if (!membership) return;
+    // `loading` keeps the submit button focusable rather than disabled, so the
+    // guard against a second submission lives here instead of in the markup.
+    if (saving || !membership) return;
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -80,74 +87,72 @@ export function GroupLeadershipAssignmentForm({
   }
 
   return (
-    <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={submit}>
-      <div class="d-flex justify-content-between align-items-start gap-2">
-        <div>
-          <h6 class="mb-1">Add local leadership</h6>
-          <p class="text-muted small mb-0">
+    // Nested inside the leadership panel, so its heading is one rung below
+    // that panel's rather than another <h3> beside it.
+    <Panel class="pk" aria-label="Add local leadership">
+      <PanelHeader title="Add local leadership" headingLevel={4}>
+        {onCancel && (
+          <Button size="sm" disabled={saving} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+      </PanelHeader>
+      <PanelBody>
+        <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submit(event)}>
+          <p class="pk-muted pk-small">
             Local assignments extend inherited leadership. An optional expiry ends the assignment automatically.
           </p>
-        </div>
-        {onCancel && (
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
-            Cancel
-          </button>
-        )}
-      </div>
-      {error && <ErrorAlert error={error} />}
-      {saved && <div class="alert alert-success mb-0">Leadership assignment added.</div>}
-      <div class="row g-2 align-items-end">
-        <div class="col-lg-5">
-          <ServerSearchSelect
-            catalog={leadershipCapacityCatalog(groupId)}
-            label="Participation capacity"
-            value={membership?.id ?? null}
-            selectedLabel={membership ? capacityLabel(membership) : undefined}
-            placeholder="Select a person and Member capacity…"
-            searchPlaceholder="Search name, email, organization, or category…"
-            onChange={setMembership}
-            disabled={saving}
-          />
-        </div>
-        <div class="col-lg-3">
-          <label class="form-label small fw-semibold" for="managed-group-leadership-role">
-            Role
-          </label>
-          <select
-            id="managed-group-leadership-role"
-            class="form-select form-select-sm"
-            value={roleId}
-            disabled={saving}
-            onChange={(event) =>
-              setRoleId((event.target as HTMLSelectElement).value as GroupLeadershipAssignment["roleId"])
-            }
-          >
-            {GROUP_LEADERSHIP_ROLE_IDS.map((id) => (
-              <option key={id} value={id}>
-                {GROUP_LEADERSHIP_ROLE_LABELS[id]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div class="col-lg-3">
-          <label class="form-label small fw-semibold" for="managed-group-leadership-expiry">
-            Expires (optional)
-          </label>
-          <input
-            id="managed-group-leadership-expiry"
-            class="form-control form-control-sm"
-            type="datetime-local"
-            value={expiresAt}
-            disabled={saving}
-            onInput={(event) => setExpiresAt((event.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-lg-1">
-          <button class="btn btn-sm btn-success w-100" type="submit" disabled={saving || !membership}>
-            {saving ? "Adding…" : "Add"}
-          </button>
-        </div>
-      </div>
-    </form>
+          {error && <ErrorAlert error={error} />}
+          {saved && <Alert tone="ok">Leadership assignment added.</Alert>}
+          {/* One disabled attribute takes the whole group out of play while the
+              assignment is in flight, including the search select's own
+              controls, which no prop of this form reaches. */}
+          <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={saving}>
+            <ServerSearchSelect
+              catalog={leadershipCapacityCatalog(groupId)}
+              label="Participation capacity"
+              value={membership?.id ?? null}
+              selectedLabel={membership ? capacityLabel(membership) : undefined}
+              placeholder="Select a person and Member capacity…"
+              searchPlaceholder="Search name, email, organization, or category…"
+              onChange={setMembership}
+              disabled={saving}
+            />
+            <Field label="Role">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={roleId}
+                  onChange={(event) =>
+                    setRoleId((event.target as HTMLSelectElement).value as GroupLeadershipAssignment["roleId"])
+                  }
+                >
+                  {GROUP_LEADERSHIP_ROLE_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {GROUP_LEADERSHIP_ROLE_LABELS[id]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Expires" help="Optional. Leave blank for an assignment that does not end.">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="datetime-local"
+                  value={expiresAt}
+                  onInput={(event) => setExpiresAt((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+          </fieldset>
+          <div class="pk-cluster">
+            <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!membership}>
+              {saving ? "Adding…" : "Add"}
+            </Button>
+          </div>
+        </form>
+      </PanelBody>
+    </Panel>
   );
 }

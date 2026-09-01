@@ -111,6 +111,78 @@ describe("portal membership-application management", () => {
     expect(open).toHaveBeenCalledWith(APPLICATION_ID);
   });
 
+  it("heads the detail view with the applicant's name and a way back to the list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(detail);
+      }),
+    );
+
+    const onBack = vi.fn();
+    const page = mount(
+      <ApplicationDetailView
+        applicationId={APPLICATION_ID}
+        categories={categories}
+        canWrite={false}
+        canApprove={false}
+        onBack={onBack}
+      />,
+    );
+    await settle();
+
+    // The name used to be a `<span>` carrying a legacy heading class, so the
+    // page it heads had no heading at all in the outline.
+    const heading = page.querySelector("h2");
+    expect(heading?.textContent).toBe("Example Applicant");
+    // Every card below it is a section titled one rung down, so the outline
+    // does not skip a level.
+    expect([...page.querySelectorAll("h3")].length).toBeGreaterThan(0);
+
+    const back = [...page.querySelectorAll("button")].find((button) => button.textContent?.includes("Back to list"));
+    expect(back).toBeDefined();
+    void act(() => back!.click());
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces a detail that could not be loaded rather than rendering an empty page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const page = mount(
+      <ApplicationDetailView
+        applicationId={APPLICATION_ID}
+        categories={categories}
+        canWrite
+        canApprove
+        onBack={vi.fn()}
+      />,
+    );
+    await settle();
+
+    // A blocking failure interrupts, and says what happened in English rather
+    // than in transport phrasing.
+    const alert = page.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this");
+    expect(page.textContent).not.toContain("HTTP 403");
+    expect(page.querySelector("h2")).toBeNull();
+  });
+
   it("keeps a read-only reviewer view free of write and approval controls", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(

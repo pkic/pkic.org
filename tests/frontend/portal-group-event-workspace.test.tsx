@@ -263,6 +263,62 @@ describe("group event workspace", () => {
 
     expect(container.textContent).toContain("This event section is not available to your current identity.");
     expect(container.textContent).not.toContain("Manage meeting series");
+    // The refusal interrupts rather than sitting silently in the layout: it is
+    // an alert, so a reader who asked for the tab is told it was refused.
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("not available to your current identity");
+  });
+
+  it("names the workspace, the open section, and the overview metadata for assistive technology", () => {
+    const event = baseEvent({
+      capabilities: ["view", "manage_attendance", "manage"],
+      links: ["https://example.test/agenda"],
+    });
+    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} />);
+
+    // Both nested regions are named, so a reader moving by landmark is not
+    // told only "region, region".
+    const regions = Array.from(container.querySelectorAll("section[aria-label]")).map((section) =>
+      section.getAttribute("aria-label"),
+    );
+    expect(regions).toContain("Architecture workshop workspace");
+    expect(regions).toContain("Overview — Architecture workshop");
+
+    // The overview is a term/value list, so every value is announced with the
+    // term it belongs to rather than as a loose run of text.
+    expect(Array.from(container.querySelectorAll("dl dt")).map((term) => term.textContent)).toEqual([
+      "When",
+      "Ends",
+      "Profile",
+      "Registration",
+      "Location",
+    ]);
+
+    // A link that leaves the page says so in words, not by an icon alone.
+    const list = container.querySelector('ul[aria-label="Event links"]');
+    expect(list).not.toBeNull();
+    const link = list?.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://example.test/agenda");
+    expect(link?.textContent).toContain("(opens in a new tab)");
+    expect(link?.querySelector(".pk-sr-only")).not.toBeNull();
+  });
+
+  it("offers the meeting series as a real link rather than a handler no keyboard can reach", () => {
+    const event = baseEvent({
+      capabilities: ["view", "manage_attendance", "manage"],
+      seriesId: "20000000-0000-4000-8000-000000000001",
+      profileKey: "meeting",
+    });
+    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
+
+    const series = Array.from(container.querySelectorAll("a")).find(
+      (anchor) => anchor.textContent === "Manage meeting series",
+    );
+    expect(series?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings`);
+    // A meeting inside a series is not standalone, so it offers no inline
+    // editor beside the series link.
+    expect(container.textContent).not.toContain("Edit event");
   });
 
   it("falls back to the default tab for an unrecognized tab key", () => {

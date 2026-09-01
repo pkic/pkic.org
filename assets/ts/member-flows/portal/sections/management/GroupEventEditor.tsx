@@ -23,7 +23,13 @@ import { EventScheduleFields } from "../../../../components/EventScheduleFields"
 import { FormActions } from "../../../../components/FormActions";
 import { useData } from "../../../../hooks/useData";
 import { getJson, postJson, patchJson } from "../../../../shared/api-client";
+import { Field } from "../../../../ui/Field";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { isoDateTimeValue } from "./meeting-form-utils";
+// `pk-mono` on the slug control is defined in Content.css, which ships in a
+// lazy chunk rather than in the entry stylesheet. A surface that writes the
+// class without importing the sheet renders it unstyled.
+import "../../../../ui/Content.css";
 
 interface EventDraft {
   name: string;
@@ -205,156 +211,170 @@ export function GroupEventEditor({
     }
   }
 
+  const selectedProfile = availableProfiles.find((profile) => profile.key === draft.profileKey);
+  // The catalog is only fetched when creating, so "nothing to choose from" is a
+  // create-time condition. It blocks submission, which is what makes it the
+  // Field's `invalid` state rather than advisory guidance: the message is
+  // announced, and the select carries `aria-invalid` to say why the form
+  // cannot be sent.
+  const noProfilesAvailable =
+    isCreate && !profileCatalog.loading && profileCatalog.error === null && availableProfiles.length === 0;
+  const profileHelp =
+    isCreate && profileCatalog.loading
+      ? "Loading available event profiles…"
+      : (selectedProfile?.description ?? undefined);
+
   return (
-    <form class="d-flex flex-column gap-3" onSubmit={(event) => void save(event)}>
+    <form class="pk pk-stack" onSubmit={(event) => void save(event)}>
       {error && <ErrorAlert error={error} />}
       {isCreate && profileCatalog.error && <ErrorAlert error={profileCatalog.error} />}
-      <div class="row g-3">
-        <div class="col-md-8">
-          <label class="form-label small fw-semibold" for={`group-event-name-${event?.id ?? "new"}`}>
-            Event name
-          </label>
-          <input
-            id={`group-event-name-${event?.id ?? "new"}`}
-            class="form-control"
-            value={draft.name}
-            required
-            disabled={saving}
-            onInput={(inputEvent) => handleName((inputEvent.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`group-event-slug-${event?.id ?? "new"}`}>
-            Slug
-          </label>
-          <input
-            id={`group-event-slug-${event?.id ?? "new"}`}
-            class="form-control font-monospace"
-            value={draft.slug}
-            required
-            disabled={saving || !isCreate}
-            onInput={(inputEvent) => update("slug", (inputEvent.target as HTMLInputElement).value)}
-          />
-        </div>
-      </div>
-      <EventScheduleFields
-        idPrefix={`group-event-${event?.id ?? "new"}`}
-        startsAt={draft.startsAt}
-        endsAt={draft.endsAt}
-        timezone={draft.timezone}
-        onStartsAtChange={(value) => update("startsAt", value)}
-        onEndsAtChange={(value) => update("endsAt", value)}
-        onTimezoneChange={(value) => update("timezone", value)}
-      />
-      <div class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`group-event-profile-${event?.id ?? "new"}`}>
-            Event profile
-          </label>
-          <select
-            id={`group-event-profile-${event?.id ?? "new"}`}
-            class="form-select"
-            value={draft.profileKey}
-            disabled={saving || !isCreate || profileCatalog.loading || availableProfiles.length === 0}
-            onChange={(inputEvent) =>
-              update(
-                "profileKey",
-                standaloneEventProfileKeySchema.parse((inputEvent.target as HTMLSelectElement).value),
-              )
+
+      {/* One attribute takes the whole form out of play while it saves,
+          including the link editor's own controls, which take no prop for it.
+          The submit and cancel pair stays outside so it keeps focus. */}
+      <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+        <div class="pk-grid pk-grid--roomy">
+          <Field label="Event name" required>
+            {(control) => (
+              <TextInput
+                {...control}
+                value={draft.name}
+                onInput={(inputEvent) => handleName((inputEvent.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
+
+          {/* Once the event exists its address is fixed, so the control is
+              locked and says so in words rather than only looking greyed out —
+              and it drops the required marker, which would be asking for
+              something the reader cannot give. */}
+          <Field
+            label="Slug"
+            required={isCreate}
+            help={
+              isCreate
+                ? "Used in the event's address. Lower case, words joined by hyphens."
+                : "The address is fixed once the event exists."
             }
           >
-            {availableProfiles.map((profile) => (
-              <option key={profile.key} value={profile.key}>
-                {profile.label}
-              </option>
-            ))}
-          </select>
-          {availableProfiles.find((profile) => profile.key === draft.profileKey)?.description && (
-            <div class="form-text">
-              {availableProfiles.find((profile) => profile.key === draft.profileKey)?.description}
-            </div>
-          )}
-          {isCreate && profileCatalog.loading && <div class="form-text">Loading available event profiles…</div>}
-          {isCreate && !profileCatalog.loading && availableProfiles.length === 0 && !profileCatalog.error && (
-            <div class="form-text">No standalone event profiles are currently available.</div>
-          )}
+            {(control) => (
+              <TextInput
+                {...control}
+                class="pk-mono"
+                value={draft.slug}
+                disabled={!isCreate}
+                onInput={(inputEvent) => update("slug", (inputEvent.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
         </div>
-        {!isCreate && (
-          <div class="col-md-4">
-            <label class="form-label small fw-semibold" for={`group-event-registration-${event?.id ?? "new"}`}>
-              Registration
-            </label>
-            <input
-              id={`group-event-registration-${event?.id ?? "new"}`}
-              class="form-control"
-              value={draft.registrationPolicy.replaceAll("_", " ")}
-              readOnly
-              disabled={saving}
+
+        <EventScheduleFields
+          idPrefix={`group-event-${event?.id ?? "new"}`}
+          startsAt={draft.startsAt}
+          endsAt={draft.endsAt}
+          timezone={draft.timezone}
+          onStartsAtChange={(value) => update("startsAt", value)}
+          onEndsAtChange={(value) => update("endsAt", value)}
+          onTimezoneChange={(value) => update("timezone", value)}
+        />
+
+        <div class="pk-grid pk-grid--roomy">
+          <Field
+            label="Event profile"
+            help={profileHelp}
+            state={noProfilesAvailable ? "invalid" : undefined}
+            message={noProfilesAvailable ? "No standalone event profiles are currently available." : undefined}
+          >
+            {(control) => (
+              <Select
+                {...control}
+                value={draft.profileKey}
+                disabled={!isCreate || profileCatalog.loading || availableProfiles.length === 0}
+                onChange={(inputEvent) =>
+                  update(
+                    "profileKey",
+                    standaloneEventProfileKeySchema.parse((inputEvent.target as HTMLSelectElement).value),
+                  )
+                }
+              >
+                {availableProfiles.map((profile) => (
+                  <option key={profile.key} value={profile.key}>
+                    {profile.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          {!isCreate && (
+            <Field label="Registration" help="Changed from the registration setup, not from here.">
+              {(control) => <TextInput {...control} value={draft.registrationPolicy.replaceAll("_", " ")} readOnly />}
+            </Field>
+          )}
+
+          <Field label="Visibility">
+            {(control) => (
+              <Select
+                {...control}
+                value={draft.visibility}
+                onChange={(inputEvent) =>
+                  update("visibility", (inputEvent.target as HTMLSelectElement).value as EventVisibility)
+                }
+              >
+                {EVENT_VISIBILITIES.map((value) => (
+                  <option key={value} value={value}>
+                    {EVENT_VISIBILITY_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          <Field label="Location">
+            {(control) => (
+              <TextInput
+                {...control}
+                value={draft.location}
+                onInput={(inputEvent) => update("location", (inputEvent.target as HTMLInputElement).value)}
+              />
+            )}
+          </Field>
+        </div>
+
+        <Field
+          label="Peer invitation limit"
+          help="Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer invitations. Manager invitations are configured separately."
+        >
+          {(control) => (
+            <TextInput
+              {...control}
+              type="number"
+              min={0}
+              max={50}
+              value={draft.inviteLimitAttendee}
+              onInput={(inputEvent) =>
+                update("inviteLimitAttendee", Number((inputEvent.target as HTMLInputElement).value))
+              }
             />
-          </div>
-        )}
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`group-event-visibility-${event?.id ?? "new"}`}>
-            Visibility
-          </label>
-          <select
-            id={`group-event-visibility-${event?.id ?? "new"}`}
-            class="form-select"
-            value={draft.visibility}
-            disabled={saving}
-            onChange={(inputEvent) =>
-              update("visibility", (inputEvent.target as HTMLSelectElement).value as EventVisibility)
-            }
-          >
-            {EVENT_VISIBILITIES.map((value) => (
-              <option key={value} value={value}>
-                {EVENT_VISIBILITY_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small fw-semibold" for={`group-event-location-${event?.id ?? "new"}`}>
-            Location
-          </label>
-          <input
-            id={`group-event-location-${event?.id ?? "new"}`}
-            class="form-control"
-            value={draft.location}
-            disabled={saving}
-            onInput={(inputEvent) => update("location", (inputEvent.target as HTMLInputElement).value)}
+          )}
+        </Field>
+
+        {/* The link editor is several controls, not one, so the group is named
+            by a legend rather than by a label with nothing to point at. Its own
+            input keeps its own accessible name. */}
+        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+          <legend class="pk-field__label">Links</legend>
+          <ProfileLinksInput
+            fieldName={`group-event-links-${event?.id ?? "new"}`}
+            value={draft.links}
+            onChange={(links) => update("links", links)}
+            helpText="Add the event website, agenda, repository, or other relevant resources."
+            inputAriaLabel="Event resource URL"
           />
-        </div>
-      </div>
-      <div>
-        <label class="form-label small fw-semibold" for={`group-event-peer-invite-limit-${event?.id ?? "new"}`}>
-          Peer invitation limit
-        </label>
-        <input
-          id={`group-event-peer-invite-limit-${event?.id ?? "new"}`}
-          class="form-control"
-          type="number"
-          min="0"
-          max="50"
-          value={draft.inviteLimitAttendee}
-          disabled={saving}
-          onInput={(inputEvent) => update("inviteLimitAttendee", Number((inputEvent.target as HTMLInputElement).value))}
-        />
-        <div class="form-text">
-          Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer
-          invitations. Manager invitations are configured separately.
-        </div>
-      </div>
-      <div>
-        <label class="form-label small fw-semibold">Links</label>
-        <ProfileLinksInput
-          fieldName={`group-event-links-${event?.id ?? "new"}`}
-          value={draft.links}
-          onChange={(links) => update("links", links)}
-          helpText="Add the event website, agenda, repository, or other relevant resources."
-          inputAriaLabel="Event resource URL"
-        />
-      </div>
+        </fieldset>
+      </fieldset>
+
       <FormActions
         submitLabel={isCreate ? "Create event" : "Save event"}
         busyLabel={isCreate ? "Creating…" : "Saving…"}

@@ -3,8 +3,11 @@ import { proposalSpeakersResponseSchema, type ProposalSpeaker } from "../../../s
 import { useData } from "../../hooks/useData";
 import { getJson } from "../../shared/api-client";
 import { formatDateTime, type ToastType } from "../../shared/ui";
+import { EmptyState } from "../EmptyState";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
+import { Button } from "../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import {
   ProposalSpeakerCard,
   buildReplacementProposerOptions,
@@ -52,57 +55,59 @@ export function ProposalSpeakersPanel({
   }
 
   return (
-    <section class="card" aria-label="Proposal speakers">
-      <div class="card-header d-flex align-items-center gap-2">
-        <h6 class="mb-0">Speakers</h6>
-        <span class="small text-muted">{speakers.length} assigned</span>
-        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void roster.reload()}>
-          ↺ Refresh
-        </button>
-      </div>
-      <div class="card-body pk-stack pk-stack--snug">
-        {access.canFinalize && inviteEndpoint && inviteWindow && (
-          <ProposalCoSpeakerInviteForm
-            endpoint={inviteEndpoint}
-            proposalId={proposalId}
-            event={inviteWindow}
-            notify={notify}
-            onInvited={async () => {
-              await roster.reload();
-              await onReload?.();
-            }}
-          />
-        )}
-        {speakers.length === 0 ? (
-          <p class="text-muted fst-italic mb-0">No speakers assigned yet.</p>
-        ) : (
-          speakers.map((speaker) => (
-            <ProposalSpeakerCard
-              key={speaker.userId}
-              speaker={speaker}
+    <div class="pk">
+      <Panel aria-label="Proposal speakers">
+        <PanelHeader title="Speakers" headingLevel={4}>
+          <span class="pk-small pk-nowrap">{speakers.length} assigned</span>
+          <Button size="sm" onClick={() => void roster.reload()}>
+            ↺ Refresh
+          </Button>
+        </PanelHeader>
+        <PanelBody class="pk-stack pk-stack--snug">
+          {access.canFinalize && inviteEndpoint && inviteWindow && (
+            <ProposalCoSpeakerInviteForm
+              endpoint={inviteEndpoint}
               proposalId={proposalId}
-              canEdit={access.canFinalize}
-              canFinalize={access.canFinalize}
-              decisionStatus={proposal.decision_status}
-              requiresPresentation={requiresPresentation}
-              isCurrentProposer={speaker.userId === proposal.proposer_user_id}
-              replacementSpeakers={buildReplacementProposerOptions(speakers, speaker.userId)}
-              endpoints={endpoints}
+              event={inviteWindow}
               notify={notify}
-              onSaved={updateSpeaker}
-              onRemoved={() => {
-                void roster.reload();
-                void onReload?.();
+              onInvited={async () => {
+                await roster.reload();
+                await onReload?.();
               }}
             />
-          ))
-        )}
-        {roster.data.proposal.presentationDeadline && (
-          <div class="small text-muted">
-            Presentation deadline: {formatDateTime(roster.data.proposal.presentationDeadline)}
-          </div>
-        )}
-      </div>
-    </section>
+          )}
+          {speakers.length === 0 ? (
+            <EmptyState
+              title="No speakers assigned yet"
+              body="Speakers appear here once the proposer adds them or a co-speaker accepts an invitation."
+            />
+          ) : (
+            speakers.map((speaker) => (
+              <ProposalSpeakerCard
+                key={speaker.userId}
+                speaker={speaker}
+                proposalId={proposalId}
+                canEdit={access.canFinalize}
+                canFinalize={access.canFinalize}
+                decisionStatus={proposal.decision_status}
+                requiresPresentation={requiresPresentation}
+                isCurrentProposer={speaker.userId === proposal.proposer_user_id}
+                replacementSpeakers={buildReplacementProposerOptions(speakers, speaker.userId)}
+                endpoints={endpoints}
+                notify={notify}
+                onSaved={updateSpeaker}
+                onRemoved={() => {
+                  void roster.reload();
+                  void onReload?.();
+                }}
+              />
+            ))
+          )}
+          {roster.data.proposal.presentationDeadline && (
+            <p class="pk-small">Presentation deadline: {formatDateTime(roster.data.proposal.presentationDeadline)}</p>
+          )}
+        </PanelBody>
+      </Panel>
+    </div>
   );
 }

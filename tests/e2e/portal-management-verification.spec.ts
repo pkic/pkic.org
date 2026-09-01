@@ -294,7 +294,9 @@ test.describe("Portal management browser-verification pass", () => {
       .filter({ has: page.getByRole("button", { name: "Details", exact: true }) });
     await expect(proposalRow).toBeVisible();
     await proposalRow.getByRole("button", { name: "Details" }).click();
-    const detail = page.locator("div.p-3.bg-body-tertiary").filter({ hasText: title });
+    // The expanded proposal is a region named after the proposal, so it is
+    // located the way a reader finds it rather than by a background utility.
+    const detail = page.getByRole("region", { name: title });
     await expect(detail.getByText("0 of 1 required endorsements")).toBeVisible();
 
     const reject = detail.getByRole("button", { name: "Reject proposal" });
@@ -584,9 +586,11 @@ test.describe("Portal management browser-verification pass", () => {
     await page.goto("/portal/#/system/organization-content-reviews");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
-    await page.getByRole("button", { name: orgName }).click();
+    // The queue's rows carry a stretched row action, so the row itself is the
+    // target and the open submission is a named region rather than a `.card`.
+    await page.getByRole("row").filter({ hasText: orgName }).click();
 
-    const detail = page.locator(".card").filter({ has: page.getByText(orgName) });
+    const detail = page.getByRole("region", { name: orgName });
     await expect(detail.getByText("Slogan", { exact: true })).toBeVisible();
     await expect(detail.getByText(newSlogan)).toBeVisible();
 
@@ -599,7 +603,7 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
 
     await page.getByLabel("Review status").selectOption("approved");
-    await expect(page.getByRole("button", { name: orgName })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: orgName })).toBeVisible();
     expect(canonicalRequests).toContain("GET /api/v1/organizations/content-reviews");
     expect(
       canonicalRequests.some(
@@ -704,9 +708,13 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.click();
 
-    const header = page.locator("div.d-flex.align-items-center.gap-2.mb-3").filter({ hasText: name });
-    await expect(header).toBeVisible({ timeout: 10_000 });
-    await expect(header.locator("span.badge", { hasText: "Ec Review" })).toBeVisible();
+    // The applicant's name heads the detail view as a real heading, so the
+    // header is found by its role rather than by the Bootstrap utility classes
+    // that used to be on the wrapper. The stage badge is its sibling.
+    const applicantHeading = page.getByRole("heading", { name, level: 2 });
+    await expect(applicantHeading).toBeVisible({ timeout: 10_000 });
+    const header = page.locator("div").filter({ has: applicantHeading }).last();
+    await expect(header.getByText("EC review", { exact: true })).toBeVisible();
 
     const approveButton = page.getByRole("button", { name: "Approve & run onboarding" });
     await expect(approveButton).toBeVisible();
@@ -717,7 +725,7 @@ test.describe("Portal management browser-verification pass", () => {
     // The click-through's own UI state: the confirmation dialog was accepted,
     // the approve call landed (toast above), and the reloaded detail view now
     // shows the post-approval stage with no further transitions available.
-    await expect(header.locator("span.badge", { hasText: "Approved" })).toBeVisible();
+    await expect(header.getByText("Approved", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
     await expect(page.getByText("No further transitions from this stage.")).toBeVisible();
 

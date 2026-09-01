@@ -11,6 +11,9 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Badge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
 import { deleteJson, patchValidated, postValidated } from "../../../../shared/api-client";
 import { MailingListForm } from "../../../../components/mailing-lists/MailingListForm";
@@ -104,29 +107,32 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
   }
 
   return (
-    <section class="card border-0 shadow-sm mb-3" aria-label="Mailing-list management">
-      <div class="card-header bg-white fw-semibold">Managed mailing lists</div>
-      <div class="card-body">
+    <Panel class="pk" aria-label="Mailing-list management">
+      <PanelHeader title="Managed mailing lists" />
+      <PanelBody class="pk-stack">
         {error && <ErrorAlert error={error} />}
         {showCreate && (
-          <form class="card card-body bg-body-tertiary mb-3" onSubmit={(event) => void createList(event)}>
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <h6 class="card-title">New group mailing list</h6>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => setShowCreate(false)}>
-                Cancel
-              </button>
-            </div>
-            <MailingListForm
-              draft={newDraft}
-              onChange={(patch) => setNewDraft((current) => ({ ...current, ...patch }))}
-              idPrefix="group-mailing-list-create"
-            />
-            <div class="mt-3">
-              <button type="submit" class="btn btn-sm btn-primary" disabled={saving}>
-                {saving ? "Saving…" : "Create mailing list"}
-              </button>
-            </div>
-          </form>
+          <Panel>
+            <form onSubmit={(event) => void createList(event)}>
+              <PanelHeader title="New group mailing list" headingLevel={4}>
+                <Button size="sm" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </Button>
+              </PanelHeader>
+              <PanelBody class="pk-stack">
+                <MailingListForm
+                  draft={newDraft}
+                  onChange={(patch) => setNewDraft((current) => ({ ...current, ...patch }))}
+                  idPrefix="group-mailing-list-create"
+                />
+                <div class="pk-cluster">
+                  <Button type="submit" size="sm" variant="primary" disabled={saving}>
+                    {saving ? "Saving…" : "Create mailing list"}
+                  </Button>
+                </div>
+              </PanelBody>
+            </form>
+          </Panel>
         )}
         <ApiDataTable
           caption="Managed mailing lists"
@@ -143,10 +149,10 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             {
               header: "Mailing list",
               cell: (list) => (
-                <>
-                  <div class="fw-semibold">{list.label}</div>
-                  <div class="small text-muted">{list.email}</div>
-                </>
+                <div class="pk-stack pk-stack--tight">
+                  <span class="pk-strong">{list.label}</span>
+                  <span class="pk-small">{list.email}</span>
+                </div>
               ),
               sort: { asc: "label", desc: "-label" },
             },
@@ -157,21 +163,24 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             },
             {
               header: "Status",
-              cell: (list) => (list.active ? <span class="text-muted">—</span> : "Archived"),
+              // The word carries the state, not the tone: an archived list has
+              // to read as archived to someone who cannot separate the hues.
+              cell: (list) => (
+                <Badge tone={list.active ? "ok" : "neutral"}>{list.active ? "Active" : "Archived"}</Badge>
+              ),
             },
             {
               header: "",
-              className: "text-end",
+              className: "pk-end",
               cell: (list) => (
-                <div class="d-flex justify-content-end align-items-center gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-secondary"
+                <div class="pk-cluster pk-cluster--end">
+                  <Button
+                    size="sm"
                     aria-expanded={selectedListId === list.id}
                     onClick={() => selectForManagement(list)}
                   >
                     {selectedListId === list.id ? "Close" : "Manage"}
-                  </button>
+                  </Button>
                   <RowActions
                     label={`Actions for ${list.label}`}
                     actions={[
@@ -190,29 +199,23 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
           rowKey={(list) => list.id}
           detailRow={(list) =>
             selectedListId === list.id ? (
-              <div class="p-3 bg-body-tertiary">
-                <h6>Manage {list.label}</h6>
+              // The expanded cell has no padding of its own — DataTable zeroes
+              // it so the row's owner decides — so the panel body supplies it
+              // on the space scale rather than a one-off padding utility.
+              <PanelBody class="pk-stack">
+                <h4>Manage {list.label}</h4>
                 <MailingListForm
                   draft={editDraft}
                   onChange={(patch) => setEditDraft((current) => ({ ...current, ...patch }))}
                   idPrefix={`group-mailing-list-${list.id}`}
                 />
-                <div class="mt-3 d-flex gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-primary"
-                    disabled={saving}
-                    onClick={() => void saveList(list.id)}
-                  >
+                <div class="pk-cluster">
+                  <Button size="sm" variant="primary" disabled={saving} onClick={() => void saveList(list.id)}>
                     {saving ? "Saving…" : "Save changes"}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-secondary"
-                    onClick={() => setSelectedListId(null)}
-                  >
+                  </Button>
+                  <Button size="sm" onClick={() => setSelectedListId(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
                 <ResourceSharingEditor
                   kind="mailingList"
@@ -220,7 +223,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
                   resourceId={list.id}
                   ownerGroupId={groupId}
                 />
-              </div>
+              </PanelBody>
             ) : null
           }
           empty={
@@ -230,7 +233,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             />
           }
         />
-      </div>
-    </section>
+      </PanelBody>
+    </Panel>
   );
 }

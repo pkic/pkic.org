@@ -988,8 +988,10 @@
 // The session dialog. `<dialog>` supplies the top layer, the backdrop, the
 // focus trap and Escape-to-close, so what is left is the box itself.
 .session-modal {
-  width: min(1140px, calc(100vw - 2rem));
-  max-width: none;
+  // `width` capped by `max-width` rather than a CSS `min()`, which libsass
+  // tries to evaluate as its own numeric function and rejects.
+  width: calc(100vw - 2rem);
+  max-width: 1140px;
   max-height: calc(100vh - 3rem);
   padding: 0;
   border: 0;
@@ -1070,7 +1072,8 @@ body.agenda-modal-open {
 // Formerly `ratio ratio-16x9 bg-light`.
 .session-modal__video {
   position: relative;
-  aspect-ratio: 16 / 9;
+  // Interpolated so libsass emits the ratio rather than dividing it.
+  aspect-ratio: #{"16 / 9"};
   background: var(--pk-surface-sunk);
 }
 
