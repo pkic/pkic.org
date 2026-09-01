@@ -257,10 +257,10 @@ describe("portal event invitations", () => {
 
     const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
     await settle();
-    // Revoke is not authorized here, so resend is the row's only action and
-    // it is shown inline — named after the invitee, not just "Resend
-    // invitation" like every other row's.
-    expect(rowActionControlNames(container)).toEqual(["Resend invitation, Ada Lovelace"]);
+    // Revoke is not authorized here, so resend is the row's only action —
+    // still behind the row's menu, whose trigger names the invitee so a page
+    // of rows is a page of distinguishable controls.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
 
     await runRowAction(container, "Ada Lovelace", "Resend invitation");
     await settle();

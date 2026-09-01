@@ -150,7 +150,9 @@ describe("portal selected-group workspace", () => {
 
     expect(container.textContent).toContain("Architecture Committee");
     expect(container.textContent).toContain("Part of Parent Group");
-    expect(container.textContent).toContain("Members represented");
+    // The headline counts live on the overview's about panel now, not in the
+    // page header repeated above every view.
+    expect(container.textContent).not.toContain("Members represented");
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     // The group workspace is route-addressed; no manageable-group picker request is made.
     expect(requests.some(({ url }) => url.searchParams.get("manageable") === "true")).toBe(false);
@@ -238,15 +240,18 @@ describe("portal selected-group workspace", () => {
     await act(() => render(<GroupWorkspace groupId={GROUP_ID} view="overview" />, container));
     await settle();
 
-    // The context is a named region, so it can be reached by landmark rather
-    // than being one more unlabelled section.
-    const context = container.querySelector('[aria-label="Group context"]')!;
+    // The page header is a labelled region, so the context a reader lands in
+    // can be reached by landmark rather than being one more unlabelled box.
+    const context = container.querySelector("header[aria-labelledby]")!;
     expect(context).not.toBeNull();
     expect(context.querySelector("h2")?.textContent).toBe("Architecture Committee");
+    // The trail leads back to the catalog.
+    const trailLink = container.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a');
+    expect(trailLink?.getAttribute("href")).toBe("#/groups");
 
     // The strip says which set of sections it is, and the current one is
     // marked rather than merely coloured.
-    const strip = container.querySelector("nav")!;
+    const strip = container.querySelector('nav[aria-label$=" sections"]')!;
     expect(strip.getAttribute("aria-label")).toBe("Architecture Committee sections");
     expect(isCurrentTab(tabNamed(container, "Overview"))).toBe(true);
     expect(isCurrentTab(tabNamed(container, "Members"))).toBe(false);
@@ -267,7 +272,7 @@ describe("portal selected-group workspace", () => {
     await settle();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("This group is not visible to you.");
-    expect(container.querySelector('[aria-label="Group context"]')).toBeNull();
+    expect(container.querySelector("header[aria-labelledby]")).toBeNull();
     expect(tabNames(container)).toEqual([]);
   });
 

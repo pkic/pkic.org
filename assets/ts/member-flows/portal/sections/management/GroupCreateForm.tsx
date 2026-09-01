@@ -19,7 +19,7 @@ import { ApiClientError, getJson, postJson } from "../../../../shared/api-client
 import { useData } from "../../../../hooks/useData";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 import { activeGroupTypeCatalog, managedGroupCatalog } from "./catalog";
 
@@ -145,8 +145,8 @@ export function GroupCreateForm({
 
   return (
     <div class="pk">
+      {/* The page header names the surface; the panel only holds the form. */}
       <Panel aria-label="Create a group">
-        <PanelHeader title="Create a group" headingLevel={2} />
         <PanelBody class="pk-stack">
           <p class="pk-small">Create a reusable group context for meetings, events, forms, votes, and membership.</p>
           <form class="pk-stack" onSubmit={(event) => void submit(event)}>

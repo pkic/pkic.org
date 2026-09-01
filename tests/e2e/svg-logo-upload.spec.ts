@@ -28,16 +28,18 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   // Creation is its own routed view, not a panel above the directory.
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
   const createForm = page.getByRole("region", { name: "Add organization" });
-  await createForm.getByLabel("Organization name").fill(organizationName);
-  await createForm.getByLabel("Membership category").selectOption("F");
-  await createForm.getByLabel("Member since").fill("2026-01-15");
-  const firstIdentity = createForm.getByRole("group", { name: "Identity 1" });
-  await firstIdentity.getByLabel("Name").fill("Logo Representative");
-  await firstIdentity.getByLabel("Email").fill(`svg-logo-${suffix}@example.invalid`);
-  // Creating an organization activates its identities at once, so the form
-  // requires a reason for it. Leaving it empty does not fail the request — the
-  // browser refuses to submit at all, and nothing is ever created.
-  await createForm.getByLabel("Immediate activation reason").fill("E2E SVG logo setup");
+  const organizationGroup = createForm.getByRole("group", { name: "Organization", exact: true });
+  await organizationGroup.getByLabel("Organization name").fill(organizationName);
+  await organizationGroup.getByLabel("Membership category").selectOption("F");
+  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  await createForm.getByRole("button", { name: "Add person", exact: true }).click();
+  const firstPerson = createForm.getByRole("group", { name: "Person 1" });
+  await firstPerson.getByLabel("Name").fill("Logo Representative");
+  await firstPerson.getByLabel("Email").fill(`svg-logo-${suffix}@example.invalid`);
+  // Adding a person activates them at once, so the form requires a reason for
+  // it. Leaving it empty does not fail the request — the browser refuses to
+  // submit at all, and nothing is ever created.
+  await createForm.getByLabel("Reason for activating without an invitation").fill("E2E SVG logo setup");
   const createResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/v1/organizations" && response.request().method() === "POST",

@@ -303,7 +303,7 @@ describe("portal email template editor", () => {
     const onBack = vi.fn();
     await mount({ onBack });
 
-    expect(container!.querySelector("h2")?.textContent).toBe(`Edit: ${TEMPLATE_KEY}`);
+    expect(container!.querySelector("h3")?.textContent).toBe(`Edit: ${TEMPLATE_KEY}`);
     await click("← Back to list");
     expect(onBack).toHaveBeenCalledTimes(1);
   });

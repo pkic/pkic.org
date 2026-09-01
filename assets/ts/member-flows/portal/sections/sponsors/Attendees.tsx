@@ -25,11 +25,14 @@ function fmtAttendanceType(value: string | null): string {
  * table re-derive an identical shape.
  */
 const ATTENDEE_COLUMNS: ReadonlyArray<DataTableColumn<SponsorAttendee>> = [
-  { id: "name", header: "Name", cell: (a) => fmtName(a) },
+  // The design system's table gives slack to no column on its own; the
+  // person is the row's subject, so a wide screen's slack lands there.
+  { id: "name", header: "Name", width: "primary", cell: (a) => fmtName(a) },
   { id: "email", header: "Email", cell: (a) => a.email ?? "—", cellClass: "pk-break" },
   { id: "organizationName", header: "Organization", cell: (a) => a.organizationName ?? "—" },
   { id: "jobTitle", header: "Job title", cell: (a) => a.jobTitle ?? "—" },
-  { id: "attendanceType", header: "Attendance", cell: (a) => fmtAttendanceType(a.attendanceType) },
+  // A bounded vocabulary hugs its content instead of claiming slack.
+  { id: "attendanceType", header: "Attendance", width: "fit", cell: (a) => fmtAttendanceType(a.attendanceType) },
 ];
 
 export function SponsorAttendees({
@@ -67,14 +70,14 @@ export function SponsorAttendees({
   }
 
   return (
-    <div class="pk pk-stack content-width-xl">
+    // Full width: a list fills the measure it is given, and the shell owns
+    // the page's <h1> — the tab strip already names this view, so the strip
+    // below it carries the context line and the list's own actions.
+    <div class="pk pk-stack">
       <div class="pk-cluster pk-cluster--between pk-cluster--start">
-        <div class="pk-stack pk-stack--tight">
-          <h1>Attendees — {eventLabel}</h1>
-          <p class="pk-small">
-            {capacity.tier} sponsor · {capacity.contactEmail}
-          </p>
-        </div>
+        <p class="pk-small">
+          {eventLabel} · {capacity.tier} sponsor · {capacity.contactEmail}
+        </p>
         {/* A download is a navigation to a representation of this list, so it
             is an anchor wearing the button's clothes rather than a button that
             fakes one. */}

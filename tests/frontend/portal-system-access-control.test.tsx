@@ -109,9 +109,9 @@ describe("portal system access control", () => {
     await settle();
     expect(revokeOnly.textContent).not.toContain("New grant");
     expect(revokeOnly.textContent).not.toContain("Grant a permission");
-    // Revoking is the row's only action, so it is offered as a button that
-    // says which grant it would revoke.
-    expect(rowActionControlNames(revokeOnly)).toEqual(["Revoke grant, access:grant granted to staff@example.test"]);
+    // The row's commands live behind the `…` menu, whose trigger says which
+    // grant it acts on.
+    expect(rowActionControlNames(revokeOnly)).toEqual(["Actions for access:grant granted to staff@example.test"]);
 
     // A grant-authorized caller sees the action, not an always-open form.
     void act(() => render(null, revokeOnly));
@@ -196,7 +196,7 @@ describe("portal system access control", () => {
       expect(onNavigate).toHaveBeenCalledWith("new");
 
       const openButton = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent === "Open",
+        (button) => button.textContent === `Open ${ROLE.name}`,
       );
       void act(() => openButton!.click());
       expect(onNavigate).toHaveBeenCalledWith(ROLE.id);

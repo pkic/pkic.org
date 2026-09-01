@@ -125,16 +125,18 @@ describe("meeting occurrence list", () => {
     // A series page shows more than one table, so this one says whose
     // occurrences it lists rather than being a second nameless "table".
     expect(container.querySelector("table caption")?.textContent).toBe("Scheduled occurrences of Architecture call");
-    // The last column has a name instead of an empty `<th>`.
-    expect([...container.querySelectorAll("th")].map((cell) => cell.textContent?.trim())).toContain("Actions");
 
-    // A disclosure, not a navigation: the detail row opens in place, so the
-    // control says what it controls and whether it is open.
-    const manage = buttonNamed(container, "Manage");
-    expect(manage.getAttribute("aria-expanded")).toBe("false");
-    expect(manage.getAttribute("aria-controls")).toBe(`meeting-occurrence-detail-${occurrence().id}`);
-    await act(() => manage.click());
-    expect(buttonNamed(container, "Hide").getAttribute("aria-expanded")).toBe("true");
+    // The row itself opens the management detail in place, and its
+    // activation names the occurrence it manages.
+    const manage = [...container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find((control) =>
+      control.textContent?.startsWith("Manage the occurrence starting"),
+    );
+    expect(manage).toBeTruthy();
+    await act(() => manage!.click());
+    const hide = [...container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find((control) =>
+      control.textContent?.startsWith("Hide management for the occurrence starting"),
+    );
+    expect(hide).toBeTruthy();
   });
 
   it("announces a rejected occurrence creation below the actions, not beside them", async () => {

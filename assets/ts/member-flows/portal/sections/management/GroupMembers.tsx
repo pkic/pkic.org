@@ -34,6 +34,9 @@ function membershipColumns(
     {
       id: "person",
       header: "Person",
+      // The design system's table gives slack to no column on its own; the
+      // person is the row's subject, so a wide screen's slack lands here.
+      width: "primary",
       cell: (membership) => <PersonCell name={membership.userName} email={membership.email} size="sm" />,
     },
     {
@@ -49,7 +52,8 @@ function membershipColumns(
     {
       id: "source",
       header: "Source",
-      cellClass: "pk-nowrap",
+      // Bounded vocabulary; the column hugs it instead of claiming slack.
+      width: "fit",
       cell: (membership) => membership.source.replaceAll("_", " "),
     },
     {

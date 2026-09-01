@@ -187,7 +187,7 @@ describe("portal resource sharing editor", () => {
 
     // Each shared group's control names that group, so a table of "Revoke"
     // buttons still says what each one revokes.
-    expect(rowActionControlNames(container)).toEqual(["Revoke, Working Group"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Working Group"]);
     await runRowAction(container, "Working Group", "Revoke");
     await act(async () => confirmDialogButton("Revoke access").click());
     await settle();

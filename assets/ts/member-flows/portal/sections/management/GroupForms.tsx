@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
+import { FORM_PURPOSES } from "../../../../../shared/schemas/forms";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
+import { FilterSelect } from "../../../../components/FilterSelect";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { GroupFormDetail } from "./GroupFormDetail";
@@ -34,6 +36,7 @@ export function GroupForms({
 }) {
   const [, navigate] = usePortalHashLocation();
   const creating = placementSegment === NEW_GROUP_FORM_SEGMENT;
+  const [purposeFilter, setPurposeFilter] = useState("");
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(
     creating ? null : (placementSegment ?? null),
   );
@@ -66,7 +69,7 @@ export function GroupForms({
           </Button>
         </div>
         <Panel aria-label="New group form">
-          <PanelHeader title="New group form" headingLevel={2} />
+          <PanelHeader title="New group form" />
           <PanelBody>
             <GroupFormEditor
               groupId={groupId}
@@ -104,6 +107,23 @@ export function GroupForms({
             }
             searchPlaceholder="Search forms…"
             initialSort="title"
+            params={purposeFilter ? { purpose: purposeFilter } : {}}
+            toolbar={({ resetPage }) => (
+              // The list contract already accepts `purpose`; the toolbar
+              // exposes it rather than leaving it to search syntax.
+              <FilterSelect
+                ariaLabel="Filter forms by purpose"
+                value={purposeFilter}
+                options={[
+                  { value: "", label: "All purposes" },
+                  ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
+                ]}
+                onChange={(value) => {
+                  setPurposeFilter(value);
+                  resetPage();
+                }}
+              />
+            )}
             columns={[
               {
                 header: "Form",
@@ -118,6 +138,7 @@ export function GroupForms({
               {
                 header: "Purpose",
                 cell: (row) => <Badge status={row.form.purpose} />,
+                width: "fit",
                 sort: { asc: "purpose", desc: "-purpose" },
               },
               {
@@ -133,24 +154,9 @@ export function GroupForms({
                     label={row.acceptingResponses ? "Accepting responses" : undefined}
                   />
                 ),
+                width: "fit",
               },
               { header: "Access", cell: (row) => <ResourceCapabilities capabilities={row.capabilities} /> },
-              {
-                header: "",
-                className: "pk-end",
-                cell: (row) => (
-                  // The control names the form it belongs to: a page of rows
-                  // otherwise offers a column of buttons all called "Details".
-                  <Button
-                    size="sm"
-                    aria-label={`${selectedPlacementId === row.placement.id ? "Hide" : "Details"} for ${row.form.title}`}
-                    aria-expanded={selectedPlacementId === row.placement.id}
-                    onClick={() => selectPlacement(selectedPlacementId === row.placement.id ? null : row.placement.id)}
-                  >
-                    {selectedPlacementId === row.placement.id ? "Hide" : "Details"}
-                  </Button>
-                ),
-              },
             ]}
             empty={
               canManage ? (
@@ -163,6 +169,16 @@ export function GroupForms({
               )
             }
             rowKey={(row) => row.placement.id}
+            // Activating a row opens its detail in place — the same rule as
+            // every other list, where a row with a detail opens it. The
+            // "Details" button column this replaces left the row inert.
+            rowAction={(row) => ({
+              label:
+                selectedPlacementId === row.placement.id
+                  ? `Hide details for ${row.form.title}`
+                  : `Show details for ${row.form.title}`,
+              onSelect: () => selectPlacement(selectedPlacementId === row.placement.id ? null : row.placement.id),
+            })}
             detailRow={(row) =>
               selectedPlacementId === row.placement.id ? (
                 <GroupFormDetail

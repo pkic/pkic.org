@@ -184,6 +184,23 @@
     min-inline-size: 0;
   }
 
+  /*
+   * The framed variant: a repeated sub-record inside a form — one person in a
+   * list of drafts — whose fields must read as its own rather than as the
+   * surrounding form's. The frame is what carries that boundary, and the
+   * legend sits on it, naming the card the way a fieldset always could.
+   */
+  .pk-fieldset--boxed {
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    padding: var(--pk-4);
+    background: var(--pk-surface);
+  }
+
+  .pk-fieldset--boxed > legend {
+    padding-inline: var(--pk-1);
+  }
+
   /* The few text utilities worth having, all reading tokens. */
   .pk-muted {
     color: var(--pk-ink-muted);

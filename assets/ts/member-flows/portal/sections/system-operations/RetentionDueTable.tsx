@@ -35,9 +35,11 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
     { header: "Registrations", cell: (row) => row.subtitle ?? "—", className: "pk-small" },
     { header: "Policy", cell: (row) => row.detail ?? "—", className: "pk-small pk-muted" },
     {
+      // A date has a bounded length; the column says so instead of wearing
+      // `pk-nowrap` while still claiming slack, and keeps the table's ink.
       header: "Ended",
       cell: (row) => (row.dueAt ? fmt(row.dueAt) : "—"),
-      className: "pk-mono pk-small pk-nowrap",
+      width: "fit",
       sort: { asc: "dueAt", desc: "-dueAt", defaultDirection: "asc" },
     },
   ];

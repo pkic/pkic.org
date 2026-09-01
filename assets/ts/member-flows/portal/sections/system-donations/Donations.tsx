@@ -30,6 +30,7 @@ import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
 import { Chip } from "../../../../ui/Chip";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
 import { getJson, postJson } from "../../../../shared/api-client";
@@ -92,6 +93,7 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
     id: "rank",
     header: "Rank",
     align: "end",
+    width: "fit",
     // The number is the content, so the tone is emphasis rather than the only
     // thing distinguishing the top three from the rest.
     cell: (row) => (
@@ -103,6 +105,9 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
   {
     id: "promoter",
     header: "Promoter",
+    // The design system's table gives slack to no column on its own; the
+    // promoter — the row's subject — is where extra room does the most good.
+    width: "primary",
     cell: (row) => (
       <div class="pk-stack pk-stack--tight">
         <span>{row.name ?? "Anonymous"}</span>
@@ -114,12 +119,13 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
       </div>
     ),
   },
-  { id: "own", header: "Own donation", align: "end", cellClass: "pk-nowrap", cell: (row) => ownAmount(row) },
-  { id: "clicks", header: "Link clicks", align: "end", cell: (row) => row.clicks },
+  { id: "own", header: "Own donation", align: "end", width: "fit", cell: (row) => ownAmount(row) },
+  { id: "clicks", header: "Link clicks", align: "end", width: "fit", cell: (row) => row.clicks },
   {
     id: "referred",
     header: "Referred donors",
     align: "end",
+    width: "fit",
     cell: (row) =>
       row.attributed_total > row.attributed_completed ? (
         <>
@@ -133,14 +139,14 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
     id: "referred-amount",
     header: "Referred amount",
     align: "end",
-    cellClass: "pk-nowrap",
+    width: "fit",
     cell: (row) => referredAmount(row),
   },
   {
     id: "impact",
     header: "Total impact",
     align: "end",
-    cellClass: "pk-nowrap",
+    width: "fit",
     cell: (row) => <span class="pk-strong">{totalImpact(row)}</span>,
   },
 ];
@@ -291,7 +297,8 @@ export function Donations({
   if (!canRead) {
     if (canSync) {
       return (
-        <div class="pk">
+        <div class="pk pk-stack">
+          <PageHeader title="Donations" />
           <Panel aria-label="Donation synchronization">
             <PanelHeader title="Donation synchronization" headingLevel={2} />
             <PanelBody class="pk-stack pk-stack--snug">
@@ -303,7 +310,8 @@ export function Donations({
       );
     }
     return (
-      <div class="pk">
+      <div class="pk pk-stack">
+        <PageHeader title="Donations" />
         <Alert tone="warn">
           Donation records require the <code class="pk-mono">donations:read</code> permission.
         </Alert>
@@ -349,30 +357,36 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
           </>
         );
       },
-      className: "pk-end pk-nowrap",
+      className: "pk-end",
+      width: "fit",
       sort: { asc: "gross_amount", desc: "-gross_amount", defaultDirection: "desc" },
     },
     {
       header: "Status",
       cell: (d) => <StatusBadge status={d.status} />,
-      className: "pk-small",
+      width: "fit",
       sort: { asc: "status", desc: "-status" },
     },
     {
       header: "Method",
       cell: (d) => (d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—"),
-      className: "pk-small",
+      width: "fit",
     },
     {
+      // A date has a bounded length, so the column says that instead of
+      // wearing `pk-nowrap` while still claiming a share of a wide screen.
+      // It keeps the table's own ink and size: a second grey line left
+      // nothing in the row reading as the record's own data.
       header: "Date",
       cell: (d) => fmtDate(d.completed_at ?? d.created_at),
-      className: "pk-small pk-muted pk-nowrap",
+      width: "fit",
       sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
     },
   ];
 
   return (
     <div class="pk pk-stack pk-stack--snug">
+      <PageHeader title="Donations" />
       <Tabs
         items={[
           { key: "list", label: "Donations" },

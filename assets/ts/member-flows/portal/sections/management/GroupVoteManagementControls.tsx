@@ -230,13 +230,16 @@ export function GroupVoteManagementControls({
                 { header: "Choice", cell: (ballot) => ballot.choice, sort: { asc: "choice", desc: "-choice" } },
                 {
                   header: "Round",
-                  className: "pk-end pk-nowrap",
+                  className: "pk-end",
+                  width: "fit",
                   cell: (ballot) => ballot.round,
                   sort: { asc: "round", desc: "-round" },
                 },
                 {
+                  // A date has a bounded length; the column says so instead
+                  // of wearing `pk-nowrap` while still claiming slack.
                   header: "Submitted",
-                  className: "pk-nowrap",
+                  width: "fit",
                   cell: (ballot) => fmt(ballot.submittedAt),
                   sort: { asc: "submittedAt", desc: "-submittedAt", defaultDirection: "desc" },
                 },

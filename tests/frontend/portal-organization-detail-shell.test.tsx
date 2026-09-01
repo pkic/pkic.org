@@ -35,6 +35,28 @@ async function settle(): Promise<void> {
   });
 }
 
+/** Settles until `condition` holds, failing after a bounded budget. */
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (condition()) return;
+    await settle();
+  }
+  throw new Error("Expected condition was not met.");
+}
+
+/** Selects one of the record's facets the way a reader does: by its tab. */
+async function openTab(container: HTMLElement, name: string): Promise<void> {
+  await waitFor(() =>
+    [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].some(
+      (candidate) => candidate.textContent === name,
+    ),
+  );
+  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+    (candidate) => candidate.textContent === name,
+  );
+  await act(async () => tab?.click());
+}
+
 function detail() {
   return organizationDetailResponseSchema.parse({
     organization: {
@@ -103,7 +125,7 @@ afterEach(() => {
 });
 
 describe("organization detail shell", () => {
-  it("heads the record with a real heading that the section is named by", async () => {
+  it("opens with one statement of the record: trail, heading, and badges, each said once", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
@@ -116,20 +138,32 @@ describe("organization detail shell", () => {
     );
 
     const container = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities={false} />,
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities={false}
+        canReadSponsorships={false}
+      />,
     );
     await settle();
     await settle();
 
-    // The name used to be an `<h5>` picked for its size. It is a real heading
-    // now, and the section is still named by it, so the record has an entry in
-    // the document outline as well as a name in the landmark list.
+    // The record opens with a PageHeader: the name is the page's `<h2>`, and
+    // the section carries it as its accessible name.
     const section = container.querySelector("section");
-    const labelledBy = section?.getAttribute("aria-labelledby");
-    expect(labelledBy).not.toBeNull();
-    const heading = container.querySelector(`#${labelledBy!}`);
-    expect(heading?.tagName).toBe("H2");
+    expect(section?.getAttribute("aria-label")).toBe("Example Organization");
+    const heading = container.querySelector(".pk-page-header h2");
     expect(heading?.textContent).toBe("Example Organization");
+
+    // One name, once: no kicker restating what the trail already says, and no
+    // second heading repeating the section's name above the record.
+    expect(container.querySelector(".pk-kicker")).toBeNull();
+    expect(
+      [...container.querySelectorAll("h1, h2, h3, h4, h5")].filter(
+        (candidate) => candidate.textContent === "Organization" || candidate.textContent === "Organizations",
+      ),
+    ).toEqual([]);
 
     // The identity count reads as a sentence rather than a bare number, and
     // the singular is not "1 identities".
@@ -147,6 +181,82 @@ describe("organization detail shell", () => {
     const trail = container.querySelector('[aria-label="Breadcrumb"]');
     expect(trail?.querySelector("a")?.getAttribute("href")).toBe("#/organizations");
     expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("Example Organization");
+
+    // The record's facets are tabs under the header, not one long scroll.
+    const tablist = container.querySelector('[role="tablist"]');
+    expect(tablist).not.toBeNull();
+  });
+
+  it("fetches each facet only when its tab is selected", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url.pathname + url.search);
+        if (url.pathname === "/api/v1/sponsors") {
+          return json({ sponsorships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(url.pathname.endsWith("/identities") ? identityPage() : detail());
+      }),
+    );
+
+    const container = mount(
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities
+        canReadSponsorships
+      />,
+    );
+    await settle();
+    await settle();
+
+    // First paint loads the record itself, and nothing else: a tab is the
+    // license not to fetch a facet nobody is looking at.
+    expect(requests).toEqual([`/api/v1/organizations/${organizationId}`]);
+
+    await openTab(container, "Identities");
+    await waitFor(() => requests.some((request) => request.includes(`/organizations/${organizationId}/identities`)));
+    expect(requests.some((request) => request.startsWith("/api/v1/sponsors"))).toBe(false);
+
+    await openTab(container, "Sponsorships");
+    await waitFor(() => requests.some((request) => request.startsWith("/api/v1/sponsors")));
+    const sponsorRequest = requests.find((request) => request.startsWith("/api/v1/sponsors"));
+    expect(sponsorRequest).toContain("visibility=all");
+    expect(sponsorRequest).toContain(`organizationId=${organizationId}`);
+  });
+
+  it("offers no sponsorships tab without sponsorships:read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return json(url.pathname.endsWith("/identities") ? identityPage() : detail());
+      }),
+    );
+
+    const container = mount(
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities={false}
+        canReadSponsorships={false}
+      />,
+    );
+    await settle();
+    await settle();
+
+    const tabNames = [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+    expect(tabNames).toEqual(["Overview", "Identities"]);
   });
 
   it("announces a failed load as an alert instead of an empty record", async () => {
@@ -156,7 +266,13 @@ describe("organization detail shell", () => {
     );
 
     const container = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities={false} />,
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities={false}
+        canReadSponsorships={false}
+      />,
     );
     await settle();
 
@@ -173,6 +289,7 @@ describe("organization detail shell", () => {
         canRead={false}
         canWrite={false}
         canManageIdentities={false}
+        canReadSponsorships={false}
       />,
     );
 

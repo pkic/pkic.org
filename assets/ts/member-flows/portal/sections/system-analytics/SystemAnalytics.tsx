@@ -15,8 +15,9 @@ export function SystemAnalytics({ initialTab }: { initialTab?: string }) {
   const tab: AnalyticsTab = initialTab === "registrations" ? initialTab : "overview";
 
   return (
-    <section class="pk pk-stack" aria-labelledby="system-analytics-heading">
-      <h2 id="system-analytics-heading">System analytics</h2>
+    // The Settings hub's "Analytics" tab already names this surface, so it
+    // carries no heading of its own — only its sub-navigation and panels.
+    <section class="pk pk-stack" aria-label="System analytics">
       {/*
        * The shared tab strip rather than a hand-rolled `nav`: each tab is a
        * place with a URL, so it stays a wouter <Link> carrying

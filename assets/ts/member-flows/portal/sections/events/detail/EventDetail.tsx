@@ -10,6 +10,7 @@ import { toast } from "../../../ui";
 import type { EventDetail } from "../types";
 import { currentEvent } from "../state";
 import { Button } from "../../../../../ui/Button";
+import { PageHeader } from "../../../../../ui/PageHeader";
 import "../../../../../ui/Content.css";
 
 const Settings = lazy(() => import("./Settings").then((module) => ({ default: module.Settings })));
@@ -71,21 +72,19 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
 
   return (
     <div class="pk pk-stack">
-      {/* Header. `--start` keeps the refresh button level with the event's
-          name rather than centered against a two-line title block. */}
-      <div class="pk-cluster pk-cluster--start">
-        <div class="pk-stack pk-stack--tight">
-          <h2>{event.name}</h2>
-          <p class="pk-small">
-            <span class="pk-mono">{event.slug}</span>
-            {event.startsAt && <> · {event.startsAt.substring(0, 10)}</>}
-            {event.venue && <> · {event.venue}</>}
-          </p>
-        </div>
-        <Button class="pk-push" size="sm" onClick={() => void load()}>
-          ↺ Refresh
-        </Button>
-      </div>
+      {/* The event heads the page over a trail back to the list; the slug,
+          date, and venue are its one quiet line, and refresh is the record's
+          command on the right. */}
+      <PageHeader
+        trail={[{ label: "Events", href: usePortalHashLocation.hrefs("/events") }, { label: event.name }]}
+        title={event.name}
+        actions={
+          <Button size="sm" onClick={() => void load()}>
+            Refresh
+          </Button>
+        }
+        description={[event.slug, event.startsAt?.substring(0, 10), event.venue].filter(Boolean).join(" · ")}
+      />
 
       {/* Tabs. Named, because the page carries more than one set of them once
           a tab's own sub-navigation renders below. */}

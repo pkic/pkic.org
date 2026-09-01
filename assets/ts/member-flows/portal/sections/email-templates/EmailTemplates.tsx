@@ -119,7 +119,7 @@ function CreateTemplate({
   return (
     <div class="pk pk-container pk-container--narrow">
       <Panel>
-        <PanelHeader title="Create New Template" headingLevel={2}>
+        <PanelHeader title="Create New Template">
           {showCancel && (
             <Button size="sm" onClick={onCancel}>
               ← Back to list
@@ -226,7 +226,7 @@ function EmailTemplateCreateOnly() {
   if (createdKey) {
     return (
       <section class="pk pk-stack pk-stack--snug" aria-labelledby="email-template-created-heading">
-        <h2 id="email-template-created-heading">Template created</h2>
+        <h3 id="email-template-created-heading">Template created</h3>
         <p class="pk-small">
           {createdKey} was created. You do not have permission to view template history or activate versions.
         </p>
@@ -241,7 +241,7 @@ function EmailTemplateCreateOnly() {
 
   return (
     <section class="pk pk-stack pk-stack--snug" aria-labelledby="email-template-create-heading">
-      <h2 id="email-template-create-heading">Create email template</h2>
+      <h3 id="email-template-create-heading">Create email template</h3>
       <p class="pk-small">You can create a draft template without access to the template catalog.</p>
       <CreateTemplate canRead={false} onCreated={setCreatedKey} onCancel={() => undefined} showCancel={false} />
     </section>
@@ -314,6 +314,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
           header: "Active",
           cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
           className: "pk-mono",
+          width: "fit",
           sort: { asc: "active_version", desc: "-active_version" },
         },
         {
@@ -332,21 +333,20 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
           header: "Versions",
           cell: (t) => t.version_count,
           className: "pk-mono",
+          width: "fit",
           sort: { asc: "version_count", desc: "-version_count", defaultDirection: "desc" },
-        },
-        {
-          header: "",
-          cell: (t) => (
-            <Button size="sm" onClick={() => void openEditor(t.template_key)}>
-              {canWrite ? "Edit" : "View"} →
-            </Button>
-          ),
         },
       ]}
       empty={
         canWrite ? <EmptyState title="No templates yet" body="Create a template to get started." /> : "No templates"
       }
       rowKey={(t) => t.template_key}
+      // The whole row opens the template. It used to be an "Edit →" button in
+      // a nameless last column, which left the row itself inert.
+      rowAction={(t) => ({
+        label: `${canWrite ? "Edit" : "View"} ${t.template_key}`,
+        onSelect: () => void openEditor(t.template_key),
+      })}
     />
   );
 }

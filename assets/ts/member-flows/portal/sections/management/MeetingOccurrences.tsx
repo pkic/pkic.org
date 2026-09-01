@@ -132,39 +132,52 @@ export function MeetingOccurrences({
             cell: (occurrence) => fmt(occurrence.startsAt),
             sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: "asc" },
           },
-          { header: "Ends", cell: (occurrence) => fmt(occurrence.endsAt), sort: { asc: "ends_at", desc: "-ends_at" } },
+          {
+            header: "Ends",
+            cell: (occurrence) => fmt(occurrence.endsAt),
+            width: "fit",
+            sort: { asc: "ends_at", desc: "-ends_at" },
+          },
           {
             header: "Status",
             cell: (occurrence) => <Badge status={occurrence.status} />,
+            width: "fit",
             sort: { asc: "status", desc: "-status" },
           },
-          { header: "Guests", cell: (occurrence) => occurrence.guestCount },
-          { header: "Joined", cell: (occurrence) => occurrence.joinConfirmedCount },
-          { header: "Verified", cell: (occurrence) => occurrence.attendanceVerifiedCount },
-          ...(canManage || canManageAttendance
-            ? [
-                {
-                  header: "Actions",
-                  className: "pk-end",
-                  cell: (occurrence: EventOccurrence) => (
-                    // A disclosure, not a navigation: the detail row opens in
-                    // place, so the control keeps aria-expanded/aria-controls
-                    // and the row itself stays a plain row.
-                    <Button
-                      size="sm"
-                      aria-expanded={selectedId === occurrence.id}
-                      aria-controls={`meeting-occurrence-detail-${occurrence.id}`}
-                      onClick={() => setSelectedId((current) => (current === occurrence.id ? null : occurrence.id))}
-                    >
-                      {selectedId === occurrence.id ? "Hide" : "Manage"}
-                    </Button>
-                  ),
-                },
-              ]
-            : []),
+          // Counts are compared down the column, so they read from the end
+          // and hug their content instead of claiming slack.
+          {
+            header: { label: "Guests", className: "pk-end" },
+            cell: (occurrence) => occurrence.guestCount,
+            width: "fit",
+          },
+          {
+            header: { label: "Joined", className: "pk-end" },
+            cell: (occurrence) => occurrence.joinConfirmedCount,
+            width: "fit",
+          },
+          {
+            header: { label: "Verified", className: "pk-end" },
+            cell: (occurrence) => occurrence.attendanceVerifiedCount,
+            width: "fit",
+          },
         ]}
         empty="No meeting occurrences have been generated."
         rowKey={(occurrence) => occurrence.id}
+        // Activating a row opens its management detail in place — the same
+        // rule as every other list. The "Manage" button column this replaces
+        // left the row itself inert.
+        rowAction={
+          canManage || canManageAttendance
+            ? (occurrence: EventOccurrence) => ({
+                label:
+                  selectedId === occurrence.id
+                    ? `Hide management for the occurrence starting ${fmt(occurrence.startsAt)}`
+                    : `Manage the occurrence starting ${fmt(occurrence.startsAt)}`,
+                onSelect: () => setSelectedId((current) => (current === occurrence.id ? null : occurrence.id)),
+              })
+            : undefined
+        }
         detailRow={(occurrence) =>
           selectedId === occurrence.id ? (
             <MeetingOccurrenceDetail

@@ -1,7 +1,8 @@
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../components/Badge";
-import { Button } from "../../../../ui/Button";
+import { usePortalHashLocation } from "../../hash-location";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { useApplicationDetail } from "./useApplicationDetail";
 import { ApplicationOverviewCard } from "./ApplicationOverviewCard";
 import { ApplicationAnswersCard } from "./ApplicationAnswersCard";
@@ -27,13 +28,11 @@ export function ApplicationDetailView({
   categories,
   canWrite,
   canApprove,
-  onBack,
 }: {
   applicationId: string;
   categories: MembershipCategoryCatalogEntry[];
   canWrite: boolean;
   canApprove: boolean;
-  onBack: () => void;
 }) {
   const { loading, error, detail, transition, sendCommunication, addNote, recordEcDecision, approve, saveEdit } =
     useApplicationDetail(applicationId);
@@ -44,13 +43,17 @@ export function ApplicationDetailView({
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button size="sm" onClick={onBack}>
-          ← Back to list
-        </Button>
-        <h2>{detail.applicantName}</h2>
-        <Badge status={detail.stage} />
-      </div>
+      {/* The applicant heads the page over a trail back to the queue; the
+          stage stands beside the name. The back button this replaces
+          duplicated the trail in button's clothing. */}
+      <PageHeader
+        trail={[
+          { label: "Membership applications", href: usePortalHashLocation.hrefs("/membership/applications") },
+          { label: detail.applicantName },
+        ]}
+        title={detail.applicantName}
+        context={<Badge status={detail.stage} />}
+      />
 
       <div class="pk-grid pk-grid--roomy">
         <div class="pk-stack">

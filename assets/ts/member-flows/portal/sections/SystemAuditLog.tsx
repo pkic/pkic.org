@@ -98,10 +98,13 @@ export function SystemAuditLog() {
       )}
       columns={[
         {
+          // A timestamp has a bounded length; the column says so instead of
+          // wearing `pk-nowrap` while still claiming a share of a wide
+          // screen, and keeps the table's own ink and size.
           header: "When",
           cell: (entry) =>
             new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
-          className: "pk-nowrap pk-small pk-muted",
+          width: "fit",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
         },
         {
@@ -135,7 +138,7 @@ export function SystemAuditLog() {
         {
           header: "Entity",
           cell: (entry) => <Badge status={entry.entity_type} label={entry.entity_type} />,
-          className: "pk-small pk-muted",
+          width: "fit",
           sort: { asc: "entity_type", desc: "-entity_type" },
         },
         {
@@ -149,8 +152,12 @@ export function SystemAuditLog() {
           className: "pk-mono pk-small pk-muted",
         },
         {
+          // The one prose column: the first labelled column is a fit-width
+          // timestamp here, so the slack is claimed explicitly rather than
+          // left to the default, which hands it to the first column.
           header: "Details",
           cell: (entry) => <DetailsSummary value={entry.details} />,
+          width: "primary",
         },
       ]}
       empty="No entries match the current filters."

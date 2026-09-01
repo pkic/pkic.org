@@ -243,16 +243,17 @@ describe("portal Operations outbox reads", () => {
     // endpoint would reject must fail here too.
     expect(emailOutboxProcessSchema.parse(processRequest.body).limit).toBe(20);
 
-    // The selection control is a labelled checkbox, named by its own label
-    // element rather than a bare aria-label on an unlabelled box.
-    const selectLabel = [...container.querySelectorAll("label.pk-check")].find((label) =>
-      label.textContent?.includes("Select Notice"),
-    )!;
-    expect(selectLabel.querySelector(".pk-check__label")?.textContent).toBe("Select Notice");
-    const checkbox = selectLabel.querySelector<HTMLInputElement>("input.pk-check__input")!;
+    // Selection is the design system's own checkbox column — the outbox is
+    // the one list whose API takes row ids — and each box is named after the
+    // message it selects.
+    const checkbox = container.querySelector<HTMLInputElement>('input.pk-table__checkbox[aria-label="Select Notice"]')!;
+    expect(checkbox).not.toBeNull();
     await act(() => {
       checkbox.click();
     });
+    // The bulk commands live in the strip that appears with the selection,
+    // announcing its count, not in the always-on toolbar.
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("1 of 1 selected");
     const resetButton = button(container, "Reset failed selected");
     await act(() => {
       resetButton.click();

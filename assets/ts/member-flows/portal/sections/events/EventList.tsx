@@ -112,6 +112,8 @@ export function EventList() {
             sort: { asc: "name", desc: "-name" },
           },
           {
+            // A date-and-place line has a bounded length; without saying so
+            // the event name's slack squeezed it into a four-line wrap.
             header: "When",
             cell: (e) => {
               const relative = formatRelativeDays(e.startsAt);
@@ -122,6 +124,7 @@ export function EventList() {
                 </>
               );
             },
+            width: "fit",
             sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: scope === "past" ? "desc" : "asc" },
           },
           {
@@ -136,6 +139,9 @@ export function EventList() {
           {
             header: "Your status",
             cell: (e) => (isAudienceEvent(e) && e.viewer ? <ViewerEventState viewer={e.viewer} /> : null),
+            // A badge has a bounded length; the slack belongs to the event
+            // name, not spread between it and a column of short states.
+            width: "fit",
           },
           {
             header: "",

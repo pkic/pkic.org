@@ -13,6 +13,8 @@ import {
 } from "../../../../shared/schemas/form-management";
 import {
   eventFormsResponseSchema,
+  FORM_PURPOSES,
+  FORM_STATUSES,
   type EventFormsPurpose,
   type FormDefinitionCreateInput,
   type FormDefinitionUpdateInput,
@@ -44,8 +46,6 @@ type FormTab = "responses" | "statistics" | "edit";
 
 function formScopeLabel(form: FormSummary): string {
   if (form.scope_type === "event") return form.event_name ?? form.scope_ref ?? "Event";
-  if (form.scope_type === "community") return "Community";
-  if (form.scope_type === "global") return "Global";
   if (form.scope_type === "community") return "Community";
   if (form.scope_type === "global") return "Global";
   return form.scope_type.replace(/_/g, " ");
@@ -336,15 +336,9 @@ export function FormManagementCreate({
   );
 }
 
-export function FormManagementList({
-  canWrite,
-  onOpenForm,
-  onCreateNew,
-}: {
-  canWrite: boolean;
-  onOpenForm: (formKey: string) => void;
-  onCreateNew?: () => void;
-}) {
+export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: string) => void }) {
+  const [purposeFilter, setPurposeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   return (
     <div class="pk">
       <ApiDataTable
@@ -358,7 +352,41 @@ export function FormManagementList({
         initialPageSize={25}
         initialSort="title"
         searchPlaceholder="Search forms…"
-        createAction={canWrite && onCreateNew ? { label: "New form", onSelect: onCreateNew } : undefined}
+        params={{
+          ...(purposeFilter ? { purpose: purposeFilter } : {}),
+          ...(statusFilter ? { status: statusFilter } : {}),
+        }}
+        toolbar={({ resetPage }) => (
+          // Both filters already exist on the list contract; the toolbar
+          // exposes them instead of leaving purpose and status concepts the
+          // reader must express through search syntax.
+          <>
+            <FilterSelect
+              ariaLabel="Filter forms by purpose"
+              value={purposeFilter}
+              options={[
+                { value: "", label: "All purposes" },
+                ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
+              ]}
+              onChange={(value) => {
+                setPurposeFilter(value);
+                resetPage();
+              }}
+            />
+            <FilterSelect
+              ariaLabel="Filter forms by status"
+              value={statusFilter}
+              options={[
+                { value: "", label: "All statuses" },
+                ...FORM_STATUSES.map((status) => ({ value: status as string, label: status })),
+              ]}
+              onChange={(value) => {
+                setStatusFilter(value);
+                resetPage();
+              }}
+            />
+          </>
+        )}
         columns={[
           // The presentational vocabulary is the column's, not a wrapper
           // span's: `Table` translates these onto the design system's cell
@@ -367,19 +395,21 @@ export function FormManagementList({
           {
             header: "Purpose",
             cell: (form: FormSummary) => form.purpose.replace(/_/g, " "),
-            className: "pk-small",
+            width: "fit",
           },
-          { header: "Status", cell: (form: FormSummary) => <Badge status={form.status} /> },
+          { header: "Status", cell: (form: FormSummary) => <Badge status={form.status} />, width: "fit" },
           { header: "Scope", cell: (form: FormSummary) => formScopeLabel(form), className: "pk-small" },
           {
             header: { label: "Fields", className: "pk-end" },
             cell: (form: FormSummary) => form.field_count,
             className: "pk-mono pk-end",
+            width: "fit",
           },
           {
             header: { label: "Responses", className: "pk-end" },
             cell: (form: FormSummary) => form.submission_count,
             className: "pk-mono pk-end",
+            width: "fit",
           },
           { header: "Title", cell: (form: FormSummary) => form.title, className: "pk-small" },
         ]}

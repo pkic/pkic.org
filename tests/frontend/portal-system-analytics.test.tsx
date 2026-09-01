@@ -44,7 +44,8 @@ function captions(container: HTMLElement): string[] {
 }
 
 function headings(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll("h2")).map((heading) => heading.textContent ?? "");
+  // Panel titles sit one rung under the Settings page's own h2.
+  return Array.from(container.querySelectorAll("h3")).map((heading) => heading.textContent ?? "");
 }
 
 /** A response with no JSON body, which is what a server fault looks like here. */

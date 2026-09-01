@@ -15,7 +15,9 @@ test("permitted staff use focused platform analytics through the System portal",
 
   await signInToPortal(page, e2eAdminEmail("portal-analytics"));
   await page.goto("/portal/#/system/analytics");
-  await expect(page.getByRole("heading", { name: "System Analytics" })).toBeVisible();
+  // The Settings hub heads the page; the selected tab names the surface.
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Analytics", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByText("Total Registrations", { exact: true })).toBeVisible();
   // Each analytics card is a Panel now, so its title is a real heading. The
   // period tables carry the same wording as their panel's title, so locating
@@ -34,7 +36,7 @@ test("permitted staff use focused platform analytics through the System portal",
 
   await page.goto("/portal/#/system/analytics");
   await expect(page).toHaveURL(/\/portal\/#\/system\/analytics$/);
-  await expect(page.getByRole("heading", { name: "System Analytics" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Analytics", exact: true })).toHaveAttribute("aria-current", "page");
 
   expect(analyticsRequests).toEqual(
     expect.arrayContaining(["/api/v1/analytics/summary", "/api/v1/analytics/registrations"]),

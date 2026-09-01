@@ -19,7 +19,6 @@
 
 import type { ComponentChildren } from "preact";
 
-import { Button } from "./Button";
 import { Menu, type MenuItem } from "./Menu";
 
 import "./RowActions.css";
@@ -69,7 +68,6 @@ export function rowActionsMenuName(subject: string | undefined): string {
 }
 
 export function RowActions({ status, actions, subject }: RowActionsProps) {
-  const [only] = actions;
   return (
     <div
       class="pk-row-actions"
@@ -78,40 +76,17 @@ export function RowActions({ status, actions, subject }: RowActionsProps) {
     >
       {status !== undefined && <span class="pk-row-actions__status">{status}</span>}
       {/*
-       * One action is a button; two or more are a menu.
+       * Always the menu, even for one action. This went to an inline button
+       * once, to save a click — and a column where some rows show a button
+       * and others show `…`, depending on how many commands each row happens
+       * to have, reads as broken. The maintainer's reference design puts `…`
+       * on every row: the ROW is the primary affordance, commands are its
+       * menu, and the column looks the same from top to bottom.
        *
-       * A `…` that opens to reveal a single item asks for two clicks and a
-       * guess to reach something there was room to show. It also reads as an
-       * empty promise beside a row that already has a visible control — which
-       * is exactly how the mailing-list rows looked, with `Manage` inline and
-       * a menu holding nothing but `Archive`.
-       *
-       * The threshold lives here rather than at each call site so no surface
-       * has to remember it, and so a row that grows a second action turns
-       * into a menu on its own.
-       *
-       * `secondary`, not `ghost`. A ghost button is transparent and inked in
-       * `--pk-ink-muted` — which inside a table row is exactly the treatment
-       * the row's own quiet values already have, so "Grant administrator role"
-       * read as another sentence about the person rather than as the control
-       * that changes them. A row's action is the one thing in the row a reader
-       * can operate, so it carries the border that says so. Destructive stays
-       * `danger-quiet`, which has a border of its own.
+       * End-aligned: a start-aligned popup on the last column hangs off the
+       * table's right edge before the viewport clamp ever gets a say.
        */}
-      {actions.length === 1 && only && (
-        <Button
-          size="sm"
-          variant={only.danger ? "danger-quiet" : "secondary"}
-          disabled={only.disabled}
-          aria-label={subject === undefined ? undefined : rowActionName(only.label, subject)}
-          onClick={() => only.onSelect()}
-        >
-          {only.label}
-        </Button>
-      )}
-      {/* End-aligned: a start-aligned popup on the last column hangs off the
-          table's right edge before the viewport clamp ever gets a say. */}
-      {actions.length > 1 && <Menu label={rowActionsMenuName(subject)} items={actions} align="end" />}
+      {actions.length > 0 && <Menu label={rowActionsMenuName(subject)} items={actions} align="end" />}
     </div>
   );
 }

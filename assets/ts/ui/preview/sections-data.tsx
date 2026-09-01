@@ -1,6 +1,8 @@
 import { useState } from "preact/hooks";
 import type { PreviewSection } from "./PreviewShell";
+import { Badge } from "../Badge";
 import { Breadcrumb } from "../Breadcrumb";
+import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import { DescriptionList } from "../DescriptionList";
 import { Field } from "../Field";
@@ -11,6 +13,7 @@ import { Pager } from "../Pager";
 import { Panel, PanelBody, PanelHeader } from "../Panel";
 import { PersonCell } from "../PersonCell";
 import { RowActions } from "../RowActions";
+import { PageHeader } from "../PageHeader";
 import { Select, Textarea, TextInput } from "../TextControl";
 import { Tabs } from "../Tabs";
 import { Toast } from "../Toast";
@@ -341,12 +344,36 @@ export const dataSections: PreviewSection[] = [
   {
     id: "navigation",
     title: "Navigation",
-    note: "Tabs, breadcrumbs, panels, pagination, and progress indicators.",
+    note: "Page headers, tabs, breadcrumbs, panels, pagination, and progress indicators.",
     render: () => {
       const [currentPage, setCurrentPage] = useState(1);
 
       return (
         <>
+          {/* The first region of every portal page: trail, subject, its
+              standing as badges, and its actions on the right. */}
+          <PageHeader
+            trail={[{ label: "Groups", href: "#" }, { label: "Post-Quantum Cryptography" }]}
+            title="Post-Quantum Cryptography"
+            context={
+              <>
+                <Badge tone="neutral">Working group</Badge>
+                <Badge tone="ok">Active</Badge>
+              </>
+            }
+            actions={
+              <>
+                <Button size="sm" variant="secondary">
+                  Export roster
+                </Button>
+                <Button size="sm" variant="primary">
+                  Add member
+                </Button>
+              </>
+            }
+            description="Coordinates the consortium's migration to quantum-safe certificates."
+          />
+
           <Tabs
             items={[
               { id: "members", label: "Members", href: "#" },

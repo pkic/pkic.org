@@ -130,10 +130,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// The context header is found the way a reader finds it — by the accessible
-// name of the region it is, not by a styling class that a migration can move.
+// The page header is found the way a reader finds it — as the labelled
+// header region the workspace opens with, not by a styling class that a
+// migration can move.
 function contexts(): string[] {
-  return [...container.querySelectorAll('[aria-label="Group context"]')].map(
+  return [...container.querySelectorAll("header[aria-labelledby]")].map(
     (node) => node.querySelector("h2")?.textContent ?? "",
   );
 }

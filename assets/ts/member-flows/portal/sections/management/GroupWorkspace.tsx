@@ -17,7 +17,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { Badge } from "../../../../ui/Badge";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
@@ -25,10 +25,6 @@ import { portalSession } from "../../state";
 import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
 import { GroupParticipationCard } from "../GroupParticipationCard";
 import { groupContextNavigation } from "./group-context-navigation";
-// `pk-datalist` on the group's headline counts is defined in Content.css, which
-// ships in a lazy chunk rather than the entry stylesheet, so the surface that
-// writes the class name has to pull the stylesheet in itself.
-import "../../../../ui/Content.css";
 
 const GroupSettingsForm = lazy(() =>
   import("./GroupSettingsForm").then((module) => ({ default: module.GroupSettingsForm })),
@@ -51,31 +47,28 @@ const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => 
 
 const OVERVIEW_VIEW = "overview";
 
+/**
+ * The group heads the workspace as a page header, not as a panel: the trail
+ * leads back to the catalog, the name is the page's `<h2>`, the type and the
+ * inactive state stand beside it as badges — the inactive one saying the word
+ * as well as showing the tone — and the parent, when there is one, is the
+ * header's single quiet sentence. The headline counts that used to share this
+ * box moved to the overview's "About this group" panel, where they are
+ * content rather than chrome.
+ */
 function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
-    // A named region, so the context a reader lands in is announced and can be
-    // jumped to by landmark rather than being one more unlabelled section.
-    <Panel aria-label="Group context">
-      {/* The group names the whole workspace, so its heading is the section's
-          own level rather than the panel default. The type is a plain tone
-          badge; only the inactive state carries the product's status
-          vocabulary, and it says the word as well as showing the tone. */}
-      <PanelHeader title={group.name} headingLevel={2}>
-        <Badge tone="neutral">{group.type.singularLabel}</Badge>
-        {!group.active && <StatusBadge status="inactive" />}
-      </PanelHeader>
-      <PanelBody class="pk-stack pk-stack--snug">
-        {group.parentGroup && <p class="pk-small">Part of {group.parentGroup.name}</p>}
-        <dl class="pk-datalist pk-small">
-          <dt>People</dt>
-          <dd>{group.participantCount}</dd>
-          <dt>Members represented</dt>
-          <dd>{group.representedMemberCount}</dd>
-          <dt>Subgroups</dt>
-          <dd>{group.childCount}</dd>
-        </dl>
-      </PanelBody>
-    </Panel>
+    <PageHeader
+      trail={[{ label: "Groups", href: usePortalHashLocation.hrefs("/groups") }, { label: group.name }]}
+      title={group.name}
+      context={
+        <>
+          <Badge tone="neutral">{group.type.singularLabel}</Badge>
+          {!group.active && <StatusBadge status="inactive" />}
+        </>
+      }
+      description={group.parentGroup ? `Part of ${group.parentGroup.name}` : undefined}
+    />
   );
 }
 
@@ -165,7 +158,13 @@ export function GroupWorkspace({
                 {!canParticipate && Boolean(portalSession.value?.member) && (
                   <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
                 )}
-                <GroupOverview groupId={group.id} description={group.description} />
+                <GroupOverview
+                  groupId={group.id}
+                  description={group.description}
+                  participantCount={group.participantCount}
+                  representedMemberCount={group.representedMemberCount}
+                  childCount={group.childCount}
+                />
                 {canParticipate && (
                   <p class="pk-small">
                     You participate in this group. <Link href="/groups">Manage your participation</Link>

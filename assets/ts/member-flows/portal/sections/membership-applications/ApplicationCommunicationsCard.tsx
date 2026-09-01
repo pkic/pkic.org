@@ -117,11 +117,14 @@ export function ApplicationCommunicationsCard({
                 cell: (record) => (
                   <Badge tone={record.kind === "communication" ? "info" : "neutral"}>{KIND_LABEL[record.kind]}</Badge>
                 ),
-                cellClass: "pk-nowrap",
+                width: "fit",
               },
               {
                 id: "message",
                 header: "Message",
+                // The first labelled column is fit-width here, so the prose
+                // column claims the slack explicitly.
+                width: "primary",
                 cell: (record) => (
                   <div class="pk-stack pk-stack--tight">
                     {record.subject && <strong>{record.subject}</strong>}
@@ -130,10 +133,12 @@ export function ApplicationCommunicationsCard({
                 ),
               },
               {
+                // A timestamp has a bounded length; the column hugs it and
+                // keeps the table's own ink and size.
                 id: "recorded",
                 header: "Recorded",
                 cell: (record) => fmt(record.createdAt),
-                cellClass: "pk-mono pk-small pk-nowrap",
+                width: "fit",
               },
             ]}
           />

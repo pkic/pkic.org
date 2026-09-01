@@ -34,7 +34,9 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("link", { name: "Operations", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "System Operations" })).toBeVisible();
+  // The Settings hub heads the page; the selected tab names the surface.
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(tab(page, "Email Outbox")).toBeVisible();
   await expect(tab(page, "Scheduled Work")).toBeVisible();
   await expect(tab(page, "Scheduled Jobs")).toBeVisible();
@@ -80,6 +82,6 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
 
   await page.goto("/portal/#/system/operations");
   await expect(page).toHaveURL(/\/portal\/#\/system\/operations$/);
-  await expect(page.getByRole("heading", { name: "System Operations" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute("aria-current", "page");
   expect(requests).toEqual([]);
 });

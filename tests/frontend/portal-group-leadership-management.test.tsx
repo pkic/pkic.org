@@ -185,7 +185,7 @@ describe("portal group leadership management", () => {
     expect(container.textContent).toContain("Local");
     // Only the local assignment can be removed, and the control that removes
     // it names the person rather than reading "Remove" like any other row's.
-    expect(rowActionControlNames(container)).toEqual(["Remove, Local Leader"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Local Leader"]);
     await runRowAction(container, "Local Leader", "Remove");
     await act(async () => confirmDialogButton("Remove from role").click());
     await settle();

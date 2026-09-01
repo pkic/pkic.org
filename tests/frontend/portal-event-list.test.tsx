@@ -208,9 +208,7 @@ describe("portal event list", () => {
     await settle();
     await settle();
 
-    expect(rowActionControlNames(container)).toEqual([
-      "Open in Post-Quantum Cryptography workspace, PQC Conference 2026",
-    ]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for PQC Conference 2026"]);
     await runRowAction(container, "PQC Conference 2026", "Open in Post-Quantum Cryptography workspace");
 
     expect(navigateMock).toHaveBeenCalledWith(

@@ -197,23 +197,26 @@ export function GroupEventInvitations({
               {
                 header: "Status",
                 cell: (invite) => <Badge status={invite.status} />,
+                width: "fit",
                 sort: { asc: "status", desc: "-status" },
               },
               {
+                // Dates have a bounded length; the columns say so instead of
+                // wearing `pk-nowrap` while still claiming slack.
                 header: "Sent",
                 cell: (invite) => fmtDate(invite.createdAt),
-                className: "pk-nowrap",
+                width: "fit",
                 sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
               },
               {
                 header: "Deadline",
                 cell: (invite) => (invite.expiresAt ? fmt(invite.expiresAt) : "—"),
-                className: "pk-nowrap",
+                width: "fit",
               },
               {
                 header: "Accepted",
                 cell: (invite) => (invite.acceptedAt ? fmt(invite.acceptedAt) : "—"),
-                className: "pk-nowrap",
+                width: "fit",
                 sort: { asc: "accepted_at", desc: "-accepted_at", defaultDirection: "desc" },
               },
               {

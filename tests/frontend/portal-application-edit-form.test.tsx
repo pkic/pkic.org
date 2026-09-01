@@ -257,13 +257,7 @@ describe("membership-application edit form, end to end", () => {
 
   async function openEditor(): Promise<HTMLElement> {
     const page = mount(
-      <ApplicationDetailView
-        applicationId={APPLICATION_ID}
-        categories={[category()]}
-        canWrite
-        canApprove={false}
-        onBack={vi.fn()}
-      />,
+      <ApplicationDetailView applicationId={APPLICATION_ID} categories={[category()]} canWrite canApprove={false} />,
     );
     await settle();
     await act(() => buttonNamed(page, "Edit").click());

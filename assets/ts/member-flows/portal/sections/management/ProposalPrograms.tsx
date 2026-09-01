@@ -52,9 +52,12 @@ export function ProposalPrograms() {
                 sort: { asc: "eventName", desc: "-eventName", defaultDirection: "asc" },
               },
               {
+                // A date has a bounded length; the column says so instead of
+                // wearing `pk-nowrap` while still claiming slack, and keeps
+                // the table's own ink and size.
                 header: "Starts",
                 cell: (program) => fmt(program.event.startsAt),
-                className: "pk-small pk-nowrap",
+                width: "fit",
                 sort: { asc: "startsAt", desc: "-startsAt" },
               },
               {
@@ -65,6 +68,7 @@ export function ProposalPrograms() {
                     label={capabilityLabel(program)}
                   />
                 ),
+                width: "fit",
               },
             ]}
             empty={

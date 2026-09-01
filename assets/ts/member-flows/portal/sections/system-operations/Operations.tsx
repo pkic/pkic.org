@@ -76,10 +76,9 @@ export function Operations({
   }
 
   return (
-    <section class="pk-stack" aria-labelledby="system-operations-heading">
-      {/* The level matches the other section headings on the system page, so
-          the outline stays flat rather than gaining one deeper rung here. */}
-      <h5 id="system-operations-heading">System Operations</h5>
+    // The Settings hub's "Operations" tab already names this surface, so it
+    // opens with its own sub-navigation rather than a heading repeating it.
+    <section class="pk-stack" aria-label="System operations">
       <Tabs
         label="System operations"
         idPrefix={TAB_ID_PREFIX}

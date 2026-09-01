@@ -108,7 +108,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       {/* A panel is a section, so it is named rather than announced as an
           anonymous group of numbers. */}
       <Panel aria-label="Group statistics">
-        <PanelHeader title="Group statistics" headingLevel={2} />
+        <PanelHeader title="Group statistics" />
         <PanelBody class="pk-stack">
           <p class="pk-small">
             Counts are calculated by the server in D1. People are distinct users; capacities are the Member
@@ -175,7 +175,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       {stats.data && (
         <>
           <Panel aria-label="Participation">
-            <PanelHeader title="Participation" headingLevel={2} />
+            <PanelHeader title="Participation" />
             <PanelBody class="pk-stack pk-stack--snug">
               <p class="pk-small">
                 {stats.data.scope === "current"
@@ -194,7 +194,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
           </Panel>
 
           <Panel aria-label="Activity">
-            <PanelHeader title="Activity" headingLevel={2} />
+            <PanelHeader title="Activity" />
             <PanelBody class="pk-stack pk-stack--snug">
               <p class="pk-small">
                 {formatWindowBoundary(stats.data.window.from)} to {formatWindowBoundary(stats.data.window.to)}

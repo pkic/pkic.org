@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
+import { VOTE_STATUSES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { Badge } from "../../../../components/Badge";
+import { Badge, statusLabel } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { FilterSelect } from "../../../../components/FilterSelect";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
@@ -46,6 +48,8 @@ export function GroupVotes({
   const [, navigate] = usePortalHashLocation();
   const creating = voteSegment === NEW_GROUP_VOTE_SEGMENT;
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(creating ? null : (voteSegment ?? null));
   const tableActions = useRef<ApiTableActions | null>(null);
   const votesPath = `/groups/${encodeURIComponent(groupId)}/votes`;
@@ -129,6 +133,41 @@ export function GroupVotes({
                 searchPlaceholder="Search votes…"
                 initialSort="-closes_at"
                 actionsRef={tableActions}
+                params={{
+                  ...(statusFilter ? { status: statusFilter } : {}),
+                  ...(typeFilter ? { type: typeFilter } : {}),
+                }}
+                toolbar={({ resetPage }) => (
+                  // Both filters already exist on the votes contract; the
+                  // toolbar exposes them rather than leaving status and type
+                  // to search syntax.
+                  <>
+                    <FilterSelect
+                      ariaLabel="Filter votes by status"
+                      value={statusFilter}
+                      options={[
+                        { value: "", label: "All statuses" },
+                        ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
+                      ]}
+                      onChange={(value) => {
+                        setStatusFilter(value);
+                        resetPage();
+                      }}
+                    />
+                    <FilterSelect
+                      ariaLabel="Filter votes by type"
+                      value={typeFilter}
+                      options={[
+                        { value: "", label: "All types" },
+                        ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
+                      ]}
+                      onChange={(value) => {
+                        setTypeFilter(value);
+                        resetPage();
+                      }}
+                    />
+                  </>
+                )}
                 columns={[
                   {
                     header: "Vote",
@@ -140,36 +179,22 @@ export function GroupVotes({
                     ),
                     sort: { asc: "title", desc: "-title" },
                   },
-                  { header: "Type", cell: (vote) => <Badge status={vote.voteType} /> },
+                  { header: "Type", cell: (vote) => <Badge status={vote.voteType} />, width: "fit" },
                   {
                     header: "Status",
                     cell: (vote) => <Badge status={vote.status} />,
+                    width: "fit",
                     sort: { asc: "status", desc: "-status" },
                   },
                   {
+                    // A date has a bounded length; the column says so instead
+                    // of wearing `pk-nowrap` while still claiming slack.
                     header: "Closes",
                     cell: (vote) => fmt(vote.closesAt),
-                    className: "pk-nowrap",
+                    width: "fit",
                     sort: { asc: "closes_at", desc: "-closes_at", defaultDirection: "desc" },
                   },
                   { header: "Access", cell: (vote) => <ResourceCapabilities capabilities={vote.capabilities} /> },
-                  {
-                    header: "",
-                    className: "pk-end",
-                    cell: (vote) => (
-                      // The control names the vote it belongs to: a page of
-                      // rows otherwise offers a column of buttons all
-                      // called "Details".
-                      <Button
-                        size="sm"
-                        aria-label={`${selectedVoteId === vote.id ? "Hide" : "Details"} for ${vote.title}`}
-                        aria-expanded={selectedVoteId === vote.id}
-                        onClick={() => setSelectedVoteId((current) => (current === vote.id ? null : vote.id))}
-                      >
-                        {selectedVoteId === vote.id ? "Hide" : "Details"}
-                      </Button>
-                    ),
-                  },
                 ]}
                 empty={
                   canManage ? (
@@ -183,6 +208,14 @@ export function GroupVotes({
                   )
                 }
                 rowKey={(vote) => vote.id}
+                // Activating a row opens its detail in place — the same rule
+                // as every other list. The "Details" button column this
+                // replaces left the row itself inert.
+                rowAction={(vote) => ({
+                  label:
+                    selectedVoteId === vote.id ? `Hide details for ${vote.title}` : `Show details for ${vote.title}`,
+                  onSelect: () => setSelectedVoteId((current) => (current === vote.id ? null : vote.id)),
+                })}
                 detailRow={(vote) => {
                   if (selectedVoteId !== vote.id) return null;
                   if (detail.loading) return <Spinner label="Loading vote…" />;

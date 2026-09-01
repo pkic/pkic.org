@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import type { SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
 import { EmptyState } from "../../../../components/EmptyState";
 import { Tabs } from "../../../../components/Tabs";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { SponsorAttendees } from "./Attendees";
@@ -63,6 +64,9 @@ export function SponsorWorkspace({
 
   return (
     <div class="pk pk-stack">
+      {/* The section root opens with the anatomy's first region; a selected
+          sponsorship replaces the whole surface and brings its own header. */}
+      {!detailId && <PageHeader title="Sponsors" />}
       {showTabs && (
         <Tabs
           items={tabs.map((item) => ({ key: item.key, label: item.label, panelId: `${TAB_PREFIX}-${item.key}-panel` }))}

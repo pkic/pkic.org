@@ -186,13 +186,10 @@ describe("Grants on the design system", () => {
     // announce several anonymous ones.
     expect(container.querySelector("caption")?.textContent).toBe("Permission grants");
 
-    // The row's one action is shown, not hidden behind a `…`, and it says
-    // which grant it would revoke rather than being one "Revoke grant" among
-    // a page of them.
-    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
-    expect(rowActionControlNames(container)).toEqual([
-      `Revoke grant, ${GRANT.permission} granted to ${GRANT.userEmail}`,
-    ]);
+    // The row's commands live behind the `…` menu — even a single one — and
+    // the trigger names the grant it acts on rather than being one
+    // "Row actions" among a page of them.
+    expect(rowActionControlNames(container)).toEqual([`Actions for ${GRANT.permission} granted to ${GRANT.userEmail}`]);
 
     void act(() => buttonNamed(container, "New grant").click());
 
@@ -305,7 +302,7 @@ describe("RoleDetail on the design system", () => {
       "Assignees",
     ]);
     expect(container.querySelector("caption")?.textContent).toBe(`${ROLE.name} assignees`);
-    expect(rowActionControlNames(container)).toEqual([`Unassign role, ${ASSIGNMENT.name}`]);
+    expect(rowActionControlNames(container)).toEqual([`Actions for ${ASSIGNMENT.name}`]);
     expect(container.textContent).toContain(ASSIGNMENT.name);
     expect(container.textContent).toContain(ASSIGNMENT.email);
 
@@ -511,8 +508,11 @@ describe("the roles list on the design system", () => {
     // A page of rows used to offer a column of buttons all called "Open" and
     // a column of menus all called "Row actions".
     expect(container.querySelector("caption")?.textContent).toBe("Roles");
-    expect(container.querySelector('button[aria-label="Open custom_reviewer"]')).toBeTruthy();
-    expect(rowActionControlNames(container)).toEqual(["Delete role, custom_reviewer"]);
+    const rowLink = [...container.querySelectorAll("button.pk-table__row-link")].find(
+      (control) => control.textContent === "Open custom_reviewer",
+    );
+    expect(rowLink).toBeTruthy();
+    expect(rowActionControlNames(container)).toEqual(["Actions for custom_reviewer"]);
   });
 
   it("offers exactly one way out of an empty roles list to a caller who can create one", async () => {

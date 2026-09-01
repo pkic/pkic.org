@@ -37,7 +37,16 @@ export type SortDirection = "asc" | "desc";
  * space it has no use for, which is how a date ended up a third of the way
  * across a wide screen from the row it dates.
  */
-export type DataTableColumnWidth = "content" | "fit";
+/**
+ * How a column relates to the width the table is given.
+ *
+ *   content   the default: sized by what it holds
+ *   fit       hugs its content and never wraps — dates, counts, badges
+ *   primary   takes all the slack on a wide screen. One per table; the
+ *             translation layer gives it to the first column when no column
+ *             claims it, because a list leads with its subject.
+ */
+export type DataTableColumnWidth = "content" | "fit" | "primary";
 
 export interface DataTableColumn<Row> {
   id: string;
@@ -165,7 +174,9 @@ function alignClass(align: DataTableColumn<unknown>["align"]): string | undefine
  * nothing anywhere else on the page.
  */
 function widthClass(width: DataTableColumn<unknown>["width"]): string | undefined {
-  return width === "fit" ? "pk-table__col--fit" : undefined;
+  if (width === "fit") return "pk-table__col--fit";
+  if (width === "primary") return "pk-table__col--primary";
+  return undefined;
 }
 
 function classList(...names: Array<string | undefined>): string | undefined {

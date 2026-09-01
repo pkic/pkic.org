@@ -28,6 +28,7 @@ import {
   DataTable as SystemDataTable,
   type DataTableColumn,
   type DataTableColumnWidth,
+  type DataTableSelection,
   type SortDirection,
 } from "../ui/DataTable";
 import "../ui/Content.css";
@@ -122,6 +123,12 @@ function widthOf<T>(column: Column<T>): DataTableColumnWidth | undefined {
   return tokens.some((token) => NOWRAP_CLASSES.includes(token)) ? "fit" : undefined;
 }
 
+function widthFor<T>(column: Column<T>, index: number, slackIndex: number): DataTableColumnWidth | undefined {
+  const stated = widthOf(column);
+  if (stated) return stated;
+  return index === slackIndex ? "primary" : undefined;
+}
+
 function utilitiesOf(className: string | undefined): string | undefined {
   if (!className) return undefined;
   const mapped = className
@@ -149,6 +156,13 @@ export interface DataTableProps<T> {
   currentSort?: string;
   onSort?: (nextSort: string) => void;
   loading?: boolean;
+  /**
+   * Row selection, passed through to the design system's table. Only for
+   * lists whose API actually takes a set of row ids — a checkbox column in
+   * front of rows nothing can act on is decoration. The keys in `selected`
+   * are the same strings `rowKey` produces.
+   */
+  selection?: DataTableSelection;
 }
 
 export function DataTable<T>({
@@ -163,6 +177,7 @@ export function DataTable<T>({
   currentSort,
   onSort,
   loading,
+  selection,
 }: DataTableProps<T>) {
   // Row identity is by index when the caller has no key, so `rowKey` here is
   // an index lookup rather than a value the design system interprets.
@@ -172,6 +187,16 @@ export function DataTable<T>({
     const index = indexOf.get(row) ?? 0;
     return String(rowKey ? rowKey(row, index) : index);
   };
+
+  /*
+   * One column takes a wide screen's slack. When no column claims `primary`,
+   * the first one gets it: a list leads with its subject, and the subject is
+   * where extra room does the most good. Without this, `table-layout: auto`
+   * shares the slack in proportion to content and every column drifts apart.
+   */
+  const primaryIndex = columns.findIndex((column) => column.width === "primary");
+  const slackIndex =
+    primaryIndex >= 0 ? primaryIndex : columns.findIndex((column) => headLabel(column.header).trim().length > 0);
 
   const systemColumns: DataTableColumn<T>[] = columns.map((column, index) => {
     const label = headLabel(column.header);
@@ -187,7 +212,7 @@ export function DataTable<T>({
       cell: (row) => column.cell(row, indexOf.get(row) ?? 0),
       sortable: Boolean(column.sort),
       align: alignOf(headClass(column.header), column.className ?? "") ?? (isActions ? "end" : undefined),
-      width: widthOf(column),
+      width: widthFor(column, index, slackIndex),
       cellClass: utilitiesOf(column.className),
     };
   });
@@ -224,6 +249,7 @@ export function DataTable<T>({
       detailRow={detailRow ? (row) => detailRow(row, indexOf.get(row) ?? 0) : undefined}
       loading={loading}
       empty={empty}
+      selection={selection}
     />
   );
 }

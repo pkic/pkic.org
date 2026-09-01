@@ -122,32 +122,36 @@ describe("ConfirmDialog", () => {
 });
 
 describe("RowActions", () => {
-  it("shows a lone action as a button rather than hiding it behind a menu", async () => {
+  it("puts even a lone action behind the row's menu, so the column is uniform", async () => {
     let rowClicked = 0;
     let selected = 0;
     const container = mount(
       <div onClick={() => (rowClicked += 1)}>
         <RowActions
           status="Invited"
+          subject="Ada"
           actions={[{ id: "revoke", label: "Revoke invitation", onSelect: () => (selected += 1) }]}
         />
       </div>,
     );
     expect(container.textContent).toContain("Invited");
-    // No `…` to open: two clicks and a guess to reach something there was
-    // room to show is worse than showing it.
-    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
-
-    const action = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+    // The rule went to an inline button once, to save a click — and a column
+    // where some rows show a button and others show the menu, depending on how
+    // many commands each row happens to have, reads as broken. The reference
+    // design puts the menu on every row.
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+    if (!trigger) throw new Error("missing menu trigger");
+    await act(() => trigger.click());
+    const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (candidate) => candidate.textContent === "Revoke invitation",
     );
-    if (!action) throw new Error("missing action button");
-    await act(() => action.click());
+    if (!item) throw new Error("missing menu item");
+    await act(() => item.click());
     expect(selected).toBe(1);
     expect(rowClicked).toBe(0);
   });
 
-  it("collapses into a menu as soon as there is a second action", async () => {
+  it("keeps every action in the one menu when there are several", async () => {
     let rowClicked = 0;
     let selected = 0;
     const container = mount(
@@ -173,17 +177,13 @@ describe("RowActions", () => {
     expect(rowClicked).toBe(0);
   });
 
-  it("names both forms of row control after the row they act on", async () => {
-    const inline = mount(
+  it("names the row's menu after the row it acts on, whatever it holds", () => {
+    const one = mount(
       <RowActions subject="custom_reviewer" actions={[{ id: "delete", label: "Delete role", onSelect: () => {} }]} />,
     );
-    const button = inline.querySelector("button");
-    // The reader still chooses "Delete role"; assistive technology is told
-    // which role, so a page of these is not a page of one name.
-    expect(button?.textContent).toBe("Delete role");
-    expect(button?.getAttribute("aria-label")).toBe("Delete role, custom_reviewer");
+    expect(one.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe("Actions for custom_reviewer");
 
-    const menu = mount(
+    const two = mount(
       <RowActions
         subject="custom_reviewer"
         actions={[
@@ -192,33 +192,11 @@ describe("RowActions", () => {
         ]}
       />,
     );
-    expect(menu.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe(
-      "Actions for custom_reviewer",
-    );
+    expect(two.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe("Actions for custom_reviewer");
 
-    // No subject is still a named control, just a worse one: the button falls
-    // back to its own visible text rather than being labelled with nothing.
+    // No subject is still a named control, just a worse one.
     const anonymous = mount(<RowActions actions={[{ id: "delete", label: "Delete role", onSelect: () => {} }]} />);
-    expect(anonymous.querySelector("button")?.hasAttribute("aria-label")).toBe(false);
-  });
-
-  it("gives a lone action the affordance of a control, not of a sentence", () => {
-    // `ghost` is transparent and inked in `--pk-ink-muted`, which is the same
-    // treatment the row's own quiet values already carry: "Grant administrator
-    // role" read as another remark about the person rather than as the thing
-    // that changes them.
-    const ordinary = mount(
-      <RowActions subject="Ada" actions={[{ id: "grant", label: "Grant", onSelect: () => {} }]} />,
-    );
-    const button = ordinary.querySelector("button");
-    expect(button?.className).toContain("pk-btn--secondary");
-    expect(button?.className).not.toContain("pk-btn--ghost");
-
-    // Destructive keeps its own quiet weight, which already has a border.
-    const destructive = mount(
-      <RowActions subject="Ada" actions={[{ id: "remove", label: "Remove", danger: true, onSelect: () => {} }]} />,
-    );
-    expect(destructive.querySelector("button")?.className).toContain("pk-btn--danger-quiet");
+    expect(anonymous.querySelector('[aria-haspopup="menu"]')?.getAttribute("aria-label")).toBe("Row actions");
   });
 
   it("renders status alone when there are no actions", () => {

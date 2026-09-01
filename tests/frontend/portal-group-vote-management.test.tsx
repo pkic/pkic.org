@@ -425,8 +425,8 @@ describe("selected-group vote management", () => {
     await settle();
     await act(() =>
       (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Details",
+        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
+          (button) => button.textContent === "Show details for Architecture proposal",
         ) as HTMLButtonElement
       ).click(),
     );
@@ -484,8 +484,8 @@ describe("selected-group vote management", () => {
     await settle();
     await act(() =>
       (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Details",
+        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
+          (button) => button.textContent === "Show details for Architecture proposal",
         ) as HTMLButtonElement
       ).click(),
     );
@@ -528,15 +528,15 @@ describe("selected-group vote management", () => {
     // Four unnamed tables on a page are announced as four tables.
     expect(container.querySelector("table caption")?.textContent).toBe("Vote proposals");
 
-    const details = buttonNamed(container, "Details");
-    expect(details.getAttribute("aria-expanded")).toBe("false");
+    // The row itself opens the detail; its activation names the proposal.
+    const details = buttonNamed(container, "Show details for Architecture proposal");
     await act(() => details.click());
     await settle();
 
     // The expanded detail is a region named after the proposal it belongs
     // to, so it can be reached without depending on a styling class.
     expect(namedRegion(container, managedProposal.title)).toBeTruthy();
-    expect(buttonNamed(container, "Hide").getAttribute("aria-expanded")).toBe("true");
+    expect(buttonNamed(container, "Hide details for Architecture proposal")).toBeTruthy();
     // The rejection reason is a required, described control, not a bare box.
     const reason = labeledControl<HTMLTextAreaElement>(container, "Rejection reason");
     expect(reason.required).toBe(true);
@@ -571,7 +571,7 @@ describe("selected-group vote management", () => {
     document.body.append(container);
     await act(() => render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />, container));
     await settle();
-    await act(() => buttonNamed(container, "Details").click());
+    await act(() => buttonNamed(container, "Show details for Architecture proposal").click());
     await settle();
 
     // The control is refused until there is a reason to send.

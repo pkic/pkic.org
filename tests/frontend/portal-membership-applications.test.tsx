@@ -185,14 +185,12 @@ describe("portal membership-application management", () => {
       }),
     );
 
-    const onBack = vi.fn();
     const page = mount(
       <ApplicationDetailView
         applicationId={APPLICATION_ID}
         categories={categories}
         canWrite={false}
         canApprove={false}
-        onBack={onBack}
       />,
     );
     await settle();
@@ -205,10 +203,12 @@ describe("portal membership-application management", () => {
     // does not skip a level.
     expect([...page.querySelectorAll("h3")].length).toBeGreaterThan(0);
 
-    const back = [...page.querySelectorAll("button")].find((button) => button.textContent?.includes("Back to list"));
-    expect(back).toBeDefined();
-    void act(() => back!.click());
-    expect(onBack).toHaveBeenCalledTimes(1);
+    // The way back is the header's trail, not a back button dressed as one.
+    const trail = page.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail).not.toBeNull();
+    const backLink = trail!.querySelector<HTMLAnchorElement>("a");
+    expect(backLink?.textContent).toBe("Membership applications");
+    expect(backLink?.getAttribute("href")).toBe("#/membership/applications");
   });
 
   it("announces a detail that could not be loaded rather than rendering an empty page", async () => {
@@ -224,13 +224,7 @@ describe("portal membership-application management", () => {
     );
 
     const page = mount(
-      <ApplicationDetailView
-        applicationId={APPLICATION_ID}
-        categories={categories}
-        canWrite
-        canApprove
-        onBack={vi.fn()}
-      />,
+      <ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} canWrite canApprove />,
     );
     await settle();
 
@@ -265,7 +259,6 @@ describe("portal membership-application management", () => {
         categories={categories}
         canWrite={false}
         canApprove={false}
-        onBack={vi.fn()}
       />,
     );
     await settle();
@@ -296,13 +289,7 @@ describe("portal membership-application management", () => {
     );
 
     const page = mount(
-      <ApplicationDetailView
-        applicationId={APPLICATION_ID}
-        categories={categories}
-        canWrite
-        canApprove
-        onBack={vi.fn()}
-      />,
+      <ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} canWrite canApprove />,
     );
     await settle();
 
@@ -337,13 +324,7 @@ describe("portal membership-application management", () => {
     const page = mount(
       <>
         <ConfirmDialogHost />
-        <ApplicationDetailView
-          applicationId={APPLICATION_ID}
-          categories={categories}
-          canWrite
-          canApprove
-          onBack={vi.fn()}
-        />
+        <ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} canWrite canApprove />
       </>,
     );
     await settle();

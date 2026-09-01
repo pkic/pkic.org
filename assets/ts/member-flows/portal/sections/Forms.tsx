@@ -5,6 +5,8 @@ import {
   FormManagementDetail,
   FormManagementList,
 } from "../../../components/forms/management/FormManagement";
+import { Button } from "../../../ui/Button";
+import { PageHeader } from "../../../ui/PageHeader";
 import { toast } from "../ui";
 
 /** Reserved form key that routes to the creation view instead of a form's detail. */
@@ -45,10 +47,20 @@ export function Forms({ formKey, canWrite }: { formKey?: string; canWrite: boole
   }
 
   return (
-    <FormManagementList
-      canWrite={canWrite}
-      onOpenForm={(key) => navigate(`/forms/${encodeURIComponent(key)}`)}
-      onCreateNew={canWrite ? () => navigate(`/forms/${NEW_FORM_KEY}`) : undefined}
-    />
+    <div class="pk pk-stack">
+      {/* The list's create action lives in the page header; the toolbar
+          keeps search, filters, and refresh. */}
+      <PageHeader
+        title="Forms"
+        actions={
+          canWrite ? (
+            <Button variant="primary" onClick={() => navigate(`/forms/${NEW_FORM_KEY}`)}>
+              New form
+            </Button>
+          ) : undefined
+        }
+      />
+      <FormManagementList onOpenForm={(key) => navigate(`/forms/${encodeURIComponent(key)}`)} />
+    </div>
   );
 }

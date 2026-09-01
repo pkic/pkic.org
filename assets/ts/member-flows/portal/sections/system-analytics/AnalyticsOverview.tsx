@@ -78,13 +78,13 @@ export function AnalyticsOverview() {
 
       <div class="pk-grid pk-grid--roomy">
         <Panel>
-          <PanelHeader title="Registrations by Status" headingLevel={2} />
+          <PanelHeader title="Registrations by Status" />
           <PanelBody>
             <div dangerouslySetInnerHTML={{ __html: statusBars(registrations.byStatus, registrations.total) }} />
           </PanelBody>
         </Panel>
         <Panel>
-          <PanelHeader title="Top Events" headingLevel={2} />
+          <PanelHeader title="Top Events" />
           <PanelBody>
             <DataTable
               caption="Top events by registrations"
@@ -110,7 +110,7 @@ export function AnalyticsOverview() {
       </div>
 
       <Panel>
-        <PanelHeader title="Activity — last 30 days" headingLevel={2} />
+        <PanelHeader title="Activity — last 30 days" />
         <PanelBody>
           <div dangerouslySetInnerHTML={{ __html: recentActivityChart(state.data.recentActivity) }} />
         </PanelBody>

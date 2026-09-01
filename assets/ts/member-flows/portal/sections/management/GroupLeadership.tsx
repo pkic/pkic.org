@@ -39,14 +39,19 @@ function leadershipColumns(
     {
       id: "person",
       header: "Person",
+      // The design system's table gives slack to no column on its own; the
+      // person is the row's subject, so a wide screen's slack lands here.
+      width: "primary",
       cell: (assignment) => <PersonCell name={assignment.userName} email={assignment.email} size="sm" />,
     },
     { id: "role", header: "Role", cell: (assignment) => GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId] },
     { id: "source", header: "Source", cell: sourceLabel },
     {
+      // A date has a bounded length; the column hugs it instead of wearing
+      // `pk-nowrap` while still claiming slack.
       id: "expires",
       header: "Expires",
-      cellClass: "pk-nowrap",
+      width: "fit",
       cell: (assignment) => (assignment.expiresAt ? fmt(assignment.expiresAt) : "—"),
     },
     {

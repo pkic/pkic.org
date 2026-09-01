@@ -170,10 +170,14 @@ describe("the meeting series list", () => {
     await settle();
 
     expect(page.querySelector("caption")?.textContent).toBe("Meeting series");
-    expect(page.querySelector('a[aria-label="Calendar for Monthly sync"]')).toBeTruthy();
 
-    const details = page.querySelector<HTMLButtonElement>('button[aria-label="Details for Monthly sync"]')!;
-    expect(details.getAttribute("aria-expanded")).toBe("false");
+    // The row itself opens the detail; the calendar download lives behind
+    // the row's menu, whose trigger names the series.
+    const rowLink = [...page.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find(
+      (control) => control.textContent === "Show details for Monthly sync",
+    );
+    expect(rowLink).toBeTruthy();
+    expect(page.querySelector('button[aria-label="Actions for Monthly sync"]')).toBeTruthy();
   });
 
   it("states an active series in words rather than as a grey dash", async () => {
@@ -400,10 +404,12 @@ describe("the group forms and votes collections", () => {
     expect(container.querySelector('section[aria-label="Group forms"]')).toBeTruthy();
     expect(container.querySelector("caption")?.textContent).toBe("Group forms");
 
-    // A page of rows otherwise offers a column of buttons all called
-    // "Details".
-    const details = container.querySelector<HTMLButtonElement>('button[aria-label="Details for Architecture survey"]')!;
-    expect(details.getAttribute("aria-expanded")).toBe("false");
+    // The row itself is the control that opens the form's detail, and its
+    // name says which form — not a column of buttons all called "Details".
+    const rowLink = [...container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find(
+      (control) => control.textContent === "Show details for Architecture survey",
+    );
+    expect(rowLink).toBeTruthy();
   });
 
   it("switches the votes sections as a tab set, with the panel pointing back at its tab", async () => {

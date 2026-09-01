@@ -310,7 +310,7 @@ describe("portal access-control collection pagination", () => {
     // The row's lone action is shown rather than hidden behind a `…`, and it
     // names the address it would remove: a list of aliases must not be a list
     // of identically named "Remove email" buttons.
-    expect(rowActionControlNames(container)).toEqual(["Remove email, alias@example.test"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for alias@example.test"]);
 
     await runRowAction(container, "alias@example.test", "Remove email");
     expect(container.textContent).toContain("Remove alias@example.test from this account?");

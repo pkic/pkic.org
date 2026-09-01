@@ -170,8 +170,8 @@ describe("selected-group vote participation", () => {
     await settle();
     await act(() =>
       (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Details",
+        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
+          (button) => button.textContent === "Show details for Architecture motion",
         ) as HTMLButtonElement
       ).click(),
     );
@@ -254,8 +254,8 @@ describe("selected-group vote participation", () => {
     await settle();
     await act(() =>
       (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Details",
+        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
+          (button) => button.textContent === "Show details for Architecture motion",
         ) as HTMLButtonElement
       ).click(),
     );

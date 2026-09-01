@@ -205,7 +205,7 @@ describe("PasskeySettings confirmation and row actions", () => {
 
     // A passkey list is a column of "Remove" controls, so each one says which
     // key it would remove rather than leaving that to the row it sits in.
-    expect(rowActionControlNames(container)).toEqual(["Remove, Work laptop"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Work laptop"]);
     await runRowAction(container, "Work laptop", "Remove");
 
     const dialog = container.querySelector('[role="alertdialog"]');

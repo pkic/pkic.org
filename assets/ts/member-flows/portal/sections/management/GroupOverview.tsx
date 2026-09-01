@@ -12,6 +12,10 @@ import { groupEventsListResponseSchema, type GroupEvent } from "../../../../../s
 import { groupVotesListResponseSchema, type GroupVote } from "../../../../../shared/schemas/group-votes";
 import { Alert } from "../../../../ui/Alert";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+// `pk-datalist` on the headline counts is defined in Content.css, which ships
+// in a lazy chunk rather than the entry stylesheet, so the surface that
+// writes the class name pulls the stylesheet in itself.
+import "../../../../ui/Content.css";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { formatEventWhen, formatRelativeDays } from "../../../../shared/ui";
@@ -28,9 +32,16 @@ function voteWhen(vote: GroupVote): string {
   return relative ? `Closes ${relative}` : "Closing soon";
 }
 
+export interface GroupHeadlineCounts {
+  participantCount: number;
+  representedMemberCount: number;
+  childCount: number;
+}
+
 export function GroupOverviewView({
   groupId,
   description,
+  counts,
   upcomingEvents,
   openVotes,
   eventsError = null,
@@ -38,6 +49,7 @@ export function GroupOverviewView({
 }: {
   groupId: string;
   description: string | null;
+  counts?: GroupHeadlineCounts;
   upcomingEvents: readonly GroupEvent[];
   openVotes: readonly GroupVote[];
   eventsError?: string | null;
@@ -111,15 +123,34 @@ export function GroupOverviewView({
       )}
       <Panel>
         <PanelHeader title="About this group" />
-        <PanelBody>
+        <PanelBody class="pk-stack pk-stack--snug">
           <p>{description || "No group description has been provided."}</p>
+          {counts && (
+            // The headline counts moved here from the workspace header: they
+            // describe the group, so they are overview content rather than
+            // chrome repeated above every tab.
+            <dl class="pk-datalist pk-small">
+              <dt>People</dt>
+              <dd>{counts.participantCount}</dd>
+              <dt>Members represented</dt>
+              <dd>{counts.representedMemberCount}</dd>
+              <dt>Subgroups</dt>
+              <dd>{counts.childCount}</dd>
+            </dl>
+          )}
         </PanelBody>
       </Panel>
     </div>
   );
 }
 
-export function GroupOverview({ groupId, description }: { groupId: string; description: string | null }) {
+export function GroupOverview({
+  groupId,
+  description,
+  participantCount,
+  representedMemberCount,
+  childCount,
+}: { groupId: string; description: string | null } & GroupHeadlineCounts) {
   const events = useData(
     () =>
       getJson(
@@ -137,6 +168,7 @@ export function GroupOverview({ groupId, description }: { groupId: string; descr
     <GroupOverviewView
       groupId={groupId}
       description={description}
+      counts={{ participantCount, representedMemberCount, childCount }}
       upcomingEvents={events.data?.events ?? []}
       openVotes={votes.data?.votes ?? []}
       eventsError={events.error}

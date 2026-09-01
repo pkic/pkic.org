@@ -54,9 +54,9 @@ describe("event workspace section shell", () => {
     mounted.push(container);
     void act(() => render(<EventWorkspace view="list" />, container));
 
-    // The section's name is a real heading rather than a styled span, so the
+    // The section opens with the page header's real heading, so the
     // workspace has an entry in the document outline.
-    expect(container.querySelector("h4")?.textContent).toBe("Events");
+    expect(container.querySelector("h2")?.textContent).toBe("Events");
     // The lazy view has not arrived yet, and the wait is announced rather
     // than shown as an empty region.
     expect(container.querySelector('[role="status"]')?.textContent).toContain("Loading");

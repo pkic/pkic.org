@@ -6,6 +6,7 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { Button } from "../../../ui/Button";
 import { Badge } from "../../../ui/Badge";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
@@ -226,23 +227,28 @@ export function AccountSettings() {
   const email = profile.value?.email || session?.identity.email || "";
 
   return (
-    <div class="pk pk-stack content-width-md">
+    <div class="pk pk-stack">
+      <PageHeader title="Account Settings" />
       {session?.pendingIdentityCount ? <IdentityInvitationsCard /> : null}
-      <Panel>
-        <PanelHeader title="Email" />
-        <PanelBody class="pk-stack pk-stack--snug">
-          <p>{email}</p>
-          <p class="pk-muted pk-small">
-            {hasMemberCapacity
-              ? "This is the verified primary email address for your account. Contact an administrator to change it."
-              : "This is the verified primary email address for your portal identity."}
-          </p>
-        </PanelBody>
-      </Panel>
+      {/* The cards flow into the width the page affords rather than stacking
+          down a capped column with the rest of the screen empty. */}
+      <div class="pk-grid pk-grid--roomy">
+        <Panel>
+          <PanelHeader title="Email" />
+          <PanelBody class="pk-stack pk-stack--snug">
+            <p>{email}</p>
+            <p class="pk-muted pk-small">
+              {hasMemberCapacity
+                ? "This is the verified primary email address for your account. Contact an administrator to change it."
+                : "This is the verified primary email address for your portal identity."}
+            </p>
+          </PanelBody>
+        </Panel>
 
-      {session && <AccessSummaryCard session={session} />}
-      {hasAccountSecurityCapacity && <PasskeySettings toastTargetId="portal-toast-area" />}
-      {hasMemberCapacity && <NotificationPreferencesCard />}
+        {session && <AccessSummaryCard session={session} />}
+        {hasAccountSecurityCapacity && <PasskeySettings toastTargetId="portal-toast-area" />}
+        {hasMemberCapacity && <NotificationPreferencesCard />}
+      </div>
     </div>
   );
 }

@@ -224,29 +224,18 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
             sort: { asc: "status", desc: "-status" },
           },
           {
+            // Counts and dates have a bounded length; the columns say so
+            // instead of wearing `pk-nowrap` while still claiming slack.
             header: "Endorsements",
-            className: "pk-nowrap",
+            width: "fit",
             cell: (proposal) => `${proposal.endorsementCount} / ${proposal.minEndorsersRequired}`,
             sort: { asc: "endorsement_count", desc: "-endorsement_count" },
           },
           {
             header: "Created",
-            className: "pk-nowrap",
+            width: "fit",
             cell: (proposal) => fmtDate(proposal.createdAt),
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
-          },
-          {
-            header: "",
-            className: "pk-end",
-            cell: (proposal) => (
-              <Button
-                size="sm"
-                aria-expanded={selectedProposal?.id === proposal.id}
-                onClick={() => setSelectedProposal((current) => (current?.id === proposal.id ? null : proposal))}
-              >
-                {selectedProposal?.id === proposal.id ? "Hide" : "Details"}
-              </Button>
-            ),
           },
         ]}
         empty={
@@ -263,6 +252,16 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
           )
         }
         rowKey={(proposal) => proposal.id}
+        // Activating a row opens its detail in place — the same rule as
+        // every other list. The "Details" button column this replaces left
+        // the row itself inert.
+        rowAction={(proposal) => ({
+          label:
+            selectedProposal?.id === proposal.id
+              ? `Hide details for ${proposal.title}`
+              : `Show details for ${proposal.title}`,
+          onSelect: () => setSelectedProposal((current) => (current?.id === proposal.id ? null : proposal)),
+        })}
         detailRow={(proposal) =>
           selectedProposal?.id === proposal.id ? (
             <GroupVoteProposalDetail groupId={groupId} proposal={selectedProposal} onChanged={reload} />

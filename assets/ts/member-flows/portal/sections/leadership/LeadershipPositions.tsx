@@ -394,14 +394,18 @@ function positionColumns(
   onChanged: () => void,
 ): ReadonlyArray<DataTableColumn<LeadershipPosition>> {
   return [
-    { id: "name", header: "Name", cell: (position) => position.name },
+    // The design system's table gives slack to no column on its own; the
+    // person is the row's subject, so a wide screen's slack lands there.
+    { id: "name", header: "Name", width: "primary", cell: (position) => position.name },
     { id: "title", header: "Position", cell: (position) => position.title },
     {
       id: "represents",
       header: "Represents",
       cell: (position) => position.organizationName ?? "Individual membership",
     },
-    { id: "term", header: "Term", cell: term, cellClass: "pk-nowrap" },
+    // A term is a pair of dates: bounded, so the column hugs it instead of
+    // claiming a share of a wide screen while refusing to wrap.
+    { id: "term", header: "Term", width: "fit", cell: term },
     {
       id: "actions",
       header: "Actions",

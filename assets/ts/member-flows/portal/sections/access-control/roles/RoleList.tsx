@@ -3,7 +3,6 @@ import { ApiDataTable, type ApiTableActions } from "../../../../../components/Ap
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
 import { Badge } from "../../../../../ui/Badge";
-import { Button } from "../../../../../ui/Button";
 import { Chip } from "../../../../../ui/Chip";
 import { RowActions } from "../../../../../ui/RowActions";
 // `pk-mono` is written here as a class name rather than reached through a
@@ -114,34 +113,31 @@ export function RoleList({
           header: "Permissions",
           cell: (r) => <PermissionsSummaryCell permissions={r.permissions} />,
         },
-        {
-          header: "",
-          className: "pk-end",
-          cell: (r) => (
-            // Both controls name the role they act on: a page of rows
-            // otherwise offers a column of buttons all called "Open" and a
-            // column of menus all called "Row actions".
-            <div class="pk-cluster pk-cluster--end">
-              <Button size="sm" aria-label={`Open ${r.name}`} onClick={() => onOpenRole(r.id)}>
-                Open
-              </Button>
-              {canRevoke && (
-                <RowActions
-                  subject={r.name}
-                  actions={[
-                    {
-                      id: "delete",
-                      label: "Delete role",
-                      onSelect: () => void handleDelete(r),
-                      disabled: r.isSystemRole,
-                    },
-                  ]}
-                />
-              )}
-            </div>
-          ),
-        },
+        ...(canRevoke
+          ? [
+              {
+                header: "",
+                cell: (r: Role) => (
+                  // Opening the role is the row's own activation; the menu
+                  // holds only the commands beyond it.
+                  <RowActions
+                    subject={r.name}
+                    actions={[
+                      {
+                        id: "delete",
+                        label: "Delete role",
+                        onSelect: () => void handleDelete(r),
+                        disabled: r.isSystemRole,
+                        danger: true,
+                      },
+                    ]}
+                  />
+                ),
+              },
+            ]
+          : []),
       ]}
+      rowAction={(r) => ({ label: `Open ${r.name}`, onSelect: () => onOpenRole(r.id) })}
       empty={
         canGrant ? (
           // The toolbar above already carries "New role"; repeating it here

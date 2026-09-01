@@ -200,9 +200,15 @@ describe("portal group management resources", () => {
       },
     });
     expect(container.textContent).toContain("Architecture call");
-    expect(container.querySelector<HTMLAnchorElement>("a[href$='/calendar.ics']")?.href).toContain(
+    // The calendar download is a command behind the row's menu, and it
+    // navigates to the canonical group route.
+    const openWindow = vi.spyOn(window, "open").mockReturnValue(null);
+    await runRowAction(container, "Architecture call", "Download calendar");
+    expect(openWindow).toHaveBeenCalledWith(
       `/api/v1/groups/${GROUP_ID}/meetings/series/60000000-0000-4000-8000-000000000001/calendar.ics`,
+      "_self",
     );
+    openWindow.mockRestore();
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     expect(requests.some(({ url }) => url.pathname.includes("/admin/"))).toBe(false);
   });
@@ -250,14 +256,20 @@ describe("portal group management resources", () => {
 
     const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    // The row itself opens and closes the detail; its activation names the
+    // series both ways.
+    const details = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Show details for Architecture call",
+    );
     await act(async () => {
       details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${seriesId}`);
 
-    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
+    const hide = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Hide details for Architecture call",
+    );
     await act(async () => {
       hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -384,7 +396,7 @@ describe("portal group management resources", () => {
     expect(container.querySelector("caption")?.textContent).toBe("Active membership capacities in this group");
     // The actions column names each row's subject instead of the control, so
     // a roster of "Remove" buttons is still a roster of distinct controls.
-    expect(rowActionControlNames(container)).toEqual(["Remove, Member Person"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Member Person"]);
 
     // The search box is reached through its own `for`/`id` pair, so this
     // lookup fails exactly when the labelling does.

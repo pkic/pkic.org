@@ -154,7 +154,7 @@ describe("event team role management", () => {
 
     // One action, so the row shows it — named after the team member it would
     // remove, since every row's action reads "Revoke".
-    expect(rowActionControlNames(container)).toEqual(["Revoke, moderator@example.test"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for moderator@example.test"]);
     await runRowAction(container, "moderator@example.test", "Revoke");
 
     const dialog = container.querySelector('[role="alertdialog"]');

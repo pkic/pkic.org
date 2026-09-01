@@ -242,7 +242,7 @@ export function TemplateEditor({
   return (
     <div class="pk pk-stack">
       <Panel>
-        <PanelHeader title={`Edit: ${templateKey}`} headingLevel={2}>
+        <PanelHeader title={`Edit: ${templateKey}`}>
           {isLayout && <Badge tone="info">shared shell</Badge>}
           <Button size="sm" onClick={onBack}>
             ← Back to list
@@ -505,7 +505,7 @@ export function TemplateEditor({
 
       {/* Version history */}
       <Panel>
-        <PanelHeader title="Version History" headingLevel={2} />
+        <PanelHeader title="Version History" />
         <PanelBody>
           <ApiDataTable
             caption="Email template versions"

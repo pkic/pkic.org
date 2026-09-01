@@ -75,6 +75,8 @@ export interface ProvisionMembershipInput {
   organizationName?: string | null;
   website?: string | null;
   description?: string | null;
+  /** The organization's own profile links (canonical links contract). Only applied when the organization is created here. */
+  links?: string[] | null;
   organizationDomain?: string | null;
   /** Set when approval transfers the application's existing domain claim. */
   domainClaimApplicationId?: string | null;
@@ -304,8 +306,8 @@ async function buildResolveOrganizationStatements(
   const statements: StatementLike[] = [
     db
       .prepare(
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, links_json, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
       )
       .bind(
         organizationId,
@@ -313,6 +315,7 @@ async function buildResolveOrganizationStatements(
         normalizedOrgName,
         input.description ?? null,
         input.website ?? null,
+        input.links && input.links.length > 0 ? serializeLinks(input.links) : null,
         now,
         now,
       ),

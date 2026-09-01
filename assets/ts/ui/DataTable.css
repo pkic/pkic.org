@@ -25,26 +25,19 @@
    * as a row. A person sat at the far left, their date at 60%, and the button
    * that acts on them a third of a metre away at the right edge.
    *
-   * So the list is measured, at the same 66rem its own specimens use. The
-   * controls, the table and the pager all read it, so the three share one edge
-   * instead of the toolbar spanning the screen above a narrower table.
-   */
-  .pk-table-list,
-  .pk-table__scroll {
-    --pk-table-measure: 66rem;
-  }
-
-  /*
-   * The list block: search and filters, the table, the pager.
+   * The list block: search and filters, the table, the pager. It spans the
+   * width the page gives it, so the toolbar, the rows and the pager share
+   * both edges with everything else on the screen.
    *
-   * `fit-content` rather than a `max-width`, so a table with more columns than
-   * the measure allows still gets the room it needs instead of being forced to
-   * scroll on a screen that had the space.
+   * This replaced a 66rem measure, which had replaced nothing at all. With no
+   * policy, `table-layout: auto` shared a wide screen's slack among the
+   * columns in proportion to their content — dead space everywhere. The
+   * measure fixed that and earned the next complaint: "the pages are not
+   * using the full width". Both were the same missing decision about where
+   * slack belongs. It belongs in one column — see `pk-table__col--primary`.
    */
   .pk-table-list {
-    width: fit-content;
-    min-width: min(100%, var(--pk-table-measure));
-    max-width: 100%;
+    width: 100%;
   }
 
   /*
@@ -52,19 +45,26 @@
    * screen, headers that read as column labels rather than sentences, and a
    * ground it can rely on because it is always drawn inside a `Panel`.
    *
-   * `width` overrides the shared skin's `100%` for the reason above. The skin
-   * keeps `100%` because a table in prose sits in a measured article already.
-   *
    * `tabular-nums` so a column of dates, counts or amounts lines up digit under
    * digit whichever way the column is aligned. Proportional figures make a
    * column of numbers look ragged even when every value has the same length.
    */
   .pk-table {
-    width: fit-content;
-    min-width: min(100%, var(--pk-table-measure, 66rem));
+    width: 100%;
     font-size: var(--pk-text-sm);
     color: var(--pk-ink);
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * The slack column. On a wide screen the leftover width all flows here —
+   * one column stretches, every other column stays the size its content asks
+   * for, and the row reads left to right without gaps that mean nothing.
+   * The 99% is the table-layout idiom for "everything the others do not
+   * need", not a real percentage; content keeps it from collapsing the rest.
+   */
+  .pk-table__col--primary {
+    width: 99%;
   }
 
   /*

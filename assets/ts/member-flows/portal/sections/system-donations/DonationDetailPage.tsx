@@ -4,7 +4,8 @@ import { usePortalHashLocation } from "../../hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { PageHeader } from "../../../../ui/PageHeader";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { getJson, postJson } from "../../../../shared/api-client";
@@ -59,7 +60,6 @@ export function DonationDetailPage({
 }
 
 function DonationDetailView({ donationId, canSync }: { donationId: string; canSync: boolean }) {
-  const [, navigate] = usePortalHashLocation();
   const [syncing, setSyncing] = useState(false);
 
   const { data, loading, error, reload } = useData(
@@ -111,18 +111,48 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
   const badgeUrl = `/api/v1/donations/checkouts/${encodeURIComponent(d.checkout_session_id)}/badge?name=${encodeURIComponent(d.name)}`;
 
   return (
-    <div class="pk pk-stack pk-stack--snug">
-      <div class="pk-cluster">
-        <Button size="sm" variant="secondary" onClick={() => navigate("/donations")}>
-          ← Back to donations
-        </Button>
-      </div>
+    <div class="pk pk-stack">
+      {/* The donor heads the page, with the donation's standing and amount
+          beside the name and the record's commands on the right; the trail
+          replaces the back button that used to stand in for it. */}
+      <PageHeader
+        trail={[{ label: "Donations", href: usePortalHashLocation.hrefs("/donations") }, { label: d.name }]}
+        title={d.name}
+        context={
+          <>
+            <Badge status={d.status} />
+            <span class="pk-strong">{gross}</span>
+          </>
+        }
+        actions={
+          <>
+            {canSync && needsSync && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={syncing}
+                disabled={syncing}
+                onClick={() => handleSync(d.checkout_session_id)}
+              >
+                {syncing ? "Syncing…" : "Sync with Stripe"}
+              </Button>
+            )}
+            {d.status === "completed" && (
+              // A link, not a button: it fetches a file from a URL, so it can
+              // be opened in a new tab and copied like any other address.
+              <a
+                class="pk-btn pk-btn--secondary pk-btn--sm"
+                href={badgeUrl}
+                download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
+              >
+                Download badge
+              </a>
+            )}
+          </>
+        }
+      />
 
       <Panel aria-label={`Donation from ${d.name}`}>
-        <PanelHeader title={d.name}>
-          <Badge status={d.status} />
-          <span class="pk-strong">{gross}</span>
-        </PanelHeader>
         <PanelBody class="pk-stack pk-stack--snug">
           <dl class="pk-datalist">
             <Detail label="Email">
@@ -152,31 +182,6 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
             <Detail label="Created">{fmt(d.created_at)}</Detail>
             <Detail label="Completed">{fmt(d.completed_at)}</Detail>
           </dl>
-
-          <div class="pk-cluster">
-            {canSync && needsSync && (
-              <Button
-                size="sm"
-                variant="secondary"
-                loading={syncing}
-                disabled={syncing}
-                onClick={() => handleSync(d.checkout_session_id)}
-              >
-                {syncing ? "Syncing…" : "↺ Sync with Stripe"}
-              </Button>
-            )}
-            {d.status === "completed" && (
-              // A link, not a button: it fetches a file from a URL, so it can
-              // be opened in a new tab and copied like any other address.
-              <a
-                class="pk-btn pk-btn--secondary pk-btn--sm"
-                href={badgeUrl}
-                download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
-              >
-                Download badge
-              </a>
-            )}
-          </div>
         </PanelBody>
       </Panel>
     </div>

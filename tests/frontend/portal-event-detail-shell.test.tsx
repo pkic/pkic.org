@@ -100,7 +100,7 @@ describe("event detail shell", () => {
     expect(tabs?.querySelector('[aria-current="page"]')?.textContent).toBe("Proposals");
 
     // The reload control carries a name rather than only a glyph.
-    const refresh = [...container.querySelectorAll("button")].find((button) => button.textContent === "↺ Refresh");
+    const refresh = [...container.querySelectorAll("button")].find((button) => button.textContent === "Refresh");
     expect(refresh).toBeDefined();
   });
 

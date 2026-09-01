@@ -41,18 +41,24 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
 
-  // Located by the names the form announces — the region, its per-identity
-  // groups, and each control's label — rather than by generated ids.
+  // Located by the names the form announces — the region, its grouped
+  // fieldsets, and each control's label — rather than by generated ids.
   const createForm = page.getByRole("region", { name: "Add organization" });
-  await createForm.getByLabel("Organization name").fill(organizationName);
-  await createForm.getByLabel("Membership category").selectOption("F");
-  await createForm.getByLabel("Member since").fill("2026-01-15");
-  await createForm.getByLabel("Website").fill("https://example.invalid");
-  const firstIdentity = createForm.getByRole("group", { name: "Identity 1" });
-  await firstIdentity.getByLabel("Name").fill("Primary Representative");
-  await firstIdentity.getByLabel("Email").fill(primaryEmail);
-  await firstIdentity.getByLabel("Job title").fill("Security Engineer");
-  await createForm.getByLabel("Immediate activation reason").fill("E2E organization setup");
+  const organizationGroup = createForm.getByRole("group", { name: "Organization", exact: true });
+  await organizationGroup.getByLabel("Organization name").fill(organizationName);
+  await organizationGroup.getByLabel("Membership category").selectOption("F");
+  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  await createForm.getByRole("group", { name: "Web presence" }).getByLabel("Website").fill("https://example.invalid");
+  // People are optional and the form starts with none; the activation reason
+  // only exists once a person has been added, because only that path skips
+  // the invitation flow.
+  await expect(createForm.getByLabel("Reason for activating without an invitation")).toHaveCount(0);
+  await createForm.getByRole("button", { name: "Add person", exact: true }).click();
+  const firstPerson = createForm.getByRole("group", { name: "Person 1" });
+  await firstPerson.getByLabel("Name").fill("Primary Representative");
+  await firstPerson.getByLabel("Email").fill(primaryEmail);
+  await firstPerson.getByLabel("Job title").fill("Security Engineer");
+  await createForm.getByLabel("Reason for activating without an invitation").fill("E2E organization setup");
 
   const createResponse = page.waitForResponse(
     (response) =>
@@ -62,9 +68,15 @@ test("permitted staff manage organizations through the canonical domain API", as
   expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
 
-  // Success navigates straight to the created organization's own detail view.
+  // Success navigates straight to the created organization's own detail view,
+  // which opens with one statement of the record and its facets as tabs.
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/[0-9a-fA-F-]{36}$/);
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
+
+  // The roster is the Identities facet; its bounded query runs when the tab
+  // is selected, not on first paint.
+  await page.getByRole("tab", { name: "Identities" }).click();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Add new person", exact: true }).click();
@@ -83,6 +95,18 @@ test("permitted staff manage organizations through the canonical domain API", as
   await page.getByRole("button", { name: "Add", exact: true }).click();
   expect((await associateResponse).status()).toBe(201);
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
+
+  // The sponsorships facet answers "which sponsorships" from the canonical
+  // staff pipeline list, bounded to this organization — an honest empty state
+  // here, since this organization has none.
+  const sponsorshipsResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/v1/sponsors" && response.request().method() === "GET",
+  );
+  await page.getByRole("tab", { name: "Sponsorships" }).click();
+  const sponsorshipsUrl = new URL((await sponsorshipsResponse).url());
+  expect(sponsorshipsUrl.searchParams.get("visibility")).toBe("all");
+  expect(sponsorshipsUrl.searchParams.get("organizationId")).toBeTruthy();
+  await expect(page.getByText("No sponsorships", { exact: true })).toBeVisible();
 
   // Ordinary additions are invitations. The exact user must accept before
   // this identity grants organization or group capacity or exposes its

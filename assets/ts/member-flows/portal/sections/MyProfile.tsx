@@ -13,6 +13,7 @@ import { Alert } from "../../../ui/Alert";
 import { Badge } from "../../../ui/Badge";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { PersonCell } from "../../../ui/PersonCell";
 import { Spinner } from "../../../ui/Spinner";
@@ -101,170 +102,173 @@ export function MyProfile() {
   }
 
   return (
-    <div class="pk pk-grid pk-grid--roomy content-width-lg">
-      <div class="pk-stack">
-        <Panel>
-          <PanelBody>
-            <AdminHeadshotManager
-              initialUrl={current.headshotUrl}
-              alt={current.email}
-              emptyLabel="You"
-              uploadLabel="📷 Upload headshot"
-              helpText="JPEG, PNG, or WebP, up to 5MB."
-              uploadHeadshot={async (file) => {
-                await replaceFile(`${CURRENT_USER_API}/headshot`, file, myHeadshotUploadResponseSchema);
-                await refreshProfile();
-                return { headshotUrl: profileSignal.value?.headshotUrl };
-              }}
-            />
-          </PanelBody>
-        </Panel>
-
-        {current.organizationId && (
+    <div class="pk pk-stack">
+      <PageHeader title="My Profile" />
+      <div class="pk-grid pk-grid--roomy">
+        <div class="pk-stack">
           <Panel>
             <PanelBody>
-              <label class="pk-check">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  role="switch"
-                  checked={current.showOnOrgProfile}
-                  disabled={visibilitySaving}
-                  onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
-                />
-                <span class="pk-check__label">
-                  Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
-                </span>
-              </label>
+              <AdminHeadshotManager
+                initialUrl={current.headshotUrl}
+                alt={current.email}
+                emptyLabel="You"
+                uploadLabel="📷 Upload headshot"
+                helpText="JPEG, PNG, or WebP, up to 5MB."
+                uploadHeadshot={async (file) => {
+                  await replaceFile(`${CURRENT_USER_API}/headshot`, file, myHeadshotUploadResponseSchema);
+                  await refreshProfile();
+                  return { headshotUrl: profileSignal.value?.headshotUrl };
+                }}
+              />
             </PanelBody>
           </Panel>
-        )}
 
-        {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
-      </div>
+          {current.organizationId && (
+            <Panel>
+              <PanelBody>
+                <label class="pk-check">
+                  <input
+                    class="pk-check__input"
+                    type="checkbox"
+                    role="switch"
+                    checked={current.showOnOrgProfile}
+                    disabled={visibilitySaving}
+                    onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
+                  />
+                  <span class="pk-check__label">
+                    Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
+                  </span>
+                </label>
+              </PanelBody>
+            </Panel>
+          )}
 
-      <div class="pk-stack">
-        <Panel>
-          <PanelBody>
-            <form
-              class="pk-stack"
-              onSubmit={(e) => {
-                void handleSubmit(e);
-              }}
-            >
-              <div class="pk-grid pk-grid--tight">
-                <Field label="First name" required>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={form.firstName}
-                      onInput={(e) => setForm((f) => ({ ...f, firstName: (e.target as HTMLInputElement).value }))}
-                    />
-                  )}
-                </Field>
-                {current.organizationId && (
-                  <Field
-                    label="Email for this organization"
-                    help="Used for your profile and actions in this organization capacity."
-                  >
-                    {(control) => (
-                      <Select
-                        {...control}
-                        value={form.emailId}
-                        onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
-                      >
-                        {current.emailAddresses.map((address) => (
-                          <option value={address.id ?? ""} key={address.id ?? "primary"}>
-                            {address.email}
-                            {address.primary ? " (primary)" : ""}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
-                )}
-                <Field label="Last name" required>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={form.lastName}
-                      onInput={(e) => setForm((f) => ({ ...f, lastName: (e.target as HTMLInputElement).value }))}
-                    />
-                  )}
-                </Field>
-                <Field label="Preferred name">
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={form.preferredName}
-                      onInput={(e) => setForm((f) => ({ ...f, preferredName: (e.target as HTMLInputElement).value }))}
-                      placeholder="Shown instead of first/last name if set"
-                    />
-                  )}
-                </Field>
-                {current.organizationId && (
-                  <Field label="Job title for this organization">
+          {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
+        </div>
+
+        <div class="pk-stack">
+          <Panel>
+            <PanelBody>
+              <form
+                class="pk-stack"
+                onSubmit={(e) => {
+                  void handleSubmit(e);
+                }}
+              >
+                <div class="pk-grid pk-grid--tight">
+                  <Field label="First name" required>
                     {(control) => (
                       <TextInput
                         {...control}
-                        value={form.jobTitle}
-                        onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
+                        value={form.firstName}
+                        onInput={(e) => setForm((f) => ({ ...f, firstName: (e.target as HTMLInputElement).value }))}
                       />
                     )}
                   </Field>
-                )}
-              </div>
+                  {current.organizationId && (
+                    <Field
+                      label="Email for this organization"
+                      help="Used for your profile and actions in this organization capacity."
+                    >
+                      {(control) => (
+                        <Select
+                          {...control}
+                          value={form.emailId}
+                          onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
+                        >
+                          {current.emailAddresses.map((address) => (
+                            <option value={address.id ?? ""} key={address.id ?? "primary"}>
+                              {address.email}
+                              {address.primary ? " (primary)" : ""}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </Field>
+                  )}
+                  <Field label="Last name" required>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={form.lastName}
+                        onInput={(e) => setForm((f) => ({ ...f, lastName: (e.target as HTMLInputElement).value }))}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Preferred name">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={form.preferredName}
+                        onInput={(e) => setForm((f) => ({ ...f, preferredName: (e.target as HTMLInputElement).value }))}
+                        placeholder="Shown instead of first/last name if set"
+                      />
+                    )}
+                  </Field>
+                  {current.organizationId && (
+                    <Field label="Job title for this organization">
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          value={form.jobTitle}
+                          onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
+                        />
+                      )}
+                    </Field>
+                  )}
+                </div>
 
-              <Field label="Biography">
-                {(control) => (
-                  <Textarea
-                    {...control}
-                    rows={5}
-                    value={form.biography}
-                    onInput={(e) => setForm((f) => ({ ...f, biography: (e.target as HTMLTextAreaElement).value }))}
-                  />
-                )}
-              </Field>
+                <Field label="Biography">
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      rows={5}
+                      value={form.biography}
+                      onInput={(e) => setForm((f) => ({ ...f, biography: (e.target as HTMLTextAreaElement).value }))}
+                    />
+                  )}
+                </Field>
 
-              <Field label="Social / profile links">
-                {(control) => (
-                  <Textarea
-                    {...control}
-                    rows={3}
-                    placeholder="One URL per line"
-                    value={form.linksText}
-                    onInput={(e) => setForm((f) => ({ ...f, linksText: (e.target as HTMLTextAreaElement).value }))}
-                  />
-                )}
-              </Field>
+                <Field label="Social / profile links">
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      rows={3}
+                      placeholder="One URL per line"
+                      value={form.linksText}
+                      onInput={(e) => setForm((f) => ({ ...f, linksText: (e.target as HTMLTextAreaElement).value }))}
+                    />
+                  )}
+                </Field>
 
-              {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
+                {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
 
-              <div class="pk-cluster">
-                <Button type="submit" variant="primary" loading={saving}>
-                  {saving ? "Saving…" : "Save changes"}
-                </Button>
-              </div>
-            </form>
-          </PanelBody>
-        </Panel>
+                <div class="pk-cluster">
+                  <Button type="submit" variant="primary" loading={saving}>
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
+              </form>
+            </PanelBody>
+          </Panel>
 
-        <Panel>
-          <PanelHeader title="Membership" />
-          <PanelBody class="pk-stack pk-stack--snug">
-            <PersonCell name={displayName(current)} avatarSrc={current.headshotUrl ?? undefined} />
-            <dl class="pk-datalist pk-small">
-              <dt>Email in this capacity</dt>
-              <dd>{current.email}</dd>
-              <dt>Membership category</dt>
-              <dd>{current.membershipCategory}</dd>
-              <dt>Member since</dt>
-              <dd>{new Date(current.memberSince).toLocaleDateString()}</dd>
-            </dl>
-          </PanelBody>
-        </Panel>
+          <Panel>
+            <PanelHeader title="Membership" />
+            <PanelBody class="pk-stack pk-stack--snug">
+              <PersonCell name={displayName(current)} avatarSrc={current.headshotUrl ?? undefined} />
+              <dl class="pk-datalist pk-small">
+                <dt>Email in this capacity</dt>
+                <dd>{current.email}</dd>
+                <dt>Membership category</dt>
+                <dd>{current.membershipCategory}</dd>
+                <dt>Member since</dt>
+                <dd>{new Date(current.memberSince).toLocaleDateString()}</dd>
+              </dl>
+            </PanelBody>
+          </Panel>
 
-        {current.organizationIdentities && <OrganizationIdentitiesCard current={current} />}
+          {current.organizationIdentities && <OrganizationIdentitiesCard current={current} />}
+        </div>
       </div>
     </div>
   );

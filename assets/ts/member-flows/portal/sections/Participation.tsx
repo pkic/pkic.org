@@ -15,6 +15,7 @@ import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { EmptyState } from "../../../ui/EmptyState";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
@@ -223,16 +224,21 @@ export function Participation() {
   const isMember = Boolean(session?.member);
 
   return (
-    <div class="pk pk-stack content-width-md">
+    <div class="pk pk-stack">
+      <PageHeader title="My participation" />
       <p class="pk-muted pk-small">
         Your record across the consortium. Active items that need a decision also appear on{" "}
         <Link href="/home">Home</Link>.
       </p>
-      <RegistrationsCard />
-      {isMember && <BallotHistoryCard />}
-      <ProposalsCard />
-      <DonationsCard />
-      {isMember && <ApplicationsCard />}
+      {/* The record panels flow into the width the page affords rather than
+          stacking down a capped column. */}
+      <div class="pk-grid pk-grid--roomy">
+        <RegistrationsCard />
+        {isMember && <BallotHistoryCard />}
+        <ProposalsCard />
+        <DonationsCard />
+        {isMember && <ApplicationsCard />}
+      </div>
     </div>
   );
 }

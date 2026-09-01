@@ -102,7 +102,7 @@ describe("system management shell", () => {
     expect(tabs(requested).find((tab) => isCurrentTab(tab))?.textContent).toBe("Audit Log");
   });
 
-  it("names the audit-log region through the heading it already renders", async () => {
+  it("names the audit-log region without a heading restating the selected tab", async () => {
     // The section itself is eager; only the log inside it is a lazy chunk, so
     // the region and its heading are there once Suspense has resolved.
     const shell = mount(<SystemManagement session={staffWith("audit:read")} view="audit-log" />);
@@ -112,9 +112,10 @@ describe("system management shell", () => {
       });
     }
 
-    const section = shell.querySelector("section[aria-labelledby]");
-    const headingId = section?.getAttribute("aria-labelledby");
-    expect(headingId).toBe("system-audit-log-heading");
-    expect(shell.querySelector(`[id="${headingId!}"]`)?.textContent).toBe("System Audit Log");
+    // The selected tab names the surface; the region carries the name for
+    // assistive technology without a visible heading restating it.
+    const section = shell.querySelector('section[aria-label="Audit log"]');
+    expect(section).not.toBeNull();
+    expect(shell.textContent).not.toContain("System Audit Log");
   });
 });

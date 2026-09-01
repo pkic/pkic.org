@@ -9,6 +9,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScheduledJobs } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledJobs";
+import { runRowAction } from "./helpers/row-actions";
 import {
   schedulerJobRunCreateSchema,
   schedulerJobStateUpdateSchema,
@@ -180,7 +181,8 @@ describe("portal scheduled-job management", () => {
     await act(() => render(<ScheduledJobs />, container!));
     await settle();
 
-    await act(() => button(container!, "Pause").click());
+    // Row commands live behind the row's menu, named after the job.
+    await runRowAction(container, "Retention", "Pause");
 
     // The reason is a labelled control: the label's `for` resolves to the
     // textarea's own id, and its guidance is wired through aria-describedby.
@@ -211,11 +213,10 @@ describe("portal scheduled-job management", () => {
     });
     await act(() => button(container!, "Confirm pause").click());
     await settle();
-    expect(container.textContent).toContain("Resume");
 
-    await act(() => button(container!, "Resume").click());
+    await runRowAction(container, "Retention", "Resume");
     await settle();
-    await act(() => button(container!, "Run now").click());
+    await runRowAction(container, "Retention", "Run now");
     for (let attempt = 0; attempt < 3; attempt += 1) await settle();
 
     // Each command body is read back through the shared request contract, so

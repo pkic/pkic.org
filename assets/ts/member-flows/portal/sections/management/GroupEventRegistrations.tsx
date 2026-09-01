@@ -10,7 +10,6 @@ import { eventAttendanceRegistrationsListResponseSchema } from "../../../../../s
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
 import { fmtDate } from "../../ui";
 import { GroupEventRegistrationAttendance } from "./GroupEventRegistrationAttendance";
 
@@ -58,50 +57,38 @@ export function GroupEventRegistrations({
           {
             header: "Status",
             cell: (registration) => <Badge status={registration.status} />,
+            width: "fit",
             sort: { asc: "status", desc: "-status" },
           },
           {
             header: "Attendance",
             cell: (registration) => registration.attendance_type ?? "—",
+            width: "fit",
             sort: { asc: "attendance_type", desc: "-attendance_type" },
           },
           {
+            // A date has a bounded length; the column says so instead of
+            // wearing `pk-nowrap` while still claiming slack.
             header: "Registered",
             cell: (registration) => fmtDate(registration.created_at),
-            className: "pk-nowrap",
+            width: "fit",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
-          },
-          {
-            // A blank `th` is announced as an unnamed column; this one holds
-            // the per-row attendance toggle, so it says so.
-            header: "Manage",
-            className: "pk-end",
-            cell: (registration) => {
-              const expanded = selectedRegistrationId === registration.id;
-              const who = registration.display_name ?? "this attendee";
-              const label = expanded ? "Hide" : "Manage attendance";
-              return (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-expanded={expanded}
-                  // Every row's control reads the same out of context, so the
-                  // accessible name says whose attendance it opens. It keeps
-                  // the visible words inside it, which is what lets someone
-                  // driving by voice still say "Manage attendance".
-                  aria-label={expanded ? `Hide attendance for ${who}` : `Manage attendance for ${who}`}
-                  onClick={() =>
-                    setSelectedRegistrationId((current) => (current === registration.id ? null : registration.id))
-                  }
-                >
-                  {label}
-                </Button>
-              );
-            },
           },
         ]}
         empty="No registrations for this event."
         rowKey={(registration) => registration.id}
+        // Activating a row opens its attendance management in place — the
+        // same rule as every other list. The "Manage attendance" button
+        // column this replaces left the row itself inert.
+        rowAction={(registration) => {
+          const expanded = selectedRegistrationId === registration.id;
+          const who = registration.display_name ?? "this attendee";
+          return {
+            label: expanded ? `Hide attendance for ${who}` : `Manage attendance for ${who}`,
+            onSelect: () =>
+              setSelectedRegistrationId((current) => (current === registration.id ? null : registration.id)),
+          };
+        }}
         detailRow={(registration) =>
           selectedRegistrationId === registration.id ? (
             <GroupEventRegistrationAttendance

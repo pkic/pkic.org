@@ -4,7 +4,7 @@ import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/eve
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
-import { Button } from "../../../../ui/Button";
+import { RowActions } from "../../../../ui/RowActions";
 import { fmt } from "../../ui";
 import { GroupMeetingSeriesDetail } from "./GroupMeetingSeriesDetail";
 import { ResourceCapabilities } from "./ResourceCapabilities";
@@ -60,11 +60,13 @@ export function GroupMeetingSeriesList({
           ),
           sort: { asc: "event_name", desc: "-event_name" },
         },
-        { header: "Profile", cell: (series) => <Badge status={series.profileKey} /> },
+        { header: "Profile", cell: (series) => <Badge status={series.profileKey} />, width: "fit" },
         {
+          // A date has a bounded length; the column says so instead of
+          // wearing `pk-nowrap` while still claiming slack.
           header: "Next",
           cell: (series) => fmt(series.nextOccurrenceAt ?? series.startsAt),
-          className: "pk-nowrap",
+          width: "fit",
           sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
         },
         {
@@ -73,36 +75,32 @@ export function GroupMeetingSeriesList({
           // name and a colour nobody could hear. Both states say their word.
           header: "Status",
           cell: (series) => <Badge status={series.active ? "active" : "inactive"} />,
+          width: "fit",
         },
         { header: "Access", cell: (series) => <ResourceCapabilities capabilities={series.capabilities} /> },
         {
           header: "",
-          className: "pk-end",
           cell: (series) => (
-            // Both controls name the series they belong to: a page of rows
-            // otherwise offers a list of controls all called "Calendar". The
-            // visible word leads the accessible name, so speaking it still
-            // activates the right one.
-            <div class="pk-cluster pk-cluster--end">
-              {/* A file to fetch, not an action, so it stays an anchor and
-                  merely borrows the button's appearance. */}
-              <a
-                class="pk-btn pk-btn--secondary pk-btn--sm"
-                aria-label={`Calendar for ${series.eventName}`}
-                href={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}/calendar.ics`}
-              >
-                Calendar
-              </a>
-              <Button
-                size="sm"
-                aria-label={`${selectedSeriesId === series.id ? "Hide" : "Details"} for ${series.eventName}`}
-                aria-expanded={selectedSeriesId === series.id}
-                aria-controls={`meeting-series-detail-${series.id}`}
-                onClick={() => selectSeries(selectedSeriesId === series.id ? null : series.id)}
-              >
-                {selectedSeriesId === series.id ? "Hide" : "Details"}
-              </Button>
-            </div>
+            // Row commands live behind the row's menu; the row itself opens
+            // the detail. The calendar file is a navigation the menu starts.
+            <RowActions
+              subject={series.eventName}
+              actions={[
+                {
+                  id: "calendar",
+                  label: "Download calendar",
+                  onSelect: () => {
+                    // A same-tab navigation to the calendar file. `window.open`
+                    // rather than `location.assign` because jsdom lets a test
+                    // observe the former; both navigate identically here.
+                    window.open(
+                      `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}/calendar.ics`,
+                      "_self",
+                    );
+                  },
+                },
+              ]}
+            />
           ),
         },
       ]}
@@ -117,6 +115,15 @@ export function GroupMeetingSeriesList({
         )
       }
       rowKey={(series) => series.id}
+      // Activating a row opens its detail in place — the same rule as every
+      // other list. The "Details" button this replaces left the row inert.
+      rowAction={(series) => ({
+        label:
+          selectedSeriesId === series.id
+            ? `Hide details for ${series.eventName}`
+            : `Show details for ${series.eventName}`,
+        onSelect: () => selectSeries(selectedSeriesId === series.id ? null : series.id),
+      })}
       detailRow={(series) =>
         selectedSeriesId === series.id ? (
           <GroupMeetingSeriesDetail

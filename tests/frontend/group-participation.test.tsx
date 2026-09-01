@@ -259,7 +259,7 @@ describe("generic group participation card", () => {
 
     // Each capacity's control names the capacity, so two affiliations do not
     // leave the reader with two controls both called "Remove".
-    expect(rowActionControlNames(container)).toEqual(["Remove, Organization A"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Organization A"]);
     await runRowAction(container, "Organization A", "Remove");
 
     const dialog = container.querySelector('[role="alertdialog"]');
@@ -295,7 +295,7 @@ describe("generic group participation card", () => {
 
     // Each capacity's control names the capacity, so two affiliations do not
     // leave the reader with two controls both called "Remove".
-    expect(rowActionControlNames(container)).toEqual(["Remove, Organization A"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Organization A"]);
     await runRowAction(container, "Organization A", "Remove");
 
     void act(() => dialogButton(container, "Cancel").click());
@@ -473,7 +473,8 @@ describe("staff groups collection", () => {
     void act(() => render(<Groups />, container));
     await settle();
 
-    expect(container.querySelector("section.pk-panel")?.getAttribute("aria-label")).toBe("All groups");
+    // The table names itself through its caption; the panel wrapper that
+    // used to carry a duplicate name is gone with the width cap.
     expect(container.querySelector("caption")?.textContent).toBe("All groups");
     // The row is activated by a real link, not a handler on the `<tr>`.
     const rowLink = container.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");

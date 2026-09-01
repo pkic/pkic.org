@@ -28,7 +28,7 @@ test("permitted staff manage donations through the neutral resource API", async 
   await expect(page.getByText("e2e-donor@example.invalid", { exact: true })).toBeVisible();
   await expect(page.getByText("cs_test_e2e_portal_donation", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "← Back to donations" }).click();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Donations" }).click();
   await tab(page, "Share Links").click();
   await expect(page).toHaveURL(/\/portal\/#\/donations\/promoters$/);
   await expect(page.getByText("E2E Promoter", { exact: true })).toBeVisible();

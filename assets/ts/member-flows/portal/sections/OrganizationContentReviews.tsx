@@ -117,7 +117,7 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
     // holding a queue and one open submission offers two distinguishable
     // regions rather than an unnamed box below a table.
     <Panel aria-label={detail.organizationName}>
-      <PanelHeader title={detail.organizationName} headingLevel={2} />
+      <PanelHeader title={detail.organizationName} />
       <PanelBody class="pk-stack pk-stack--snug">
         <p class="pk-muted pk-small">
           Submitted by {detail.submitterName} ({detail.submitterEmail}) on {fmt(detail.submittedAt)}
@@ -131,10 +131,12 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
             {
               header: "Field",
               cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
-              className: "pk-nowrap",
+              width: "fit",
             },
             { header: "Current", cell: (entry) => <DiffValue value={entry.current} />, className: "pk-muted" },
-            { header: "Proposed", cell: (entry) => <DiffValue value={entry.proposed} /> },
+            // The first labelled column is fit-width here, so the prose
+            // column claims the slack explicitly.
+            { header: "Proposed", cell: (entry) => <DiffValue value={entry.proposed} />, width: "primary" },
           ]}
           data={detail.diff}
           rowKey={(entry) => entry.field}
@@ -228,12 +230,16 @@ export function OrganizationContentReviews() {
           {
             header: "Status",
             cell: (review) => <Badge status={review.status} />,
+            width: "fit",
             sort: { asc: "status", desc: "-status" },
           },
           {
+            // A date has a bounded length; the column says so instead of
+            // wearing `pk-nowrap` while still claiming slack, and keeps the
+            // table's own ink and size.
             header: "Submitted",
             cell: (review) => fmt(review.submittedAt),
-            className: "pk-nowrap pk-small pk-muted",
+            width: "fit",
             sort: { asc: "submittedAt", desc: "-submittedAt", defaultDirection: "desc" },
           },
         ]}

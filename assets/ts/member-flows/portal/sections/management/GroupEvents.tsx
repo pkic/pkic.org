@@ -117,11 +117,14 @@ export function GroupEvents({
               {
                 header: "Profile",
                 cell: (event) => <Badge status={event.profileKey ?? "event"} />,
+                width: "fit",
               },
               {
+                // A date has a bounded length; the column says so instead of
+                // wearing `pk-nowrap` while still claiming slack.
                 header: "Next",
                 cell: (event) => fmt(event.nextOccurrenceAt ?? event.startsAt),
-                className: "pk-nowrap",
+                width: "fit",
                 sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
               },
             ]}

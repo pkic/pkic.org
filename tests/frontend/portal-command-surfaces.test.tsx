@@ -143,7 +143,7 @@ describe("system operation commands", () => {
 
     const region = page.querySelector("section");
     expect(region?.getAttribute("aria-label")).toBe("Operational commands");
-    expect(page.querySelector("h4")?.textContent).toBe("Operational commands");
+    expect(page.querySelector("h3")?.textContent).toBe("Operational commands");
   });
 
   it("offers each command only to the domain permission that owns it", () => {

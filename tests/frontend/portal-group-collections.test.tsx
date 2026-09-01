@@ -237,9 +237,10 @@ describe("portal selected-group collections", () => {
     });
     expect(created?.body).not.toHaveProperty("groupId");
 
-    expect(button("Manage")).not.toBeUndefined();
+    // The row itself opens the editor; its activation names the list.
+    expect(button("Manage Architecture discussion")).not.toBeUndefined();
     await act(async () => {
-      button("Manage")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button("Manage Architecture discussion")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     const saveButton = button("Save changes");
@@ -251,9 +252,9 @@ describe("portal selected-group collections", () => {
     expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
 
     await settle();
-    // The row already carries "Manage"; its one remaining action sits beside
-    // it as a button naming the list, not behind a `…` holding one item.
-    expect(rowActionControlNames(container)).toEqual(["Archive, Architecture discussion"]);
+    // The row's remaining command lives behind its menu, whose trigger
+    // names the list.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Architecture discussion"]);
     await runRowAction(container, "Architecture discussion", "Archive");
     await settle();
     const archiveDialog = container.querySelector('[role="alertdialog"]');

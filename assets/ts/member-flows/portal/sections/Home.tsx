@@ -18,6 +18,7 @@ import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { EmptyState } from "../../../ui/EmptyState";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
@@ -322,16 +323,23 @@ export function Home() {
   const firstName = profile.value?.preferredName || profile.value?.firstName || "";
 
   return (
-    <div class="pk pk-stack content-width-schedule">
-      <p class="pk-muted">
-        {firstName ? `Welcome back, ${firstName}.` : "Welcome back."} Here is what is happening in your consortium.
-      </p>
-      {isMember && <AttentionPanel />}
-      {isMember && <MeetingsPanel />}
-      <EventsPanel />
-      {isMember && <VotesPanel />}
-      {isMember && <ApplicationsPanel />}
-      {isMember && <OrganizationsPanel />}
+    <div class="pk pk-stack">
+      <PageHeader
+        title="Home"
+        description={`${firstName ? `Welcome back, ${firstName}.` : "Welcome back."} Here is what is happening in your consortium.`}
+      />
+      {/* The panels flow into as many columns as `#portal-main` affords
+          instead of stacking down a capped reading measure that left the rest
+          of a wide screen empty. Source order is priority order: what needs
+          the reader's voice first, then what is coming up. */}
+      <div class="pk-grid pk-grid--roomy">
+        {isMember && <AttentionPanel />}
+        {isMember && <MeetingsPanel />}
+        <EventsPanel />
+        {isMember && <VotesPanel />}
+        {isMember && <ApplicationsPanel />}
+        {isMember && <OrganizationsPanel />}
+      </div>
     </div>
   );
 }

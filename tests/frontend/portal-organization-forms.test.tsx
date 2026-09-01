@@ -17,10 +17,10 @@ import {
 } from "../../assets/shared/schemas/organization-management";
 import {
   buttonNamed,
-  buttonNames,
   chooseOption,
   controlFor,
   groupNames,
+  labelNames,
   namedGroup,
   submitForm,
   typeInto,
@@ -127,16 +127,29 @@ describe("portal organization create form", () => {
     // which is what the end-to-end specs now rely on.
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Add organization");
 
-    await typeInto(controlFor(container, "Organization name"), "Example Organization");
-    await typeInto(controlFor(container, "Member since"), "2026-01-15");
-    await typeInto(controlFor(container, "Website"), "https://example.test");
-    await chooseOption(controlFor(container, "Membership category"), "F");
+    const organizationGroup = namedGroup(container, "Organization");
+    await typeInto(controlFor(organizationGroup, "Organization name"), "Example Organization");
+    await typeInto(controlFor(organizationGroup, "Member since"), "2026-01-15");
+    await chooseOption(controlFor(organizationGroup, "Membership category"), "F");
 
-    const identity = namedGroup(container, "Identity 1");
-    await typeInto(controlFor(identity, "Name"), "Ada Lovelace");
-    await typeInto(controlFor(identity, "Email"), "ada@example.test");
-    await typeInto(controlFor(identity, "Job title"), "Engineer");
-    await typeInto(controlFor(container, "Immediate activation reason"), "Initial setup");
+    // The website and the additional links are one concept, grouped as the
+    // organization's web presence rather than scattered through the form.
+    const webPresence = namedGroup(container, "Web presence");
+    await typeInto(controlFor(webPresence, "Website"), "https://example.test");
+    const linkInput = webPresence.querySelector<HTMLInputElement>('[aria-label="Additional organization URL"]');
+    if (!linkInput) throw new Error("missing organization link input");
+    await typeInto(linkInput, "https://www.linkedin.com/company/example");
+    const addLink = webPresence.querySelector<HTMLButtonElement>('[aria-label="Add profile link"]');
+    await act(async () => addLink?.click());
+    // The chip carries the automatic hostname label the help text promises.
+    expect(webPresence.textContent).toContain("LinkedIn");
+
+    await act(async () => buttonNamed(container, "Add person").click());
+    const person = namedGroup(container, "Person 1");
+    await typeInto(controlFor(person, "Name"), "Ada Lovelace");
+    await typeInto(controlFor(person, "Email"), "ada@example.test");
+    await typeInto(controlFor(person, "Job title"), "Engineer");
+    await typeInto(controlFor(container, "Reason for activating without an invitation"), "Initial setup");
 
     await submitForm(container);
 
@@ -145,6 +158,7 @@ describe("portal organization create form", () => {
     expect(organizationCreateSchema.parse(posted?.body)).toEqual({
       name: "Example Organization",
       website: "https://example.test",
+      links: ["https://www.linkedin.com/company/example"],
       membershipCategory: "F",
       memberSince: "2026-01-15",
       identities: [{ name: "Ada Lovelace", email: "ada@example.test", jobTitle: "Engineer" }],
@@ -157,30 +171,78 @@ describe("portal organization create form", () => {
     expect(onCreated).toHaveBeenCalledWith(detail().organization.id);
   });
 
-  it("adds and removes identity groups, each announced by its own legend", async () => {
+  it("creates an organization with no people and sends no activation reason", async () => {
+    const requests: Array<{ method: string; path: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(typeof input === "string" ? input : input.toString(), location.origin);
+        const rawBody = init?.body;
+        requests.push({
+          method: init?.method ?? "GET",
+          path: url.pathname,
+          body: typeof rawBody === "string" ? JSON.parse(rawBody) : null,
+        });
+        return json(detail());
+      }),
+    );
+    const onCreated = vi.fn();
+    const container = mount(<OrganizationCreateForm onCreated={onCreated} onCancel={vi.fn()} />);
+
+    await typeInto(controlFor(container, "Organization name"), "Example Organization");
+    await submitForm(container);
+
+    const posted = requests.find((request) => request.method === "POST");
+    const parsed = organizationCreateSchema.parse(posted?.body);
+    expect(parsed.identities).toEqual([]);
+    // No one is being activated, so no reason is demanded — or sent.
+    expect(parsed.activationReason).toBeUndefined();
+    expect(onCreated).toHaveBeenCalledWith(detail().organization.id);
+  });
+
+  it("asks for the activation reason exactly while a person is on the form, and requires it then", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(detail())),
+    );
+    const container = mount(<OrganizationCreateForm onCreated={vi.fn()} onCancel={vi.fn()} />);
+    const reasonLabel = "Reason for activating without an invitation";
+
+    // With nobody to activate there is nothing to justify, so the field is
+    // absent rather than disabled or optional.
+    expect(labelNames(container)).not.toContain(reasonLabel);
+
+    await act(async () => buttonNamed(container, "Add person").click());
+    const reason = controlFor(container, reasonLabel);
+    expect(reason.required).toBe(true);
+
+    await act(async () => buttonNamed(container, "Remove person 1").click());
+    expect(labelNames(container)).not.toContain(reasonLabel);
+  });
+
+  it("adds and removes person cards, each announced by its own legend", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(detail())),
     );
     const container = mount(<OrganizationCreateForm onCreated={vi.fn()} onCancel={vi.fn()} />);
 
-    // Each identity carries its own link editor, which is several controls and
-    // so is named by a legend of its own inside the identity it belongs to.
-    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1", "Profile links"]);
-    // A single identity cannot be removed, so no orphan remove control.
-    expect(buttonNames(container)).not.toContain("Remove identity 1");
+    // The form is three named groups in one column, and it starts with no
+    // person cards: an organization can exist before anyone represents it.
+    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People"]);
 
-    await act(async () => buttonNamed(container, "Add identity").click());
-    expect(groupNames(container)).toEqual([
-      "Initial identities",
-      "Identity 1",
-      "Profile links",
-      "Identity 2",
-      "Profile links",
-    ]);
+    await act(async () => buttonNamed(container, "Add person").click());
+    await act(async () => buttonNamed(container, "Add person").click());
+    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People", "Person 1", "Person 2"]);
+    // A quick-create is not the place to curate someone's LinkedIn: the card
+    // holds name, email, and job title, and links are added later on the
+    // person. No per-person link editor, so no rival "Profile links" group.
+    expect(groupNames(container)).not.toContain("Profile links");
 
-    await act(async () => buttonNamed(container, "Remove identity 2").click());
-    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1", "Profile links"]);
+    await act(async () => buttonNamed(container, "Remove person 2").click());
+    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People", "Person 1"]);
+    await act(async () => buttonNamed(container, "Remove person 1").click());
+    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People"]);
   });
 
   it("announces a rejected creation as a blocking alert and keeps the draft", async () => {

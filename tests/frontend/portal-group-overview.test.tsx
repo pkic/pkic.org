@@ -147,7 +147,18 @@ describe("GroupOverview", () => {
     );
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupOverview groupId={GROUP_ID} description={null} />, container));
+    await act(() =>
+      render(
+        <GroupOverview
+          groupId={GROUP_ID}
+          description={null}
+          participantCount={3}
+          representedMemberCount={2}
+          childCount={0}
+        />,
+        container,
+      ),
+    );
     await settle();
 
     // An empty list would claim the group has no open votes, which is a
@@ -172,7 +183,18 @@ describe("GroupOverview", () => {
     );
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupOverview groupId={GROUP_ID} description={null} />, container));
+    await act(() =>
+      render(
+        <GroupOverview
+          groupId={GROUP_ID}
+          description={null}
+          participantCount={3}
+          representedMemberCount={2}
+          childCount={0}
+        />,
+        container,
+      ),
+    );
     await settle();
     expect(urls.some((url) => url.includes(`/api/v1/groups/${GROUP_ID}/events?`) && url.includes("from="))).toBe(true);
     expect(urls).toContain(`/api/v1/groups/${GROUP_ID}/votes?status=open&limit=3`);
@@ -189,7 +211,18 @@ describe("GroupOverview", () => {
     );
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupOverview groupId={GROUP_ID} description={null} />, container));
+    await act(() =>
+      render(
+        <GroupOverview
+          groupId={GROUP_ID}
+          description={null}
+          participantCount={3}
+          representedMemberCount={2}
+          childCount={0}
+        />,
+        container,
+      ),
+    );
     await settle();
     expect(container.textContent).not.toContain("Upcoming events");
     expect(container.textContent).not.toContain("Open votes");

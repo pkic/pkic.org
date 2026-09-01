@@ -16,8 +16,9 @@ test("a permitted staff identity uses the system audit log only through the port
   await signInToPortal(page, e2eAdminEmail("portal-system-audit-list"));
   await page.goto("/portal/#/system/audit-log");
 
-  await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+  // The Settings hub heads the page; the selected tab names the surface.
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit Log", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.locator("tbody tr").first()).toBeVisible();
   expect(auditLogRequests).toContain("GET /api/v1/audit-log");
@@ -26,7 +27,7 @@ test("a permitted staff identity uses the system audit log only through the port
 
   await page.goto("/portal/#/system/audit-log");
   await expect(page).toHaveURL(/\/portal\/#\/system\/audit-log$/);
-  await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit Log", exact: true })).toHaveAttribute("aria-current", "page");
   expect(legacyAuditRequests).toEqual([]);
 });
 
@@ -91,7 +92,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   });
 
   await page.goto("/portal/#/system/audit-log");
-  await expect(page.getByRole("heading", { name: "System Audit Log" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByRole("status")).toBeVisible();
   releaseInitialRequest();
 

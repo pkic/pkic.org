@@ -159,6 +159,7 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             {
               header: "Purpose",
               cell: (list) => list.purpose.replaceAll("_", " "),
+              width: "fit",
               sort: { asc: "purpose", desc: "-purpose" },
             },
             {
@@ -168,35 +169,33 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
               cell: (list) => (
                 <Badge tone={list.active ? "ok" : "neutral"}>{list.active ? "Active" : "Archived"}</Badge>
               ),
+              width: "fit",
             },
             {
               header: "",
-              className: "pk-end",
               cell: (list) => (
-                <div class="pk-cluster pk-cluster--end">
-                  <Button
-                    size="sm"
-                    aria-expanded={selectedListId === list.id}
-                    onClick={() => selectForManagement(list)}
-                  >
-                    {selectedListId === list.id ? "Close" : "Manage"}
-                  </Button>
-                  <RowActions
-                    subject={list.label}
-                    actions={[
-                      {
-                        id: "archive",
-                        label: "Archive",
-                        onSelect: () => void archiveList(list),
-                        disabled: !list.active,
-                      },
-                    ]}
-                  />
-                </div>
+                <RowActions
+                  subject={list.label}
+                  actions={[
+                    {
+                      id: "archive",
+                      label: "Archive",
+                      onSelect: () => void archiveList(list),
+                      disabled: !list.active,
+                    },
+                  ]}
+                />
               ),
             },
           ]}
           rowKey={(list) => list.id}
+          // Activating a row opens its management form in place — the same
+          // rule as every other list. The "Manage" button this replaces left
+          // the row itself inert.
+          rowAction={(list) => ({
+            label: selectedListId === list.id ? `Close management for ${list.label}` : `Manage ${list.label}`,
+            onSelect: () => selectForManagement(list),
+          })}
           detailRow={(list) =>
             selectedListId === list.id ? (
               // The expanded cell has no padding of its own — DataTable zeroes

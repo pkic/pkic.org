@@ -212,7 +212,7 @@ export function MeetingGuests({
           },
           { header: "Affiliation", cell: (guest) => guest.affiliation ?? "—" },
           { header: "Scope", cell: (guest) => (guest.seriesWide ? "Series" : "Occurrence") },
-          { header: "Expires", cell: (guest) => fmt(guest.expiresAt), className: "pk-nowrap" },
+          { header: "Expires", cell: (guest) => fmt(guest.expiresAt), width: "fit" },
           {
             header: "Status",
             cell: (guest) => {

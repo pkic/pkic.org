@@ -152,7 +152,11 @@ describe("URL-addressed group sub-resources", () => {
 
     const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
     await settle();
-    const details = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Details");
+    // The row itself opens and closes the detail; its activation names the
+    // form both ways.
+    const details = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Show details for Architecture survey",
+    );
     await act(async () => {
       details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -160,7 +164,9 @@ describe("URL-addressed group sub-resources", () => {
     expect(container.textContent).toContain("Architecture survey");
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/${placementId}`);
 
-    const hide = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Hide");
+    const hide = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (button) => button.textContent === "Hide details for Architecture survey",
+    );
     await act(async () => {
       hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

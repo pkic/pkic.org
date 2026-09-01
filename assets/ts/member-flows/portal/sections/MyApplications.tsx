@@ -19,6 +19,7 @@ import { Badge, statusLabel } from "../../../components/Badge";
 import { Button } from "../../../ui/Button";
 import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
 import { EmptyState } from "../../../ui/EmptyState";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import type { MyApplicationDetail, MyApplicationSummary } from "../types";
 
@@ -58,12 +59,27 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
   }, [id]);
 
   return (
-    <div class="pk pk-stack content-width-md">
-      <div class="pk-cluster">
-        <Button size="sm" onClick={onBack}>
-          ← Back to applications
-        </Button>
-      </div>
+    <div class="pk pk-stack">
+      {/* The applicant heads the page; the way back rides in the header's
+          action slot because the detail has no URL of its own for a trail
+          link to point at — it is the same page, expanded. */}
+      {detail ? (
+        <PageHeader
+          title={detail.applicantName}
+          context={<Badge status={detail.stage} />}
+          actions={
+            <Button size="sm" variant="ghost" onClick={onBack}>
+              Back to applications
+            </Button>
+          }
+        />
+      ) : (
+        <div class="pk-cluster">
+          <Button size="sm" variant="ghost" onClick={onBack}>
+            Back to applications
+          </Button>
+        </div>
+      )}
       {error && <ErrorAlert error={error} />}
       {!detail && !error ? (
         <Spinner label="Loading your application…" />
@@ -71,9 +87,6 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
         detail && (
           <>
             <Panel>
-              <PanelHeader title={detail.applicantName}>
-                <Badge status={detail.stage} />
-              </PanelHeader>
               <PanelBody class="pk-stack pk-stack--tight">
                 <p class="pk-muted pk-small">
                   {detail.organizationName ?? "Individual applicant"} — Category {detail.membershipCategory}
@@ -137,7 +150,9 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 }
 
 const APPLICATION_COLUMNS: ReadonlyArray<DataTableColumn<MyApplicationSummary>> = [
-  { id: "membershipCategory", header: "Category", cell: (app) => app.membershipCategory },
+  // The design system's table gives slack to no column on its own; the
+  // category is the row's subject, so a wide screen's slack lands there.
+  { id: "membershipCategory", header: "Category", width: "primary", cell: (app) => app.membershipCategory },
   // The badge carries the status as words as well as a tone, so the column is
   // readable without relying on colour.
   { id: "stage", header: "Status", cell: (app) => <Badge status={app.stage} /> },
@@ -145,7 +160,9 @@ const APPLICATION_COLUMNS: ReadonlyArray<DataTableColumn<MyApplicationSummary>> 
     id: "createdAt",
     header: "Submitted",
     cell: (app) => fmtDate(app.createdAt),
-    cellClass: "pk-small pk-nowrap",
+    // A date has a bounded length; saying so keeps the slack in the
+    // category column instead of stranding the date mid-screen.
+    width: "fit",
   },
 ];
 
@@ -171,7 +188,8 @@ export function MyApplications() {
   const applications = page.data.applications;
 
   return (
-    <div class="pk pk-stack content-width-md">
+    <div class="pk pk-stack">
+      <PageHeader title="My application" />
       <Panel>
         <PanelBody>
           <DataTable

@@ -81,7 +81,7 @@ describe("portal System leadership", () => {
     expect(container.textContent).toContain("Ada Lovelace");
     // A caller who may revoke but not grant gets exactly one row command, and
     // it names the position holder it would remove.
-    expect(rowActionControlNames(container)).toEqual(["Remove position, Ada Lovelace"]);
+    expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
     expect(container.textContent).not.toContain("Edit position");
     expect(container.textContent).not.toContain("Add");
     expect(container.textContent).not.toContain("Group leadership");

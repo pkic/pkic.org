@@ -63,7 +63,9 @@ export function AccessControl({
   }, [resourceId, tab, navigate]);
 
   return (
-    <div>
+    // The stack's gap separates the sub-tab strip from its content, the same
+    // rhythm every other Settings tab keeps.
+    <div class="pk-stack">
       <Tabs items={TABS} active={tab} onChange={(key) => navigate(`/system/access-control/${key}`)} />
       {tab === "grants" && <Grants canGrant={canGrant} canRevoke={canRevoke} />}
       {tab === "roles" && (

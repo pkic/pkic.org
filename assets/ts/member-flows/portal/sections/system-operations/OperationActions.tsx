@@ -151,7 +151,7 @@ export function OperationActions({
     // of irreversible operations should be.
     <div class="pk">
       <Panel aria-label="Operational commands">
-        <PanelHeader title="Operational commands" headingLevel={4} />
+        <PanelHeader title="Operational commands" />
         <PanelBody class="pk-stack pk-stack--snug">
           <div class="pk-cluster">
             {commands

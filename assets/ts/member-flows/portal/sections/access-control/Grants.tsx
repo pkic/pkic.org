@@ -207,15 +207,17 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
             sort: { asc: "context_type", desc: "-context_type" },
           },
           {
+            // Dates have a bounded length; the columns say so and keep the
+            // table's own ink and size, leaving the slack with the subject.
             header: "Expires",
             cell: (g) => (g.expiresAt ? fmt(g.expiresAt) : <span class="pk-muted">Never</span>),
-            className: "pk-small",
+            width: "fit",
             sort: { asc: "expires_at", desc: "-expires_at" },
           },
           {
             header: "Granted",
             cell: (g) => fmtDate(g.createdAt),
-            className: "pk-small pk-mono",
+            width: "fit",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
           {

@@ -92,6 +92,60 @@ describe("canonical organization management", () => {
     expect((await call("/api/v1/admin/organizations", admin.token)).status).toBe(404);
   });
 
+  it("creates an organization without identities on membership:write alone, and persists its links", async () => {
+    await adminToken();
+    // No identities:activate: nobody is being activated, so none is demanded.
+    const writer = await grantToken("membership:write");
+
+    const created = await call("/api/v1/organizations", writer.token, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Peopleless Organization",
+        membershipCategory: "F",
+        memberSince: "2026-01-15",
+        website: "https://peopleless.example.test",
+        links: ["https://www.linkedin.com/company/peopleless"],
+        identities: [],
+        workingGroupSlugs: [],
+      }),
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const body = (await created.json()) as {
+      organization: { activeIdentityCount: number; identities: unknown[]; links: string[] };
+    };
+    expect(body.organization.identities).toEqual([]);
+    expect(body.organization.activeIdentityCount).toBe(0);
+    expect(body.organization.links).toEqual(["https://www.linkedin.com/company/peopleless"]);
+  });
+
+  it("still demands identities:activate and an activation reason exactly when identities are provided", async () => {
+    await adminToken();
+    const writer = await grantToken("membership:write");
+    const activator = await grantToken("membership:write", "identities:activate");
+
+    // Providing people without the activation permission is refused before
+    // anything is written.
+    const forbidden = await call("/api/v1/organizations", writer.token, {
+      method: "POST",
+      body: JSON.stringify(createBody("Forbidden Organization")),
+    });
+    expect(forbidden.status).toBe(403);
+
+    // Providing people without a reason fails the shared contract itself.
+    const { activationReason: _dropped, ...withoutReason } = createBody("Reasonless Organization");
+    const unreasoned = await call("/api/v1/organizations", activator.token, {
+      method: "POST",
+      body: JSON.stringify(withoutReason),
+    });
+    expect(unreasoned.status).toBe(400);
+
+    const created = await call("/api/v1/organizations", activator.token, {
+      method: "POST",
+      body: JSON.stringify(createBody("Reasoned Organization")),
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+  });
+
   it("requires a current revision and rolls back a write when permission changes before the D1 batch", async () => {
     const admin = await adminToken();
     const created = await call("/api/v1/organizations", admin.token, {

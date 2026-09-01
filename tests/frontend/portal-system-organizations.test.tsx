@@ -46,6 +46,17 @@ async function waitForElement<T extends Element>(find: () => T | null): Promise<
   throw new Error("Expected element was not rendered.");
 }
 
+/** Selects one of the record's facets the way a reader does: by its tab. */
+async function openTab(container: HTMLElement, name: string): Promise<void> {
+  const tab = await waitForElement(
+    () =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+        (candidate) => candidate.textContent === name,
+      ) ?? null,
+  );
+  await act(async () => tab.click());
+}
+
 function detail() {
   return organizationDetailResponseSchema.parse({
     organization: {
@@ -352,26 +363,45 @@ describe("portal System Organizations", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const readOnly = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities={false} />,
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities={false}
+        canReadSponsorships={false}
+      />,
     );
     await settle();
     await settle();
     expect(readOnly.textContent).not.toContain("Edit");
+    expect(readOnly.textContent).not.toContain("Remove");
+    await openTab(readOnly, "Identities");
+    await settle();
     expect(readOnly.textContent).not.toContain("Add new person");
     expect(readOnly.textContent).not.toContain("Link existing user");
-    expect(readOnly.textContent).not.toContain("Remove");
 
-    const writer = mount(<OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />);
+    const writer = mount(
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite
+        canManageIdentities
+        canReadSponsorships={false}
+      />,
+    );
+    await settle();
+    expect(writer.textContent).toContain("Edit");
+    expect(writer.textContent).toContain("Contacts");
+    // Reading another facet is a tab away, and its bounded query runs then.
+    await openTab(writer, "Identities");
     const menuTrigger = await waitForElement(() =>
       writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    expect(writer.textContent).toContain("Edit");
-    expect(writer.textContent).toContain("Contacts");
     expect(writer.textContent).toContain("Add new person");
     expect(writer.textContent).toContain("Link existing user");
     expect(writer.textContent).toContain("Active");
 
-    await act(async () => menuTrigger!.click());
+    await act(async () => menuTrigger.click());
     expect(writer.textContent).toContain("End identity");
   });
 
@@ -405,9 +435,16 @@ describe("portal System Organizations", () => {
     );
 
     const container = mount(
-      <OrganizationDetail organizationId={organizationId} canRead canWrite={false} canManageIdentities />,
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities
+        canReadSponsorships={false}
+      />,
     );
     await settle();
+    await openTab(container, "Identities");
     const addButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent?.trim() === "Add new person",
     );
@@ -464,13 +501,20 @@ describe("portal System Organizations", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />
+        <OrganizationDetail
+          organizationId={organizationId}
+          canRead
+          canWrite
+          canManageIdentities
+          canReadSponsorships={false}
+        />
       </>,
     );
+    await openTab(container, "Identities");
     const menuTrigger = await waitForElement(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    await act(async () => menuTrigger!.click());
+    await act(async () => menuTrigger.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (candidate) => candidate.textContent === "End identity",
     );
@@ -503,13 +547,20 @@ describe("portal System Organizations", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <OrganizationDetail organizationId={organizationId} canRead canWrite canManageIdentities />
+        <OrganizationDetail
+          organizationId={organizationId}
+          canRead
+          canWrite
+          canManageIdentities
+          canReadSponsorships={false}
+        />
       </>,
     );
+    await openTab(container, "Identities");
     const menuTrigger = await waitForElement(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    await act(async () => menuTrigger!.click());
+    await act(async () => menuTrigger.click());
     const removeItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (candidate) => candidate.textContent === "End identity",
     );

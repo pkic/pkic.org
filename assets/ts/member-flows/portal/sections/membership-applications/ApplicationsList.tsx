@@ -118,9 +118,12 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
             sort: { asc: "stage", desc: "-stage" },
           },
           {
+            // A date has a bounded length; the column says so instead of
+            // wearing `pk-nowrap` while still claiming a share of a wide
+            // screen, and keeps the table's own ink and size.
             header: "Submitted",
             cell: (a) => fmtDate(a.createdAt),
-            className: "pk-mono pk-small pk-nowrap",
+            width: "fit",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
         ]}

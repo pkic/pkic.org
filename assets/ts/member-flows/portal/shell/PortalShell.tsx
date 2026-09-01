@@ -150,7 +150,7 @@ export function PortalShell() {
               <Route
                 path="/sponsors/:sponsorId"
                 component={({ params }: { params: { sponsorId: string } }) => (
-                  <SectionWrapper title="Sponsors">
+                  <SectionWrapper>
                     <SponsorWorkspace
                       sponsors={session?.sponsors ?? []}
                       canRead={portalHasGlobalPermission(session, "sponsorships:read")}
@@ -166,7 +166,7 @@ export function PortalShell() {
               <Route
                 path="/sponsors"
                 component={() => (
-                  <SectionWrapper title="Sponsors">
+                  <SectionWrapper>
                     <SponsorWorkspace
                       sponsors={session?.sponsors ?? []}
                       canRead={portalHasGlobalPermission(session, "sponsorships:read")}
@@ -181,7 +181,7 @@ export function PortalShell() {
               <Route
                 path="/forms/:formKey"
                 component={({ params }: { params: { formKey: string } }) => (
-                  <SectionWrapper title="Forms">
+                  <SectionWrapper>
                     <Forms formKey={params.formKey} canWrite={portalHasGlobalPermission(session, "forms:write")} />
                   </SectionWrapper>
                 )}
@@ -191,7 +191,7 @@ export function PortalShell() {
               <Route
                 path="/forms"
                 component={() => (
-                  <SectionWrapper title="Forms">
+                  <SectionWrapper>
                     <Forms canWrite={portalHasGlobalPermission(session, "forms:write")} />
                   </SectionWrapper>
                 )}
@@ -224,12 +224,16 @@ export function PortalShell() {
                 path="/organizations/:organizationId"
                 component={({ params }: { params: { organizationId: string } }) =>
                   hasOrganizationsDirectory ? (
-                    <SectionWrapper title="Organizations">
+                    // No section title here: the record's PageHeader already
+                    // carries the "Organizations" trail and the record's name,
+                    // and the anatomy allows each name exactly once.
+                    <SectionWrapper>
                       <OrganizationDetail
                         organizationId={params.organizationId}
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
                         canWrite={portalHasGlobalPermission(session, "organizations:write")}
                         canManageIdentities={portalHasGlobalPermission(session, "membership:write")}
+                        canReadSponsorships={portalHasGlobalPermission(session, "sponsorships:read")}
                       />
                     </SectionWrapper>
                   ) : (
@@ -263,7 +267,7 @@ export function PortalShell() {
               <Route
                 path="/membership/applications/:applicationId?"
                 component={({ params }: { params: { applicationId?: string } }) => (
-                  <SectionWrapper title="Membership">
+                  <SectionWrapper>
                     <MembershipApplications
                       initialApplicationId={params.applicationId}
                       canWrite={portalHasGlobalPermission(session, "membership:write")}
@@ -277,7 +281,7 @@ export function PortalShell() {
               <Route
                 path="/users/:userId?"
                 component={({ params }: { params: { userId?: string } }) => (
-                  <SectionWrapper title="Users">
+                  <SectionWrapper>
                     <Users
                       userId={params.userId}
                       permissions={{
@@ -297,7 +301,7 @@ export function PortalShell() {
               <Route
                 path="/donations/detail/:donationId"
                 component={({ params }: { params: { donationId: string } }) => (
-                  <SectionWrapper title="Donation">
+                  <SectionWrapper>
                     <DonationDetailPage
                       donationId={params.donationId}
                       canRead={portalHasGlobalPermission(session, "donations:read")}
@@ -311,7 +315,7 @@ export function PortalShell() {
               <Route
                 path="/donations/:subTab?"
                 component={({ params }: { params: { subTab?: string } }) => (
-                  <SectionWrapper title="Donations">
+                  <SectionWrapper>
                     <Donations
                       subTab={params.subTab}
                       canRead={portalHasGlobalPermission(session, "donations:read")}
@@ -388,7 +392,7 @@ export function PortalShell() {
               <Route
                 path="/system/access-control/roles/:roleId"
                 component={({ params }: { params: { roleId: string } }) => (
-                  <SectionWrapper title="Settings">
+                  <SectionWrapper>
                     <SystemManagement session={session} view="access-control" resourceId={`roles/${params.roleId}`} />
                   </SectionWrapper>
                 )}
@@ -398,7 +402,7 @@ export function PortalShell() {
               <Route
                 path="/system/:view/:resourceId"
                 component={({ params }: { params: { view: string; resourceId: string } }) => (
-                  <SectionWrapper title="Settings">
+                  <SectionWrapper>
                     <SystemManagement session={session} view={params.view} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
@@ -408,7 +412,7 @@ export function PortalShell() {
               <Route
                 path="/system/:view?"
                 component={({ params }: { params: { view?: string } }) => (
-                  <SectionWrapper title="Settings">
+                  <SectionWrapper>
                     <SystemManagement session={session} view={params.view} />
                   </SectionWrapper>
                 )}
@@ -418,7 +422,7 @@ export function PortalShell() {
               <Route
                 path="/home"
                 component={() => (
-                  <SectionWrapper title="Home">
+                  <SectionWrapper>
                     <Home />
                   </SectionWrapper>
                 )}
@@ -431,7 +435,7 @@ export function PortalShell() {
               <Route
                 path="/groups/new"
                 component={() => (
-                  <SectionWrapper title="Groups">
+                  <SectionWrapper>
                     <Groups groupSegment="new" />
                   </SectionWrapper>
                 )}
@@ -441,7 +445,7 @@ export function PortalShell() {
               <Route
                 path="/groups"
                 component={() => (
-                  <SectionWrapper title="Groups">
+                  <SectionWrapper>
                     <Groups />
                   </SectionWrapper>
                 )}
@@ -487,7 +491,7 @@ export function PortalShell() {
               <Route
                 path="/profile"
                 component={() => (
-                  <SectionWrapper title="My Profile">
+                  <SectionWrapper>
                     <MyProfile />
                   </SectionWrapper>
                 )}
@@ -516,7 +520,7 @@ export function PortalShell() {
               <Route
                 path="/application"
                 component={() => (
-                  <SectionWrapper title="My Application">
+                  <SectionWrapper>
                     <MyApplications />
                   </SectionWrapper>
                 )}
@@ -526,7 +530,7 @@ export function PortalShell() {
               <Route
                 path="/participation"
                 component={() => (
-                  <SectionWrapper title="My participation">
+                  <SectionWrapper>
                     <Participation />
                   </SectionWrapper>
                 )}
@@ -536,7 +540,7 @@ export function PortalShell() {
               <Route
                 path="/account"
                 component={() => (
-                  <SectionWrapper title="Account Settings">
+                  <SectionWrapper>
                     <AccountSettings />
                   </SectionWrapper>
                 )}

@@ -148,8 +148,10 @@ function installApi(waitlisted: boolean) {
 
 async function openAttendance(container: HTMLElement): Promise<void> {
   await settle();
-  const button = Array.from(container.querySelectorAll("button")).find(
-    (candidate) => candidate.textContent === "Manage attendance",
+  // The row itself is the control: its stretched activation is a real
+  // button whose name says whose attendance it opens.
+  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+    (candidate) => candidate.textContent?.startsWith("Manage attendance for"),
   );
   await act(async () => {
     button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -285,8 +287,8 @@ describe("portal event attendance management", () => {
     const headers = [...container.querySelectorAll("thead th")].map((cell) =>
       (cell.textContent ?? "").replace(/[↑↓↕]/g, "").trim(),
     );
-    expect(headers).toEqual(["Name / email", "Status", "Attendance", "Registered", "Manage"]);
-    // The column that used to have a blank header now has one.
+    expect(headers).toEqual(["Name / email", "Status", "Attendance", "Registered"]);
+    // No blank header: the per-row toggle became the row's own activation.
     for (const header of headers) expect(header).not.toBe("");
   });
 
@@ -295,19 +297,20 @@ describe("portal event attendance management", () => {
     const container = mount();
     await settle();
 
-    const toggle = Array.from(container.querySelectorAll("button")).find(
-      (candidate) => candidate.textContent === "Manage attendance",
+    const toggle = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (candidate) => candidate.textContent === "Manage attendance for Group Member",
     );
-    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle?.getAttribute("aria-label")).toBe("Manage attendance for Group Member");
+    expect(toggle).not.toBeUndefined();
 
     await act(async () => {
       toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
 
-    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
-    expect(toggle?.getAttribute("aria-label")).toBe("Hide attendance for Group Member");
+    const openedToggle = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
+      (candidate) => candidate.textContent === "Hide attendance for Group Member",
+    );
+    expect(openedToggle).not.toBeUndefined();
   });
 
   it("serves the roster the shared list contract describes", async () => {

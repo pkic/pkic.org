@@ -174,7 +174,7 @@ describe("portal form management", () => {
       }),
     );
 
-    const container = mount(<FormManagementList canWrite={false} onOpenForm={vi.fn()} />);
+    const container = mount(<FormManagementList onOpenForm={vi.fn()} />);
     await settle();
 
     expect(requests).toHaveLength(1);
@@ -185,23 +185,39 @@ describe("portal form management", () => {
     expect(container.textContent).not.toContain("Archive/Delete");
   });
 
-  it("shows authoring controls only to a form writer, and New form hands off to the caller instead of layering a table below it", async () => {
+  it("keeps creation out of the list itself and exposes the contract's purpose and status filters", async () => {
+    const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => formListResponse()),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return formListResponse();
+      }),
     );
-    const onCreateNew = vi.fn();
 
-    const container = mount(<FormManagementList canWrite onOpenForm={vi.fn()} onCreateNew={onCreateNew} />);
+    const container = mount(<FormManagementList onOpenForm={vi.fn()} />);
     await settle();
 
-    expect(container.querySelector("form")).toBeNull();
-    expect(container.textContent).toContain("New form");
-    const newFormButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "New form",
-    );
-    newFormButton!.click();
-    expect(onCreateNew).toHaveBeenCalledTimes(1);
+    // The create action lives in the page header, not the list's toolbar:
+    // the list renders no "New form" control of its own.
+    expect(container.textContent).not.toContain("New form");
+
+    // The filters the API already accepts are real toolbar controls wired to
+    // the server params, not client-side row filtering.
+    const purposeFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by purpose"]');
+    const statusFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by status"]');
+    expect(purposeFilter).not.toBeNull();
+    expect(statusFilter).not.toBeNull();
+
+    purposeFilter!.value = "survey";
+    purposeFilter!.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    const lastRequest = requests.at(-1);
+    expect(lastRequest?.searchParams.get("purpose")).toBe("survey");
   });
 
   it("does not offer global mutations for a community-owned form", async () => {
@@ -518,7 +534,7 @@ describe("portal form management", () => {
     );
     const onOpenForm = vi.fn();
 
-    const container = mount(<FormManagementList canWrite={false} onOpenForm={onOpenForm} />);
+    const container = mount(<FormManagementList onOpenForm={onOpenForm} />);
     await settle();
 
     // A table with no caption is announced as "table"; this page can hold

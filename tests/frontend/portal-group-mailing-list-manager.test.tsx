@@ -177,14 +177,15 @@ describe("group mailing-list management surface", () => {
     const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
     await settle();
 
-    const manage = buttonNamed(container, "Manage");
-    expect(manage.getAttribute("aria-expanded")).toBe("false");
+    // The row itself opens the editor; its activation names the list, and
+    // once open the same control reads as the way back out.
+    const manage = buttonNamed(container, "Manage Architecture discussion");
     await act(() => {
       manage.click();
     });
     await settle();
 
-    expect(buttonNamed(container, "Close").getAttribute("aria-expanded")).toBe("true");
+    expect(buttonNamed(container, "Close management for Architecture discussion")).toBeTruthy();
     const detail = container.querySelector(".pk-table__detail");
     expect(detail?.textContent).toContain(`Manage ${archivedList.label}`);
     // The editor opens on the row's own values rather than a blank draft.

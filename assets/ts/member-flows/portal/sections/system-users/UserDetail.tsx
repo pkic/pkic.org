@@ -15,7 +15,9 @@ import { UserMembershipPanel } from "./UserMembershipPanel";
 import { UserProfileEditor } from "./UserProfileEditor";
 import type { UserDetail as UserDetailModel } from "./model";
 import { Badge } from "../../../../components/Badge";
+import { usePortalHashLocation } from "../../hash-location";
 import { Alert } from "../../../../ui/Alert";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 // `pk-datalist`, `pk-break` and `pk-nowrap`'s neighbours ship in a component
@@ -32,15 +34,7 @@ export interface UserPermissions {
   canActivateIdentity: boolean;
 }
 
-export function UserDetail({
-  userId,
-  onBack,
-  permissions,
-}: {
-  userId: string;
-  onBack: () => void;
-  permissions: UserPermissions;
-}) {
+export function UserDetail({ userId, permissions }: { userId: string; permissions: UserPermissions }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<UserDetailModel | null>(null);
@@ -138,15 +132,20 @@ export function UserDetail({
 
   return (
     <div class="pk pk-stack">
-      {/* The name heads the record, so it is a real heading. It used to be a
-          `<span>` carrying a legacy `page-heading` class, which left the page
-          with no entry in the document outline at all. */}
-      <div class="pk-cluster">
-        <Button size="sm" onClick={onBack}>
-          ← Back to list
-        </Button>
-        <h2>{displayName}</h2>
-      </div>
+      {/* The record opens as every detail page does: the trail back to the
+          directory, the person's name as the page's heading, and their
+          standing — role, and inactive when it applies — beside it. The
+          back button this replaces duplicated the trail in button's clothing. */}
+      <PageHeader
+        trail={[{ label: "Users", href: usePortalHashLocation.hrefs("/users") }, { label: displayName }]}
+        title={displayName}
+        context={
+          <>
+            <Badge status={user.role} />
+            {!user.active && <Badge status="inactive" />}
+          </>
+        }
+      />
 
       {user.pii_redacted_at && (
         /* The redaction used to be a red date in the table, which is a state

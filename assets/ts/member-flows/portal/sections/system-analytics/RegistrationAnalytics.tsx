@@ -54,13 +54,13 @@ export function RegistrationAnalytics() {
     <div class="pk pk-stack">
       <div class="pk-grid pk-grid--roomy">
         <Panel>
-          <PanelHeader title="By Status" headingLevel={2} />
+          <PanelHeader title="By Status" />
           <PanelBody>
             <StatusTable caption="Registrations by status" entries={Object.entries(registrations.byStatus)} />
           </PanelBody>
         </Panel>
         <Panel>
-          <PanelHeader title="By Attendance Type" headingLevel={2} />
+          <PanelHeader title="By Attendance Type" />
           <PanelBody>
             <SimpleTable
               caption="Registrations by attendance type"
@@ -74,7 +74,7 @@ export function RegistrationAnalytics() {
       </div>
 
       <Panel>
-        <PanelHeader title={WEEKLY_TITLE} headingLevel={2} />
+        <PanelHeader title={WEEKLY_TITLE} />
         <PanelBody class="pk-stack pk-stack--snug">
           <div dangerouslySetInnerHTML={{ __html: weeklyChart }} />
           <SimpleTable
@@ -86,7 +86,7 @@ export function RegistrationAnalytics() {
       </Panel>
 
       <Panel>
-        <PanelHeader title={MONTHLY_TITLE} headingLevel={2} />
+        <PanelHeader title={MONTHLY_TITLE} />
         <PanelBody class="pk-stack pk-stack--snug">
           <div dangerouslySetInnerHTML={{ __html: monthlyChart }} />
           <SimpleTable

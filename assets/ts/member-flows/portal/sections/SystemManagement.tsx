@@ -4,6 +4,7 @@ import { portalHasGlobalPermission, portalSystemNavigationItems } from "../shell
 import { EmptyState } from "../../../components/EmptyState";
 import { Spinner } from "../../../components/Spinner";
 import { Tabs } from "../../../components/Tabs";
+import { PageHeader } from "../../../ui/PageHeader";
 
 const OrganizationContentReviews = lazy(() =>
   import("./OrganizationContentReviews").then((module) => ({ default: module.OrganizationContentReviews })),
@@ -38,15 +39,19 @@ export function SystemManagement({
   if (!selected) {
     // A permission-shaped dead end is still an empty state: EmptyState names
     // what is absent inside a `role="status"` region, where the bare muted
-    // paragraph it replaces was announced as nothing at all.
+    // paragraph it replaces was announced as nothing at all. The page still
+    // opens with its header — the dead end is the content, not the page.
     return (
-      <EmptyState
-        title={
-          items.length === 0
-            ? "No system-management permissions are assigned to this account."
-            : "This system-management section is not available to your account."
-        }
-      />
+      <div class="pk pk-stack">
+        <PageHeader title="Settings" />
+        <EmptyState
+          title={
+            items.length === 0
+              ? "No system-management permissions are assigned to this account."
+              : "This system-management section is not available to your account."
+          }
+        />
+      </div>
     );
   }
 
@@ -59,6 +64,10 @@ export function SystemManagement({
    */
   return (
     <div class="pk pk-stack">
+      {/* The hub is a section root: the sidebar entry brought the reader
+          here, so there is no trail, and the selected tab — not a repeated
+          heading inside each tab — names the surface below the strip. */}
+      <PageHeader title="Settings" />
       <Tabs
         items={items.map((item) => ({ key: item.path, label: item.label }))}
         active={selected.path}
@@ -74,10 +83,9 @@ export function SystemManagement({
         ) : selected.path === "/system/organization-content-reviews" ? (
           <OrganizationContentReviews />
         ) : selected.path === "/system/audit-log" ? (
-          <section aria-labelledby="system-audit-log-heading" class="pk-stack">
-            {/* h5 because PortalShell already renders the section title as an
-                h4; the margin this carried is now the stack's gap. */}
-            <h5 id="system-audit-log-heading">System Audit Log</h5>
+          // The selected "Audit Log" tab already names this surface; a
+          // heading restating it would say the name twice on one screen.
+          <section aria-label="Audit log" class="pk-stack">
             <SystemAuditLog />
           </section>
         ) : selected.path === "/system/email-templates" ? (

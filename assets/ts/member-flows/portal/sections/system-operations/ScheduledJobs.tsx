@@ -16,6 +16,8 @@ import {
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
+import type { MenuItem } from "../../../../ui/Menu";
+import { RowActions } from "../../../../ui/RowActions";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
@@ -112,31 +114,25 @@ function JobActions({ job, controls }: { job: ScheduledJobResource; controls: Jo
   const isPaused = job.pausedAt !== null;
   const isRunning = job.runningSince !== null;
 
-  return (
-    <div class="pk-cluster pk-cluster--end">
-      {job.capabilities.run ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={isBusy || isPaused || isRunning}
-          onClick={() => controls.onRun(job)}
-        >
-          Run now
-        </Button>
-      ) : null}
-      {job.capabilities.manageState ? (
-        isPaused ? (
-          <Button size="sm" variant="secondary" disabled={isBusy} onClick={() => controls.onResume(job)}>
-            Resume
-          </Button>
-        ) : (
-          <Button size="sm" variant="secondary" disabled={isBusy} onClick={() => controls.onStartPause(job)}>
-            Pause
-          </Button>
-        )
-      ) : null}
-    </div>
-  );
+  // Row commands live behind the row's menu, like every other list; a row
+  // with no capability at all carries no menu rather than an empty one.
+  const actions: MenuItem[] = [];
+  if (job.capabilities.run) {
+    actions.push({
+      id: "run",
+      label: "Run now",
+      onSelect: () => controls.onRun(job),
+      disabled: isBusy || isPaused || isRunning,
+    });
+  }
+  if (job.capabilities.manageState) {
+    actions.push(
+      isPaused
+        ? { id: "resume", label: "Resume", onSelect: () => controls.onResume(job), disabled: isBusy }
+        : { id: "pause", label: "Pause", onSelect: () => controls.onStartPause(job), disabled: isBusy },
+    );
+  }
+  return <RowActions subject={titleFromKey(job.jobKey)} actions={actions} />;
 }
 
 function PauseForm({
@@ -282,7 +278,13 @@ export function ScheduledJobs() {
     { id: "schedule", header: "Schedule", cell: (job) => <JobSchedule job={job} /> },
     { id: "outcome", header: "Last outcome", cell: (job) => <JobOutcome job={job} /> },
     { id: "health", header: "Health", cell: (job) => <JobHealth job={job} /> },
-    { id: "actions", header: "Actions", align: "end", cell: (job) => <JobActions job={job} controls={controls} /> },
+    {
+      id: "actions",
+      header: "Actions",
+      headerHidden: true,
+      align: "end",
+      cell: (job) => <JobActions job={job} controls={controls} />,
+    },
   ];
 
   return (

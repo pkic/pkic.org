@@ -69,6 +69,7 @@ export function ApiDataTable<T, Response = unknown>({
   rowKey,
   rowAction,
   detailRow,
+  selection,
   caption,
   showCaption,
   initialSort = "",
@@ -196,6 +197,7 @@ export function ApiDataTable<T, Response = unknown>({
             rowKey={rowKey}
             rowAction={rowAction}
             detailRow={detailRow}
+            selection={selection}
             currentSort={sort}
             onSort={applySort}
           />

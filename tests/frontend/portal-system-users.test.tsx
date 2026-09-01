@@ -245,7 +245,6 @@ describe("portal System Users anonymize confirmation", () => {
           <ConfirmDialogHost />
           <UserDetailView
             userId={userId}
-            onBack={() => {}}
             permissions={{
               canRead: true,
               canWrite: true,
@@ -335,11 +334,11 @@ describe("portal System Users detail record", () => {
     });
   }
 
-  async function mountDetail(permissions: UserPermissions, onBack: () => void = () => undefined): Promise<HTMLElement> {
+  async function mountDetail(permissions: UserPermissions): Promise<HTMLElement> {
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
-    await act(() => render(<UserDetailView userId={user.id} onBack={onBack} permissions={permissions} />, container));
+    await act(() => render(<UserDetailView userId={user.id} permissions={permissions} />, container));
     await settle();
     return container;
   }
@@ -367,16 +366,15 @@ describe("portal System Users detail record", () => {
     expect([...list!.querySelectorAll(":scope > dd")][3]?.textContent).toBe("—");
   });
 
-  it("returns to the list through a real button rather than a click handler on text", async () => {
+  it("returns to the list through the header's trail rather than a back button", async () => {
     stubDetail(user);
-    const onBack = vi.fn();
-    const container = await mountDetail(READ_ONLY, onBack);
+    const container = await mountDetail(READ_ONLY);
 
-    const back = buttonNamed(container, "← Back to list");
-    expect(back.tagName).toBe("BUTTON");
-    expect(back.type).toBe("button");
-    await act(() => back.click());
-    expect(onBack).toHaveBeenCalledOnce();
+    const trail = container.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail).not.toBeNull();
+    const backLink = trail!.querySelector<HTMLAnchorElement>("a");
+    expect(backLink?.textContent).toBe("Users");
+    expect(backLink?.getAttribute("href")).toBe("#/users");
   });
 
   it("reports a failed load as an alert instead of an empty record", async () => {

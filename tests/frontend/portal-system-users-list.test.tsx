@@ -75,9 +75,9 @@ describe("portal System Users list permissions", () => {
   it("offers the administrator-role action only when both permissions are present", async () => {
     const container = mount(true);
     await settle();
-    // The one action a user's row offers is shown, and it names the person it
-    // would promote rather than every row reading "Grant administrator role".
-    expect(rowActionControlNames(container)).toEqual(["Grant administrator role, Ada Lovelace"]);
+    // The row's commands live behind the `…` menu, whose trigger names the
+    // person it acts on rather than every row reading the same label.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
   });
 
   it("renders initials when a user has no headshot, and an image when one is set", async () => {
