@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
 import { GroupLeadershipAssignmentForm } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm";
+import { controlFor } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
 
@@ -71,7 +72,7 @@ async function pickCapacity(container: HTMLElement, email: string): Promise<void
   )!;
   await act(async () => search.click());
   await settle();
-  const select = container.querySelector<HTMLSelectElement>('select[aria-label="Participation capacity"]')!;
+  const select = controlFor<HTMLSelectElement>(container, "Participation capacity");
   select.value = MEMBER_ID;
   void act(() => {
     select.dispatchEvent(new Event("change", { bubbles: true }));

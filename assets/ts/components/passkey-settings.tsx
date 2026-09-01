@@ -12,19 +12,27 @@ import { deleteJson, getJson, postJson } from "../shared/api-client";
 import { formatDateTime, showToast } from "../shared/ui";
 import { confirmAction } from "./ConfirmDialog";
 import { ErrorAlert } from "./ErrorAlert";
+import { DataTable } from "./Table";
+import { Alert } from "../ui/Alert";
+import { Button } from "../ui/Button";
+import { Field } from "../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import { RowActions } from "../ui/RowActions";
+import { TextInput } from "../ui/TextControl";
 import { Spinner } from "./Spinner";
+
+function passkeyName(passkey: PasskeySummary): string {
+  return passkey.deviceName ?? "Unnamed passkey";
+}
 
 export function PasskeySettings({
   toastTargetId,
   title = "Passkeys",
   className = "",
-  tableHeaderClass = "",
 }: {
   toastTargetId: string;
   title?: string;
   className?: string;
-  tableHeaderClass?: string;
 }) {
   const [passkeys, setPasskeys] = useState<PasskeySummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +81,9 @@ export function PasskeySettings({
   }
 
   async function handleRemove(passkey: PasskeySummary) {
-    const deviceName = passkey.deviceName ?? "Unnamed passkey";
+    const name = passkeyName(passkey);
     const confirmed = await confirmAction({
-      title: `Remove passkey "${deviceName}"?`,
+      title: `Remove passkey "${name}"?`,
       consequences: ["You'll need another passkey or magic link to sign in with this device"],
       confirmLabel: "Remove passkey",
       tone: "danger",
@@ -92,75 +100,79 @@ export function PasskeySettings({
 
   if (error) return <ErrorAlert error={error} />;
 
+  // No `.pk` of its own: this renders as a sibling panel inside the account
+  // surface's `.pk` root, and a second one would only repaint the canvas.
   return (
-    <div class={`card border-0 shadow-sm ${className}`.trim()}>
-      <div class="card-header bg-white fw-semibold">{title}</div>
-      <div class="card-body">
-        <p class="text-muted small">
+    <Panel class={className || undefined}>
+      <PanelHeader title={title} headingLevel={2} />
+      <PanelBody class="pk-stack">
+        <p class="pk-small pk-muted">
           Passkeys let you sign in with Touch ID, Face ID, or a hardware security key instead of a magic link. You can
           register more than one device.
         </p>
 
         {passkeysSupported ? (
-          <form onSubmit={handleEnroll} class="d-flex gap-2 align-items-end flex-wrap mb-3">
-            <div>
-              <label class="form-label small fw-semibold">Device name (optional)</label>
-              <input
-                class="form-control form-control-sm"
-                value={deviceName}
-                onInput={(event) => setDeviceName((event.target as HTMLInputElement).value)}
-                placeholder="e.g. Work laptop"
-                disabled={enrolling}
-              />
-            </div>
-            <button type="submit" class="btn btn-sm btn-success" disabled={enrolling}>
+          <form onSubmit={handleEnroll} class="pk-cluster">
+            {/* The label used to be a bare `<label>` with no `for` and no id on
+                the input beside it, so the field announced nothing. Field owns
+                that pairing. */}
+            <Field label="Device name (optional)">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={deviceName}
+                  onInput={(event) => setDeviceName((event.target as HTMLInputElement).value)}
+                  placeholder="e.g. Work laptop"
+                  disabled={enrolling}
+                />
+              )}
+            </Field>
+            {/* `loading` rather than `disabled`: a disabled button loses focus,
+                which throws a keyboard user out of the form mid-enrolment. */}
+            <Button type="submit" variant="primary" size="sm" loading={enrolling}>
               {enrolling ? "Waiting for passkey…" : "Add a passkey"}
-            </button>
+            </Button>
           </form>
         ) : (
-          <div class="alert alert-warning small">This browser doesn't support passkeys.</div>
+          <Alert tone="warn">This browser doesn&apos;t support passkeys.</Alert>
         )}
 
         {passkeys === null ? (
           <Spinner label="Loading passkeys…" />
         ) : (
-          <table class="table table-sm table-hover mb-0">
-            <thead class={tableHeaderClass || undefined}>
-              <tr>
-                <th>Device</th>
-                <th>Last used</th>
-                <th>Added</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {passkeys.length === 0 ? (
-                <tr>
-                  <td colspan={4} class="text-center text-muted fst-italic py-3">
-                    No passkeys registered
-                  </td>
-                </tr>
-              ) : (
-                passkeys.map((passkey) => (
-                  <tr key={passkey.id}>
-                    <td class="fw-semibold">{passkey.deviceName ?? "Unnamed passkey"}</td>
-                    <td class="small">
-                      {passkey.lastUsedAt ? formatDateTime(passkey.lastUsedAt) : <span class="text-muted">Never</span>}
-                    </td>
-                    <td class="small mono">{formatDateTime(passkey.createdAt)}</td>
-                    <td class="text-end">
-                      <RowActions
-                        label={`Actions for ${passkey.deviceName ?? "Unnamed passkey"}`}
-                        actions={[{ id: "remove", label: "Remove", onSelect: () => void handleRemove(passkey) }]}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <DataTable
+            caption={`${title} registered to this account`}
+            columns={[
+              { header: "Device", cell: (passkey: PasskeySummary) => passkeyName(passkey) },
+              {
+                header: "Last used",
+                cell: (passkey: PasskeySummary) =>
+                  passkey.lastUsedAt ? formatDateTime(passkey.lastUsedAt) : <span class="pk-muted">Never</span>,
+                className: "pk-small",
+              },
+              {
+                header: "Added",
+                cell: (passkey: PasskeySummary) => formatDateTime(passkey.createdAt),
+                className: "pk-small pk-nowrap",
+              },
+              {
+                // The column used to have an empty `<th>`, which a screen
+                // reader reaching the cell announces as nothing at all.
+                header: "Actions",
+                cell: (passkey: PasskeySummary) => (
+                  <RowActions
+                    label={`Actions for ${passkeyName(passkey)}`}
+                    actions={[{ id: "remove", label: "Remove", onSelect: () => void handleRemove(passkey) }]}
+                  />
+                ),
+              },
+            ]}
+            data={passkeys}
+            rowKey={(passkey) => passkey.id}
+            empty="No passkeys registered"
+          />
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

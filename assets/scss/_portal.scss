@@ -37,23 +37,7 @@ $portal-sidebar-width: 240px;
   overflow-y: auto;
 }
 
-.portal-leadership-user {
-  min-width: 220px;
-}
-
-.portal-leadership-affiliation {
-  width: 220px;
-}
-
-.portal-leadership-title {
-  width: 180px;
-}
-
 .portal-leadership-date,
-.portal-leadership-name {
-  width: 160px;
-}
-
 #portal-root {
   display: flex;
   min-height: calc(100vh - var(--pkic-navbar-height, 57px));
@@ -348,49 +332,6 @@ $portal-sidebar-width: 240px;
 
 .portal-management-search {
   max-width: 720px;
-}
-
-// A designed stand-in for JSON.stringify(details) in audit-log style tables: a compact
-// label/value list instead of a raw machine payload.
-.details-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8125rem;
-}
-
-.details-summary-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-
-  dt {
-    flex: 0 0 auto;
-    min-width: 96px;
-    margin-bottom: 0;
-    font-weight: 600;
-    color: #6c757d;
-  }
-
-  dd {
-    margin-bottom: 0;
-    word-break: break-word;
-  }
-}
-
-.details-summary-sublist {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  margin: 0.25rem 0 0 1rem;
-  padding-left: 0.5rem;
-  border-left: 2px solid #e9ecef;
-}
-
-.details-summary-raw summary {
-  cursor: pointer;
-  font-size: 0.8125rem;
-  color: #6c757d;
 }
 
 #portal-toast-area {

@@ -130,7 +130,11 @@ describe("portal access-control collection pagination", () => {
     const picker = container.querySelector('.portal-access-role-user-picker input[type="text"]') as HTMLInputElement;
     dispatchInput(picker, "history");
     await settle(300);
-    void act(() => (container.querySelector(".portal-user-picker-results button") as HTMLButtonElement).click());
+    // The suggestion list is located by the name it announces rather than by
+    // the container class it happens to carry, so it keeps working through the
+    // next restyling the way a reader's route into it does.
+    const suggestions = container.querySelector('[role="group"][aria-label="Matching users"]')!;
+    void act(() => (suggestions.querySelector("button") as HTMLButtonElement).click());
     await settle();
 
     const initial = requests.find((url) => url.pathname === `/api/v1/users/${USER_ID}/roles`);

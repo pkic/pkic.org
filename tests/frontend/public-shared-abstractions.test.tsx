@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { z } from "zod";
-import { ConsentCard } from "../../assets/ts/components/ConsentCard";
+import { ConsentCard, ConsentList } from "../../assets/ts/components/ConsentCard";
 import { MagicLinkSubmitButton, SignInError } from "../../assets/ts/components/MagicLinkFeedback";
 import { MenuIcon } from "../../assets/ts/components/MenuIcon";
 import { NotFoundPanel } from "../../assets/ts/components/NotFoundPanel";
@@ -23,6 +23,7 @@ import { replaceFormWithSuccess } from "../../assets/ts/shared/form/success-pane
 import { memberInitials } from "../../assets/ts/shared/member-display";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../assets/ts/shared/organization-content";
 import { handleFormInviteSubmitError } from "../../assets/ts/shared/widgets/invite-recovery";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -65,13 +66,79 @@ describe("public shared frontend abstractions", () => {
       />,
     );
 
-    for (const container of [compact, featured]) {
-      const card = container.querySelector<HTMLElement>('[role="checkbox"]');
-      expect(card?.getAttribute("aria-checked")).toBe("false");
-      void act(() => card?.click());
-      expect(card?.getAttribute("aria-checked")).toBe("true");
+    // Both shapes agree through one real checkbox, named by its own label —
+    // not a div claiming role="checkbox" that only a mouse could reach.
+    for (const [container, label] of [
+      [compact, "Privacy"],
+      [featured, "Code of conduct"],
+    ] as const) {
+      const consent = controlFor(container, label);
+      expect(consent.type).toBe("checkbox");
+      expect(consent.checked).toBe(false);
+      void act(() => consent.click());
+      expect(consent.checked).toBe(true);
     }
     expect(featured.textContent).toContain("Please review this policy.");
+    // The help text is not just nearby, it is announced with the control.
+    const conduct = controlFor(featured, "Code of conduct");
+    const describedBy = conduct.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(featured.querySelector(`#${describedBy ?? ""}`)?.textContent).toContain("Please review this policy.");
+  });
+
+  it("announces a required consent that a validation pass rejected", () => {
+    const container = mount(
+      <ConsentCard
+        term={{ termKey: "privacy", version: "1", required: true, contentRef: null, displayText: "Privacy" }}
+      />,
+    );
+    const form = document.createElement("form");
+    document.body.append(form);
+    const consent = controlFor(container, "Privacy");
+    form.append(consent);
+
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    // What the event flows do on submit: the platform fires `invalid` at every
+    // control that fails, and the card takes its state from that rather than
+    // from a script reaching in to set a class.
+    void act(() => {
+      form.checkValidity();
+    });
+
+    const message = container.querySelector('[role="alert"]');
+    expect(message?.textContent).toContain("You need to agree to this to continue.");
+    expect(consent.getAttribute("aria-invalid")).toBe("true");
+    expect(consent.getAttribute("aria-describedby")).toBe(message?.id);
+
+    // Agreeing clears it, without anything else having to be told.
+    void act(() => consent.click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(consent.getAttribute("aria-invalid")).toBeNull();
+    form.remove();
+  });
+
+  it("names the consent list's terms without repeating an unagreed one as required", () => {
+    const container = mount(
+      <ConsentList
+        terms={[
+          { termKey: "privacy", version: "1", required: true, contentRef: null, displayText: "Privacy" },
+          { termKey: "news", version: "1", required: false, contentRef: null, displayText: "Newsletter" },
+        ]}
+      />,
+    );
+    expect(labelNames(container)).toEqual(["Privacy", "Newsletter"]);
+    expect(controlFor(container, "Privacy").required).toBe(true);
+    expect(controlFor(container, "Newsletter").required).toBe(false);
+    // "Optional" is a word, not a colour, so a reader who cannot separate the
+    // hues still knows which of the two they may skip.
+    expect(container.textContent).toContain("Optional");
+  });
+
+  it("reports no consents as a sentence rather than an empty region", () => {
+    const container = mount(<ConsentList terms={[]} />);
+    expect(container.textContent).toContain("No required consents for this flow.");
+    expect(container.querySelector("input")).toBeNull();
   });
 
   it("finds the canonical registration email-review input and card", () => {

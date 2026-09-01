@@ -7,6 +7,7 @@ import { LogoManager } from "../../assets/ts/components/LogoManager";
 import { PasskeySettings } from "../../assets/ts/components/passkey-settings";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import type { ProposalSpeaker } from "../../assets/shared/schemas/proposal-speakers";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -167,6 +168,55 @@ describe("PasskeySettings confirmation and row actions", () => {
     await settle();
 
     expect(requests.some((request) => request.method === "DELETE")).toBe(true);
+  });
+
+  it("names the table and the device-name field instead of leaving both anonymous", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => passkeysResponse()),
+    );
+    // jsdom has no WebAuthn, so the enrolment form is only offered once the
+    // capability check the component runs can find it.
+    vi.stubGlobal("PublicKeyCredential", function PublicKeyCredentialStub() {
+      /* presence is the whole capability check */
+    });
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    // A page of unnamed tables is announced as a list of "table"s.
+    expect(container.querySelector("caption")?.textContent).toBe("Passkeys registered to this account");
+    // The Bootstrap version's <label> carried no `for`, and the input carried
+    // no id, so the field announced nothing at all.
+    const field = controlFor(container, "Device name (optional)");
+    expect(field.tagName).toBe("INPUT");
+    expect(labelNames(container)).toContain("Device name (optional)");
+  });
+
+  it("states a failed passkey list as a sentence and shows no table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 403 })),
+    );
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(container.querySelector("table")).toBeNull();
+  });
+
+  it("says so, once, when the browser has no passkey support", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => passkeysResponse()),
+    );
+    // jsdom carries no WebAuthn, which is the unsupported case verbatim: the
+    // enrolment form must not be offered, and the reason must be stated.
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("This browser doesn't support passkeys.");
   });
 });
 

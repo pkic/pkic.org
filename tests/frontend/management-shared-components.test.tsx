@@ -5,6 +5,9 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { ActivityChartCard } from "../../assets/ts/components/analytics/ActivityChartCard";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
+import { Markdown } from "../../assets/ts/components/Markdown";
+import { PersonCell } from "../../assets/ts/components/PersonCell";
+import { StatCard } from "../../assets/ts/components/StatCard";
 import { EnumSelect } from "../../assets/ts/components/EnumSelect";
 import { FilterSelect } from "../../assets/ts/components/FilterSelect";
 import { EventScheduleFields } from "../../assets/ts/components/EventScheduleFields";
@@ -16,7 +19,7 @@ import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/eve
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
-import { buttonNamed } from "./helpers/labelled-control";
+import { buttonNamed, controlFor } from "./helpers/labelled-control";
 import { tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
@@ -92,12 +95,38 @@ describe("shared management presentation components", () => {
         onChange={onChange}
       />,
     );
-    const select = container.querySelector("select") as HTMLSelectElement;
+    // A visible label has to point at the control it names. The version this
+    // replaces rendered a bare `<label>` with no `for` and put a second copy
+    // of the same word in `aria-label`: two names, neither of them wired.
+    const select = controlFor<HTMLSelectElement>(container, "Status");
+    expect(select.tagName.toLowerCase()).toBe("select");
+    expect(select.getAttribute("aria-label")).toBeNull();
     select.value = "active";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("active");
+  });
+
+  it("FilterSelect never leaves a select anonymous, however little the caller names it", () => {
+    // A toolbar filter has no room for a visible label, and call sites exist
+    // that pass neither name — which announced "combo box" and nothing more.
+    const unnamed = mount(
+      <FilterSelect value="" options={[{ value: "", label: "All statuses" }]} onChange={() => {}} />,
+    );
+    expect(unnamed.querySelector("select")?.getAttribute("aria-label")).toBe("Filter");
+
+    const named = mount(
+      <FilterSelect
+        ariaLabel="Proposal status"
+        value=""
+        options={[{ value: "", label: "All statuses" }]}
+        onChange={() => {}}
+      />,
+    );
+    expect(named.querySelector("select")?.getAttribute("aria-label")).toBe("Proposal status");
+    // No visible label, and therefore no orphaned `for` either.
+    expect(named.querySelector("label")).toBeNull();
   });
 
   it("reports every event schedule field through the shared editor", () => {
@@ -302,11 +331,49 @@ describe("shared management presentation components", () => {
     const select = container.querySelector<HTMLSelectElement>("#widget-status")!;
     expect(select.options).toHaveLength(2);
     expect(select.options[1].textContent).toBe("Published");
+    // The caller owns the id, so the label it writes has to reach that id and
+    // not a generated one.
+    expect(controlFor<HTMLSelectElement>(container, "Status")).toBe(select);
     select.value = "published";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("published");
+  });
+
+  it("EnumSelect announces a required field in words, and survives a value outside its vocabulary", () => {
+    const container = mount(
+      <EnumSelect
+        id="widget-policy"
+        label="Posting policy"
+        value={"retired" as "members" | "subscribers"}
+        required
+        help="Who may post to this list."
+        options={[
+          { value: "members", label: "Members" },
+          { value: "subscribers", label: "Subscribers" },
+        ]}
+        onChange={() => {}}
+      />,
+    );
+
+    const select = container.querySelector<HTMLSelectElement>("#widget-policy")!;
+    // A value the contract no longer offers selects nothing rather than
+    // inventing an option for itself, so a stale record cannot be silently
+    // re-saved under a vocabulary term that does not exist.
+    expect(select.value).toBe("");
+    expect(select.required).toBe(true);
+
+    // The asterisk is decorative; the word behind it is what gets announced,
+    // so "required" survives even with images and colour off.
+    const label = container.querySelector("label")!;
+    expect(label.textContent).toContain("(required)");
+    expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
+
+    // Help text is guidance, so it is described-by rather than part of the name.
+    const helpId = select.getAttribute("aria-describedby");
+    expect(helpId).toBe("widget-policy-help");
+    expect(container.querySelector(`[id="${helpId!}"]`)?.textContent).toBe("Who may post to this list.");
   });
 
   it("TimeZoneSelect keeps the submitted value as the raw IANA identifier typed or picked", () => {
@@ -369,5 +436,119 @@ describe("shared management presentation components", () => {
       categoryA.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith([]);
+  });
+});
+
+/**
+ * The shared components every list surface renders. Their internals now
+ * delegate to the design system, so what is worth asserting here is what a
+ * visual specimen cannot show: what each one exposes to assistive technology,
+ * and what it does when the data or the request is not the happy one.
+ */
+describe("shared component translation layer", () => {
+  it("PersonCell falls back to a placeholder name and omits the second line when nothing is on file", () => {
+    const container = mount(<PersonCell firstName={null} lastName={null} email={null} />);
+    expect(container.textContent).toContain("—");
+    // The face repeats what the name says, so it is decoration rather than a
+    // second announcement of the same person.
+    expect(container.querySelector(".pk-avatar")?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector(".pk-person-cell__email")).toBeNull();
+  });
+
+  it("PersonCell keeps the email as the quiet second line unless it is already the name", () => {
+    const named = mount(<PersonCell firstName="Ada" lastName="Lovelace" email="ada@example.test" />);
+    expect(named.querySelector(".pk-person-cell__name")?.textContent).toBe("Ada Lovelace");
+    expect(named.querySelector(".pk-person-cell__email")?.textContent).toBe("ada@example.test");
+
+    const unnamed = mount(<PersonCell firstName={null} lastName={null} email="ada@example.test" />);
+    expect(unnamed.querySelector(".pk-person-cell__name")?.textContent).toBe("ada@example.test");
+    expect(unnamed.querySelector(".pk-person-cell__email")).toBeNull();
+  });
+
+  it("StatCard states a bad figure in words rather than only tinting it", () => {
+    const container = mount(<StatCard label="Failed Emails" value={3} note="1 bounced" variant="danger" />);
+    expect(container.querySelector(".pk-stat-card__value")?.textContent).toBe("3");
+    // The tint the Bootstrap version used is invisible to a reader who cannot
+    // separate the hues, so the state is said instead.
+    expect(container.querySelector(".pk-stat-card__note")?.textContent).toBe("Needs attention · 1 bounced");
+  });
+
+  it("StatCard leaves an ordinary figure unannotated and names its link with just the label", () => {
+    const plain = mount(<StatCard label="Queued Emails" value={0} />);
+    expect(plain.querySelector(".pk-stat-card__note")).toBeNull();
+
+    const linked = mount(
+      <StatCard label="Total Registrations" value={412} note="8 confirmed" href="#/registrations" />,
+    );
+    const link = linked.querySelector<HTMLAnchorElement>("a");
+    // The whole card is the target, but the link's name stays "Total
+    // Registrations" rather than the card's entire contents read aloud.
+    expect(link?.textContent).toBe("Total Registrations");
+    expect(link?.getAttribute("href")).toBe("#/registrations");
+  });
+
+  it("Markdown refuses an unsafe link target and keeps the text", () => {
+    const container = mount(<Markdown markdown="[click me](javascript:alert(1))" />);
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.textContent).toContain("click me");
+  });
+
+  it("Markdown names a video embed and renders a plain link as a link", () => {
+    const embed = mount(<Markdown markdown="https://youtu.be/abc123" />);
+    const frame = embed.querySelector<HTMLIFrameElement>("iframe");
+    // An unnamed frame is announced as "frame", which says nothing about what
+    // is inside it.
+    expect(frame?.getAttribute("title")).toBe("Embedded video");
+    expect(frame?.getAttribute("src")).toBe("https://www.youtube.com/embed/abc123");
+
+    const linked = mount(<Markdown markdown="See [the policy](https://example.test/policy)." />);
+    expect(linked.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("AuditLogTable names its table and says which history it is showing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ auditLog: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const container = mount(
+      <AuditLogTable
+        endpoint="/api/v1/groups/group-1/audit-log"
+        caption="Group history"
+        actionCell={(entry) => entry.action}
+        detailsCell={() => null}
+      />,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // Four unnamed tables on a page are announced as four tables.
+    expect(container.querySelector("caption")?.textContent).toBe("Group history");
+    expect(container.textContent).toContain("No audit log entries.");
+  });
+
+  it("AuditLogTable states a failed history request as a sentence, not a status code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 500 })),
+    );
+    const container = mount(
+      <AuditLogTable
+        endpoint="/api/v1/groups/group-1/audit-log"
+        actionCell={(entry) => entry.action}
+        detailsCell={() => null}
+      />,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Something went wrong on our side.");
+    expect(container.querySelector("table")).toBeNull();
   });
 });

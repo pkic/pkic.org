@@ -9,12 +9,20 @@ export function renderConsentInputs(container: HTMLElement, terms: RequiredTerm[
   render(<ConsentList terms={terms} />, container);
 }
 
+/**
+ * Asks each consent control to re-check itself, so a required term that has
+ * not been agreed to shows its error before the form is submitted.
+ *
+ * This used to walk up to the surrounding card and toggle Bootstrap's
+ * `is-invalid` on it — a second copy of validation state living in a class
+ * list, which only the legacy stylesheet knew how to draw. `checkValidity()`
+ * fires the platform's own `invalid` event on a control that fails, and the
+ * card listens for it, so the state has one owner again.
+ */
 export function syncConsentValidation(form: HTMLFormElement): void {
   const checkboxes = form.querySelectorAll<HTMLInputElement>("input.event-flow-consent-native-check");
-  for (const cb of Array.from(checkboxes)) {
-    const card = cb.closest<HTMLElement>(".event-flow-consent-card");
-    if (!card) continue;
-    card.classList.toggle("is-invalid", cb.required && !cb.checked);
+  for (const checkbox of Array.from(checkboxes)) {
+    checkbox.checkValidity();
   }
 }
 

@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { renderConsentInputs, readConsentValues } from "../../assets/ts/shared/widgets/consents";
+import { act } from "preact/test-utils";
+import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../../assets/ts/shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../../assets/ts/shared/widgets/custom-fields";
 import { findFieldErrorTarget } from "../../assets/ts/shared/form/validation-map";
 import { installLiveValidation } from "../../assets/ts/shared/form/validation";
+import { controlFor } from "./helpers/labelled-control";
 
 const option = (value: string) => ({ value, label: value, active: true });
 
@@ -20,10 +22,13 @@ describe("frontend field rendering", () => {
       },
     ]);
 
-    const label = host.querySelector<HTMLLabelElement>("label.event-flow-consent-card-label");
-    expect(label?.textContent?.trim()).toBe("I have read and accept the privacy policy.");
+    // Resolved through the `for`/`id` pair rather than a class, so the lookup
+    // fails exactly when the label stops naming the control.
+    const consent = controlFor(host, "I have read and accept the privacy policy.");
+    expect(consent.type).toBe("checkbox");
+    expect(consent.required).toBe(true);
 
-    const link = host.querySelector<HTMLAnchorElement>("a.event-flow-consent-read-link");
+    const link = host.querySelector<HTMLAnchorElement>("a[aria-label^='Read:']");
     expect(link?.getAttribute("href")).toBe("/privacy");
 
     const form = document.createElement("form");
@@ -33,6 +38,34 @@ describe("frontend field rendering", () => {
     checkboxes[0].checked = true;
 
     expect(readConsentValues(form)).toEqual([{ termKey: "privacy", version: "v1" }]);
+  });
+
+  it("marks a required term that has not been agreed to when the flow validates the form", () => {
+    const form = document.createElement("form");
+    document.body.append(form);
+    const host = document.createElement("div");
+    form.append(host);
+    // Through `act`, so the card's effects — the one that listens for the
+    // platform's `invalid` event — have run before the form is validated.
+    void act(() => {
+      renderConsentInputs(host, [
+        { termKey: "privacy", version: "v1", required: true, contentRef: null, displayText: "Privacy policy" },
+      ]);
+    });
+
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+
+    // This used to reach into the card and toggle Bootstrap's `is-invalid`.
+    // It now asks the control to re-check itself, and the card takes its
+    // message from the platform's `invalid` event.
+    void act(() => {
+      syncConsentValidation(form);
+    });
+
+    const consent = controlFor(host, "Privacy policy");
+    expect(consent.getAttribute("aria-invalid")).toBe("true");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("You need to agree");
+    form.remove();
   });
 
   it("renders custom widgets and serializes values", () => {

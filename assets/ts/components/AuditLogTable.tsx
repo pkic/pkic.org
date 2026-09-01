@@ -8,16 +8,16 @@ function actorCell(
   entry: AuditLogEntry,
   entityHref?: (entityType: string, entityId: string) => string | null,
 ): ComponentChildren {
-  if (entry.actor_type === "system") return <span class="text-muted">System</span>;
+  if (entry.actor_type === "system") return <span class="pk-muted">System</span>;
   const href = entry.actor_id && entityHref ? entityHref(entry.actor_type, entry.actor_id) : null;
   if (entry.actor_display) return <EntityLink href={href}>{entry.actor_display}</EntityLink>;
   if (entry.actor_id)
     return (
       <EntityLink href={href}>
-        <span class="text-muted small">{entry.actor_id}</span>
+        <span class="pk-muted pk-small">{entry.actor_id}</span>
       </EntityLink>
     );
-  return <span class="text-muted">{entry.actor_type}</span>;
+  return <span class="pk-muted">{entry.actor_type}</span>;
 }
 
 export interface AuditLogTableProps {
@@ -60,13 +60,13 @@ export function AuditLogTable({
           header: "When",
           cell: (entry) =>
             new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
-          className: "text-nowrap small text-muted",
+          className: "pk-nowrap pk-small pk-muted",
           sort: { asc: "createdAt", desc: "-createdAt", defaultDirection: "desc" },
         },
         {
           header: "Actor",
           cell: (entry) => actorCell(entry, entityHref),
-          className: "small",
+          className: "pk-small",
           sort: { asc: "actor", desc: "-actor" },
         },
         { header: "Action", cell: actionCell, sort: { asc: "action", desc: "-action" } },

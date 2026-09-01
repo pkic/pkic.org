@@ -140,6 +140,13 @@
     text-align: center;
   }
 
+  /* The end-aligned counterpart. Also the word a table column uses to say
+     which way its cells run, so a migrated surface never has to write
+     `text-end` into a file the isolation gate holds at zero. */
+  .pk-end {
+    text-align: end;
+  }
+
   .pk-strong {
     font-weight: 700;
   }

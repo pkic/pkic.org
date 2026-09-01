@@ -84,13 +84,16 @@ describe("portal System Users list permissions", () => {
   it("renders initials when a user has no headshot, and an image when one is set", async () => {
     const container = mount(false, null);
     await settle();
-    const avatar = container.querySelector(".portal-user-avatar");
+    const avatar = container.querySelector(".pk-avatar");
     expect(avatar?.querySelector("img")).toBeNull();
     expect(avatar?.textContent).toBe("AL");
+    // The face repeats the name beside it, so it is decoration: a screen
+    // reader that announced "A L" before the name would be reading it twice.
+    expect(avatar?.getAttribute("aria-hidden")).toBe("true");
 
     const withPhoto = mount(false, "/api/v1/users/00000000-0000-4000-8000-000000000001/headshots/photo.webp");
     await settle();
-    const photoAvatar = withPhoto.querySelector(".portal-user-avatar img");
+    const photoAvatar = withPhoto.querySelector(".pk-avatar img");
     expect(photoAvatar).not.toBeNull();
     expect(photoAvatar?.getAttribute("src")).toBe(
       "/api/v1/users/00000000-0000-4000-8000-000000000001/headshots/photo.webp",

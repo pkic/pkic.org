@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ResourceSharingEditor } from "../../assets/ts/member-flows/portal/sections/management/ResourceSharingEditor";
+import { controlFor } from "./helpers/labelled-control";
 
 const OWNER_GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const GRANTEE_GROUP_ID = "10000000-0000-4000-8000-000000000002";
@@ -159,7 +160,7 @@ describe("portal resource sharing editor", () => {
 
     const capabilitySelect = container.querySelector<HTMLSelectElement>(`select[aria-label="Capability"]`)!;
     expect([...capabilitySelect.options].map((option) => option.value)).toContain(selectedCapability);
-    const groupSelect = container.querySelector<HTMLSelectElement>(`select[aria-label="Group"]`)!;
+    const groupSelect = controlFor<HTMLSelectElement>(container, "Group");
     groupSelect.value = GRANTEE_GROUP_ID;
     await act(async () => {
       groupSelect.dispatchEvent(new Event("change", { bubbles: true }));

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { paginatedResponseSchema } from "../../assets/shared/schemas/pagination";
 import { ServerSearchSelect } from "../../assets/ts/components/ServerSearchSelect";
 import type { ServerCatalog } from "../../assets/ts/shared/server-catalog";
+import { buttonNamed, controlFor } from "./helpers/labelled-control";
 
 const itemSchema = z.object({ id: z.string(), name: z.string() });
 const responseSchema = paginatedResponseSchema("items", itemSchema);
@@ -89,7 +90,9 @@ describe("ServerSearchSelect", () => {
     void act(() => {
       search.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    void act(() => (container.querySelector(".input-group button") as HTMLButtonElement).click());
+    // Located by the name the button announces rather than by the wrapper's
+    // class, which is styling and will change again.
+    void act(() => buttonNamed(container, "Search").click());
     await settle();
     expect(requests.at(-1)?.searchParams.get("q")).toBe("security");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
@@ -177,5 +180,62 @@ describe("ServerSearchSelect", () => {
     expect(filterRequests).toHaveLength(1);
     expect(filterRequests[0].searchParams.get("active")).toBe("false");
     expect(filterRequests[0].searchParams.get("offset")).toBe("0");
+  });
+
+  it("announces a failed load as an error rather than as differently coloured result text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "nope" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const container = mount(
+      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={() => {}} />,
+    );
+    await settle();
+
+    // The version this replaces put the failure in the same sentence as the
+    // result count and separated the two by colour alone, which is not a
+    // status anyone who cannot tell red from grey can read. A failure is now
+    // its own region, announced as one.
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).toContain("503");
+    // Paging is still reachable, so a transient failure is not a dead end.
+    expect(buttonNamed(container, "Previous").disabled).toBe(true);
+  });
+
+  it("names its select through the `for`/`id` pair the visible label promises", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              items: [{ id: "item-0", name: "Item 0" }],
+              page: { limit: 25, offset: 0, total: 1, hasMore: false },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    const container = mount(
+      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={() => {}} />,
+    );
+    await settle();
+
+    // Resolving the control through the label itself fails exactly when the
+    // pair is broken — which is what the bare `<label>` this replaces was.
+    expect(controlFor<HTMLSelectElement>(container, "Working group").tagName.toLowerCase()).toBe("select");
+    // The search field keeps a name of its own, distinct from the select's, so
+    // a page holding several selectors does not announce four "Search" boxes.
+    const search = container.querySelector('input[type="search"]');
+    expect(search?.getAttribute("aria-label")).toBe("Working group search");
+    // Its paging controls stay a named group rather than two loose buttons.
+    expect(container.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("Working group result pages");
   });
 });

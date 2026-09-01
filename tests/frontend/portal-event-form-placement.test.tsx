@@ -145,7 +145,7 @@ describe("portal event form placement management", () => {
     );
     await settle();
     await settle();
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Proposal submission questions"]')!;
+    const select = controlFor<HTMLSelectElement>(container, "Proposal submission questions");
     expect(select.querySelectorAll("option")).toHaveLength(3);
     select.value = "30000000-0000-4000-8000-000000000002";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -201,7 +201,7 @@ describe("portal event form placement management", () => {
     expect(requests.some(({ path }) => path.endsWith("/registration-settings"))).toBe(false);
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin"))).toBe(false);
 
-    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Registration questions"]')!;
+    const select = controlFor<HTMLSelectElement>(container, "Registration questions");
     select.value = "";
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
@@ -262,7 +262,9 @@ describe("portal event form placement management", () => {
     );
     await settle();
     expect(container.textContent).toContain("Proposal submission questions");
-    expect(container.querySelector('select[aria-label="Proposal submission questions"]')).not.toBeNull();
+    expect(controlFor<HTMLSelectElement>(container, "Proposal submission questions").tagName.toLowerCase()).toBe(
+      "select",
+    );
 
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
     await settle();

@@ -70,8 +70,11 @@ function headClass(head: HeadCell): string {
 
 function alignOf(...classNames: string[]): DataTableColumn<unknown>["align"] {
   const tokens = classNames.join(" ").split(/\s+/);
-  if (tokens.includes("text-end")) return "end";
-  if (tokens.includes("text-center")) return "center";
+  // Both vocabularies, so a migrated surface can say `pk-end` without writing
+  // a Bootstrap token into a file the isolation gate holds at zero, and an
+  // unmigrated one keeps working until it is converted.
+  if (tokens.includes("text-end") || tokens.includes("pk-end")) return "end";
+  if (tokens.includes("text-center") || tokens.includes("pk-center")) return "center";
   return undefined;
 }
 

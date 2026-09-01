@@ -90,6 +90,21 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/management/EventTermsEditor.tsx",
   "assets/ts/member-flows/portal/sections/system-users/UserMembershipCard.tsx",
   "assets/ts/member-flows/portal/sections/system-users/UserMembershipPanel.tsx",
+  "assets/ts/member-flows/portal/sections/leadership/LeadershipPositions.tsx",
+  "assets/ts/member-flows/portal/sections/leadership/Leadership.tsx",
+  "assets/ts/member-flows/portal/sections/management/GroupSettingsForm.tsx",
+  "assets/ts/components/FormActions.tsx",
+  "assets/ts/components/SuccessPanel.tsx",
+  "assets/ts/components/NotFoundPanel.tsx",
+  "assets/ts/components/VerifyingOverlay.tsx",
+  "assets/ts/components/MagicLinkFeedback.tsx",
+  "assets/ts/components/DetailsSummary.tsx",
+  "assets/ts/components/PersonCell.tsx",
+  "assets/ts/components/StatCard.tsx",
+  "assets/ts/components/Markdown.tsx",
+  "assets/ts/components/AuditLogTable.tsx",
+  "assets/ts/components/ConsentCard.tsx",
+  "assets/ts/components/passkey-settings.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

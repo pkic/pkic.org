@@ -769,14 +769,6 @@ main :is(h2, h3, h4):hover .header-link {
   }
 }
 
-#agenda-tabs .nav-link {
-  background: var(--bs-success-bg-subtle);
-}
-#agenda-tabs .active {
-  background: var(--bs-light);
-  font-weight: bold;
-}
-
 @keyframes member-marquee {
   from {
     transform: translateX(0);

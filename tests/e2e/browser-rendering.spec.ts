@@ -538,7 +538,10 @@ test.describe("browser workflows", () => {
     const watchButton = page.getByRole("button", { name: "Watch", exact: true }).first();
     await watchButton.click();
 
-    const modal = page.locator(".session-modal.show").first();
+    // The session detail is a native <dialog>; an open one is the only visible
+    // dialog on the page, so the role locator is enough and survives the next
+    // restyle in a way a class selector would not.
+    const modal = page.getByRole("dialog").first();
     await expect(modal).toBeVisible();
     const iframe = modal.locator('iframe[src*="youtube"]').first();
     await expect(iframe).toBeVisible();
@@ -547,7 +550,7 @@ test.describe("browser workflows", () => {
     expect(embedUrl).toBeTruthy();
     const requestsBeforeClose = embedRequestCounts.get(embedUrl ?? "") ?? 0;
 
-    await modal.locator('[data-bs-dismiss="modal"]').first().click();
+    await modal.getByRole("button", { name: "Close", exact: true }).first().click();
     await expect(modal).toBeHidden();
     await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
 

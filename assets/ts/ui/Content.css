@@ -31,6 +31,24 @@
   }
 
   /*
+   * A 16:9 embed — the one shape rendered Markdown needs that no primitive
+   * owns. It exists as a class because the alternative is a `style` attribute
+   * carrying the ratio, which the repository forbids and which a
+   * server-rendered page could not share. It lives here rather than in
+   * `utilities.css` for the same reason as everything else in this file: only
+   * the surfaces that render an embed should pay for it, and the entry
+   * stylesheet is already close to its budget. `box-sizing` is set locally
+   * because `base.css` only sets it inside `.pk`, and an embed is often
+   * dropped into a page that has not adopted the base layer yet.
+   */
+  .pk-embed {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+
+  /*
    * A name/value list — the metadata block under a profile, a record, an
    * order. `base.css` resets headings and lists but not a description list,
    * so a `dl` still arrives with the user agent's block margin and a 40px

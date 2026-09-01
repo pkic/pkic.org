@@ -1,72 +1,74 @@
 
-<nav class="sticky-top navbar navbar-expand-lg pkic-navbar" id="pkicMainNav">
-  <div class="container pkic-navbar-container">
-    <a href="/" class="navbar-brand d-flex align-items-center">
+<nav class="pkic-navbar" id="pkicMainNav" aria-label="Main">
+  <div class="pk-container pk-container--wide pkic-navbar-container">
+    <a href="/" class="pkic-navbar-brand" aria-label="PKI Consortium home">
       <img src="/img/logo.svg" height="30" alt="PKI Consortium">
     </a>
 
-    {{/* ── Centre: search (desktop only, absolutely positioned) ────── */}}
-    <div class="pkic-navbar-search d-none d-lg-flex" id="pkicNavSearch">
+    {{/* ── Centre: search (desktop only) ───────────────────────────── */}}
+    <div class="pkic-navbar-search" id="pkicNavSearch">
       <button class="pkic-search-trigger" id="pkicSearchToggle" type="button" aria-label="Open search">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
         </svg>
         <span class="pkic-search-trigger-label">Search…</span>
         <kbd class="pkic-search-shortcut" id="pkicSearchKbd">⌘K</kbd>
       </button>
       <div class="pkic-search-input-wrap" id="pkicSearchInputWrap">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" class="pkic-search-input-icon" viewBox="0 0 16 16">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" class="pkic-search-input-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
         </svg>
         <input type="search" id="pkicSearchInput" class="pkic-search-input-field" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Search">
         <button class="pkic-search-close-btn" id="pkicSearchClose" type="button" aria-label="Close search">
-          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 12 12"><path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </button>
       </div>
     </div>
 
-    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
+    <button class="pkic-navbar-toggler" type="button" id="pkicNavToggle" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 30 30" aria-hidden="true" focusable="false">
+        <path stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="2" d="M4 7h22M4 15h22M4 23h22"/>
+      </svg>
     </button>
 
-    <div class="collapse navbar-collapse" id="navbarContent">
+    <div class="pkic-navbar-collapse" id="navbarContent">
 
       {{- if $.Page.FirstSection.Param "sideMenu" -}}
-      <div class="navbar-nav mb-2 d-block d-sm-none">
+      <div class="pkic-navbar-sidemenu">
         {{- partial "menu.html" . -}}
       </div>
-      <hr class="border-secondary">
+      <hr class="pkic-navbar-divider">
       {{- end -}}
 
       {{/* ── Mobile search (inside collapse, not shown on desktop) ──── */}}
-      <div class="d-lg-none mb-2" id="pkicNavSearchMobile">
-        <button class="pkic-search-trigger w-100" id="pkicSearchToggleMobile" type="button" aria-label="Open search">
-          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+      <div class="pkic-navbar-mobile-search" id="pkicNavSearchMobile">
+        <button class="pkic-search-trigger" id="pkicSearchToggleMobile" type="button" aria-label="Open search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
             <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
           </svg>
           <span>Search…</span>
         </button>
       </div>
 
-      <div class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center" id="pkicNavItems">
+      <div class="pkic-navbar-nav" id="pkicNavItems">
         {{ $currentPage := . }}
         {{ range .Site.Menus.main }}
         {{ if .HasChildren }}
-        <div class="nav-item pkic-mega-trigger">
-          <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" href="{{ .URL }}" title="{{ .Title }}">{{ .Name }}</a>
+        <div class="pkic-mega-trigger">
+          <a class="pkic-nav-link{{ if $currentPage.IsMenuCurrent "main" . }} is-active{{ end }}" href="{{ .URL }}" title="{{ .Title }}">{{ .Name }}</a>
           <button class="pkic-mega-chevron" data-mega-target="pkic-wg-mega" aria-label="Open Working Groups menu" aria-expanded="false">
-            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/></svg>
           </button>
         </div>
         {{ else if eq .Identifier "members" }}
-        <div class="nav-item pkic-mega-trigger pkic-members-trigger">
-          <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" href="{{ .URL }}" title="{{ .Title }}">{{ .Name }}</a>
+        <div class="pkic-mega-trigger pkic-members-trigger">
+          <a class="pkic-nav-link{{ if $currentPage.IsMenuCurrent "main" . }} is-active{{ end }}" href="{{ .URL }}" title="{{ .Title }}">{{ .Name }}</a>
           <button class="pkic-mega-chevron" data-mega-target="pkic-members-mega" aria-label="Open Members menu" aria-expanded="false">
-            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/></svg>
           </button>
         </div>
         {{ else }}
-        <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" title="{{ .Title }}" href="{{ .URL }}">{{ .Name }}</a>
+        <a class="pkic-nav-link{{ if $currentPage.IsMenuCurrent "main" . }} is-active{{ end }}" title="{{ .Title }}" href="{{ .URL }}">{{ .Name }}</a>
         {{ end }}
         {{ end }}
       </div>
@@ -79,11 +81,11 @@
 
 {{/* ── Search results panel (drops down from navbar) ────────────── */}}
 <div class="pkic-search-panel" id="pkicSearchPanel" hidden aria-label="Search results">
-  <div class="container pb-5">
-    {{/* ── Mobile: search input — only shown on screens < lg where the navbar input is hidden ── */}}
-    <div class="d-lg-none pt-3 pb-1">
+  <div class="pk-container pk-container--wide pkic-search-panel-body">
+    {{/* ── Mobile: search input — only shown where the navbar input is hidden ── */}}
+    <div class="pkic-search-panel-mobile-input">
       <div class="pkic-search-input-wrap pkic-search-panel-input">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" class="pkic-search-input-icon" viewBox="0 0 16 16">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" class="pkic-search-input-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
         </svg>
         <input type="search" id="pkicSearchInputMobile" class="pkic-search-input-field" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Search">
@@ -91,13 +93,13 @@
     </div>
     {{/* Section filter pills + close button in one sticky row */}}
     <div class="pkic-search-filters" id="pkicSearchFilters">
-      <button class="pkic-filter-pill is-active" data-type="">All</button>
-      <button class="pkic-filter-pill" data-type="blog">Blog</button>
-      <button class="pkic-filter-pill" data-type="events">Events</button>
-      <button class="pkic-filter-pill" data-type="wg">Working Groups</button>
-      <button class="pkic-filter-pill" data-type="members">Members</button>
-      <button class="pkic-search-panel-close ms-auto" id="pkicSearchPanelClose" type="button" aria-label="Close search">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <button class="pkic-filter-pill is-active" type="button" data-type="">All</button>
+      <button class="pkic-filter-pill" type="button" data-type="blog">Blog</button>
+      <button class="pkic-filter-pill" type="button" data-type="events">Events</button>
+      <button class="pkic-filter-pill" type="button" data-type="wg">Working Groups</button>
+      <button class="pkic-filter-pill" type="button" data-type="members">Members</button>
+      <button class="pkic-search-panel-close pk-push" id="pkicSearchPanelClose" type="button" aria-label="Close search">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false"><path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>Close search</span>
         <kbd>Esc</kbd>
       </button>
@@ -116,34 +118,32 @@
 
 {{/* ── WG Mega-menu panel ────────────────────────────────────────────── */}}
 <div class="pkic-mega-panel" id="pkic-wg-mega" aria-label="Working Groups navigation">
-  <div class="container py-4">
-    <p class="pkic-mega-label mb-3">Working Groups</p>
-    <div class="row g-3">
+  <div class="pk-container pk-container--wide pkic-mega-body pk-stack pk-stack--snug">
+    <p class="pkic-mega-label">Working Groups</p>
+    <div class="pk-grid pk-grid--roomy">
       {{ range .Site.Menus.main }}
         {{ if .HasChildren }}
           {{ range .Children }}
             {{ with .Page }}
             {{ $color := .Params.color | default "green" }}
             {{ $wgIconID := .Params.card.icon | default (.Params.wgID | lower) }}
-            <div class="col-xl-4 col-md-6">
-              <a class="pkic-mega-wg-card pkic-mega-wg-card--{{ $color }}" href="{{ .RelPermalink }}">
-                <span class="pkic-mega-icon">
-                  {{ partial "wg/icon.html" (dict "id" $wgIconID "class" "pkic-mega-wg-svg") }}
-                </span>
-                <div class="pkic-mega-card-body">
-                  <div class="pkic-mega-wg-id">{{ .Params.wgID }}</div>
-                  <div class="pkic-mega-wg-name">{{ .Title }}</div>
-                  <p class="pkic-mega-wg-desc">{{ .Params.description | truncate 90 }}</p>
-                </div>
-                <span class="pkic-mega-arrow">→</span>
-              </a>
-            </div>
+            <a class="pkic-mega-wg-card pkic-mega-wg-card--{{ $color }}" href="{{ .RelPermalink }}">
+              <span class="pkic-mega-icon">
+                {{ partial "wg/icon.html" (dict "id" $wgIconID "class" "pkic-mega-wg-svg") }}
+              </span>
+              <div class="pkic-mega-card-body">
+                <div class="pkic-mega-wg-id">{{ .Params.wgID }}</div>
+                <div class="pkic-mega-wg-name">{{ .Title }}</div>
+                <p class="pkic-mega-wg-desc">{{ .Params.description | truncate 90 }}</p>
+              </div>
+              <span class="pkic-mega-arrow" aria-hidden="true">→</span>
+            </a>
             {{ end }}
           {{ end }}
         {{ end }}
       {{ end }}
     </div>
-    <div class="mt-3 pt-3 border-top">
+    <div class="pkic-mega-footer">
       <a href="/wg/" class="pkic-mega-footer-link">View all Working Groups →</a>
     </div>
   </div>
@@ -153,16 +153,16 @@
 
 {{/* ── Members Mega-menu panel ──────────────────────────────────────── */}}
 <div class="pkic-mega-panel pkic-members-mega-panel" id="pkic-members-mega" aria-label="Members navigation">
-  <div class="container py-4">
-    <div class="row g-4 align-items-start">
+  <div class="pk-container pk-container--wide pkic-mega-body">
+    <div class="pk-grid pk-grid--roomy">
 
       {{/* Left: overview */}}
-      <div class="col-lg-4">
-        <p class="pkic-mega-label mb-2">Members</p>
-        <p class="mb-3" style="font-size:0.84rem;color:#444;line-height:1.5;">
+      <div class="pk-stack pk-stack--snug">
+        <p class="pkic-mega-label">Members</p>
+        <p class="pk-small">
           The PKI Consortium brings together leading organizations committed to trustworthy digital identities and secure communication.
         </p>
-        <div class="d-flex gap-3 mb-3">
+        <div class="pk-cluster">
           <a href="/members/" class="pkic-members-stat-card">
             <span class="pkic-members-stat-num" data-member-count="organization" aria-live="polite">—</span>
             <span class="pkic-members-stat-label">Members</span>
@@ -176,34 +176,32 @@
       </div>
 
       {{/* Right: actions */}}
-      <div class="col-lg-4 offset-lg-1">
-        <p class="pkic-mega-label mb-3">Quick links</p>
-        <div class="d-flex flex-column gap-2">
-          <a href="/join/" class="pkic-members-action-link">
-            <span class="pkic-members-action-icon">🤝</span>
-            <div>
-              <div class="pkic-members-action-title">Join the PKI Consortium</div>
-              <div class="pkic-members-action-desc">Become part of our global network</div>
-            </div>
-            <span class="pkic-mega-arrow ms-auto">→</span>
-          </a>
-          <a href="/application-process/" class="pkic-members-action-link">
-            <span class="pkic-members-action-icon">📋</span>
-            <div>
-              <div class="pkic-members-action-title">Application Process</div>
-              <div class="pkic-members-action-desc">Learn how membership works</div>
-            </div>
-            <span class="pkic-mega-arrow ms-auto">→</span>
-          </a>
-          <a href="/bylaws/" class="pkic-members-action-link">
-            <span class="pkic-members-action-icon">📄</span>
-            <div>
-              <div class="pkic-members-action-title">Bylaws &amp; Governance</div>
-              <div class="pkic-members-action-desc">How decisions are made</div>
-            </div>
-            <span class="pkic-mega-arrow ms-auto">→</span>
-          </a>
-        </div>
+      <div class="pk-stack pk-stack--snug">
+        <p class="pkic-mega-label">Quick links</p>
+        <a href="/join/" class="pkic-members-action-link">
+          <span class="pkic-members-action-icon" aria-hidden="true">🤝</span>
+          <div>
+            <div class="pkic-members-action-title">Join the PKI Consortium</div>
+            <div class="pkic-members-action-desc">Become part of our global network</div>
+          </div>
+          <span class="pkic-mega-arrow pk-push" aria-hidden="true">→</span>
+        </a>
+        <a href="/application-process/" class="pkic-members-action-link">
+          <span class="pkic-members-action-icon" aria-hidden="true">📋</span>
+          <div>
+            <div class="pkic-members-action-title">Application Process</div>
+            <div class="pkic-members-action-desc">Learn how membership works</div>
+          </div>
+          <span class="pkic-mega-arrow pk-push" aria-hidden="true">→</span>
+        </a>
+        <a href="/bylaws/" class="pkic-members-action-link">
+          <span class="pkic-members-action-icon" aria-hidden="true">📄</span>
+          <div>
+            <div class="pkic-members-action-title">Bylaws &amp; Governance</div>
+            <div class="pkic-members-action-desc">How decisions are made</div>
+          </div>
+          <span class="pkic-mega-arrow pk-push" aria-hidden="true">→</span>
+        </a>
       </div>
 
     </div>

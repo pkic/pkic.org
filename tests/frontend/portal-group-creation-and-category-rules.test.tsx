@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupCategoryRulesEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupCategoryRulesEditor";
 import { GroupCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupCreateForm";
+import { controlFor } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 
@@ -98,7 +99,7 @@ describe("portal group creation and category policy", () => {
     await act(() => render(<GroupCreateForm onCreated={onCreated} />, container));
     await settle();
     await settle();
-    const typeSelect = container.querySelector<HTMLSelectElement>('select[aria-label="Group type"]')!;
+    const typeSelect = controlFor<HTMLSelectElement>(container, "Group type");
     typeSelect.value = "working_group";
     await act(async () => {
       typeSelect.dispatchEvent(new Event("change", { bubbles: true }));

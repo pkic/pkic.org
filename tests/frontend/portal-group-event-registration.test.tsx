@@ -144,7 +144,9 @@ describe("portal group event registration", () => {
     const attendance = form.querySelector<HTMLInputElement>("input[name='attendanceType'][value='virtual']")!;
     attendance.checked = true;
     attendance.dispatchEvent(new Event("change", { bubbles: true }));
-    form.querySelector<HTMLElement>(".event-flow-consent-card")?.click();
+    // The consent is a real checkbox now, so the test agrees to it the way
+    // a reader does rather than by clicking a styling class.
+    form.querySelector<HTMLInputElement>("input[name='consents']")?.click();
     await settle();
     await act(async () => {
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -206,7 +208,9 @@ describe("portal group event registration", () => {
     const attendance = form.querySelector<HTMLInputElement>("input[name='dayAttendance.2026-09-01']")!;
     attendance.checked = true;
     attendance.dispatchEvent(new Event("change", { bubbles: true }));
-    form.querySelector<HTMLElement>(".event-flow-consent-card")?.click();
+    // The consent is a real checkbox now, so the test agrees to it the way
+    // a reader does rather than by clicking a styling class.
+    form.querySelector<HTMLInputElement>("input[name='consents']")?.click();
     await act(async () => {
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
