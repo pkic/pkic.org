@@ -69,7 +69,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["assets/js/**/*.js", "static/scripts/**/*.js"],
+    files: ["assets/js/**/*.js", "static/js/*.js", "static/scripts/**/*.js"],
     languageOptions: {
       globals: globals.browser,
     },

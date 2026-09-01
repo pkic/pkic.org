@@ -48,18 +48,28 @@ test.describe("the portal's appearance", () => {
         );
         expect(sideways, `${screen.name} scrolls sideways at ${size.width}px`).toBe(false);
 
-        // A measured list, not one stretched to whatever the window offers.
-        const overWide = await page.evaluate(() => {
+        // The list fills the width it is given, and the slack all sits in the
+        // subject column rather than drifting between the others. This
+        // assertion replaced its own opposite: an earlier policy capped the
+        // list at a reading measure, and the maintainer's next complaint was
+        // "the pages are not using the full width".
+        const layout = await page.evaluate(() => {
           const table = document.querySelector("table.pk-table");
           if (!table) return null;
           const main = document.querySelector("#portal-main") ?? document.body;
           const room = main.getBoundingClientRect().width;
           const width = table.getBoundingClientRect().width;
-          // A table may fill a narrow screen; it may not simply take all of a
-          // wide one, which is what an unbounded `table-layout: auto` did.
-          return room > 1200 && width > room * 0.95 ? Math.round(width) : null;
+          const headers = [...table.querySelectorAll("th")];
+          const primary = headers.find((th) => th.classList.contains("pk-table__col--primary"));
+          return {
+            fills: width >= Math.min(room, main.clientWidth) * 0.9,
+            hasPrimary: primary !== undefined,
+          };
         });
-        expect(overWide, `${screen.name}'s table stretches to fill the window`).toBeNull();
+        if (layout) {
+          expect(layout.fills, `${screen.name}'s table leaves the width unused`).toBe(true);
+          expect(layout.hasPrimary, `${screen.name}'s table has no slack column`).toBe(true);
+        }
 
         await testInfo.attach(`${screen.name}-${size.name}`, {
           body: await page.screenshot({ fullPage: false }),

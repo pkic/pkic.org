@@ -18,7 +18,7 @@
     if (theme === "light" || theme === "dark") {
       document.documentElement.setAttribute("data-theme", theme);
     }
-  } catch (e) {
+  } catch {
     /* Storage refused; the system's preference still applies. */
   }
 })();
