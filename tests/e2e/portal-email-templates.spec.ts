@@ -30,7 +30,9 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await page.getByLabel("Template key").fill(templateKey);
   await expect(page.getByText("Key is available", { exact: true })).toBeVisible();
   await page.getByLabel("Subject template").fill("System template for {{firstName}}");
-  await page.getByLabel("Body", { exact: true }).fill(initialBody);
+  // A required Field carries a screen-reader-only "(required)" inside its
+  // label, so that — not the bare word — is the control's accessible name.
+  await page.getByRole("textbox", { name: "Body (required)", exact: true }).fill(initialBody);
 
   const createResponse = page.waitForResponse(
     (response) =>

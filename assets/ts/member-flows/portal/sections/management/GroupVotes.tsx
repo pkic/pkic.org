@@ -141,13 +141,11 @@ export function GroupVotes({
                   ]}
                   empty={
                     canManage ? (
-                      // An empty list a manager can act on hands them the
-                      // action rather than naming what is absent and stopping.
-                      <EmptyState
-                        title="No votes yet"
-                        body="Create a vote to get started."
-                        action={{ label: "Create vote", onSelect: () => setShowCreate(true) }}
-                      />
+                      // The way out is named, not repeated: the toolbar above
+                      // already carries "Create vote", and a second button
+                      // with that same name is one command answering to two
+                      // controls.
+                      <EmptyState title="No votes yet" body="Use Create vote above to get started." />
                     ) : (
                       "No votes are available through this group."
                     )

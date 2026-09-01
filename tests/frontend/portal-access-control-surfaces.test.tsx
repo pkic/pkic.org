@@ -512,7 +512,7 @@ describe("the roles list on the design system", () => {
     expect(container.querySelector('button[aria-label="Actions for custom_reviewer"]')).toBeTruthy();
   });
 
-  it("offers the way out of an empty roles list to a caller who can create one", async () => {
+  it("offers exactly one way out of an empty roles list to a caller who can create one", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json({ roles: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
@@ -523,8 +523,16 @@ describe("the roles list on the design system", () => {
 
     const empty = container.querySelector('[role="status"]')!;
     expect(empty.textContent).toContain("No roles yet");
-    const action = Array.from(empty.querySelectorAll("button")).find((button) => button.textContent === "New role")!;
-    void act(() => action.click());
+    // The empty state names the way out rather than cloning it: one command
+    // reachable through one control, so "New role" is not two different
+    // buttons to anyone navigating by name.
+    expect(empty.textContent).toContain("New role");
+    expect(empty.querySelectorAll("button")).toHaveLength(0);
+    const actions = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent === "New role",
+    );
+    expect(actions).toHaveLength(1);
+    void act(() => actions[0].click());
     expect(onCreateNew).toHaveBeenCalled();
   });
 });

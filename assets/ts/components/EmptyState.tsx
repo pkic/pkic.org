@@ -6,6 +6,12 @@
  * The `action` shorthand exists because seventeen surfaces pass one; the
  * design system's EmptyState takes children, so the button it renders is the
  * design system's Button rather than a Bootstrap one.
+ *
+ * One command, one control: pass `action` only when nothing else on the
+ * surface already offers it. A list whose `ApiDataTable` declares a
+ * `createAction` puts that command in the toolbar directly above this state,
+ * and repeating it here leaves two buttons with one accessible name — which
+ * is ambiguous to anyone navigating by name rather than by sight.
  */
 import type { ComponentChildren } from "preact";
 

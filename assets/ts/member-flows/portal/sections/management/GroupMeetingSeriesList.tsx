@@ -108,11 +108,10 @@ export function GroupMeetingSeriesList({
       ]}
       empty={
         createAction ? (
-          <EmptyState
-            title="No meeting series yet"
-            body="Create a meeting series to get started."
-            action={createAction}
-          />
+          // The same `createAction` is already the toolbar's button, so this
+          // state names it rather than rendering it a second time under the
+          // same accessible name.
+          <EmptyState title="No meeting series yet" body={`Use ${createAction.label} above to get started.`} />
         ) : (
           "No matching meeting series."
         )

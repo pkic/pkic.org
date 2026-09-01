@@ -284,7 +284,16 @@ export function ProposalDetailPage({
       <div class="pk-grid pk-grid--roomy">
         {/* Main content */}
         <div class="pk-stack">
-          <Tabs items={tabItems} active={activeTab} onChange={(key) => setActiveTab(key as DetailTab)} />
+          {/* Named for what it switches. The default "Sections" collides with
+              the group workspace's own "<group> sections" strip on the same
+              page — and its "Audit log" entry — leaving two tab strips a
+              reader cannot tell apart. */}
+          <Tabs
+            items={tabItems}
+            active={activeTab}
+            label="Proposal sections"
+            onChange={(key) => setActiveTab(key as DetailTab)}
+          />
 
           {/* ── Submission tab ── */}
           {activeTab === "submission" && (

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
 
@@ -150,7 +151,7 @@ test("a selected-group manager changes one attendee day through portal routes", 
   await page.getByPlaceholder("Search events…").fill(event.slug);
   const row = page.getByRole("row").filter({ hasText: event.name });
   await expect(row).toBeVisible();
-  await row.getByRole("button", { name: "Details" }).click();
+  await openRow(row, `Open ${event.name}`);
   const detail = page.getByRole("region", { name: `${event.name} workspace` });
   await tab(detail, "Registrations").click();
   await expect(detail.getByRole("heading", { name: "Attendees", exact: true })).toBeVisible();
@@ -161,19 +162,25 @@ test("a selected-group manager changes one attendee day through portal routes", 
   const attendance = page.getByRole("region", { name: "Attendance for E2E Attendee" });
   await expect(attendance).toBeVisible();
   await expect(attendance.getByLabel("Attendance for 2027-07-10")).toHaveValue("in_person");
-  await expect(attendance.getByText("—", { exact: true })).toBeVisible();
+  // The waitlist state is read from the day's own row rather than from
+  // anywhere in the panel, and it is the badge's word — the raw status token
+  // is no longer what the cell renders.
+  const attendanceDay = attendance.getByRole("row").filter({ hasText: "2027-07-10" });
+  await expect(attendanceDay.getByText("—", { exact: true })).toBeVisible();
 
   await attendance.getByRole("button", { name: "Return to waitlist" }).click();
-  await expect(attendance.getByText("waiting", { exact: true })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("updated");
+  await expect(attendanceDay.getByText("Waiting", { exact: true })).toBeVisible();
+  // Several live regions share the page — the selection counter, the panel's
+  // own outcome alert, the toast — so each assertion names the one it means.
+  await expect(page.getByRole("status").filter({ hasText: "updated" })).toBeVisible();
 
   await attendance.getByLabel("Admit day").check();
   await attendance.getByRole("button", { name: "Admit selected days" }).click();
-  await expect(attendance.getByText("accepted", { exact: true })).toBeVisible();
+  await expect(attendanceDay.getByText("Accepted", { exact: true })).toBeVisible();
   await expect(attendance.getByLabel("Attendance for 2027-07-10")).toHaveValue("in_person");
-  await expect(page.getByRole("status")).toContainText("admitted");
+  await expect(page.getByRole("status").filter({ hasText: "admitted" })).toBeVisible();
 
-  const vipOverride = attendance.getByRole("group", { name: "Reasoned VIP admission override" });
+  const vipOverride = attendance.getByRole("region", { name: "Reasoned VIP admission override" });
   await expect(vipOverride).toContainText("Requires the effective event manage capability");
   await vipOverride.getByLabel("E2E Saturday — 2027-07-10").check();
   await vipOverride.getByLabel("Required reason").fill("E2E invited consortium guest");

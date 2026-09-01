@@ -1,3 +1,5 @@
+import { useEffect } from "preact/hooks";
+
 import { usePortalHashLocation } from "../../hash-location";
 import { Tabs } from "../../../../components/Tabs";
 import { Grants } from "./Grants";
@@ -47,6 +49,18 @@ export function AccessControl({
 } = {}) {
   const [, navigate] = usePortalHashLocation();
   const { tab, roleSegment } = resolveAccessControlTab(resourceId);
+
+  /**
+   * Every tab here is a place, and each one navigates to `/system/access-control/:tab`
+   * when it is chosen. The sidebar's own entry points at the bare section path,
+   * though, so arriving from navigation left the default tab showing at an
+   * address that named no tab: the same view under two URLs, only one of which
+   * a reader could share back. Rewriting the entry — replacing, so Back still
+   * leaves the section — gives the visible tab and the address bar one answer.
+   */
+  useEffect(() => {
+    if (!resourceId) navigate(`/system/access-control/${tab}`, { replace: true });
+  }, [resourceId, tab, navigate]);
 
   return (
     <div>

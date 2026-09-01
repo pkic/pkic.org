@@ -106,7 +106,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   await expect(page.getByText("No entries match the current filters.", { exact: true })).toBeVisible();
   await expect(pager).toHaveCount(0);
 
-  await page.getByRole("button", { name: "↺ Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText("page_one_action", { exact: true })).toBeVisible();
   await expect(pager).toContainText("1–1 of 51");
   await expect(currentPage).toHaveText("1");
@@ -118,7 +118,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   await expect(pager).toContainText("51–51 of 51");
   await expect(currentPage).toHaveText("2");
 
-  await page.getByRole("button", { name: "↺ Refresh" }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("Synthetic audit log failure");
   expect(requestCount).toBe(4);
   expect(requestOffsets).toEqual([0, 0, 50, 50]);

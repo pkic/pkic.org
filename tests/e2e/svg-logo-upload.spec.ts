@@ -32,7 +32,16 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   const firstIdentity = createForm.getByRole("group", { name: "Identity 1" });
   await firstIdentity.getByLabel("Name").fill("Logo Representative");
   await firstIdentity.getByLabel("Email").fill(`svg-logo-${suffix}@example.invalid`);
+  // Creating an organization activates its identities at once, so the form
+  // requires a reason for it. Leaving it empty does not fail the request — the
+  // browser refuses to submit at all, and nothing is ever created.
+  await createForm.getByLabel("Immediate activation reason").fill("E2E SVG logo setup");
+  const createResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/organizations" && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Create organization" }).click();
+  expect((await createResponse).status()).toBe(201);
   await expect(page.getByText("Organization created", { exact: true })).toBeVisible();
 
   await page.getByRole("cell", { name: new RegExp(organizationName) }).click();

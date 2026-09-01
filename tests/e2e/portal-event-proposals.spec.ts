@@ -105,10 +105,13 @@ test("portal proposal detail uses canonical proposal resources without admin fal
       response.request().method() === "GET" &&
       new URL(response.url()).pathname === `/api/v1/proposals/${proposalId}/audit-log`,
   );
-  await tab(page, "Audit Log").click();
+  // Scoped to the proposal's own tab strip: the group workspace around it
+  // carries an "Audit log" tab of its own, and an unscoped lookup names both.
+  const proposalTabs = page.getByRole("tablist", { name: "Proposal sections" });
+  await tab(proposalTabs, "Audit Log").click();
   expect((await auditResponse).status()).toBe(200);
   await expect(page.getByRole("heading", { name: "Audit Log", exact: true })).toBeVisible();
-  await tab(page, "Speakers").click();
+  await tab(proposalTabs, "Speakers").click();
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   await expect(page.getByLabel("Proposal speakers").getByText("Portal Proposer", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit profile" }).click();

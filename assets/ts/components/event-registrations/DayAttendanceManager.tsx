@@ -324,8 +324,11 @@ export function DayAttendanceManager({
             : "Select waitlisted in-person days to enable admission."}
         </span>
       </div>
+      {/* The override is one of several sections stacked inside the attendance
+          panel, so it names itself: an unnamed <section> is announced as
+          nothing at all. */}
       {canVip && (
-        <Panel>
+        <Panel aria-label="Reasoned VIP admission override">
           <PanelHeader title="Reasoned VIP admission override" />
           <PanelBody class="pk-stack pk-stack--snug">
             <p class="pk-small">

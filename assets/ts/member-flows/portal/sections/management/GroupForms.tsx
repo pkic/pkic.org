@@ -121,13 +121,10 @@ export function GroupForms({
             ]}
             empty={
               canManage ? (
-                // An empty list a manager can act on hands them the action,
-                // rather than naming what is absent and stopping there.
-                <EmptyState
-                  title="No forms yet"
-                  body="Create a form to get started."
-                  action={{ label: "New form", onSelect: () => setShowCreate(true) }}
-                />
+                // The way out is named, not repeated: the toolbar above
+                // already carries "New form", and a second button with that
+                // same name is one command answering to two controls.
+                <EmptyState title="No forms yet" body="Use New form above to get started." />
               ) : (
                 "No forms are available through this group."
               )

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { definitionFor } from "./helpers/definition-list";
 
 test("permitted staff manage organizations through the canonical domain API", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -93,9 +94,12 @@ test("permitted staff manage organizations through the canonical domain API", as
   // Located by role rather than by the class the record used to carry: the
   // user's name is a real heading now.
   await expect(page.getByRole("heading", { name: "Secondary Representative", level: 2 })).toBeVisible();
-  const capacityCard = page.locator(".border.rounded.p-3").filter({ hasText: organizationName });
-  await expect(capacityCard).toContainText(secondaryEmail);
-  await expect(capacityCard).toContainText("Program Manager");
+  // The acting identity is a description list, not a bordered card, so each
+  // value is asserted under the label it answers rather than as text somewhere
+  // inside `.border.rounded.p-3` — Bootstrap class names that are now gone.
+  await expect(definitionFor(page, "Organization")).toHaveText(organizationName);
+  await expect(definitionFor(page, "Identity email")).toHaveText(secondaryEmail);
+  await expect(definitionFor(page, "Job title")).toHaveText("Program Manager");
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   await expect(page.locator("#user-organizationName")).toHaveCount(0);
   await expect(page.locator("#user-jobTitle")).toHaveCount(0);

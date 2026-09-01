@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { acceptConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -48,17 +49,29 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   const editRow = management.locator("tr").filter({ hasText: `Manage ${label}` });
   await expect(editRow).toBeVisible();
   await editRow.getByLabel("Label").fill(editedLabel);
+  // The edit is asserted on its own response, the way the creation above is,
+  // rather than by racing the table's re-render.
+  const listUpdated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      new URL(response.url()).pathname.startsWith(`/api/v1/groups/${GROUP_ID}/mailing-lists/`),
+  );
   await editRow.getByRole("button", { name: "Save changes" }).click();
+  expect((await listUpdated).status()).toBe(200);
 
   const editedRow = management.getByRole("row").filter({ hasText: email });
   await expect(editedRow).toContainText(editedLabel);
-  page.on("dialog", async (dialog) => {
-    expect(dialog.message()).toContain(editedLabel);
-    await dialog.accept();
-  });
-  await editedRow.getByRole("button", { name: "Archive" }).click();
+  // Archiving now lives in the row's actions menu behind the portal's own
+  // confirmation, not an inline button behind `window.confirm`.
+  const rowActions = editedRow.getByRole("button", { name: `Actions for ${editedLabel}` });
+  await rowActions.click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await expect(confirmDialog(page)).toContainText(editedLabel);
+  await acceptConfirmDialog(page, "Archive mailing list");
   await expect(editedRow).toContainText("Archived");
-  await expect(editedRow.getByRole("button", { name: "Archive" })).toBeDisabled();
+  // An archived list offers the action still, disabled, rather than hiding it.
+  await rowActions.click();
+  await expect(page.getByRole("menuitem", { name: "Archive" })).toBeDisabled();
 
   expect(adminRequests, "portal group management must not fall back to admin APIs").toEqual([]);
   expect(groupMailingListRequests).toEqual(

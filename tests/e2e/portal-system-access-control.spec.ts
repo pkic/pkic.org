@@ -45,7 +45,11 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles\/new$/);
 
   const roleName = `e2e_access_${Date.now()}`;
-  const createCard = page.getByText("New role", { exact: true }).locator("..", { has: page.locator("form") });
+  // The form names itself, so it is reached by that name rather than by climbing
+  // from the heading to a parent that happens to contain it: the heading now
+  // lives in the panel's own header, a sibling of the body holding the form.
+  const createCard = page.getByRole("form", { name: "New role" });
+  await expect(createCard).toBeVisible();
   await createCard.getByLabel("Name").fill(roleName);
   await createCard.getByLabel("Description").fill("Temporary browser-test role");
 
@@ -84,7 +88,9 @@ test("permitted staff manage a custom role through the Settings portal", async (
     (response) =>
       new URL(response.url()).pathname.startsWith(`${ROLES_API}/`) && response.request().method() === "DELETE",
   );
-  await roleRow.getByRole("button", { name: "Row actions" }).click();
+  // Each row's menu names the role it acts on, so a page of rows no longer
+  // offers a column of menus all called "Row actions".
+  await roleRow.getByRole("button", { name: `Actions for ${roleName}` }).click();
   await page.getByRole("menuitem", { name: "Delete role" }).click();
   await acceptConfirmDialog(page, "Delete role");
   expect((await deleteResponse).status()).toBe(200);

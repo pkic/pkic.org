@@ -6,6 +6,7 @@ import {
   groupEventsListResponseSchema,
 } from "../../assets/shared/schemas/group-events";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
 
@@ -20,7 +21,12 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const eventName = `Portal architecture workshop ${unique}`;
   const eventSlug = `portal-architecture-workshop-${unique}`;
 
-  await page.getByRole("button", { name: "Create event" }).click();
+  // Two controls legitimately read "Create event": the list toolbar's button
+  // that opens the form, and the form's own submit. Each is addressed through
+  // the surface that owns it rather than by adding `.first()`.
+  const eventsToolbar = page.getByRole("toolbar", { name: "Group events controls" });
+  await eventsToolbar.getByRole("button", { name: "Create event" }).click();
+  const eventForm = page.getByRole("region", { name: "New group event" });
   await page.getByLabel("Event name").fill(eventName);
   await page.getByLabel("Slug").fill(eventSlug);
   await expect(page.getByLabel("Slug")).toHaveValue(eventSlug);
@@ -37,12 +43,12 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       new URL(response.url()).pathname === `/api/v1/groups/${GROUP_ID}/events` &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Create event", exact: true }).click();
+  await eventForm.getByRole("button", { name: "Create event", exact: true }).click();
   expect((await eventCreated).status()).toBe(201);
 
   const row = page.getByRole("row").filter({ hasText: eventName });
   await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.getByRole("button", { name: "Details" }).click();
+  await openRow(row, `Open ${eventName}`);
   const detail = page.getByRole("region", { name: `${eventName} workspace` });
   await expect(detail.getByText("Amsterdam and online", { exact: true })).toBeVisible();
   await expect(detail.locator('a[href="https://example.test/portal-workshop"]')).toHaveAttribute(

@@ -163,6 +163,27 @@ describe("portal system access control", () => {
     expect(navigate).toHaveBeenCalledWith("/system/access-control/grants");
   });
 
+  it("rewrites the bare section path to the tab it is actually showing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    mount(<AccessControl canGrant canRevoke />);
+    await settle();
+    // Replaced rather than pushed: Back belongs to whoever linked here.
+    expect(navigate).toHaveBeenCalledWith("/system/access-control/grants", { replace: true });
+  });
+
+  it("leaves a URL that already names its tab alone", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    mount(<AccessControl canGrant canRevoke resourceId="grants" />);
+    await settle();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it("falls back to the grants tab for an unrecognized resourceId", async () => {
     vi.stubGlobal(
       "fetch",

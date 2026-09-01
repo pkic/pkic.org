@@ -201,9 +201,15 @@
 
   /*
    * A row that activates something. The control is a real link or button in
-   * the first cell, stretched over the whole row by its ::after, so the row is
-   * clickable everywhere while remaining one focusable, named, Enter-activated
-   * control. A `<tr onClick>` is none of those things.
+   * the first cell, stretched over the whole row, so the row is clickable
+   * everywhere while remaining one focusable, named, Enter-activated control.
+   * A `<tr onClick>` is none of those things.
+   *
+   * The control is stretched by its own box rather than by an `::after`
+   * overlay: its label is visually hidden, so a statically positioned button
+   * measures 0x0 and the only thing occupying the row is a pseudo-element
+   * nothing can hit-test, scroll into view, or report as visible. The
+   * element that receives the click is now the element that has the size.
    */
   .pk-table__row--action {
     position: relative;
@@ -215,7 +221,8 @@
   }
 
   .pk-table__row-link {
-    position: static;
+    position: absolute;
+    inset: 0;
     padding: 0;
     background: none;
     border: 0;
@@ -224,15 +231,14 @@
     cursor: pointer;
   }
 
-  .pk-table__row-link::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-  }
-
-  /* Anything the row's own cells offer - a menu, a link - must sit above the
-     stretched control, or the row swallows every click meant for it. */
-  .pk-table__row--action td > *:not(.pk-table__row-link) {
+  /* Anything the row's own cells offer - a menu, a link, a checkbox - must sit
+     above the stretched control, or the row swallows every click meant for it.
+     Only what a reader can actually operate is lifted, though: raising every
+     element child put a `<span>` that merely styles half a cell's text over the
+     row's own link, so clicking that half of the text did nothing at all. */
+  .pk-table__row--action
+    td
+    :is(a, button, input, select, textarea, label, summary, [role="menu"], [tabindex]):not(.pk-table__row-link) {
     position: relative;
     z-index: 1;
   }

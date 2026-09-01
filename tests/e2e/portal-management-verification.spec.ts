@@ -217,9 +217,13 @@ test.describe("Portal management browser-verification pass", () => {
     const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
 
-    const visibility = detail.getByLabel("Visibility");
+    // The editor is a named form ("Vote visibility") around a field labelled
+    // "Visibility", so the control is asked for by its exact label rather
+    // than by a substring that also matches the form around it.
+    const visibilityForm = detail.getByRole("form", { name: "Vote visibility" });
+    const visibility = visibilityForm.getByLabel("Visibility", { exact: true });
     await visibility.selectOption("public");
-    await detail.getByRole("button", { name: "Save visibility" }).click();
+    await visibilityForm.getByRole("button", { name: "Save visibility" }).click();
     await expect(visibility).toHaveValue("public");
 
     await detail.getByRole("button", { name: "Load identifiable ballots" }).click();
@@ -283,7 +287,11 @@ test.describe("Portal management browser-verification pass", () => {
     await page.context().clearCookies();
     await signInToPortal(page, ADMIN_EMAIL);
     await page.goto(`/portal/#/groups/${groupId}/votes`);
-    await page.getByRole("button", { name: "Proposals", exact: true }).click();
+    // The vote sections swap a panel already on the page, so they are the
+    // WAI-ARIA tab pattern rather than plain buttons — reached through the
+    // helper that knows both kinds, and asserted to actually be showing.
+    await tab(page, "Proposals").click();
+    await expectCurrentTab(page, "Proposals");
 
     // The expanded detail is a second table row containing the same title.
     // Anchor the locator to the data row's Details action so it remains
@@ -305,7 +313,8 @@ test.describe("Portal management browser-verification pass", () => {
     await acceptConfirmDialog(page, "Approve and create vote");
     await expect(proposalRow).toContainText(/converted to vote/i);
 
-    await page.getByRole("button", { name: "All votes", exact: true }).click();
+    await tab(page, "All votes").click();
+    await expectCurrentTab(page, "All votes");
     await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible();
   });
 

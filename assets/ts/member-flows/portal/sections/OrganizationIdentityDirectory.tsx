@@ -289,7 +289,10 @@ export function ActingIdentityDirectory({
       ]}
       empty={
         createAction ? (
-          <EmptyState title="No identities yet" body="Invite an identity to get started." action={createAction} />
+          // The same `createAction` is already the toolbar's button, so this
+          // state names it rather than rendering it a second time under the
+          // same accessible name.
+          <EmptyState title="No identities yet" body={`Use ${createAction.label} above to get started.`} />
         ) : (
           "No identities"
         )

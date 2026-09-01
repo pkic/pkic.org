@@ -231,10 +231,12 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
         ]}
         empty={
           canGrant ? (
+            // The toolbar above already carries "New grant"; repeating it
+            // here would leave one command answering to two identically
+            // named controls.
             <EmptyState
               title="No permission grants yet"
-              body="Grant a permission to give someone access without assigning a full role."
-              action={{ label: "New grant", onSelect: () => setCreating(true) }}
+              body="Use New grant above to give someone access without assigning a full role."
             />
           ) : (
             <EmptyState title="No permission grants yet" />

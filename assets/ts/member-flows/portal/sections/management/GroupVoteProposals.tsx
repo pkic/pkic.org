@@ -251,10 +251,12 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
         ]}
         empty={
           canParticipate ? (
+            // "Propose a vote" is already above this state, as the form's
+            // disclosure; a second button under that name would be one
+            // command answering to two controls.
             <EmptyState
               title="No vote proposals yet"
-              body="Propose a vote for this group to start collecting endorsements."
-              action={{ label: "Propose a vote", onSelect: () => setShowCreate(true) }}
+              body="Use Propose a vote above to start collecting endorsements."
             />
           ) : (
             "No vote proposals are available through this group."

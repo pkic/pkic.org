@@ -144,11 +144,10 @@ export function RoleList({
       ]}
       empty={
         canGrant ? (
-          <EmptyState
-            title="No roles yet"
-            body="Create a role to bundle permissions you assign together."
-            action={{ label: "New role", onSelect: onCreateNew }}
-          />
+          // The toolbar above already carries "New role"; repeating it here
+          // would leave one command answering to two identically named
+          // controls.
+          <EmptyState title="No roles yet" body="Use New role above to bundle permissions you assign together." />
         ) : (
           <EmptyState title="No roles yet" body="No roles have been defined for this installation." />
         )
