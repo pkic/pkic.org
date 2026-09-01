@@ -6,7 +6,7 @@ import { groupLeadershipAssignSchema } from "../../assets/shared/schemas/groups"
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupLeadership } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadership";
 import { GroupLeadershipAssignmentForm } from "../../assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm";
-import { buttonNamed, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
@@ -62,11 +62,13 @@ function tableNamed(root: ParentNode, caption: string): HTMLTableElement {
   return match;
 }
 
-async function pickCapacity(container: HTMLElement, email: string): Promise<void> {
-  await typeInto(container.querySelector<HTMLInputElement>(`input[placeholder="${SEARCH_PLACEHOLDER}"]`)!, email);
-  await act(async () => buttonNamed(container, "Search").click());
+async function pickCapacity(container: HTMLElement): Promise<void> {
+  // Let the catalog's first page land, then pick the way a pointer user
+  // would: open the combobox, choose the match. The typing and debounce path
+  // is covered by the ServerSearchSelect tests.
   await settle();
-  await chooseOption(controlFor<HTMLSelectElement>(container, "Participation capacity"), MEMBER_ID);
+  await chooseComboboxOption(container, "Participation capacity", MEMBER_ID);
+  await settle();
 }
 
 function membershipsPage(userId: string, email: string) {
@@ -299,7 +301,7 @@ describe("portal group leadership management", () => {
 
     expect(container.querySelector(`input[placeholder="${SEARCH_PLACEHOLDER}"]`)).toBeNull();
     await act(async () => buttonNamed(container, "Add leadership").click());
-    await pickCapacity(container, "leader@example.test");
+    await pickCapacity(container);
 
     await chooseOption(controlFor<HTMLSelectElement>(container, "Role"), "role-group_deputy_lead");
     await typeInto(controlFor(container, "Expires"), "2026-10-01T12:30");
@@ -357,7 +359,7 @@ describe("portal group leadership management", () => {
     );
     const onAssigned = vi.fn(async () => {});
     const container = mount(<GroupLeadershipAssignmentForm groupId={GROUP_ID} onAssigned={onAssigned} />);
-    await pickCapacity(container, "leader@example.test");
+    await pickCapacity(container);
 
     await act(async () => buttonNamed(container, "Add").click());
     await settle();
@@ -365,8 +367,10 @@ describe("portal group leadership management", () => {
     expect(alertTexts(container).join(" ")).toContain("Management access changed.");
     expect(container.textContent).not.toContain("Leadership assignment added.");
     expect(onAssigned).not.toHaveBeenCalled();
+    // The rejected assignment keeps its picked capacity: the combobox still
+    // reads the chosen label rather than being wiped by the failure.
     expect(container.querySelector<HTMLInputElement>(`input[placeholder="${SEARCH_PLACEHOLDER}"]`)?.value).toBe(
-      "leader@example.test",
+      "Selected Person — Example Member",
     );
   });
 });

@@ -334,8 +334,8 @@ describe("the event form picker", () => {
       "Choose the form this event should use for registrations.",
     );
 
-    // The select inside it is still reached through its own label.
-    expect(controlFor<HTMLSelectElement>(page, "Registration form").tagName.toLowerCase()).toBe("select");
+    // The combobox inside it is still reached through its own label.
+    expect(controlFor(page, "Registration form").getAttribute("role")).toBe("combobox");
   });
 
   it("surfaces a catalog that could not be loaded", async () => {

@@ -31,6 +31,7 @@
 import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 
+import { applyPopupPosition, measurePopupPosition, type PopupPosition } from "./popup-placement";
 import "./Menu.css";
 
 export interface MenuItem {
@@ -64,17 +65,11 @@ export interface MenuProps {
   children?: ComponentChildren;
 }
 
-interface Position {
-  top: number;
-  left: number;
-  minWidth: number;
-}
-
 export function Menu({ label, items, heading, align = "start", variant = "icon", children }: MenuProps) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [position, setPosition] = useState<Position | null>(null);
+  const [position, setPosition] = useState<PopupPosition | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -111,26 +106,11 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
    * opening: the effect below runs once the popup is in the document and
    * fills the position in then.
    */
-  const measure = useCallback((): Position | null => {
+  const measure = useCallback((): PopupPosition | null => {
     const trigger = triggerRef.current;
     const popup = popupRef.current;
     if (!trigger || !popup) return null;
-
-    const anchor = trigger.getBoundingClientRect();
-    const rect = popup.getBoundingClientRect();
-    const gap = 4;
-    const margin = 8;
-
-    // Below by default; above only when below does not fit AND above does.
-    // Flipping into an even smaller gap would be worse than overflowing.
-    const fitsBelow = anchor.bottom + gap + rect.height <= window.innerHeight - margin;
-    const fitsAbove = anchor.top - gap - rect.height >= margin;
-    const top = !fitsBelow && fitsAbove ? anchor.top - gap - rect.height : anchor.bottom + gap;
-
-    const preferred = align === "end" ? anchor.right - rect.width : anchor.left;
-    const left = Math.max(margin, Math.min(preferred, window.innerWidth - rect.width - margin));
-
-    return { top: Math.max(margin, top), left, minWidth: anchor.width };
+    return measurePopupPosition(trigger.getBoundingClientRect(), popup.getBoundingClientRect(), align);
   }, [align]);
 
   const openAt = useCallback(
@@ -141,18 +121,11 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
     [setOpen, setActiveIndex],
   );
 
-  // Placement is applied imperatively rather than as a `style` attribute: the
-  // value is viewport geometry, which no stylesheet can express, and the
-  // repository forbids style attributes in markup. CSS anchor positioning will
-  // replace this once Firefox ships it.
+  // Why imperative rather than a style attribute: see popup-placement.ts.
   useLayoutEffect(() => {
     const popup = popupRef.current;
     if (!popup || !position) return;
-    popup.style.setProperty("top", `${position.top}px`);
-    popup.style.setProperty("left", `${position.left}px`);
-    // The popup is never narrower than what it hangs from, so a wide trigger
-    // does not sprout a thin popup off one corner.
-    popup.style.setProperty("min-width", `${position.minWidth}px`);
+    applyPopupPosition(popup, position);
   }, [position]);
 
   // Measure once the popup is in the document, and again if the item list

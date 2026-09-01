@@ -79,7 +79,8 @@ export const publicMemberIdentitySchema = z.object({
   name: z.string(),
   jobTitle: z.string().nullable(),
   bio: z.string().nullable(),
-  linkedin: httpUrlSchema.nullable(),
+  // The identity's owner-ordered featured profile link (links[0]), any platform.
+  featuredLink: httpUrlSchema.nullable(),
   photoUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 
@@ -90,7 +91,8 @@ export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
   // Empty for individual members; their identity profile is shown in the summary/detail fields.
   identities: z.array(publicMemberIdentitySchema),
   jobTitle: z.string().nullable(),
-  linkedin: httpUrlSchema.nullable(),
+  // First entry of `links` — the owner-ordered featured profile link.
+  featuredLink: httpUrlSchema.nullable(),
 });
 export type PublicMemberDetail = z.infer<typeof publicMemberDetailSchema>;
 

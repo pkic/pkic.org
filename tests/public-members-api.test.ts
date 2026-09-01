@@ -401,12 +401,22 @@ describe("GET /api/v1/members/:id", () => {
       .bind(
         "## About us",
         "https://content-org.test/blog",
-        JSON.stringify(["https://linkedin.com/company/content-org"]),
+        // The org ranked its own site above a well-known network — the
+        // featured link must follow that order, not a hardcoded platform.
+        JSON.stringify(["https://git.content-org.test/", "https://linkedin.com/company/content-org"]),
         organizationId,
       )
       .run();
-    await env.DB.prepare(`UPDATE identities SET job_title = ?, biography = ? WHERE organization_id = ? AND user_id = ?`)
-      .bind("CTO", "Leads engineering.", organizationId, shownUserId)
+    await env.DB.prepare(
+      `UPDATE identities SET job_title = ?, biography = ?, links_json = ? WHERE organization_id = ? AND user_id = ?`,
+    )
+      .bind(
+        "CTO",
+        "Leads engineering.",
+        JSON.stringify(["https://mastodon.example/@rep", "https://linkedin.com/in/rep"]),
+        organizationId,
+        shownUserId,
+      )
       .run();
 
     const hiddenUserId = await insertUser(env.DB);
@@ -421,13 +431,21 @@ describe("GET /api/v1/members/:id", () => {
       content: string | null;
       blogUrl: string | null;
       links: string[];
-      identities: Array<{ name: string; jobTitle: string | null; bio: string | null }>;
+      featuredLink: string | null;
+      identities: Array<{ name: string; jobTitle: string | null; bio: string | null; featuredLink: string | null }>;
     };
     expect(body.content).toBe("## About us");
     expect(body.blogUrl).toBe("https://content-org.test/blog");
-    expect(body.links).toEqual(["https://linkedin.com/company/content-org"]);
+    expect(body.links).toEqual(["https://git.content-org.test/", "https://linkedin.com/company/content-org"]);
+    // The featured link is the first canonical link, whatever its platform.
+    expect(body.featuredLink).toBe("https://git.content-org.test/");
     expect(body.identities).toHaveLength(1);
-    expect(body.identities[0]).toMatchObject({ name: "Rep Person", jobTitle: "CTO", bio: "Leads engineering." });
+    expect(body.identities[0]).toMatchObject({
+      name: "Rep Person",
+      jobTitle: "CTO",
+      bio: "Leads engineering.",
+      featuredLink: "https://mastodon.example/@rep",
+    });
   });
 
   it("omits unsafe legacy organization detail URLs while preserving valid HTTP links", async () => {

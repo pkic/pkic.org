@@ -40,7 +40,7 @@ function publicMember(overrides: MemberPayload = {}): MemberPayload {
     links: [],
     identities: [],
     jobTitle: null,
-    linkedin: null,
+    featuredLink: null,
     ...overrides,
   };
 }
@@ -209,26 +209,36 @@ describe("public member detail content", () => {
     expect(since).not.toContain("2024-03-01");
   });
 
-  it("gives the LinkedIn icon a name that says whose profile it opens", async () => {
+  it("features the owner's first link, labels it by its site, and names it after the owner", async () => {
+    // The first link is not a hardcoded platform: the owner ranked GitHub
+    // above LinkedIn, so GitHub is the featured link.
     const container = await mountView({
-      links: ["https://www.linkedin.com/company/example"],
+      links: ["https://github.com/example-corp", "https://www.linkedin.com/company/example"],
+      featuredLink: "https://github.com/example-corp",
       identities: [
         {
           name: "Ada Lovelace",
           jobTitle: "Chief Engineer",
           bio: null,
-          linkedin: "https://www.linkedin.com/in/ada",
+          featuredLink: "https://www.linkedin.com/in/ada",
           photoUrl: null,
         },
       ],
     });
 
-    const names = [...container.querySelectorAll("a .pk-sr-only")].map((node) => node.textContent);
-    expect(names).toEqual(["Example Corp on LinkedIn", "Ada Lovelace on LinkedIn"]);
-    // The glyph itself says nothing, so it stays out of the accessibility tree.
-    for (const icon of container.querySelectorAll("a svg")) {
-      expect(icon.getAttribute("aria-hidden")).toBe("true");
-    }
+    const featured = [...container.querySelectorAll("a[aria-label]")];
+    // Named after the owner, not the site: two bare site labels say nothing
+    // about whose profile either one opens.
+    expect(featured.map((link) => link.getAttribute("aria-label"))).toEqual([
+      "Example Corp on GitHub",
+      "Ada Lovelace on LinkedIn",
+    ]);
+    expect(featured[0]?.getAttribute("href")).toBe("https://github.com/example-corp");
+    expect(featured[0]?.textContent).toBe("GitHub");
+
+    // The featured link is not repeated in the remaining-links list.
+    const list = container.querySelector("dl.pk-datalist");
+    expect(terms(list!)).toEqual(["Member since", "Website", "LinkedIn"]);
   });
 
   it("names the representatives region and nests each person under it", async () => {
@@ -239,9 +249,9 @@ describe("public member detail content", () => {
           jobTitle: "Chief Engineer",
           bio: "Writes **compilers**.",
           photoUrl: null,
-          linkedin: null,
+          featuredLink: null,
         },
-        { name: "Grace Hopper", jobTitle: null, bio: null, photoUrl: "/assets/grace.jpg", linkedin: null },
+        { name: "Grace Hopper", jobTitle: null, bio: null, photoUrl: "/assets/grace.jpg", featuredLink: null },
       ],
     });
 

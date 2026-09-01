@@ -26,6 +26,15 @@
   --sponsors-caption-gap: var(--pk-3);
   --sponsors-row-gap: var(--pk-4);
   --sponsors-logo-gap: var(--pk-5);
+  // How wide a logo's box is for its height. Two values because each
+  // breakpoint has its own packing constraint. On a phone, 3.6 is what keeps
+  // a four-logo tier at two per line: any narrower and three squeeze onto the
+  // first line, stranding the fourth alone under them. On a desktop the
+  // binding tier is Platinum with seven logos, and 3.6 is exactly too wide:
+  // the seventh wrapped onto its own centered line, so the desktop override
+  // below trims the aspect to the widest value at which seven weight-4 boxes
+  // and their six gaps still share the row's 1096px.
+  --sponsors-logo-aspect: 3.6;
   // The band separation is the stack utility's own gap: the wall is a
   // `pk-stack`, and its "Load more" control wants the same distance from the
   // last band that the bands want from each other.
@@ -38,6 +47,7 @@
     --sponsors-caption-gap: var(--pk-4);
     --sponsors-row-gap: var(--pk-5);
     --sponsors-logo-gap: var(--pk-6);
+    --sponsors-logo-aspect: 3.375;
     --pk-gap: var(--pk-7);
 
     padding-block: var(--pk-6);
@@ -77,7 +87,10 @@
     // width, so the ramp survives the narrow screen at the bottom of the wall
     // and compresses only at the top, where the tiers are one or two logos
     // wide anyway.
-    --sponsors-logo-width: min(var(--sponsors-logo-height) * 3.6, calc((100% - var(--sponsors-logo-gap)) / 2));
+    --sponsors-logo-width: min(
+      var(--sponsors-logo-height) * var(--sponsors-logo-aspect),
+      calc((100% - var(--sponsors-logo-gap)) / 2)
+    );
 
     display: flex;
     flex-direction: column;
