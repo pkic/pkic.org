@@ -24,7 +24,10 @@
  * assignment unambiguous by construction, rather than a check bolted on
  * afterward.
  */
-import { MEMBERSHIP_CATEGORIES, isIndividualMembershipCategory } from "../../assets/shared/schemas/membership-categories.ts";
+import {
+  MEMBERSHIP_CATEGORIES,
+  isIndividualMembershipCategory,
+} from "../../assets/shared/schemas/membership-categories.ts";
 
 const MEMBERSHIP_CATEGORY_SET = new Set(MEMBERSHIP_CATEGORIES);
 

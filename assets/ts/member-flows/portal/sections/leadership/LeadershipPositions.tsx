@@ -122,6 +122,95 @@ function AffiliationPicker({
   );
 }
 
+/**
+ * The four values a position is made of, and the state behind them.
+ *
+ * The add form and the row's editor differ only in what they start from and
+ * where they send it, so the fields and their state live here once rather
+ * than as two copies that can drift apart. Every setter is a `useState`
+ * setter, which matters: the affiliation lookup takes `onChange` as an effect
+ * dependency, and an inline callback there would re-run the effect forever.
+ */
+function usePositionDraft(initial: LeadershipPosition | null) {
+  const [identityId, setIdentityId] = useState<string | null | undefined>(initial ? initial.identityId : undefined);
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [startsAt, setStartsAt] = useState(initial?.startsAt ?? "");
+  const [endsAt, setEndsAt] = useState(initial?.endsAt ?? "");
+
+  return {
+    identityId,
+    setIdentityId,
+    title,
+    setTitle,
+    startsAt,
+    setStartsAt,
+    endsAt,
+    setEndsAt,
+    incomplete: identityId === undefined || !title.trim() || !startsAt,
+    clear(): void {
+      setIdentityId(undefined);
+      setTitle("");
+      setStartsAt("");
+      setEndsAt("");
+    },
+  };
+}
+
+type PositionDraft = ReturnType<typeof usePositionDraft>;
+
+function PositionFields({
+  userId,
+  initialIdentityId,
+  draft,
+  titlePlaceholder,
+}: {
+  userId: string | null;
+  initialIdentityId: string | null | undefined;
+  draft: PositionDraft;
+  titlePlaceholder?: string;
+}) {
+  return (
+    <>
+      <AffiliationPicker
+        userId={userId}
+        initialValue={initialIdentityId}
+        value={draft.identityId}
+        onChange={draft.setIdentityId}
+      />
+      <Field label="Title" required>
+        {(control) => (
+          <TextInput
+            {...control}
+            placeholder={titlePlaceholder}
+            value={draft.title}
+            onInput={(e) => draft.setTitle((e.target as HTMLInputElement).value)}
+          />
+        )}
+      </Field>
+      <Field label="From" required>
+        {(control) => (
+          <TextInput
+            {...control}
+            type="date"
+            value={draft.startsAt}
+            onInput={(e) => draft.setStartsAt((e.target as HTMLInputElement).value)}
+          />
+        )}
+      </Field>
+      <Field label="Till" help="Leave blank for a current position.">
+        {(control) => (
+          <TextInput
+            {...control}
+            type="date"
+            value={draft.endsAt}
+            onInput={(e) => draft.setEndsAt((e.target as HTMLInputElement).value)}
+          />
+        )}
+      </Field>
+    </>
+  );
+}
+
 function AddPositionForm({
   onAdded,
   body,
@@ -132,16 +221,13 @@ function AddPositionForm({
   label: string;
 }) {
   const [picked, setPicked] = useState<PickedUser | null>(null);
-  const [identityId, setIdentityId] = useState<string | null | undefined>(undefined);
-  const [title, setTitle] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
+  const draft = usePositionDraft(null);
   const [busy, setBusy] = useState(false);
-  const incomplete = !picked || identityId === undefined || !title.trim() || !startsAt;
+  const incomplete = !picked || draft.incomplete;
 
   async function submit(e: Event) {
     e.preventDefault();
-    if (busy || !picked || identityId === undefined || !title.trim() || !startsAt) return;
+    if (busy || !picked || draft.incomplete) return;
     setBusy(true);
     try {
       await postJson(
@@ -149,19 +235,16 @@ function AddPositionForm({
         {
           body,
           userId: picked.id,
-          identityId,
-          title: title.trim(),
-          startsAt,
-          endsAt: endsAt || null,
+          identityId: draft.identityId,
+          title: draft.title.trim(),
+          startsAt: draft.startsAt,
+          endsAt: draft.endsAt || null,
         },
         leadershipPositionResponseSchema,
       );
       toast("Position added", "success");
       setPicked(null);
-      setIdentityId(undefined);
-      setTitle("");
-      setStartsAt("");
-      setEndsAt("");
+      draft.clear();
       onAdded();
     } catch (err) {
       toast((err as Error).message, "error");
@@ -182,47 +265,17 @@ function AddPositionForm({
             value={picked}
             onChange={(user) => {
               setPicked(user);
-              setIdentityId(undefined);
+              draft.setIdentityId(undefined);
             }}
             disabled={busy}
           />
         </fieldset>
-        <AffiliationPicker
+        <PositionFields
           userId={picked?.id ?? null}
-          initialValue={undefined}
-          value={identityId}
-          onChange={setIdentityId}
+          initialIdentityId={undefined}
+          draft={draft}
+          titlePlaceholder="Board Member"
         />
-        <Field label="Title" required>
-          {(control) => (
-            <TextInput
-              {...control}
-              placeholder="Board Member"
-              value={title}
-              onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-            />
-          )}
-        </Field>
-        <Field label="From" required>
-          {(control) => (
-            <TextInput
-              {...control}
-              type="date"
-              value={startsAt}
-              onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
-            />
-          )}
-        </Field>
-        <Field label="Till" help="Leave blank for a current position.">
-          {(control) => (
-            <TextInput
-              {...control}
-              type="date"
-              value={endsAt}
-              onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
-            />
-          )}
-        </Field>
       </fieldset>
       <div class="pk-cluster">
         <Button type="submit" size="sm" variant="primary" loading={busy} disabled={incomplete}>
@@ -242,21 +295,22 @@ function PositionEditForm({
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [title, setTitle] = useState(position.title);
-  const [identityId, setIdentityId] = useState<string | null | undefined>(position.identityId);
-  const [startsAt, setStartsAt] = useState(position.startsAt);
-  const [endsAt, setEndsAt] = useState(position.endsAt ?? "");
+  const draft = usePositionDraft(position);
   const [busy, setBusy] = useState(false);
-  const incomplete = identityId === undefined || !title.trim() || !startsAt;
 
   async function save(e: Event) {
     e.preventDefault();
-    if (busy || incomplete) return;
+    if (busy || draft.incomplete) return;
     setBusy(true);
     try {
       await patchJson(
         `${API_BASE}/${encodeURIComponent(position.id)}`,
-        { identityId, title: title.trim(), startsAt, endsAt: endsAt || null },
+        {
+          identityId: draft.identityId,
+          title: draft.title.trim(),
+          startsAt: draft.startsAt,
+          endsAt: draft.endsAt || null,
+        },
         leadershipPositionResponseSchema,
       );
       toast("Position updated", "success");
@@ -275,40 +329,10 @@ function PositionEditForm({
       onSubmit={(e) => void save(e)}
     >
       <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={busy}>
-        <AffiliationPicker
-          userId={position.userId}
-          initialValue={position.identityId}
-          value={identityId}
-          onChange={setIdentityId}
-        />
-        <Field label="Title" required>
-          {(control) => (
-            <TextInput {...control} value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
-          )}
-        </Field>
-        <Field label="From" required>
-          {(control) => (
-            <TextInput
-              {...control}
-              type="date"
-              value={startsAt}
-              onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
-            />
-          )}
-        </Field>
-        <Field label="Till" help="Leave blank for a current position.">
-          {(control) => (
-            <TextInput
-              {...control}
-              type="date"
-              value={endsAt}
-              onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
-            />
-          )}
-        </Field>
+        <PositionFields userId={position.userId} initialIdentityId={position.identityId} draft={draft} />
       </fieldset>
       <div class="pk-cluster">
-        <Button type="submit" size="sm" variant="primary" loading={busy} disabled={incomplete}>
+        <Button type="submit" size="sm" variant="primary" loading={busy} disabled={draft.incomplete}>
           Save
         </Button>
         <Button size="sm" disabled={busy} onClick={onCancel}>

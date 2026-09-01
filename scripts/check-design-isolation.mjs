@@ -82,6 +82,12 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationCreateForm.tsx",
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile.tsx",
   "assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail.tsx",
+  "assets/ts/member-flows/portal/sections/Home.tsx",
+  "assets/ts/member-flows/portal/sections/GroupParticipationCard.tsx",
+  "assets/ts/components/event-invites/BulkInviteComposer.tsx",
+  "assets/ts/components/event-registrations/DayAttendanceManager.tsx",
+  "assets/ts/member-flows/portal/sections/email-templates/EmailTemplates.tsx",
+  "assets/ts/member-flows/portal/sections/management/EventTermsEditor.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

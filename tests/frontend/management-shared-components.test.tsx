@@ -16,6 +16,7 @@ import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/eve
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
+import { buttonNamed } from "./helpers/labelled-control";
 import { tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
@@ -144,6 +145,49 @@ describe("shared management presentation components", () => {
     expect(submit.disabled).toBe(true);
     expect(cancel.disabled).toBe(true);
     expect(container.textContent).toContain("Waiting");
+  });
+
+  it("says a save is in flight to assistive technology, not only by swapping the label", () => {
+    const busy = mount(<FormActions submitLabel="Save" busyLabel="Saving…" busy onCancel={vi.fn()} />);
+    const submit = busy.querySelector("button")!;
+    expect(submit.getAttribute("aria-busy")).toBe("true");
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
+
+    const idle = mount(<FormActions submitLabel="Save" busy={false} onCancel={vi.fn()} />);
+    const idleSubmit = idle.querySelector("button")!;
+    expect(idleSubmit.hasAttribute("aria-busy")).toBe(false);
+    expect(idleSubmit.disabled).toBe(false);
+  });
+
+  it("announces a failed save as an alert rather than colouring the same sentence red", () => {
+    const failed = mount(
+      <FormActions
+        submitLabel="Save"
+        busy={false}
+        onCancel={vi.fn()}
+        status="Could not save."
+        statusVariant="danger"
+      />,
+    );
+    const alert = failed.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Could not save.");
+
+    // The routine outcome is not an alert: it is announced politely, so a
+    // reader is not interrupted every time a form reports that it saved.
+    const saved = mount(<FormActions submitLabel="Save" busy={false} onCancel={vi.fn()} status="Saved." />);
+    expect(saved.querySelector('[role="alert"]')).toBeNull();
+    expect(saved.querySelector('[role="status"]')?.textContent).toBe("Saved.");
+  });
+
+  it("keeps cancel reachable while the save is in flight only when the form is not busy", () => {
+    const onCancel = vi.fn();
+    const ready = mount(<FormActions submitLabel="Save" busy={false} onCancel={onCancel} />);
+    void act(() => buttonNamed(ready, "Cancel").click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    const busy = mount(<FormActions submitLabel="Save" busy onCancel={onCancel} />);
+    void act(() => buttonNamed(busy, "Cancel").click());
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it("renders one settings shell for loading, errors, actions, and content", () => {

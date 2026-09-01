@@ -57,9 +57,7 @@ export function processIndividualRecord(ctx, { filename, slug, doc, name, member
   const rep = reps[0] ?? { name, role: null, social: {}, description: null };
   const { firstName, lastName } = splitName(rep.name ?? name);
   const links = [rep.social?.linkedin, rep.social?.x].filter(Boolean);
-  const linksJson = buildLinksJson(links, (url) =>
-    ctx.report.invalidLinks.push({ file: filename, name, url }),
-  );
+  const linksJson = buildLinksJson(links, (url) => ctx.report.invalidLinks.push({ file: filename, name, url }));
   const normalizedEmail = upsertMemberUser(ctx, {
     email,
     firstName,

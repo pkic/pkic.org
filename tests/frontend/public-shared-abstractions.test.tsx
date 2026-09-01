@@ -7,6 +7,7 @@ import { ConsentCard } from "../../assets/ts/components/ConsentCard";
 import { MagicLinkSubmitButton, SignInError } from "../../assets/ts/components/MagicLinkFeedback";
 import { MenuIcon } from "../../assets/ts/components/MenuIcon";
 import { NotFoundPanel } from "../../assets/ts/components/NotFoundPanel";
+import { SuccessPanel } from "../../assets/ts/components/SuccessPanel";
 import { VerifyingOverlay } from "../../assets/ts/components/VerifyingOverlay";
 import { findEmailReviewCard } from "../../assets/ts/event-flows/registration-page";
 import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
@@ -251,6 +252,74 @@ describe("public shared frontend abstractions", () => {
     expect(container.querySelector("button")?.textContent).toBe("Sending…");
     expect(container.querySelector("button")?.hasAttribute("disabled")).toBe(true);
     expect(container.textContent).toContain("Sign-in failed: Expired");
+  });
+
+  it("announces a sign-in failure, and renders nothing when there is none", () => {
+    const failed = mount(<SignInError error="Expired" />);
+    const alert = failed.querySelector('[role="alert"]');
+    // The failure is a role, not a red box with a "✕" glyph in front of it.
+    expect(alert?.textContent).toBe("Sign-in failed: Expired");
+    expect(failed.textContent).not.toContain("✕");
+
+    const bare = mount(<SignInError error="Expired" includePrefix={false} />);
+    expect(bare.querySelector('[role="alert"]')?.textContent).toBe("Expired");
+
+    expect(mount(<SignInError error={null} />).innerHTML).toBe("");
+  });
+
+  it("says the sign-in link is sending, and blocks a second send while it is", () => {
+    const sending = mount(<MagicLinkSubmitButton submitting />);
+    const button = sending.querySelector("button")!;
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+
+    const idle = mount(<MagicLinkSubmitButton submitting={false} />);
+    const idleButton = idle.querySelector("button")!;
+    expect(idleButton.textContent).toBe("Send sign-in link");
+    expect(idleButton.disabled).toBe(false);
+    expect(idleButton.hasAttribute("aria-busy")).toBe(false);
+  });
+
+  it("names the missing record and the way back out of it", () => {
+    const container = mount(
+      <NotFoundPanel message="Missing member" backHref="/members/" backLabel="Back to members" />,
+    );
+    // The panel replaces a load that failed, so a reader who is not watching
+    // the page is told the wait ended in nothing.
+    const region = container.querySelector('[role="status"]');
+    expect(region?.textContent).toContain("Missing member");
+    const back = container.querySelector("a")!;
+    expect(back.getAttribute("href")).toBe("/members/");
+    expect(back.textContent).toContain("Back to members");
+  });
+
+  it("keeps the verification wait and the sentence explaining it in one announced region", () => {
+    const container = mount(<VerifyingOverlay />);
+    const region = container.querySelector('[role="status"]');
+    // The Bootstrap version left this region empty and put the sentence in a
+    // sibling paragraph, so the wait was announced as busy and unexplained.
+    expect(region?.textContent).toContain("Verifying your sign-in link");
+    expect(mount(<VerifyingOverlay message="Checking your invitation…" />).textContent).toContain(
+      "Checking your invitation…",
+    );
+  });
+
+  it("announces a submitted form's success and keeps its icon out of the heading's name", () => {
+    const container = mount(
+      <SuccessPanel icon="🎉" title="You're registered!">
+        <p>A confirmation email is on its way.</p>
+      </SuccessPanel>,
+    );
+    const region = container.querySelector('[role="status"]');
+    expect(region).not.toBeNull();
+
+    const heading = container.querySelector("h2")!;
+    const named = [...heading.childNodes].filter(
+      (node) => !(node instanceof HTMLElement && node.getAttribute("aria-hidden") === "true"),
+    );
+    expect(named.map((node) => node.textContent).join("")).toBe("You're registered!");
+    expect(heading.querySelector('[aria-hidden="true"]')?.textContent).toBe("🎉");
+    expect(container.textContent).toContain("A confirmation email is on its way.");
   });
 
   it("classifies every donation polling state consistently", () => {

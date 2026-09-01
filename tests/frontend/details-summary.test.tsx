@@ -22,6 +22,20 @@ afterEach(() => {
   }
 });
 
+/**
+ * The term/value pairs of one list, read the way assistive technology walks
+ * them: a `dt` and the `dd` that immediately follows it, both direct children
+ * of the same `dl`. The Bootstrap version wrapped each pair in a styling
+ * `div`, so this is also what stops that wrapper coming back — it breaks the
+ * association, and `pk-datalist`'s two-column grid, at the same time.
+ */
+function pairsIn(list: Element): [string, string][] {
+  return [...list.querySelectorAll(":scope > dt")].map((term) => {
+    const value = term.nextElementSibling;
+    return [term.textContent ?? "", value?.tagName === "DD" ? (value.textContent ?? "") : ""];
+  });
+}
+
 describe("DetailsSummary", () => {
   it("humanizes snake_case and camelCase keys into sentence case", () => {
     const container = mount(<DetailsSummary value={{ previous_status: "draft", campaignId: "camp-1" }} />);
@@ -46,10 +60,11 @@ describe("DetailsSummary", () => {
 
   it("renders booleans as yes/no and null as an em dash", () => {
     const container = mount(<DetailsSummary value={{ active: true, archived: false, deleted_at: null }} />);
-    const rows = Array.from(container.querySelectorAll(".details-summary-row")).map((row) => row.textContent);
-    expect(rows.find((r) => r?.includes("Active"))).toContain("yes");
-    expect(rows.find((r) => r?.includes("Archived"))).toContain("no");
-    expect(rows.find((r) => r?.includes("Deleted at"))).toContain("—");
+    expect(pairsIn(container.querySelector("dl")!)).toEqual([
+      ["Active", "yes"],
+      ["Archived", "no"],
+      ["Deleted at", "—"],
+    ]);
   });
 
   it("joins an array of primitives with a comma", () => {
@@ -60,28 +75,32 @@ describe("DetailsSummary", () => {
 
   it("renders a nested object one level deep as an indented sub-list", () => {
     const container = mount(<DetailsSummary value={{ change: { field: "title", from: "Old", to: "New" } }} />);
-    const sublist = container.querySelector(".details-summary-sublist");
+    const sublist = container.querySelector("dd > dl");
     expect(sublist).not.toBeNull();
-    expect(sublist?.textContent).toContain("Field");
-    expect(sublist?.textContent).toContain("title");
-    expect(sublist?.textContent).toContain("From");
-    expect(sublist?.textContent).toContain("Old");
+    expect(pairsIn(sublist!)).toEqual([
+      ["Field", "title"],
+      ["From", "Old"],
+      ["To", "New"],
+    ]);
     expect(container.querySelector("pre")).toBeNull();
   });
 
   it("falls back to a collapsed raw view when nesting goes past one level", () => {
     const container = mount(<DetailsSummary value={{ change: { field: { nested: "too deep" } } }} />);
-    const details = container.querySelector("details.details-summary-raw");
+    const details = container.querySelector("details");
     expect(details).not.toBeNull();
+    // A native <details>/<summary> is the disclosure: already reachable by
+    // keyboard and announced as expandable, with no role or handler added.
+    expect(details?.open).toBe(false);
     expect(details?.querySelector("summary")?.textContent).toBe("Raw details");
     const pre = details?.querySelector("pre");
     expect(pre?.textContent).toContain('"nested": "too deep"');
-    expect(container.querySelector("dl.details-summary")).toBeNull();
+    expect(container.querySelector("dl")).toBeNull();
   });
 
   it("falls back to a collapsed raw view for a non-object root", () => {
     const container = mount(<DetailsSummary value={["one", "two"]} />);
-    const details = container.querySelector("details.details-summary-raw");
+    const details = container.querySelector("details");
     expect(details).not.toBeNull();
     expect(details?.querySelector("pre")?.textContent).toContain('"one"');
   });
@@ -89,6 +108,15 @@ describe("DetailsSummary", () => {
   it("renders nothing for an empty object", () => {
     const container = mount(<DetailsSummary value={{}} />);
     expect(container.innerHTML).toBe("");
+  });
+
+  it("keeps a value the summary cannot read rather than dropping it", () => {
+    // The failure path: a payload past the shape the list can express. It has
+    // to survive, because an audit entry that silently loses its details is
+    // worse than one that shows them raw.
+    const container = mount(<DetailsSummary value={{ a: { b: { c: { d: 1 } } } }} />);
+    expect(container.querySelector("dl")).toBeNull();
+    expect(container.querySelector("pre")?.textContent).toContain('"d": 1');
   });
 
   it("renders nothing for undefined or null", () => {
