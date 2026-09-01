@@ -26,7 +26,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { runRowAction } from "./helpers/data-table";
+import { openRow, runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
@@ -312,14 +312,15 @@ test.describe("Portal management browser-verification pass", () => {
     await expectCurrentTab(page, "Proposals");
 
     // The expanded detail is a second table row containing the same title.
-    // Anchor the locator to the data row's Details action so it remains
-    // unique before and after expansion.
+    // Anchor the locator to the data row's own named row control — which reads
+    // "Show details for …" collapsed and "Hide details for …" expanded — so it
+    // stays unique before and after expansion.
     const proposalRow = page
       .getByRole("row")
       .filter({ hasText: title })
-      .filter({ has: page.getByRole("button", { name: "Details", exact: true }) });
+      .filter({ has: page.getByRole("button", { name: new RegExp(`^(?:Show|Hide) details for ${title}$`) }) });
     await expect(proposalRow).toBeVisible();
-    await proposalRow.getByRole("button", { name: "Details" }).click();
+    await openRow(proposalRow, `Show details for ${title}`);
     // The expanded proposal is a region named after the proposal, so it is
     // located the way a reader finds it rather than by a background utility.
     const detail = page.getByRole("region", { name: title });
@@ -492,7 +493,7 @@ test.describe("Portal management browser-verification pass", () => {
     );
     await page.goto(`/portal/#/events/${EVENT_SLUG}/promoters`);
     expect((await loaded).status()).toBe(200);
-    await expect(page.getByText(/Active Promoters|No promoter activity yet/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Active promoters|No promoter activity yet/).first()).toBeVisible({ timeout: 15_000 });
     expect(legacyRequests).toEqual([]);
   });
 
@@ -677,7 +678,10 @@ test.describe("Portal management browser-verification pass", () => {
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
     await expect(primaryRow).toBeVisible({ timeout: 10_000 });
     await primaryRow.click();
-    await expect(page.getByText(`Primary User ${stamp}`)).toBeVisible({ timeout: 10_000 });
+    // The record's name appears as the PageHeader title and again as the
+    // breadcrumb's current-page crumb (the trail ends at the record), so the
+    // assertion names the heading it means.
+    await expect(page.getByRole("heading", { name: `Primary User ${stamp}` })).toBeVisible({ timeout: 10_000 });
 
     // Located by role and accessible name rather than by `.card`/`.card-header`:
     // the panel is a named region now, and a role does not break the next time
