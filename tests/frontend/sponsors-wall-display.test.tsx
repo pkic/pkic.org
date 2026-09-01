@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
 
 const DISPLAY = "/api/v1/sponsors/display";
+const WALL = "/api/v1/members/wall";
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -48,6 +49,16 @@ function installApi(response: () => Response): void {
     vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), location.origin);
       return Promise.resolve(url.pathname === DISPLAY ? response() : json({}));
+    }),
+  );
+}
+
+function installWallApi(response: () => Response): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), location.origin);
+      return Promise.resolve(url.pathname === WALL ? response() : json({}));
     }),
   );
 }
@@ -159,5 +170,61 @@ describe("public sponsor wall", () => {
     expect(root.querySelector(".sponsor-strip-default-label")?.textContent).toBe("Our sponsors");
     expect(root.querySelector("[class*='d-flex']")).toBeNull();
     expect(root.querySelector("[class*='text-white']")).toBeNull();
+  });
+});
+
+/**
+ * The band around the wall reserves a fixed height for its scrolling track, so
+ * the stylesheet has to be able to tell "still fetching" from "there is
+ * nothing here". It reads `data-state` on the mount element; without it, a site
+ * whose members have not loaded shows 280 pixels of white nothing under a
+ * heading that promises logos.
+ */
+describe("what the wall reports about itself", () => {
+  it("says it is loading before the answer arrives, so the space is held rather than collapsed", async () => {
+    installWallApi(() => json({ entries: [] }));
+    const root = mountShell("wall");
+    await act(async () => {
+      await import("../../assets/ts/member-flows/sponsors-wall");
+    });
+    expect(root.dataset.state).toBe("loading");
+  });
+
+  it("says it is empty when there are no members, so the band can collapse", async () => {
+    installWallApi(() => json({ entries: [] }));
+    const root = mountShell("wall");
+    await boot();
+    expect(root.dataset.state).toBe("empty");
+    expect(root.textContent).toBe("");
+  });
+
+  it("says it is ready once it has logos", async () => {
+    installWallApi(() =>
+      json({
+        entries: [
+          {
+            key: "a",
+            href: "https://alpha.example",
+            logoUrl: "/img/a.svg",
+            name: "Alpha",
+            slogan: null,
+            sponsorLevel: 0,
+            sponsorLevelName: null,
+          },
+        ],
+      }),
+    );
+    const root = mountShell("wall");
+    await boot();
+    expect(root.dataset.state).toBe("ready");
+    expect(root.querySelectorAll("img").length).toBe(1);
+  });
+
+  it("says so in words when the request fails, rather than rendering the same blank as success", async () => {
+    installWallApi(() => json({ error: "boom" }, 500));
+    const root = mountShell("wall");
+    await boot();
+    expect(root.dataset.state).toBe("error");
+    expect(root.textContent).toContain("could not be loaded");
   });
 });

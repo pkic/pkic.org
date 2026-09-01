@@ -292,19 +292,35 @@ function StripMode({
 
 // ── Wall mode (members/wall.html) ──────────────────────────────────────────
 
-function useWallEntries(apiBase: string, memberLimit: number): MemberWallEntry[] | null {
+/**
+ * What the wall knows about its logos, which is not the same as how many it
+ * has.
+ *
+ * The band reserves a fixed height for the scrolling track, so the difference
+ * between "still fetching" and "there is nothing" has to reach the stylesheet:
+ * collapsing while the logos are on their way would drop the rest of the page
+ * out from under the reader, and holding the space open forever leaves a
+ * silent white hole where the members should be.
+ */
+export type WallState = "loading" | "ready" | "empty" | "error";
+
+function useWallEntries(apiBase: string, memberLimit: number): { entries: MemberWallEntry[] | null; state: WallState } {
   const [entries, setEntries] = useState<MemberWallEntry[] | null>(null);
+  const [state, setState] = useState<WallState>("loading");
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
         const response = await getJson(`${apiBase}/members/wall?memberLimit=${memberLimit}`, memberWallResponseSchema);
-        if (!cancelled) {
-          setEntries(response.entries);
-        }
+        if (cancelled) return;
+        setEntries(response.entries);
+        setState(response.entries.length > 0 ? "ready" : "empty");
       } catch (e) {
         console.error("[sponsors-wall]", e);
+        // A failure is reported, not swallowed into the same blank the
+        // loading state renders.
+        if (!cancelled) setState("error");
       }
     }
     void load();
@@ -313,11 +329,24 @@ function useWallEntries(apiBase: string, memberLimit: number): MemberWallEntry[]
     };
   }, [apiBase, memberLimit]);
 
-  return entries;
+  return { entries, state };
 }
 
-function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: number }) {
-  const entries = useWallEntries(apiBase, memberLimit);
+function WallMode({
+  apiBase,
+  memberLimit,
+  onState,
+}: {
+  apiBase: string;
+  memberLimit: number;
+  /** Reports the state to the mount element, where the stylesheet reads it. */
+  onState?: (state: WallState) => void;
+}) {
+  const { entries, state } = useWallEntries(apiBase, memberLimit);
+
+  useEffect(() => {
+    onState?.(state);
+  }, [onState, state]);
 
   // The marquee/scroll effects (sponsor-banner-marquee.js, members-overview-effects.js)
   // build their tracks by scanning the DOM once — they need to run after these anchors
@@ -325,6 +354,10 @@ function WallMode({ apiBase, memberLimit }: { apiBase: string; memberLimit: numb
   useEffect(() => {
     if (entries) document.dispatchEvent(new CustomEvent("member:wall-rendered"));
   }, [entries]);
+
+  if (state === "error") {
+    return <p class="pk-muted pk-small">Member logos could not be loaded.</p>;
+  }
 
   if (!entries) return null;
 
@@ -367,7 +400,16 @@ function main(): void {
     }
 
     if (mode === "wall") {
-      render(<WallMode apiBase={apiBase} memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? 200))} />, root);
+      render(
+        <WallMode
+          apiBase={apiBase}
+          memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? 200))}
+          onState={(state) => {
+            root.dataset.state = state;
+          }}
+        />,
+        root,
+      );
       return;
     }
 

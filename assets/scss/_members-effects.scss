@@ -160,6 +160,11 @@
   }
 }
 
+// The label is the band's, so it leaves when the band does.
+.pkic-section-label:has(+ .members-overview [data-sponsors-wall][data-state="empty"]) {
+  display: none;
+}
+
 .members-overview {
   background: #fff;
   // The wall's inset used to be four responsive padding utilities on the
@@ -167,26 +172,30 @@
   padding-block: var(--pk-5);
   padding-inline: var(--pk-3);
 
+  // A band with no logos in it is not 280 pixels of nothing.
+  //
+  // The height below is reserved while the logos are on their way, because
+  // collapsing then would drop the rest of the page out from under the reader.
+  // Once the module says there is nothing to show, the space is released; the
+  // label above it goes with it, since a heading over an empty band is worse
+  // than no band at all. An error keeps its line of text, so a failure is not
+  // rendered as the same blank as success-with-no-members.
+  &:has([data-sponsors-wall][data-state="empty"]) {
+    display: none;
+  }
+
+  &:has([data-sponsors-wall][data-state="error"]) .members {
+    height: auto;
+  }
+
   // Viewport: clips the scrolling track to a fixed visible height
   .members {
     height: 280px;
     overflow: hidden;
     position: relative;
     // mask top/bottom edges so logos fade in/out softly
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      transparent 0%,
-      #000 8%,
-      #000 92%,
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to bottom,
-      transparent 0%,
-      #000 8%,
-      #000 92%,
-      transparent 100%
-    );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
     // Suppress the mask while the zoom overlay is showing so it fills cleanly
     &.members--zooming {
       -webkit-mask-image: none;
