@@ -20,13 +20,14 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   await signInToPortal(page, e2eAdminEmail("portal-mailing-lists"));
   await page.goto(`/portal/#/groups/${GROUP_ID}/mailing-lists`);
 
-  const management = page.getByRole("region", { name: "Mailing-list management" });
+  const management = page.getByRole("region", { name: "Managed mailing lists" });
   await expect(page.getByRole("heading", { name: "Post-Quantum Cryptography Working Group" })).toBeVisible();
   await expect(management).toBeVisible();
   await expect(management.getByRole("row").filter({ hasText: "pqc@lists.pkic.org" })).toBeVisible();
   await management.getByRole("button", { name: "Add mailing list" }).click();
 
-  const createForm = management.locator("form").filter({ hasText: "New group mailing list" });
+  // The create form opens as its own panel above the list, not inside it.
+  const createForm = page.locator("form").filter({ hasText: "New group mailing list" });
   const stamp = `${Date.now()}-${test.info().workerIndex}`;
   const email = `e2e-list-${stamp}@lists.pkic.org`;
   const label = `E2E group list ${stamp}`;

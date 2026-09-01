@@ -15,6 +15,7 @@ import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
 import { Select, TextInput } from "../../../../ui/TextControl";
+import { fmt } from "../../ui";
 
 interface DateWindow {
   scope: GroupStatsQuery["scope"];
@@ -42,7 +43,9 @@ function toUtcBoundary(value: string): string | undefined {
 }
 
 function formatWindowBoundary(value: string | null): string {
-  return value ? value.replace("T", " ").replace(".000Z", " UTC") : "Beginning of available history";
+  // Localized like every other instant; the boundary is defined in UTC but
+  // read in the viewer's clock.
+  return value ? fmt(value) : "Beginning of available history";
 }
 
 function queryString(query: GroupStatsQuery): string {
@@ -107,30 +110,26 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
     <div class="pk pk-stack">
       {/* A panel is a section, so it is named rather than announced as an
           anonymous group of numbers. */}
-      <Panel aria-label="Group statistics">
-        <PanelHeader title="Group statistics" />
+      <Panel aria-label="Reporting window">
+        <PanelHeader title="Reporting window" />
         <PanelBody class="pk-stack">
-          <p class="pk-small">
-            Counts are calculated by the server in D1. People are distinct users; capacities are the Member
-            participation rows they represent. Activity is limited to the UTC window below.
-          </p>
           <form class="pk-stack" aria-label="Statistics window" onSubmit={applyWindow}>
             <div class="pk-grid pk-grid--tight">
-              <Field label="Population scope">
+              <Field label="Count people who">
                 {(control) => (
                   <Select
                     {...control}
                     value={draft.scope}
                     onChange={(event) => updateDraft("scope", event.currentTarget.value)}
                   >
-                    <option value="current">Current participation</option>
-                    <option value="historical">Historical window</option>
+                    <option value="current">Participate now</option>
+                    <option value="historical">Participated during the window</option>
                   </Select>
                 )}
               </Field>
               <Field
-                label="From (UTC)"
-                help="Leave blank to start at the beginning of available history."
+                label="From"
+                help="A UTC day. Leave blank to start at the beginning of available history."
                 state={fromMessage ? "invalid" : undefined}
                 message={fromMessage}
               >
@@ -144,8 +143,8 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                 )}
               </Field>
               <Field
-                label="To (UTC, exclusive)"
-                help="Leave blank to run the window up to now."
+                label="To"
+                help="Up to, but not including, this UTC day. Leave blank to run up to now."
                 state={toMessage ? "invalid" : undefined}
                 message={toMessage}
               >
@@ -183,11 +182,11 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                   : "Participation overlapping the selected window."}
               </p>
               <div class="pk-grid pk-grid--tight">
-                <StatCard label="People" value={String(stats.data.participation.people.count)} note="Distinct users" />
+                <StatCard label="People" value={String(stats.data.participation.people.count)} note="Distinct people" />
                 <StatCard
-                  label="Membership capacities"
+                  label="Memberships"
                   value={String(stats.data.participation.capacities.count)}
-                  note="Member participation rows"
+                  note="One per Member represented"
                 />
               </div>
             </PanelBody>
@@ -203,29 +202,29 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                 <StatCard
                   label="Active people"
                   value={String(stats.data.activity.people.actorCount)}
-                  note="People with audited actions"
+                  note="People with recorded actions"
                 />
                 <StatCard
                   label="Actions"
                   value={String(stats.data.activity.people.actionCount)}
-                  note="Audited group actions"
+                  note="Recorded in the audit log"
                 />
                 <StatCard
                   label="Joined"
                   value={String(stats.data.activity.capacities.joinedCount)}
-                  note="Capacity rows joined"
+                  note="Memberships started"
                 />
                 <StatCard
                   label="Left"
                   value={String(stats.data.activity.capacities.leftCount)}
-                  note="Capacity rows left"
+                  note="Memberships ended"
                 />
               </div>
-              {noActivity && <EmptyState title="No activity recorded in this UTC window." />}
+              {noActivity && <EmptyState title="No activity recorded in this window." />}
             </PanelBody>
           </Panel>
 
-          <p class="pk-small">Generated at {stats.data.generatedAt}.</p>
+          <p class="pk-small pk-muted">Generated {fmt(stats.data.generatedAt)}.</p>
         </>
       )}
     </div>

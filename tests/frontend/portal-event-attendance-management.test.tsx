@@ -283,7 +283,7 @@ describe("portal event attendance management", () => {
     const container = mount();
     await settle();
 
-    expect(container.querySelector("caption")?.textContent).toBe("Event attendees");
+    expect(container.querySelector("caption")?.textContent).toBe("Registrations");
     const headers = [...container.querySelectorAll("thead th")].map((cell) =>
       (cell.textContent ?? "").replace(/[↑↓↕]/g, "").trim(),
     );
@@ -356,8 +356,9 @@ describe("portal event attendance management", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("Something went wrong on our side.");
-    // The heading stays, so the reader still knows what failed to load.
-    expect(container.querySelector("h3")?.textContent).toBe("Attendees");
+    // The named list region stays, so the reader still knows what failed to
+    // load even though the table gave way to the error.
+    expect(container.querySelector('section[aria-label="Registrations"]')).not.toBeNull();
   });
 
   it("names the opened attendance region and states its type in the shared words", async () => {

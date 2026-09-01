@@ -227,11 +227,12 @@ test.describe("Portal management browser-verification pass", () => {
     await form.getByLabel("Closes at").fill(closesAtLocal);
     await form.getByRole("button", { name: "Create vote", exact: true }).click();
 
-    // Success navigates to the created vote's own address, which opens its
-    // detail beneath the row rather than leaving the reader to find it.
+    // Success navigates to the created vote's own record page: its name as
+    // the record heading, its facets as tabs, and the list left behind.
     await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/[0-9a-fA-F-]{36}$`));
-    const row = page.getByRole("row").filter({ hasText: title });
-    await expect(row).toBeVisible();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    const voteTabs = page.getByRole("navigation", { name: `${title} sections` });
+    await voteTabs.getByRole("link", { name: "Settings" }).click();
     const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
 
@@ -244,8 +245,9 @@ test.describe("Portal management browser-verification pass", () => {
     await visibilityForm.getByRole("button", { name: "Save visibility" }).click();
     await expect(visibility).toHaveValue("public");
 
-    await detail.getByRole("button", { name: "Load identifiable ballots" }).click();
-    await expect(detail.getByText("No ballots have been submitted.")).toBeVisible();
+    // The ballot audit is its own facet, fetched when its tab is opened.
+    await voteTabs.getByRole("link", { name: "Ballots" }).click();
+    await expect(page.getByText("No ballots have been submitted.")).toBeVisible();
   });
 
   test("vote proposals: a real member submission is moderated (reject guard + approve bypass)", async ({ page }) => {

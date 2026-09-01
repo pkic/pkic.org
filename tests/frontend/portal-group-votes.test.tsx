@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from "preact";
+import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
@@ -10,6 +10,16 @@ import { openConfirmation } from "./helpers/confirm-dialog";
 // component needs one even when a test only exercises participation.
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
+
+// The record page's facet tabs are wouter links; a plain anchor keeps them
+// renderable without a Router around the component under test.
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
@@ -161,19 +171,11 @@ describe("selected-group vote participation", () => {
     await act(() =>
       render(
         <>
-          <GroupVotes groupId={GROUP_ID} canManage canParticipate />
+          <GroupVotes groupId={GROUP_ID} canManage canParticipate voteSegment={VOTE_ID} voteTab="settings" />
           <ConfirmDialogHost />
         </>,
         container,
       ),
-    );
-    await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
-          (button) => button.textContent === "Show details for Architecture motion",
-        ) as HTMLButtonElement
-      ).click(),
     );
     await settle();
     await act(() =>
@@ -250,14 +252,11 @@ describe("selected-group vote participation", () => {
 
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupVotes groupId={GROUP_ID} canManage canParticipate />, container));
-    await settle();
     await act(() =>
-      (
-        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
-          (button) => button.textContent === "Show details for Architecture motion",
-        ) as HTMLButtonElement
-      ).click(),
+      render(
+        <GroupVotes groupId={GROUP_ID} canManage canParticipate voteSegment={VOTE_ID} voteTab="settings" />,
+        container,
+      ),
     );
     await settle();
     await act(() =>

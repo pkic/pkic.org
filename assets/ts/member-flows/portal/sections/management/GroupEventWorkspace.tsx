@@ -13,7 +13,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody } from "../../../../ui/Panel";
-import { fmt, formatEventWhen } from "../../ui";
+import { formatEventWhen } from "../../ui";
 import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
@@ -122,7 +122,9 @@ export function GroupEventWorkspace({
             ← Back to events
           </Button>
         </div>
-        <h2>{event.name}</h2>
+        {/* h3: the shell owns h1 and the workspace's PageHeader owns h2, so a
+          record inside a workspace tab is the next level down. */}
+        <h3 class="pk-record-title">{event.name}</h3>
         <p class="pk-small">
           {formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}
           {event.location ? ` · ${event.location}` : ""}
@@ -149,7 +151,10 @@ export function GroupEventWorkspace({
                 {event.endsAt && (
                   <>
                     <dt>Ends</dt>
-                    <dd>{fmt(event.endsAt)}</dd>
+                    {/* The same formatter as "When": one page must not show
+                        the start in the event's zone and the end in the
+                        viewer's. */}
+                    <dd>{formatEventWhen(event.endsAt, event.timezone, event.location)}</dd>
                   </>
                 )}
                 <dt>Profile</dt>

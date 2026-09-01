@@ -148,7 +148,9 @@ export function GroupCreateForm({
       {/* The page header names the surface; the panel only holds the form. */}
       <Panel aria-label="Create a group">
         <PanelBody class="pk-stack">
-          <p class="pk-small">Create a reusable group context for meetings, events, forms, votes, and membership.</p>
+          <p class="pk-small">
+            A group brings its own members, meetings, events, votes, forms, and mailing lists together in one place.
+          </p>
           <form class="pk-stack" onSubmit={(event) => void submit(event)}>
             {/* One disabled fieldset takes every control out of play while the
                 create is in flight, rather than each deciding for itself. The

@@ -139,26 +139,26 @@ export function GroupMeetings({
   const listActions = useRef<ApiTableActions | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   return (
-    <Panel class="pk" aria-label="Meeting series">
-      <PanelBody class="pk-stack">
-        {canManage && showCreate && (
-          <CreateMeetingSeries
-            groupId={groupId}
-            onCreated={async () => {
-              setShowCreate(false);
-              await listActions.current?.reload();
-            }}
-            onCancel={() => setShowCreate(false)}
-          />
-        )}
-        <GroupMeetingSeriesList
+    // The list is its own panel — head, table, pager inside one frame — so
+    // this wrapper only stacks the create form above it while it is open.
+    <div class="pk pk-stack">
+      {canManage && showCreate && (
+        <CreateMeetingSeries
           groupId={groupId}
-          actionsRef={listActions}
-          initialSeriesId={initialSeriesId}
-          initialSeriesTab={initialSeriesTab}
-          createAction={canManage ? { label: "New series", onSelect: () => setShowCreate(true) } : undefined}
+          onCreated={async () => {
+            setShowCreate(false);
+            await listActions.current?.reload();
+          }}
+          onCancel={() => setShowCreate(false)}
         />
-      </PanelBody>
-    </Panel>
+      )}
+      <GroupMeetingSeriesList
+        groupId={groupId}
+        actionsRef={listActions}
+        initialSeriesId={initialSeriesId}
+        initialSeriesTab={initialSeriesTab}
+        createAction={canManage ? { label: "New series", onSelect: () => setShowCreate(true) } : undefined}
+      />
+    </div>
   );
 }

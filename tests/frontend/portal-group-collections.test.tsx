@@ -339,27 +339,26 @@ describe("portal selected-group collections", () => {
     // The whole row opens the event now: the "Details" button in a nameless
     // last column was a control no keyboard could reach the row through, so
     // the table's own `rowAction` renders the link and stretches it.
-    const open = Array.from(container.querySelectorAll("a, button")).find(
+    const open = Array.from(container.querySelectorAll("a")).find(
       (control) => control.textContent === `Open ${event.name}`,
     );
-    expect(open).toBeDefined();
-    await act(async () => {
-      open?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    await settle();
+    // The row is a link, so the event's address is inspectable and the row
+    // can be opened in a new tab.
+    expect(open?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/events/${event.id}`);
 
+    // Arriving on that URL loads the event and renders its workspace.
+    const record = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} />);
+    await settle();
+    await settle();
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}`);
 
     // The default tab is the overview, which shows the registration panel — not the settings form.
-    expect(container.textContent).toContain("Registration");
-    expect(container.textContent).toContain("Register for this event");
-    expect(container.textContent).toContain("I agree to the event terms");
-    expect(container.textContent).not.toContain("Attendees");
-    expect(container.textContent).not.toContain("Manage meeting series");
+    expect(record.textContent).toContain("Registration");
+    expect(record.textContent).toContain("Register for this event");
+    expect(record.textContent).toContain("I agree to the event terms");
+    expect(record.textContent).not.toContain("Manage meeting series");
 
-    const tab = (label: string) => tabs(container).find((item) => item.textContent?.trim() === label);
+    const tab = (label: string) => tabs(record).find((item) => item.textContent?.trim() === label);
 
     // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
     // spy here, so the resulting tab is verified below through the URL it
@@ -374,7 +373,7 @@ describe("portal selected-group collections", () => {
     });
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}/settings`);
 
-    const back = Array.from(container.querySelectorAll("button")).find(
+    const back = Array.from(record.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "← Back to events",
     );
     await act(async () => {
@@ -388,7 +387,6 @@ describe("portal selected-group collections", () => {
     );
     await settle();
     await settle();
-    expect(registrationsView.textContent).toContain("Attendees");
     expect(registrationsView.textContent).toContain("Group Member");
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}/registrations`))).toBe(true);
 
