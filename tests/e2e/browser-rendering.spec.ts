@@ -20,12 +20,37 @@ async function setNativeChecked(page: Page, selector: string): Promise<void> {
   });
 }
 
-async function clickConsentCard(page: Page, text: string): Promise<void> {
-  const card = page.locator("div.event-flow-consent-card").filter({ hasText: text });
-  await card.scrollIntoViewIfNeeded();
-  await card.evaluate((element) => {
-    (element as HTMLElement).click();
-  });
+/*
+ * Consent terms.
+ *
+ * These used to be a `div[role=checkbox]` with a click handler, located by the
+ * `event-flow-consent-card` class and driven with a synthetic click that
+ * asserted nothing about the result. `ConsentCard.tsx` renders a real
+ * `<input type="checkbox">` with a real `<label>` now, so a term is addressed
+ * by its accessible name and `check()` both drives it and asserts it ended up
+ * checked.
+ */
+async function agreeToTerm(page: Page, labelText: string): Promise<void> {
+  const term = page.getByRole("checkbox", { name: new RegExp(labelText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") });
+  await expect(term).toHaveCount(1);
+  await term.check();
+}
+
+/*
+ * Every term of a flow at once, for the speaker steps that gate on all of them.
+ *
+ * `data-term-key` is the flow's own record of which term a card is — the one
+ * attribute `ConsentCard.tsx` documents as fixed — so it, and not the card's
+ * styling, is what identifies a consent here.
+ */
+async function agreeToAllTerms(page: Page): Promise<void> {
+  const terms = page.locator("[data-term-key] input[type='checkbox']");
+  await terms.first().waitFor({ state: "visible", timeout: 10_000 });
+  const count = await terms.count();
+  expect(count).toBeGreaterThan(0);
+  for (let i = 0; i < count; i++) {
+    await terms.nth(i).check();
+  }
 }
 
 // ── Error and network monitoring ──────────────────────────────────────────────
@@ -282,9 +307,9 @@ async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectP
     await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
   }
   await setNativeChecked(page, "#registration-email-review-confirmed");
-  await clickConsentCard(page, "privacy policy");
-  await clickConsentCard(page, "code of conduct");
-  await clickConsentCard(page, "photos and videos");
+  await agreeToTerm(page, "privacy policy");
+  await agreeToTerm(page, "code of conduct");
+  await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
@@ -306,9 +331,9 @@ async function fillInviteRegistration(
   await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
   await expect(page.locator("[data-registration-review]")).toContainText("None provided");
   await setNativeChecked(page, "#registration-email-review-confirmed");
-  await clickConsentCard(page, "privacy policy");
-  await clickConsentCard(page, "code of conduct");
-  await clickConsentCard(page, "photos and videos");
+  await agreeToTerm(page, "privacy policy");
+  await agreeToTerm(page, "code of conduct");
+  await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
@@ -318,13 +343,7 @@ async function fillProposal(
 ): Promise<void> {
   const type = options.type ?? "talk";
   // Step 1: accept all speaker consent terms
-  const consentCards = page.locator("div.event-flow-consent-card");
-  await consentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-  const count = await consentCards.count();
-  for (let i = 0; i < count; i++) {
-    await consentCards.nth(i).scrollIntoViewIfNeeded();
-    await consentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-  }
+  await agreeToAllTerms(page);
   await page.getByRole("button", { name: /Continue/i }).click();
   await page.getByLabel("First name").fill("Priya");
   await page.getByLabel("Last name").fill("Proposal");
@@ -842,12 +861,7 @@ test.describe("browser workflows", () => {
     await page.goto(speakerManageRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     // Accept all speaker consent terms
-    const spkConsentCards2 = page.locator("div.event-flow-consent-card");
-    await spkConsentCards2.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await spkConsentCards2.count()); i++) {
-      await spkConsentCards2.nth(i).scrollIntoViewIfNeeded();
-      await spkConsentCards2.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
@@ -1070,12 +1084,7 @@ test.describe("browser workflows", () => {
     const spkRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(spkToken)}`;
     await page.goto(spkRoute);
     // Accept all speaker consent terms
-    const spkConsentCards = page.locator("div.event-flow-consent-card");
-    await spkConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await spkConsentCards.count()); i++) {
-      await spkConsentCards.nth(i).scrollIntoViewIfNeeded();
-      await spkConsentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
@@ -1240,12 +1249,7 @@ test.describe("browser workflows", () => {
     await page.goto(samProposalUrl);
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
     // Accept all speaker consent terms
-    const samConsentCards = page.locator("div.event-flow-consent-card");
-    await samConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await samConsentCards.count()); i++) {
-      await samConsentCards.nth(i).scrollIntoViewIfNeeded();
-      await samConsentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Continue/i }).click();
     await page.getByLabel("First name").fill("Sam");
     await page.getByLabel("Last name").fill("Speaker");
@@ -1332,7 +1336,15 @@ test.describe("browser workflows", () => {
       .locator("[data-speaker-card]")
       .filter({ hasText: "co-sam-speaker@example.test" });
     await expect(refreshedCoSpeakerCard).toBeVisible();
-    await expect(refreshedCoSpeakerCard.locator("img.adm-headshot-preview-img")).toBeVisible({ timeout: 15_000 });
+    // The preview is an `<img>` named for the speaker it belongs to, which is
+    // steadier than the class this used to select on — that class no longer
+    // exists anywhere in the product. Checking the `src` too proves the image
+    // on the card is this speaker's headshot resource, rather than merely that
+    // the card has an image somewhere. The URL carries a `?v=` cache buster,
+    // so the path is what is pinned.
+    const coSpeakerHeadshot = refreshedCoSpeakerCard.getByRole("img", { name: "Co Sam Speaker" });
+    await expect(coSpeakerHeadshot).toBeVisible({ timeout: 15_000 });
+    await expect(coSpeakerHeadshot).toHaveAttribute("src", new RegExp(`/speakers/${speakerUserId}/headshot(?:\\?|$)`));
     await screenshot("05-co-speaker-invited");
 
     // ── Resend the co-speaker manage link via the browser ────────────────────
@@ -1371,12 +1383,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Save profile/i }).click();
     await expect(page.getByText(/Profile updated./i)).toBeVisible({ timeout: 10_000 });
     // Accept all speaker consent terms
-    const refreshedConsentCards = page.locator("div.event-flow-consent-card");
-    await refreshedConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await refreshedConsentCards.count()); i++) {
-      await refreshedConsentCards.nth(i).scrollIntoViewIfNeeded();
-      await refreshedConsentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("08-co-speaker-confirmed-via-refreshed-link");

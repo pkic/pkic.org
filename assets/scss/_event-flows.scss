@@ -640,11 +640,10 @@
 }
 
 // ── Consent items ────────────────────────────────────────────────────────────
-
-// ── Consent items ────────────────────────────────────────────────────────────
-// Each consent is rendered as an interactive card. Clicking/tapping anywhere
-// on the card (except the external "Read" link) toggles the hidden checkbox.
-// Cards transition from neutral → green when the user agrees.
+// The only card left in here is the registration step's email-review
+// confirmation: it draws its own indicator, and clicking anywhere on it
+// toggles the hidden checkbox behind that drawing. The terms of a flow are
+// `ConsentCard.tsx` now, and are `pk-field` / `pk-check` rather than cards.
 
 .event-flow-consents {
   display: flex;
@@ -652,8 +651,15 @@
   gap: 0.625rem;
 }
 
-// Hidden native checkbox — the card appearance reflects its state.
-.event-flow-consent-native-check {
+// Hidden native checkbox — the card that draws its own indicator is the one
+// that has to take the real control out of sight, so the rule is scoped to it.
+//
+// Unscoped, this also caught `ConsentCard.tsx`, which puts the same hook class
+// on the `pk-check__input` that IS its visible control. Nothing in the design
+// system's components layer declares `opacity` or `pointer-events`, so there
+// was no cascade to win: every consent in every event flow rendered as an
+// invisible, unclickable box that only its label could still toggle.
+.event-flow-consent-card .event-flow-consent-native-check {
   position: absolute;
   opacity: 0;
   pointer-events: none;

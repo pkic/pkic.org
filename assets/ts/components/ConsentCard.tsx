@@ -83,11 +83,13 @@ export function ConsentCard({ term }: ConsentCardProps) {
         <div class="pk-check">
           <input
             ref={inputRef}
-            // `event-flow-consent-native-check` is not styling: it is how the
-            // vanilla event-flow modules find the consent inputs in a form
-            // they did not render. Removing it would silently drop consents
-            // out of every public submission.
-            class="pk-check__input event-flow-consent-native-check"
+            // `data-consent-input` is how the vanilla event-flow modules find
+            // the consent inputs in a form they did not render. Removing it
+            // would silently drop consents out of every public submission. It
+            // is an attribute rather than a class so that no stylesheet can
+            // reach these controls by reaching for the hook.
+            data-consent-input
+            class="pk-check__input"
             type="checkbox"
             id={id}
             name="consents"

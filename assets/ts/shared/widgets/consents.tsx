@@ -20,7 +20,12 @@ export function renderConsentInputs(container: HTMLElement, terms: RequiredTerm[
  * card listens for it, so the state has one owner again.
  */
 export function syncConsentValidation(form: HTMLFormElement): void {
-  const checkboxes = form.querySelectorAll<HTMLInputElement>("input.event-flow-consent-native-check");
+  // A data attribute, not a class. The class this replaced was doing two
+  // contradictory jobs at once: a query hook here, and "hide this control
+  // behind a drawn card" in the legacy stylesheet. The second job reached the
+  // first one's elements and rendered every consent in every event flow
+  // invisible and unclickable.
+  const checkboxes = form.querySelectorAll<HTMLInputElement>("input[data-consent-input]");
   for (const checkbox of Array.from(checkboxes)) {
     checkbox.checkValidity();
   }

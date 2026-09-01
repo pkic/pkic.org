@@ -160,7 +160,9 @@ describe("proposal submission gate", () => {
 
     // The consent card learns it is invalid from the platform's own `invalid`
     // event, which `checkValidity()` fires — not from a class on the form.
-    const consent = document.querySelector<HTMLInputElement>("input.event-flow-consent-native-check");
+    // Found by the hook the validator uses, not by a class: the class is the
+    // legacy card's styling and no longer sits on this control.
+    const consent = document.querySelector<HTMLInputElement>("input[data-consent-input]");
     expect(consent).not.toBeNull();
     expect(consent?.getAttribute("aria-invalid")).toBe("true");
     const field = consent?.closest(".pk-field");
@@ -188,7 +190,7 @@ describe("proposal submission gate", () => {
       abstract:
         "A walk through migrating a working certificate authority to post-quantum algorithms, with the rollbacks we needed.",
     });
-    const consent = document.querySelector<HTMLInputElement>("input.event-flow-consent-native-check")!;
+    const consent = document.querySelector<HTMLInputElement>("input[data-consent-input]")!;
     await act(async () => {
       consent.checked = true;
       consent.dispatchEvent(new Event("change", { bubbles: true }));

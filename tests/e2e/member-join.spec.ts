@@ -10,13 +10,25 @@ test("requires a factual organization answer and updates the email path", async 
   const applicantQuestion = page.locator("legend", {
     hasText: "Are you employed by, or do you own, an organization?",
   });
-  await expect(applicantQuestion).toHaveClass(/fs-6/);
-  await expect(applicantQuestion).toHaveClass(/fw-semibold/);
+  // The question names the radio group, so it is a field label — `pk-strong`
+  // is what lifts it above the answers it introduces. The class assertions
+  // pin the contract; the computed assertions below are what the classes are
+  // for, and hold whatever the class names become.
+  //
+  // The size check used to compare the legend with its own radio labels,
+  // which only matched because Bootstrap's `fs-6` and `form-check-label` were
+  // both 1rem. The design system separates the two scales on purpose: a label
+  // is `--pk-text-sm` and a control — including a `pk-check` — is
+  // `--pk-text-md`. The invariant that survives is that a `<legend>` renders
+  // at the same label scale as every other field label in this form, rather
+  // than falling back to the browser's oversized default legend size.
+  await expect(applicantQuestion).toHaveClass(/\bpk-field__label\b/);
+  await expect(applicantQuestion).toHaveClass(/\bpk-strong\b/);
+  const answerLabel = page.locator('label[for="joinApplicantOrganization"]');
   const questionFontSize = await applicantQuestion.evaluate((element) => getComputedStyle(element).fontSize);
-  const answerFontSize = await page
-    .locator('label[for="joinApplicantOrganization"]')
-    .evaluate((element) => getComputedStyle(element).fontSize);
-  expect(questionFontSize).toBe(answerFontSize);
+  const questionFontWeight = await applicantQuestion.evaluate((element) => getComputedStyle(element).fontWeight);
+  const answerFontWeight = await answerLabel.evaluate((element) => getComputedStyle(element).fontWeight);
+  expect(Number(questionFontWeight)).toBeGreaterThan(Number(answerFontWeight));
 
   const organizationChoice = page.getByLabel("Yes — I am employed by or own an organization");
   const individualChoice = page.getByLabel("No — I am not employed by and do not own an organization");
@@ -27,6 +39,12 @@ test("requires a factual organization answer and updates the email path", async 
   await organizationChoice.check();
   const organizationEmail = page.getByLabel("Your official work or organization email address");
   await expect(organizationEmail).toBeVisible();
+  // The email step is the first ordinary field label to become visible, so it
+  // is the peer that proves the legend above sits on the same label scale.
+  const emailLabelFontSize = await page
+    .locator('label[for="joinEmail"]')
+    .evaluate((element) => getComputedStyle(element).fontSize);
+  expect(questionFontSize).toBe(emailLabelFontSize);
   await expect(organizationEmail).toHaveAttribute("placeholder", "you@organization.example");
   await expect(page.getByText(/You must participate on behalf of that organization/)).toBeVisible();
 
