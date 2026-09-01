@@ -274,18 +274,17 @@ describe("portal System Organizations", () => {
     expect(addButton).toBeTruthy();
     await act(async () => addButton?.click());
 
-    const name = container.querySelector<HTMLInputElement>("#organization-identity-name")!;
-    const email = container.querySelector<HTMLInputElement>("#organization-identity-email")!;
-    const jobTitle = container.querySelector<HTMLInputElement>("#organization-identity-job-title")!;
-    for (const [input, value] of [
-      [name, "Grace Hopper"],
-      [email, "grace@example.test"],
-      [jobTitle, "Engineer"],
+    // The add form's controls are reached through the `<legend>` naming the
+    // group and the `for`/`id` pair on each label, so the lookup fails exactly
+    // when that contract does. The surface no longer hands out hand-written
+    // ids for a test to select on.
+    const addForm = namedGroup(container, "New person");
+    for (const [label, value] of [
+      ["Name", "Grace Hopper"],
+      ["Email", "grace@example.test"],
+      ["Job title", "Engineer"],
     ] as const) {
-      input.value = value;
-      await act(() => {
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      });
+      await typeInto(controlFor(addForm, label), value);
     }
     await act(async () => {
       container

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
@@ -115,7 +116,7 @@ async function manageInvitation(
   await eventRow.getByRole("button", { name: "Details" }).click();
 
   const detail = page.getByRole("region", { name: `${event.name} workspace` });
-  await detail.getByRole("tab", { name: "Invitations" }).click();
+  await tab(detail, "Invitations").click();
   const label = type === "attendee" ? "Attendee" : "Speaker";
   await expect(detail.getByRole("heading", { name: `${label} invitations` })).toBeVisible();
   const invitations = detail.getByRole("region", { name: `${label} invitations` });

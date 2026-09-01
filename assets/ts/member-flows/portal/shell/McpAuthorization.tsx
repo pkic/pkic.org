@@ -1,3 +1,20 @@
+/**
+ * The consent screen an MCP client is sent to before it may act as a member of
+ * staff. It is the whole page, so it carries its own `.pk` root.
+ *
+ * Three things the Bootstrap version could not say, and this one does:
+ *
+ *   - "Signed in as … / Client: …" was two bold `div`s inside a tinted box. It
+ *     is a name/value pair, so it is a description list, and a reader can now
+ *     tell which half is the label.
+ *   - The unauthorized case is an `Alert` with the `warn` tone, whose
+ *     `role="alert"` announces it. The old version carried its meaning in an
+ *     amber background and nothing else.
+ *   - The permission lists are headed by real `h3`s beneath the panel's `h2`,
+ *     rather than by bold text that no heading navigation could reach. They
+ *     take their size from `pk-small pk-strong` so the structure is honest
+ *     without a sub-heading printing larger than the panel it sits in.
+ */
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
@@ -11,6 +28,14 @@ import { VerifyingOverlay } from "../../../components/VerifyingOverlay";
 import { requestJson } from "../../../shared/api-client";
 import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
 import { emailFromSubmitEvent } from "../../../shared/form/helpers";
+import { Alert } from "../../../ui/Alert";
+import { Button } from "../../../ui/Button";
+import { Field } from "../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { TextInput } from "../../../ui/TextControl";
+// `pk-datalist`, `pk-answer-list`: component CSS ships in lazy chunks, so a
+// module that writes these class names has to pull their stylesheet in itself.
+import "../../../ui/Content.css";
 
 const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 
@@ -167,11 +192,11 @@ export function McpAuthorization() {
   }
 
   return (
-    <div class="d-flex justify-content-center py-5">
-      <div class="card shadow-sm content-width-sm">
-        <div class="card-body p-4">
-          <h2 class="h4 mb-3">Authorize MCP access</h2>
-          <p class="text-muted">
+    <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
+      <Panel class="content-width-sm">
+        <PanelHeader title="Authorize MCP access" headingLevel={2} />
+        <PanelBody class="pk-stack">
+          <p class="pk-muted">
             {context?.clientName
               ? `${context.clientName} is requesting access to the PKI Consortium API.`
               : "Sign in through the portal to review this authorization request."}
@@ -179,121 +204,112 @@ export function McpAuthorization() {
 
           {!context?.authenticated ? (
             sent ? (
-              <div class="alert alert-success mt-3">
-                ✓ If this address has staff access, you'll receive a sign-in link shortly.
-              </div>
+              <Alert tone="ok">If this address has staff access, you&apos;ll receive a sign-in link shortly.</Alert>
             ) : (
               <>
                 {passkeysSupported && (
                   <>
-                    <button
-                      type="button"
-                      class="btn btn-outline-success w-100 mb-3"
+                    <Button
+                      block
+                      loading={submitting}
                       disabled={submitting}
                       onClick={() => {
                         void handlePasskeySignIn();
                       }}
                     >
                       {submitting ? "Waiting for passkey…" : "Sign in with a passkey"}
-                    </button>
-                    <div class="text-center text-muted small mb-3">or</div>
+                    </Button>
+                    <p class="pk-small pk-center">or</p>
                   </>
                 )}
                 <form
+                  class="pk-stack"
                   onSubmit={(event) => {
                     void handleSubmit(event);
                   }}
                 >
-                  <div class="mb-3">
-                    <label class="form-label fw-semibold" for="mcp-oauth-email">
-                      Portal email
-                    </label>
-                    <input
-                      class="form-control"
-                      type="email"
-                      id="mcp-oauth-email"
-                      name="email"
-                      required
-                      autocomplete="email"
-                    />
-                  </div>
-                  <button type="submit" class="btn btn-success w-100" disabled={submitting || !returnTo}>
+                  <Field label="Portal email" required>
+                    {(control) => <TextInput {...control} type="email" name="email" autocomplete="email" />}
+                  </Field>
+                  <Button type="submit" variant="primary" block loading={submitting} disabled={submitting || !returnTo}>
                     {submitting ? "Sending…" : "Send sign-in link"}
-                  </button>
+                  </Button>
                 </form>
               </>
             )
           ) : !context.authorized ? (
-            <div class="d-grid gap-3">
-              <div class="alert alert-warning mb-0">
-                <div class="fw-semibold">Signed in as {context.userEmail}</div>
-                <div>This account does not have permission to authorize MCP access.</div>
-              </div>
-              <button
-                type="button"
-                class="btn btn-outline-secondary"
+            <>
+              <Alert tone="warn" title={`Signed in as ${context.userEmail ?? "an unknown account"}`}>
+                This account does not have permission to authorize MCP access.
+              </Alert>
+              <Button
+                block
                 disabled={submitting}
                 onClick={() => {
                   void handleDecision("deny");
                 }}
               >
                 Deny and return to client
-              </button>
-            </div>
+              </Button>
+            </>
           ) : (
-            <div class="d-grid gap-3">
-              <div class="alert alert-light border mb-0">
-                <div class="fw-semibold">Signed in as {context.staffEmail}</div>
-                <div class="small text-muted">Client: {context.clientName}</div>
-              </div>
-              <div>
-                <div class="fw-semibold mb-2">Requested permissions</div>
-                <ul class="mb-2">
+            <>
+              <dl class="pk-datalist pk-small">
+                <dt>Signed in as</dt>
+                <dd>{context.staffEmail}</dd>
+                <dt>Client</dt>
+                <dd>{context.clientName}</dd>
+              </dl>
+
+              <div class="pk-stack pk-stack--tight">
+                <h3 class="pk-small pk-strong">Requested permissions</h3>
+                <ul class="pk-answer-list">
                   {context.requestedScopes.map((scope) => (
                     <li key={scope}>{scope}</li>
                   ))}
                 </ul>
               </div>
-              <div>
-                <div class="fw-semibold mb-2">Granted permissions</div>
+
+              <div class="pk-stack pk-stack--tight">
+                <h3 class="pk-small pk-strong">Granted permissions</h3>
                 {context.grantedScopes.length > 0 ? (
-                  <ul class="mb-0">
+                  <ul class="pk-answer-list">
                     {context.grantedScopes.map((scope) => (
                       <li key={scope}>{scope}</li>
                     ))}
                   </ul>
                 ) : (
-                  <p class="text-muted mb-0">No requested permissions can be granted by this account.</p>
+                  <p class="pk-muted">No requested permissions can be granted by this account.</p>
                 )}
               </div>
-              <div class="d-grid gap-2">
-                <button
-                  type="button"
-                  class="btn btn-success"
+
+              <div class="pk-stack pk-stack--snug">
+                <Button
+                  variant="primary"
+                  block
                   disabled={submitting || context.grantedScopes.length === 0}
                   onClick={() => {
                     void handleDecision("approve");
                   }}
                 >
                   Approve
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary"
+                </Button>
+                <Button
+                  block
                   disabled={submitting}
                   onClick={() => {
                     void handleDecision("deny");
                   }}
                 >
                   Deny
-                </button>
+                </Button>
               </div>
-            </div>
+            </>
           )}
 
-          {error && <div class="alert alert-danger mt-3">{error}</div>}
-        </div>
-      </div>
+          {error && <Alert tone="danger">{error}</Alert>}
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

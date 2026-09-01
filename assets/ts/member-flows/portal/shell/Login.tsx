@@ -1,6 +1,18 @@
 /**
  * Identity-based portal login screen — one magic link or passkey ceremony
  * establishes every currently eligible staff/member capacity.
+ *
+ * The screen is the whole page while nobody is signed in, so it carries its
+ * own `.pk` root. Two details are load-bearing rather than cosmetic:
+ *
+ *   - The email control is a `Field`, which owns the `for`/`id` pair and the
+ *     required annotation. It no longer carries a hand-written `id`; the
+ *     end-to-end specs that located `#portal-inp-email` now ask for the
+ *     control by its accessible name, which is what a reader has too.
+ *   - The confirmation is an `Alert` rather than a green box opening with a
+ *     bare "✓". A screen reader reads that character out as a character, and
+ *     it was the only thing besides the color saying the send had worked;
+ *     the sentence says it instead, inside the Alert's `role="status"`.
  */
 import { useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
@@ -10,6 +22,11 @@ import { MagicLinkSubmitButton, SignInError } from "../../../components/MagicLin
 import { useMagicLinkRequest } from "../../../hooks/useMagicLinkRequest";
 import { emailFromSubmitEvent } from "../../../shared/form/helpers";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import { Alert } from "../../../ui/Alert";
+import { Button } from "../../../ui/Button";
+import { Field } from "../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { TextInput } from "../../../ui/TextControl";
 
 async function requestMagicLink(email: string): Promise<void> {
   await postJson("/api/v1/auth/request-link", { email }, successResponseSchema);
@@ -45,58 +62,53 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
   }
 
   return (
-    <div class="d-flex justify-content-center py-4 py-md-5">
-      <div class="card shadow-sm content-width-sm">
-        <div class="card-body p-4">
-          <h2 class="h4 mb-3">PKI Consortium Portal</h2>
-
+    <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
+      <Panel class="content-width-sm">
+        <PanelHeader title="PKI Consortium Portal" headingLevel={2} />
+        <PanelBody class="pk-stack">
           {passkeysSupported && !magicLink.sent && (
             <>
-              <button
-                type="button"
-                class="btn btn-outline-success w-100 mb-3"
+              <Button
+                block
+                loading={passkeySubmitting}
                 disabled={passkeySubmitting}
                 onClick={() => {
                   void handlePasskeySignIn();
                 }}
               >
                 {passkeySubmitting ? "Waiting for passkey…" : "Sign in with a passkey"}
-              </button>
-              <div class="text-center text-muted small mb-3">or</div>
+              </Button>
+              <p class="pk-small pk-center">or</p>
             </>
           )}
 
-          <p class="text-muted">Enter your email to receive a sign-in link.</p>
+          <p class="pk-muted">Enter your email to receive a sign-in link.</p>
           {magicLink.sent ? (
-            <div class="alert alert-success mt-3">
-              ✓ If this address has portal access, you'll receive a sign-in link shortly.
-            </div>
+            <Alert tone="ok">If this address has portal access, you&apos;ll receive a sign-in link shortly.</Alert>
           ) : (
             <form
+              class="pk-stack"
               onSubmit={(e) => {
                 void handleSubmit(e);
               }}
             >
-              <div class="mb-3">
-                <label class="form-label fw-semibold" for="portal-inp-email">
-                  Email
-                </label>
-                <input
-                  class="form-control"
-                  type="email"
-                  id="portal-inp-email"
-                  name="email"
-                  placeholder="you@example.com"
-                  required
-                  autocomplete="email"
-                />
-              </div>
+              <Field label="Email" required>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="email"
+                    name="email"
+                    placeholder="you@example.com"
+                    autocomplete="email"
+                  />
+                )}
+              </Field>
               <MagicLinkSubmitButton submitting={magicLink.submitting} />
             </form>
           )}
           <SignInError error={magicLink.error} />
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </div>
   );
 }

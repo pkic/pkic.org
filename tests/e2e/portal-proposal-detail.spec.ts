@@ -3,6 +3,7 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
+import { tab } from "./helpers/tabs";
 
 const adminSessionResponse = userAuthSessionResponseSchema.parse({
   success: true,
@@ -503,12 +504,12 @@ test("renders the portal proposal detail workflow with submission answers and op
   await expect(page.getByRole("button", { name: "Load more comments" })).toHaveCount(0);
 
   // Navigate to Reviews tab to see reviewer details
-  await page.getByRole("tab", { name: /Reviews/ }).click();
+  await tab(page, /Reviews/).click();
   await expect(page.getByText("Ada Reviewer").first()).toBeVisible();
   await expect(page.getByText("Reviews are read-only after a proposal decision.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit Review" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Open Proposer Manage Page ↗" }).click();
+  await page.getByRole("button", { name: "Open proposer manage page" }).click();
   await expect
     .poll(async () => page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? []))
     .toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
@@ -516,7 +517,7 @@ test("renders the portal proposal detail workflow with submission answers and op
 
   expect(openedUrls).toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
 
-  await page.getByRole("tab", { name: "Audit Log" }).click();
+  await tab(page, "Audit Log").click();
   await expect(page.getByText("Proposal updated: title")).toBeVisible();
   await expect(page.locator(".adm-pager-range")).toHaveText("1–1 of 51");
   await page.locator(".adm-pager .page-item").last().getByRole("button").click();
@@ -524,7 +525,7 @@ test("renders the portal proposal detail workflow with submission answers and op
   await expect(page.locator(".adm-pager-range")).toHaveText("51–51 of 51");
   expect(auditOffsets).toEqual([0, 50]);
 
-  await page.getByRole("tab", { name: "Presentation" }).click();
+  await tab(page, "Presentation").click();
   const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: /Upload on behalf of speaker/ }).click();
   const fileChooser = await fileChooserPromise;
@@ -536,7 +537,7 @@ test("renders the portal proposal detail workflow with submission answers and op
   expect(adminUpload?.fileSize).toBe(String(pdfBody.byteLength));
   expect(adminUpload?.body).toEqual(pdfBody);
 
-  await page.getByRole("tab", { name: "Decision" }).click();
+  await tab(page, "Decision").click();
   await page.getByLabel("Comment to speakers *").fill("The speaker is unavailable for the scheduled session.");
   await page.getByLabel("I understand that every speaker linked to this proposal will be notified.").check();
   await page.getByRole("button", { name: "Cancel accepted session" }).click();

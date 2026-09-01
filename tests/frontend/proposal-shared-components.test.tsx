@@ -3,10 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { AcceptedProposalCancellationPanel } from "../../assets/ts/components/proposals/AcceptedProposalCancellationPanel";
-import { ProposalReviewsPanel } from "../../assets/ts/components/proposals/ProposalReviewsPanel";
+import {
+  ProposalReviewsPanel,
+  type ProposalReviewDraft,
+} from "../../assets/ts/components/proposals/ProposalReviewsPanel";
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
 import { ProposalCoSpeakerInviteForm } from "../../assets/ts/components/proposals/ProposalCoSpeakerInviteForm";
-import type { ProposalReview } from "../../assets/shared/schemas/proposal-reviews";
+import { proposalReviewUpsertSchema, type ProposalReview } from "../../assets/shared/schemas/proposal-reviews";
+import { buttonNamed, chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -98,6 +102,94 @@ describe("shared proposal management components", () => {
 
     expect(root.textContent).toContain("Reviews are read-only after a proposal decision.");
     expect(root.querySelector("form")).toBeNull();
+  });
+
+  it("submits the reviewer's draft as the shared upsert contract", async () => {
+    const onSave = vi.fn(async (_draft: ProposalReviewDraft) => review);
+    const onSaved = vi.fn();
+    const root = mount(reviewPanel({ canReview: true, onSave, onSaved }));
+
+    await chooseOption(controlFor<HTMLSelectElement>(root, "Recommendation"), "needs-work");
+    await typeInto(controlFor(root, "Score (1–10)"), "7");
+    await typeInto(controlFor<HTMLTextAreaElement>(root, "Internal review notes"), "  Needs a tighter scope.  ");
+    await act(async () => {
+      root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Parsed through the canonical schema instead of compared to a literal, so
+    // the assertion breaks if the draft stops being a valid upsert.
+    expect(proposalReviewUpsertSchema.parse(onSave.mock.calls[0][0])).toEqual({
+      recommendation: "needs-work",
+      score: 7,
+      reviewerComment: "Needs a tighter scope.",
+      applicantNote: undefined,
+    });
+    expect(onSaved).toHaveBeenCalledWith(review);
+  });
+
+  it("states a failed save on the surface and keeps the draft", async () => {
+    const onError = vi.fn();
+    const onSaved = vi.fn();
+    const root = mount(
+      reviewPanel({
+        canReview: true,
+        onSaved,
+        onError,
+        onSave: async () => {
+          throw new Error("Score must be between 1 and 10.");
+        },
+      }),
+    );
+
+    await typeInto(controlFor(root, "Score (1–10)"), "9");
+    await act(async () => {
+      root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // A toast can be gone before the reviewer looks up; the form must say so
+    // itself, and must not discard what was typed.
+    const alert = root.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Score must be between 1 and 10.");
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(controlFor(root, "Score (1–10)").value).toBe("9");
+    expect(buttonNamed(root, "Submit Review").disabled).toBe(false);
+  });
+
+  it("names every review control and says quorum in words as well as tone", () => {
+    const root = mount(reviewPanel({ canReview: true }));
+
+    expect(labelNames(root)).toEqual([
+      "Recommendation",
+      "Score (1–10)",
+      "Internal review notes",
+      "Suggested note to applicant",
+    ]);
+    // Each label resolves to a real control through its own for/id pair.
+    expect(controlFor<HTMLSelectElement>(root, "Recommendation").tagName).toBe("SELECT");
+    expect(controlFor(root, "Score (1–10)").required).toBe(true);
+    // One man in twelve cannot separate the warn and ok hues, so the count is
+    // spelled out rather than left to the badge's colour.
+    expect(root.textContent).toContain("1 more review needed");
+  });
+
+  it("offers more reviews through a real button rather than a clickable row", async () => {
+    const onLoadMore = vi.fn(async () => {});
+    const root = mount(reviewPanel({ page: { limit: 25, offset: 0, total: 30, hasMore: true }, onLoadMore }));
+
+    const more = buttonNamed(root, "Load more reviews");
+    await act(async () => more.click());
+    expect(onLoadMore).toHaveBeenCalledOnce();
+  });
+
+  it("names the empty review list instead of leaving the region blank", () => {
+    const root = mount(reviewPanel({ reviews: [], summary: { ...summary, totalReviews: 0 } }));
+
+    const status = root.querySelector('[role="status"]');
+    expect(status?.textContent).toContain("No reviews yet");
+    expect(root.textContent).toContain("2 more reviews needed");
   });
 
   it("requires a cancellation comment and explicit confirmation", async () => {

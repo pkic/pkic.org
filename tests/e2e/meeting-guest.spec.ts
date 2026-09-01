@@ -128,7 +128,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
     const portalSession = await guestPage.request.get("/api/v1/auth/session");
     expect(portalSession.status()).toBe(401);
     await guestPage.goto(`/portal/#/groups/${GROUP_ID}/overview`);
-    await expect(guestPage.locator("#portal-inp-email")).toBeVisible();
+    await expect(guestPage.getByLabel("Email")).toBeVisible();
   } finally {
     await guestContext.close();
   }

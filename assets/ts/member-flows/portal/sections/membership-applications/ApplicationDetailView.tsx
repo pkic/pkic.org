@@ -43,7 +43,7 @@ export function ApplicationDetailView({
       </div>
 
       <div class="row g-4">
-        <div class="col-md-6">
+        <div class="col-md-6 pk-stack">
           <ApplicationOverviewCard detail={detail} categories={categories} canWrite={canWrite} onSave={saveEdit} />
           <ApplicationAnswersCard detail={detail} />
           {(canWrite || canApprove) && (
@@ -58,7 +58,7 @@ export function ApplicationDetailView({
           <ApplicationDocumentsCard applicationId={detail.id} />
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-6 pk-stack">
           <ApplicationTimelineCard detail={detail} />
           <ApplicationCommunicationsCard
             detail={detail}

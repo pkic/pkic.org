@@ -21,9 +21,6 @@ document.addEventListener('DOMContentLoaded', function () {
     initializeDayTabs();
     initializeSessionDialogs();
 
-    // Keep nested actions from triggering their session card.
-    initializeSessionActionPropagation();
-
     // Break overlays removed; using inline break cards again
 });
 
@@ -118,12 +115,6 @@ function initializeDayTabs() {
             event.preventDefault();
             activate(next, true);
         });
-    });
-}
-
-function initializeSessionActionPropagation() {
-    document.querySelectorAll('[data-agenda-stop-propagation]').forEach(element => {
-        element.addEventListener('click', event => event.stopPropagation());
     });
 }
 

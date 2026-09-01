@@ -275,8 +275,8 @@ describe("group event proposal portal", () => {
       ),
     ).toBe(false);
     expect(container.textContent).not.toContain("Edit");
-    expect(container.textContent).not.toContain("Operator Actions");
-    expect(container.textContent).not.toContain("Open Proposer Manage Page");
+    expect(container.textContent).not.toContain("Operator actions");
+    expect(container.textContent).not.toContain("Open proposer manage page");
     expect(calls.filter(({ url }) => url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`)).toHaveLength(0);
     const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("Speakers"),
@@ -429,8 +429,15 @@ describe("group event proposal portal", () => {
     await settle();
 
     expect(container.textContent).toContain("Speakers");
-    expect(container.textContent).toContain("Operator Actions");
-    expect(container.textContent).toContain("Open Proposer Manage Page");
+    // The sidebar's operator panel, located by its heading and its control's
+    // accessible name rather than by a substring of the whole page, so a
+    // rename surfaces here as the panel going missing.
+    expect([...container.querySelectorAll("h3")].map((heading) => heading.textContent)).toContain("Operator actions");
+    expect(
+      [...container.querySelectorAll("button")].some(
+        (button) => button.textContent?.trim() === "Open proposer manage page",
+      ),
+    ).toBe(true);
     expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
 
     const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>

@@ -8,11 +8,31 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { StatCard } from "../../../../ui/StatCard";
+import { Select, TextInput } from "../../../../ui/TextControl";
 
 interface DateWindow {
   scope: GroupStatsQuery["scope"];
   from: string;
   to: string;
+}
+
+/**
+ * A rejected window, attributed to the boundary that caused it.
+ *
+ * The shared schema reports its own path — `to` for a window that ends before
+ * it starts — so the message can land on that control as a `Field` state
+ * rather than as a detached banner. That is what puts `aria-invalid` and
+ * `aria-describedby` on the input the reader actually has to fix.
+ */
+interface WindowError {
+  boundary: "from" | "to" | null;
+  message: string;
 }
 
 const DEFAULT_WINDOW: DateWindow = { scope: "current", from: "", to: "" };
@@ -32,18 +52,9 @@ function queryString(query: GroupStatsQuery): string {
   return params.toString();
 }
 
-function StatValue({ label, value, help }: { label: string; value: number; help: string }) {
-  return (
-    <div class="col-sm-6 col-xl-3">
-      <div class="border rounded p-3 h-100">
-        <div class="small text-body-secondary">{label}</div>
-        <div class="fs-3 fw-semibold" aria-label={`${label}: ${value}`}>
-          {value}
-        </div>
-        <div class="small text-body-secondary">{help}</div>
-      </div>
-    </div>
-  );
+/** The message a boundary field shows, or undefined when the error is elsewhere. */
+function messageFor(error: WindowError | null, boundary: "from" | "to"): string | undefined {
+  return error?.boundary === boundary ? error.message : undefined;
 }
 
 export function GroupStatistics({ groupId }: { groupId: string }) {
@@ -51,7 +62,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
   const [query, setQuery] = useState<GroupStatsQuery>(() =>
     groupStatsQuerySchema.parse({ scope: "current", timezone: "UTC" }),
   );
-  const [queryError, setQueryError] = useState<string | null>(null);
+  const [queryError, setQueryError] = useState<WindowError | null>(null);
   const stats = useData(
     () =>
       getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/stats?${queryString(query)}`, groupStatsResponseSchema),
@@ -71,121 +82,152 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       to: toUtcBoundary(draft.to),
     });
     if (!parsed.success) {
-      setQueryError(parsed.error.issues[0]?.message ?? "Choose a valid UTC window.");
+      const issue = parsed.error.issues[0];
+      const path = issue?.path[0];
+      setQueryError({
+        boundary: path === "from" || path === "to" ? path : null,
+        message: issue?.message ?? "Choose a valid UTC window.",
+      });
       return;
     }
     setQueryError(null);
     setQuery(parsed.data);
   }
 
-  if (!stats.data && stats.loading) return <Spinner />;
+  if (!stats.data && stats.loading) return <Spinner label="Loading group statistics…" />;
+
+  const fromMessage = messageFor(queryError, "from");
+  const toMessage = messageFor(queryError, "to");
+  const noActivity =
+    stats.data?.activity.people.actionCount === 0 &&
+    stats.data.activity.capacities.joinedCount === 0 &&
+    stats.data.activity.capacities.leftCount === 0;
 
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">Group statistics</div>
-      <div class="card-body d-flex flex-column gap-4">
-        <p class="text-muted small mb-0">
-          Counts are calculated by the server in D1. People are distinct users; capacities are the Member participation
-          rows they represent. Activity is limited to the UTC window below.
-        </p>
-        <form class="row g-3 align-items-end" onSubmit={applyWindow}>
-          <div class="col-md-3">
-            <label class="form-label" for="group-stats-scope">
-              Population scope
-            </label>
-            <select
-              id="group-stats-scope"
-              class="form-select"
-              value={draft.scope}
-              onChange={(event) => updateDraft("scope", (event.target as HTMLSelectElement).value)}
-            >
-              <option value="current">Current participation</option>
-              <option value="historical">Historical window</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label" for="group-stats-from">
-              From (UTC)
-            </label>
-            <input
-              id="group-stats-from"
-              type="date"
-              class="form-control"
-              value={draft.from}
-              onInput={(event) => updateDraft("from", (event.target as HTMLInputElement).value)}
-            />
-          </div>
-          <div class="col-md-3">
-            <label class="form-label" for="group-stats-to">
-              To (UTC, exclusive)
-            </label>
-            <input
-              id="group-stats-to"
-              type="date"
-              class="form-control"
-              value={draft.to}
-              onInput={(event) => updateDraft("to", (event.target as HTMLInputElement).value)}
-            />
-          </div>
-          <div class="col-md-3">
-            <button type="submit" class="btn btn-outline-secondary w-100">
-              Apply window
-            </button>
-          </div>
-        </form>
-        {queryError && <ErrorAlert error={queryError} />}
-        {stats.error && <ErrorAlert error={stats.error} />}
-        {stats.data && (
-          <>
-            <div>
-              <h6 class="mb-1">Participation</h6>
-              <p class="small text-body-secondary mb-3">
+    <div class="pk pk-stack">
+      {/* A panel is a section, so it is named rather than announced as an
+          anonymous group of numbers. */}
+      <Panel aria-label="Group statistics">
+        <PanelHeader title="Group statistics" headingLevel={2} />
+        <PanelBody class="pk-stack">
+          <p class="pk-small">
+            Counts are calculated by the server in D1. People are distinct users; capacities are the Member
+            participation rows they represent. Activity is limited to the UTC window below.
+          </p>
+          <form class="pk-stack" aria-label="Statistics window" onSubmit={applyWindow}>
+            <div class="pk-grid pk-grid--tight">
+              <Field label="Population scope">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={draft.scope}
+                    onChange={(event) => updateDraft("scope", event.currentTarget.value)}
+                  >
+                    <option value="current">Current participation</option>
+                    <option value="historical">Historical window</option>
+                  </Select>
+                )}
+              </Field>
+              <Field
+                label="From (UTC)"
+                help="Leave blank to start at the beginning of available history."
+                state={fromMessage ? "invalid" : undefined}
+                message={fromMessage}
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="date"
+                    value={draft.from}
+                    onInput={(event) => updateDraft("from", event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field
+                label="To (UTC, exclusive)"
+                help="Leave blank to run the window up to now."
+                state={toMessage ? "invalid" : undefined}
+                message={toMessage}
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="date"
+                    value={draft.to}
+                    onInput={(event) => updateDraft("to", event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+            </div>
+            {/* A rejection the schema did not attribute to either boundary has
+                no control to sit beside, so it is stated on its own. */}
+            {queryError?.boundary === null && <Alert tone="danger">{queryError.message}</Alert>}
+            <div class="pk-cluster">
+              <Button type="submit" loading={stats.loading}>
+                Apply window
+              </Button>
+            </div>
+          </form>
+          {stats.error && <ErrorAlert error={stats.error} />}
+        </PanelBody>
+      </Panel>
+
+      {stats.data && (
+        <>
+          <Panel aria-label="Participation">
+            <PanelHeader title="Participation" headingLevel={2} />
+            <PanelBody class="pk-stack pk-stack--snug">
+              <p class="pk-small">
                 {stats.data.scope === "current"
                   ? "Active participation now."
                   : "Participation overlapping the selected window."}
               </p>
-              <div class="row g-3">
-                <StatValue label="People" value={stats.data.participation.people.count} help="Distinct users" />
-                <StatValue
+              <div class="pk-grid pk-grid--tight">
+                <StatCard label="People" value={String(stats.data.participation.people.count)} note="Distinct users" />
+                <StatCard
                   label="Membership capacities"
-                  value={stats.data.participation.capacities.count}
-                  help="Member participation rows"
+                  value={String(stats.data.participation.capacities.count)}
+                  note="Member participation rows"
                 />
               </div>
-            </div>
-            <div>
-              <h6 class="mb-1">Activity</h6>
-              <p class="small text-body-secondary mb-3">
+            </PanelBody>
+          </Panel>
+
+          <Panel aria-label="Activity">
+            <PanelHeader title="Activity" headingLevel={2} />
+            <PanelBody class="pk-stack pk-stack--snug">
+              <p class="pk-small">
                 {formatWindowBoundary(stats.data.window.from)} to {formatWindowBoundary(stats.data.window.to)}
               </p>
-              <div class="row g-3">
-                <StatValue
+              <div class="pk-grid pk-grid--tight">
+                <StatCard
                   label="Active people"
-                  value={stats.data.activity.people.actorCount}
-                  help="People with audited actions"
+                  value={String(stats.data.activity.people.actorCount)}
+                  note="People with audited actions"
                 />
-                <StatValue
+                <StatCard
                   label="Actions"
-                  value={stats.data.activity.people.actionCount}
-                  help="Audited group actions"
+                  value={String(stats.data.activity.people.actionCount)}
+                  note="Audited group actions"
                 />
-                <StatValue
+                <StatCard
                   label="Joined"
-                  value={stats.data.activity.capacities.joinedCount}
-                  help="Capacity rows joined"
+                  value={String(stats.data.activity.capacities.joinedCount)}
+                  note="Capacity rows joined"
                 />
-                <StatValue label="Left" value={stats.data.activity.capacities.leftCount} help="Capacity rows left" />
+                <StatCard
+                  label="Left"
+                  value={String(stats.data.activity.capacities.leftCount)}
+                  note="Capacity rows left"
+                />
               </div>
-              {stats.data.activity.people.actionCount === 0 &&
-                stats.data.activity.capacities.joinedCount === 0 &&
-                stats.data.activity.capacities.leftCount === 0 && (
-                  <p class="text-muted small mt-3 mb-0">No activity recorded in this UTC window.</p>
-                )}
-            </div>
-            <p class="small text-body-secondary mb-0">Generated at {stats.data.generatedAt}.</p>
-          </>
-        )}
-      </div>
+              {noActivity && <EmptyState title="No activity recorded in this UTC window." />}
+            </PanelBody>
+          </Panel>
+
+          <p class="pk-small">Generated at {stats.data.generatedAt}.</p>
+        </>
+      )}
     </div>
   );
 }

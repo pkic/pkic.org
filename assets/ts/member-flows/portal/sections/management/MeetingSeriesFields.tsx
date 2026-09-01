@@ -15,6 +15,8 @@ import {
 } from "../../../../../shared/schemas/event-series";
 import { RecurrenceEditor } from "../../../../components/RecurrenceEditor";
 import { TimeZoneSelect } from "../../../../components/TimeZoneSelect";
+import { Field } from "../../../../ui/Field";
+import { Select, TextInput } from "../../../../ui/TextControl";
 
 export interface MeetingSeriesDraft {
   name: string;
@@ -51,6 +53,20 @@ function updateDraft<K extends keyof MeetingSeriesDraft>(
   onChange({ ...draft, [key]: value });
 }
 
+/**
+ * The fields describing a recurring meeting series, shared by the create form
+ * and the settings form.
+ *
+ * The three groups are the three decisions: what the meeting is, when it
+ * recurs, and who may attend. They are separate `pk-grid` blocks rather than
+ * one twelve-column row, so the columns reflow by how much room a field needs
+ * instead of by a breakpoint triplet written per field.
+ *
+ * `idPrefix` still names the controls this component hands to a child that
+ * owns its own labelling — the recurrence editor and the time-zone input.
+ * Everything else is inside a `Field`, which pairs the label and the control
+ * by generated id, so those ids are no longer the component's to choose.
+ */
 export function MeetingSeriesFields({
   idPrefix,
   draft,
@@ -64,177 +80,167 @@ export function MeetingSeriesFields({
   scheduleLocked?: boolean;
   onChange: (draft: MeetingSeriesDraft) => void;
 }) {
+  const scheduleDisabled = disabled || scheduleLocked;
+
   return (
-    <div class="row g-3">
-      <div class="col-md-6">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-name`}>
-          Meeting name
-        </label>
-        <input
-          id={`${idPrefix}-name`}
-          class="form-control"
-          value={draft.name}
-          required
-          disabled={disabled}
-          onInput={(event) => updateDraft(draft, onChange, "name", event.currentTarget.value)}
-        />
+    <div class="pk pk-stack">
+      <div class="pk-grid">
+        <Field label="Meeting name" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              value={draft.name}
+              disabled={disabled}
+              onInput={(event) => updateDraft(draft, onChange, "name", event.currentTarget.value)}
+            />
+          )}
+        </Field>
+        <Field label="Event profile">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.profileKey}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "profileKey", event.currentTarget.value as EventProfileKey)
+              }
+            >
+              {EVENT_PROFILE_KEYS.map((profile) => (
+                <option key={profile} value={profile}>
+                  {EVENT_PROFILE_LABELS[profile]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="First occurrence" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="datetime-local"
+              value={draft.startsAt}
+              disabled={scheduleDisabled}
+              onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
+            />
+          )}
+        </Field>
       </div>
-      <div class="col-md-3">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-profile`}>
-          Event profile
-        </label>
-        <select
-          id={`${idPrefix}-profile`}
-          class="form-select"
-          value={draft.profileKey}
-          disabled={disabled}
-          onChange={(event) => updateDraft(draft, onChange, "profileKey", event.currentTarget.value as EventProfileKey)}
-        >
-          {EVENT_PROFILE_KEYS.map((profile) => (
-            <option key={profile} value={profile}>
-              {EVENT_PROFILE_LABELS[profile]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-start`}>
-          First occurrence
-        </label>
-        <input
-          id={`${idPrefix}-start`}
-          type="datetime-local"
-          class="form-control"
-          value={draft.startsAt}
-          required
-          disabled={disabled || scheduleLocked}
-          onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
-        />
-      </div>
-      <div class="col-md-6">
+
+      <div class="pk-grid pk-grid--roomy">
         <RecurrenceEditor
           id={`${idPrefix}-recurrence`}
           value={draft.recurrenceRule}
-          disabled={disabled || scheduleLocked}
+          disabled={scheduleDisabled}
           referenceDate={draft.startsAt}
           onChange={(value) => updateDraft(draft, onChange, "recurrenceRule", value)}
         />
-      </div>
-      <div class="col-md-3">
         <TimeZoneSelect
           id={`${idPrefix}-timezone`}
           label="Time zone"
           value={draft.timezone}
-          disabled={disabled || scheduleLocked}
+          disabled={scheduleDisabled}
           onChange={(value) => updateDraft(draft, onChange, "timezone", value)}
         />
+        <Field label="Duration (minutes)" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="number"
+              min={1}
+              max={10080}
+              value={draft.durationMinutes}
+              disabled={scheduleDisabled}
+              onInput={(event) => updateDraft(draft, onChange, "durationMinutes", Number(event.currentTarget.value))}
+            />
+          )}
+        </Field>
       </div>
-      <div class="col-md-3">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-duration`}>
-          Duration (minutes)
-        </label>
-        <input
-          id={`${idPrefix}-duration`}
-          type="number"
-          class="form-control"
-          min={1}
-          max={10080}
-          value={draft.durationMinutes}
-          required
-          disabled={disabled || scheduleLocked}
-          onInput={(event) => updateDraft(draft, onChange, "durationMinutes", Number(event.currentTarget.value))}
-        />
+
+      <div class="pk-grid">
+        <Field label="Registration">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.registrationPolicy}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "registrationPolicy", event.currentTarget.value as EventRegistrationPolicy)
+              }
+            >
+              {EVENT_REGISTRATION_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {EVENT_REGISTRATION_POLICY_LABELS[policy]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Visibility">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.visibility}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "visibility", event.currentTarget.value as EventVisibility)
+              }
+            >
+              {EVENT_VISIBILITIES.map((visibility) => (
+                <option key={visibility} value={visibility}>
+                  {EVENT_VISIBILITY_LABELS[visibility]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Attendee eligibility">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.memberEligibility}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "memberEligibility", event.currentTarget.value as EventMemberEligibility)
+              }
+            >
+              {EVENT_MEMBER_ELIGIBILITIES.map((eligibility) => (
+                <option key={eligibility} value={eligibility}>
+                  {ELIGIBILITY_LABELS[eligibility]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="External guests">
+          {(control) => (
+            <Select
+              {...control}
+              value={draft.guestPolicy}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "guestPolicy", event.currentTarget.value as EventGuestPolicy)
+              }
+            >
+              {EVENT_GUEST_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {GUEST_LABELS[policy]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
-      <div class="col-md-4">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-registration`}>
-          Registration
-        </label>
-        <select
-          id={`${idPrefix}-registration`}
-          class="form-select"
-          value={draft.registrationPolicy}
-          disabled={disabled}
-          onChange={(event) =>
-            updateDraft(draft, onChange, "registrationPolicy", event.currentTarget.value as EventRegistrationPolicy)
-          }
-        >
-          {EVENT_REGISTRATION_POLICIES.map((policy) => (
-            <option key={policy} value={policy}>
-              {EVENT_REGISTRATION_POLICY_LABELS[policy]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-visibility`}>
-          Visibility
-        </label>
-        <select
-          id={`${idPrefix}-visibility`}
-          class="form-select"
-          value={draft.visibility}
-          disabled={disabled}
-          onChange={(event) => updateDraft(draft, onChange, "visibility", event.currentTarget.value as EventVisibility)}
-        >
-          {EVENT_VISIBILITIES.map((visibility) => (
-            <option key={visibility} value={visibility}>
-              {EVENT_VISIBILITY_LABELS[visibility]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-eligibility`}>
-          Attendee eligibility
-        </label>
-        <select
-          id={`${idPrefix}-eligibility`}
-          class="form-select"
-          value={draft.memberEligibility}
-          disabled={disabled}
-          onChange={(event) =>
-            updateDraft(draft, onChange, "memberEligibility", event.currentTarget.value as EventMemberEligibility)
-          }
-        >
-          {EVENT_MEMBER_ELIGIBILITIES.map((eligibility) => (
-            <option key={eligibility} value={eligibility}>
-              {ELIGIBILITY_LABELS[eligibility]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-guests`}>
-          External guests
-        </label>
-        <select
-          id={`${idPrefix}-guests`}
-          class="form-select"
-          value={draft.guestPolicy}
-          disabled={disabled}
-          onChange={(event) =>
-            updateDraft(draft, onChange, "guestPolicy", event.currentTarget.value as EventGuestPolicy)
-          }
-        >
-          {EVENT_GUEST_POLICIES.map((policy) => (
-            <option key={policy} value={policy}>
-              {GUEST_LABELS[policy]}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div class="col-12">
-        <label class="form-label small fw-semibold" for={`${idPrefix}-location`}>
-          Location or public meeting page
-        </label>
-        <input
-          id={`${idPrefix}-location`}
-          class="form-control"
-          value={draft.location}
-          disabled={disabled}
-          onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
-        />
-      </div>
+
+      <Field label="Location or public meeting page">
+        {(control) => (
+          <TextInput
+            {...control}
+            value={draft.location}
+            disabled={disabled}
+            onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
+          />
+        )}
+      </Field>
     </div>
   );
 }

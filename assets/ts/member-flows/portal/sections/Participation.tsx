@@ -14,6 +14,8 @@ import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/v
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
+import { EmptyState } from "../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
 import { portalSession } from "../state";
@@ -21,6 +23,15 @@ import { fmt, fmtDate, formatDateRange } from "../ui";
 
 type MemberVote = z.infer<typeof currentUserVotesListResponseSchema>["votes"][number];
 
+/**
+ * One record history, as a titled panel.
+ *
+ * The three states a panel can be in — loading, failed, empty — are each
+ * announced rather than merely drawn: `Spinner` and `EmptyState` carry
+ * `role="status"`, `ErrorAlert` an alert region. The rhythm between the
+ * panel's own children is the body's `gap`, so nothing inside carries a
+ * margin of its own.
+ */
 function RecordCard({
   title,
   loading,
@@ -37,15 +48,15 @@ function RecordCard({
   children?: preact.ComponentChildren;
 }) {
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold">{title}</div>
-      <div class="card-body">
-        {loading && <Spinner />}
+    <Panel>
+      <PanelHeader title={title} />
+      <PanelBody class="pk-stack pk-stack--snug">
+        {loading && <Spinner label={`Loading ${title.toLowerCase()}…`} />}
         {!loading && error && <ErrorAlert error={error} />}
-        {!loading && !error && count === 0 && <p class="text-muted small mb-0">{empty}</p>}
+        {!loading && !error && count === 0 && <EmptyState title={empty} />}
         {!loading && !error && count > 0 && children}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -63,9 +74,11 @@ function ApplicationsCard() {
       empty="No membership applications."
       count={rows.length}
     >
-      <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+      {/* A list of records with no name is announced as "list", and this page
+          renders five of them. */}
+      <ul class="pk-stack pk-stack--tight" aria-label="Membership applications">
         {rows.map((application) => (
-          <li key={application.id} class="small">
+          <li key={application.id} class="pk-cluster">
             <Link href="/application">Application from {fmt(application.createdAt)}</Link>
             <Badge status={application.stage} />
           </li>
@@ -89,13 +102,15 @@ function BallotHistoryCard() {
       empty="No votes involve your capacities yet."
       count={rows.length}
     >
-      <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+      <ul class="pk-stack pk-stack--tight" aria-label="Votes">
         {rows.map((vote: MemberVote) => (
-          <li key={vote.id} class="small">
+          <li key={vote.id} class="pk-cluster">
             <Link href={`/groups/${encodeURIComponent(vote.ownerGroupId)}/votes/${encodeURIComponent(vote.id)}`}>
               {vote.title}
             </Link>
-            <span class="text-muted ms-2">closes {fmt(vote.closesAt)}</span>
+            <span class="pk-small">closes {fmt(vote.closesAt)}</span>
+            {/* The badge says "Voted" or "Not voted yet" in words, so whether a
+                ballot is cast never rests on the tone alone. */}
             {vote.hasCastBallot ? (
               <Badge status="completed" label="Voted" />
             ) : (
@@ -126,15 +141,15 @@ function RegistrationsCard() {
       empty="No event registrations yet."
       count={rows.length}
     >
-      <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+      <ul class="pk-stack pk-stack--tight" aria-label="Event registrations">
         {rows.map((registration) => (
-          <li key={registration.id} class="small">
-            <span class="fw-semibold">{registration.event.name}</span>
-            <span class="text-muted ms-2">
+          <li key={registration.id} class="pk-cluster">
+            <span class="pk-strong">{registration.event.name}</span>
+            <span class="pk-small">
               {formatDateRange(registration.event.startsAt, registration.event.endsAt, registration.event.timezone)}
             </span>
             <Badge status={registration.status} />
-            <span class="text-muted ms-2">{label(registration.attendanceType)}</span>
+            <span class="pk-small">{label(registration.attendanceType)}</span>
             {registration.waitlisted && <Badge status="waitlisted" />}
           </li>
         ))}
@@ -157,14 +172,14 @@ function DonationsCard() {
       empty="No donations recorded for your verified email."
       count={rows.length}
     >
-      <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+      <ul class="pk-stack pk-stack--tight" aria-label="Donations">
         {rows.map((donation) => (
-          <li key={donation.id} class="small">
-            <span class="fw-semibold">
+          <li key={donation.id} class="pk-cluster">
+            <span class="pk-strong">
               {donation.currency} {(donation.grossAmount / 100).toFixed(2)}
             </span>
             <Badge status={donation.status} />
-            <span class="text-muted ms-2">{fmtDate(donation.createdAt)}</span>
+            <span class="pk-small">{fmtDate(donation.createdAt)}</span>
           </li>
         ))}
       </ul>
@@ -186,16 +201,16 @@ function ProposalsCard() {
       empty="No event proposals are linked to your account."
       count={rows.length}
     >
-      <p class="text-muted small">
+      <p class="pk-muted pk-small">
         Proposal editing works through the personal access link from your proposal emails; this list is your record.
       </p>
-      <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+      <ul class="pk-stack pk-stack--tight" aria-label="Event proposals">
         {rows.map((proposal) => (
-          <li key={proposal.id} class="small">
-            <span class="fw-semibold">{proposal.title}</span>
-            <span class="text-muted ms-2">{proposal.event.name}</span>
+          <li key={proposal.id} class="pk-cluster">
+            <span class="pk-strong">{proposal.title}</span>
+            <span class="pk-small">{proposal.event.name}</span>
             <Badge status={proposal.status} />
-            <span class="text-muted ms-2">{label(proposal.role)}</span>
+            <span class="pk-small">{label(proposal.role)}</span>
           </li>
         ))}
       </ul>
@@ -208,8 +223,8 @@ export function Participation() {
   const isMember = Boolean(session?.member);
 
   return (
-    <div class="d-flex flex-column gap-3 content-width-md">
-      <p class="text-muted small mb-0">
+    <div class="pk pk-stack content-width-md">
+      <p class="pk-muted pk-small">
         Your record across the consortium. Active items that need a decision also appear on{" "}
         <Link href="/home">Home</Link>.
       </p>

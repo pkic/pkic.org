@@ -2,7 +2,13 @@ import { useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
+import { Alert } from "../../../../ui/Alert";
+import { Badge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { fmt, fmtDate, toast } from "../../ui";
@@ -14,6 +20,11 @@ import {
   accessGrantCreateResponseSchema,
   accessGrantsListResponseSchema,
 } from "../../../../../shared/schemas/access-control";
+// A permission name and a context reference are identifiers, so their cells
+// are set in `pk-mono`. That class lives in the content stylesheet, and
+// component CSS ships in lazy chunks — the surface writing the class name
+// imports the sheet itself.
+import "../../../../ui/Content.css";
 
 /** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
 export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
@@ -24,6 +35,13 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
   const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /*
+   * What went wrong stays beside the form rather than in a toast that has
+   * already faded by the time the reader reaches the control it is about.
+   * `Alert`'s danger tone carries role="alert", so it is announced as it
+   * appears without moving focus out of the form.
+   */
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function handleRevoke(grant: AccessGrant) {
     const confirmed = await confirmAction({
@@ -41,14 +59,20 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
     }
   }
 
+  function closeForm() {
+    setCreating(false);
+    setFormError(null);
+  }
+
   async function handleAdd(e: Event) {
     e.preventDefault();
+    setFormError(null);
     if (!user) {
-      toast("Pick a user first", "error");
+      setFormError("Pick a user first.");
       return;
     }
     if (target.targetType && !target.targetId) {
-      toast("Pick a specific event/working group, or clear the context", "error");
+      setFormError("Pick a specific event, group, or organization, or clear the context.");
       return;
     }
     setSubmitting(true);
@@ -68,84 +92,84 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
       setUser(null);
       setTarget({ targetType: null, targetId: null });
       setExpiresAt("");
-      setCreating(false);
+      closeForm();
       await tableRef.current?.reload();
     } catch (error) {
-      toast((error as Error).message, "error");
+      setFormError((error as Error).message);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div>
-      {canGrant && !creating && (
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <button type="button" class="btn btn-sm btn-success" onClick={() => setCreating(true)}>
-            New grant
-          </button>
-        </div>
-      )}
-
+    <div class="pk pk-stack">
       {canGrant && creating && (
-        <div class="card border-0 shadow-sm mb-3">
-          <div class="card-header bg-white fw-semibold">Grant a permission</div>
-          <div class="card-body">
-            <form onSubmit={handleAdd} class="row g-2 align-items-end">
-              <div class="col-md-4">
-                <label class="form-label small fw-semibold">User</label>
-                <UserPicker
-                  endpoint="/api/v1/permissions/subjects"
-                  value={user}
-                  onChange={setUser}
-                  disabled={submitting}
-                />
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small fw-semibold">Permission</label>
-                <select
-                  class="form-select form-select-sm"
-                  value={permission}
-                  onChange={(e) => setPermission((e.target as HTMLSelectElement).value)}
-                  disabled={submitting}
-                >
-                  {PERMISSIONS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div class="col-md-3">
-                <label class="form-label small fw-semibold">Target</label>
-                <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small fw-semibold">Expires (optional)</label>
-                <input
-                  class="form-control form-control-sm"
-                  type="datetime-local"
-                  value={expiresAt}
-                  onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
-                  disabled={submitting}
-                />
-              </div>
-              <div class="col-12 d-flex gap-2">
-                <button type="submit" class="btn btn-sm btn-success" disabled={submitting}>
+        <Panel>
+          <PanelHeader title="Grant a permission" />
+          <PanelBody>
+            <form class="pk-stack" aria-label="Grant a permission" onSubmit={(e) => void handleAdd(e)}>
+              {/* One `disabled` takes the whole form out of play while the
+                  request is in flight, including the pickers this surface
+                  cannot reach a prop into. */}
+              <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={submitting}>
+                {/* The people search is several controls, so it is named by a
+                    legend rather than by a label with no single control to
+                    point its `for` at. */}
+                <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+                  <legend class="pk-field__label">User</legend>
+                  <UserPicker
+                    endpoint="/api/v1/permissions/subjects"
+                    value={user}
+                    onChange={setUser}
+                    disabled={submitting}
+                  />
+                </fieldset>
+                <Field label="Permission">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={permission}
+                      onChange={(e) => setPermission((e.target as HTMLSelectElement).value)}
+                      disabled={submitting}
+                    >
+                      {PERMISSIONS.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+                  <legend class="pk-field__label">Target</legend>
+                  <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
+                </fieldset>
+                <Field label="Expires (optional)" help="Leave empty for a grant that never expires.">
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      type="datetime-local"
+                      value={expiresAt}
+                      onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
+                      disabled={submitting}
+                    />
+                  )}
+                </Field>
+              </fieldset>
+
+              {formError && <Alert tone="danger">{formError}</Alert>}
+
+              <div class="pk-cluster">
+                <Button type="submit" variant="primary" size="sm" loading={submitting}>
                   {submitting ? "Granting…" : "Grant permission"}
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm btn-outline-secondary"
-                  onClick={() => setCreating(false)}
-                  disabled={submitting}
-                >
+                </Button>
+                <Button variant="secondary" size="sm" disabled={submitting} onClick={closeForm}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       )}
 
       <ApiDataTable
@@ -157,41 +181,51 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
         resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
+        createAction={
+          canGrant ? { label: "New grant", onSelect: () => setCreating(true), disabled: creating } : undefined
+        }
         columns={[
           {
             header: "User",
             cell: (g) => g.userEmail,
-            className: "small mono",
+            className: "pk-small pk-mono",
             sort: { asc: "user_id", desc: "-user_id" },
           },
           {
             header: "Permission",
-            cell: (g) => <span class="badge text-bg-secondary">{g.permission}</span>,
+            cell: (g) => (
+              <Badge tone="neutral" dot={false}>
+                <span class="pk-mono">{g.permission}</span>
+              </Badge>
+            ),
             sort: { asc: "permission", desc: "-permission" },
           },
           {
             header: "Context",
-            cell: (g) => (g.contextType ? `${g.contextType}:${g.contextId}` : <span class="text-muted">Global</span>),
-            className: "small mono",
+            cell: (g) => (g.contextType ? `${g.contextType}:${g.contextId}` : <span class="pk-muted">Global</span>),
+            className: "pk-small pk-mono",
             sort: { asc: "context_type", desc: "-context_type" },
           },
           {
             header: "Expires",
-            cell: (g) => (g.expiresAt ? fmt(g.expiresAt) : <span class="text-muted">Never</span>),
-            className: "small",
+            cell: (g) => (g.expiresAt ? fmt(g.expiresAt) : <span class="pk-muted">Never</span>),
+            className: "pk-small",
             sort: { asc: "expires_at", desc: "-expires_at" },
           },
           {
             header: "Granted",
             cell: (g) => fmtDate(g.createdAt),
-            className: "small mono",
+            className: "pk-small pk-mono",
             sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
           },
           {
             header: "",
             cell: (g) =>
               canRevoke ? (
-                <RowActions actions={[{ id: "revoke", label: "Revoke grant", onSelect: () => void handleRevoke(g) }]} />
+                <RowActions
+                  label={`Actions for the ${g.permission} grant to ${g.userEmail}`}
+                  actions={[{ id: "revoke", label: "Revoke grant", onSelect: () => void handleRevoke(g) }]}
+                />
               ) : null,
           },
         ]}

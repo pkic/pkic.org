@@ -16,8 +16,8 @@ import { ensureAppOrigin, uniqueSuffix } from "./helpers/membership";
 /** Requests one sign-in link and returns the URL from the delivered mail. */
 async function requestSignInLink(page: import("@playwright/test").Page, email: string): Promise<string> {
   await page.goto("/portal/");
-  await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 10_000 });
-  await page.locator("#portal-inp-email").fill(email);
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
+  await page.getByLabel("Email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   const message = await waitForCapturedEmail(email, "sign-in link", { since });
@@ -33,7 +33,7 @@ test("the sign-in capability is single-use and cannot be replayed", async ({ pag
   await page.goto(link);
   await page.reload();
   await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator("#portal-inp-email")).toHaveCount(0);
+  await expect(page.getByLabel("Email")).toHaveCount(0);
 
   // The same link, in a browser that never held a session. Redeeming a
   // capability twice must not produce a second one.
@@ -43,7 +43,7 @@ test("the sign-in capability is single-use and cannot be replayed", async ({ pag
     .then((c) => c.newPage());
   await replayPage.goto(link);
   await replayPage.reload();
-  await expect(replayPage.locator("#portal-inp-email")).toBeVisible({ timeout: 15_000 });
+  await expect(replayPage.getByLabel("Email")).toBeVisible({ timeout: 15_000 });
   const replaySession = await replayPage.evaluate(async () => {
     const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
     return response.status;
@@ -89,7 +89,7 @@ test("signing out revokes the session rather than only clearing the view", async
   // standalone button.
   await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
-  await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 15_000 });
 
   // A cleared UI is not a revoked session: ask the API directly.
   const after = await page.evaluate(async () => {
@@ -124,7 +124,7 @@ test("a membership join capability cannot be redeemed as a portal sign-in", asyn
   // Present it where a portal sign-in capability is expected.
   await page.goto(`/portal/#verify=${encodeURIComponent(joinToken!)}`);
   await page.reload();
-  await expect(page.locator("#portal-inp-email")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 15_000 });
   const session = await page.evaluate(async () => {
     const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
     return response.status;

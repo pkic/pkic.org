@@ -7,14 +7,34 @@ import { presentationVersionResponseSchema } from "../../../../../../../shared/s
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../../../ui";
 import { Badge } from "../../../../../../components/Badge";
+import { Alert } from "../../../../../../ui/Alert";
+import { Badge as ToneBadge } from "../../../../../../ui/Badge";
+import { Button } from "../../../../../../ui/Button";
+import { EmptyState } from "../../../../../../ui/EmptyState";
+import { Field } from "../../../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
+import { Select, Textarea } from "../../../../../../ui/TextControl";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
 import { proposalResourcePath } from "./proposal-api";
+// `pk-datalist` is written here as a class name rather than reached through a
+// component, so this module has to pull its stylesheet into its own chunk.
+// The `pk-btn` classes on the download anchor ride the Button import above.
+import "../../../../../../ui/Content.css";
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * The review form's id, derived from the version rather than from `useId`, so
+ * the `aria-controls` relationship is in the markup before any JavaScript runs
+ * and does not depend on a hook being called inside a loop.
+ */
+function reviewFormId(versionId: string): string {
+  return `presentation-review-${versionId}`;
 }
 
 export function PresentationVersionsTab({
@@ -40,8 +60,13 @@ export function PresentationVersionsTab({
   const [reviewStatus, setReviewStatus] = useState<PresentationVersionReview["status"]>("approved");
   const [reviewNote, setReviewNote] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Upload and delete have no form of their own to sit beside, so their
+  // failures are stated once above the list. An Alert stays on screen to be
+  // read back, where a toast that has already faded cannot be.
+  const [error, setError] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   async function handlePresentationUpload(event: Event) {
@@ -50,6 +75,7 @@ export function PresentationVersionsTab({
     if (!file) return;
     input.value = "";
     setUploading(true);
+    setError(null);
     try {
       await requestJson(proposalResourcePath(proposalId, "presentations"), successResponseSchema, {
         method: "POST",
@@ -58,7 +84,7 @@ export function PresentationVersionsTab({
       toast("Presentation uploaded", "success");
       onReload();
     } catch (caught) {
-      toast((caught as Error).message, "error");
+      setError((caught as Error).message);
     } finally {
       setUploading(false);
     }
@@ -66,6 +92,7 @@ export function PresentationVersionsTab({
 
   async function handleReview(versionId: string) {
     setSavingReview(true);
+    setReviewError(null);
     try {
       await postJson(
         proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}/reviews`),
@@ -77,7 +104,7 @@ export function PresentationVersionsTab({
       setReviewNote("");
       onReload();
     } catch (caught) {
-      toast((caught as Error).message, "error");
+      setReviewError((caught as Error).message);
     } finally {
       setSavingReview(false);
     }
@@ -96,6 +123,7 @@ export function PresentationVersionsTab({
     )
       return;
     setDeletingId(version.id);
+    setError(null);
     try {
       await deleteJson(
         proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}`),
@@ -104,26 +132,24 @@ export function PresentationVersionsTab({
       toast("Version deleted", "success");
       onReload();
     } catch (caught) {
-      toast((caught as Error).message, "error");
+      setError((caught as Error).message);
     } finally {
       setDeletingId(null);
     }
   }
 
+  // The button is the control and the file input is opened through it, so
+  // there is one focusable thing carrying one accessible name — rather than a
+  // hidden input a utility class has taken out of the page.
   const uploadButton = (
-    <div>
-      <button
-        type="button"
-        class="btn btn-sm btn-outline-primary"
-        disabled={uploading}
-        onClick={() => uploadInputRef.current?.click()}
-      >
-        {uploading ? "Uploading…" : "↑ Upload on behalf of speaker"}
-      </button>
+    <div class="pk-cluster">
+      <Button variant="secondary" size="sm" loading={uploading} onClick={() => uploadInputRef.current?.click()}>
+        {uploading ? "Uploading…" : "Upload on behalf of speaker"}
+      </Button>
       <input
         ref={uploadInputRef}
         type="file"
-        class="d-none"
+        hidden
         accept=".pdf,.pptx,.ppt,.odp,.pptm"
         disabled={uploading}
         onChange={handlePresentationUpload}
@@ -131,120 +157,159 @@ export function PresentationVersionsTab({
     </div>
   );
 
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner label="Loading presentation versions…" />;
+
   if (versions.length === 0) {
     return (
-      <div class="d-flex flex-column gap-2">
-        <p class="text-muted fst-italic mb-0">No presentation uploaded yet.</p>
-        {canManage && uploadButton}
+      <div class="pk pk-stack pk-stack--snug">
+        {error && <Alert tone="danger">{error}</Alert>}
+        <EmptyState
+          title="No presentation uploaded yet."
+          body="Each file a speaker uploads appears here as its own version."
+        >
+          {canManage && uploadButton}
+        </EmptyState>
       </div>
     );
   }
 
   return (
-    <div>
-      {canManage && <div class="mb-3">{uploadButton}</div>}
+    <div class="pk pk-stack">
+      {error && <Alert tone="danger">{error}</Alert>}
+      {canManage && uploadButton}
       {versions.map((version) => (
-        <div
+        <Panel
           key={version.id}
-          class={`card mb-3 ${version.isCurrent ? "border-primary" : ""}`}
+          // The section is named, so it is a landmark: every control inside it
+          // is announced with the version it belongs to, which is what keeps
+          // three identical "Review" buttons on one page distinguishable.
+          aria-label={`Presentation version ${version.versionNumber}`}
           data-presentation-version-card
         >
-          <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-            <span class="fw-semibold">Version {version.versionNumber}</span>
-            {version.isCurrent && <span class="badge text-bg-primary">Current</span>}
+          <PanelHeader title={`Version ${version.versionNumber}`}>
+            {/* "Current" is a word, not a coloured border: the accent frame
+                this replaces carried the whole distinction in hue. */}
+            {version.isCurrent && <ToneBadge tone="accent">Current</ToneBadge>}
             {version.latestReview && (
               <span data-presentation-review-status>
                 <Badge status={version.latestReview.status} />
               </span>
             )}
-            <span class="small text-muted ms-auto">
-              {fmt(version.uploadedAt)} · {formatBytes(version.fileSize)}
-            </span>
-          </div>
-          <div class="card-body py-2 px-3">
-            <div class="small text-muted mb-2">
-              {version.fileName ?? "—"} · {version.mimeType ?? "—"}
-            </div>
+          </PanelHeader>
+          <PanelBody class="pk-stack pk-stack--snug">
+            <dl class="pk-datalist pk-small">
+              <dt>Uploaded</dt>
+              <dd class="pk-nowrap">{fmt(version.uploadedAt)}</dd>
+              <dt>File</dt>
+              <dd class="pk-break">{version.fileName ?? "—"}</dd>
+              <dt>Type</dt>
+              <dd class="pk-break">{version.mimeType ?? "—"}</dd>
+              <dt>Size</dt>
+              <dd class="pk-nowrap">{formatBytes(version.fileSize)}</dd>
+            </dl>
+
             {version.latestReview?.note && (
-              <blockquote class="blockquote small mb-2">
-                <p class="mb-0">{version.latestReview.note}</p>
-              </blockquote>
+              <p class="pk-small">
+                <span class="pk-muted">Reviewer note: </span>
+                {version.latestReview.note}
+              </p>
             )}
-            <div class="d-flex gap-2 flex-wrap">
+
+            <div class="pk-cluster">
               <a
                 href={proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}/content`)}
-                class="btn btn-sm btn-outline-secondary"
+                class="pk-btn pk-btn--secondary pk-btn--sm"
                 download
               >
-                ↓ Download
+                Download
               </a>
               {canManage && (
                 <>
-                  <button
-                    class="btn btn-sm btn-outline-primary"
+                  <Button
+                    size="sm"
+                    aria-expanded={reviewingId === version.id ? "true" : "false"}
+                    aria-controls={reviewFormId(version.id)}
                     onClick={() => {
                       setReviewingId(reviewingId === version.id ? null : version.id);
                       setReviewNote("");
                       setReviewStatus("approved");
+                      setReviewError(null);
                     }}
                   >
                     Review
-                  </button>
-                  <button
-                    class="btn btn-sm btn-outline-danger"
-                    disabled={deletingId === version.id}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger-quiet"
+                    loading={deletingId === version.id}
                     onClick={() => void handleDelete(version)}
                   >
                     {deletingId === version.id ? "Deleting…" : "Delete"}
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
 
             {canManage && reviewingId === version.id && (
-              <div class="mt-3 border-top pt-3">
-                <div class="mb-2">
-                  <select
-                    class="form-select form-select-sm mb-2"
-                    value={reviewStatus}
-                    onChange={(event) =>
-                      setReviewStatus((event.target as HTMLSelectElement).value as PresentationVersionReview["status"])
-                    }
-                  >
-                    <option value="approved">Approved</option>
-                    <option value="needs_revision">Needs revision</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                  <textarea
-                    class="form-control form-control-sm"
-                    rows={3}
-                    placeholder="Optional note for the speaker…"
-                    value={reviewNote}
-                    onInput={(event) => setReviewNote((event.target as HTMLTextAreaElement).value)}
-                  />
-                </div>
-                <div class="d-flex gap-2">
-                  <button
-                    class="btn btn-sm btn-success"
-                    disabled={savingReview}
+              <div class="pk-stack pk-stack--snug" id={reviewFormId(version.id)}>
+                <Field label="Review outcome">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={reviewStatus}
+                      disabled={savingReview}
+                      onChange={(event) =>
+                        setReviewStatus(
+                          (event.target as HTMLSelectElement).value as PresentationVersionReview["status"],
+                        )
+                      }
+                    >
+                      <option value="approved">Approved</option>
+                      <option value="needs_revision">Needs revision</option>
+                      <option value="rejected">Rejected</option>
+                    </Select>
+                  )}
+                </Field>
+                <Field
+                  label="Note for the speaker"
+                  help="Optional. The speaker sees this alongside the outcome."
+                  state={reviewError ? "invalid" : undefined}
+                  message={reviewError ?? undefined}
+                >
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      rows={3}
+                      value={reviewNote}
+                      disabled={savingReview}
+                      onInput={(event) => setReviewNote((event.target as HTMLTextAreaElement).value)}
+                    />
+                  )}
+                </Field>
+                <div class="pk-cluster">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={savingReview}
                     onClick={() => void handleReview(version.id)}
                   >
                     {savingReview ? "Saving…" : "Save review"}
-                  </button>
-                  <button class="btn btn-sm btn-outline-secondary" onClick={() => setReviewingId(null)}>
+                  </Button>
+                  <Button size="sm" onClick={() => setReviewingId(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </PanelBody>
+        </Panel>
       ))}
       {hasMore && (
-        <button type="button" class="btn btn-sm btn-outline-secondary" disabled={loadingMore} onClick={onLoadMore}>
-          {loadingMore ? "Loading…" : "Load more versions"}
-        </button>
+        <div class="pk-cluster">
+          <Button size="sm" loading={loadingMore} onClick={onLoadMore}>
+            {loadingMore ? "Loading…" : "Load more versions"}
+          </Button>
+        </div>
       )}
     </div>
   );

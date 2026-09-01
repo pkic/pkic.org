@@ -83,7 +83,10 @@
   {{ $4k := $img.Resize "3840x" }}
 
   {{ $minSponsorLevel := $.Params.heroSponsorLevel }}
-  <div class="pk pkic-hero-media{{ $heroSizeClass }}{{ if $minSponsorLevel }} hero-sponsor-host{{ $heroSponsorHostClass }}{{ end }}">
+  {{/* `.pk` goes on the scrim, not on this root: the sponsor strip below is
+       still styled entirely from `main.scss`, and the base layer would take
+       its logo sizing away. See "`.pk` is not always safe to add yet". */}}
+  <div class="pkic-hero-media{{ $heroSizeClass }}{{ if $minSponsorLevel }} hero-sponsor-host{{ $heroSponsorHostClass }}{{ end }}">
     <picture>
       <source
         media="(min-width:1200px)"
@@ -113,8 +116,8 @@
       >
     </picture>
 
-    <div class="pkic-hero-media__scrim">
-      <div class="pk-container pk-container--wide pk-stack pk-center">
+    <div class="pk pkic-hero-media__scrim">
+      <div class="pk-container pk-container--wide pk-stack pk-center pkic-hero-media__content">
         <h1 class="{{ $heroTitleClass }}">{{ $heroTitleText }}</h1>
         {{ with $.Params.heroDescription }}
           <p class="pkic-hero-lead">{{ . | markdownify }}</p>

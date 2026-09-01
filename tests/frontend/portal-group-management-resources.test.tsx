@@ -6,6 +6,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
 import { groupMemberAddSchema } from "../../assets/shared/schemas/groups";
+import { controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
 
@@ -176,14 +177,13 @@ describe("portal group management resources", () => {
     await settle();
 
     expect(container.textContent).toContain("No meeting series yet");
-    expect(container.querySelector("#managed-group-meeting-create-name")).toBeNull();
+    // The create form is absent until it is asked for, and present once it
+    // is — said by the name the reader would look for, not by an id.
+    expect(labelNames(container)).not.toContain("Meeting name");
     const newSeries = [...container.querySelectorAll("button")].find((button) => button.textContent === "New series")!;
     await act(async () => newSeries.click());
-    const name = container.querySelector<HTMLInputElement>("#managed-group-meeting-create-name")!;
-    name.value = "Architecture call";
-    void act(() => {
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    expect(labelNames(container)).toContain("Meeting name");
+    await typeInto(controlFor(container, "Meeting name"), "Architecture call");
     await settle();
     const create = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Create meeting series",

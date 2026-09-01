@@ -35,6 +35,7 @@ import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { verifyMembershipJoinEmail } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
+import { expectCurrentTab, tab } from "./helpers/tabs";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
@@ -321,15 +322,13 @@ test.describe("Portal management browser-verification pass", () => {
     await page.goto("/portal/#/sponsors");
     await page.getByRole("button", { name: "Create sponsorship" }).click();
 
-    // Labels aren't `<label for>`-linked to their inputs here either —
-    // target by the label-then-input sibling structure (see the Votes
-    // test's same note).
-    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Create", exact: true }) });
-    await form.locator("select").selectOption("event");
-    await form.locator('div:has(> label:text-is("Contact name")) > input').fill(contactName);
-    await form
-      .locator('div:has(> label:text-is("Contact email")) > input')
-      .fill(`e2e-sponsor-${Date.now()}@example.test`);
+    // Now that the form is built from the design system's `Field`, every
+    // control is reachable by the name its label gives it, so this no longer
+    // depends on the label-then-input sibling structure it used to walk.
+    const form = page.getByRole("form", { name: "Create sponsorship" });
+    await form.getByLabel("Type").selectOption("event");
+    await form.getByLabel("Contact name").fill(contactName);
+    await form.getByLabel("Contact email").fill(`e2e-sponsor-${Date.now()}@example.test`);
     await form.getByRole("button", { name: "Create", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Sponsorship created" })).toBeVisible();
 
@@ -520,9 +519,8 @@ test.describe("Portal management browser-verification pass", () => {
     });
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/proposals/responses`);
-    await expect(page.getByRole("tab", { name: "Responses", exact: true })).toHaveAttribute("aria-selected", "true", {
-      timeout: 15_000,
-    });
+    await expect(tab(page, "Responses")).toBeVisible({ timeout: 15_000 });
+    await expectCurrentTab(page, "Responses");
     await expect(page.getByText("Proposal not found")).toHaveCount(0);
     expect(proposalDetailRequests).toEqual([]);
   });
@@ -534,9 +532,8 @@ test.describe("Portal management browser-verification pass", () => {
     page,
   }) => {
     await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations/responses`);
-    await expect(page.getByRole("tab", { name: "Responses", exact: true })).toHaveAttribute("aria-selected", "true", {
-      timeout: 15_000,
-    });
+    await expect(tab(page, "Responses")).toBeVisible({ timeout: 15_000 });
+    await expectCurrentTab(page, "Responses");
     await expect(page.getByText("Registration not found")).toHaveCount(0);
   });
 

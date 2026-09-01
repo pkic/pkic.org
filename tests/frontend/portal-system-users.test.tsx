@@ -7,6 +7,16 @@ import { UserDetail as UserDetailView } from "../../assets/ts/member-flows/porta
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
 import { typedConfirmationInput } from "./helpers/confirm-dialog";
+import {
+  buttonNamed,
+  controlFor,
+  groupNames,
+  labelNames,
+  namedGroup,
+  submitForm,
+  typeInto,
+} from "./helpers/labelled-control";
+import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
 
 const apiClient = vi.hoisted(() => ({
   patchJson: vi.fn(),
@@ -78,14 +88,73 @@ describe("portal System Users profile permissions", () => {
     document.body.append(container);
     mounted.push(container);
     void act(() => render(<UserProfileEditor user={linkedUser} canGrantAccess={false} onSaved={vi.fn()} />, container));
-    void act(() => (container.querySelector("button") as HTMLButtonElement).click());
-    expect(container.querySelector<HTMLInputElement>("#user-preferredName")?.value).toBe("Ada");
-    await act(async () => (container.querySelector(".btn-primary") as HTMLButtonElement).click());
+    void act(() => buttonNamed(container, "Edit profile").click());
+    // Resolved through the label's `for`/`id` pair rather than a hand-written
+    // id, so the lookup fails exactly when that pairing is broken.
+    expect(controlFor(container, "Preferred name").value).toBe("Ada");
+    await submitForm(container);
     expect(apiClient.patchJson).toHaveBeenCalledWith(
       `/api/v1/users/${user.id}`,
       expect.objectContaining({ preferredName: "Ada" }),
       expect.anything(),
     );
+    // The body is what the canonical update contract accepts, not merely what
+    // this form happens to send.
+    const lastCall = apiClient.patchJson.mock.calls.at(-1);
+    expect(userUpdateSchema.safeParse(lastCall?.[1]).success).toBe(true);
+  });
+
+  it("names every control it draws and groups the ones that belong together", () => {
+    const container = mount(true);
+    expect(labelNames(container)).toEqual(
+      expect.arrayContaining(["First name", "Last name", "Preferred name", "Email", "admin", "user", "guest"]),
+    );
+    expect(groupNames(container)).toEqual(["Role", "Standing"]);
+    // A checkbox needs all three parts, or it renders an operating-system
+    // default control that no stylesheet reaches.
+    const standing = namedGroup(container, "Standing");
+    for (const label of standing.querySelectorAll("label.pk-check")) {
+      expect(label.querySelector("input.pk-check__input")).not.toBeNull();
+      expect(label.querySelector("span.pk-check__label")).not.toBeNull();
+    }
+    expect(controlFor(container, "Active").checked).toBe(true);
+    expect(controlFor(container, "Executive Council member").checked).toBe(false);
+  });
+
+  it("marks a malformed address invalid, blocks the save, and clears once it is fixed", async () => {
+    apiClient.patchJson.mockClear();
+    const container = mount(true);
+    const email = controlFor(container, "Email");
+    await typeInto(email, "not-an-address");
+
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    const messageId = email.getAttribute("aria-describedby");
+    expect(messageId).toBeTruthy();
+    const message = container.querySelector(`[id="${messageId}"]`)!;
+    // Announced, and readable without being able to tell red from gray.
+    expect(message.getAttribute("role")).toBe("alert");
+    expect(message.textContent).toContain("Enter a valid email address.");
+    expect(buttonNamed(container, "Save").disabled).toBe(true);
+
+    await submitForm(container);
+    expect(apiClient.patchJson).not.toHaveBeenCalled();
+
+    await typeInto(email, "ada@example.test");
+    expect(email.getAttribute("aria-invalid")).toBeNull();
+    expect(buttonNamed(container, "Save").disabled).toBe(false);
+  });
+
+  it("reports a rejected save as an alert instead of leaving the form looking saved", async () => {
+    apiClient.patchJson.mockRejectedValueOnce(new Error("Email already in use"));
+    const container = mount(true);
+    await submitForm(container);
+
+    const alert = [...container.querySelectorAll('[role="alert"]')].find((node) =>
+      node.textContent?.includes("Email already in use"),
+    );
+    expect(alert).toBeTruthy();
+    // Still editing, so the rejected values are not silently discarded.
+    expect(container.querySelector("form")).not.toBeNull();
   });
 
   it("does not expose acting-identity profile fields in the user-wide profile editor", async () => {

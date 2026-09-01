@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { tab } from "./helpers/tabs";
 
 const DONATION_ID = "70000000-0000-4000-8000-000000000001";
 
@@ -18,7 +19,7 @@ test("permitted staff manage donations through the neutral resource API", async 
   await signInToPortal(page, e2eAdminEmail("portal-donations"));
   await page.goto("/portal/#/donations");
 
-  await expect(page.getByRole("tab", { name: "Donations", exact: true })).toBeVisible();
+  await expect(tab(page, "Donations")).toBeVisible();
   const donorCell = page.getByRole("cell", { name: /E2E Donor — Example Organization/ });
   await expect(donorCell).toBeVisible();
 
@@ -28,14 +29,14 @@ test("permitted staff manage donations through the neutral resource API", async 
   await expect(page.getByText("cs_test_e2e_portal_donation", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "← Back to Donations" }).click();
-  await page.getByRole("tab", { name: "Share Links", exact: true }).click();
+  await tab(page, "Share Links").click();
   await expect(page).toHaveURL(/\/portal\/#\/donations\/promoters$/);
   await expect(page.getByText("E2E Promoter", { exact: true })).toBeVisible();
 
   // Donation analytics moved from System Analytics into a Stats tab here,
   // alongside the domain that owns it (see portal-system-analytics.spec.ts,
   // which confirms Donations no longer appears in System Analytics's tabs).
-  await page.getByRole("tab", { name: "Stats", exact: true }).click();
+  await tab(page, "Stats").click();
   await expect(page).toHaveURL(/\/portal\/#\/donations\/stats$/);
   await expect(page.getByText("Total Gross (USD)", { exact: true })).toBeVisible();
 

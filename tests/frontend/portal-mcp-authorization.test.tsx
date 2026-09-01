@@ -2,8 +2,10 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McpAuthorization } from "../../assets/ts/member-flows/portal/shell/McpAuthorization";
+import { mcpOauthAuthorizeActionSchema } from "../../assets/shared/schemas/mcp-oauth";
 import { portalSessionFixture } from "../helpers/portal-session";
 
+const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 const RETURN_TO =
   "/api/v1/auth/oauth/authorize?client_id=client-1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback";
 let container: HTMLDivElement;
@@ -27,6 +29,34 @@ async function waitFor(condition: () => boolean): Promise<void> {
     });
   }
   expect(condition()).toBe(true);
+}
+
+/**
+ * The control a visible label points at. Resolving it through `for`/`id` is
+ * the assertion as much as the lookup: the screen no longer writes a
+ * hand-picked id, so a label that pointed nowhere would leave the field
+ * nameless and this would find nothing.
+ */
+function controlLabeled(labelText: string): HTMLInputElement | null {
+  const label = Array.from(container.querySelectorAll("label")).find((el) =>
+    (el.textContent ?? "").trim().startsWith(labelText),
+  );
+  if (!label) return null;
+  const id = label.getAttribute("for");
+  expect(id, `the "${labelText}" label points at nothing`).toBeTruthy();
+  return container.querySelector<HTMLInputElement>(`#${id!}`);
+}
+
+function buttonLabeled(text: string): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll("button")).find((el) => (el.textContent ?? "").trim() === text);
+}
+
+/** The value beside a term in the screen's metadata list. */
+function definitionFor(term: string): string | undefined {
+  const list = container.querySelector("dl");
+  const children = Array.from(list?.children ?? []);
+  const index = children.findIndex((el) => el.tagName === "DT" && el.textContent?.trim() === term);
+  return index < 0 ? undefined : children[index + 1]?.textContent?.trim();
 }
 
 beforeEach(() => {
@@ -69,25 +99,30 @@ describe("portal MCP authorization", () => {
     );
 
     await act(() => render(<McpAuthorization />, container));
-    await waitFor(() => container.querySelector("#mcp-oauth-email") !== null);
-    const email = container.querySelector<HTMLInputElement>("#mcp-oauth-email")!;
+    await waitFor(() => controlLabeled("Portal email") !== null);
+    const email = controlLabeled("Portal email")!;
+    expect(email.type).toBe("email");
+    expect(email.required).toBe(true);
     email.value = "staff@example.test";
     await act(() => {
       container.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit"));
     });
     await waitFor(() => container.textContent?.includes("you'll receive a sign-in link") ?? false);
 
-    expect(container.textContent).toContain("you'll receive a sign-in link");
-    expect(requests).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ path: "/api/v1/auth/oauth/authorize", method: "GET" }),
-        expect.objectContaining({
-          path: "/api/v1/auth/oauth/authorize",
-          method: "POST",
-          body: { action: "request-link", email: "staff@example.test", return_to: RETURN_TO },
-        }),
-      ]),
-    );
+    // The confirmation is a live region, not just a green box.
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("you'll receive a sign-in link");
+    expect(requests.some(({ path, method }) => path === OAUTH_AUTHORIZE_PATH && method === "GET")).toBe(true);
+
+    const posted = requests.find(({ method }) => method === "POST");
+    expect(posted?.path).toBe(OAUTH_AUTHORIZE_PATH);
+    // Comparing the literal back would only restate what the component sent.
+    // Parsing it through the shared contract is what proves the server would
+    // accept it — including the discriminator the route switches on.
+    expect(mcpOauthAuthorizeActionSchema.parse(posted?.body)).toEqual({
+      action: "request-link",
+      email: "staff@example.test",
+      return_to: RETURN_TO,
+    });
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin") || path === "/api/v1/oauth/verify-link")).toBe(
       false,
     );
@@ -125,12 +160,16 @@ describe("portal MCP authorization", () => {
     await act(() => render(<McpAuthorization />, container));
     await flush();
     await flush();
-    await waitFor(() => container.textContent?.includes("Signed in as person@example.test") ?? false);
+    await waitFor(() => definitionFor("Signed in as") === "person@example.test");
 
     expect(requests[0]).toEqual({ path: "/api/v1/auth/verify-link", method: "POST" });
-    expect(container.textContent).toContain("Signed in as person@example.test");
+    // The identity and the client are a name/value list, so each value is
+    // reachable through the term that names it rather than as loose bold text.
+    expect(definitionFor("Signed in as")).toBe("person@example.test");
+    expect(definitionFor("Client")).toBe("Test client");
     expect(container.textContent).toContain("events:read");
-    expect(container.querySelector<HTMLButtonElement>("button.btn-success")?.disabled).toBe(false);
+    expect(buttonLabeled("Approve")?.disabled).toBe(false);
+    expect(buttonLabeled("Deny")).toBeTruthy();
     expect(window.location.pathname).toBe("/portal/");
     expect(window.location.hash).not.toContain("token=");
   });
@@ -155,13 +194,38 @@ describe("portal MCP authorization", () => {
     );
 
     await act(() => render(<McpAuthorization />, container));
-    await waitFor(() => container.textContent?.includes("does not have permission") ?? false);
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
 
-    expect(container.textContent).toContain("Signed in as member@example.test");
-    expect(container.querySelector("#mcp-oauth-email")).toBeNull();
-    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Approve")).toBe(
-      false,
+    // A refusal that is only amber says nothing to a reader who cannot see it,
+    // so the reason is announced and written out in words.
+    const refusal = container.querySelector('[role="alert"]');
+    expect(refusal?.textContent).toContain("Signed in as member@example.test");
+    expect(refusal?.textContent).toContain("does not have permission");
+    expect(controlLabeled("Portal email")).toBeNull();
+    expect(buttonLabeled("Approve")).toBeUndefined();
+    expect(buttonLabeled("Deny and return to client")).toBeTruthy();
+  });
+
+  it("announces a failed context lookup and offers nothing to approve", async () => {
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: "UPSTREAM_UNAVAILABLE", message: "The authorization request could not be read." } },
+          { status: 502 },
+        ),
+      ),
     );
-    expect(container.textContent).toContain("Deny and return to client");
+
+    await act(() => render(<McpAuthorization />, container));
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "The authorization request could not be read.",
+    );
+    // Nothing is known about the request, so nothing may be granted on it.
+    expect(buttonLabeled("Approve")).toBeUndefined();
+    expect(container.querySelector("dl")).toBeNull();
   });
 });

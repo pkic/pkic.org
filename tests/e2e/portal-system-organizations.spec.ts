@@ -48,9 +48,13 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Add new person", exact: true }).click();
-  await page.locator("#organization-identity-name").fill("Secondary Representative");
-  await page.locator("#organization-identity-email").fill(secondaryEmail);
-  await page.locator("#organization-identity-job-title").fill("Program Manager");
+  // Located by the group's accessible name and each control's label rather
+  // than by ids the surface used to hand out, so this keeps working the next
+  // time the markup moves.
+  const newPerson = page.getByRole("group", { name: "New person" });
+  await newPerson.getByLabel("Name").fill("Secondary Representative");
+  await newPerson.getByLabel("Email").fill(secondaryEmail);
+  await newPerson.getByLabel("Job title").fill("Program Manager");
   const associateResponse = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/identities$/.test(new URL(response.url()).pathname) &&

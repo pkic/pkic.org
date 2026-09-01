@@ -208,7 +208,7 @@ async function anonymousDenied(browser: Browser, groupId: string): Promise<void>
   const response = await page.request.get(`/api/v1/groups/${groupId}`);
   expect(response.status()).toBe(404);
   await page.goto(`/portal/#/groups/${groupId}/overview`);
-  await expect(page.locator("#portal-inp-email")).toBeVisible();
+  await expect(page.getByLabel("Email")).toBeVisible();
   await context.close();
 }
 

@@ -7,7 +7,9 @@ import {
   donationDetailResponseSchema,
   donationsListResponseSchema,
   donationPromotersListResponseSchema,
+  donationSyncRequestSchema,
 } from "../../assets/shared/schemas/donation-management";
+import { donationAnalyticsResponseSchema } from "../../assets/shared/schemas/analytics";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { DonationDetailPage } from "../../assets/ts/member-flows/portal/sections/system-donations/DonationDetailPage";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
@@ -74,6 +76,98 @@ function donation() {
   };
 }
 
+function promotersResponse(promoters: unknown[]) {
+  return new Response(
+    JSON.stringify(
+      donationPromotersListResponseSchema.parse({
+        promoters,
+        page: { limit: 50, offset: 0, total: promoters.length, hasMore: false },
+        summary: {
+          promoterCount: promoters.length,
+          totalOwnGrossUsd: 5_000,
+          totalAttributedGrossUsd: 12_500,
+          totalClicks: 42,
+          totalAttributedCompleted: 3,
+        },
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function promoter() {
+  return {
+    code: "ADA1",
+    name: "Ada Lovelace",
+    checkout_session_id: "cs_test_promoter",
+    clicks: 42,
+    own_gross: 5_000,
+    own_gross_usd: 5_000,
+    own_currency: "usd",
+    attributed_total: 5,
+    attributed_completed: 3,
+    attributed_gross: 12_500,
+    attributed_gross_usd: 12_500,
+    currency: "usd",
+    created_at: "2026-01-01T00:00:00Z",
+  };
+}
+
+function period(month: string) {
+  return {
+    month,
+    count: 4,
+    completed: 3,
+    pending: 1,
+    failed: 0,
+    expired: 0,
+    gross: 4_000,
+    grossUsd: 4_000,
+    netUsd: 3_800,
+  };
+}
+
+function analyticsResponse() {
+  return new Response(
+    JSON.stringify(
+      donationAnalyticsResponseSchema.parse({
+        generatedAt: "2026-08-28T12:00:00.000Z",
+        donations: {
+          byStatus: { completed: 3 },
+          byCurrency: [
+            {
+              status: "completed",
+              currency: "usd",
+              count: 3,
+              totalGross: 4_000,
+              averageGross: 1_333,
+              totalNet: 3_800,
+              totalGrossUsd: 4_000,
+            },
+          ],
+          totals: { grossUsd: 4_000, netUsd: 3_800 },
+          daily: [],
+          weekly: [],
+          monthly: [period("2026-08")],
+        },
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+/** A route that fails, so the surface's error path is exercised rather than assumed. */
+function serverError() {
+  return new Response(JSON.stringify({ error: { code: "HTTP_ERROR", message: "HTTP 500" } }), {
+    status: 500,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function captions(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll("caption")).map((caption) => caption.textContent ?? "");
+}
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -136,13 +230,15 @@ describe("portal system donations", () => {
     });
     await settle();
 
-    expect(requests).toEqual([
-      expect.objectContaining({
-        url: expect.objectContaining({ pathname: "/api/v1/donations/sync" }),
-        method: "POST",
-        body: {},
-      }),
-    ]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url.pathname).toBe("/api/v1/donations/sync");
+    expect(requests[0]?.method).toBe("POST");
+    // Checked against the contract the route enforces rather than a literal:
+    // `donationSyncRequestSchema` is `.strict()`, so this also proves the
+    // button sends nothing the server would reject, and that a full
+    // reconciliation is an empty body rather than a stray `pendingOnly`.
+    const syncBody = donationSyncRequestSchema.safeParse(requests[0]?.body);
+    expect(syncBody.success ? syncBody.data : syncBody.error.message).toEqual({});
   });
 
   it("uses only canonical system list requests and hides sync controls without donations:sync", async () => {
@@ -276,5 +372,113 @@ describe("portal system donations", () => {
 
     expect(container.textContent).not.toContain("Stats");
     expect(requests.some((url) => url.pathname === "/api/v1/analytics/donations")).toBe(false);
+  });
+
+  it("names the donation table and exposes each status filter's pressed state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => response()),
+    );
+
+    const container = mount(<Donations canSync={false} />);
+    await settle();
+
+    // A <table> with no <caption> is announced as "table"; this page carries
+    // several, so each one has to say which it is.
+    expect(captions(container)).toContain("Donations");
+
+    // The filters were `btn-outline-secondary` buttons carrying an `active`
+    // class, which said "selected" in colour only. Selection is aria-pressed
+    // now, so it survives without sight of the button.
+    const filters = Array.from(container.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"));
+    expect(filters).toHaveLength(6);
+    const pressed = filters.filter((button) => button.getAttribute("aria-pressed") === "true");
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0]?.textContent).toContain("All");
+  });
+
+  it("names the promoter leaderboard and reaches each share link by keyboard", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname === "/api/v1/donations/promoters" ? promotersResponse([promoter()]) : response();
+      }),
+    );
+
+    const container = mount(<Donations subTab="promoters" />);
+    await settle();
+
+    expect(captions(container)).toContain("Promoter share links, ranked by total impact");
+    expect(Array.from(container.querySelectorAll("th")).map((cell) => cell.textContent)).toContain("Total impact");
+
+    // The share link is a real anchor, not a click handler on a card div, so
+    // it is in the tab order and can be opened in a new tab.
+    const link = container.querySelector<HTMLAnchorElement>('a[href="/donate/r/ADA1"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toBe("/donate/r/ADA1");
+    expect(container.textContent).toContain("Ada Lovelace");
+  });
+
+  it("reports a failed promoter request as an alert instead of an empty leaderboard", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname === "/api/v1/donations/promoters" ? serverError() : response();
+      }),
+    );
+
+    const container = mount(<Donations subTab="promoters" />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Something went wrong on our side");
+    // "No promoter links yet" would claim the list is empty when it is unknown.
+    expect(container.textContent).not.toContain("No promoter links yet");
+    expect(captions(container)).not.toContain("Promoter share links, ranked by total impact");
+  });
+
+  it("names every analytics table and reports a failed analytics request as an alert", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => analyticsResponse()),
+    );
+
+    const ok = mount(<Donations subTab="stats" />);
+    await settle();
+
+    expect(captions(ok)).toEqual(
+      expect.arrayContaining([
+        "Donations by status and currency",
+        "Donations — Daily (last 30 days)",
+        "Donations — Weekly (last 12 weeks)",
+        "Donations — Monthly (last 12 months)",
+      ]),
+    );
+    expect(ok.textContent).toContain("Total Gross (USD)");
+
+    vi.unstubAllGlobals();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => serverError()),
+    );
+
+    const failed = mount(<Donations subTab="stats" />);
+    await settle();
+
+    expect(failed.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side");
+    expect(captions(failed)).toEqual([]);
   });
 });

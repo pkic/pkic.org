@@ -462,4 +462,103 @@ describe("portal form management", () => {
     expect(fetchMock.mock.calls.length).toBe(callsBeforeCancel);
     expect(onBack).not.toHaveBeenCalled();
   });
+
+  it("states a failed load as a sentence in an alert region rather than an empty panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 503 })),
+    );
+
+    const container = mount(<FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe("The service is temporarily unavailable. Try again in a moment.");
+    // The transport phrasing never reaches the reader, and nothing pretends
+    // the form loaded.
+    expect(container.textContent).not.toContain("HTTP 503");
+    expect(container.querySelector('[role="tab"]')).toBeNull();
+  });
+
+  it("wires each tab to the panel it controls, in both directions", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : globalFormDetailResponse();
+      }),
+    );
+
+    const container = mount(<FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    const strip = container.querySelector('[role="tablist"]');
+    expect(strip?.getAttribute("aria-label")).toBe("Member feedback sections");
+
+    const selected = tabs(container).find(isCurrentTab);
+    const panelId = selected?.getAttribute("aria-controls");
+    expect(panelId).toBeTruthy();
+    const panel = [...container.querySelectorAll('[role="tabpanel"]')].find((element) => element.id === panelId);
+    expect(panel).toBeTruthy();
+    // And back the other way, so the panel is announced with the tab's name.
+    expect(panel?.getAttribute("aria-labelledby")).toBe(selected?.id);
+
+    // Exactly one tab is in the tab order; the arrows move within the strip.
+    const inTabOrder = tabs(container).filter((tab) => tab.tabIndex === 0);
+    expect(inTabOrder).toHaveLength(1);
+  });
+
+  it("names the forms table and makes the whole row a keyboard-reachable control that says which form it opens", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => formListResponse()),
+    );
+    const onOpenForm = vi.fn();
+
+    const container = mount(<FormManagementList canWrite={false} onOpenForm={onOpenForm} />);
+    await settle();
+
+    // A table with no caption is announced as "table"; this page can hold
+    // several.
+    expect(container.querySelector("caption")?.textContent).toBe("Configured forms");
+
+    const row = container.querySelector("tbody tr");
+    const action = row?.querySelector("button");
+    expect(action?.textContent).toBe("Open Member feedback");
+    // Not a click handler on the <tr>: a row is not focusable and takes no
+    // Enter key.
+    expect(row?.hasAttribute("onclick")).toBe(false);
+
+    action!.click();
+    expect(onOpenForm).toHaveBeenCalledWith("member-feedback");
+  });
+
+  it("names the response filter bar and every control in it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => formListResponse()),
+    );
+
+    const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
+    await settle();
+
+    const toolbar = container.querySelector('[role="toolbar"]');
+    expect(toolbar?.getAttribute("aria-label")).toBe("Response filters");
+
+    const statusFilter = toolbar?.querySelector("select");
+    expect(statusFilter?.getAttribute("aria-label")).toBe("Submission status");
+    expect([...statusFilter!.options].map((option) => option.value)).toEqual([
+      "",
+      "submitted",
+      "accepted",
+      "rejected",
+      "withdrawn",
+    ]);
+
+    // Attendance is a registration-only vocabulary, so it is absent here.
+    expect(toolbar?.querySelectorAll("select")).toHaveLength(1);
+  });
 });

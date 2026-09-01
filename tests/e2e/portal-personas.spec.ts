@@ -305,7 +305,7 @@ test.describe("selected-group portal personas", () => {
       await json(route, { error: { code: "UNAUTHORIZED", message: "Authentication required" } }, 401);
     });
     await page.goto(`/portal/#/groups/${GROUP_ID}/overview`);
-    await expect(page.locator("#portal-inp-email")).toBeVisible();
+    await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByText(group.name)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Settings" })).toHaveCount(0);
   });

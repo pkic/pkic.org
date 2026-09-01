@@ -846,21 +846,18 @@ $pkic-page-hero-themes: (
 // ============================================================
 // Photographic page hero (hero.html, image branch)
 //
-// A `.pk` root, so `--pk-canvas` is what `base.css` paints and the scrim, not
-// the element, carries the light text. The height used to be an inline
-// `height` / `min-height` pair; it is a three-step scale now, because the
-// rendered height was always the larger of the two values anyway.
+// The height used to be an inline `height` / `min-height` pair; it is a
+// three-step scale now, because the rendered height was always the larger of
+// the two values anyway.
+//
+// `.pk` sits on the scrim rather than on the root. The sponsor strip and the
+// image credit hang off the root, and the strip's logo sizing is still legacy
+// CSS the base layer's `max-width: 100%` would take away.
 // ============================================================
 .pkic-hero-media {
   position: relative;
   width: 100%;
   height: 50vh;
-  --pk-accent-ink: var(--pk-on-solid);
-  --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
-  // `heroButton` used to be `.btn-page-accent`; the same per-page accent now
-  // reaches the design system's primary button through its own token.
-  --pk-accent-strong: var(--page-accent, #{$green});
-  --pk-accent-on: var(--pk-on-solid);
 }
 
 .pkic-hero-media--tall {
@@ -886,7 +883,19 @@ $pkic-page-hero-themes: (
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: var(--pk-overlay);
+  // The scrim is the `.pk` root, so `base.css` paints its ground from this
+  // token rather than from a `background` declaration a later layer would win.
+  --pk-canvas: var(--pk-overlay);
+  --pk-accent-ink: var(--pk-on-solid);
+  --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
+  // `heroButton` used to be `.btn-page-accent`; the same per-page accent now
+  // reaches the design system's primary button through its own token.
+  --pk-accent-strong: var(--page-accent, #{$green});
+  --pk-accent-on: var(--pk-on-solid);
+}
+
+// Text colour sits here, not on the `.pk` root, where `base.css` would win it.
+.pkic-hero-media__content {
   color: var(--pk-on-solid);
 }
 
@@ -907,6 +916,10 @@ $pkic-page-hero-themes: (
   color: var(--pk-on-solid);
   background: var(--pk-overlay);
   border-radius: var(--pk-radius);
+
+  a {
+    color: inherit;
+  }
 }
 
 .hero-sponsors-overlay {

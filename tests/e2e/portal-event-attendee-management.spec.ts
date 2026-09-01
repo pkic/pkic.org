@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { signInToPortal } from "./helpers/portal-auth";
+import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
@@ -151,7 +152,7 @@ test("a selected-group manager changes one attendee day through portal routes", 
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Details" }).click();
   const detail = page.getByRole("region", { name: `${event.name} workspace` });
-  await detail.getByRole("tab", { name: "Registrations" }).click();
+  await tab(detail, "Registrations").click();
   await expect(detail.getByRole("heading", { name: "Attendees", exact: true })).toBeVisible();
 
   const attendeeRow = detail.getByRole("row").filter({ hasText: attendeeEmail });

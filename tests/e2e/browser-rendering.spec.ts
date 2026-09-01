@@ -4,6 +4,7 @@ import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
+import { tab } from "./helpers/tabs";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -1460,7 +1461,7 @@ test.describe("browser workflows", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("tab", { name: /Presentation/i }).click();
+    await tab(page, /Presentation/i).click();
     await expect(page.getByText(/Version 1/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/pqc-migration-talk\.pdf/i)).toBeVisible();
     await screenshot("06-admin-presentation-tab");

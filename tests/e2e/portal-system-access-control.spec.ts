@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { tab } from "./helpers/tabs";
 
 const PERMISSIONS_API = "/api/v1/permissions";
 const ROLES_API = "/api/v1/roles";
@@ -35,7 +36,7 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/grants$/);
 
   // Tabs are URL-addressed — switching to Roles navigates to its canonical URL.
-  await page.getByRole("tab", { name: "Roles" }).click();
+  await tab(page, "Roles").click();
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles$/);
 
   // Creation lives behind an explicit action, list-first — no inline create form.
@@ -91,7 +92,7 @@ test("permitted staff manage a custom role through the Settings portal", async (
 
   // The former "Staff" tab is now labeled People, without renaming the
   // underlying user_roles-backed schema fields it reads and writes.
-  await page.getByRole("tab", { name: "People" }).click();
+  await tab(page, "People").click();
   await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/people$/);
   await expect(page.getByText("Staff management", { exact: true })).toHaveCount(0);
 

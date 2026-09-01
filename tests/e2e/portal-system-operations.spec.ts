@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { tab } from "./helpers/tabs";
 
 const LEGACY_OPERATIONS_APIS = [
   "/api/v1/admin/email/outbox",
@@ -34,14 +35,14 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
   await page.getByRole("link", { name: "Operations", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: "System Operations" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Email Outbox" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Scheduled Work" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Scheduled Jobs" })).toBeVisible();
+  await expect(tab(page, "Email Outbox")).toBeVisible();
+  await expect(tab(page, "Scheduled Work")).toBeVisible();
+  await expect(tab(page, "Scheduled Jobs")).toBeVisible();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/email/outbox")).toBe(true);
-  await page.getByRole("tab", { name: "Scheduled Work" }).click();
+  await tab(page, "Scheduled Work").click();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/retention/due")).toBe(true);
 
-  await page.getByRole("tab", { name: "Scheduled Jobs" }).click();
+  await tab(page, "Scheduled Jobs").click();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/scheduler/jobs")).toBe(true);
   const jobRow = page.getByRole("row", { name: /Working Group Chair Digest/ });
   await expect(jobRow).toBeVisible();

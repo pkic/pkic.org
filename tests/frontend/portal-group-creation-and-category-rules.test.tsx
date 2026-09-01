@@ -4,7 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupCategoryRulesEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupCategoryRulesEditor";
 import { GroupCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupCreateForm";
-import { controlFor } from "./helpers/labelled-control";
+import { groupCreateSchema } from "../../assets/shared/schemas/groups";
+import { buttonNamed, chooseOption, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 
@@ -99,27 +100,31 @@ describe("portal group creation and category policy", () => {
     await act(() => render(<GroupCreateForm onCreated={onCreated} />, container));
     await settle();
     await settle();
-    const typeSelect = controlFor<HTMLSelectElement>(container, "Group type");
-    typeSelect.value = "working_group";
-    await act(async () => {
-      typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await chooseOption(controlFor<HTMLSelectElement>(container, "Group type"), "working_group");
     await settle();
-    const name = container.querySelector<HTMLInputElement>("#create-group-name")!;
-    name.value = "Security Working Group";
-    await act(async () => {
-      name.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    const description = container.querySelector<HTMLTextAreaElement>("#create-group-description")!;
-    description.value = "Coordinates security work.";
-    await act(async () => {
-      description.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    const submit = [...container.querySelectorAll("button")].find((button) => button.textContent === "Create group")!;
-    await act(async () => submit.click());
+
+    // Every editable field is reachable through its own label, and the two
+    // policy switches carry the design system's full checkbox triad — a label
+    // with only `pk-check` renders an operating-system default control.
+    expect(labelNames(container)).toEqual(
+      expect.arrayContaining(["Group type", "Parent group (optional)", "Name", "Slug (optional)", "Description"]),
+    );
+    const switches = [...container.querySelectorAll("label.pk-check")];
+    expect(switches).toHaveLength(2);
+    for (const control of switches) {
+      expect(control.querySelector("input.pk-check__input")).not.toBeNull();
+      expect(control.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
+    }
+
+    await typeInto(controlFor(container, "Name"), "Security Working Group");
+    await typeInto(controlFor<HTMLTextAreaElement>(container, "Description"), "Coordinates security work.");
+    await act(async () => buttonNamed(container, "Create group").click());
     await settle();
+
     const request = requests.find(({ method }) => method === "POST");
-    expect(request?.body).toMatchObject({
+    // Parsing through the canonical request schema proves the surface sends
+    // the contract rather than a shape that happens to match this assertion.
+    expect(groupCreateSchema.parse(request?.body)).toMatchObject({
       typeKey: "working_group",
       name: "Security Working Group",
       description: "Coordinates security work.",
@@ -130,6 +135,83 @@ describe("portal group creation and category policy", () => {
     });
     expect(request?.body).not.toHaveProperty("groupId");
     expect(onCreated).toHaveBeenCalledWith(created);
+    await act(() => render(null, container));
+    container.remove();
+  });
+
+  it("states a rejected create in a live region and leaves the form editable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init.method ?? "GET";
+        if (url.pathname === "/api/v1/groups/creation-capabilities") return json({ canCreate: true });
+        if (url.pathname === "/api/v1/groups/types") {
+          return json({
+            groupTypes: [
+              {
+                key: "working_group",
+                singularLabel: "Working Group",
+                pluralLabel: "Working Groups",
+                description: "A focused group",
+                defaultGovernanceInheritanceMode: "inherited",
+                defaultEligibilityMode: "managed",
+                defaultAutomaticEnrollmentMode: "none",
+                defaultAllowAutomaticOptOut: false,
+                defaultVisibility: "participants",
+                active: true,
+                sortOrder: 1,
+              },
+            ],
+            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+          });
+        }
+        if (url.pathname === "/api/v1/groups" && method === "GET") {
+          return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
+        return new Response(JSON.stringify({ error: { code: "CONFLICT", message: "That slug is already taken." } }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    const onCreated = vi.fn();
+    await act(() => render(<GroupCreateForm onCreated={onCreated} />, container));
+    await settle();
+    await settle();
+
+    await chooseOption(controlFor<HTMLSelectElement>(container, "Group type"), "working_group");
+    await settle();
+    await typeInto(controlFor(container, "Name"), "Security Working Group");
+    await submitForm(container);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("That slug is already taken.");
+    expect(onCreated).not.toHaveBeenCalled();
+    // The in-flight fieldset is released again, so the reader can correct and
+    // resubmit rather than being left with a form nothing can type into.
+    expect(container.querySelector("fieldset")?.disabled).toBe(false);
+    expect(controlFor(container, "Name").hasAttribute("disabled")).toBe(false);
+    await act(() => render(null, container));
+    container.remove();
+  });
+
+  it("renders nothing at all when the caller may not create a group", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ canCreate: false })),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GroupCreateForm onCreated={vi.fn()} />, container));
+    await settle();
+    expect(container.innerHTML).toBe("");
     await act(() => render(null, container));
     container.remove();
   });
