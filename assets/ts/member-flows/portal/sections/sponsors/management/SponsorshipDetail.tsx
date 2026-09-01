@@ -141,84 +141,90 @@ export function SponsorshipDetail({
           {canWrite && !sponsorship.organizationId && <SponsorshipLogo sponsorship={sponsorship} onChanged={load} />}
 
           {canWrite && (
-            <fieldset class="pk-fieldset pk-stack pk-stack--snug">
+            <fieldset class="pk-fieldset pk-field">
               <legend class="pk-field__label">Sponsorship record</legend>
-              <div class="pk-grid pk-grid--tight">
-                <Field label="Assigned staff user ID" help={sponsorship.assignedToName ?? undefined}>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={assignedToUserId}
-                      disabled={busy}
-                      onInput={(e) => setAssignedToUserId((e.target as HTMLInputElement).value)}
-                    />
-                  )}
-                </Field>
-                <Field label="Renewal date">
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      type="date"
-                      value={renewalDate}
-                      disabled={busy}
-                      onInput={(e) => setRenewalDate((e.target as HTMLInputElement).value)}
-                    />
-                  )}
-                </Field>
-                <Field label="Notes">
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={notes}
-                      disabled={busy}
-                      onInput={(e) => setNotes((e.target as HTMLInputElement).value)}
-                    />
-                  )}
-                </Field>
-              </div>
-              <div class="pk-cluster">
-                <Button size="sm" loading={busy} onClick={() => void saveFields()}>
-                  Save fields
-                </Button>
+              <div class="pk-stack pk-stack--snug">
+                <div class="pk-grid pk-grid--tight">
+                  <Field label="Assigned staff user ID" help={sponsorship.assignedToName ?? undefined}>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={assignedToUserId}
+                        disabled={busy}
+                        onInput={(e) => setAssignedToUserId((e.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Renewal date">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        type="date"
+                        value={renewalDate}
+                        disabled={busy}
+                        onInput={(e) => setRenewalDate((e.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Notes">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={notes}
+                        disabled={busy}
+                        onInput={(e) => setNotes((e.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                </div>
+                <div class="pk-cluster">
+                  <Button size="sm" loading={busy} onClick={() => void saveFields()}>
+                    Save fields
+                  </Button>
+                </div>
               </div>
             </fieldset>
           )}
 
           {canWrite && (
-            <fieldset class="pk-fieldset pk-stack pk-stack--snug">
+            <fieldset class="pk-fieldset pk-field">
               <legend class="pk-field__label">Pipeline stage</legend>
-              <div class="pk-grid pk-grid--tight">
-                <Field label="Advance to stage">
-                  {(control) => (
-                    <Select
-                      {...control}
-                      value={nextStage}
-                      disabled={busy}
-                      onChange={(e) => setNextStage((e.target as HTMLSelectElement).value as SponsorshipPipelineStage)}
-                    >
-                      {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
-                        <option value={s} key={s}>
-                          {statusLabel(s)}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-                <Field label="Note (optional)">
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={stageNote}
-                      disabled={busy}
-                      onInput={(e) => setStageNote((e.target as HTMLInputElement).value)}
-                    />
-                  )}
-                </Field>
-              </div>
-              <div class="pk-cluster">
-                <Button variant="primary" size="sm" loading={busy} onClick={() => void advanceStage()}>
-                  Advance
-                </Button>
+              <div class="pk-stack pk-stack--snug">
+                <div class="pk-grid pk-grid--tight">
+                  <Field label="Advance to stage">
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={nextStage}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setNextStage((e.target as HTMLSelectElement).value as SponsorshipPipelineStage)
+                        }
+                      >
+                        {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
+                          <option value={s} key={s}>
+                            {statusLabel(s)}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field label="Note (optional)">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={stageNote}
+                        disabled={busy}
+                        onInput={(e) => setStageNote((e.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                </div>
+                <div class="pk-cluster">
+                  <Button variant="primary" size="sm" loading={busy} onClick={() => void advanceStage()}>
+                    Advance
+                  </Button>
+                </div>
               </div>
             </fieldset>
           )}

@@ -41,7 +41,10 @@ interface LabelledControlProps {
  * A label and the control it names, paired by a caller-chosen id.
  *
  * The same shape as `Field`'s render prop, so a control moves between the two
- * without being rewritten — the only difference is who picks the id.
+ * without being rewritten — the only difference is who picks the id. It also
+ * builds the same markup: the group is a `pk-field`, which is the only element
+ * a validation modifier is ever set on, and the control sits in the
+ * `pk-field__control` box the state mark is positioned against.
  */
 function LabelledField({
   id,
@@ -57,7 +60,7 @@ function LabelledField({
   children: (control: LabelledControlProps) => ComponentChildren;
 }) {
   return (
-    <div class="pk-stack pk-stack--tight">
+    <div class="pk-field">
       <label class="pk-field__label" for={id}>
         {label}
         {required && (
@@ -67,7 +70,9 @@ function LabelledField({
           </span>
         )}
       </label>
-      {children({ id, required: required || undefined, "aria-describedby": describedBy })}
+      <div class="pk-field__control">
+        {children({ id, required: required || undefined, "aria-describedby": describedBy })}
+      </div>
     </div>
   );
 }

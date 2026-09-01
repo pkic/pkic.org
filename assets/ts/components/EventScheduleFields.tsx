@@ -24,7 +24,7 @@ function ScheduleField({
   children: ComponentChildren;
 }) {
   return (
-    <div class="pk-stack pk-stack--tight">
+    <div class="pk-field">
       <label class="pk-field__label" for={id}>
         {label}
         {required && (
@@ -36,7 +36,9 @@ function ScheduleField({
           </span>
         )}
       </label>
-      {children}
+      {/* The box the state mark is positioned against. Without it a date that
+          fails validation colours its border and has nowhere to draw the ✕. */}
+      <div class="pk-field__control">{children}</div>
     </div>
   );
 }

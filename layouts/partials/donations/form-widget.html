@@ -54,28 +54,38 @@
     <p class="pk-small">A receipt will be issued by email after your donation is processed.</p>
   </div>
 
-  {{/* Donor identity fields */}}
+  {{/* Donor identity fields. Every control sits in `pk-field__control`: the
+       state mark is positioned against that wrapper, so an input outside it
+       has nowhere to draw the tick, the caution or the cross. */}}
   <div class="pk-stack pk-stack--snug">
     <div class="pk-field">
       <label for="donation-donor-name" class="pk-field__label">Full name <span class="pk-field__required" aria-hidden="true">*</span></label>
-      <input type="text" id="donation-donor-name" class="pk-input" data-donation-name-input placeholder="Your full name" required autocomplete="name" aria-required="true">
+      <div class="pk-field__control">
+        <input type="text" id="donation-donor-name" class="pk-input" data-donation-name-input placeholder="Your full name" required autocomplete="name" aria-required="true">
+      </div>
     </div>
     <div class="pk-field">
       <label for="donation-donor-email" class="pk-field__label">Email</label>
-      <input type="email" id="donation-donor-email" class="pk-input" data-donation-email-input placeholder="your@email.com" autocomplete="email">
+      <div class="pk-field__control">
+        <input type="email" id="donation-donor-email" class="pk-input" data-donation-email-input placeholder="your@email.com" autocomplete="email">
+      </div>
     </div>
     <div class="pk-field">
       <label for="donation-donor-org" class="pk-field__label">Organization <span class="pk-small">(optional)</span></label>
-      <input type="text" id="donation-donor-org" class="pk-input" data-donation-org-input placeholder="Your company or organization" autocomplete="organization">
+      <div class="pk-field__control">
+        <input type="text" id="donation-donor-org" class="pk-input" data-donation-org-input placeholder="Your company or organization" autocomplete="organization">
+      </div>
     </div>
   </div>
 
   {{/* Currency selector */}}
   <div class="pk-field">
     <label for="donation-currency" class="pk-field__label">Currency</label>
-    <select id="donation-currency" class="pk-input pk-input--select" data-donation-currency>
-      <option value="usd">USD ($) — US Dollar</option>
-    </select>
+    <div class="pk-field__control">
+      <select id="donation-currency" class="pk-input pk-input--select" data-donation-currency>
+        <option value="usd">USD ($) — US Dollar</option>
+      </select>
+    </div>
   </div>
 
   {{/* Preset amounts. `renderPresets` replaces these with the same amounts
@@ -91,10 +101,14 @@
 
   {{/* Custom amount. The live currency symbol sits inside the label rather
        than in a leading box with its own `aria-label`, so the control's
-       accessible name says which currency the number is in. */}}
-  <div class="pk-stack pk-stack--tight">
+       accessible name says which currency the number is in. The label belongs
+       to a `pk-field` like every other one: outside it, it is a part with no
+       whole and can never carry a state. */}}
+  <div class="pk-field">
     <label for="donation-custom-amount" class="pk-field__label">Or enter a custom amount (<span data-donation-currency-prefix>$</span>)</label>
-    <input type="number" id="donation-custom-amount" class="pk-input" data-donation-custom-input placeholder="Other amount" min="1" step="1">
+    <div class="pk-field__control">
+      <input type="number" id="donation-custom-amount" class="pk-input" data-donation-custom-input placeholder="Other amount" min="1" step="1">
+    </div>
   </div>
   {{- /* Kept in the same unbroken run as the block above, and trimmed so this
          comment does not introduce a break of its own: `button` is not one of

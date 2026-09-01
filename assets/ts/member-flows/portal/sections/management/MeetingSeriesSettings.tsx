@@ -138,8 +138,10 @@ export function MeetingSeriesSettings({
           scheduleLocked={series.occurrenceCount > 0}
           onChange={setDraft}
         />
+        {/* A note about the whole form, not the help text of one control:
+            `pk-field__help` belongs to a control inside a `pk-field`. */}
         {series.occurrenceCount > 0 && (
-          <p class="pk-field__help">
+          <p class="pk-muted pk-small">
             The recurring schedule is locked after occurrences are generated. Mutable policy, profile, name, location,
             and active state remain editable.
           </p>

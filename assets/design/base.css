@@ -113,7 +113,22 @@
     box-shadow: var(--pk-focus);
   }
 
-  .pk :where([hidden]) {
+  /*
+   * `hidden` means hidden, everywhere — not only under a `.pk` root.
+   *
+   * The user agent hides `[hidden]` with a rule any author `display` beats, so
+   * a component that sets `display: flex` — a field, its message, a check —
+   * renders even while the attribute says it should not. Scoping the correction
+   * to `.pk` meant a template that uses the components without a design-system
+   * root got the visible half of that bargain and not the hiding half, which is
+   * how empty message slots came to occupy a line under half the site's forms.
+   *
+   * `!important` in this layer is what makes it hold: an important declaration
+   * beats every ordinary one in a later layer, so a component cannot outrank
+   * the attribute by accident. The legacy layer can still override it
+   * deliberately, because important declarations resolve layers in reverse.
+   */
+  :where([hidden]) {
     display: none !important;
   }
 

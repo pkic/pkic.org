@@ -4,11 +4,17 @@
 
   {{/* ── Resend manage link fallback (missing/invalid token) ─────────── */}}
   <div data-resend-speaker-manage-section class="pk-stack" hidden>
-    <p class="pk-field__help">Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.</p>
+    {{/* Prose about the panel, not a control's help text: `pk-field__help`
+         belongs to a field and takes its color from the field's state. */}}
+    <p class="pk-muted pk-small">Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.</p>
     <div class="pk-grid">
+      {{/* The control sits in `pk-field__control`, which is the box the state
+           mark is positioned against. */}}
       <div class="pk-field">
         <label class="pk-field__label" for="resend-speaker-manage-email">Your email address</label>
-        <input id="resend-speaker-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-speaker-manage-email>
+        <div class="pk-field__control">
+          <input id="resend-speaker-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-speaker-manage-email>
+        </div>
       </div>
     </div>
     <div class="pk-cluster">
@@ -18,11 +24,11 @@
   </div>
 
   {{/* ── Loading ───────────────────────────────────────────────────────── */}}
-  <p data-speaker-loading class="pk-field__help">Loading your presentation details…</p>
+  <p data-speaker-loading class="pk-muted pk-small">Loading your presentation details…</p>
 
   {{/* ── Not accepted / declined state ───────────────────────────────── */}}
   <div data-not-accepted-section hidden>
-    <p class="pk-field__help">Presentation upload is only available once your proposal has been accepted and you have confirmed your participation.</p>
+    <p class="pk-muted pk-small">Presentation upload is only available once your proposal has been accepted and you have confirmed your participation.</p>
   </div>
 
   {{/* ── Main content (shown after data loads) ────────────────────────── */}}
@@ -46,7 +52,12 @@
           accept="application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.oasis.opendocument.presentation"
           class="pk-sr-only" data-presentation-file>
       </div>
-      <p data-presentation-upload-status class="pk-field__help"></p>
+      {{/* The upload outcome, written by speaker-presentation-page.tsx. It
+           reports on the panel rather than on one control, so it is muted
+           prose and not a field's help text. `data-flow-status` is the live
+           region that announces the same outcome; a second one here would say
+           it twice. */}}
+      <p data-presentation-upload-status class="pk-muted pk-small"></p>
     </div>
 
   </div>

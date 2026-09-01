@@ -81,7 +81,7 @@ export function GroupMemberAddForm({
            * can express — and the `<fieldset>` is also the one attribute that
            * takes the picker out of play while the add is in flight.
            */}
-          <fieldset class="pk-fieldset pk-stack pk-stack--tight" disabled={saving}>
+          <fieldset class="pk-fieldset pk-field" disabled={saving}>
             <legend class="pk-field__label">User</legend>
             <UserPicker
               value={user}

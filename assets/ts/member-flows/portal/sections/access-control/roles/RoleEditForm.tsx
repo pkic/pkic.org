@@ -96,7 +96,7 @@ export function RoleEditForm({
         {/* "Permissions" used to be a bare `<label>` with no `for`, so it
             named nothing: the checkboxes below it were an unlabelled run of
             controls. A `<legend>` names the group it actually introduces. */}
-        <fieldset class="pk-fieldset pk-stack pk-stack--snug">
+        <fieldset class="pk-fieldset pk-field">
           <legend class="pk-field__label">Permissions</legend>
           <PermissionCheckboxes selected={selected} onToggle={toggle} disabled={submitting} />
         </fieldset>

@@ -202,33 +202,31 @@ export function ProposalDecisionPanel({
                     </Select>
                   )}
                 </Field>
-                <div>
-                  <label class="pk-strong">
-                    Note to applicant
-                    {decisionStatus === "needs-work" && (
-                      <span class="pk-required">
-                        <span aria-hidden="true">*</span>
-                        <span class="pk-sr-only">(required)</span>
-                      </span>
-                    )}
-                  </label>
-                  <div class="pk-small pk-muted">Sent in the decision email · Markdown supported</div>
-                  <Textarea
-                    value={decisionNote}
-                    onInput={(event) => setDecisionNote((event.target as HTMLTextAreaElement).value)}
-                    placeholder={
-                      decisionStatus === "needs-work"
-                        ? "Describe the changes or clarifications needed…"
-                        : "Optional feedback for the proposer…"
-                    }
-                    aria-invalid={needsWorkRequiresNote ? "true" : undefined}
-                  />
-                  {needsWorkRequiresNote && (
-                    <div class="pk-field__message" role="alert">
-                      A note is required when requesting changes.
-                    </div>
+                {/* The decision above is a `Field`; this was a hand-copied
+                    imitation of one — a bare `<label>` naming no control, its
+                    help text a loose div, and a `pk-field__message` with no
+                    `pk-field` to take its state from, which is why the missing
+                    note showed neither the red border nor the ✕. */}
+                <Field
+                  label="Note to applicant"
+                  required={decisionStatus === "needs-work"}
+                  help="Sent in the decision email · Markdown supported"
+                  state={needsWorkRequiresNote ? "invalid" : undefined}
+                  message="A note is required when requesting changes."
+                >
+                  {(c) => (
+                    <Textarea
+                      {...c}
+                      value={decisionNote}
+                      onInput={(event) => setDecisionNote((event.target as HTMLTextAreaElement).value)}
+                      placeholder={
+                        decisionStatus === "needs-work"
+                          ? "Describe the changes or clarifications needed…"
+                          : "Optional feedback for the proposer…"
+                      }
+                    />
                   )}
-                </div>
+                </Field>
                 <div class="pk-cluster">
                   <Button
                     type="button"

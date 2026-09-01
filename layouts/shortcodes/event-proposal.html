@@ -39,7 +39,7 @@
     </ol>
   </nav>
 
-  <form class="pk-stack needs-validation" novalidate>
+  <form class="pk-form needs-validation" novalidate>
 
     {{/* ── Step 1: Terms ────────────────────────────────────────────────── */}}
     <div data-step="1" class="event-flow-step is-active pk-stack">
@@ -47,10 +47,17 @@
         Before you begin, please review and accept the terms below. Knowing these upfront means
         no surprises at the end — and you can fill in your proposal with full confidence.
       </p>
-      <div data-consents>
-        <p class="pk-field__help">Loading…</p>
+      {{/* The message belongs inside `pk-field`: that is the element the
+           validators put `pk-field--ok|--advisory|--invalid` on, and the
+           `--state-*` variables it sets are what colour the message. A loose
+           sibling can be styled but can never show a state. */}}
+      <div class="pk-field">
+        <div data-consents>
+          {{/* A loading notice, not a control's help text. */}}
+          <p class="pk-muted pk-small">Loading…</p>
+        </div>
+        <p data-field-error="consents" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
-      <div data-field-error="consents" class="pk-field__message"></div>
     </div>
 
     {{/* ── Step 2: Contact ──────────────────────────────────────────────── */}}
@@ -60,42 +67,58 @@
         communication and are kept confidential from the public.
       </p>
       <div class="pk-grid">
+        {{/* The control sits inside `pk-field__control`: the state mark is
+             positioned against that box, so an input outside one has nowhere
+             to draw its tick, caution or cross. */}}
         <div class="pk-field">
           <label for="proposal-first-name" class="pk-field__label">First name</label>
-          <input id="proposal-first-name" name="firstName" type="text" class="pk-input" required autocomplete="given-name">
-          <div data-field-error="proposer.firstName" class="pk-field__message"></div>
+          <div class="pk-field__control">
+            <input id="proposal-first-name" name="firstName" type="text" class="pk-input" required autocomplete="given-name">
+          </div>
+          <p data-field-error="proposer.firstName" class="pk-field__message" aria-live="polite" hidden></p>
         </div>
         <div class="pk-field">
           <label for="proposal-last-name" class="pk-field__label">Last name</label>
-          <input id="proposal-last-name" name="lastName" type="text" class="pk-input" required autocomplete="family-name">
-          <div data-field-error="proposer.lastName" class="pk-field__message"></div>
+          <div class="pk-field__control">
+            <input id="proposal-last-name" name="lastName" type="text" class="pk-input" required autocomplete="family-name">
+          </div>
+          <p data-field-error="proposer.lastName" class="pk-field__message" aria-live="polite" hidden></p>
         </div>
       </div>
       <div class="pk-field">
         <label for="proposal-email" class="pk-field__label">Work email</label>
-        <input id="proposal-email" name="email" type="email" class="pk-input" required autocomplete="email">
-        <div class="pk-field__help">
+        <div class="pk-field__control">
+          <input id="proposal-email" name="email" type="email" class="pk-input" required autocomplete="email"
+            aria-describedby="proposal-email-help proposal-email-warning proposal-email-error">
+        </div>
+        <p id="proposal-email-error" data-field-error="proposer.email" class="pk-field__message" aria-live="polite" hidden></p>
+        <p id="proposal-email-help" class="pk-field__help">
           We'll send your proposal management link here — use it to track status, edit details,
           and add speakers after submission.
-        </div>
-        <div data-email-warning class="pk-field__help pk-warning-note" hidden>
+        </p>
+        <p id="proposal-email-warning" data-email-warning class="pk-field__help pk-warning-note" hidden>
           This looks like a personal email address. Consider using your professional email so
           we can verify your affiliation.
-        </div>
-        <div data-field-error="proposer.email" class="pk-field__message"></div>
+        </p>
       </div>
       <div class="pk-grid">
         <div class="pk-field">
           <label for="proposal-organization" class="pk-field__label">
             Organization <span class="pk-small">(optional)</span>
           </label>
-          <input id="proposal-organization" name="organizationName" type="text" class="pk-input" autocomplete="organization">
+          <div class="pk-field__control">
+            <input id="proposal-organization" name="organizationName" type="text" class="pk-input" autocomplete="organization">
+          </div>
+          <p data-field-error="proposer.organizationName" class="pk-field__message" aria-live="polite" hidden></p>
         </div>
         <div class="pk-field">
           <label for="proposal-job-title" class="pk-field__label">
             Job title <span class="pk-small">(optional)</span>
           </label>
-          <input id="proposal-job-title" name="jobTitle" type="text" class="pk-input" autocomplete="organization-title">
+          <div class="pk-field__control">
+            <input id="proposal-job-title" name="jobTitle" type="text" class="pk-input" autocomplete="organization-title">
+          </div>
+          <p data-field-error="proposer.jobTitle" class="pk-field__message" aria-live="polite" hidden></p>
         </div>
       </div>
       <label class="pk-check" for="proposal-is-presenting">
@@ -111,34 +134,40 @@
       <p class="event-flow-step-intro">
         Describe your session clearly so the review committee can assess its fit and impact.
       </p>
-      <fieldset class="pk-fieldset">
+      {{/* `pk-field` on the group, not just `pk-fieldset`: the modifier that
+           the validator sets carries the state variables, and for a choice
+           group the fieldset is the element that owns the message. */}}
+      <fieldset class="pk-fieldset pk-field">
         <legend class="pk-field__label">Session type</legend>
-        <div class="pk-stack pk-stack--snug">
-          <div data-session-types class="pk-cluster">
-            {{/* Session type radios are injected here by JS based on event config */}}
-          </div>
-          <p class="pk-field__help">
-            This is your preferred format. The program committee may accept your session in a
-            different form if it better fits the schedule or audience.
-          </p>
-          <div data-field-error="proposal.type" class="pk-field__message"></div>
+        <p class="pk-field__help">
+          This is your preferred format. The program committee may accept your session in a
+          different form if it better fits the schedule or audience.
+        </p>
+        <div data-session-types class="pk-cluster">
+          {{/* Session type radios are injected here by JS based on event config */}}
         </div>
+        <p data-field-error="proposal.type" class="pk-field__message" aria-live="polite" hidden></p>
       </fieldset>
 
       <div class="pk-field">
         <label for="proposal-title" class="pk-field__label">Title</label>
-        <input id="proposal-title" name="title" type="text" class="pk-input" required minlength="8" maxlength="180">
-        <div data-field-error="proposal.title" class="pk-field__message"></div>
+        <div class="pk-field__control">
+          <input id="proposal-title" name="title" type="text" class="pk-input" required minlength="8" maxlength="180">
+        </div>
+        <p data-field-error="proposal.title" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
 
       <div class="pk-field">
         <label for="proposal-abstract" class="pk-field__label">Abstract</label>
-        <textarea id="proposal-abstract" name="abstract" rows="8" class="pk-input pk-input--textarea" required minlength="80" maxlength="8000"></textarea>
-        <div class="pk-field__help">
+        <div class="pk-field__control">
+          <textarea id="proposal-abstract" name="abstract" rows="8" class="pk-input pk-input--textarea" required
+            minlength="80" maxlength="8000" aria-describedby="proposal-abstract-help"></textarea>
+        </div>
+        <p data-field-error="proposal.abstract" class="pk-field__message" aria-live="polite" hidden></p>
+        <p id="proposal-abstract-help" class="pk-field__help">
           Aim for 150–500 words. The committee values clarity, novelty, and practical
           applicability. Avoid promotional language and product names.
-        </div>
-        <div data-field-error="proposal.abstract" class="pk-field__message"></div>
+        </p>
       </div>
 
       <div data-custom-fields>
@@ -157,13 +186,17 @@
            on the legacy `.proposal-speaker-card`, and left with that class when
            the card moved onto Panel. */}}
       <div data-proposal-speakers class="pk-stack"></div>
-      <div class="pk-cluster">
-        <button type="button" data-add-speaker class="pk-btn pk-btn--secondary pk-btn--sm">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></svg>
-          Add speaker
-        </button>
+      {{/* The message about the speaker list belongs to a `pk-field` too: it
+           is the field that carries the state the message is coloured by. */}}
+      <div class="pk-field">
+        <div class="pk-cluster">
+          <button type="button" data-add-speaker class="pk-btn pk-btn--secondary pk-btn--sm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></svg>
+            Add speaker
+          </button>
+        </div>
+        <p data-field-error="speakers" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
-      <div data-field-error="speakers" class="pk-field__message"></div>
     </div>
 
     {{/* ── Step navigation ──────────────────────────────────────────────── */}}

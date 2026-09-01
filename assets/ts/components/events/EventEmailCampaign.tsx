@@ -261,70 +261,81 @@ export function EventEmailCampaign({
           placeholder="Write from scratch"
           onChange={(template) => void handleTemplateChange(template?.template_key ?? "")}
         />
-        <div class="pk-stack pk-stack--tight">
+        <div class="pk-field">
           <label class="pk-field__label" for="event-email-campaign-mode">
             Delivery mode
           </label>
-          <Select
-            id="event-email-campaign-mode"
-            value={mode}
-            onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
-          >
-            <option value="personal">Personal (1:1)</option>
-            <option value="bcc_batch">Broadcast BCC</option>
-          </Select>
+          <div class="pk-field__control">
+            <Select
+              id="event-email-campaign-mode"
+              value={mode}
+              onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
+            >
+              <option value="personal">Personal (1:1)</option>
+              <option value="bcc_batch">Broadcast BCC</option>
+            </Select>
+          </div>
         </div>
-        <div class="pk-stack pk-stack--tight">
+        <div class="pk-field">
           <label class="pk-field__label" for="event-email-campaign-message-type">
             Message type
           </label>
-          <Select
-            id="event-email-campaign-message-type"
-            value={messageType}
-            onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
-          >
-            <option value="transactional">Transactional</option>
-            <option value="promotional">Promotional</option>
-          </Select>
+          <div class="pk-field__control">
+            <Select
+              id="event-email-campaign-message-type"
+              value={messageType}
+              onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+            >
+              <option value="transactional">Transactional</option>
+              <option value="promotional">Promotional</option>
+            </Select>
+          </div>
         </div>
         {!personal && (
-          <div class="pk-stack pk-stack--tight">
+          <div class="pk-field">
             <label class="pk-field__label" for="event-email-campaign-batch-size">
               BCC batch size
             </label>
-            <TextInput
-              id="event-email-campaign-batch-size"
-              type="number"
-              min={1}
-              max={500}
-              value={batchSize}
-              onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)}
-            />
+            <div class="pk-field__control">
+              <TextInput
+                id="event-email-campaign-batch-size"
+                type="number"
+                min={1}
+                max={500}
+                value={batchSize}
+                onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)}
+              />
+            </div>
           </div>
         )}
       </div>
 
       {/* Subject */}
-      <div class="pk-stack pk-stack--tight">
+      <div class="pk-field">
         <label class="pk-field__label" for="event-email-campaign-subject">
           Subject
         </label>
-        <TextInput
-          id="event-email-campaign-subject"
-          type="text"
-          placeholder="Email subject"
-          value={subject}
-          onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
-        />
+        <div class="pk-field__control">
+          <TextInput
+            id="event-email-campaign-subject"
+            type="text"
+            placeholder="Email subject"
+            value={subject}
+            onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+          />
+        </div>
       </div>
 
       {/* Body + variables sidebar */}
       <div class="pk-grid pk-grid--roomy">
-        <div class="pk-stack pk-stack--tight">
+        <div class="pk-field">
           <label class="pk-field__label" for="event-email-campaign-body">
             Message <span class="pk-muted">(Markdown, {"{{variables}}"})</span>
           </label>
-          <div class="pk-overlay-editor">
+          {/* The overlay editor is this field's control box as well as the
+              backdrop's positioning context — both want `position: relative`,
+              so they are one element rather than two nested ones. */}
+          <div class="pk-field__control pk-overlay-editor">
             <pre
               ref={bodyPreRef}
               aria-hidden="true"
@@ -396,93 +407,103 @@ export function EventEmailCampaign({
       {/* Filters */}
       {audience === "attendees" ? (
         <div class="pk-grid">
-          <div class="pk-stack pk-stack--tight">
+          <div class="pk-field">
             <label class="pk-field__label" for="event-email-campaign-registration-status">
               Registration status
             </label>
-            <Select
-              id="event-email-campaign-registration-status"
-              value={attendeeStatus}
-              onChange={(e) =>
-                setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
-              }
-            >
-              {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
-                <option key={status} value={status}>
-                  {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
-                </option>
-              ))}
-            </Select>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-registration-status"
+                value={attendeeStatus}
+                onChange={(e) =>
+                  setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
+                }
+              >
+                {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
+                  <option key={status} value={status}>
+                    {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
-          <div class="pk-stack pk-stack--tight">
+          <div class="pk-field">
             <label class="pk-field__label" for="event-email-campaign-attendance-type">
               Attendance type
             </label>
-            <Select
-              id="event-email-campaign-attendance-type"
-              value={attendanceType}
-              onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
-            >
-              <option value="all">All types</option>
-              <option value="in_person">In-person</option>
-              <option value="virtual">Virtual</option>
-              <option value="on_demand">On-demand</option>
-            </Select>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-attendance-type"
+                value={attendanceType}
+                onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
+              >
+                <option value="all">All types</option>
+                <option value="in_person">In-person</option>
+                <option value="virtual">Virtual</option>
+                <option value="on_demand">On-demand</option>
+              </Select>
+            </div>
           </div>
-          <div class="pk-stack pk-stack--tight">
+          <div class="pk-field">
             <label class="pk-field__label" for="event-email-campaign-day">
               Specific day
             </label>
-            <Select
-              id="event-email-campaign-day"
-              value={dayFilter}
-              onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">All days</option>
-              {days.map((d) => {
-                const dateKey = d.day_date ?? d.date ?? "";
-                return (
-                  <option key={dateKey} value={dateKey}>
-                    {d.label ?? dateKey}
-                  </option>
-                );
-              })}
-            </Select>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-day"
+                value={dayFilter}
+                onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">All days</option>
+                {days.map((d) => {
+                  const dateKey = d.day_date ?? d.date ?? "";
+                  return (
+                    <option key={dateKey} value={dateKey}>
+                      {d.label ?? dateKey}
+                    </option>
+                  );
+                })}
+              </Select>
+            </div>
           </div>
-          <div class="pk-stack pk-stack--tight">
+          <div class="pk-field">
             <label class="pk-field__label" for="event-email-campaign-day-waitlist">
               Day waitlist
             </label>
-            <Select
-              id="event-email-campaign-day-waitlist"
-              value={dayWaitlistStatus}
-              onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
-            >
-              <option value="all">Any state</option>
-              <option value="active">Active waitlist</option>
-              <option value="waiting">Waiting</option>
-              <option value="offered">Offer sent</option>
-              <option value="accepted">Accepted offer</option>
-              <option value="none">Not waitlisted</option>
-            </Select>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-day-waitlist"
+                value={dayWaitlistStatus}
+                onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
+              >
+                <option value="all">Any state</option>
+                <option value="active">Active waitlist</option>
+                <option value="waiting">Waiting</option>
+                <option value="offered">Offer sent</option>
+                <option value="accepted">Accepted offer</option>
+                <option value="none">Not waitlisted</option>
+              </Select>
+            </div>
           </div>
         </div>
       ) : (
         <div class="pk-grid">
-          <div class="pk-stack pk-stack--tight">
+          <div class="pk-field">
             <label class="pk-field__label" for="event-email-campaign-speaker-status">
               Speaker status
             </label>
-            <Select
-              id="event-email-campaign-speaker-status"
-              value={speakerStatus}
-              onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
-            >
-              <option value="confirmed">Confirmed</option>
-              <option value="all">All active</option>
-              <option value="invited">Invited</option>
-              <option value="pending">Pending</option>
-            </Select>
+            <div class="pk-field__control">
+              <Select
+                id="event-email-campaign-speaker-status"
+                value={speakerStatus}
+                onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
+              >
+                <option value="confirmed">Confirmed</option>
+                <option value="all">All active</option>
+                <option value="invited">Invited</option>
+                <option value="pending">Pending</option>
+              </Select>
+            </div>
           </div>
         </div>
       )}

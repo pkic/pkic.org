@@ -19,17 +19,6 @@
 @layer utilities {
   /* A measured reading column. One max-width, not twelve breakpoint variants. */
   .pk-container {
-    /*
-     * Stated here, not inherited from the base layer.
-     *
-     * The base layer's box-sizing reset is scoped to `.pk`, but these
-     * utilities are deliberately unscoped — a Hugo template uses
-     * `pk-container` without a `.pk` root wherever its own styling has not
-     * moved yet, which MIGRATION.md sanctions. Without this, `width: 100%`
-     * plus `padding-inline` overflowed the viewport on every one of those
-     * pages, at every width.
-     */
-    box-sizing: border-box;
     width: 100%;
     max-width: var(--pk-measure, 72rem);
     margin-inline: auto;
@@ -75,6 +64,22 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /*
+   * A form column.
+   *
+   * A form is filled one line at a time, so its width is set by the line rather
+   * than by the page. Stretched across a wide screen, an input becomes a target
+   * with no shape and the eye loses the label on its way to the control; the
+   * design page puts its own field examples in a column for the same reason.
+   * Composes with the stack modifiers, which is why the gap is the stack's.
+   */
+  .pk-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-gap, var(--pk-4));
+    max-width: 42rem;
   }
 
   /* A cluster whose items align to their tops rather than their centres —
@@ -171,9 +176,6 @@
     font-weight: 700;
   }
 
-  /* Monospace for a control whose value is code — a template, a JSON blob.
-     `base.css` already gives `code`, `kbd`, `samp` and `pre` the mono family,
-     but a form control takes `font: inherit`, so it has to be told. */
   /* An introductory paragraph, and its opposite. Both read the type scale so
      a page cannot invent its own "slightly bigger" text. */
   .pk-lede {

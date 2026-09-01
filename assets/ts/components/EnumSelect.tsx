@@ -39,7 +39,10 @@ export function EnumSelect<Value extends string>({
 }) {
   const helpId = help ? `${id}-help` : undefined;
   return (
-    <div class="pk-stack pk-stack--tight">
+    // `pk-field` is the group the state modifiers are set on and
+    // `pk-field__control` is the box the state mark is positioned inside, so
+    // the label, the control and the help text only hold together in here.
+    <div class="pk-field">
       <label class="pk-field__label" for={id}>
         {label}
         {required && (
@@ -51,20 +54,22 @@ export function EnumSelect<Value extends string>({
           </span>
         )}
       </label>
-      <Select
-        id={id}
-        value={value}
-        disabled={disabled}
-        required={required}
-        aria-describedby={helpId}
-        onChange={(event) => onChange((event.target as HTMLSelectElement).value as Value)}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
+      <div class="pk-field__control">
+        <Select
+          id={id}
+          value={value}
+          disabled={disabled}
+          required={required}
+          aria-describedby={helpId}
+          onChange={(event) => onChange((event.target as HTMLSelectElement).value as Value)}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      </div>
       {help && (
         <p id={helpId} class="pk-field__help">
           {help}

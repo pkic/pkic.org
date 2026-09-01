@@ -255,44 +255,56 @@ export function TemplateEditor({
               {isLayout && <Alert tone="info">This template controls the outer email shell used for all emails.</Alert>}
               {!isLayout && (
                 <div class="pk-grid">
-                  <div class="pk-stack pk-stack--tight">
+                  {/* Written out rather than composed from <Field>: every
+                      control on this screen is addressed by a fixed id, which
+                      <Field> generates for itself. The markup is the one
+                      <Field> builds — the group carries any state modifier and
+                      the control sits in the box the state mark reads. */}
+                  <div class="pk-field">
                     <label class="pk-field__label" for="email-template-editor-content-type">
                       Content type
                     </label>
-                    <Select
-                      id="email-template-editor-content-type"
-                      value={contentType}
-                      disabled={!canWrite}
-                      onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
-                    >
-                      <option value="markdown">Markdown</option>
-                      <option value="html">HTML</option>
-                      <option value="text">Plain text</option>
-                    </Select>
+                    <div class="pk-field__control">
+                      <Select
+                        id="email-template-editor-content-type"
+                        value={contentType}
+                        disabled={!canWrite}
+                        onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
+                      >
+                        <option value="markdown">Markdown</option>
+                        <option value="html">HTML</option>
+                        <option value="text">Plain text</option>
+                      </Select>
+                    </div>
                   </div>
-                  <div class="pk-stack pk-stack--tight">
+                  <div class="pk-field">
                     <label class="pk-field__label" for="email-template-editor-message-type">
                       Default message type
                     </label>
-                    <Select
-                      id="email-template-editor-message-type"
-                      value={messageType}
-                      disabled={!canWrite}
-                      onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
-                    >
-                      <option value="transactional">Transactional</option>
-                      <option value="promotional">Promotional</option>
-                    </Select>
+                    <div class="pk-field__control">
+                      <Select
+                        id="email-template-editor-message-type"
+                        value={messageType}
+                        disabled={!canWrite}
+                        onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+                      >
+                        <option value="transactional">Transactional</option>
+                        <option value="promotional">Promotional</option>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Subject with highlight backdrop */}
-              <div class="pk-stack pk-stack--tight">
+              <div class="pk-field">
                 <label class="pk-field__label" for="email-template-editor-subject">
                   Subject template <span class="pk-muted">(supports conditions and variables)</span>
                 </label>
-                <div class="pk-overlay-editor">
+                {/* The overlay editor is this field's control box: both are the
+                    positioned box its contents are placed against, so they are
+                    one element rather than two nested ones. */}
+                <div class="pk-field__control pk-overlay-editor">
                   <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
                   <TextInput
                     id="email-template-editor-subject"
@@ -312,14 +324,14 @@ export function TemplateEditor({
               </div>
 
               {/* Body with highlight backdrop */}
-              <div class="pk-stack pk-stack--tight">
+              <div class="pk-field">
                 <label class="pk-field__label" for="email-template-editor-body">
                   Body{" "}
                   <span class="pk-muted">
                     (supports {"{{variables}}"}, {"{{#if}}...{{/if}}"}, {"{{#each}}...{{/each}}"})
                   </span>
                 </label>
-                <div class="pk-overlay-editor">
+                <div class="pk-field__control pk-overlay-editor">
                   <pre
                     ref={bodyPreRef}
                     aria-hidden="true"
@@ -352,33 +364,38 @@ export function TemplateEditor({
               </div>
 
               {/* Partials */}
-              <div class="pk-stack pk-stack--tight">
+              <div class="pk-field">
                 <label class="pk-field__label" for="email-template-partial">
                   Insert partial
                 </label>
-                <Select
-                  id="email-template-partial"
-                  disabled={!canWrite}
-                  onChange={(e) => {
-                    const sel = e.target as HTMLSelectElement;
-                    if (!sel.value) return;
-                    insertSnippet(`{{> ${sel.value}}}`, "body");
-                    sel.value = "";
-                  }}
-                >
-                  <option value="">— select partial to insert —</option>
-                  {TEMPLATE_PARTIALS.map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.name} — {p.description}
-                    </option>
-                  ))}
-                </Select>
+                <div class="pk-field__control">
+                  <Select
+                    id="email-template-partial"
+                    disabled={!canWrite}
+                    onChange={(e) => {
+                      const sel = e.target as HTMLSelectElement;
+                      if (!sel.value) return;
+                      insertSnippet(`{{> ${sel.value}}}`, "body");
+                      sel.value = "";
+                    }}
+                  >
+                    <option value="">— select partial to insert —</option>
+                    {TEMPLATE_PARTIALS.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name} — {p.description}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
 
               {/* Template helpers */}
               <div class="pk-stack pk-stack--snug">
+                {/* A heading over a row of buttons, not the label of a control:
+                    `pk-field__label` outside a `pk-field` names nothing and can
+                    never carry a state. */}
                 <div class="pk-stack pk-stack--tight">
-                  <span class="pk-field__label">Template helpers</span>
+                  <span class="pk-small pk-strong">Template helpers</span>
                   <span class="pk-small">Click to insert into the active field.</span>
                 </div>
                 {HELPER_CATEGORIES.map((cat) => (
@@ -402,7 +419,7 @@ export function TemplateEditor({
 
               {/* Preview data */}
               {canWrite && (
-                <div class="pk-stack pk-stack--tight">
+                <div class="pk-field">
                   <div class="pk-cluster pk-cluster--between">
                     <label class="pk-field__label" for="email-template-preview-data">
                       Preview data (JSON)
@@ -415,13 +432,15 @@ export function TemplateEditor({
                       Reset to defaults
                     </Button>
                   </div>
-                  <Textarea
-                    id="email-template-preview-data"
-                    class="pk-mono"
-                    rows={6}
-                    value={previewData}
-                    onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
-                  />
+                  <div class="pk-field__control">
+                    <Textarea
+                      id="email-template-preview-data"
+                      class="pk-mono"
+                      rows={6}
+                      value={previewData}
+                      onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
+                    />
+                  </div>
                 </div>
               )}
 

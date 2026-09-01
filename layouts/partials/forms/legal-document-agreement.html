@@ -13,11 +13,14 @@
       <h3>{{ .Title }}</h3>
       {{ .Content }} {{- end }} {{ $page.Content }}
     </article>
-    {{/* All three parts of the checkbox pattern: the block on the wrapper, the
-         element class on the input, and the element class on its label. The
-         input keeps its own `data-` hooks, which is what join-form.tsx and the
+    {{/* The acceptance block is the field: it is what carries the `--state-*`
+         variables that `pk-field--ok|--advisory|--invalid` set, so the message
+         has to be its child rather than a loose sibling of the checkbox. The
+         `pk-check` itself stays intact — the box, its input and its label are
+         one unit — and the message is its sibling inside the field. The input
+         keeps its own `data-` hooks, which is what join-form.tsx and the
          end-to-end spec locate it by. */}}
-    <div class="membership-legal-acceptance pk-stack pk-stack--snug">
+    <div class="membership-legal-acceptance pk-field">
       <div class="pk-check">
         <input
           class="pk-check__input"
@@ -31,7 +34,7 @@
           >I agree to the membership terms in this document</label
         >
       </div>
-      <div class="pk-field__message" data-field-error="{{ $fieldKey }}"></div>
+      <p class="pk-field__message" data-field-error="{{ $fieldKey }}" aria-live="polite" hidden></p>
     </div>
   </div>
 </section>

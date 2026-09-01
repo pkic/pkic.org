@@ -67,7 +67,10 @@ function SpeakerField({ id, label, optional = false, help, errorPath, children }
         {label}
         {optional && <span class="pk-small"> (optional)</span>}
       </label>
-      {children({ id, "aria-describedby": describedBy })}
+      {/* The box the state mark is positioned against: `applyFieldErrors`
+          moves this field into a state, and the mark has nowhere to draw
+          without it. */}
+      <div class="pk-field__control">{children({ id, "aria-describedby": describedBy })}</div>
       {help && (
         <p class="pk-field__help" id={helpId}>
           {help}
@@ -171,7 +174,7 @@ export function SpeakerFormCard({
             // which is what a reader hears on entering it. The previous
             // `aria-label` sat on a plain div beside a visible "Role" label
             // that pointed at no control at all.
-            <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+            <fieldset class="pk-fieldset pk-field">
               <legend class="pk-field__label">Role</legend>
               <div class="pk-cluster">
                 {SPEAKER_ROLE_OPTIONS.map((role, index) => {
@@ -194,7 +197,7 @@ export function SpeakerFormCard({
             </fieldset>
           )}
 
-          <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+          <fieldset class="pk-fieldset pk-field">
             <legend class="pk-field__label">
               Profile links
               <span class="pk-small"> (optional)</span>

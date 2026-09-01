@@ -12,20 +12,26 @@ panel carries a margin of its own. */}}
 >
   {{/* ── Resend manage link fallback (missing/invalid token) ─────────── */}}
   <div data-resend-speaker-manage-section class="pk-stack" hidden>
-    <p class="pk-field__help">
+    {{/* Prose about the panel, not a control's help text: `pk-field__help`
+         belongs to a field and takes its color from the field's state. */}}
+    <p class="pk-muted pk-small">
       Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.
     </p>
     <div class="pk-grid">
+      {{/* The control sits in `pk-field__control`, which is the box the state
+           mark is positioned against. */}}
       <div class="pk-field">
         <label class="pk-field__label" for="resend-speaker-manage-email">Your email address</label>
-        <input
-          id="resend-speaker-manage-email"
-          type="email"
-          class="pk-input"
-          autocomplete="email"
-          placeholder="you@example.com"
-          data-resend-speaker-manage-email
-        />
+        <div class="pk-field__control">
+          <input
+            id="resend-speaker-manage-email"
+            type="email"
+            class="pk-input"
+            autocomplete="email"
+            placeholder="you@example.com"
+            data-resend-speaker-manage-email
+          />
+        </div>
       </div>
     </div>
     <div class="pk-cluster">
@@ -35,7 +41,7 @@ panel carries a margin of its own. */}}
   </div>
 
   {{/* ── Loading ───────────────────────────────────────────────────────── */}}
-  <p data-speaker-loading class="pk-field__help">Loading your speaker details…</p>
+  <p data-speaker-loading class="pk-muted pk-small">Loading your speaker details…</p>
 
   {{/* ── Main content (shown after data loads) ────────────────────────── */}}
   <div data-speaker-content class="pk-stack pk-stack--loose" hidden>
@@ -64,7 +70,9 @@ panel carries a margin of its own. */}}
           <div class="pk-stack pk-stack--snug">
             <h5>Speaker terms and conditions</h5>
             <div data-speaker-consents>
-              <p class="pk-field__help">Loading required terms…</p>
+              {{/* A loading notice for the whole list, not one control's help
+                   text — `renderConsentInputs` replaces it. */}}
+              <p class="pk-muted pk-small">Loading required terms…</p>
             </div>
           </div>
           <div class="pk-cluster">
@@ -78,13 +86,15 @@ panel carries a margin of its own. */}}
       <div class="pk-stack pk-stack--snug" data-decline-panel hidden>
         <div class="pk-field">
           <label class="pk-field__label" for="decline-reason">Reason (optional)</label>
-          <textarea
-            id="decline-reason"
-            class="pk-input pk-input--textarea"
-            rows="3"
-            maxlength="2000"
-            placeholder="Let the proposer know why you cannot participate…"
-          ></textarea>
+          <div class="pk-field__control">
+            <textarea
+              id="decline-reason"
+              class="pk-input pk-input--textarea"
+              rows="3"
+              maxlength="2000"
+              placeholder="Let the proposer know why you cannot participate…"
+            ></textarea>
+          </div>
         </div>
         <div class="pk-cluster">
           <button type="button" data-decline-confirm class="pk-btn pk-btn--danger pk-btn--sm">
@@ -106,7 +116,11 @@ panel carries a margin of its own. */}}
         Upload a professional headshot photo. It will appear on the event website alongside your session.
       </p>
       <div data-headshot-preview class="pkic-speaker-headshot-preview"></div>
-      <p data-headshot-status class="pk-field__help"></p>
+      {{/* The upload outcome for the panel, written by
+           registration-manage-headshot.ts. It reports on the section rather
+           than on one control, so it is muted prose and not a field's help
+           text. */}}
+      <p data-headshot-status class="pk-muted pk-small"></p>
       <div class="pk-cluster">
         <label class="pk-btn pk-btn--sm pk-btn--secondary" for="speaker-headshot-file">Upload photo</label>
         <input
@@ -133,61 +147,75 @@ panel carries a margin of its own. */}}
       </div>
       <div data-profile-form-wrap>
         <form data-profile-form class="pk-grid" novalidate>
+          {{/* Every control sits in `pk-field__control`: that wrapper is the
+               box `pk-field__state` is positioned against, so an input outside
+               one has nowhere to draw its ✓ / ⚠ / ✕. */}}
           <div class="pk-field">
             <label for="speaker-first-name" class="pk-field__label">First name</label>
-            <input
-              id="speaker-first-name"
-              name="firstName"
-              type="text"
-              maxlength="80"
-              class="pk-input"
-              placeholder="Your first name"
-            />
+            <div class="pk-field__control">
+              <input
+                id="speaker-first-name"
+                name="firstName"
+                type="text"
+                maxlength="80"
+                class="pk-input"
+                placeholder="Your first name"
+              />
+            </div>
           </div>
           <div class="pk-field">
             <label for="speaker-last-name" class="pk-field__label">Last name</label>
-            <input
-              id="speaker-last-name"
-              name="lastName"
-              type="text"
-              maxlength="120"
-              class="pk-input"
-              placeholder="Your last name"
-            />
+            <div class="pk-field__control">
+              <input
+                id="speaker-last-name"
+                name="lastName"
+                type="text"
+                maxlength="120"
+                class="pk-input"
+                placeholder="Your last name"
+              />
+            </div>
           </div>
           <div class="pk-field">
             <label for="speaker-organization" class="pk-field__label">Organization</label>
-            <input
-              id="speaker-organization"
-              name="organizationName"
-              type="text"
-              maxlength="160"
-              class="pk-input"
-              placeholder="Organization name"
-            />
+            <div class="pk-field__control">
+              <input
+                id="speaker-organization"
+                name="organizationName"
+                type="text"
+                maxlength="160"
+                class="pk-input"
+                placeholder="Organization name"
+              />
+            </div>
           </div>
           <div class="pk-field">
             <label for="speaker-job-title" class="pk-field__label">Job title</label>
-            <input
-              id="speaker-job-title"
-              name="jobTitle"
-              type="text"
-              maxlength="120"
-              class="pk-input"
-              placeholder="Job title"
-            />
+            <div class="pk-field__control">
+              <input
+                id="speaker-job-title"
+                name="jobTitle"
+                type="text"
+                maxlength="120"
+                class="pk-input"
+                placeholder="Job title"
+              />
+            </div>
           </div>
           <div class="pk-field">
             <label for="speaker-bio" class="pk-field__label">Biography</label>
-            <textarea
-              id="speaker-bio"
-              name="biography"
-              rows="5"
-              maxlength="10000"
-              class="pk-input pk-input--textarea"
-              placeholder="A short professional bio for the programme and website…"
-            ></textarea>
-            <div class="pk-field__help">Visible to attendees on the event programme.</div>
+            <div class="pk-field__control">
+              <textarea
+                id="speaker-bio"
+                name="biography"
+                rows="5"
+                maxlength="10000"
+                class="pk-input pk-input--textarea"
+                placeholder="A short professional bio for the programme and website…"
+                aria-describedby="speaker-bio-help"
+              ></textarea>
+            </div>
+            <p id="speaker-bio-help" class="pk-field__help">Visible to attendees on the event programme.</p>
           </div>
           <div data-profile-links-container>{{/* Profile links widget injected by JS */}}</div>
           <div class="pk-cluster">

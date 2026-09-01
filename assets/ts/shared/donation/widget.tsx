@@ -105,13 +105,24 @@ function SharedControls() {
         the currency changes, and `Field` takes its label as a string. Naming
         the control "Or enter a custom amount ($)" also beats the `aria-label`
         this replaces, which said "Custom donation amount" while the symbol sat
-        in a separate box the name never mentioned.
+        in a separate box the name never mentioned. It is still the system's
+        `pk-field` group around a `pk-field__control` box, so the parts the
+        component would have rendered are the ones written here.
       */}
-      <div class="pk-stack pk-stack--tight">
+      <div class="pk-field">
         <label class="pk-field__label" for={customId}>
           Or enter a custom amount (<span data-donation-currency-prefix>$</span>)
         </label>
-        <TextInput id={customId} type="number" data-donation-custom-input placeholder="Other amount" min={1} step={1} />
+        <div class="pk-field__control">
+          <TextInput
+            id={customId}
+            type="number"
+            data-donation-custom-input
+            placeholder="Other amount"
+            min={1}
+            step={1}
+          />
+        </div>
       </div>
 
       <Button variant="primary" block data-donation-submit>

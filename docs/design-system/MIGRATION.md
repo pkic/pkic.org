@@ -221,13 +221,30 @@ template is migrating its class names but its appearance still comes from
 alone and say so. A surface that looks broken is worse than one that is
 honestly half-done.
 
-## Three things the gate cannot see
+## A `pk-` class you got half right
 
-**A `pk-` class you got half right.** `class="pk-check"` on a label with no
+This is the failure that survives review, because the diff looks migrated: the
+class names are all real, all defined, and all from the design system. It is the
+nesting that is wrong, and nothing in the rendered page says so except that the
+surface looks plainer than the design page.
+
+Fields are now checked. `pnpm run check:field-structure` fails a
+`pk-field__label`, `__control`, `__message` or `__help` that is not inside a
+`pk-field`, and a `pk-input` inside a field that is not inside a
+`pk-field__control`. Both matter for the same reason: the state modifiers
+(`pk-field--ok|--advisory|--invalid`) set the `--state-*` custom properties that
+the border, the message and the ✓/⚠/✕ mark read, and they are only ever set on
+`pk-field`. A loose label and message can be styled but can never show a state,
+so the form silently loses every piece of validation feedback the design system
+draws. `pnpm run report:field-structure` lists violations without failing.
+
+The rest are still on you. `class="pk-check"` on a label with no
 `pk-check__input` on the input inside it passes every check — both classes
 exist — and renders an operating-system default checkbox. The same is true of
 `pk-stat-card` without its parts, or `pk-table` without `pk-table__scroll`.
 When you adopt a block class, adopt its elements.
+
+## Two more things the gate cannot see
 
 **A control that only a mouse can reach.** `onClick` on a `<tr>`, a `<div>`
 or a `<span>` type-checks, lints, renders and works — for anyone with a

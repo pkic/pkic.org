@@ -4,35 +4,49 @@
   <p class="pk-muted" data-proposal-manage-loading>Loading proposal…</p>
 
   <div class="pk-stack pk-stack--loose" hidden data-proposal-manage-content>
-    <p class="pk-field__help">Open this page from your proposal management link.</p>
+    {{/* Prose about the page, not a control's help text: `pk-field__help`
+         belongs to a field and takes its colour from the field's state. */}}
+    <p class="pk-muted pk-small">Open this page from your proposal management link.</p>
 
-    <form class="pk-stack needs-validation" novalidate>
+    <form class="pk-form needs-validation" novalidate>
+      {{/* The control sits inside `pk-field__control`: the state mark is
+           positioned against that box, so a control outside one has nowhere to
+           draw its tick, caution or cross. The message slot lives in the same
+           `pk-field`, which is what carries the `--state-*` variables that
+           `pk-field--ok|--advisory|--invalid` set. */}}
       <div class="pk-field">
         <label for="manage-proposal-type" class="pk-field__label">Session type</label>
-        <select id="manage-proposal-type" name="proposalType" class="pk-input pk-input--select" required>
-          <option value="talk">Talk</option>
-          <option value="workshop">Workshop</option>
-          <option value="panel">Panel</option>
-          <option value="tutorial">Tutorial</option>
-          <option value="lightning_talk">Lightning talk</option>
-          <option value="roundtable">Roundtable</option>
-          <option value="keynote">Keynote</option>
-          <option value="birds_of_a_feather">Birds of a feather</option>
-          <option value="fireside_chat">Fireside chat</option>
-          <option value="demo">Demo</option>
-        </select>
+        <div class="pk-field__control">
+          <select id="manage-proposal-type" name="proposalType" class="pk-input pk-input--select" required>
+            <option value="talk">Talk</option>
+            <option value="workshop">Workshop</option>
+            <option value="panel">Panel</option>
+            <option value="tutorial">Tutorial</option>
+            <option value="lightning_talk">Lightning talk</option>
+            <option value="roundtable">Roundtable</option>
+            <option value="keynote">Keynote</option>
+            <option value="birds_of_a_feather">Birds of a feather</option>
+            <option value="fireside_chat">Fireside chat</option>
+            <option value="demo">Demo</option>
+          </select>
+        </div>
+        <p data-field-error="proposalType" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
 
       <div class="pk-field">
         <label for="manage-proposal-title" class="pk-field__label">Title</label>
-        <input id="manage-proposal-title" name="title" type="text" class="pk-input" required>
-        <div data-field-error="title" class="pk-field__message"></div>
+        <div class="pk-field__control">
+          <input id="manage-proposal-title" name="title" type="text" class="pk-input" required>
+        </div>
+        <p data-field-error="title" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
 
       <div class="pk-field">
         <label for="manage-proposal-abstract" class="pk-field__label">Abstract</label>
-        <textarea id="manage-proposal-abstract" name="abstract" rows="8" class="pk-input pk-input--textarea" required></textarea>
-        <div data-field-error="abstract" class="pk-field__message"></div>
+        <div class="pk-field__control">
+          <textarea id="manage-proposal-abstract" name="abstract" rows="8" class="pk-input pk-input--textarea" required></textarea>
+        </div>
+        <p data-field-error="abstract" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
 
       <div class="pk-cluster">
@@ -55,25 +69,35 @@
       <div data-cospeaker-form class="pk-stack">
         <div class="pk-grid pk-grid--tight">
           <div class="pk-field">
-            <label class="pk-field__label" for="cs-email">Email <span class="pk-field__required" aria-hidden="true">*</span></label>
-            <input id="cs-email" name="cs-email" type="email" class="pk-input" placeholder="speaker@example.com" autocomplete="off">
+            {{/* The asterisk is decorative; the word behind it is what a
+                 screen reader announces, as `Field` renders it. */}}
+            <label class="pk-field__label" for="cs-email">Email <span class="pk-field__required"><span aria-hidden="true">*</span><span class="pk-field__sr">(required)</span></span></label>
+            <div class="pk-field__control">
+              <input id="cs-email" name="cs-email" type="email" class="pk-input" placeholder="speaker@example.com" autocomplete="off">
+            </div>
           </div>
           <div class="pk-field">
             <label class="pk-field__label" for="cs-first-name">First name</label>
-            <input id="cs-first-name" name="cs-first-name" type="text" class="pk-input" placeholder="Optional">
+            <div class="pk-field__control">
+              <input id="cs-first-name" name="cs-first-name" type="text" class="pk-input" placeholder="Optional">
+            </div>
           </div>
           <div class="pk-field">
             <label class="pk-field__label" for="cs-last-name">Last name</label>
-            <input id="cs-last-name" name="cs-last-name" type="text" class="pk-input" placeholder="Optional">
+            <div class="pk-field__control">
+              <input id="cs-last-name" name="cs-last-name" type="text" class="pk-input" placeholder="Optional">
+            </div>
           </div>
           <div class="pk-field">
             <label class="pk-field__label" for="cs-role">Role</label>
-            <select id="cs-role" name="cs-role" class="pk-input pk-input--select">
-              <option value="speaker">Speaker</option>
-              <option value="co_speaker">Co-speaker</option>
-              <option value="moderator">Moderator</option>
-              <option value="panelist">Panelist</option>
-            </select>
+            <div class="pk-field__control">
+              <select id="cs-role" name="cs-role" class="pk-input pk-input--select">
+                <option value="speaker">Speaker</option>
+                <option value="co_speaker">Co-speaker</option>
+                <option value="moderator">Moderator</option>
+                <option value="panelist">Panelist</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="pk-cluster">
@@ -89,7 +113,9 @@
     <div class="pk-grid">
       <div class="pk-field">
         <label class="pk-field__label" for="resend-proposal-manage-email">Your email address</label>
-        <input id="resend-proposal-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-proposal-manage-email>
+        <div class="pk-field__control">
+          <input id="resend-proposal-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-proposal-manage-email>
+        </div>
       </div>
       <div class="pk-cluster">
         <button type="button" class="pk-btn pk-btn--primary" data-resend-proposal-manage-btn>Send my proposal links</button>

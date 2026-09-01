@@ -332,7 +332,7 @@ export function DayAttendanceManager({
               Requires the effective event <code>manage</code> capability. The narrower <code>manage_attendance</code>
               capability can admit only actively waitlisted days and cannot use this capacity override.
             </p>
-            <fieldset class="pk-fieldset pk-stack pk-stack--tight" disabled={applyingVip}>
+            <fieldset class="pk-fieldset pk-field" disabled={applyingVip}>
               <legend class="pk-field__label">Days to admit</legend>
               <div class="pk-cluster">
                 {rows
@@ -364,22 +364,24 @@ export function DayAttendanceManager({
              * contract: the caller addresses these controls by that prefix,
              * and a generated id would quietly break it.
              */}
-            <div class="pk-stack pk-stack--tight">
+            <div class="pk-field">
               <label class="pk-field__label" for={vipReasonId}>
                 Required reason
               </label>
-              <Textarea
-                id={vipReasonId}
-                rows={2}
-                minLength={3}
-                maxLength={1000}
-                required
-                value={vipReason}
-                disabled={applyingVip}
-                aria-describedby={vipReasonHelpId}
-                aria-invalid={vipReasonTooShort ? "true" : undefined}
-                onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
-              />
+              <div class="pk-field__control">
+                <Textarea
+                  id={vipReasonId}
+                  rows={2}
+                  minLength={3}
+                  maxLength={1000}
+                  required
+                  value={vipReason}
+                  disabled={applyingVip}
+                  aria-describedby={vipReasonHelpId}
+                  aria-invalid={vipReasonTooShort ? "true" : undefined}
+                  onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
+                />
+              </div>
               <p class="pk-small" id={vipReasonHelpId} role={vipReasonTooShort ? "alert" : undefined}>
                 {vipReasonTooShort
                   ? "Give at least three characters of reason before applying the override."

@@ -44,8 +44,10 @@ export function TimeZoneSelect({
     // The caller supplies the control's `id`, which is why the label is
     // written here rather than delegated to `ui/Field`: `Field` generates the
     // id itself, and two sources for one id is how a `for` attribute ends up
-    // pointing at nothing. Same shape as `EnumSelect` and `EventScheduleFields`.
-    <div class="pk-stack pk-stack--tight">
+    // pointing at nothing. Same shape as `EnumSelect` and `EventScheduleFields`:
+    // the system's `pk-field` group, with the control inside the
+    // `pk-field__control` box that positions the state mark.
+    <div class="pk-field">
       <label class="pk-field__label" for={id}>
         {label}
         {required && (
@@ -57,22 +59,26 @@ export function TimeZoneSelect({
           </span>
         )}
       </label>
-      <TextInput
-        id={id}
-        type="text"
-        list={listId}
-        value={value}
-        required={required}
-        disabled={disabled}
-        aria-describedby={helpId}
-        placeholder="Europe/Amsterdam"
-        onInput={(event) => onChange((event.target as HTMLInputElement).value)}
-      />
-      <datalist id={listId}>
-        {supportedTimeZones().map((zone) => (
-          <option key={zone} value={zone} />
-        ))}
-      </datalist>
+      <div class="pk-field__control">
+        <TextInput
+          id={id}
+          type="text"
+          list={listId}
+          value={value}
+          required={required}
+          disabled={disabled}
+          aria-describedby={helpId}
+          placeholder="Europe/Amsterdam"
+          onInput={(event) => onChange((event.target as HTMLInputElement).value)}
+        />
+        {/* The list renders nothing itself; it stays beside the input it
+            belongs to rather than floating at the end of the field. */}
+        <datalist id={listId}>
+          {supportedTimeZones().map((zone) => (
+            <option key={zone} value={zone} />
+          ))}
+        </datalist>
+      </div>
       {help && (
         <p id={helpId} class="pk-field__help">
           {help}

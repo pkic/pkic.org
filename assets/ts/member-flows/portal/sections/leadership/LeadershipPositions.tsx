@@ -258,7 +258,7 @@ function AddPositionForm({
       <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={busy}>
         {/* The people search is several controls, so it is named by a legend
             rather than by a label with no single control to point at. */}
-        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+        <fieldset class="pk-fieldset pk-field">
           <legend class="pk-field__label">Member</legend>
           <UserPicker
             endpoint={USER_CATALOG_ENDPOINT}

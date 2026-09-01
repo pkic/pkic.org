@@ -115,7 +115,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
                 {/* The people search is several controls, so it is named by a
                     legend rather than by a label with no single control to
                     point its `for` at. */}
-                <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+                <fieldset class="pk-fieldset pk-field">
                   <legend class="pk-field__label">User</legend>
                   <UserPicker
                     endpoint="/api/v1/permissions/subjects"
@@ -140,7 +140,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
                     </Select>
                   )}
                 </Field>
-                <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+                <fieldset class="pk-fieldset pk-field">
                   <legend class="pk-field__label">Target</legend>
                   <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
                 </fieldset>

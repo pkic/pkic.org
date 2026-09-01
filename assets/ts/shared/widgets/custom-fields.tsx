@@ -41,12 +41,12 @@ function CustomFieldRow({
   initialValue?: unknown;
 }) {
   const isBoolean = field.fieldType === "boolean";
-  // A boolean is a control and its word on one line; everything else is a
-  // label above its control. Neither carries a bottom margin any more — both
-  // callers stack this list, so the gap is theirs to decide once.
-  const className = [isBoolean ? "pk-cluster" : "pk-stack pk-stack--tight", !visible ? "pk-sr-only" : ""]
-    .filter(Boolean)
-    .join(" ");
+  // The row is a `pk-field`: it holds a label, a control, help text and the
+  // slot the validators write into, and `setFieldMessage` reaches the group
+  // through `closest(".pk-field")` — outside one, a failed answer had nowhere
+  // to put its state. It carries no bottom margin: both callers stack this
+  // list, so the gap is theirs to decide once.
+  const className = ["pk-field", !visible ? "pk-sr-only" : ""].filter(Boolean).join(" ");
 
   const helpId = `custom-${field.key}-help`;
   const linkId = `custom-${field.key}-link`;
@@ -92,12 +92,7 @@ function CustomFieldRow({
   }, [visible, describedBy]);
 
   const widget = <CustomFieldInput field={field} geoHint={geoHint} initialValue={initialValue} />;
-
-  const label = (
-    <label class="pk-field__label" for={`custom-${field.key}`}>
-      {field.label}
-    </label>
-  );
+  const controlId = `custom-${field.key}`;
 
   return (
     <div
@@ -107,14 +102,34 @@ function CustomFieldRow({
       data-custom-field-rules={JSON.stringify(rules)}
       aria-hidden={!visible ? "true" : "false"}
     >
+      {/* The label is written out in each arrangement rather than held in a
+          variable: a part lifted out of its field is exactly the detachment
+          this markup is being kept from, and only the nesting shows that the
+          two belong together. */}
       {isBoolean ? (
-        <>
+        // A boolean is a control and its word on one line, so the two share a
+        // row inside the field rather than stacking.
+        <div class="pk-cluster">
           {widget}
-          {label}
-        </>
+          <label class="pk-field__label" for={controlId}>
+            {field.label}
+          </label>
+        </div>
       ) : (
         <>
-          {label}
+          <label class="pk-field__label" for={controlId}>
+            {field.label}
+          </label>
+          {/*
+           * No `pk-field__control` around the widget: `CustomFieldInput` picks
+           * the control from the field's type, and several of those are a
+           * group rather than one box — a checkbox set, a tag picker, a date
+           * range. The control box is a flex parent sized to its contents, so
+           * putting a group inside one would shrink it to its widest option.
+           * The border and the message still take their colour from the
+           * field's state; only the in-control mark has nowhere to sit, and a
+           * group has no single control to mark anyway.
+           */}
           {widget}
         </>
       )}

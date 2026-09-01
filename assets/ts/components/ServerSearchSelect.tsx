@@ -92,53 +92,62 @@ export function ServerSearchSelect<Item, Response>({
 
   return (
     <div class="pk-stack pk-stack--tight">
-      {/* The visible name now points at the control it names. It used to be a
-          bare `<label>` with no `for`, while the select carried a duplicate
-          copy of the same word in `aria-label`. */}
-      <label class="pk-field__label" for={selectId}>
-        {label}
-      </label>
-      {/* One flex row, the way the Bootstrap input group was: `pk-input`'s
-          `min-width: 0` lets the search field absorb the shrinking so the
-          button keeps its text on one line. */}
-      <div class="pk-field__control">
-        <TextInput
-          type="search"
-          aria-label={`${label} search`}
-          placeholder={searchPlaceholder ?? `Search ${label.toLowerCase()}…`}
-          value={pendingSearch}
-          disabled={disabled}
-          onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              applySearch();
-            }
-          }}
-        />
-        <Button size="sm" disabled={disabled} onClick={applySearch}>
-          Search
-        </Button>
+      {/* The name, the box that narrows the list and the box that holds the
+          choice are one field: a `pk-field__control` outside a `pk-field` has
+          no group to take its state from, and the label above it names a
+          control it is not grouped with. The page count and a failed load are
+          not part of the field, so they stay outside it. */}
+      <div class="pk-field">
+        {/* The visible name now points at the control it names. It used to be a
+            bare `<label>` with no `for`, while the select carried a duplicate
+            copy of the same word in `aria-label`. */}
+        <label class="pk-field__label" for={selectId}>
+          {label}
+        </label>
+        {/* One flex row, the way the Bootstrap input group was: `pk-input`'s
+            `min-width: 0` lets the search field absorb the shrinking so the
+            button keeps its text on one line. */}
+        <div class="pk-field__control">
+          <TextInput
+            type="search"
+            aria-label={`${label} search`}
+            placeholder={searchPlaceholder ?? `Search ${label.toLowerCase()}…`}
+            value={pendingSearch}
+            disabled={disabled}
+            onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                applySearch();
+              }
+            }}
+          />
+          <Button size="sm" disabled={disabled} onClick={applySearch}>
+            Search
+          </Button>
+        </div>
+        <div class="pk-field__control">
+          <Select
+            id={selectId}
+            value={value ?? ""}
+            disabled={disabled || collection.loading}
+            onChange={(event) => {
+              const next = (event.target as HTMLSelectElement).value;
+              const selected = items.find((item) => catalog.itemKey(item) === next) ?? null;
+              valueRef.current = selected ? catalog.itemKey(selected) : null;
+              onChange(selected);
+            }}
+          >
+            {allowEmpty && <option value="">{placeholder}</option>}
+            {value && !hasSelectedOption && <option value={value}>{selectedLabel ?? value}</option>}
+            {items.map((item) => (
+              <option key={catalog.itemKey(item)} value={catalog.itemKey(item)}>
+                {catalog.itemLabel(item)}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
-      <Select
-        id={selectId}
-        value={value ?? ""}
-        disabled={disabled || collection.loading}
-        onChange={(event) => {
-          const next = (event.target as HTMLSelectElement).value;
-          const selected = items.find((item) => catalog.itemKey(item) === next) ?? null;
-          valueRef.current = selected ? catalog.itemKey(selected) : null;
-          onChange(selected);
-        }}
-      >
-        {allowEmpty && <option value="">{placeholder}</option>}
-        {value && !hasSelectedOption && <option value={value}>{selectedLabel ?? value}</option>}
-        {items.map((item) => (
-          <option key={catalog.itemKey(item)} value={catalog.itemKey(item)}>
-            {catalog.itemLabel(item)}
-          </option>
-        ))}
-      </Select>
       <div class="pk-cluster">
         {/* The count and a failed load used to be the same sentence in two
             colours, which is a status nobody who cannot separate red from grey

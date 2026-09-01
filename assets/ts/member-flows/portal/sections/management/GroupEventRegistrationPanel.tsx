@@ -44,20 +44,22 @@ function attendanceTypeOptions(): JSX.Element {
   return (
     // A `legend` rather than a `label`: the question names the group of radios,
     // and a label may only point at one control.
-    <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+    <fieldset class="pk-fieldset pk-field">
       <legend class="pk-field__label">How will you attend?</legend>
-      {ATTENDANCE_TYPES.map((attendanceType) => (
-        <label class="pk-check" key={attendanceType}>
-          <input
-            class="pk-check__input"
-            type="radio"
-            name="attendanceType"
-            value={attendanceType}
-            required={attendanceType === ATTENDANCE_TYPES[0]}
-          />
-          <span class="pk-check__label">{ATTENDANCE_LABELS[attendanceType]}</span>
-        </label>
-      ))}
+      <div class="pk-stack pk-stack--tight">
+        {ATTENDANCE_TYPES.map((attendanceType) => (
+          <label class="pk-check" key={attendanceType}>
+            <input
+              class="pk-check__input"
+              type="radio"
+              name="attendanceType"
+              value={attendanceType}
+              required={attendanceType === ATTENDANCE_TYPES[0]}
+            />
+            <span class="pk-check__label">{ATTENDANCE_LABELS[attendanceType]}</span>
+          </label>
+        ))}
+      </div>
     </fieldset>
   );
 }
@@ -86,7 +88,7 @@ function RegistrationFields({ config }: { config: EventFormsResponse }): JSX.Ele
   return (
     <div class="pk-stack" onChange={handleAttendanceChange}>
       {config.eventDays.length > 0 ? (
-        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+        <fieldset class="pk-fieldset pk-field">
           <legend class="pk-field__label">Choose your attendance for each day</legend>
           <DayAttendancePicker days={config.eventDays} />
         </fieldset>

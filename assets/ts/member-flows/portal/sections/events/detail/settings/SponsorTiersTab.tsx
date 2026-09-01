@@ -84,7 +84,7 @@ export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: bo
           //
           // `disabled` on the fieldset takes the whole row out of play in one
           // attribute, including the controls rendered by a child component.
-          <fieldset class="pk-fieldset pk-stack pk-stack--snug" key={`${tier.tierName}-${index}`} disabled={!canWrite}>
+          <fieldset class="pk-fieldset pk-field" key={`${tier.tierName}-${index}`} disabled={!canWrite}>
             <legend class="pk-field__label">Tier {index + 1}</legend>
             <div class="pk-cluster">
               <Field label="Tier name">

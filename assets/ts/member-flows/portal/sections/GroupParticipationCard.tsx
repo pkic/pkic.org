@@ -103,7 +103,10 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
 
         {group.memberships.length > 0 && (
           <div class="pk-stack pk-stack--snug">
-            <p class="pk-field__label">Participating as</p>
+            {/* A heading over a list of affiliations, not the label of a
+                control. `pk-field__label` outside a `pk-field` is a part with
+                no whole: there is no state here for it to carry. */}
+            <p class="pk-small pk-strong">Participating as</p>
             <ul class="pk-stack pk-stack--tight" aria-label={`Affiliations participating in ${group.name}`}>
               {group.memberships.map((membership) => {
                 const label = affiliationLabel({
@@ -136,26 +139,31 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
         )}
 
         {available.length > 0 && (
-          <fieldset disabled={busy} class="pk-fieldset pk-stack pk-stack--snug">
+          // `pk-field` is the group the legend belongs to: the modifier that
+          // carries a validation state is only ever set there, so a legend
+          // outside one could never show it.
+          <fieldset disabled={busy} class="pk-fieldset pk-field">
             <legend class="pk-field__label">
               {group.memberships.length > 0 ? "Add another affiliation" : "Join on behalf of"}
             </legend>
-            {available.map((capacity) => {
-              const label = affiliationLabel(capacity);
-              const controlId = `group-${group.id}-capacity-${capacity.memberId}`;
-              return (
-                <label class="pk-check" for={controlId} key={capacity.memberId}>
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    id={controlId}
-                    checked={selected.has(capacity.memberId)}
-                    onChange={() => toggle(capacity.memberId)}
-                  />
-                  <span class="pk-check__label">{label}</span>
-                </label>
-              );
-            })}
+            <div class="pk-stack pk-stack--snug">
+              {available.map((capacity) => {
+                const label = affiliationLabel(capacity);
+                const controlId = `group-${group.id}-capacity-${capacity.memberId}`;
+                return (
+                  <label class="pk-check" for={controlId} key={capacity.memberId}>
+                    <input
+                      class="pk-check__input"
+                      type="checkbox"
+                      id={controlId}
+                      checked={selected.has(capacity.memberId)}
+                      onChange={() => toggle(capacity.memberId)}
+                    />
+                    <span class="pk-check__label">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
           </fieldset>
         )}
 

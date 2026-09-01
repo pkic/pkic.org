@@ -62,7 +62,7 @@ function LinkExistingUserForm({
        * be a `<label>` pointing at nothing. A `<legend>` names the group the
        * control belongs to, which is a relationship the markup can express.
        */}
-      <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+      <fieldset class="pk-fieldset pk-field">
         <legend class="pk-field__label">Existing user</legend>
         <UserPicker value={user} onChange={setUser} disabled={busy} />
       </fieldset>
@@ -138,42 +138,44 @@ function AddIdentityForm({
        * take. The legend also names the group, which is what tells "Name" and
        * "Email" apart from the organization profile form above it on this page.
        */}
-      <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={busy}>
+      <fieldset class="pk-fieldset pk-field" disabled={busy}>
         <legend class="pk-field__label">New person</legend>
-        <div class="pk-grid pk-grid--tight">
-          <Field label="Name" required>
-            {(control) => (
-              <TextInput
-                {...control}
-                value={name}
-                onInput={(event) => setName((event.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
-          <Field label="Email" required>
-            {(control) => (
-              <TextInput
-                {...control}
-                type="email"
-                value={email}
-                onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
-          <Field label="Job title">
-            {(control) => (
-              <TextInput
-                {...control}
-                value={jobTitle}
-                onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
+        <div class="pk-stack pk-stack--snug">
+          <div class="pk-grid pk-grid--tight">
+            <Field label="Name" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={name}
+                  onInput={(event) => setName((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+            <Field label="Email" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  type="email"
+                  value={email}
+                  onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+            <Field label="Job title">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={jobTitle}
+                  onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+          </div>
+          <fieldset class="pk-fieldset pk-field">
+            <legend class="pk-field__label">Profile links</legend>
+            <ProfileLinksInput fieldName="identity.links" value={links} onChange={setLinks} />
+          </fieldset>
         </div>
-        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
-          <legend class="pk-field__label">Profile links</legend>
-          <ProfileLinksInput fieldName="identity.links" value={links} onChange={setLinks} />
-        </fieldset>
       </fieldset>
       <FormActions
         submitLabel="Add"

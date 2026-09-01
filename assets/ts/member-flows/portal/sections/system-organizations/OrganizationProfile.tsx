@@ -159,7 +159,7 @@ function OrganizationProfileForm({
         )}
       </Field>
 
-      <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+      <fieldset class="pk-fieldset pk-field">
         <legend class="pk-field__label">Links</legend>
         <ProfileLinksInput
           fieldName="organization.links"

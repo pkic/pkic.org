@@ -70,11 +70,11 @@ export function RoleAssignForm({ roleId, onAssigned }: { roleId: string; onAssig
       <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={submitting}>
         {/* The people search is several controls, so it is named by a legend
             rather than by a label with no single control to point its `for` at. */}
-        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+        <fieldset class="pk-fieldset pk-field">
           <legend class="pk-field__label">User</legend>
           <UserPicker endpoint="/api/v1/permissions/subjects" value={user} onChange={setUser} disabled={submitting} />
         </fieldset>
-        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+        <fieldset class="pk-fieldset pk-field">
           <legend class="pk-field__label">Target</legend>
           <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
         </fieldset>

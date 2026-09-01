@@ -43,9 +43,11 @@ export function MembershipCategoryPicker({
   return (
     // `pk-fieldset` carries the reset the element needs — no groove border, no
     // user-agent padding, and `min-inline-size: 0` so it can shrink inside a
-    // flex or grid parent. The spacing between the legend, the boxes and the
-    // help text is the stack's gap rather than a margin on each of them.
-    <fieldset class="pk-fieldset pk-stack pk-stack--tight" disabled={disabled} aria-describedby={helpId}>
+    // flex or grid parent. `pk-field` is what makes the legend and the help
+    // text parts of a whole rather than two loose paragraphs: it is the group
+    // the state modifiers are set on, and its gap spaces the three rows. The
+    // legend is why this cannot be a `ui/Field`, which renders a `<label>`.
+    <fieldset class="pk-fieldset pk-field" disabled={disabled} aria-describedby={helpId}>
       <legend class="pk-field__label">{label}</legend>
       <div class="pk-cluster">
         {MEMBERSHIP_CATEGORIES.map((category) => {

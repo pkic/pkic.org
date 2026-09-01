@@ -149,82 +149,93 @@ export function OrganizationCreateForm({ onCreated, onCancel }: { onCreated: () 
             {/* A fieldset per identity, so the repeated "Name" and "Email"
                 labels are announced inside the group they belong to rather
                 than as several identically named controls in one form. */}
-            <fieldset class="pk-fieldset pk-stack">
+            <fieldset class="pk-fieldset pk-field">
               <legend class="pk-field__label">Initial identities</legend>
-              <p class="pk-small">
-                Creating an organization activates these identities immediately and requires identities:activate.
-              </p>
-              {identities.map((identity, index) => (
-                <fieldset class="pk-fieldset pk-stack pk-stack--snug" key={index}>
-                  <legend class="pk-field__label">Identity {index + 1}</legend>
-                  <div class="pk-grid pk-grid--tight">
-                    <Field label="Name" required>
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          value={identity.name}
-                          disabled={busy}
-                          onInput={(event) => updateIdentity(index, { name: (event.target as HTMLInputElement).value })}
+              <div class="pk-stack">
+                <p class="pk-small">
+                  Creating an organization activates these identities immediately and requires identities:activate.
+                </p>
+                {identities.map((identity, index) => (
+                  <fieldset class="pk-fieldset pk-field" key={index}>
+                    <legend class="pk-field__label">Identity {index + 1}</legend>
+                    <div class="pk-stack pk-stack--snug">
+                      <div class="pk-grid pk-grid--tight">
+                        <Field label="Name" required>
+                          {(control) => (
+                            <TextInput
+                              {...control}
+                              value={identity.name}
+                              disabled={busy}
+                              onInput={(event) =>
+                                updateIdentity(index, { name: (event.target as HTMLInputElement).value })
+                              }
+                            />
+                          )}
+                        </Field>
+                        <Field label="Email" required>
+                          {(control) => (
+                            <TextInput
+                              {...control}
+                              type="email"
+                              value={identity.email}
+                              disabled={busy}
+                              onInput={(event) =>
+                                updateIdentity(index, { email: (event.target as HTMLInputElement).value })
+                              }
+                            />
+                          )}
+                        </Field>
+                        <Field label="Job title">
+                          {(control) => (
+                            <TextInput
+                              {...control}
+                              value={identity.jobTitle}
+                              disabled={busy}
+                              onInput={(event) =>
+                                updateIdentity(index, { jobTitle: (event.target as HTMLInputElement).value })
+                              }
+                            />
+                          )}
+                        </Field>
+                      </div>
+                      {/* The link editor is several controls, not one, so the
+                          group is named by a legend rather than by a label with
+                          nothing to point at. */}
+                      <fieldset class="pk-fieldset pk-field">
+                        <legend class="pk-field__label">Profile links</legend>
+                        <ProfileLinksInput
+                          fieldName={`identities.${String(index)}.links`}
+                          value={identity.links}
+                          inputAriaLabel={`Profile URL for identity ${String(index + 1)}`}
+                          onChange={(links) => updateIdentity(index, { links })}
                         />
+                      </fieldset>
+                      {identities.length > 1 && (
+                        <div class="pk-cluster pk-cluster--end">
+                          <Button
+                            variant="danger-quiet"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              setIdentities((current) => current.filter((_, position) => position !== index))
+                            }
+                          >
+                            Remove identity {index + 1}
+                          </Button>
+                        </div>
                       )}
-                    </Field>
-                    <Field label="Email" required>
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          type="email"
-                          value={identity.email}
-                          disabled={busy}
-                          onInput={(event) =>
-                            updateIdentity(index, { email: (event.target as HTMLInputElement).value })
-                          }
-                        />
-                      )}
-                    </Field>
-                    <Field label="Job title">
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          value={identity.jobTitle}
-                          disabled={busy}
-                          onInput={(event) =>
-                            updateIdentity(index, { jobTitle: (event.target as HTMLInputElement).value })
-                          }
-                        />
-                      )}
-                    </Field>
-                  </div>
-                  <div class="pk-stack pk-stack--tight">
-                    <span class="pk-field__label">Profile links</span>
-                    <ProfileLinksInput
-                      fieldName={`identities.${String(index)}.links`}
-                      value={identity.links}
-                      inputAriaLabel={`Profile URL for identity ${String(index + 1)}`}
-                      onChange={(links) => updateIdentity(index, { links })}
-                    />
-                  </div>
-                  {identities.length > 1 && (
-                    <div class="pk-cluster pk-cluster--end">
-                      <Button
-                        variant="danger-quiet"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => setIdentities((current) => current.filter((_, position) => position !== index))}
-                      >
-                        Remove identity {index + 1}
-                      </Button>
                     </div>
-                  )}
-                </fieldset>
-              ))}
-              <div class="pk-cluster">
-                <Button
-                  size="sm"
-                  disabled={busy || identities.length >= 10}
-                  onClick={() => setIdentities((current) => [...current, emptyIdentity()])}
-                >
-                  Add identity
-                </Button>
+                  </fieldset>
+                ))}
+                <div class="pk-cluster">
+                  <Button
+                    size="sm"
+                    disabled={busy || identities.length >= 10}
+                    onClick={() => setIdentities((current) => [...current, emptyIdentity()])}
+                  >
+                    Add identity
+                  </Button>
+                </div>
               </div>
             </fieldset>
 

@@ -122,7 +122,7 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
               </div>
               {/* Several controls, so the group is named by a legend rather
                   than by a label with no single control to point its `for` at. */}
-              <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+              <fieldset class="pk-fieldset pk-field">
                 <legend class="pk-field__label">Permissions</legend>
                 <PermissionCheckboxes selected={selected} onToggle={toggle} disabled={submitting} />
               </fieldset>

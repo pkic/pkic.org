@@ -9,18 +9,34 @@
 <div class="pk pk-stack" data-application-status data-module="member-flows/application-status-page" data-api-base="/api/v1">
   <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
 
-  <div data-lookup-form class="pk-stack">
-    <p class="pk-small">
+  <div data-lookup-form class="pk-form">
+    {{/* Guidance for both controls, so it is a described-by target rather than
+         a `pk-field__help` — that class belongs to one field and takes its
+         color from that field's state. */}}
+    <p id="lookupHelp" class="pk-muted pk-small">
       Enter the application ID and token from your confirmation email to check your application's status.
     </p>
+    {{/* Each control sits in `pk-field__control`: that wrapper is what the
+         state mark is positioned against, so an input outside it has nowhere
+         to draw the tick, the caution or the cross. */}}
     <div class="pk-grid">
       <div class="pk-field">
         <label class="pk-field__label" for="lookup-application-id">Application ID</label>
-        <input id="lookup-application-id" type="text" class="pk-input" data-lookup-id />
+        <div class="pk-field__control">
+          <input
+            id="lookup-application-id"
+            type="text"
+            class="pk-input"
+            aria-describedby="lookupHelp"
+            data-lookup-id
+          />
+        </div>
       </div>
       <div class="pk-field">
         <label class="pk-field__label" for="lookup-token">Token</label>
-        <input id="lookup-token" type="text" class="pk-input" data-lookup-token />
+        <div class="pk-field__control">
+          <input id="lookup-token" type="text" class="pk-input" aria-describedby="lookupHelp" data-lookup-token />
+        </div>
       </div>
     </div>
     <div class="pk-cluster">

@@ -101,7 +101,10 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
 
   return (
     <div class="pk-stack pk-stack--snug">
-      <p class="pk-field__help">{helpText}</p>
+      {/* Prose about the whole widget — the chips as well as the box that adds
+          one — rather than one control's help text, so it is muted small print
+          and not a `pk-field__help` sitting outside any field. */}
+      <p class="pk-muted pk-small">{helpText}</p>
 
       {links.length > 0 && (
         // A bare `aria-label` on a `<div>` is discarded, so the set of added

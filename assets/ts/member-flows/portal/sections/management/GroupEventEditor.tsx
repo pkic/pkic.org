@@ -363,7 +363,7 @@ export function GroupEventEditor({
         {/* The link editor is several controls, not one, so the group is named
             by a legend rather than by a label with nothing to point at. Its own
             input keeps its own accessible name. */}
-        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+        <fieldset class="pk-fieldset pk-field">
           <legend class="pk-field__label">Links</legend>
           <ProfileLinksInput
             fieldName={`group-event-links-${event?.id ?? "new"}`}

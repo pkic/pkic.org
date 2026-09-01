@@ -108,11 +108,7 @@ export function normalizeValidation(error: unknown): ValidationState {
  * colours the border and draws the mark — a template that ships the right
  * markup still looks unstyled until something sets it.
  */
-export function setFieldMessage(
-  element: HTMLElement | null,
-  message: string,
-  state: FieldState = "invalid",
-): void {
+export function setFieldMessage(element: HTMLElement | null, message: string, state: FieldState = "invalid"): void {
   if (!element) return;
   element.textContent = message;
   element.hidden = message.length === 0;

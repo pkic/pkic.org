@@ -1,4 +1,13 @@
-<div class="pk-container pk-center" data-module="invite-decline">
+{{/*
+  invite-decline — the decline flow for an event invitation.
+
+  `pk` on the root: the surface is built from design-system components, so it
+  takes the system's typography and ink rather than inheriting whatever the
+  page around it happens to set. Safe here because nothing in this template is
+  styled by the legacy stylesheet except the `event-flow-invite-*` blocks,
+  which set their own colours.
+*/}}
+<div class="pk pk-container pk-center" data-module="invite-decline">
   <div>
     <div data-invite-decline data-api-base="/api/v1">
 
@@ -17,10 +26,19 @@
           <p data-status-body></p>
         </div>
         <div data-resend-invite-section hidden>
-          <label class="pk-field__label" for="resend-invite-email">Email address from the invitation</label>
-          <div class="pk-cluster">
-            <input id="resend-invite-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-invite-email>
-            <button type="button" class="pk-btn pk-btn--primary" data-resend-invite-btn>Send fresh invitation</button>
+          {{/* The label and the control belong inside `pk-field`: it is what
+               carries the `--state-*` variables the border and the mark read,
+               and `pk-field__control` is the box the mark is positioned
+               against. The send button stays a sibling of the control inside
+               the cluster, so the two still sit on one line. */}}
+          <div class="pk-field pk-start">
+            <label class="pk-field__label" for="resend-invite-email">Email address from the invitation</label>
+            <div class="pk-cluster">
+              <div class="pk-field__control">
+                <input id="resend-invite-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-invite-email>
+              </div>
+              <button type="button" class="pk-btn pk-btn--primary" data-resend-invite-btn>Send fresh invitation</button>
+            </div>
           </div>
           <p data-resend-invite-status></p>
         </div>
@@ -31,7 +49,7 @@
       <div data-decline-form hidden>
         <div class="pk-center">
           <div aria-hidden="true">🫱</div>
-          <h1 class="h3 pk-strong" data-copy-target="heading">Not able to make it?</h1>
+          <h1 class="pk-strong" data-copy-target="heading">Not able to make it?</h1>
           <p class="pk-muted">
             Hi <strong data-placeholder="firstName">there</strong> — <span data-copy-target="intro">please let us know why. It helps us
             improve future events and make them more relevant to people like you.</span>
@@ -56,71 +74,97 @@
 
         {{/* ── Convince-my-boss section ─────────────────────────── */}}
         <div data-convince-boss data-attendee-only class="pk-alert pk-alert--info" hidden role="region">
-          <strong>Need to convince your organisation?</strong> Attendees consistently cite
+          <strong>Need to convince your organization?</strong> Attendees consistently cite
           peer-to-peer networking and access to pre-release standards as the top reasons
-          their organisations approve attendance. Virtual attendance is also available —
+          their organizations approve attendance. Virtual attendance is also available —
           <a data-registration-link-boss href="#">register for the virtual stream</a> if
           in-person approval is difficult to obtain.
         </div>
 
-        <form data-decline-form-el novalidate>
+        {{/* The rhythm belongs to the form, not to a margin on each field:
+             every `pk-field` is a flex column of its own parts and carries no
+             outer spacing. `pk-start` because the page root centers its text,
+             and a label centered over its control reads as a caption. */}}
+        <form data-decline-form-el class="pk-form pk-start" novalidate>
           {{/* ── Reason for declining ──────────────────────────── */}}
-          <fieldset>
-            <legend class="pk-strong">Reason for declining</legend>
-            <div data-reason-options>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="schedule_conflict">
-                <span data-reason-label="schedule_conflict">Schedule conflict &mdash; I have another commitment</span>
-              </label>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="travel_not_possible">
-                <span data-reason-label="travel_not_possible">Travel is not possible for me</span>
-              </label>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="content_not_relevant">
-                <span data-reason-label="content_not_relevant">Content is not relevant to my role</span>
-              </label>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="organization_policy">
-                <span data-reason-label="organization_policy">Organisation policy prevents me from attending</span>
-              </label>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="not_interested">
-                <span data-reason-label="not_interested">This event doesn&rsquo;t match my current focus</span>
-              </label>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="already_registered">
-                <span data-reason-label="already_registered">I&rsquo;m already registered through another link</span>
-              </label>
-              <label>
-                <input class="pk-check__input" type="radio" name="reasonCode" value="other">
-                Other reason
-              </label>
+          {{/* `pk-field` on the group, not just `pk-fieldset`: for a choice
+               group the fieldset is the element that owns the message and
+               carries the state variables, so the message slot is its last
+               child. Each option is a `pk-check` — the drawn control only
+               lines up with its label inside that wrapper. */}}
+          <fieldset class="pk-fieldset pk-field">
+            <legend class="pk-field__label pk-strong">Reason for declining</legend>
+            <div data-reason-options class="pk-stack pk-stack--snug">
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonScheduleConflict" value="schedule_conflict">
+                <label class="pk-check__label" for="declineReasonScheduleConflict">
+                  <span data-reason-label="schedule_conflict">Schedule conflict &mdash; I have another commitment</span>
+                </label>
+              </div>
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonTravelNotPossible" value="travel_not_possible">
+                <label class="pk-check__label" for="declineReasonTravelNotPossible">
+                  <span data-reason-label="travel_not_possible">Travel is not possible for me</span>
+                </label>
+              </div>
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonContentNotRelevant" value="content_not_relevant">
+                <label class="pk-check__label" for="declineReasonContentNotRelevant">
+                  <span data-reason-label="content_not_relevant">Content is not relevant to my role</span>
+                </label>
+              </div>
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonOrganizationPolicy" value="organization_policy">
+                <label class="pk-check__label" for="declineReasonOrganizationPolicy">
+                  <span data-reason-label="organization_policy">Organization policy prevents me from attending</span>
+                </label>
+              </div>
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonNotInterested" value="not_interested">
+                <label class="pk-check__label" for="declineReasonNotInterested">
+                  <span data-reason-label="not_interested">This event doesn&rsquo;t match my current focus</span>
+                </label>
+              </div>
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonAlreadyRegistered" value="already_registered">
+                <label class="pk-check__label" for="declineReasonAlreadyRegistered">
+                  <span data-reason-label="already_registered">I&rsquo;m already registered through another link</span>
+                </label>
+              </div>
+              <div class="pk-check">
+                <input class="pk-check__input" type="radio" name="reasonCode" id="declineReasonOther" value="other">
+                <label class="pk-check__label" for="declineReasonOther">Other reason</label>
+              </div>
             </div>
-            <div data-reason-error class="pk-field__message" hidden>Please select a reason before submitting.</div>
+            <p data-reason-error class="pk-field__message" aria-live="polite" hidden>Please select a reason before submitting.</p>
           </fieldset>
 
           {{/* ── Topic gap analysis (shown when content_not_relevant) */}}
-          <div data-topic-suggestion hidden>
+          <div class="pk-field" data-topic-suggestion hidden>
             <label class="pk-field__label" for="topicSuggestion">
               <span data-copy-target="topic-label">What topic would make this event a must-attend for you?</span>
               <span class="pk-muted" data-copy-target="topic-help">(helps us shape the agenda)</span>
             </label>
-            <input type="text" id="topicSuggestion" data-topic-input class="pk-input"
-              maxlength="200" placeholder="e.g. Post-quantum migration for enterprise CAs">
+            <div class="pk-field__control">
+              <input type="text" id="topicSuggestion" data-topic-input class="pk-input"
+                maxlength="200" placeholder="e.g. Post-quantum migration for enterprise CAs">
+            </div>
           </div>
 
           {{/* ── Additional comments ───────────────────────────── */}}
-          <div>
+          <div class="pk-field">
             <label class="pk-field__label" for="reasonNote">
               Additional comments
               <span data-note-optional class="pk-muted">(optional)</span>
             </label>
-            <textarea id="reasonNote" data-reason-note class="pk-input pk-input--textarea"
-              rows="3" maxlength="2000" placeholder="Any details that might help us improve…"></textarea>
-            <div data-note-error class="pk-field__message" hidden>
-              Please add a brief explanation for &ldquo;Other reason&rdquo;.
+            <div class="pk-field__control">
+              <textarea id="reasonNote" data-reason-note class="pk-input pk-input--textarea"
+                rows="3" maxlength="2000" aria-describedby="reasonNoteError"
+                placeholder="Any details that might help us improve…"></textarea>
             </div>
+            <p id="reasonNoteError" data-note-error class="pk-field__message" aria-live="polite" hidden>
+              Please add a brief explanation for &ldquo;Other reason&rdquo;.
+            </p>
           </div>
 
           {{/* ── NPS score ─────────────────────────────────────── */}}
@@ -131,7 +175,7 @@
             <div class="pk-cluster" data-nps-buttons role="group" aria-label="Likelihood score 1 to 10">
               <span class="pk-muted">Very unlikely</span>
               {{range seq 1 10}}
-              <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm nps-btn" data-nps="{{ . }}">{{ . }}</button>
+              <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-nps="{{ . }}">{{ . }}</button>
               {{end}}
               <span class="pk-muted">Very likely</span>
             </div>
@@ -139,13 +183,14 @@
           </div>
 
           {{/* ── Unsubscribe ───────────────────────────────────── */}}
-          <div>
-            <div>
-              <input type="checkbox" id="unsubscribeFuture" data-unsubscribe-future>
-              <label for="unsubscribeFuture">
-                <span data-copy-target="unsubscribe">Don&rsquo;t send me invitations to future events</span>
-              </label>
-            </div>
+          {{/* The same `pk-check` as the reason options: the box is drawn by
+               the design system rather than the operating system, and the two
+               sitting in one form with different accents reads as a bug. */}}
+          <div class="pk-check">
+            <input class="pk-check__input" type="checkbox" id="unsubscribeFuture" data-unsubscribe-future>
+            <label class="pk-check__label" for="unsubscribeFuture">
+              <span data-copy-target="unsubscribe">Don&rsquo;t send me invitations to future events</span>
+            </label>
           </div>
 
           <hr>
@@ -197,7 +242,7 @@
       {{/* ── Success state ──────────────────────────────────────── */}}
       <div data-decline-success class="pk-center" hidden>
         <div aria-hidden="true">✅</div>
-        <h2 class="h4 pk-strong" data-copy-target="success-title">Thank you for letting us know</h2>
+        <h2 class="pk-strong" data-copy-target="success-title">Thank you for letting us know</h2>
         <p class="pk-muted" data-success-forwarded></p>
         <p class="pk-muted" data-copy-target="success-body">We hope to see you at a future event!</p>
 

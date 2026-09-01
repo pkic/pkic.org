@@ -159,7 +159,7 @@ export function UserProfileEditor({
           </div>
 
           {canGrantAccess && (
-            <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+            <fieldset class="pk-fieldset pk-field">
               <legend class="pk-field__label">Role</legend>
               <div class="pk-cluster">
                 {userRoleValueSchema.options.map((role) => (
@@ -179,28 +179,30 @@ export function UserProfileEditor({
             </fieldset>
           )}
 
-          <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+          <fieldset class="pk-fieldset pk-field">
             <legend class="pk-field__label">Standing</legend>
-            <label class="pk-check" for="edit-active">
-              <input
-                class="pk-check__input"
-                type="checkbox"
-                id="edit-active"
-                checked={form.active}
-                onChange={(event) => update({ active: event.currentTarget.checked })}
-              />
-              <span class="pk-check__label">Active</span>
-            </label>
-            <label class="pk-check" for="edit-ec-member">
-              <input
-                class="pk-check__input"
-                type="checkbox"
-                id="edit-ec-member"
-                checked={form.isEcMember}
-                onChange={(event) => update({ isEcMember: event.currentTarget.checked })}
-              />
-              <span class="pk-check__label">Executive Council member</span>
-            </label>
+            <div class="pk-stack pk-stack--tight">
+              <label class="pk-check" for="edit-active">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  id="edit-active"
+                  checked={form.active}
+                  onChange={(event) => update({ active: event.currentTarget.checked })}
+                />
+                <span class="pk-check__label">Active</span>
+              </label>
+              <label class="pk-check" for="edit-ec-member">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  id="edit-ec-member"
+                  checked={form.isEcMember}
+                  onChange={(event) => update({ isEcMember: event.currentTarget.checked })}
+                />
+                <span class="pk-check__label">Executive Council member</span>
+              </label>
+            </div>
           </fieldset>
         </fieldset>
 

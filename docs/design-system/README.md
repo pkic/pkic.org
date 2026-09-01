@@ -137,7 +137,9 @@ markup must be right; the behaviour attaches on hydration.
 | --- | --- |
 | `pnpm run check:tokens` | The generated CSS matches the module. |
 | `pnpm run check:design-isolation` | No Bootstrap classes, no `--bs-*`, no hard-coded colours, type sizes, radii or durations in adopted surfaces. |
+| `pnpm run check:field-structure` | Every field part sits inside the element that styles it. |
 | `pnpm run report:bootstrap` | Prints what is left to remove. |
+| `pnpm run report:field-structure` | Prints field-structure violations without failing. |
 
 All are wired into `check:static`.
 
@@ -145,6 +147,13 @@ The isolation gate's scope is the list of surfaces that have **adopted** the
 system and must stay at zero. A surface joins the list once it is clean, and
 can then never regress. It is not a baseline of tolerated violations: the gate
 always demands zero for everything in scope.
+
+The field-structure gate exists because a surface can pass every other check
+and still not use the system. A `pk-field__label` or `pk-field__message` that
+is not inside a `pk-field` is a part with no whole: the state modifiers set
+`--state-*` on the field, so a loose label and message can be styled but can
+never show the tick, the caution or the cross. Every form on the site was in
+that condition — the classes were right and the nesting was not.
 
 The gate is deliberately narrow about sizes. A gap or an icon's width is
 legitimately local; a type size, a corner radius or a duration is not, because

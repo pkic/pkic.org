@@ -161,15 +161,23 @@ describe("portal organization create form", () => {
     );
     const container = mount(<OrganizationCreateForm onCreated={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1"]);
+    // Each identity carries its own link editor, which is several controls and
+    // so is named by a legend of its own inside the identity it belongs to.
+    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1", "Profile links"]);
     // A single identity cannot be removed, so no orphan remove control.
     expect(buttonNames(container)).not.toContain("Remove identity 1");
 
     await act(async () => buttonNamed(container, "Add identity").click());
-    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1", "Identity 2"]);
+    expect(groupNames(container)).toEqual([
+      "Initial identities",
+      "Identity 1",
+      "Profile links",
+      "Identity 2",
+      "Profile links",
+    ]);
 
     await act(async () => buttonNamed(container, "Remove identity 2").click());
-    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1"]);
+    expect(groupNames(container)).toEqual(["Initial identities", "Identity 1", "Profile links"]);
   });
 
   it("announces a rejected creation as a blocking alert and keeps the draft", async () => {

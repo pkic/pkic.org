@@ -10,61 +10,27 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inviteDeclineSchema } from "../../assets/shared/schemas/registration";
+// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
+import inviteDeclineTemplate from "../../layouts/shortcodes/invite-decline.html?raw";
+import { mountTemplate } from "./helpers/hugo-template";
 
-const SHORTCODE = `
-  <div data-invite-decline data-api-base="/api/v1" data-forward-max="3">
-    <div data-decline-loading></div>
-    <div data-decline-status hidden>
-      <div class="pk-alert pk-alert--info" data-status-alert role="alert">
-        <h2 class="pk-alert__title" data-status-title></h2>
-        <p data-status-body></p>
-      </div>
-      <div data-resend-invite-section hidden>
-        <label class="pk-field__label" for="resend-invite-email">Email address from the invitation</label>
-        <input id="resend-invite-email" type="email" class="pk-input" data-resend-invite-email>
-        <button type="button" class="pk-btn pk-btn--primary" data-resend-invite-btn>Send fresh invitation</button>
-        <p data-resend-invite-status></p>
-      </div>
-    </div>
-    <div data-decline-form hidden>
-      <strong data-placeholder="firstName">there</strong>
-      <div data-error-banner class="pk-alert pk-alert--danger" hidden role="alert"></div>
-      <div data-virtual-pivot data-attendee-only class="pk-alert pk-alert--info" hidden></div>
-      <div data-on-demand-pivot data-attendee-only class="pk-alert pk-alert--info" hidden></div>
-      <div data-convince-boss data-attendee-only class="pk-alert pk-alert--info" hidden></div>
-      <form data-decline-form-el novalidate>
-        <div data-reason-options>
-          <label><input class="pk-check__input" type="radio" name="reasonCode" value="schedule_conflict"></label>
-          <label><input class="pk-check__input" type="radio" name="reasonCode" value="content_not_relevant"></label>
-          <label><input class="pk-check__input" type="radio" name="reasonCode" value="other"></label>
-        </div>
-        <div data-reason-error class="pk-field__message" hidden></div>
-        <div data-topic-suggestion hidden><input id="topicSuggestion" data-topic-input class="pk-input"></div>
-        <label class="pk-field__label" for="reasonNote">
-          Additional comments <span data-note-optional class="pk-muted">(optional)</span>
-        </label>
-        <textarea id="reasonNote" data-reason-note class="pk-input pk-input--textarea"></textarea>
-        <div data-note-error class="pk-field__message" hidden></div>
-        <div class="pk-cluster" data-nps-buttons role="group" aria-label="Likelihood score 1 to 10">
-          <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm nps-btn" data-nps="1">1</button>
-          <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm nps-btn" data-nps="2">2</button>
-        </div>
-        <input type="hidden" data-nps-value>
-        <input type="checkbox" id="unsubscribeFuture" data-unsubscribe-future>
-        <button type="button" class="pk-btn pk-btn--link" data-forward-toggle aria-expanded="false"
-          aria-controls="forwardEntries"><span data-forward-arrow aria-hidden="true">▶</span></button>
-        <div id="forwardEntries" data-forward-entries hidden>
-          <textarea data-decline-forward-paste class="pk-input pk-input--textarea"></textarea>
-          <div class="event-flow-invite-list" data-forward-list></div>
-          <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm" data-add-forward>+ Add a contact</button>
-        </div>
-        <button type="submit" class="pk-btn pk-btn--danger" data-submit-btn>
-          <span data-copy-target="submit">Decline this invitation</span>
-        </button>
-      </form>
-    </div>
-    <div data-decline-success hidden><p data-success-forwarded></p></div>
-  </div>`;
+/**
+ * Hugo's `range seq 1 10` writes the ten score buttons; the raw template holds
+ * the one that is repeated. Cloning it keeps the shipped classes and
+ * attributes — which is what these tests assert on — instead of restating them.
+ */
+function expandScoreButtons(): void {
+  const group = document.querySelector<HTMLElement>("[data-nps-buttons]");
+  const button = group?.querySelector("button");
+  if (!group || !button) return;
+  const scores = Array.from({ length: 10 }, (_, index) => {
+    const clone = button.cloneNode(true) as HTMLButtonElement;
+    clone.dataset.nps = String(index + 1);
+    clone.textContent = String(index + 1);
+    return clone;
+  });
+  button.replaceWith(...scores);
+}
 
 const VALID_INVITE = {
   status: "valid",
@@ -96,7 +62,13 @@ async function boot(): Promise<void> {
 }
 
 beforeEach(() => {
-  document.body.innerHTML = SHORTCODE;
+  // The shipped markup, not a copy of it. The copy this replaced had drifted
+  // to loose labels, missing `pk-check` wrappers and a `data-forward-max` the
+  // template does not set — every assertion still passing against markup the
+  // site no longer serves.
+  mountTemplate(inviteDeclineTemplate);
+  document.querySelector<HTMLElement>("[data-invite-decline]")!.dataset.forwardMax = "3";
+  expandScoreButtons();
   history.replaceState({}, "", "/?token=tok-abc");
 });
 

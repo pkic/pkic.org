@@ -101,7 +101,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
           {/* The people search is several controls, so it is named by a legend
               rather than by a label with no single control to point its `for`
               at. The width constraint stays on the group, as it was. */}
-          <fieldset class="pk-fieldset pk-stack pk-stack--tight portal-access-role-user-picker">
+          <fieldset class="pk-fieldset pk-field portal-access-role-user-picker">
             <legend class="pk-field__label">User</legend>
             <UserPicker endpoint="/api/v1/permissions/subjects" value={user} onChange={setUser} />
           </fieldset>
@@ -133,7 +133,7 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                         setRoleLabel(role?.name);
                       }}
                     />
-                    <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+                    <fieldset class="pk-fieldset pk-field">
                       <legend class="pk-field__label">Target</legend>
                       <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
                     </fieldset>

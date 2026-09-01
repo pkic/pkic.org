@@ -197,8 +197,11 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
                   />
                 )}
               </Field>
-              <div class="pk-stack pk-stack--tight">
-                <span class="pk-field__label">Links</span>
+              {/* The link editor is several controls, not one, so the group is
+                  named by a legend rather than by a label with nothing to point
+                  at — and `pk-field` is the group that legend belongs to. */}
+              <fieldset class="pk-fieldset pk-field">
+                <legend class="pk-field__label">Links</legend>
                 <ProfileLinksInput
                   fieldName="group-create.links"
                   value={draft.links}
@@ -206,7 +209,7 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
                   helpText="Add relevant group resources."
                   inputAriaLabel="Group resource URL"
                 />
-              </div>
+              </fieldset>
               <div class="pk-grid pk-grid--roomy">
                 {POLICY_CHOICES.map(([key, label, options]) => (
                   <Field label={label} key={key}>
