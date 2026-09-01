@@ -161,6 +161,7 @@ const scanned = [
   "assets/ts/shared/widgets/share-panel.tsx",
   "assets/ts/shared/donation/widget.tsx",
   "assets/ts/shared/donation/form.tsx",
+  "layouts/partials/footer.html",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

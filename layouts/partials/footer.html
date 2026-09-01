@@ -2,7 +2,7 @@
          application shell where stray logos under the content read as
          clutter (most visibly beneath the sign-in card on mobile). */}}
     {{ if ne .Type "portal" }}
-    <div class="container members text-nowrap overflow-hidden my-4 text-center">
+    <div class="pk pk-container members footer-member-wall pk-center">
         <div class="banner">
             {{ partialCached "members/wall.html" . }}
         </div>
@@ -12,26 +12,31 @@
     <footer id="site-footer">
 
         {{/* ── CTA bar ───────────────────────────────────────────── */}}
-        <div id="participate" class="py-4">
-            <div class="container">
+        <div id="participate" class="pk pk-section">
+            <div class="pk-container">
                 Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions, <a href="/join/">join</a> the consortium, and <a href="/donate/" class="footer-cta-donate">support us with a donation</a>
             </div>
         </div>
 
         {{/* ── Main footer body ─────────────────────────────────── */}}
         <div class="footer-body">
-            <div class="container">
-                <div class="row g-5 py-5">
+            <div class="pk-container">
+                {{/* `pk-grid` rather than a Bootstrap row: `.row` sets negative
+                     horizontal margins, and with `g-5` those exceed the
+                     container's padding, so the footer pushed every page on the
+                     site 12 pixels sideways on a phone. A grid has no margins to
+                     escape with. */}}
+                <div class="pk-grid pk-grid--roomy">
 
                     {{/* — Brand column ——————————————————————————— */}}
-                    <div class="col-lg-3 footer-brand">
+                    <div class="footer-brand pk-stack pk-stack--snug">
                         <a href="/" class="footer-logo-link">
                             <img src="/img/logo.svg" alt="{{ .Site.Params.shortName }}" class="footer-logo-img">
                         </a>
                         {{ with .Site.Params.footer.tagline }}
                         <p class="footer-tagline">{{ . }}</p>
                         {{ end }}
-                        <div class="footer-social mt-4">
+                        <div class="footer-social">
                             {{ partial "social.html" $.Site.Params.social }}
                         </div>
                     </div>
@@ -39,7 +44,7 @@
                     {{/* — Nav columns (Hugo menu: site.Menus.footer, parent entries = column titles) */}}
                     {{ range $i, $col := site.Menus.footer }}
                     {{ if .HasChildren }}
-                    <div class="col-6 col-lg-2{{ if eq $i 0 }} ms-lg-auto{{ end }}">
+                    <div class="pk-stack pk-stack--snug">
                         <h6 class="footer-col-title">{{ .Name }}</h6>
                         <ul class="footer-col-list">
                             {{ range .Children }}
@@ -62,13 +67,13 @@
 
         {{/* ── Bottom bar ───────────────────────────────────────── */}}
         <div class="footer-bottom">
-            <div class="container py-4">
+            <div class="pk-container pk-section">
                 <div class="footer-disclaimer">
                     Decisions within the {{ .Site.Params.shortName }} are taken by substantial consensus of the members
                     <a href="/bylaws/#10-voting">as specified in our bylaws</a>.
                     Substantial consensus among members does not necessarily mean that all members share the same view or opinion.
                 </div>
-                <div class="mt-2">
+                <div>
                     <small class="footer-copy">© {{ now.Format "2006" }} {{ .Site.Copyright }} &middot; 501(c)(6) non-profit business league registered in Utah (#10462204-0140)</small>
                 </div>
             </div>

@@ -98,6 +98,12 @@ async function unnamedThings(page: Page): Promise<string[]> {
       if (element.getAttribute("aria-labelledby")) return true;
       if (element.getAttribute("title")?.trim()) return true;
       if ((element.textContent ?? "").trim()) return true;
+      // A link or button whose whole content is an image takes its name from
+      // that image's alt text, and an inline SVG from its <title>.
+      for (const image of element.querySelectorAll("img[alt]")) {
+        if ((image.getAttribute("alt") ?? "").trim()) return true;
+      }
+      if (element.querySelector("svg > title")?.textContent?.trim()) return true;
       const id = element.getAttribute("id");
       if (id && document.querySelector(`label[for="${id}"]`)) return true;
       return Boolean(element.closest("label"));
@@ -122,13 +128,23 @@ async function unnamedThings(page: Page): Promise<string[]> {
   });
 }
 
+/*
+ * One sign-in, every width.
+ *
+ * Each sign-in issues a magic link and redeems it, and the portal rate-limits
+ * that per client address. Four tests that each sign in as the same operator
+ * exhaust the limiter and the later ones never get a session — so this walks
+ * all three widths inside one test rather than paying for three sessions to
+ * assert the same thing.
+ */
 test.describe("portal at every width", () => {
-  for (const viewport of WIDTHS) {
-    test(`is usable at ${viewport.name} (${String(viewport.width)}px)`, async ({ page }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await signInAsE2eStaff(page, e2eAdminEmail());
+  test("is usable at mobile, tablet and desktop", async ({ page }) => {
+    await signInAsE2eStaff(page, e2eAdminEmail());
 
-      const failures: string[] = [];
+    const failures: string[] = [];
+
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
       for (const screen of SCREENS) {
         await page.goto(`/portal/${screen.path}`);
@@ -136,17 +152,18 @@ test.describe("portal at every width", () => {
         // The section renders into a lazy chunk; wait for content, not a timer.
         await page.waitForLoadState("networkidle");
 
+        const where = `${viewport.name}/${screen.name}`;
         for (const problem of await overflowingElements(page)) {
-          failures.push(`${screen.name}: overflows — ${problem}`);
+          failures.push(`${where}: overflows — ${problem}`);
         }
         const overflow = await horizontalOverflow(page);
-        if (overflow > 0) failures.push(`${screen.name}: page scrolls ${String(overflow)}px sideways`);
+        if (overflow > 0) failures.push(`${where}: page scrolls ${String(overflow)}px sideways`);
 
         for (const problem of await mouseOnlyControls(page)) {
-          failures.push(`${screen.name}: mouse-only control — ${problem}`);
+          failures.push(`${where}: mouse-only control — ${problem}`);
         }
         for (const problem of await unnamedThings(page)) {
-          failures.push(`${screen.name}: ${problem}`);
+          failures.push(`${where}: ${problem}`);
         }
 
         await page.screenshot({
@@ -154,10 +171,10 @@ test.describe("portal at every width", () => {
           fullPage: true,
         });
       }
+    }
 
-      expect(failures, `portal problems at ${viewport.name}`).toEqual([]);
-    });
-  }
+    expect(failures, "portal problems across widths").toEqual([]);
+  });
 
   test("opens and closes its navigation on a phone, and returns focus", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });

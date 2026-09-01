@@ -38,6 +38,15 @@
 }
 
 // Brand column
+// The member-logo marquee. It carried `text-nowrap overflow-hidden my-4` in
+// the markup; clipping and not wrapping are what make a marquee a marquee, so
+// they belong here rather than being re-stated on every page that shows one.
+.footer-member-wall {
+  white-space: nowrap;
+  overflow: hidden;
+  margin-block: 1.5rem;
+}
+
 .footer-brand {
   padding-right: 2rem;
 
