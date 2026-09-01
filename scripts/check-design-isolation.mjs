@@ -105,6 +105,14 @@ const scanned = [
   "assets/ts/components/AuditLogTable.tsx",
   "assets/ts/components/ConsentCard.tsx",
   "assets/ts/components/passkey-settings.tsx",
+  "assets/ts/components/ProfileLinksInput.tsx",
+  "assets/ts/components/ServerSearchSelect.tsx",
+  "assets/ts/components/UserPicker.tsx",
+  "assets/ts/components/EnumSelect.tsx",
+  "assets/ts/components/FilterSelect.tsx",
+  "layouts/partials/navbar.html",
+  "assets/js/session-registration.js",
+  "assets/js",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

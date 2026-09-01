@@ -184,6 +184,37 @@ If a class you are about to delete appears, fix the spec in the same change —
 preferably by switching it to a role or an accessible name, which will not
 break the next time either.
 
+## `.pk` is not always safe to add yet
+
+Step 3 of the procedure says to wrap the surface's root in `.pk`. That is
+right when the surface's own styling has moved with it, and wrong when it has
+not, because the layer order that makes this migration work cuts both ways:
+
+```
+@layer legacy, tokens, base, components, utilities;
+```
+
+`base` beats `legacy` at any specificity. So `.pk` on a surface whose CSS is
+still in `main.scss` hands the base layer authority over that surface's
+elements, and the base layer has opinions:
+
+- `.pk :where(button, input, select, textarea) { font: inherit; color: inherit }`
+  takes the colour off every control the legacy stylesheet coloured.
+- `.pk :where(ul, ol)` restores the list marker and indent a legacy
+  `list-style: none` had removed.
+- `.pk a { color: var(--pk-accent-ink) }` recolours every link.
+
+The navigation bar is the worked example: its ~980-line stylesheet is still
+legacy, so adding `.pk` to it would have rendered dark ink on a black bar and
+put bullets back in the search facets. The class went on the parts whose
+styling had moved, and not on the parts whose had not.
+
+The rule, then: **add `.pk` when the surface's styles come with it.** If a
+template is migrating its class names but its appearance still comes from
+`assets/scss`, migrate the stylesheet in the same change, or leave the root
+alone and say so. A surface that looks broken is worse than one that is
+honestly half-done.
+
 ## Three things the gate cannot see
 
 **A `pk-` class you got half right.** `class="pk-check"` on a label with no
