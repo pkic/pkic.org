@@ -88,6 +88,8 @@ const scanned = [
   "assets/ts/components/event-registrations/DayAttendanceManager.tsx",
   "assets/ts/member-flows/portal/sections/email-templates/EmailTemplates.tsx",
   "assets/ts/member-flows/portal/sections/management/EventTermsEditor.tsx",
+  "assets/ts/member-flows/portal/sections/system-users/UserMembershipCard.tsx",
+  "assets/ts/member-flows/portal/sections/system-users/UserMembershipPanel.tsx",
 ];
 
 /** An entry is either a directory prefix or an exact file path. */

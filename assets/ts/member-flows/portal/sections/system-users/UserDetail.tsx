@@ -123,7 +123,7 @@ export function UserDetail({
   const editable = permissions.canWrite && !user.pii_redacted_at;
 
   return (
-    <div>
+    <div class="pk pk-stack">
       <div class="d-flex align-items-center gap-2 mb-3">
         <button class="btn btn-sm btn-outline-secondary" onClick={onBack}>
           ← Back to list

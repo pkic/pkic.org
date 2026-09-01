@@ -1,3 +1,5 @@
+import { Select } from "../ui/TextControl";
+
 export interface EnumSelectOption<Value extends string> {
   value: Value;
   label: string;
@@ -8,6 +10,13 @@ export interface EnumSelectOption<Value extends string> {
  * human-readable labels — typically the options of a shared Zod enum. Use
  * this instead of a free-text input whenever a field's value must be one of
  * a closed, contract-defined vocabulary.
+ *
+ * The caller supplies the control's `id`, which is why the label is written
+ * here rather than delegated to `ui/Field`: `Field` generates the id itself,
+ * and two sources for one id is how a `for` attribute ends up pointing at
+ * nothing. It is the same pattern the migrated email-template and campaign
+ * editors use — the system's `pk-field` parts around a control whose id the
+ * surface owns.
  */
 export function EnumSelect<Value extends string>({
   id,
@@ -18,7 +27,6 @@ export function EnumSelect<Value extends string>({
   disabled = false,
   required = false,
   help,
-  size = "sm",
 }: {
   id: string;
   label: string;
@@ -28,17 +36,23 @@ export function EnumSelect<Value extends string>({
   disabled?: boolean;
   required?: boolean;
   help?: string;
-  size?: "sm" | "md";
 }) {
   const helpId = help ? `${id}-help` : undefined;
   return (
-    <div>
-      <label class="form-label small fw-semibold" for={id}>
+    <div class="pk-stack pk-stack--tight">
+      <label class="pk-field__label" for={id}>
         {label}
+        {required && (
+          // The asterisk is decorative; the word behind it is what a screen
+          // reader announces. Same split as `ui/Field`'s required marker.
+          <span class="pk-field__required">
+            <span aria-hidden="true">*</span>
+            <span class="pk-field__sr">(required)</span>
+          </span>
+        )}
       </label>
-      <select
+      <Select
         id={id}
-        class={size === "sm" ? "form-select form-select-sm" : "form-select"}
         value={value}
         disabled={disabled}
         required={required}
@@ -50,11 +64,11 @@ export function EnumSelect<Value extends string>({
             {option.label}
           </option>
         ))}
-      </select>
+      </Select>
       {help && (
-        <div id={helpId} class="form-text">
+        <p id={helpId} class="pk-field__help">
           {help}
-        </div>
+        </p>
       )}
     </div>
   );
