@@ -27,6 +27,19 @@ import "./ui/Badge.css";
 // to server-rendered markup too. This one addition unblocks roughly 600 of the
 // remaining Bootstrap references in layouts/.
 import "./ui/Field.css";
+// Every table an author writes in Markdown is server-rendered by the table
+// render hook in `layouts/_default/_markup/`, which writes the same class
+// names as `ui/DataTable`. Only the static skin is in this sheet — what a data
+// table does with a pointer stays in that component's chunk.
+import "./ui/Table.css";
+// The list pages' pager is server-rendered from `partials/pagination.html`,
+// which writes the same class names as `ui/Pager`. One stylesheet dresses
+// both, so the public pager cannot drift from the portal's.
+import "./ui/Pager.css";
+// The theme toggle is in the navbar of every server-rendered page, and which
+// icon it shows is decided by the stylesheet. Lazily loaded, all three icons
+// would show until the chunk arrived.
+import "./ui/ThemeToggle.css";
 // Cards and inline messages are pervasive in the public shortcodes, so these
 // two follow for the same reason. The budget in check-css-budget.mjs is what
 // keeps this list from growing on convenience alone.

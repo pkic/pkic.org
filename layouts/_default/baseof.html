@@ -20,6 +20,20 @@
          unlayered on :root so they still beat the layered token sheet, and it
          costs no extra request the way a generated stylesheet would. */ -}}
     <style>:root{ {{- $themeVars | safeCSS -}} }</style>
+    {{- /* The reader's theme, stamped before the first paint.
+         Inline and synchronous on purpose: a module would arrive after the
+         page had already been painted in the other theme, which is the flash
+         this exists to prevent. No attribute means "follow the system", which
+         is what the token sheet already does, so only an explicit choice is
+         written here. */ -}}
+    <script>
+      try {
+        var pkTheme = localStorage.getItem("pk-theme");
+        if (pkTheme === "light" || pkTheme === "dark") document.documentElement.setAttribute("data-theme", pkTheme);
+      } catch (e) {
+        /* Storage refused; the system's preference still applies. */
+      }
+    </script>
     {{ block "head_extra" . }}{{ end }}
   </head>
   <body>

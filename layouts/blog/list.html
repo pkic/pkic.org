@@ -14,10 +14,8 @@
       {{ end }}
     </div>
 
-    {{/* Pagination */}}
-    <nav class="pk-cluster pk-cluster--center" aria-label="Blog pagination">
-      {{ template "_internal/pagination.html" . }}
-    </nav>
+    {{/* The partial is its own labelled `nav` and centers itself. */}}
+    {{ partial "pagination.html" . }}
   </div>
 </div>
 {{ end }}

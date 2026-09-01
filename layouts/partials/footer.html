@@ -33,7 +33,11 @@
                      container's padding, so the footer pushed every page on the
                      site 12 pixels sideways on a phone. A grid has no margins to
                      escape with. */}}
-                <div class="pk-grid pk-grid--roomy">
+                {{/* `footer-columns` sets the track: the card-sized one folded
+                     these four columns into two, which doubled the footer's
+                     height and left the brand column's divider standing in the
+                     middle of it rather than beside it. */}}
+                <div class="pk-grid footer-columns">
 
                     {{/* — Brand column ——————————————————————————— */}}
                     <div class="footer-brand pk-stack pk-stack--snug">

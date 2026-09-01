@@ -1,9 +1,7 @@
 {{ define "main" }}
-{{/* `.pk` goes on the header only. The block below embeds Hugo's built-in
-     `_internal/pagination.html`, whose markup is still Bootstrap's, and the
-     base layer beats the legacy sheet — opting that block in would re-indent
-     the pager list and recolour its links. It uses the utilities instead,
-     which are unscoped. */}}
+{{/* `.pk` goes on the header only: the listing below is painted by the legacy
+     sheet, which the base layer would beat. It uses the unscoped utilities
+     instead, and the pager brings its own design-system styling. */}}
 <section class="pk pk-section pk-center">
   <div class="pk-container pk-container--narrow pk-stack pk-stack--snug">
     <h1>{{ $.Site.Params.shortName }} blog</h1>
@@ -29,7 +27,7 @@
       {{ end }}
 
       <nav class="pk-cluster pk-cluster--center" aria-label="Pagination">
-        {{ template "_internal/pagination.html" . }}
+        {{ partial "pagination.html" . }}
       </nav>
     {{ end }}
   </div>

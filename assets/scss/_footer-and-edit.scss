@@ -37,6 +37,17 @@
   border-top: 1px solid rgba(#fff, 0.06);
 }
 
+// Four columns on a desktop footer: the brand and the three link lists.
+//
+// The generic tracks are sized for cards. At the 22rem one the four columns
+// folded into two, which doubled the footer's height and left the brand
+// column's divider standing in the middle of it; at the 11rem one a fifth,
+// empty track opens up. A footer column is as wide as its longest link, so it
+// gets its own measure rather than bending a shared one.
+.footer-columns {
+  --pk-col-min: 14rem;
+}
+
 // Brand column
 // The member-logo marquee. It carried `text-nowrap overflow-hidden my-4` in
 // the markup; clipping and not wrapping are what make a marquee a marquee, so

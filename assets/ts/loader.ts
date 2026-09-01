@@ -19,6 +19,11 @@
 // they are small. Component CSS rides its own lazy chunk instead.
 import "./design-system";
 
+// Site chrome rather than a page module: the toggle is in every navbar, and a
+// lazy chunk would mean a request on every page for forty lines — and a window
+// in which the control is rendered but does not respond.
+import { installThemeToggles } from "./theme";
+
 // Each value is a function returning a dynamic import — esbuild turns each
 // import() into a separate chunk. Only the chunk requested by the page is
 // ever fetched by the browser.
@@ -60,6 +65,7 @@ async function loadModule(name: string): Promise<void> {
 }
 
 function init(): void {
+  installThemeToggles();
   document.querySelectorAll<HTMLElement>("[data-module]").forEach((el) => {
     const name = el.dataset.module;
     if (name) void loadModule(name);

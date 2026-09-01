@@ -10,7 +10,7 @@ import { UserRoles } from "../../assets/ts/member-flows/portal/sections/access-c
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
-import { controlFor } from "./helpers/labelled-control";
+import { buttonNamed, controlFor } from "./helpers/labelled-control";
 import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
@@ -37,26 +37,6 @@ function mount(node: preact.ComponentChildren): HTMLElement {
   mounted.push(container);
   void act(() => render(node, container));
   return container;
-}
-
-/**
- * A control located the way a reader locates it — through the label that names
- * it. `Field` mints its own ids, so a hand-written id is no longer there to
- * select on, and the `for`/`id` pair is the thing worth asserting anyway.
- */
-function labeledControl<T extends HTMLElement>(container: HTMLElement, label: string): T {
-  const element = [...container.querySelectorAll("label")].find((candidate) =>
-    candidate.textContent?.startsWith(label),
-  );
-  const control = element?.htmlFor ? container.querySelector<T>(`[id="${element.htmlFor}"]`) : null;
-  if (!control) throw new Error(`no control labeled: ${label}`);
-  return control;
-}
-
-function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
-  const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-  if (!button) throw new Error(`missing button: ${label}`);
-  return button;
 }
 
 beforeEach(() => {
@@ -295,7 +275,7 @@ describe("portal system access control", () => {
       const onNavigate = vi.fn();
       const container = mount(<Roles canGrant roleSegment="new" onNavigate={onNavigate} />);
 
-      const nameInput = labeledControl<HTMLInputElement>(container, "Name");
+      const nameInput = controlFor<HTMLInputElement>(container, "Name");
       void act(() => {
         nameInput.value = "brand_new";
         nameInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -582,19 +562,19 @@ describe("portal system access control", () => {
     function openRowMenuAndSelectDelete() {
       const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
       void act(() => trigger.click());
-      void act(() => dialogButton(container, "Delete role").click());
+      void act(() => buttonNamed(container, "Delete role").click());
     }
 
     // Cancel: the confirm dialog names the role, but dismissing it must not delete it.
     openRowMenuAndSelectDelete();
     expect(container.textContent).toContain('Delete the role "custom_reviewer"?');
-    void act(() => dialogButton(container, "Cancel").click());
+    void act(() => buttonNamed(container, "Cancel").click());
     await settle();
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
 
     // Confirm: the dialog's own "Delete role" button deletes it through the canonical route.
     openRowMenuAndSelectDelete();
-    void act(() => dialogButton(container, "Delete role").click());
+    void act(() => buttonNamed(container, "Delete role").click());
     await settle();
     const deleteRequest = requests.find((r) => r.method === "DELETE");
     expect(deleteRequest?.pathname).toBe(`/api/v1/roles/${ROLE.id}`);

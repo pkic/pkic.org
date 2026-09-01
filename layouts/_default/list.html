@@ -2,11 +2,10 @@
 {{/*
   The default list layout: every page in the section, then the pager.
 
-  No `pk` root. The block embeds Hugo's built-in `_internal/pagination.html`,
-  whose markup is still Bootstrap's, and `pagelisting.html` renders cards that
-  `assets/scss` still paints — the base layer beats the legacy layer, so opting
-  either in would re-indent the pager list and recolour the cards. The
-  utilities are unscoped, so the column and the rhythm come from them.
+  No `pk` root: `pagelisting.html` renders cards that `assets/scss` still
+  paints, and the base layer beats the legacy layer, so opting in would
+  recolour them. The utilities are unscoped, so the column and the rhythm come
+  from them, and the pager brings its own design-system styling.
 
   The empty `py-2 bg-light` band that used to sit above the list is gone: it
   carried no content and existed only to paint a Bootstrap grey strip.
@@ -20,7 +19,7 @@
         {{ end }}
 
         <nav class="pk-cluster pk-cluster--center" aria-label="Pagination">
-        {{ template "_internal/pagination.html" . }}
+        {{ partial "pagination.html" . }}
         </nav>
     </div>
 </div>

@@ -65,6 +65,9 @@
     font-size: var(--pk-text-sm);
     font-weight: 500;
     cursor: pointer;
+    /* The portal's pager is buttons; the public one is links, which arrive
+       underlined. A page number is a control here, not a phrase in a sentence. */
+    text-decoration: none;
     transition:
       background-color var(--pk-dur-fast),
       border-color var(--pk-dur-fast),
@@ -76,7 +79,13 @@
     border-color: var(--pk-line-strong);
   }
 
-  .pk-pager__button:disabled {
+  /*
+   * `:disabled` is for the portal's buttons; `[aria-disabled]` is for the
+   * public list pages, where the pager is server-rendered and a page you
+   * cannot go to is a `span` rather than a link with its href taken away.
+   */
+  .pk-pager__button:disabled,
+  .pk-pager__button[aria-disabled="true"] {
     opacity: 0.45;
     cursor: not-allowed;
   }

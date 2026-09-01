@@ -108,10 +108,17 @@
    * A responsive grid with no breakpoint classes at all: columns are as many
    * as fit at `--pk-col-min`, so the same markup works on a phone and a wide
    * desktop without `col-sm-6 col-lg-3` triplets.
+   *
+   * `auto-fill`, not `auto-fit`. `auto-fit` collapses the tracks it has no
+   * items for and shares the space between the ones that are left, so a list
+   * that happens to hold one item stretched that item across the whole row —
+   * a single upcoming event rendered as a banner three times the size of the
+   * same card on a month with three events. `auto-fill` keeps the empty tracks,
+   * so a card is the same size whether it has neighbours or not.
    */
   .pk-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(var(--pk-col-min, 16rem), 100%), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--pk-col-min, 16rem), 100%), 1fr));
     gap: var(--pk-gap, var(--pk-4));
   }
 

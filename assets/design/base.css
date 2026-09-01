@@ -15,14 +15,31 @@
  */
 
 @layer base {
+  /*
+   * `pk` says "this subtree speaks the design system": its typography and its
+   * ink. It deliberately does NOT paint a ground.
+   *
+   * It used to, and that is the single most expensive line this stylesheet has
+   * had. `pk` sits on twenty-four surfaces, most of them inline — a width
+   * container around an alert, a cluster of event cards, a button. Every one of
+   * them painted the canvas over whatever it was sitting on: grey bands down
+   * both sides of the home page's announcement, a footer bar that lost its
+   * black, a `Panel` whose own surface colour was overridden by the class that
+   * was only meant to give it the right font.
+   *
+   * A page-level surface that wants the ground asks for it by name.
+   */
   .pk {
     font-family: var(--pk-font);
     font-size: var(--pk-text-md);
     line-height: 1.55;
     color: var(--pk-ink);
-    background: var(--pk-canvas);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  .pk-canvas {
+    background: var(--pk-canvas);
   }
 
   /*
@@ -58,6 +75,17 @@
    */
   body {
     margin: 0;
+    /*
+     * The page's ground and its ink, from the tokens.
+     *
+     * Nothing painted either: in light mode the browser's own white passes for
+     * the canvas closely enough that nobody noticed, and the moment a reader
+     * chooses the dark theme the tokens flip the ink to near-white and leave
+     * the ground white underneath it. A theme the reader can choose has to
+     * reach the page itself, not only the components drawn on it.
+     */
+    background: var(--pk-canvas);
+    color: var(--pk-ink);
   }
 
   .pk h1,

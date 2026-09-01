@@ -10,6 +10,14 @@
 // where nothing in `base.css` competes.
 .pkic-home-hero {
   --pk-canvas: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+  // The ground is painted here rather than inherited from `.pk`.
+  //
+  // These surfaces set `--pk-canvas` to their own gradient and used to rely on
+  // `.pk` painting it. `.pk` no longer paints a ground — it was doing that on
+  // every subtree that merely wanted the design system's typography, which put
+  // a grey band beside the home page's announcement and overrode `Panel`'s own
+  // surface — so a surface that redefines the token now says where it wants it.
+  background: var(--pk-canvas);
   --pk-accent-ink: var(--pk-on-solid);
   --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
   padding: 3rem 0 2.5rem;
@@ -181,6 +189,7 @@ $pkic-page-hero-themes: (
 @each $name, $stops in $pkic-page-hero-themes {
   .pkic-page-hero--#{$name} {
     --pk-canvas: linear-gradient(#{$stops});
+    background: var(--pk-canvas);
   }
 }
 
@@ -213,6 +222,14 @@ $pkic-page-hero-themes: (
 // the tokens the base layer reads rather than declared again here.
 .pkic-stats-bar {
   --pk-canvas: #{$green};
+  // The ground is painted here rather than inherited from `.pk`.
+  //
+  // These surfaces set `--pk-canvas` to their own gradient and used to rely on
+  // `.pk` painting it. `.pk` no longer paints a ground — it was doing that on
+  // every subtree that merely wanted the design system's typography, which put
+  // a grey band beside the home page's announcement and overrode `Panel`'s own
+  // surface — so a surface that redefines the token now says where it wants it.
+  background: var(--pk-canvas);
   --pk-accent-ink: var(--pk-on-solid);
 
   // Four equal columns, three below the small breakpoint where the last one
@@ -319,6 +336,14 @@ $pkic-page-hero-themes: (
 // only that element sees it: `base.css` sizes every `h2` from `--pk-text-xl`.
 .pkic-join-cta {
   --pk-canvas: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
+  // The ground is painted here rather than inherited from `.pk`.
+  //
+  // These surfaces set `--pk-canvas` to their own gradient and used to rely on
+  // `.pk` painting it. `.pk` no longer paints a ground — it was doing that on
+  // every subtree that merely wanted the design system's typography, which put
+  // a grey band beside the home page's announcement and overrode `Panel`'s own
+  // surface — so a surface that redefines the token now says where it wants it.
+  background: var(--pk-canvas);
   --pk-ink: #fff;
   --pk-ink-muted: rgba(255, 255, 255, 0.88);
   padding-top: 3rem;
@@ -923,9 +948,11 @@ $pkic-page-hero-themes: (
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  // The scrim is the `.pk` root, so `base.css` paints its ground from this
-  // token rather than from a `background` declaration a later layer would win.
+  // The scrim's ground, declared here rather than left to `.pk`: that class
+  // no longer paints one, because it was painting every subtree that only
+  // wanted the design system's typography.
   --pk-canvas: var(--pk-overlay);
+  background: var(--pk-canvas);
   --pk-accent-ink: var(--pk-on-solid);
   --pk-ink-muted: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
   // `heroButton` used to be `.btn-page-accent`; the same per-page accent now

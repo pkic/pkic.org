@@ -1,0 +1,44 @@
+/*
+ * Theme toggle.
+ *
+ * Which icon shows is decided by the stylesheet, not by script: the root
+ * carries `data-theme` (or carries nothing, meaning "follow the system"), and
+ * each icon is shown for exactly one of those states. So the control is
+ * correct on the first paint, before any JavaScript has run, and the module
+ * that handles the click never has to write markup or class names to keep it
+ * in step.
+ */
+
+@layer components {
+  .pk-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius-sm);
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .pk-theme-toggle:hover {
+    border-color: currentColor;
+  }
+
+  .pk-theme-toggle svg {
+    width: 1rem;
+    height: 1rem;
+    display: none;
+  }
+
+  /* No attribute is the third state, not a missing one: the reader has not
+     chosen, so the operating system decides and the control says so. */
+  :root:not([data-theme]) .pk-theme-toggle [data-theme-icon="system"],
+  :root[data-theme="light"] .pk-theme-toggle [data-theme-icon="light"],
+  :root[data-theme="dark"] .pk-theme-toggle [data-theme-icon="dark"] {
+    display: block;
+  }
+}
