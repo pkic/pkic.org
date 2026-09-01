@@ -18,7 +18,8 @@ import { Button } from "../../../../../ui/Button";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { Field } from "../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
-import { Select, TextInput } from "../../../../../ui/TextControl";
+import { Select, TextInput, Textarea } from "../../../../../ui/TextControl";
+import { UserPicker, type PickedUser } from "../../../../../components/UserPicker";
 import { SponsorshipLogo } from "./SponsorshipLogo";
 import { useSponsorshipEventHistory } from "./useSponsorshipEventHistory";
 
@@ -41,7 +42,7 @@ export function SponsorshipDetail({
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [renewalDate, setRenewalDate] = useState("");
-  const [assignedToUserId, setAssignedToUserId] = useState("");
+  const [assignedTo, setAssignedTo] = useState<PickedUser | null>(null);
   const [nextStage, setNextStage] = useState<SponsorshipPipelineStage>("contacted");
   const [stageNote, setStageNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,7 +59,14 @@ export function SponsorshipDetail({
       setSponsorship(detailData.sponsorship);
       setNotes(detailData.sponsorship.notes ?? "");
       setRenewalDate(detailData.sponsorship.renewalDate ?? "");
-      setAssignedToUserId(detailData.sponsorship.assignedToUserId ?? "");
+      setAssignedTo(
+        detailData.sponsorship.assignedToUserId
+          ? {
+              id: detailData.sponsorship.assignedToUserId,
+              email: detailData.sponsorship.assignedToName ?? detailData.sponsorship.assignedToUserId,
+            }
+          : null,
+      );
     } catch (e) {
       if (requestId === detailRequestIdRef.current) setError((e as Error).message);
     } finally {
@@ -81,7 +89,7 @@ export function SponsorshipDetail({
         {
           notes: notes.trim() || null,
           renewalDate: renewalDate.trim() || null,
-          assignedToUserId: assignedToUserId.trim() || null,
+          assignedToUserId: assignedTo?.id ?? null,
         },
         sponsorshipResponseSchema,
       );
@@ -128,7 +136,7 @@ export function SponsorshipDetail({
         </PanelHeader>
         <PanelBody class="pk-stack">
           <p class="pk-small">
-            {sponsorship.sponsorType} · {sponsorship.tier ?? "no tier"}
+            {statusLabel(sponsorship.sponsorType)} sponsorship · {sponsorship.tier ?? "No tier"}
             {sponsorship.eventName && <> · {sponsorship.eventName}</>}
           </p>
 
@@ -145,16 +153,19 @@ export function SponsorshipDetail({
               <legend class="pk-field__label">Sponsorship record</legend>
               <div class="pk-stack pk-stack--snug">
                 <div class="pk-grid pk-grid--tight">
-                  <Field label="Assigned staff user ID" help={sponsorship.assignedToName ?? undefined}>
-                    {(control) => (
-                      <TextInput
-                        {...control}
-                        value={assignedToUserId}
-                        disabled={busy}
-                        onInput={(e) => setAssignedToUserId((e.target as HTMLInputElement).value)}
-                      />
-                    )}
-                  </Field>
+                  {/* A search-as-you-type picker: the record stores a user id,
+                      but nobody types a UUID. A fieldset legend names it, the
+                      way every composite picker is labelled, rather than a
+                      label with no single control to point its `for` at. */}
+                  <fieldset class="pk-fieldset pk-field">
+                    <legend class="pk-field__label">Assigned staff</legend>
+                    <UserPicker
+                      endpoint="/api/v1/permissions/subjects"
+                      value={assignedTo}
+                      disabled={busy}
+                      onChange={setAssignedTo}
+                    />
+                  </fieldset>
                   <Field label="Renewal date">
                     {(control) => (
                       <TextInput
@@ -166,20 +177,21 @@ export function SponsorshipDetail({
                       />
                     )}
                   </Field>
-                  <Field label="Notes">
-                    {(control) => (
-                      <TextInput
-                        {...control}
-                        value={notes}
-                        disabled={busy}
-                        onInput={(e) => setNotes((e.target as HTMLInputElement).value)}
-                      />
-                    )}
-                  </Field>
                 </div>
+                <Field label="Notes">
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      rows={3}
+                      value={notes}
+                      disabled={busy}
+                      onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+                    />
+                  )}
+                </Field>
                 <div class="pk-cluster">
                   <Button size="sm" loading={busy} onClick={() => void saveFields()}>
-                    Save fields
+                    Save
                   </Button>
                 </div>
               </div>

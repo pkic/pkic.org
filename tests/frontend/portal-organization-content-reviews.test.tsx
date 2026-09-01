@@ -228,7 +228,11 @@ describe("portal organization content reviews", () => {
     await settle();
     expect(container.textContent).toContain("No pending organization content submissions.");
 
-    const status = controlFor<HTMLSelectElement>("Review status");
+    // The filter sits inline in the list's toolbar, named through
+    // `aria-label` like every FilterSelect beside a search field.
+    const status = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by review status"]');
+    expect(status, "the review status filter is not rendered").toBeTruthy();
+    if (!status) throw new Error("unreachable");
     await act(async () => {
       status.value = "approved";
       status.dispatchEvent(new Event("change", { bubbles: true }));

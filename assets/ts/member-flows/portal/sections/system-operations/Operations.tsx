@@ -9,7 +9,7 @@
  */
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { Alert } from "../../../../ui/Alert";
@@ -69,6 +69,14 @@ export function Operations({
   const [tab, setTab] = useState<OperationsTab>(() =>
     readableTabs.includes(initialTab as OperationsTab) ? (initialTab as OperationsTab) : (readableTabs[0] ?? "outbox"),
   );
+  // The route names the tab; a later navigation to another sub-path lands on
+  // the same mounted component, so the state initializer alone left the URL
+  // and the selected tab disagreeing.
+  useEffect(() => {
+    if (readableTabs.includes(initialTab as OperationsTab)) setTab(initialTab as OperationsTab);
+    // Reacts to the routed segment only; the permission-derived tab list is
+    // stable for a session.
+  }, [initialTab]);
   const selectedTab = readableTabs.includes(tab) ? tab : readableTabs[0];
 
   if (!readableTabs.length) {

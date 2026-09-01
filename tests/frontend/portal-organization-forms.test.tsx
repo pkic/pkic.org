@@ -127,7 +127,7 @@ describe("portal organization create form", () => {
     // which is what the end-to-end specs now rely on.
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Add organization");
 
-    const organizationGroup = namedGroup(container, "Organization");
+    const organizationGroup = namedGroup(container, "Details");
     await typeInto(controlFor(organizationGroup, "Organization name"), "Example Organization");
     await typeInto(controlFor(organizationGroup, "Member since"), "2026-01-15");
     await chooseOption(controlFor(organizationGroup, "Membership category"), "F");
@@ -229,20 +229,20 @@ describe("portal organization create form", () => {
 
     // The form is three named groups in one column, and it starts with no
     // person cards: an organization can exist before anyone represents it.
-    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People"]);
+    expect(groupNames(container)).toEqual(["Details", "Web presence", "People"]);
 
     await act(async () => buttonNamed(container, "Add person").click());
     await act(async () => buttonNamed(container, "Add person").click());
-    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People", "Person 1", "Person 2"]);
+    expect(groupNames(container)).toEqual(["Details", "Web presence", "People", "Person 1", "Person 2"]);
     // A quick-create is not the place to curate someone's LinkedIn: the card
     // holds name, email, and job title, and links are added later on the
     // person. No per-person link editor, so no rival "Profile links" group.
     expect(groupNames(container)).not.toContain("Profile links");
 
     await act(async () => buttonNamed(container, "Remove person 2").click());
-    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People", "Person 1"]);
+    expect(groupNames(container)).toEqual(["Details", "Web presence", "People", "Person 1"]);
     await act(async () => buttonNamed(container, "Remove person 1").click());
-    expect(groupNames(container)).toEqual(["Organization", "Web presence", "People"]);
+    expect(groupNames(container)).toEqual(["Details", "Web presence", "People"]);
   });
 
   it("announces a rejected creation as a blocking alert and keeps the draft", async () => {

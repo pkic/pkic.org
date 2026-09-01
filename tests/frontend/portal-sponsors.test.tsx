@@ -12,7 +12,6 @@ import { managedSponsorTiersResponseSchema } from "../../assets/shared/schemas/s
 import { SponsorshipTierConfig } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipTierConfig";
 import { Sponsorships } from "../../assets/ts/member-flows/portal/sections/sponsors/management";
 import { SponsorWorkspace } from "../../assets/ts/member-flows/portal/sections/sponsors";
-import { controlFor } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -220,7 +219,7 @@ describe("portal sponsorship pipeline filters", () => {
     );
   }
 
-  it("names both pipeline filters through a for/id pair rather than an option label", async () => {
+  it("names both pipeline filters in the list toolbar through aria-label", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => companiesPage([])),
@@ -229,13 +228,15 @@ describe("portal sponsorship pipeline filters", () => {
     const container = mount(<Sponsorships canWrite={false} />);
     await settle();
 
-    const type = controlFor<HTMLSelectElement>(container, "Type");
-    const stage = controlFor<HTMLSelectElement>(container, "Stage");
-    expect(type.tagName).toBe("SELECT");
-    expect(stage.tagName).toBe("SELECT");
-    // Two competing names for one control is the defect this replaced.
-    expect(type.getAttribute("aria-label")).toBeNull();
-    expect(stage.getAttribute("aria-label")).toBeNull();
+    // The filters ride the list's own toolbar now, named the way every
+    // FilterSelect beside a search field is named — one accessible name,
+    // carried by `aria-label` through the shared control.
+    const type = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by sponsor type"]');
+    const stage = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by pipeline stage"]');
+    expect(type?.tagName).toBe("SELECT");
+    expect(stage?.tagName).toBe("SELECT");
+    // The toolbar that owns them is the list's named controls region.
+    expect(type?.closest('[role="toolbar"]')).not.toBeNull();
   });
 
   it("sends the chosen stage to the companies query", async () => {
@@ -251,7 +252,8 @@ describe("portal sponsorship pipeline filters", () => {
     const container = mount(<Sponsorships canWrite={false} />);
     await settle();
 
-    const stage = controlFor<HTMLSelectElement>(container, "Stage");
+    const stage = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by pipeline stage"]');
+    if (!stage) throw new Error("the pipeline stage filter is not rendered");
     stage.value = "contacted";
     await act(async () => {
       stage.dispatchEvent(new Event("change", { bubbles: true }));

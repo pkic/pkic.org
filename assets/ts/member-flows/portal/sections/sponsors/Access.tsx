@@ -76,7 +76,7 @@ export function SponsorAccess() {
               <Field
                 label="Event"
                 required
-                help="The event's web address slug — found in your original sponsor invitation email, or ask your PKIC contact."
+                help="The event's web address slug — found in your original sponsor invitation email, or ask your PKI Consortium contact."
               >
                 {(control) => (
                   <TextInput

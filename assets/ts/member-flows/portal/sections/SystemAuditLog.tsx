@@ -6,7 +6,6 @@ import { DetailsSummary } from "../../../components/DetailsSummary";
 import { EntityLink } from "../../../components/EntityLink";
 import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
 import { Button } from "../../../ui/Button";
-import { Field } from "../../../ui/Field";
 import { TextInput } from "../../../ui/TextControl";
 import { portalEntityHref } from "../entity-links";
 import "../../../ui/Content.css";
@@ -29,11 +28,10 @@ function AuditFilterInput({
   placeholder: string;
 }) {
   return (
-    // `Field` owns the label/control `for`+`id` pair, so the filter can no
-    // longer end up with a label pointing at an id that is not there.
-    <Field label={label}>
-      {(control) => <TextInput {...control} name={name} type="search" placeholder={placeholder} />}
-    </Field>
+    // The filters share the toolbar's one row, so — like every FilterSelect
+    // beside them across the portal — each keeps its name in `aria-label`
+    // rather than growing a stacked visible label of its own.
+    <TextInput name={name} type="search" aria-label={label} placeholder={placeholder} class="portal-audit-filter" />
   );
 }
 
@@ -57,7 +55,7 @@ export function SystemAuditLog() {
       }}
       toolbar={({ resetPage }) => (
         <form
-          class="pk-stack pk-stack--snug"
+          class="pk-cluster"
           aria-label="Audit log filters"
           onSubmit={(event) => {
             event.preventDefault();
@@ -70,31 +68,23 @@ export function SystemAuditLog() {
             resetPage();
           }}
         >
-          {/* A grid rather than a flex row: three filters and two buttons wrap
-              into a readable shape on a phone without a breakpoint class each,
-              and the buttons keep their own line instead of floating against
-              the middle of a taller field. */}
-          <div class="pk-grid pk-grid--tight">
-            <AuditFilterInput name="entityType" label="Entity type" placeholder="e.g. event" />
-            <AuditFilterInput name="actorType" label="Actor type" placeholder="e.g. user" />
-            <AuditFilterInput name="action" label="Action" placeholder="e.g. event_updated" />
-          </div>
-          <div class="pk-cluster">
-            <Button type="submit" variant="primary" size="sm">
-              Apply filters
-            </Button>
-            <Button
-              type="reset"
-              variant="link"
-              size="sm"
-              onClick={() => {
-                setFilters(EMPTY_FILTERS);
-                resetPage();
-              }}
-            >
-              Clear
-            </Button>
-          </div>
+          <AuditFilterInput name="entityType" label="Entity type" placeholder="Entity type" />
+          <AuditFilterInput name="actorType" label="Actor type" placeholder="Actor type" />
+          <AuditFilterInput name="action" label="Action" placeholder="Action" />
+          <Button type="submit" variant="secondary">
+            Apply
+          </Button>
+          <Button
+            type="reset"
+            variant="link"
+            size="sm"
+            onClick={() => {
+              setFilters(EMPTY_FILTERS);
+              resetPage();
+            }}
+          >
+            Clear
+          </Button>
         </form>
       )}
       columns={[
@@ -133,6 +123,7 @@ export function SystemAuditLog() {
         {
           header: "Action",
           cell: (entry) => <code class="pk-small">{entry.action}</code>,
+          width: "fit",
           sort: { asc: "action", desc: "-action" },
         },
         {
@@ -145,11 +136,18 @@ export function SystemAuditLog() {
           header: "Entity ID",
           cell: (entry) =>
             entry.entity_id ? (
-              <EntityLink href={portalEntityHref(entry.entity_type, entry.entity_id)}>{entry.entity_id}</EntityLink>
+              <EntityLink href={portalEntityHref(entry.entity_type, entry.entity_id)}>
+                {/* The first block identifies the record to someone comparing
+                    rows; the whole identifier stays a hover and a click away.
+                    Rendered in full, a UUID column swallowed the width the
+                    details column needed and wrapped down four lines. */}
+                <span title={entry.entity_id}>{entry.entity_id.slice(0, 8)}…</span>
+              </EntityLink>
             ) : (
               "—"
             ),
           className: "pk-mono pk-small pk-muted",
+          width: "fit",
         },
         {
           // The one prose column: the first labelled column is a fit-width

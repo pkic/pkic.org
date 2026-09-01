@@ -44,7 +44,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   // Located by the names the form announces — the region, its grouped
   // fieldsets, and each control's label — rather than by generated ids.
   const createForm = page.getByRole("region", { name: "Add organization" });
-  const organizationGroup = createForm.getByRole("group", { name: "Organization", exact: true });
+  const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
   await organizationGroup.getByLabel("Organization name").fill(organizationName);
   await organizationGroup.getByLabel("Membership category").selectOption("F");
   await organizationGroup.getByLabel("Member since").fill("2026-01-15");

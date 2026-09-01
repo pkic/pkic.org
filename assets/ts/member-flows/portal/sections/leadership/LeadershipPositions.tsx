@@ -416,6 +416,7 @@ function positionColumns(
 
 function PositionsTable({
   caption,
+  showCaption = false,
   positions,
   loading,
   empty,
@@ -424,6 +425,8 @@ function PositionsTable({
   onChanged,
 }: {
   caption: string;
+  /** Show the caption only where the panel header does not already say it. */
+  showCaption?: boolean;
   positions: readonly LeadershipPosition[];
   loading: boolean;
   empty: string;
@@ -436,7 +439,7 @@ function PositionsTable({
   return (
     <DataTable
       caption={caption}
-      showCaption
+      showCaption={showCaption}
       columns={positionColumns(canGrant, canRevoke, editId, setEditId, onChanged)}
       rows={positions}
       rowKey={(position) => position.id}
@@ -504,6 +507,9 @@ export function LeadershipPositions({
           <Spinner label={`Loading ${label.toLowerCase()}…`} />
         ) : (
           <>
+            {/* The panel header already names the body; a visible "Current
+                Board of Directors" directly beneath it said the name twice.
+                The full name stays in the caption for assistive technology. */}
             <PositionsTable
               caption={`Current ${label}`}
               positions={current}
@@ -519,6 +525,7 @@ export function LeadershipPositions({
               <div class="pk-stack pk-stack--snug">
                 <PositionsTable
                   caption={`Past ${label}`}
+                  showCaption
                   positions={past}
                   loading={pastPage.loading}
                   empty="No past members"

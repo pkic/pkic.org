@@ -5,7 +5,7 @@ import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { getJson } from "../../../../shared/api-client";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
-import { Panel, PanelBody } from "../../../../ui/Panel";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 // `pk-mono` on the context line comes from Content.css, which ships in a lazy
 // chunk rather than the entry stylesheet, so the module that writes the class
@@ -46,8 +46,10 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
 
   return (
     // The rule and padding the Bootstrap version drew by hand are the panel's
-    // own edge, and the gap between the note and the table is the stack's.
+    // own edge; the panel header leads, and the explanatory sentence follows
+    // it rather than sitting above an unheaded table.
     <Panel>
+      <PanelHeader title="Due for retention redaction" />
       <PanelBody class="pk-stack pk-stack--snug">
         <p class="pk-small">
           Events whose configured retention window has elapsed and whose identifying registration data has not yet been
@@ -55,7 +57,6 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
         </p>
         <ApiDataTable
           caption="Events due for retention redaction"
-          showCaption
           endpoint="/api/v1/retention/due"
           responseSchema={retentionDueListResponseSchema}
           resolve={(data) => data.items}

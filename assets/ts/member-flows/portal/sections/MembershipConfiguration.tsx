@@ -37,7 +37,7 @@ const APPLICATION_FORM_DEFINITION_API = "/api/v1/members/applications/form/defin
 /** The three review deadlines, each bounded by the shared settings schema. */
 const WINDOW_FIELDS: ReadonlyArray<{ key: keyof typeof MEMBERSHIP_WINDOW_DAY_LIMITS; label: string }> = [
   { key: "consultationWindowDays", label: "Consultation window (days)" },
-  { key: "ecReviewWindowDays", label: "Executive Council review window (days)" },
+  { key: "ecReviewWindowDays", label: "EC review window (days)" },
   { key: "onHoldResponseDeadlineDays", label: "On-hold response deadline (days)" },
 ];
 

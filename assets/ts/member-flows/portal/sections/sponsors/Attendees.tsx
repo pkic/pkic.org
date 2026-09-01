@@ -5,6 +5,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { Alert } from "../../../../ui/Alert";
+import { Panel, PanelBody } from "../../../../ui/Panel";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
 import type { SponsorAttendee, SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
@@ -28,7 +29,9 @@ const ATTENDEE_COLUMNS: ReadonlyArray<DataTableColumn<SponsorAttendee>> = [
   // The design system's table gives slack to no column on its own; the
   // person is the row's subject, so a wide screen's slack lands there.
   { id: "name", header: "Name", width: "primary", cell: (a) => fmtName(a) },
-  { id: "email", header: "Email", cell: (a) => a.email ?? "—", cellClass: "pk-break" },
+  // A bounded value: `fit` keeps the address on one line instead of letting
+  // the primary column squeeze it into a one-character-per-line tower.
+  { id: "email", header: "Email", width: "fit", cell: (a) => a.email ?? "—" },
   { id: "organizationName", header: "Organization", cell: (a) => a.organizationName ?? "—" },
   { id: "jobTitle", header: "Job title", cell: (a) => a.jobTitle ?? "—" },
   // A bounded vocabulary hugs its content instead of claiming slack.
@@ -62,8 +65,8 @@ export function SponsorAttendees({
     return (
       <div class="pk pk-stack content-width-md">
         <Alert tone="warn" title="This sponsorship no longer has attendee data access">
-          Either your tier isn't configured for it, or the sponsorship is no longer active. Contact your PKIC
-          representative if you believe this is a mistake.
+          Either your tier isn't configured for it, or the sponsorship is no longer active. Contact the PKI Consortium
+          if you believe this is a mistake.
         </Alert>
       </div>
     );
@@ -97,21 +100,25 @@ export function SponsorAttendees({
       {listing.error && !sessionExpired ? (
         <ErrorAlert error={listing.error} />
       ) : (
-        <DataTable
-          caption={`Consenting attendees for ${eventLabel}`}
-          columns={ATTENDEE_COLUMNS}
-          rows={attendees ?? []}
-          rowKey={(a) => a.registrationId}
-          loading={listing.loading}
-          empty={
-            <EmptyState
-              title="No consenting attendees yet"
-              body="Registered attendees appear here once they agree to share their profile with event sponsors."
+        <Panel>
+          <PanelBody>
+            <DataTable
+              caption={`Consenting attendees for ${eventLabel}`}
+              columns={ATTENDEE_COLUMNS}
+              rows={attendees ?? []}
+              rowKey={(a) => a.registrationId}
+              loading={listing.loading}
+              empty={
+                <EmptyState
+                  title="No consenting attendees yet"
+                  body="Registered attendees appear here once they agree to share their profile with event sponsors."
+                />
+              }
             />
-          }
-        />
+            {listing.pagerProps && <Pager {...listing.pagerProps} />}
+          </PanelBody>
+        </Panel>
       )}
-      {listing.pagerProps && <Pager {...listing.pagerProps} />}
     </div>
   );
 }

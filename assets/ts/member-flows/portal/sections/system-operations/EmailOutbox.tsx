@@ -43,7 +43,10 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     cell: (row) => (
       <div class="pk-stack pk-stack--tight">
         <div class="pk-strong">{row.recipientName || row.recipientEmail}</div>
-        <div class="pk-mono pk-small pk-break">{row.recipientEmail}</div>
+        {/* The address is the second line only when the first line is a
+            name; a row without a name already leads with the address, and
+            repeating it said nothing twice. */}
+        {row.recipientName && <div class="pk-mono pk-small pk-break">{row.recipientEmail}</div>}
         {row.eventName && <div class="pk-small">{row.eventName}</div>}
       </div>
     ),
@@ -82,11 +85,9 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     header: "Timing",
     cell: (row) => (
       <div class="pk-stack pk-stack--tight">
-        <div class="pk-small">Queued</div>
-        <div class="pk-mono">{fmt(row.createdAt)}</div>
-        <div class="pk-small">Due</div>
-        <div class="pk-mono">{fmt(row.sendAfter)}</div>
-        {row.sentAt && <div class="pk-small">Sent {fmt(row.sentAt)}</div>}
+        <div>Queued {fmt(row.createdAt)}</div>
+        <div>Due {fmt(row.sendAfter)}</div>
+        {row.sentAt && <div>Sent {fmt(row.sentAt)}</div>}
       </div>
     ),
     className: "pk-small",
@@ -97,18 +98,24 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     header: "Details",
     cell: (row) => (
       <div class="pk-stack pk-stack--tight">
-        <div class="pk-mono pk-small pk-break">{row.id}</div>
-        {row.providerMessageId && <div class="pk-mono pk-small pk-break">{row.providerMessageId}</div>}
-        {row.lastError ? (
+        {/* A failure is the one detail worth a row's attention, and "failure"
+            is in the words, so the row does not depend on a tone nobody can
+            rely on to say that something went wrong. The identifiers stay one
+            click away for support work instead of wrapping a UUID down the
+            column; a healthy row does not narrate the absence of an error. */}
+        {row.lastError && (
           <details>
-            {/* "Failure" is in the words, so the row does not depend on a tone
-                nobody can rely on to say that something went wrong. */}
             <summary class="pk-small">Failure details</summary>
             <div class="pk-small pk-break">{row.lastError}</div>
           </details>
-        ) : (
-          <div class="pk-small">No delivery error recorded.</div>
         )}
+        <details>
+          <summary class="pk-small">References</summary>
+          <div class="pk-stack pk-stack--tight">
+            <div class="pk-mono pk-small pk-break">{row.id}</div>
+            {row.providerMessageId && <div class="pk-mono pk-small pk-break">{row.providerMessageId}</div>}
+          </div>
+        </details>
       </div>
     ),
   },
@@ -164,35 +171,40 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
           <ToneBadge tone="neutral">Read only</ToneBadge>
         </div>
       )}
-      {/* The strip appears only while rows are selected; the bounded
-          commands that take the selected ids live here, not in the toolbar. */}
-      {canManage && (
-        <BulkBar
-          count={selected.size}
-          total={lastData.current?.page.total ?? selected.size}
-          onClear={() => setSelected(new Set())}
-        >
-          {overCap && <span class="pk-small">Selection exceeds the {MAX_SELECTION}-message limit per request.</span>}
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy || overCap}
-            onClick={() => void process("/api/v1/email/outbox/process", { ids: [...selected] }, false)}
-          >
-            Process selected
-          </Button>
-          <Button
-            size="sm"
-            variant="danger-quiet"
-            disabled={busy || overCap}
-            onClick={() => void process("/api/v1/email/outbox/reset-failed", { ids: [...selected] }, true)}
-          >
-            Reset failed selected
-          </Button>
-        </BulkBar>
-      )}
       <ApiDataTable
         caption="Email outbox messages"
+        bulkBar={
+          /* The strip appears only while rows are selected; the bounded
+             commands that take the selected ids live here — in the panel's
+             own slot between the head and the rows — not in the toolbar. */
+          canManage ? (
+            <BulkBar
+              count={selected.size}
+              total={lastData.current?.page.total ?? selected.size}
+              onClear={() => setSelected(new Set())}
+            >
+              {overCap && (
+                <span class="pk-small">Selection exceeds the {MAX_SELECTION}-message limit per request.</span>
+              )}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy || overCap}
+                onClick={() => void process("/api/v1/email/outbox/process", { ids: [...selected] }, false)}
+              >
+                Process selected
+              </Button>
+              <Button
+                size="sm"
+                variant="danger-quiet"
+                disabled={busy || overCap}
+                onClick={() => void process("/api/v1/email/outbox/reset-failed", { ids: [...selected] }, true)}
+              >
+                Reset failed selected
+              </Button>
+            </BulkBar>
+          ) : undefined
+        }
         urlState="outbox"
         endpoint="/api/v1/email/outbox"
         responseSchema={emailOutboxResponseSchema}

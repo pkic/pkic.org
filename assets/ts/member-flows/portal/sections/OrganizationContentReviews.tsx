@@ -201,7 +201,7 @@ export function OrganizationContentReviews() {
         actionsRef={tableActions}
         toolbar={({ resetPage }) => (
           <FilterSelect
-            label="Review status"
+            ariaLabel="Filter by review status"
             value={status}
             options={CONTENT_REVIEW_STATUSES.map((value) => ({ value, label: statusLabel(value) }))}
             onChange={(next) => {
