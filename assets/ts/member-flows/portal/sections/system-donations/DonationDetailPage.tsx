@@ -1,6 +1,7 @@
 import { Fragment, type ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
+import { formatDate } from "../../../../shared/ui";
 import { Badge } from "../../../../components/Badge";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
@@ -98,11 +99,7 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
     d.settled_amount !== null && d.settled_currency && d.settled_currency.toLowerCase() !== d.currency.toLowerCase();
   const deadline =
     d.status === "awaiting_payment" && d.session_expires_at
-      ? new Date(d.session_expires_at * 1000).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
+      ? formatDate(new Date(d.session_expires_at * 1000).toISOString())
       : null;
   const needsSync =
     d.status === "pending" ||

@@ -13,6 +13,7 @@ import { Select, TextInput } from "../../../../ui/TextControl";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
+import { formatCalendarDate } from "../../../../shared/ui";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
@@ -27,20 +28,9 @@ import {
 const API_BASE = "/api/v1/leadership/positions";
 const USER_CATALOG_ENDPOINT = "/api/v1/permissions/subjects";
 
-/** ISO date -> "Jun 1, 2022" for display (starts_at/ends_at are date-only, no time component). */
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 /** The term as one phrase, so the column reads the same whether or not it has ended. */
 function term(position: LeadershipPosition): string {
-  return `${fmtDate(position.startsAt)} – ${position.endsAt ? fmtDate(position.endsAt) : "present"}`;
+  return `${formatCalendarDate(position.startsAt)} – ${position.endsAt ? formatCalendarDate(position.endsAt) : "present"}`;
 }
 
 function AffiliationPicker({

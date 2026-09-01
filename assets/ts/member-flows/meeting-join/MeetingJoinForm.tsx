@@ -5,6 +5,7 @@ import type { meetingJoinLandingSchema } from "../../../shared/schemas/event-ser
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Panel, PanelBody } from "../../ui/Panel";
+import { formatDateTime } from "../../shared/ui";
 // `pk-check`, `pk-check__input` and `pk-check__label` are written here as
 // class names rather than reached through `ui/Field`, and `pk-datalist` the
 // same way, so this module pulls both stylesheets into its own chunk. Without
@@ -37,7 +38,7 @@ export function MeetingJoinForm({
           <div class="pk-stack pk-stack--tight">
             <h1>{landing.occurrence.eventName}</h1>
             <p class="pk-muted">
-              {new Date(landing.occurrence.startsAt).toLocaleString()} · {landing.occurrence.location ?? "Online"}
+              {formatDateTime(landing.occurrence.startsAt)} · {landing.occurrence.location ?? "Online"}
             </p>
           </div>
 

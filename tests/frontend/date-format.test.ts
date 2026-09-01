@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  formatCalendarDate,
   formatDate,
   formatDateRange,
+  formatDateTime,
   formatDateTimeInZone,
   formatEventWhen,
+  formatMonthYear,
   formatRelativeDays,
 } from "../../assets/ts/shared/ui";
 
@@ -62,5 +65,72 @@ describe("friendly date formatting", () => {
     expect(date).not.toMatch(/\d{1,2}:\d{2}/);
     expect(formatDate(null)).toBe("—");
     expect(formatDate(undefined)).toBe("—");
+    expect(formatDate("not-a-date")).toBe("—");
+  });
+
+  it("renders a calendar date on its own day, never through a zone shift", () => {
+    // A date-only value is day-precise in the owning entity's zone. Rendered
+    // through the viewer's zone it would fall back to 3 September for anyone
+    // west of UTC, so it must stay on the UTC calendar in every time zone.
+    expect(formatCalendarDate("2026-09-04")).toBe(
+      new Date("2026-09-04T00:00:00Z").toLocaleString(undefined, { dateStyle: "medium", timeZone: "UTC" }),
+    );
+    expect(formatCalendarDate("2026-09-04")).toContain("4");
+    // Not date-only: treated as an instant in the viewer's zone.
+    expect(formatCalendarDate("2026-09-04T10:00:00.000Z")).toBe(formatDate("2026-09-04T10:00:00.000Z"));
+    expect(formatCalendarDate(null)).toBe("—");
+    expect(formatCalendarDate("nonsense")).toBe("—");
+  });
+
+  it("renders a month-precise value without a day, pinned to the UTC calendar for date-only input", () => {
+    const rendered = formatMonthYear("2026-09-04");
+    expect(rendered).toBe(
+      new Date("2026-09-04T00:00:00Z").toLocaleString(undefined, {
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }),
+    );
+    expect(rendered).toContain("2026");
+    expect(rendered).not.toContain("4");
+    expect(formatMonthYear(null)).toBe("—");
+  });
+
+  it("widens a date-time to seconds for audit trails and can name the viewer's zone", () => {
+    expect(formatDateTime("2026-12-01T08:00:00.000Z")).toBe(
+      new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }),
+    );
+    expect(formatDateTime("2026-12-01T08:00:00.000Z", { seconds: true })).toMatch(/\d{1,2}.\d{2}.\d{2}/);
+    // The zone-labeled variant tells the reader whose clock is shown.
+    expect(formatDateTime("2026-12-01T08:00:00.000Z", { zoneName: true })).not.toBe(
+      formatDateTime("2026-12-01T08:00:00.000Z"),
+    );
+    expect(formatDateTime(null)).toBe("—");
+    expect(formatDateTime("nonsense")).toBe("—");
+  });
+
+  it("follows the viewer's own locale and never pins a literal one (issue #10)", () => {
+    // Different locales really do order these dates differently…
+    const sample = new Date("2026-09-04T00:00:00Z");
+    const options = { dateStyle: "medium", timeZone: "UTC" } as const;
+    expect(new Intl.DateTimeFormat("en-US", options).format(sample)).toMatch(/^Sep/);
+    expect(new Intl.DateTimeFormat("sv-SE", options).format(sample)).toMatch(/^4/);
+
+    // …and every helper hands Intl an undefined locale so the viewer's own
+    // browser decides. A literal locale anywhere in the shared formatters is
+    // the bug issue #10 reported.
+    const spy = vi.spyOn(Date.prototype, "toLocaleString");
+    try {
+      formatDate("2026-12-01T23:00:00.000Z");
+      formatCalendarDate("2026-09-04");
+      formatMonthYear("2026-09-04");
+      formatDateTime("2026-12-01T08:00:00.000Z", { seconds: true });
+      formatDateTime("2026-12-01T08:00:00.000Z", { zoneName: true });
+      formatDateTimeInZone("2026-12-01T08:00:00.000Z", "Europe/Amsterdam");
+      expect(spy.mock.calls.length).toBeGreaterThanOrEqual(6);
+      for (const call of spy.mock.calls) expect(call[0]).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

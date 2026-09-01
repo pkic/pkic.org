@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { Alert } from "../ui/Alert";
 import { getJson, patchJson } from "../shared/api-client";
+import { formatDateTime } from "../shared/ui";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
@@ -42,7 +43,7 @@ async function main(): Promise<void> {
   }
   if (deadlineRow) {
     if (data.proposal.presentationDeadline) {
-      deadlineRow.textContent = `Presentation deadline: ${new Date(data.proposal.presentationDeadline).toLocaleString()}`;
+      deadlineRow.textContent = `Presentation deadline: ${formatDateTime(data.proposal.presentationDeadline)}`;
     } else {
       deadlineRow.textContent = "Presentation upload opens after acceptance.";
     }

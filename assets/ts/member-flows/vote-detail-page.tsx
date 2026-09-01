@@ -19,6 +19,7 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson, ApiClientError } from "../shared/api-client";
+import { formatDateTime } from "../shared/ui";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { NotFoundPanel } from "../components/NotFoundPanel";
@@ -40,16 +41,6 @@ const VOTE_TYPE_LABELS: Record<VoteType, string> = {
   motion: "Motion",
   consultation: "Consultation",
 };
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function MotionResult({ result }: { result: MotionResultData }) {
   // A consultation result carries no outcome at all — it gathers preference
@@ -129,8 +120,8 @@ function VoteResult({ vote }: { vote: PublicVote }) {
     return (
       <p class="pk-muted">
         Voting {vote.status === "open" ? "closes" : "opens"}{" "}
-        {formatDate(vote.status === "open" ? vote.closesAt : vote.opensAt)}. Results will be published here once voting
-        closes.
+        {formatDateTime(vote.status === "open" ? vote.closesAt : vote.opensAt)}. Results will be published here once
+        voting closes.
       </p>
     );
   }
@@ -170,7 +161,7 @@ export function VoteDetailView({ vote, indexHref }: { vote: PublicVote; indexHre
         <h1>{vote.title}</h1>
         {vote.description && <p class="pk-lede">{vote.description}</p>}
         <p class="pk-small">
-          Opens {formatDate(vote.opensAt)} · Closes {formatDate(vote.closesAt)}
+          Opens {formatDateTime(vote.opensAt)} · Closes {formatDateTime(vote.closesAt)}
         </p>
       </div>
       <VoteResult vote={vote} />

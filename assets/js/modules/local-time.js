@@ -7,6 +7,8 @@
  *   <time data-local-time="2026-03-19T16:00:00Z">19 Mar 2026, 16:00 UTC</time>
  *   <time data-local-time="2026-03-19T16:00:00Z" data-local-time-date-only>19 Mar 2026</time>
  */
+import { formatDate, formatDateTime } from '../../shared/format-date';
+
 export function initLocalTime() {
   const els = document.querySelectorAll('time[data-local-time]');
   if (!els.length) return;
@@ -20,17 +22,8 @@ export function initLocalTime() {
 
     const dateOnly = el.hasAttribute('data-local-time-date-only');
 
-    if (dateOnly) {
-      el.textContent = new Intl.DateTimeFormat(undefined, {
-        day: 'numeric', month: 'short', year: 'numeric',
-      }).format(d);
-    } else {
-      const formatted = new Intl.DateTimeFormat(undefined, {
-        day: 'numeric', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-        timeZoneName: 'short',
-      }).format(d);
-      el.textContent = formatted;
-    }
+    // The shared browser-locale rendering (issue #10); date-times name the
+    // viewer's zone so the converted-to-local time cannot be mistaken for UTC.
+    el.textContent = dateOnly ? formatDate(iso) : formatDateTime(iso, { zoneName: true });
   });
 }

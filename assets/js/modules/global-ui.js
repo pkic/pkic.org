@@ -1,3 +1,5 @@
+import { formatDateTime } from '../../shared/format-date';
+
 var e = document.querySelectorAll('.nav-tabs .nav-link');
 for (var i = 0; i < e.length; i++) {
   e[i].addEventListener('click', function (event) {
@@ -20,23 +22,9 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
   if ($e.dataset.localTime) {
     var localDate = new Date($e.dataset.localTime);
     if (!isNaN(localDate.getTime())) {
-      var localOptions = {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short'
-      };
-
-      // Default is browser preference; optionally force 24h or 12h per element.
-      if ($e.dataset.hourFormat === '24') {
-        localOptions.hour12 = false;
-      } else if ($e.dataset.hourFormat === '12') {
-        localOptions.hour12 = true;
-      }
-
-      $e.textContent = localDate.toLocaleString([], localOptions);
+      // The shared browser-locale rendering (issue #10), with the viewer's
+      // zone named so the converted-to-local time cannot be mistaken for UTC.
+      $e.textContent = formatDateTime($e.dataset.localTime, { zoneName: true });
       return;
     }
   }

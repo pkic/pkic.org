@@ -8,6 +8,7 @@ import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 import { postJson } from "../../../../shared/api-client";
+import { formatDateTime } from "../../../../shared/ui";
 import { toast } from "../../ui";
 import { highlightTemplateSyntax } from "../../../../shared/email-template-syntax";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
@@ -534,7 +535,7 @@ export function TemplateEditor({
               },
               {
                 header: "Created",
-                cell: (v) => (v.created_at ? new Date(v.created_at).toLocaleString("en-US") : "—"),
+                cell: (v) => formatDateTime(v.created_at),
                 className: "pk-small",
               },
               {

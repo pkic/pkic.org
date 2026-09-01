@@ -1,5 +1,6 @@
 import { Fragment, render } from "preact";
 import { getJson, patchJson } from "../shared/api-client";
+import { formatDateTime } from "../shared/ui";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { normalizeValidation } from "../shared/form/validation-map";
@@ -304,9 +305,7 @@ async function main(): Promise<void> {
           )}
           <div class="event-flow-day-waitlist pk-cluster">
             {activeDayWaitlist.map((entry) => {
-              const expiry = entry.offerExpiresAt
-                ? `, offer expires ${new Date(entry.offerExpiresAt).toLocaleString()}`
-                : "";
+              const expiry = entry.offerExpiresAt ? `, offer expires ${formatDateTime(entry.offerExpiresAt)}` : "";
               const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
               const statusText = entry.status === "offered" ? "In-person spot available" : "Waiting for in-person seat";
               return (
