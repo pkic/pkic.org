@@ -112,3 +112,20 @@
     overflow-wrap: anywhere;
   }
 }
+
+@layer components {
+  /*
+   * The title of a record rendered inside a workspace tab — an event, a vote,
+   * a form. The shell owns h1 and the page header owns h2 at 24px, so the
+   * record's own name sits one step down the scale, still bold enough to
+   * anchor its header block above the record's tabs.
+   */
+  .pk-record-title {
+    margin: 0;
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    color: var(--pk-ink);
+  }
+}

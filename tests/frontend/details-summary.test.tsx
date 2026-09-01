@@ -73,6 +73,13 @@ describe("DetailsSummary", () => {
     expect(dd?.textContent).toBe("alpha, beta, gamma");
   });
 
+  it("renders a pure from/to pair as a single transition", () => {
+    const container = mount(<DetailsSummary value={{ stage: { from: "pending", to: "in_review" } }} />);
+    expect(pairsIn(container.querySelector("dl")!)).toEqual([["Stage", "pending → in_review"]]);
+    // No sub-list: the pair collapsed into one value.
+    expect(container.querySelector("dd > dl")).toBeNull();
+  });
+
   it("renders a nested object one level deep as an indented sub-list", () => {
     const container = mount(<DetailsSummary value={{ change: { field: "title", from: "Old", to: "New" } }} />);
     const sublist = container.querySelector("dd > dl");

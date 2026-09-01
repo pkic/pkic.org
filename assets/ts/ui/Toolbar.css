@@ -60,7 +60,10 @@
   .pk-toolbar__controls {
     display: flex;
     align-items: center;
-    gap: var(--pk-3);
+    gap: var(--pk-2) var(--pk-3);
+    /* Controls wrap rather than crush: a row of filters and buttons that
+       runs out of room used to squeeze every select down to its caret. */
+    flex-wrap: wrap;
   }
 
   @media (max-width: 47.9375rem) {

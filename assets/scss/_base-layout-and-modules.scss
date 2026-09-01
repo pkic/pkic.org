@@ -104,7 +104,9 @@
   border-radius: 1.25rem;
   overflow: hidden;
   margin: 2rem 0;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.05);
 
   @media (min-width: 768px) {
@@ -400,15 +402,7 @@ blockquote::after {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(
-    to right,
-    $green,
-    $teal,
-    $blue,
-    $yellow,
-    $orange,
-    $red
-  );
+  background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
   border-radius: 0 0 1.25rem 1.25rem;
 }
 
@@ -532,8 +526,13 @@ blockquote::after {
   padding: 1.5rem;
 }
 
+// Public-page heading typography. The portal application (#portal-app) is
+// excluded: its design system owns every heading in there, and these
+// unlayered rules — gradient fills, !important weights, prose margins — were
+// silently overriding `.pk` panel and page-header titles (a panel called
+// "Passkeys" rendered as gradient text while its siblings stayed ink).
 // H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
-main h2 {
+main h2:not(#portal-app *) {
   font-size: 1.5em;
   font-weight: 700 !important;
   background: linear-gradient(
@@ -556,7 +555,7 @@ main h2 {
 }
 
 // H3: solid companion color — muted, never alarming
-main h3 {
+main h3:not(#portal-app *) {
   font-size: 1.15em;
   font-weight: 600 !important;
   color: var(--page-accent-2, var(--page-accent, var(--wg-color, #{$blue-dark})));
@@ -565,7 +564,7 @@ main h3 {
   padding-top: 0;
 }
 
-main h4 {
+main h4:not(#portal-app *) {
   font-size: 1em;
   font-weight: 600 !important;
   color: $gray-600;
@@ -574,7 +573,7 @@ main h4 {
   padding-top: 0;
 }
 
-main h5 {
+main h5:not(#portal-app *) {
   font-size: 0.9em;
   font-weight: 600 !important;
   color: $gray-500;
@@ -583,7 +582,7 @@ main h5 {
   margin-top: 1em;
 }
 
-main h6 {
+main h6:not(#portal-app *) {
   font-size: 0.85em;
   font-weight: 600 !important;
   color: $gray-500;
@@ -692,13 +691,7 @@ main :is(h2, h3, h4):hover .header-link {
     left: -20%;
     width: 25%;
     height: 2px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.8) 40%,
-      white 60%,
-      transparent
-    );
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8) 40%, white 60%, transparent);
     opacity: 0;
     pointer-events: none;
   }
@@ -803,9 +796,7 @@ main :is(h2, h3, h4):hover .header-link {
 }
 
 self-assessment {
-  --pkimm-sticky-top-offset: calc(
-    var(--pkic-navbar-height, 57px) + 44px + 1.5rem
-  ); // navbar + wg-section-nav (44px)
+  --pkimm-sticky-top-offset: calc(var(--pkic-navbar-height, 57px) + 44px + 1.5rem); // navbar + wg-section-nav (44px)
 
   .pkimm-tabs {
     z-index: 150 !important; // below wg-section-nav (1030) so its dropdowns render on top

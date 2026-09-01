@@ -1,22 +1,40 @@
 /*
  * Pager.
  *
- * Offset pagination for lists. Shows a summary of the displayed range,
- * previous/next buttons, and a window of page numbers. When the page
- * count exceeds 7, an ellipsis marks omitted pages.
+ * One row, composed the way the design system's list panel draws it: the
+ * range summary sits at the start, the page controls keep to the end, and
+ * the optional rows-per-page control rides with them. The buttons are
+ * quiet — transparent until hovered — and only the current page carries
+ * the accent, so a strip of eleven pages does not read as eleven buttons.
+ *
+ * The row wraps on a narrow screen: summary first, controls following,
+ * each keeping its own cluster.
  */
 
 @layer components {
   .pk-pager {
     display: flex;
-    flex-direction: column;
-    gap: var(--pk-2);
     align-items: center;
+    gap: var(--pk-2) var(--pk-3);
+    flex-wrap: wrap;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
   }
 
   .pk-pager__summary {
     font-size: var(--pk-text-sm);
     color: var(--pk-ink-muted);
+  }
+
+  /*
+   * A pager rendered directly in a panel body (a page composing DataTable +
+   * Pager by hand rather than through the list block) still closes the panel
+   * the way the list specimen draws it: a soft rule above, count at the
+   * start, controls at the end.
+   */
+  .pk-panel__body > .pk-pager {
+    border-top: 1px solid var(--pk-line-soft);
+    padding-top: var(--pk-2);
   }
 
   .pk-pager__list {
@@ -26,18 +44,8 @@
     gap: 0.25rem;
     padding: 0;
     margin: 0;
-  }
-
-  @media (max-width: 48rem) {
-    .pk-pager {
-      gap: var(--pk-1);
-    }
-
-    .pk-pager__list {
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 0.15rem;
-    }
+    margin-left: auto;
+    flex-wrap: wrap;
   }
 
   .pk-pager__item {
@@ -55,13 +63,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2rem;
-    height: 2rem;
+    min-width: 1.7rem;
+    height: 1.7rem;
     padding: 0 var(--pk-1);
     border: 1px solid transparent;
     border-radius: var(--pk-radius-sm);
-    background: var(--pk-surface);
-    color: var(--pk-ink);
+    background: transparent;
+    color: var(--pk-ink-muted);
     font-size: var(--pk-text-sm);
     font-weight: 500;
     cursor: pointer;
@@ -76,7 +84,7 @@
 
   .pk-pager__button:hover:not(:disabled) {
     background: var(--pk-surface-sunk);
-    border-color: var(--pk-line-strong);
+    color: var(--pk-ink);
   }
 
   /*
@@ -91,9 +99,8 @@
   }
 
   .pk-pager__button[aria-current="page"] {
-    background: var(--pk-accent);
+    background: var(--pk-accent-strong);
     color: var(--pk-accent-on);
-    border-color: var(--pk-accent);
   }
 
   .pk-pager__button[aria-current="page"]:hover {
@@ -106,7 +113,7 @@
     padding: 0 0.5rem;
   }
 
-  /* The page-size control sits with the page numbers, not above the table:
+  /* The page-size control rides with the page numbers, not above the table:
      it is the same decision seen from the other end. */
   .pk-pager__size {
     display: inline-flex;

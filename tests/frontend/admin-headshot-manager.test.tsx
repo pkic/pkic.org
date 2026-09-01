@@ -64,8 +64,8 @@ describe("admin headshot manager", () => {
 
     // One focusable control carrying one accessible name, rather than a label
     // wrapping an input a utility class had hidden.
-    expect(buttonNamed(container, "📷 Upload headshot")).toBeInstanceOf(HTMLButtonElement);
-    expect(buttonNamed(container, "🌐 Fetch from Gravatar")).toBeInstanceOf(HTMLButtonElement);
+    expect(buttonNamed(container, "Upload headshot")).toBeInstanceOf(HTMLButtonElement);
+    expect(buttonNamed(container, "Fetch from Gravatar")).toBeInstanceOf(HTMLButtonElement);
     const file = container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(file?.hidden).toBe(true);
 
