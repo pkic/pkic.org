@@ -136,7 +136,33 @@ describe("the shared proposal catalog", () => {
     expect(page.querySelector("caption")?.textContent).toBe("Event proposals");
     // Every proposal filter carries a name, even without room for a visible one.
     const filterNames = Array.from(page.querySelectorAll("select")).map((select) => select.getAttribute("aria-label"));
-    expect(filterNames).toEqual(expect.arrayContaining(["Proposal status", "Review recommendation"]));
+    expect(filterNames).toEqual(
+      expect.arrayContaining(["Proposal status", "Review recommendation", "Proposal archive"]),
+    );
+  });
+
+  it("sends the archive choice to the proposals query rather than filtering rows in the browser", async () => {
+    stubCatalog();
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+
+    const page = await mountCatalog(EVENT_SLUG);
+
+    const archive = page.querySelector<HTMLSelectElement>('select[aria-label="Proposal archive"]')!;
+    expect(archive).not.toBeNull();
+    // The default view is the server default: no `archived` parameter at all.
+    const before = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(before.some((url) => url.includes("archived="))).toBe(false);
+
+    archive.value = "true";
+    await act(async () => {
+      archive.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    const requested = fetchMock.mock.calls.map((call) => new URL(String(call[0]), location.origin));
+    expect(requested.some((url) => url.searchParams.get("archived") === "true")).toBe(true);
+    sessionStorage.clear();
   });
 
   it("states an unavailable proposal program as a status region rather than a bare line", async () => {

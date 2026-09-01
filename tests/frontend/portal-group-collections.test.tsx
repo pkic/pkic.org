@@ -121,6 +121,70 @@ describe("portal selected-group collections", () => {
     expect(container.textContent).toContain("Add mailing list");
   });
 
+  it("names the primary-discussion filter and sends the choice to the management query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    await settle();
+
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Primary discussion list"]')!;
+    expect(filter).not.toBeNull();
+    // The default view is the server default: no `primaryDiscussion` parameter at all.
+    expect(requests.some((url) => url.searchParams.has("primaryDiscussion"))).toBe(false);
+
+    filter.value = "true";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("primaryDiscussion") === "true")).toBe(true);
+  });
+
+  it("names the form context filter and sends the choice to the group forms query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ forms: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
+    await settle();
+
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by context"]')!;
+    expect(filter).not.toBeNull();
+    // The options speak product language, not the schema's `contextType` keys.
+    expect([...filter.options].map((option) => option.textContent)).toEqual([
+      "All contexts",
+      "Installation-wide",
+      "Group",
+      "Event",
+      "Organization",
+    ]);
+    // The default view is the server default: no `contextType` parameter at all.
+    expect(requests.some((url) => url.searchParams.has("contextType"))).toBe(false);
+
+    filter.value = "event";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("contextType") === "event")).toBe(true);
+  });
+
   it("renders manager collection errors", async () => {
     vi.stubGlobal(
       "fetch",

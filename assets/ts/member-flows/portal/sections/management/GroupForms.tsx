@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
-import { FORM_PURPOSES } from "../../../../../shared/schemas/forms";
+import { FORM_PLACEMENT_CONTEXT_TYPES, FORM_PURPOSES, type FormPlacement } from "../../../../../shared/schemas/forms";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
@@ -14,6 +14,16 @@ import { ResourceCapabilities } from "./ResourceCapabilities";
 
 /** Reserved placement segment that routes to the creation page instead of a placement's detail. */
 const NEW_GROUP_FORM_SEGMENT = "new";
+
+type FormContextFilter = "" | FormPlacement["contextType"];
+
+/** Where a placement is anchored, in product language rather than schema keys. */
+const FORM_CONTEXT_LABELS: Record<FormPlacement["contextType"], string> = {
+  installation: "Installation-wide",
+  group: "Group",
+  event: "Event",
+  organization: "Organization",
+};
 
 /** Returns to the forms list from an effect, not render — see its call site below. */
 function GroupFormsRedirect({ onLeave }: { onLeave: () => void }) {
@@ -37,6 +47,7 @@ export function GroupForms({
   const [, navigate] = usePortalHashLocation();
   const creating = placementSegment === NEW_GROUP_FORM_SEGMENT;
   const [purposeFilter, setPurposeFilter] = useState("");
+  const [contextFilter, setContextFilter] = useState<FormContextFilter>("");
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(
     creating ? null : (placementSegment ?? null),
   );
@@ -107,22 +118,46 @@ export function GroupForms({
             }
             searchPlaceholder="Search forms…"
             initialSort="title"
-            params={purposeFilter ? { purpose: purposeFilter } : {}}
+            params={{
+              ...(purposeFilter ? { purpose: purposeFilter } : {}),
+              ...(contextFilter ? { contextType: contextFilter } : {}),
+            }}
             toolbar={({ resetPage }) => (
-              // The list contract already accepts `purpose`; the toolbar
-              // exposes it rather than leaving it to search syntax.
-              <FilterSelect
-                ariaLabel="Filter forms by purpose"
-                value={purposeFilter}
-                options={[
-                  { value: "", label: "All purposes" },
-                  ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
-                ]}
-                onChange={(value) => {
-                  setPurposeFilter(value);
-                  resetPage();
-                }}
-              />
+              // The list contract already accepts `purpose` and
+              // `contextType`; the toolbar exposes them rather than leaving
+              // them to search syntax.
+              <>
+                <FilterSelect
+                  ariaLabel="Filter forms by purpose"
+                  value={purposeFilter}
+                  options={[
+                    { value: "", label: "All purposes" },
+                    ...FORM_PURPOSES.map((purpose) => ({
+                      value: purpose as string,
+                      label: purpose.replace(/_/g, " "),
+                    })),
+                  ]}
+                  onChange={(value) => {
+                    setPurposeFilter(value);
+                    resetPage();
+                  }}
+                />
+                <FilterSelect
+                  ariaLabel="Filter forms by context"
+                  value={contextFilter}
+                  options={[
+                    { value: "" as FormContextFilter, label: "All contexts" },
+                    ...FORM_PLACEMENT_CONTEXT_TYPES.map((contextType) => ({
+                      value: contextType as FormContextFilter,
+                      label: FORM_CONTEXT_LABELS[contextType],
+                    })),
+                  ]}
+                  onChange={(value) => {
+                    setContextFilter(value);
+                    resetPage();
+                  }}
+                />
+              </>
             )}
             columns={[
               {

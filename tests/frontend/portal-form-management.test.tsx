@@ -289,6 +289,41 @@ describe("portal form management", () => {
     expect(requests[0]?.searchParams.get("purpose")).toBe("proposal_submission");
   });
 
+  it("scopes the event catalogue to linked forms by default and widens it through the scope filter", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return formListResponse();
+      }),
+    );
+
+    const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
+    await settle();
+
+    // The default view sends the contract's boolean value, not a bespoke "1".
+    expect(requests[0]?.searchParams.get("linkedOnly")).toBe("true");
+
+    const scope = container.querySelector<HTMLSelectElement>('select[aria-label="Form scope"]')!;
+    expect(scope).not.toBeNull();
+    scope.value = "";
+    await act(async () => {
+      scope.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    // Widening the scope is the server default: the parameter is dropped.
+    const last = requests.at(-1);
+    expect(last?.pathname).toBe("/api/v1/events/pqc-2026/forms");
+    expect(last?.searchParams.has("linkedOnly")).toBe(false);
+  });
+
   it("shows only the creation editor, with no forms table, and cancel hands control back without saving", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

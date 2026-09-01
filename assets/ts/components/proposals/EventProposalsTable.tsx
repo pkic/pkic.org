@@ -14,6 +14,8 @@ import { PROPOSAL_RECOMMENDATIONS, type ProposalRecommendation } from "../../../
 import { formatDateTime } from "../../shared/ui";
 
 type RecommendationFilter = "" | ProposalRecommendation;
+/** `""` shows current proposals (the server default); `"true"` shows the archive. */
+type ArchivedFilter = "" | "true";
 
 const VALID_STATUSES = new Set<string>(["", ...PROPOSAL_ADMIN_STATUS_FILTERS]);
 const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", ...PROPOSAL_RECOMMENDATIONS]);
@@ -50,23 +52,29 @@ function recommendationSummary(proposal: EventProposalSummary) {
   );
 }
 
-function loadSavedFilters(storageKey?: string): { status: string; recommendation: RecommendationFilter } {
-  if (!storageKey) return { status: "active", recommendation: "" };
+function loadSavedFilters(storageKey?: string): {
+  status: string;
+  recommendation: RecommendationFilter;
+  archived: ArchivedFilter;
+} {
+  const defaults = { status: "active", recommendation: "" as RecommendationFilter, archived: "" as ArchivedFilter };
+  if (!storageKey) return defaults;
   try {
     const raw = sessionStorage.getItem(storageKey);
-    if (!raw) return { status: "active", recommendation: "" };
+    if (!raw) return defaults;
     const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed !== "object" || parsed === null) return { status: "active", recommendation: "" };
-    const { status, recommendation } = parsed as Record<string, unknown>;
+    if (typeof parsed !== "object" || parsed === null) return defaults;
+    const { status, recommendation, archived } = parsed as Record<string, unknown>;
     return {
       status: typeof status === "string" && VALID_STATUSES.has(status) ? status : "active",
       recommendation:
         typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
           ? (recommendation as RecommendationFilter)
           : "",
+      archived: archived === "true" ? "true" : "",
     };
   } catch {
-    return { status: "active", recommendation: "" };
+    return defaults;
   }
 }
 
@@ -87,6 +95,7 @@ export function EventProposalsTable({
   const initialFilters = loadSavedFilters(storageKey);
   const [statusFilter, setStatusFilter] = useState(initialFilters.status);
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(initialFilters.recommendation);
+  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>(initialFilters.archived);
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [access, setAccess] = useState<ProposalAccess | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -96,12 +105,12 @@ export function EventProposalsTable({
     try {
       sessionStorage.setItem(
         storageKey,
-        JSON.stringify({ status: statusFilter, recommendation: recommendationFilter }),
+        JSON.stringify({ status: statusFilter, recommendation: recommendationFilter, archived: archivedFilter }),
       );
     } catch {
       // Session storage is optional and must never disable server-side filtering.
     }
-  }, [storageKey, statusFilter, recommendationFilter]);
+  }, [storageKey, statusFilter, recommendationFilter, archivedFilter]);
 
   return (
     <div class="pk pk-stack pk-stack--snug">
@@ -122,6 +131,7 @@ export function EventProposalsTable({
         params={{
           ...(statusFilter ? { status: statusFilter } : {}),
           ...(recommendationFilter ? { recommendation: recommendationFilter } : {}),
+          ...(archivedFilter ? { archived: archivedFilter } : {}),
         }}
         actionsRef={tableRef}
         toolbar={({ resetPage }) => (
@@ -154,6 +164,18 @@ export function EventProposalsTable({
               ]}
               onChange={(value) => {
                 setRecommendationFilter(value);
+                resetPage();
+              }}
+            />
+            <FilterSelect
+              ariaLabel="Proposal archive"
+              value={archivedFilter}
+              options={[
+                { value: "" as ArchivedFilter, label: "Current proposals" },
+                { value: "true" as ArchivedFilter, label: "Archived proposals" },
+              ]}
+              onChange={(value) => {
+                setArchivedFilter(value);
                 resetPage();
               }}
             />

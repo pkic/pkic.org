@@ -168,6 +168,34 @@ describe("meeting occurrence attendance", () => {
     expect(container.querySelector("tbody")?.textContent).toContain("Verified");
   });
 
+  it("names the verification filter and sends the choice to the attendance query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return attendancePage([]);
+      }),
+    );
+
+    const container = mount(<MeetingAttendance base={BASE} occurrence={guestOccurrence()} />);
+    await settle();
+
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Attendance verification"]')!;
+    expect(filter).not.toBeNull();
+    // The default view is the server default: no `verified` parameter at all.
+    expect(requests.some((url) => url.searchParams.has("verified"))).toBe(false);
+
+    filter.value = "false";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("verified") === "false")).toBe(true);
+  });
+
   it("states a refused attendance listing as a sentence rather than an empty table", async () => {
     vi.stubGlobal(
       "fetch",

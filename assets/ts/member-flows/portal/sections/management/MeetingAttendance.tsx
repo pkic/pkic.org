@@ -6,6 +6,7 @@ import {
   type EventOccurrence,
 } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { FilterSelect } from "../../../../components/FilterSelect";
 import { Button } from "../../../../ui/Button";
 import { putJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
@@ -13,6 +14,8 @@ import { fmt, toast } from "../../ui";
 export function MeetingAttendance({ base, occurrence }: { base: string; occurrence: EventOccurrence }) {
   const actions = useRef<ApiTableActions | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  /** `""` lists everyone; `"true"`/`"false"` narrow to verified or unverified attendance. */
+  const [verifiedFilter, setVerifiedFilter] = useState("");
   const endpoint = `${base}/occurrences/${encodeURIComponent(occurrence.id)}/attendance`;
 
   async function verify(confirmationId: string): Promise<void> {
@@ -43,6 +46,25 @@ export function MeetingAttendance({ base, occurrence }: { base: string; occurren
       searchPlaceholder="Search attendance…"
       initialSort="-confirmed_at"
       actionsRef={actions}
+      params={verifiedFilter ? { verified: verifiedFilter } : {}}
+      toolbar={({ resetPage }) => (
+        // The list contract already accepts `verified`; the toolbar exposes
+        // it instead of leaving verification a concept the reader must scan
+        // the Attendance column for.
+        <FilterSelect
+          ariaLabel="Attendance verification"
+          value={verifiedFilter}
+          options={[
+            { value: "", label: "All attendance" },
+            { value: "true", label: "Verified" },
+            { value: "false", label: "Not verified" },
+          ]}
+          onChange={(value) => {
+            setVerifiedFilter(value);
+            resetPage();
+          }}
+        />
+      )}
       columns={[
         {
           header: "Attendee",

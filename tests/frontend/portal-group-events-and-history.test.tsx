@@ -98,6 +98,41 @@ describe("group events list", () => {
     expect(container.querySelector("table caption")?.textContent).toBe("Group events");
   });
 
+  it("names the source filter and sends the chosen source to the events query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ events: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount(<GroupEvents groupId={GROUP_ID} canManage />);
+    await settle();
+
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter events by source"]')!;
+    expect(filter).not.toBeNull();
+    // The options speak product language, not the schema's `sourceMode` keys.
+    expect([...filter.options].map((option) => option.textContent)).toEqual([
+      "All sources",
+      "Website content",
+      "Portal",
+      "Integration",
+    ]);
+    // The default view is the server default: no `sourceMode` parameter at all.
+    expect(requests.some((url) => url.searchParams.has("sourceMode"))).toBe(false);
+
+    filter.value = "portal";
+    await act(async () => {
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(requests.some((url) => url.searchParams.get("sourceMode") === "portal")).toBe(true);
+  });
+
   it("announces a failed event load as an alert instead of an empty list", async () => {
     vi.stubGlobal(
       "fetch",

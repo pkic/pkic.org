@@ -430,6 +430,8 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
   const [status, setStatus] = useState("");
   const [attendanceType, setAttendanceType] = useState("");
   const [attendanceOptions, setAttendanceOptions] = useState<Array<{ value: string; label: string }>>([]);
+  /** `"true"` narrows to forms linked to this event; `""` lets global forms in as well. */
+  const [linkedScope, setLinkedScope] = useState<"" | "true">("true");
   const formsEndpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/forms`;
   const submissionParams = {
     eventSlug,
@@ -479,11 +481,28 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
           responseSchema={formsListResponseSchema}
           resolve={(response) => response.forms}
           resolvePage={(response) => response.page}
-          params={{ purpose, linkedOnly: "1" }}
+          params={{ purpose, ...(linkedScope ? { linkedOnly: linkedScope } : {}) }}
           paginate
           initialPageSize={25}
           initialSort="title"
           searchPlaceholder="Search event forms…"
+          toolbar={({ resetPage }) => (
+            // The list contract already accepts `linkedOnly`; the toolbar
+            // exposes the scope instead of hiding the catalogue's global
+            // forms with no way to reach them.
+            <FilterSelect
+              ariaLabel="Form scope"
+              value={linkedScope}
+              options={[
+                { value: "true" as "" | "true", label: "Linked to this event" },
+                { value: "" as "" | "true", label: "Linked and global forms" },
+              ]}
+              onChange={(value) => {
+                setLinkedScope(value);
+                resetPage();
+              }}
+            />
+          )}
           columns={[
             { header: "Title", cell: (form: FormSummary) => form.title },
             { header: "Key", cell: (form: FormSummary) => form.key, className: "pk-mono pk-small" },

@@ -125,6 +125,39 @@ describe("event registrations list", () => {
     expect(filterNames(page)).not.toContain("");
   });
 
+  it("sends the consent and attendance-change choices to the registrations query", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json(listPage([]));
+      }),
+    );
+
+    const page = mount(<Registrations slug="pqc-2026" />);
+    await settle();
+    await settle();
+
+    const consent = page.querySelector<HTMLSelectElement>('select[aria-label="Sponsor consent"]')!;
+    consent.value = "true";
+    await act(async () => {
+      consent.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+    expect(requests.some((url) => url.searchParams.get("consent") === "true")).toBe(true);
+
+    const changes = page.querySelector<HTMLSelectElement>('select[aria-label="Attendance changes"]')!;
+    changes.value = "left_in_person";
+    await act(async () => {
+      changes.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+    expect(requests.some((url) => url.searchParams.get("attendance_change") === "left_in_person")).toBe(true);
+  });
+
   it("names the table and states sponsor consent in words, not only as a green tick", async () => {
     vi.stubGlobal(
       "fetch",

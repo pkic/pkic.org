@@ -4,9 +4,11 @@ import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
 } from "../../../../../shared/schemas/group-events";
+import { EVENT_SOURCE_MODES, type EventSourceMode } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
+import { FilterSelect } from "../../../../components/FilterSelect";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -15,6 +17,13 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventWorkspace } from "./GroupEventWorkspace";
+
+/** Where an event is authored, in product language rather than schema keys. */
+const EVENT_SOURCE_LABELS: Record<EventSourceMode, string> = {
+  hugo: "Website content",
+  portal: "Portal",
+  integration: "Integration",
+};
 
 export function GroupEvents({
   groupId,
@@ -32,6 +41,7 @@ export function GroupEvents({
   const [, navigate] = usePortalHashLocation();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
   const [showCreate, setShowCreate] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"" | EventSourceMode>("");
   const tableActions = useRef<ApiTableActions | null>(null);
   const createHeadingId = useId();
   const detail = useData(
@@ -103,6 +113,27 @@ export function GroupEvents({
             createAction={canManage ? { label: "Create event", onSelect: () => setShowCreate(true) } : undefined}
             searchPlaceholder="Search events…"
             initialSort="next_occurrence_at"
+            params={sourceFilter ? { sourceMode: sourceFilter } : {}}
+            toolbar={({ resetPage }) => (
+              // The list contract already accepts `sourceMode`; the toolbar
+              // exposes it as a source filter instead of leaving where an
+              // event is authored a concept search cannot express.
+              <FilterSelect
+                ariaLabel="Filter events by source"
+                value={sourceFilter}
+                options={[
+                  { value: "" as "" | EventSourceMode, label: "All sources" },
+                  ...EVENT_SOURCE_MODES.map((mode) => ({
+                    value: mode as "" | EventSourceMode,
+                    label: EVENT_SOURCE_LABELS[mode],
+                  })),
+                ]}
+                onChange={(value) => {
+                  setSourceFilter(value);
+                  resetPage();
+                }}
+              />
+            )}
             columns={[
               {
                 header: "Event",
