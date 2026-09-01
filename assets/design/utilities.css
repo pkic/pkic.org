@@ -19,6 +19,17 @@
 @layer utilities {
   /* A measured reading column. One max-width, not twelve breakpoint variants. */
   .pk-container {
+    /*
+     * Stated here, not inherited from the base layer.
+     *
+     * The base layer's box-sizing reset is scoped to `.pk`, but these
+     * utilities are deliberately unscoped — a Hugo template uses
+     * `pk-container` without a `.pk` root wherever its own styling has not
+     * moved yet, which MIGRATION.md sanctions. Without this, `width: 100%`
+     * plus `padding-inline` overflowed the viewport on every one of those
+     * pages, at every width.
+     */
+    box-sizing: border-box;
     width: 100%;
     max-width: var(--pk-measure, 72rem);
     margin-inline: auto;
@@ -109,6 +120,7 @@
 
   /* Vertical section rhythm, so pages do not each choose their own py-*. */
   .pk-section {
+    box-sizing: border-box;
     padding-block: var(--pk-7);
   }
 

@@ -216,6 +216,30 @@ because most of what it catches now is not a class in a `class=` attribute:
 the real gate against the candidate and refuses anything that is not already
 at zero, so the list can never become a list of intentions.
 
+## Seeing it
+
+Three checks look at a rendered page, because the gates above read source and
+source cannot tell you that a page scrolls sideways.
+
+| Command | What it looks at |
+| --- | --- |
+| `pnpm exec playwright test design-system-responsive` | `/design/` — every primitive at 375, 768 and 1280, in both themes and both densities |
+| `pnpm exec playwright test portal-responsive` | five portal screens, signed in, at the same three widths |
+
+Both assert the same three things, and each is a defect this repository has
+actually shipped: nothing pushes the page sideways, nothing is operable by
+mouse only, and every table, control and region has a name.
+
+They earned their place immediately. Between them they found a table's
+visually hidden header spans escaping their scroll container and stretching
+the document 222px; every default-size Avatar rendering as a 300-pixel circle,
+because the component emits a size modifier only for its non-default variants
+and the base class read a custom property nothing defined; and — after
+Bootstrap came out — an 8-to-24-pixel sideways scroll on every portal page at
+every width, because Bootstrap's reboot had been supplying
+`box-sizing: border-box` for the whole document and the design system's reset
+was scoped to `.pk`. None of the three is visible in source.
+
 ## The preview
 
 `/design/` renders every primitive with live theme, density, radius and accent

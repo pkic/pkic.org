@@ -25,9 +25,24 @@
     text-rendering: optimizeLegibility;
   }
 
-  .pk *,
-  .pk *::before,
-  .pk *::after {
+  /*
+   * Border-box, globally — not scoped to `.pk`.
+   *
+   * This is the one thing in the base layer that deliberately reaches outside
+   * the design system's own root, and it is here because Bootstrap's reboot
+   * used to provide it for the whole document. Scoping it to `.pk` meant that
+   * removing Bootstrap silently put every legacy-styled element back on
+   * content-box, so a `width: 100%` with padding overflowed its parent. That
+   * showed up as an 8-to-24-pixel sideways scroll on every portal page, at
+   * every width, which no source-level check could see.
+   *
+   * Border-box is what essentially every stylesheet in this repository was
+   * already written against. Making it global is restoring an assumption, not
+   * imposing a new one.
+   */
+  *,
+  *::before,
+  *::after {
     box-sizing: border-box;
   }
 
