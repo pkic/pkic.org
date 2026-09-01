@@ -6,6 +6,7 @@
  * (master/detail within a single tab — no route param, since
  * scoped the nav shell's routing to top-level sections only).
  */
+import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson, ApiClientError } from "../../../shared/api-client";
 import { myApplicationDetailSchema, myApplicationsListResponseSchema } from "../../../../shared/schemas/me";
@@ -15,7 +16,28 @@ import { Pager } from "../../../components/Pager";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { fmt, fmtDate } from "../ui";
 import { Badge, statusLabel } from "../../../components/Badge";
-import type { MyApplicationDetail } from "../types";
+import { Button } from "../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
+import { EmptyState } from "../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import type { MyApplicationDetail, MyApplicationSummary } from "../types";
+
+/**
+ * One entry in the status history or the message list. Both are a headline
+ * with a timestamp opposite it and an optional block of prose underneath, so
+ * the shape is defined once rather than twice.
+ */
+function LogEntry({ headline, at, body }: { headline: ComponentChildren; at: string; body?: string | null }) {
+  return (
+    <li class="pk-stack pk-stack--tight">
+      <div class="pk-cluster pk-cluster--between pk-cluster--start">
+        <span>{headline}</span>
+        <span class="pk-muted pk-small pk-nowrap">{fmt(at)}</span>
+      </div>
+      {body && <p class="pk-small">{body}</p>}
+    </li>
+  );
+}
 
 function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<MyApplicationDetail | null>(null);
@@ -36,66 +58,76 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
   }, [id]);
 
   return (
-    <div>
-      <button class="btn btn-sm btn-outline-secondary mb-3" onClick={onBack}>
-        ← Back to applications
-      </button>
+    <div class="pk pk-stack content-width-md">
+      <div class="pk-cluster">
+        <Button size="sm" onClick={onBack}>
+          ← Back to applications
+        </Button>
+      </div>
       {error && <ErrorAlert error={error} />}
       {!detail && !error ? (
-        <Spinner />
+        <Spinner label="Loading your application…" />
       ) : (
         detail && (
           <>
-            <div class="card border-0 shadow-sm mb-3">
-              <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                  <div>
-                    <h3 class="h5 mb-1">{detail.applicantName}</h3>
-                    <p class="text-muted small mb-0">
-                      {detail.organizationName ?? "Individual applicant"} — Category {detail.membershipCategory}
-                    </p>
-                  </div>
-                  <Badge status={detail.stage} />
-                </div>
-                <p class="text-muted small mt-2 mb-0">
+            <Panel>
+              <PanelHeader title={detail.applicantName}>
+                <Badge status={detail.stage} />
+              </PanelHeader>
+              <PanelBody class="pk-stack pk-stack--tight">
+                <p class="pk-muted pk-small">
+                  {detail.organizationName ?? "Individual applicant"} — Category {detail.membershipCategory}
+                </p>
+                <p class="pk-muted pk-small">
                   Submitted {fmt(detail.createdAt)} — last updated {fmt(detail.stageEnteredAt)}
                 </p>
-              </div>
-            </div>
+              </PanelBody>
+            </Panel>
 
-            <div class="card border-0 shadow-sm mb-3">
-              <div class="card-header bg-white fw-semibold">Status history</div>
-              <ul class="list-group list-group-flush">
-                {detail.timeline.map((entry, i) => (
-                  <li key={i} class="list-group-item">
-                    <div class="d-flex justify-content-between">
-                      <span>
-                        {entry.fromStage ? `${statusLabel(entry.fromStage)} → ` : ""}
-                        <strong>{statusLabel(entry.toStage)}</strong>
-                      </span>
-                      <span class="text-muted small">{fmt(entry.createdAt)}</span>
-                    </div>
-                    {entry.note && <div class="text-muted small mt-1">{entry.note}</div>}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Panel>
+              <PanelHeader title="Status history" />
+              <PanelBody>
+                {detail.timeline.length === 0 ? (
+                  <EmptyState
+                    title="No status changes yet."
+                    body="Every decision on this application will be recorded here."
+                  />
+                ) : (
+                  <ul class="pk-stack pk-stack--snug">
+                    {detail.timeline.map((entry, i) => (
+                      <LogEntry
+                        key={i}
+                        at={entry.createdAt}
+                        body={entry.note}
+                        headline={
+                          <>
+                            {entry.fromStage ? `${statusLabel(entry.fromStage)} → ` : ""}
+                            <strong>{statusLabel(entry.toStage)}</strong>
+                          </>
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}
+              </PanelBody>
+            </Panel>
 
             {detail.communications.length > 0 && (
-              <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-semibold">Messages</div>
-                <ul class="list-group list-group-flush">
-                  {detail.communications.map((entry, i) => (
-                    <li key={i} class="list-group-item">
-                      <div class="d-flex justify-content-between">
-                        <strong>{entry.subject ?? "Message"}</strong>
-                        <span class="text-muted small">{fmt(entry.createdAt)}</span>
-                      </div>
-                      <div class="small mt-1">{entry.body}</div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <Panel>
+                <PanelHeader title="Messages" />
+                <PanelBody>
+                  <ul class="pk-stack pk-stack--snug">
+                    {detail.communications.map((entry, i) => (
+                      <LogEntry
+                        key={i}
+                        at={entry.createdAt}
+                        body={entry.body}
+                        headline={<strong>{entry.subject ?? "Message"}</strong>}
+                      />
+                    ))}
+                  </ul>
+                </PanelBody>
+              </Panel>
             )}
           </>
         )
@@ -103,6 +135,19 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
     </div>
   );
 }
+
+const APPLICATION_COLUMNS: ReadonlyArray<DataTableColumn<MyApplicationSummary>> = [
+  { id: "membershipCategory", header: "Category", cell: (app) => app.membershipCategory },
+  // The badge carries the status as words as well as a tone, so the column is
+  // readable without relying on colour.
+  { id: "stage", header: "Status", cell: (app) => <Badge status={app.stage} /> },
+  {
+    id: "createdAt",
+    header: "Submitted",
+    cell: (app) => fmtDate(app.createdAt),
+    cellClass: "pk-small pk-nowrap",
+  },
+];
 
 export function MyApplications() {
   const page = useApiPage(
@@ -122,43 +167,36 @@ export function MyApplications() {
       <ErrorAlert error={page.error instanceof Error ? page.error.message : "Could not load your applications."} />
     );
   }
-  if (!page.data) return <Spinner />;
+  if (!page.data) return <Spinner label="Loading your applications…" />;
   const applications = page.data.applications;
 
-  if (applications.length === 0) {
-    return <div class="alert alert-info">No membership application is on file for your account.</div>;
-  }
-
   return (
-    <div class="content-width-md">
-      <div class="card border-0 shadow-sm">
-        <table class="table table-hover mb-0">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Status</th>
-              <th>Submitted</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {applications.map((app) => (
-              <tr key={app.id} class="is-clickable" onClick={() => setSelectedId(app.id)}>
-                <td>{app.membershipCategory}</td>
-                <td>
-                  <Badge status={app.stage} />
-                </td>
-                <td class="small">{fmtDate(app.createdAt)}</td>
-                <td>
-                  <button class="btn btn-sm btn-outline-secondary" onClick={() => setSelectedId(app.id)}>
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div class="pk pk-stack content-width-md">
+      <Panel>
+        <PanelBody>
+          <DataTable
+            caption="Your membership applications"
+            columns={APPLICATION_COLUMNS}
+            rows={applications}
+            rowKey={(app) => app.id}
+            loading={page.loading}
+            // The row's activation is a real control stretched over the row,
+            // not a click handler on the `<tr>`: a row is not focusable and
+            // takes no Enter key, so the handler this replaces could only be
+            // reached with a mouse.
+            rowAction={(app) => ({
+              label: `Open the application submitted ${fmtDate(app.createdAt)}`,
+              onSelect: () => setSelectedId(app.id),
+            })}
+            empty={
+              <EmptyState
+                title="No membership application is on file for your account."
+                body="An application you submit appears here as soon as it reaches us."
+              />
+            }
+          />
+        </PanelBody>
+      </Panel>
       {page.pagerProps && <Pager {...page.pagerProps} />}
     </div>
   );

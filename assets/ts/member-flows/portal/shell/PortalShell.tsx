@@ -6,6 +6,7 @@ import { Router, Route, Switch } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
 import { clearAuth, portalSession, profile } from "../state";
 import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
+import { EmptyState } from "../../../components/EmptyState";
 import { Spinner } from "../../../components/Spinner";
 import type { PortalSession } from "../types";
 import { PortalNavigationShell } from "./PortalNavigationShell";
@@ -94,7 +95,13 @@ function PortalRouteFallback({ session }: { session: PortalSession | null }) {
   }, [fallbackPath, navigate]);
 
   if (fallbackPath) return null;
-  return <div class="p-4 text-muted fst-italic">Section not found.</div>;
+  // A section that does not exist is a dead end, so it says what to do next
+  // rather than stating the fact and stopping.
+  return (
+    <div class="pk pk-section">
+      <EmptyState title="Section not found." body="The link may be out of date, or the section may have moved." />
+    </div>
+  );
 }
 
 function PortalRouteRedirect({ to }: { to: string }) {

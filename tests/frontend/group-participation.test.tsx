@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SelfGroup } from "../../assets/shared/schemas/group-participation";
+import { groupJoinSchema, groupLeaveSchema } from "../../assets/shared/schemas/groups";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupParticipationCard } from "../../assets/ts/member-flows/portal/sections/GroupParticipationCard";
 import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
@@ -72,6 +73,17 @@ function mountCard(value: SelfGroup, onChanged = vi.fn(async () => {})): HTMLEle
     ),
   );
   return container;
+}
+
+/**
+ * Controls are found by the name a reader hears, not by a styling class. The
+ * previous selector named a framework utility class, which coupled every
+ * assertion to the framework the surface has now dropped.
+ */
+function buttonNamed(container: HTMLElement, name: string): HTMLButtonElement {
+  const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === name);
+  if (!button) throw new Error(`missing button: ${name}`);
+  return button;
 }
 
 function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
@@ -173,10 +185,12 @@ describe("generic group participation card", () => {
     expect(checkboxes).toHaveLength(2);
     expect(checkboxes.every((checkbox) => checkbox.checked)).toBe(true);
 
-    void act(() => (container.querySelector("button.btn-outline-primary") as HTMLButtonElement).click());
+    void act(() => buttonNamed(container, "Join selected").click());
     await settle();
     expect(requests[0]?.url).toBe("/api/v1/groups/10000000-0000-4000-8000-000000000001/join");
-    expect(JSON.parse(String(requests[0]?.init.body))).toEqual({
+    // Parsed through the shared request contract, so the assertion fails if
+    // the surface ever sends a body the endpoint would reject.
+    expect(groupJoinSchema.parse(JSON.parse(String(requests[0]?.init.body)))).toEqual({
       capacitySelection: { mode: "all_eligible", confirmed: true },
     });
   });
@@ -193,9 +207,9 @@ describe("generic group participation card", () => {
     const container = mountCard(group());
     const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
     void act(() => checkboxes[1]!.click());
-    void act(() => (container.querySelector("button.btn-outline-primary") as HTMLButtonElement).click());
+    void act(() => buttonNamed(container, "Join selected").click());
     await settle();
-    expect(body).toEqual({
+    expect(groupJoinSchema.parse(body)).toEqual({
       capacitySelection: {
         mode: "selected",
         memberIds: ["20000000-0000-4000-8000-000000000001"],
@@ -232,15 +246,13 @@ describe("generic group participation card", () => {
       "#/groups/10000000-0000-4000-8000-000000000001/meetings",
     );
 
-    void act(() => (container.querySelector("button.btn-outline-primary") as HTMLButtonElement).click());
+    void act(() => buttonNamed(container, "Add selected").click());
     await settle();
-    expect(requests[0]).toEqual({
-      url: "/api/v1/groups/10000000-0000-4000-8000-000000000001/join",
-      body: {
-        capacitySelection: {
-          mode: "selected",
-          memberIds: ["20000000-0000-4000-8000-000000000002"],
-        },
+    expect(requests[0]?.url).toBe("/api/v1/groups/10000000-0000-4000-8000-000000000001/join");
+    expect(groupJoinSchema.parse(requests[0]?.body)).toEqual({
+      capacitySelection: {
+        mode: "selected",
+        memberIds: ["20000000-0000-4000-8000-000000000002"],
       },
     });
 
@@ -258,9 +270,10 @@ describe("generic group participation card", () => {
 
     void act(() => dialogButton(container, "Stop participating").click());
     await settle();
-    expect(requests[1]).toEqual({
-      url: "/api/v1/groups/10000000-0000-4000-8000-000000000001/leave",
-      body: { mode: "selected", memberIds: ["20000000-0000-4000-8000-000000000001"] },
+    expect(requests[1]?.url).toBe("/api/v1/groups/10000000-0000-4000-8000-000000000001/leave");
+    expect(groupLeaveSchema.parse(requests[1]?.body)).toEqual({
+      mode: "selected",
+      memberIds: ["20000000-0000-4000-8000-000000000001"],
     });
   });
 
@@ -297,6 +310,103 @@ describe("generic group participation card", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it("gives every capacity checkbox a label bound to it by id, drawn as a real control", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const container = mountCard(group());
+
+    const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(checkboxes).toHaveLength(2);
+
+    for (const checkbox of checkboxes) {
+      const label = container.querySelector<HTMLLabelElement>(`label[for="${checkbox.id}"]`);
+      expect(checkbox.id).not.toBe("");
+      expect(label).not.toBeNull();
+      expect(label?.textContent?.trim()).not.toBe("");
+      // All three parts of the block, or the browser draws its own control:
+      // the label alone passes every gate and renders an OS default checkbox.
+      expect(label?.classList.contains("pk-check")).toBe(true);
+      expect(checkbox.classList.contains("pk-check__input")).toBe(true);
+      expect(label?.querySelector(".pk-check__label")).not.toBeNull();
+    }
+
+    // The set of affiliations is named, so it is not announced as a bare list.
+    const affiliations = container.querySelector('ul[aria-label="Affiliations participating in Architecture Group"]');
+    expect(affiliations).toBeNull();
+    expect(container.querySelector("legend")?.textContent).toBe("Join on behalf of");
+  });
+
+  it("names the joined affiliations list and leaves the group card usable", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const container = mountCard(
+      group({
+        memberships: [
+          {
+            id: "30000000-0000-4000-8000-000000000001",
+            memberId: "20000000-0000-4000-8000-000000000001",
+            memberType: "organization",
+            organizationName: "Organization A",
+            membershipCategory: "A",
+            source: "self_service",
+            joinedAt: "2026-08-20T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const affiliations = container.querySelector('ul[aria-label="Affiliations participating in Architecture Group"]');
+    expect(affiliations?.textContent).toContain("Organization A");
+    // "Joined" is a word, not only a colour.
+    expect([...container.querySelectorAll(".pk-badge")].map((badge) => badge.textContent)).toEqual([
+      "Working group",
+      "Joined",
+    ]);
+  });
+
+  it("reports a rejected join as a toast and leaves the selection intact", async () => {
+    const toastArea = document.createElement("div");
+    toastArea.id = "portal-toast-area";
+    document.body.append(toastArea);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ error: { code: "FORBIDDEN", message: "You are not eligible for this group." } }),
+            { status: 403, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+
+    const onChanged = vi.fn(async () => {});
+    const container = mountCard(group(), onChanged);
+    void act(() => buttonNamed(container, "Join selected").click());
+    await settle();
+
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(toastArea.textContent).toContain("You are not eligible for this group.");
+    // The card recovers: the control is live again rather than stuck busy.
+    const join = buttonNamed(container, "Join selected");
+    expect(join.disabled).toBe(false);
+    expect(join.getAttribute("aria-busy")).toBeNull();
+    expect(
+      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every((box) => box.checked),
+    ).toBe(true);
+
+    toastArea.remove();
+  });
+
+  it("blocks the join control when nothing is selected", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const container = mountCard(group());
+    const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    void act(() => checkboxes[0]!.click());
+    void act(() => checkboxes[1]!.click());
+
+    const join = buttonNamed(container, "Join selected");
+    expect(join.disabled).toBe(true);
+    expect(join.getAttribute("aria-disabled")).toBe("true");
   });
 });
 

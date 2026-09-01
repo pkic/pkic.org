@@ -11,6 +11,11 @@ import {
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { ApiClientError, patchJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 
 interface GroupSettingsDraft {
   name: string;
@@ -71,6 +76,9 @@ export function GroupSettingsForm({
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
+    // The submit control stays focusable while it saves, so it also stays
+    // clickable; the guard is what stops a second in-flight request.
+    if (saving) return;
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -99,195 +107,210 @@ export function GroupSettingsForm({
     }
   }
 
+  const optOutUnavailable = draft.automaticEnrollmentMode === "none";
+
   return (
-    <form class="card border-0 shadow-sm" onSubmit={submit}>
-      <div class="card-header bg-white fw-semibold">Group settings</div>
-      <div class="card-body d-flex flex-column gap-3">
-        <div>
-          <label class="form-label small fw-semibold" for="managed-group-name">
-            Name
-          </label>
-          <input
-            id="managed-group-name"
-            class="form-control"
-            value={draft.name}
-            disabled={saving}
-            required
-            onInput={(event) => setField("name", (event.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div>
-          <label class="form-label small fw-semibold" for="managed-group-description">
-            Description
-          </label>
-          <textarea
-            id="managed-group-description"
-            class="form-control"
-            rows={4}
-            value={draft.description}
-            disabled={saving}
-            onInput={(event) => setField("description", (event.target as HTMLTextAreaElement).value)}
-          />
-        </div>
-        <div>
-          <label class="form-label small fw-semibold">Links</label>
-          <ProfileLinksInput
-            fieldName="group.links"
-            value={draft.links}
-            onChange={(links) => setField("links", links)}
-            helpText="Add any relevant group resources, such as a website, repository, document library, or meeting page."
-            inputAriaLabel="Group resource URL"
-          />
-        </div>
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="managed-group-visibility">
-              Visibility
-            </label>
-            <select
-              id="managed-group-visibility"
-              class="form-select"
-              value={draft.visibility}
-              disabled={saving}
-              onChange={(event) =>
-                setField("visibility", (event.target as HTMLSelectElement).value as GroupSettingsDetail["visibility"])
-              }
-            >
-              {GROUP_VISIBILITIES.map((value) => (
-                <option key={value} value={value}>
-                  {optionLabel(value)}
-                </option>
-              ))}
-            </select>
+    <form class="pk" onSubmit={(event) => void submit(event)}>
+      <Panel>
+        <PanelHeader title="Group settings" />
+        <PanelBody class="pk-stack">
+          {/* One attribute takes the whole form out of play while it saves,
+              including the link editor's own controls, which take no prop for
+              it. The submit button stays outside so it keeps focus. */}
+          <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+            <Field label="Name" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={draft.name}
+                  onInput={(event) => setField("name", (event.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+
+            <Field label="Description">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={4}
+                  value={draft.description}
+                  onInput={(event) => setField("description", (event.target as HTMLTextAreaElement).value)}
+                />
+              )}
+            </Field>
+
+            {/* The link editor is several controls, not one, so the group is
+                named by a legend rather than by a label with nothing to point
+                at. Its own input keeps its own accessible name. */}
+            <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+              <legend class="pk-field__label">Links</legend>
+              <ProfileLinksInput
+                fieldName="group.links"
+                value={draft.links}
+                onChange={(links) => setField("links", links)}
+                helpText="Add any relevant group resources, such as a website, repository, document library, or meeting page."
+                inputAriaLabel="Group resource URL"
+              />
+            </fieldset>
+
+            <div class="pk-grid pk-grid--roomy">
+              <Field label="Visibility">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={draft.visibility}
+                    onChange={(event) =>
+                      setField(
+                        "visibility",
+                        (event.target as HTMLSelectElement).value as GroupSettingsDetail["visibility"],
+                      )
+                    }
+                  >
+                    {GROUP_VISIBILITIES.map((value) => (
+                      <option key={value} value={value}>
+                        {optionLabel(value)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              <Field label="Leadership inheritance">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={draft.governanceInheritanceMode}
+                    onChange={(event) =>
+                      setField(
+                        "governanceInheritanceMode",
+                        (event.target as HTMLSelectElement).value as GroupSettingsDetail["governanceInheritanceMode"],
+                      )
+                    }
+                  >
+                    {GROUP_GOVERNANCE_INHERITANCE_MODES.map((value) => (
+                      <option key={value} value={value}>
+                        {optionLabel(value)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              <Field label="Join eligibility">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={draft.eligibilityMode}
+                    onChange={(event) =>
+                      setField(
+                        "eligibilityMode",
+                        (event.target as HTMLSelectElement).value as GroupSettingsDetail["eligibilityMode"],
+                      )
+                    }
+                  >
+                    {GROUP_ELIGIBILITY_MODES.map((value) => (
+                      <option key={value} value={value}>
+                        {optionLabel(value)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              <Field label="Automatic enrollment">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={draft.automaticEnrollmentMode}
+                    onChange={(event) => {
+                      const value = (event.target as HTMLSelectElement)
+                        .value as GroupSettingsDetail["automaticEnrollmentMode"];
+                      setDraft((current) => ({
+                        ...current,
+                        automaticEnrollmentMode: value,
+                        allowAutomaticOptOut: value === "none" ? false : current.allowAutomaticOptOut,
+                      }));
+                    }}
+                  >
+                    {GROUP_AUTOMATIC_ENROLLMENT_MODES.map((value) => (
+                      <option key={value} value={value}>
+                        {optionLabel(value)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
+              <Field label="Minimum endorsers for a ballot">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    type="number"
+                    min={0}
+                    max={1000}
+                    value={draft.minEndorsersForBallot}
+                    onInput={(event) =>
+                      setField("minEndorsersForBallot", (event.target as HTMLInputElement).valueAsNumber)
+                    }
+                  />
+                )}
+              </Field>
+            </div>
+
+            <div class="pk-stack pk-stack--snug">
+              <label class="pk-check">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  checked={draft.allowAutomaticOptOut}
+                  disabled={optOutUnavailable}
+                  onChange={(event) => setField("allowAutomaticOptOut", (event.target as HTMLInputElement).checked)}
+                />
+                <span class="pk-check__label">
+                  Allow people to opt out of automatic enrollment
+                  {/* The control is dimmed when it does not apply; the reason
+                      is stated in words so the state is not carried by the
+                      dimming alone. */}
+                  {optOutUnavailable && (
+                    <span class="pk-check__hint">
+                      Available once automatic enrollment is set to something other than “None”.
+                    </span>
+                  )}
+                </span>
+              </label>
+
+              <label class="pk-check">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  checked={draft.publicLeadership}
+                  onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
+                />
+                <span class="pk-check__label">Publish leadership</span>
+              </label>
+
+              <label class="pk-check">
+                <input
+                  class="pk-check__input"
+                  type="checkbox"
+                  checked={draft.active}
+                  onChange={(event) => setField("active", (event.target as HTMLInputElement).checked)}
+                />
+                <span class="pk-check__label">Active</span>
+              </label>
+            </div>
+          </fieldset>
+
+          {error && <ErrorAlert error={error} />}
+          {saved && <Alert tone="ok">Group settings updated.</Alert>}
+
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" loading={saving} disabled={!draft.name.trim()}>
+              {saving ? "Saving…" : "Save group settings"}
+            </Button>
           </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="managed-group-governance">
-              Leadership inheritance
-            </label>
-            <select
-              id="managed-group-governance"
-              class="form-select"
-              value={draft.governanceInheritanceMode}
-              disabled={saving}
-              onChange={(event) =>
-                setField(
-                  "governanceInheritanceMode",
-                  (event.target as HTMLSelectElement).value as GroupSettingsDetail["governanceInheritanceMode"],
-                )
-              }
-            >
-              {GROUP_GOVERNANCE_INHERITANCE_MODES.map((value) => (
-                <option key={value} value={value}>
-                  {optionLabel(value)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="managed-group-eligibility">
-              Join eligibility
-            </label>
-            <select
-              id="managed-group-eligibility"
-              class="form-select"
-              value={draft.eligibilityMode}
-              disabled={saving}
-              onChange={(event) =>
-                setField(
-                  "eligibilityMode",
-                  (event.target as HTMLSelectElement).value as GroupSettingsDetail["eligibilityMode"],
-                )
-              }
-            >
-              {GROUP_ELIGIBILITY_MODES.map((value) => (
-                <option key={value} value={value}>
-                  {optionLabel(value)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="managed-group-enrollment">
-              Automatic enrollment
-            </label>
-            <select
-              id="managed-group-enrollment"
-              class="form-select"
-              value={draft.automaticEnrollmentMode}
-              disabled={saving}
-              onChange={(event) => {
-                const value = (event.target as HTMLSelectElement)
-                  .value as GroupSettingsDetail["automaticEnrollmentMode"];
-                setDraft((current) => ({
-                  ...current,
-                  automaticEnrollmentMode: value,
-                  allowAutomaticOptOut: value === "none" ? false : current.allowAutomaticOptOut,
-                }));
-              }}
-            >
-              {GROUP_AUTOMATIC_ENROLLMENT_MODES.map((value) => (
-                <option key={value} value={value}>
-                  {optionLabel(value)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-semibold" for="managed-group-endorser-count">
-              Minimum endorsers for a ballot
-            </label>
-            <input
-              id="managed-group-endorser-count"
-              class="form-control"
-              type="number"
-              min={0}
-              max={1000}
-              value={draft.minEndorsersForBallot}
-              disabled={saving}
-              onInput={(event) => setField("minEndorsersForBallot", (event.target as HTMLInputElement).valueAsNumber)}
-            />
-          </div>
-        </div>
-        <div class="d-flex flex-column gap-2">
-          <label class="form-check">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              checked={draft.allowAutomaticOptOut}
-              disabled={saving || draft.automaticEnrollmentMode === "none"}
-              onChange={(event) => setField("allowAutomaticOptOut", (event.target as HTMLInputElement).checked)}
-            />
-            <span class="form-check-label">Allow people to opt out of automatic enrollment</span>
-          </label>
-          <label class="form-check">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              checked={draft.publicLeadership}
-              disabled={saving}
-              onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
-            />
-            <span class="form-check-label">Publish leadership</span>
-          </label>
-          <label class="form-check">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              checked={draft.active}
-              disabled={saving}
-              onChange={(event) => setField("active", (event.target as HTMLInputElement).checked)}
-            />
-            <span class="form-check-label">Active</span>
-          </label>
-        </div>
-        {error && <ErrorAlert error={error} />}
-        {saved && <div class="alert alert-success mb-0">Group settings updated.</div>}
-        <div>
-          <button type="submit" class="btn btn-success" disabled={saving || !draft.name.trim()}>
-            {saving ? "Saving…" : "Save group settings"}
-          </button>
-        </div>
-      </div>
+        </PanelBody>
+      </Panel>
     </form>
   );
 }

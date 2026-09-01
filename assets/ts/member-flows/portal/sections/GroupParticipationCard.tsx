@@ -1,8 +1,17 @@
+/**
+ * One group in the participation catalog: what the group is, which of the
+ * viewer's affiliations already participate, which ones could, and the joins
+ * and leaves available from here. Every mutation goes through the shared
+ * join/leave endpoints; the card never edits its own copy of the group.
+ */
 import { useEffect, useState } from "preact/hooks";
 import type { GroupParticipationCapacity, SelfGroup } from "../../../../shared/schemas/group-participation";
 import { groupMembershipMutationResponseSchema } from "../../../../shared/schemas/groups";
 import { ApiClientError, postJson } from "../../../shared/api-client";
 import { confirmAction } from "../../../components/ConfirmDialog";
+import { Badge } from "../../../ui/Badge";
+import { Button } from "../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { RowActions } from "../../../ui/RowActions";
 import { fmtDate, toast } from "../ui";
 
@@ -76,23 +85,26 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
     await mutate("leave", { mode: "all" }, `Left ${group.name}`);
   }
 
+  const joinLabel = group.memberships.length > 0 ? "Add selected" : "Join selected";
+
   return (
-    <article class="card border-0 shadow-sm">
-      <div class="card-body d-flex flex-column gap-3">
-        <div>
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-semibold">{group.name}</span>
-            <span class="badge text-bg-secondary">{group.type.singularLabel}</span>
-            {group.memberships.length > 0 && <span class="badge text-bg-success">Joined</span>}
+    <Panel class="pk">
+      <PanelHeader title={group.name}>
+        <Badge tone="neutral">{group.type.singularLabel}</Badge>
+        {group.memberships.length > 0 && <Badge tone="ok">Joined</Badge>}
+      </PanelHeader>
+      <PanelBody class="pk-stack">
+        {(group.parentGroup ?? group.description) != null && (
+          <div class="pk-stack pk-stack--tight">
+            {group.parentGroup && <p class="pk-small">Part of {group.parentGroup.name}</p>}
+            {group.description && <p class="pk-small">{group.description}</p>}
           </div>
-          {group.parentGroup && <p class="text-muted small mb-0 mt-1">Part of {group.parentGroup.name}</p>}
-          {group.description && <p class="text-muted small mb-0 mt-1">{group.description}</p>}
-        </div>
+        )}
 
         {group.memberships.length > 0 && (
-          <div>
-            <p class="small fw-semibold mb-1">Participating as</p>
-            <ul class="list-unstyled d-flex flex-column gap-1 mb-0">
+          <div class="pk-stack pk-stack--snug">
+            <p class="pk-field__label">Participating as</p>
+            <ul class="pk-stack pk-stack--tight" aria-label={`Affiliations participating in ${group.name}`}>
               {group.memberships.map((membership) => {
                 const label = affiliationLabel({
                   memberId: membership.memberId,
@@ -101,9 +113,9 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
                   membershipCategory: membership.membershipCategory,
                 });
                 return (
-                  <li key={membership.id} class="d-flex align-items-center justify-content-between gap-2 small">
+                  <li key={membership.id} class="pk-cluster pk-cluster--between">
                     <span>
-                      {label} <span class="text-muted">since {fmtDate(membership.joinedAt)}</span>
+                      {label} <span class="pk-small">since {fmtDate(membership.joinedAt)}</span>
                     </span>
                     <RowActions
                       label={`Actions for ${label}`}
@@ -124,54 +136,55 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
         )}
 
         {available.length > 0 && (
-          <fieldset disabled={busy} class="border-0 p-0 m-0">
-            <legend class="small fw-semibold mb-1">
+          <fieldset disabled={busy} class="pk-fieldset pk-stack pk-stack--snug">
+            <legend class="pk-field__label">
               {group.memberships.length > 0 ? "Add another affiliation" : "Join on behalf of"}
             </legend>
             {available.map((capacity) => {
               const label = affiliationLabel(capacity);
               const controlId = `group-${group.id}-capacity-${capacity.memberId}`;
               return (
-                <div class="form-check" key={capacity.memberId}>
+                <label class="pk-check" for={controlId} key={capacity.memberId}>
                   <input
-                    class="form-check-input"
+                    class="pk-check__input"
                     type="checkbox"
                     id={controlId}
                     checked={selected.has(capacity.memberId)}
                     onChange={() => toggle(capacity.memberId)}
                   />
-                  <label class="form-check-label small" for={controlId}>
-                    {label}
-                  </label>
-                </div>
+                  <span class="pk-check__label">{label}</span>
+                </label>
               );
             })}
           </fieldset>
         )}
 
-        <div class="d-flex flex-wrap gap-2">
+        <div class="pk-cluster">
           {group.memberships.length > 0 && (
-            <a href={`#/groups/${encodeURIComponent(group.id)}/meetings`} class="btn btn-sm btn-outline-secondary">
+            // A destination, not an action, so it stays an anchor and merely
+            // borrows the button's appearance.
+            <a href={`#/groups/${encodeURIComponent(group.id)}/meetings`} class="pk-btn pk-btn--secondary pk-btn--sm">
               Meetings and calendar
             </a>
           )}
           {available.length > 0 && (
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-primary"
-              disabled={busy || selected.size === 0}
+            <Button
+              variant="primary"
+              size="sm"
+              loading={busy}
+              disabled={selected.size === 0}
               onClick={() => void joinSelected()}
             >
-              {busy ? "Saving…" : group.memberships.length > 0 ? "Add selected" : "Join selected"}
-            </button>
+              {busy ? "Saving…" : joinLabel}
+            </Button>
           )}
           {group.memberships.length > 1 && (
-            <button type="button" class="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => void leaveAll()}>
+            <Button variant="danger-quiet" size="sm" loading={busy} onClick={() => void leaveAll()}>
               Leave all
-            </button>
+            </Button>
           )}
         </div>
-      </div>
-    </article>
+      </PanelBody>
+    </Panel>
   );
 }

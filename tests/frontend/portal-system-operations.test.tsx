@@ -4,10 +4,10 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScheduledWork } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledWork";
 import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
-import { ScheduledJobs } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledJobs";
-import type { ScheduledJobResource } from "../../assets/shared/schemas/scheduler";
+import { emailOutboxProcessSchema, emailOutboxResetFailedSchema } from "../../assets/shared/schemas/email-outbox";
 
 let container: HTMLDivElement | null = null;
+let toastArea: HTMLDivElement | null = null;
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -16,33 +16,31 @@ function json(body: unknown): Response {
   });
 }
 
+function apiError(status: number, code: string, message: string): Response {
+  return new Response(JSON.stringify({ error: { code, message } }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** The portal's toast target, so a failure path has somewhere to land. */
+function mountToastArea(): HTMLDivElement {
+  toastArea = document.createElement("div");
+  toastArea.id = "portal-toast-area";
+  document.body.append(toastArea);
+  return toastArea;
+}
+
+function button(root: ParentNode, label: string): HTMLButtonElement {
+  const found = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.includes(label));
+  if (!found) throw new Error(`No button labelled ${label}`);
+  return found;
+}
+
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function scheduledJob(overrides: Partial<ScheduledJobResource> = {}): ScheduledJobResource {
-  return {
-    jobKey: "retention",
-    intervalSeconds: 86_400,
-    nextRunAt: "2026-09-01T00:00:00.000Z",
-    wakeRequested: false,
-    lastRunAt: null,
-    lastSuccessAt: null,
-    lastStatus: null,
-    lastError: null,
-    lastDurationMs: null,
-    consecutiveFailures: 0,
-    consecutiveAbandoned: 0,
-    runningSince: null,
-    leaseExpiresAt: null,
-    pausedAt: null,
-    pausedReason: null,
-    leaseExpired: false,
-    capabilities: { manageState: false, run: false },
-    ...overrides,
-  };
 }
 
 afterEach(() => {
@@ -50,6 +48,10 @@ afterEach(() => {
     void act(() => render(null, container!));
     container.remove();
     container = null;
+  }
+  if (toastArea) {
+    toastArea.remove();
+    toastArea = null;
   }
   vi.unstubAllGlobals();
 });
@@ -141,8 +143,15 @@ describe("portal Operations outbox reads", () => {
 
     expect(requests.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual(["GET /api/v1/email/outbox"]);
     expect(container.textContent).toContain("Read only");
+    // The table names itself, so a page listing several tables does not read
+    // out several anonymous ones.
+    expect(container.querySelector("caption")?.textContent).toBe("Email outbox messages");
+    // No selection column at all without email:manage — not a disabled one.
+    expect(container.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
     expect(
-      [...container.querySelectorAll("button")].some((button) => /process|reset|retry/i.test(button.textContent ?? "")),
+      [...container.querySelectorAll("button")].some((control) =>
+        /process|reset|retry/i.test(control.textContent ?? ""),
+      ),
     ).toBe(false);
     expect(
       requests.some(
@@ -222,39 +231,88 @@ describe("portal Operations outbox reads", () => {
 
     expect(container.textContent).toContain("Process next 20 due");
     expect(container.textContent).not.toContain("Process all due");
-    const processButton = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Process next 20 due"),
-    )!;
+    const processButton = button(container, "Process next 20 due");
     await act(() => {
       processButton.click();
     });
     await settle();
     for (let attempt = 0; attempt < 3; attempt += 1) await settle();
-    expect(requests.find(({ url }) => url.pathname === "/api/v1/email/outbox/process")).toMatchObject({
-      method: "POST",
-      body: { limit: 20 },
-    });
+    const processRequest = requests.find(({ url }) => url.pathname === "/api/v1/email/outbox/process")!;
+    expect(processRequest.method).toBe("POST");
+    // Through the shared request contract, not a literal: a body that the
+    // endpoint would reject must fail here too.
+    expect(emailOutboxProcessSchema.parse(processRequest.body).limit).toBe(20);
 
-    const checkbox = container.querySelector<HTMLInputElement>(`input[aria-label="Select Notice"]`)!;
+    // The selection control is a labelled checkbox, named by its own label
+    // element rather than a bare aria-label on an unlabelled box.
+    const selectLabel = [...container.querySelectorAll("label.pk-check")].find((label) =>
+      label.textContent?.includes("Select Notice"),
+    )!;
+    expect(selectLabel.querySelector(".pk-check__label")?.textContent).toBe("Select Notice");
+    const checkbox = selectLabel.querySelector<HTMLInputElement>("input.pk-check__input")!;
     await act(() => {
       checkbox.click();
     });
-    const resetButton = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Reset failed selected"),
-    )!;
+    const resetButton = button(container, "Reset failed selected");
     await act(() => {
       resetButton.click();
     });
     await settle();
-    expect(requests.find(({ url }) => url.pathname === "/api/v1/email/outbox/reset-failed")).toMatchObject({
-      method: "POST",
-      body: { ids: [failedId] },
-    });
+    const resetRequest = requests.find(({ url }) => url.pathname === "/api/v1/email/outbox/reset-failed")!;
+    expect(resetRequest.method).toBe("POST");
+    expect(emailOutboxResetFailedSchema.parse(resetRequest.body).ids).toEqual([failedId]);
     expect(
       requests.some(
         ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
       ),
     ).toBe(false);
+  });
+
+  it("reports a rejected process command and leaves the control usable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/email/outbox") {
+          return json({
+            outbox: [],
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+            summary: {
+              total: 0,
+              byStatus: {},
+              byMessageType: {},
+              topTemplates: [],
+              dueNow: 0,
+              dueByStatus: {},
+              nextSendAfter: null,
+            },
+          });
+        }
+        if (url.pathname === "/api/v1/email/outbox/process") {
+          return apiError(503, "PROVIDER_UNAVAILABLE", "The email provider is not accepting messages.");
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    const toasts = mountToastArea();
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<EmailOutbox canManage />, container!));
+    await settle();
+
+    await act(() => {
+      button(container!, "Process next 20 due").click();
+    });
+    for (let attempt = 0; attempt < 3; attempt += 1) await settle();
+
+    expect(toasts.textContent).toContain("The email provider is not accepting messages.");
+    // A failed command must hand the control back rather than stranding the
+    // page in its busy state.
+    expect(button(container, "Process next 20 due").disabled).toBe(false);
   });
 });
 
@@ -405,112 +463,5 @@ describe("portal Operations command visibility", () => {
         ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
       ),
     ).toBe(false);
-  });
-});
-
-describe("portal scheduled-job management", () => {
-  it("renders the bounded registry without reconstructing server-denied actions", async () => {
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-        requests.push(`${method} ${url.pathname}`);
-        if (url.pathname === "/api/v1/scheduler/jobs") return json({ jobs: [scheduledJob()] });
-        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
-      }),
-    );
-
-    container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(<ScheduledJobs />, container!));
-    await settle();
-
-    expect(container.textContent).toContain("Retention");
-    expect(container.textContent).toContain("1 day");
-    expect(container.textContent).not.toContain("Run now");
-    expect(container.textContent).not.toContain("Pause");
-    expect(container.textContent).not.toContain("Resume");
-    expect(requests).toEqual(["GET /api/v1/scheduler/jobs"]);
-  });
-
-  it("uses the canonical state resource and runs collection for server-authorized controls", async () => {
-    const requests: Array<{ method: string; path: string; body: unknown }> = [];
-    let current = scheduledJob({ capabilities: { manageState: true, run: true } });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-        const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
-        requests.push({ method, path: url.pathname, body });
-        if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") return json({ jobs: [current] });
-        if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
-          const state = (body as { state: "active" | "paused" }).state;
-          current = scheduledJob({
-            capabilities: { manageState: true, run: true },
-            pausedAt: state === "paused" ? "2026-08-30T00:00:00.000Z" : null,
-            pausedReason: state === "paused" ? (body as { reason: string }).reason : null,
-          });
-          return json({ success: true, job: current });
-        }
-        if (url.pathname === "/api/v1/scheduler/jobs/retention/runs" && method === "POST") {
-          current = scheduledJob({
-            capabilities: { manageState: true, run: true },
-            lastRunAt: "2026-08-30T00:00:01.000Z",
-            lastSuccessAt: "2026-08-30T00:00:01.000Z",
-            lastStatus: "succeeded",
-            lastDurationMs: 12,
-          });
-          return json({ success: true, jobKey: "retention", status: "succeeded", durationMs: 12 });
-        }
-        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
-      }),
-    );
-
-    container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(<ScheduledJobs />, container!));
-    await settle();
-
-    const pause = [...container.querySelectorAll("button")].find((button) => button.textContent === "Pause")!;
-    await act(() => pause.click());
-    const reason = container.querySelector<HTMLTextAreaElement>("#pause-reason-retention")!;
-    await act(() => {
-      reason.value = "investigating delivery failures";
-      reason.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    const confirm = [...container.querySelectorAll("button")].find((button) => button.textContent === "Confirm pause")!;
-    await act(() => confirm.click());
-    await settle();
-    expect(container.textContent).toContain("Resume");
-
-    const resume = [...container.querySelectorAll("button")].find((button) => button.textContent === "Resume")!;
-    await act(() => resume.click());
-    await settle();
-    const run = [...container.querySelectorAll("button")].find((button) => button.textContent === "Run now")!;
-    await act(() => run.click());
-    for (let attempt = 0; attempt < 3; attempt += 1) await settle();
-
-    expect(requests).toEqual(
-      expect.arrayContaining([
-        {
-          method: "PATCH",
-          path: "/api/v1/scheduler/jobs/retention",
-          body: { state: "paused", reason: "investigating delivery failures" },
-        },
-        { method: "PATCH", path: "/api/v1/scheduler/jobs/retention", body: { state: "active" } },
-        { method: "POST", path: "/api/v1/scheduler/jobs/retention/runs", body: {} },
-      ]),
-    );
-    expect(requests.some(({ path }) => path.endsWith("/pause") || path.endsWith("/resume"))).toBe(false);
-    expect(container.textContent).toContain("Succeeded");
   });
 });

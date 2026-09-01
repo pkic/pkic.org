@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
+import { Alert } from "../../../ui/Alert";
 import { Menu } from "../../../ui/Menu";
 import { MenuIcon } from "../../../components/MenuIcon";
 import { useData } from "../../../hooks/useData";
@@ -96,8 +97,8 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
         aria-label="Close navigation"
         onClick={closeNavigation}
       />
-      <aside id="portal-sidebar" class={`p-2${navigationOpen ? " open" : ""}`} aria-label="Portal navigation">
-        <div class="px-2 py-3 mb-1">
+      <aside id="portal-sidebar" class={navigationOpen ? "open" : undefined} aria-label="Portal navigation">
+        <div class="portal-sidebar-brand">
           <div class="portal-brand">PKI Consortium Portal</div>
         </div>
         {portalNavigationItems(session).map((item) => (
@@ -112,8 +113,12 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
             {item.section === "groups" && <SidebarGroups session={session} onNavigate={closeNavigation} />}
           </div>
         ))}
-        <div class="portal-sidebar-footer px-1 pt-3">
-          {signOutError && <div class="alert alert-danger small">{signOutError}</div>}
+        <div class="portal-sidebar-footer">
+          {signOutError && (
+            <div class="pk">
+              <Alert tone="danger">{signOutError}</Alert>
+            </div>
+          )}
           {/* The trigger is a person, not an icon, so the menu renders it
               plain and the sidebar's own class styles the content inside. */}
           <Menu

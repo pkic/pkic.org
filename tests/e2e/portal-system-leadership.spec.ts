@@ -29,12 +29,14 @@ test("permitted staff manage the public leadership roster through the System por
   await page.goto("/portal/#/system/leadership");
   await expect(page.getByRole("link", { name: "Leadership" })).toBeVisible();
 
-  const boardCard = page.locator(".card").filter({ has: page.getByText("Board of Directors", { exact: true }) });
+  // The panel names itself, so the roster is addressed as a named region
+  // rather than by the framework class its markup used to carry.
+  const boardCard = page.getByRole("region", { name: "Board of Directors" });
   const title = `Browser-test Board Member ${Date.now()}`;
   await boardCard.getByPlaceholder("Search by email or name…").fill(staffEmail);
   await boardCard.getByRole("button", { name: new RegExp(staffEmail, "i") }).click();
-  await boardCard.getByPlaceholder("Title (e.g. Board Member)").fill(title);
-  await boardCard.getByTitle("From").fill("2026-08-28");
+  await boardCard.getByLabel("Title").fill(title);
+  await boardCard.getByLabel("From").fill("2026-08-28");
 
   const createResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === LEADERSHIP_API && response.request().method() === "POST",
@@ -43,7 +45,7 @@ test("permitted staff manage the public leadership roster through the System por
   await boardCard.getByRole("button", { name: "Add", exact: true }).click();
   expect((await createResponse).status()).toBe(201);
 
-  const position = boardCard.locator(".portal-leadership-name").locator("..", { hasText: title });
+  const position = boardCard.locator("tr").filter({ hasText: title });
   await expect(position).toContainText(title);
 
   const publicResponse = await page.request.get("/api/v1/leadership/board");
@@ -55,7 +57,9 @@ test("permitted staff manage the public leadership roster through the System por
     (response) =>
       new URL(response.url()).pathname.startsWith(`${LEADERSHIP_API}/`) && response.request().method() === "DELETE",
   );
-  await position.getByRole("button", { name: "Row actions" }).click();
+  // The row's menu is named after the person it acts on; the row is already
+  // narrowed to this position, so the prefix is enough to address it.
+  await position.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Remove position" }).click();
   await acceptConfirmDialog(page, "Remove position");
   expect((await deleteResponse).status()).toBe(200);

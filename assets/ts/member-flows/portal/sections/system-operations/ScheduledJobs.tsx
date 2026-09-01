@@ -1,3 +1,11 @@
+/**
+ * Scheduled jobs — the dispatcher registry, its cadence, and its outcomes.
+ *
+ * Rendered by the design system's DataTable rather than a hand-built table:
+ * the caption names the table for anyone listing the tables on the page, and
+ * the pause form arrives as the row's own detail row instead of being nested
+ * inside the actions cell, where it inherited that cell's end alignment.
+ */
 import { useEffect, useState } from "preact/hooks";
 import {
   schedulerJobRunResponseSchema,
@@ -6,9 +14,18 @@ import {
   type ScheduledJobResource,
 } from "../../../../../shared/schemas/scheduler";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { Spinner } from "../../../../components/Spinner";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Textarea } from "../../../../ui/TextControl";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
+import "../../../../ui/Content.css";
+
+/** The shortest reason the state endpoint accepts. Mirrors the shared schema. */
+const MINIMUM_PAUSE_REASON = 3;
 
 function titleFromKey(jobKey: string): string {
   return jobKey.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -19,6 +36,165 @@ function formatInterval(seconds: number): string {
   if (seconds % 3_600 === 0) return `${seconds / 3_600} hour${seconds === 3_600 ? "" : "s"}`;
   if (seconds % 60 === 0) return `${seconds / 60} minute${seconds === 60 ? "" : "s"}`;
   return `${seconds} seconds`;
+}
+
+function JobIdentity({ job }: { job: ScheduledJobResource }) {
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div>{titleFromKey(job.jobKey)}</div>
+      <div class="pk-mono pk-small">{job.jobKey}</div>
+      {job.pausedAt !== null && job.pausedReason ? <div class="pk-small">{job.pausedReason}</div> : null}
+    </div>
+  );
+}
+
+function JobSchedule({ job }: { job: ScheduledJobResource }) {
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div>{formatInterval(job.intervalSeconds)}</div>
+      <div class="pk-small">Next {fmt(job.nextRunAt)}</div>
+      {job.wakeRequested ? (
+        <div class="pk-cluster">
+          <Badge status="pending" label="Wake requested" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function JobOutcome({ job }: { job: ScheduledJobResource }) {
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div>{job.lastStatus ? <Badge status={job.lastStatus} /> : <span class="pk-small">Never run</span>}</div>
+      <div class="pk-small">Last run {fmt(job.lastRunAt)}</div>
+      <div class="pk-small">Last success {fmt(job.lastSuccessAt)}</div>
+      {job.lastDurationMs !== null ? (
+        <div class="pk-small">Duration {job.lastDurationMs.toLocaleString()} ms</div>
+      ) : null}
+    </div>
+  );
+}
+
+function JobHealth({ job }: { job: ScheduledJobResource }) {
+  const isPaused = job.pausedAt !== null;
+  const isRunning = job.runningSince !== null;
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div class="pk-cluster">
+        {isPaused ? <Badge status="paused" label="Paused" /> : null}
+        {isRunning ? <Badge status="running" label={job.leaseExpired ? "Lease expired" : "Running"} /> : null}
+        {!isPaused && !isRunning ? <Badge status="active" /> : null}
+      </div>
+      <div class="pk-small">
+        Failures {job.consecutiveFailures}; abandoned {job.consecutiveAbandoned}
+      </div>
+      {job.lastError ? (
+        <details>
+          {/* The word carries the meaning. A red line and nothing else leaves
+              anyone who cannot separate the hues with an unexplained colour. */}
+          <summary class="pk-small">Last error</summary>
+          <div class="pk-small pk-break">{job.lastError}</div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+interface JobControls {
+  busyJob: string | null;
+  onRun: (job: ScheduledJobResource) => void;
+  onResume: (job: ScheduledJobResource) => void;
+  onStartPause: (job: ScheduledJobResource) => void;
+}
+
+function JobActions({ job, controls }: { job: ScheduledJobResource; controls: JobControls }) {
+  const isBusy = controls.busyJob === job.jobKey;
+  const isPaused = job.pausedAt !== null;
+  const isRunning = job.runningSince !== null;
+
+  return (
+    <div class="pk-cluster pk-cluster--end">
+      {job.capabilities.run ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={isBusy || isPaused || isRunning}
+          onClick={() => controls.onRun(job)}
+        >
+          Run now
+        </Button>
+      ) : null}
+      {job.capabilities.manageState ? (
+        isPaused ? (
+          <Button size="sm" variant="secondary" disabled={isBusy} onClick={() => controls.onResume(job)}>
+            Resume
+          </Button>
+        ) : (
+          <Button size="sm" variant="secondary" disabled={isBusy} onClick={() => controls.onStartPause(job)}>
+            Pause
+          </Button>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function PauseForm({
+  job,
+  busy,
+  reason,
+  onReason,
+  onCancel,
+  onConfirm,
+}: {
+  job: ScheduledJobResource;
+  busy: boolean;
+  reason: string;
+  onReason: (value: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const trimmed = reason.trim();
+  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_PAUSE_REASON;
+
+  return (
+    <form
+      class="pk-stack pk-stack--snug"
+      aria-label={`Pause ${titleFromKey(job.jobKey)}`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onConfirm();
+      }}
+    >
+      <Field
+        label="Pause reason"
+        required
+        help="Recorded with the pause and shown beside the job until it resumes."
+        state={tooShort ? "invalid" : undefined}
+        message={tooShort ? `Give at least ${MINIMUM_PAUSE_REASON} characters.` : undefined}
+      >
+        {(control) => (
+          <Textarea
+            {...control}
+            rows={2}
+            minLength={MINIMUM_PAUSE_REASON}
+            maxLength={500}
+            value={reason}
+            disabled={busy}
+            onInput={(event) => onReason((event.target as HTMLTextAreaElement).value)}
+          />
+        )}
+      </Field>
+      <div class="pk-cluster pk-cluster--end">
+        <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" variant="primary" disabled={busy || trimmed.length < MINIMUM_PAUSE_REASON}>
+          Confirm pause
+        </Button>
+      </div>
+    </form>
+  );
 }
 
 export function ScheduledJobs() {
@@ -91,165 +267,63 @@ export function ScheduledJobs() {
     }
   }
 
-  if (loading) return <Spinner />;
-  if (error) {
-    return (
-      <div class="alert alert-danger" role="alert">
-        {error}
-      </div>
-    );
-  }
-  if (jobs.length === 0) return <p class="text-muted">No scheduled jobs are configured.</p>;
+  const controls: JobControls = {
+    busyJob,
+    onRun: (job) => void runNow(job),
+    onResume: (job) => void updateState(job, "active"),
+    onStartPause: (job) => {
+      setPauseJob(job.jobKey);
+      setPauseReason("");
+    },
+  };
+
+  const columns: ReadonlyArray<DataTableColumn<ScheduledJobResource>> = [
+    { id: "job", header: "Job", cell: (job) => <JobIdentity job={job} /> },
+    { id: "schedule", header: "Schedule", cell: (job) => <JobSchedule job={job} /> },
+    { id: "outcome", header: "Last outcome", cell: (job) => <JobOutcome job={job} /> },
+    { id: "health", header: "Health", cell: (job) => <JobHealth job={job} /> },
+    { id: "actions", header: "Actions", align: "end", cell: (job) => <JobActions job={job} controls={controls} /> },
+  ];
 
   return (
-    <div>
-      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-        <div>
-          <strong>Scheduled Jobs</strong>
-          <p class="mb-0 text-muted small">
-            Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
-          </p>
-        </div>
+    <div class="pk pk-stack pk-stack--snug">
+      <div class="pk-stack pk-stack--tight">
+        <strong>Scheduled Jobs</strong>
+        <p class="pk-small">
+          Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
+        </p>
       </div>
-      <div class="table-responsive">
-        <table class="table align-middle">
-          <thead>
-            <tr>
-              <th scope="col">Job</th>
-              <th scope="col">Schedule</th>
-              <th scope="col">Last outcome</th>
-              <th scope="col">Health</th>
-              <th scope="col" class="text-end">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((job) => {
-              const isBusy = busyJob === job.jobKey;
-              const isRunning = job.runningSince !== null;
-              const isPaused = job.pausedAt !== null;
-              return (
-                <tr key={job.jobKey}>
-                  <th scope="row">
-                    <div>{titleFromKey(job.jobKey)}</div>
-                    <div class="mono small text-muted">{job.jobKey}</div>
-                    {isPaused && job.pausedReason ? <div class="small text-muted mt-1">{job.pausedReason}</div> : null}
-                  </th>
-                  <td>
-                    <div>{formatInterval(job.intervalSeconds)}</div>
-                    <div class="small text-muted">Next {fmt(job.nextRunAt)}</div>
-                    {job.wakeRequested ? <Badge status="pending" label="Wake requested" /> : null}
-                  </td>
-                  <td>
-                    {job.lastStatus ? <Badge status={job.lastStatus} /> : <span class="text-muted">Never run</span>}
-                    <div class="small text-muted mt-1">Last run {fmt(job.lastRunAt)}</div>
-                    <div class="small text-muted">Last success {fmt(job.lastSuccessAt)}</div>
-                    {job.lastDurationMs !== null ? (
-                      <div class="small text-muted">Duration {job.lastDurationMs.toLocaleString()} ms</div>
-                    ) : null}
-                  </td>
-                  <td>
-                    <div class="d-flex flex-wrap gap-1">
-                      {isPaused ? <Badge status="paused" label="Paused" /> : null}
-                      {isRunning ? (
-                        <Badge status="running" label={job.leaseExpired ? "Lease expired" : "Running"} />
-                      ) : null}
-                      {!isPaused && !isRunning ? <Badge status="active" /> : null}
-                    </div>
-                    <div class="small text-muted mt-1">
-                      Failures {job.consecutiveFailures}; abandoned {job.consecutiveAbandoned}
-                    </div>
-                    {job.lastError ? (
-                      <details class="mt-1">
-                        <summary class="small text-danger">Last error</summary>
-                        <div class="small text-danger mt-1">{job.lastError}</div>
-                      </details>
-                    ) : null}
-                  </td>
-                  <td class="text-end">
-                    <div class="d-flex flex-wrap justify-content-end gap-2">
-                      {job.capabilities.run ? (
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-outline-primary"
-                          disabled={isBusy || isPaused || isRunning}
-                          onClick={() => void runNow(job)}
-                        >
-                          Run now
-                        </button>
-                      ) : null}
-                      {job.capabilities.manageState ? (
-                        isPaused ? (
-                          <button
-                            type="button"
-                            class="btn btn-sm btn-outline-primary"
-                            disabled={isBusy}
-                            onClick={() => void updateState(job, "active")}
-                          >
-                            Resume
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            class="btn btn-sm btn-outline-warning"
-                            disabled={isBusy}
-                            onClick={() => {
-                              setPauseJob(job.jobKey);
-                              setPauseReason("");
-                            }}
-                          >
-                            Pause
-                          </button>
-                        )
-                      ) : null}
-                    </div>
-                    {pauseJob === job.jobKey ? (
-                      <form
-                        class="mt-2 text-start"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void updateState(job, "paused");
-                        }}
-                      >
-                        <label class="form-label small" for={`pause-reason-${job.jobKey}`}>
-                          Pause reason
-                        </label>
-                        <textarea
-                          id={`pause-reason-${job.jobKey}`}
-                          class="form-control form-control-sm"
-                          required
-                          minLength={3}
-                          maxLength={500}
-                          value={pauseReason}
-                          onInput={(event) => setPauseReason((event.target as HTMLTextAreaElement).value)}
-                        />
-                        <div class="d-flex justify-content-end gap-2 mt-2">
-                          <button
-                            type="button"
-                            class="btn btn-sm btn-outline-secondary"
-                            disabled={isBusy}
-                            onClick={() => setPauseJob(null)}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            class="btn btn-sm btn-warning"
-                            disabled={isBusy || pauseReason.trim().length < 3}
-                          >
-                            Confirm pause
-                          </button>
-                        </div>
-                      </form>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {error ? (
+        <Alert tone="danger" title="Could not load the scheduled jobs.">
+          {error}
+        </Alert>
+      ) : (
+        <DataTable
+          caption="Scheduled jobs"
+          columns={columns}
+          rows={jobs}
+          rowKey={(job) => job.jobKey}
+          loading={loading}
+          empty={
+            <EmptyState
+              title="No scheduled jobs are configured."
+              body="A job appears here once the dispatcher registers it."
+            />
+          }
+          detailRow={(job) =>
+            pauseJob === job.jobKey ? (
+              <PauseForm
+                job={job}
+                busy={busyJob === job.jobKey}
+                reason={pauseReason}
+                onReason={setPauseReason}
+                onCancel={() => setPauseJob(null)}
+                onConfirm={() => void updateState(job, "paused")}
+              />
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }

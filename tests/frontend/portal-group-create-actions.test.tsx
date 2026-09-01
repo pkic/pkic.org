@@ -27,6 +27,15 @@ function mount(node: ComponentChildren): HTMLElement {
   return container;
 }
 
+/**
+ * The create-vote form, located by the name it exposes rather than by an id
+ * on one of its inputs: the design system's Field generates its own id/for
+ * pair, so a hard-coded `#group-vote-title` stops matching anything.
+ */
+function createVoteForm(container: HTMLElement): HTMLFormElement | null {
+  return container.querySelector("form[aria-label='Create vote']");
+}
+
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -69,7 +78,7 @@ describe("group collection create actions", () => {
 
     expect(events.textContent).not.toContain("New group event");
     expect(forms.textContent).not.toContain("New group form");
-    expect(votes.querySelector("#group-vote-title")).toBeNull();
+    expect(createVoteForm(votes)).toBeNull();
 
     function clickButton(container: HTMLElement, label: string): Promise<void> {
       const candidate = Array.from(container.querySelectorAll("button")).find(
@@ -87,7 +96,7 @@ describe("group collection create actions", () => {
 
     expect(events.textContent).toContain("New group event");
     expect(forms.textContent).toContain("New group form");
-    expect(votes.querySelector("#group-vote-title")).not.toBeNull();
+    expect(createVoteForm(votes)).not.toBeNull();
 
     await clickButton(events, "Cancel");
     await clickButton(forms, "Cancel");
@@ -95,6 +104,6 @@ describe("group collection create actions", () => {
 
     expect(events.textContent).not.toContain("New group event");
     expect(forms.textContent).not.toContain("New group form");
-    expect(votes.querySelector("#group-vote-title")).toBeNull();
+    expect(createVoteForm(votes)).toBeNull();
   });
 });

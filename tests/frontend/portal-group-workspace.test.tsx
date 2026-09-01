@@ -159,7 +159,12 @@ describe("portal selected-group workspace", () => {
       false,
     );
 
-    const name = container.querySelector<HTMLInputElement>("#managed-group-name")!;
+    // The design-system Field owns the control's id, so the input is found
+    // the way a reader finds it: through the label that points at it.
+    const nameLabel = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Name"))!;
+    expect(nameLabel.htmlFor).not.toBe("");
+    const name = container.querySelector<HTMLInputElement>(`[id="${nameLabel.htmlFor}"]`)!;
+    expect(name).not.toBeNull();
     name.value = "Architecture and Design Committee";
     void act(() => {
       name.dispatchEvent(new Event("input", { bubbles: true }));

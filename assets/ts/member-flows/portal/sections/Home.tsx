@@ -17,6 +17,8 @@ import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/v
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
+import { EmptyState } from "../../../ui/EmptyState";
+import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
@@ -37,17 +39,19 @@ function PanelCard({
   children: ComponentChildren;
 }) {
   return (
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-baseline gap-2">
-        <span>{title}</span>
+    <Panel>
+      <PanelHeader title={title}>
         {viewAll && (
-          <Link href={viewAll.href} class="small fw-normal">
-            {viewAll.label}
-          </Link>
+          // The size utility goes on a wrapper rather than on the anchor:
+          // `pk-small` also sets a muted ink, and utilities beat the base
+          // layer, so putting it on the link would drain the link colour.
+          <span class="pk-small">
+            <Link href={viewAll.href}>{viewAll.label}</Link>
+          </span>
         )}
-      </div>
-      <div class="card-body">{children}</div>
-    </div>
+      </PanelHeader>
+      <PanelBody>{children}</PanelBody>
+    </Panel>
   );
 }
 
@@ -64,7 +68,9 @@ function PanelState({
 }) {
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
-  if (count === 0) return <p class="text-muted small mb-0">{empty}</p>;
+  // EmptyState carries role="status", so an empty panel says so rather than
+  // merely looking empty.
+  if (count === 0) return <EmptyState title={empty} />;
   return null;
 }
 
@@ -100,22 +106,22 @@ function AttentionPanel() {
     <PanelCard title="Needs your voice">
       <PanelState loading={loading} error={error} empty="Nothing is waiting on you right now." count={count} />
       {!loading && !error && count > 0 && (
-        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+        <ul class="pk-stack pk-stack--tight" aria-label="Items waiting on you">
           {openBallots.map((vote) => (
-            <li key={`vote-${vote.id}`} class="small">
+            <li key={`vote-${vote.id}`} class="pk-cluster">
               <Link href={votePath(vote)}>Vote on: {vote.title}</Link>
-              <span class="text-muted ms-2">closes {fmt(vote.closesAt)}</span>
+              <span class="pk-small">closes {fmt(vote.closesAt)}</span>
             </li>
           ))}
           {openSurveys.map((form) => (
-            <li key={`form-${form.placementId}`} class="small">
+            <li key={`form-${form.placementId}`} class="pk-cluster">
               <Link href={formPath(form)}>Respond: {form.title}</Link>
-              <span class="text-muted ms-2">{form.ownerGroupName}</span>
-              {form.closesAt && <span class="text-muted ms-2">closes {fmt(form.closesAt)}</span>}
+              <span class="pk-small">{form.ownerGroupName}</span>
+              {form.closesAt && <span class="pk-small">closes {fmt(form.closesAt)}</span>}
             </li>
           ))}
           {pendingReviews.map((organization) => (
-            <li key={`review-${organization.organizationId}`} class="small">
+            <li key={`review-${organization.organizationId}`} class="pk-cluster">
               <Link href={`/organizations/${encodeURIComponent(organization.organizationId)}`}>
                 Review pending: {organization.name}
               </Link>
@@ -143,18 +149,18 @@ function MeetingsPanel() {
         count={occurrences.length}
       />
       {occurrences.length > 0 && (
-        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+        <ul class="pk-stack pk-stack--tight" aria-label="Upcoming meetings">
           {occurrences.map((occurrence) => (
-            <li key={occurrence.occurrenceId} class="small">
+            <li key={occurrence.occurrenceId} class="pk-cluster">
               <Link
                 href={`/groups/${encodeURIComponent(occurrence.groupId)}/meetings/${encodeURIComponent(occurrence.seriesId)}`}
               >
                 {occurrence.eventName}
               </Link>
-              <span class="text-muted ms-2">{occurrence.groupName}</span>
-              <span class="text-muted ms-2">{fmt(occurrence.startsAt)}</span>
+              <span class="pk-small">{occurrence.groupName}</span>
+              <span class="pk-small">{fmt(occurrence.startsAt)}</span>
               {formatRelativeDays(occurrence.startsAt) && (
-                <span class="text-muted ms-2">({formatRelativeDays(occurrence.startsAt)})</span>
+                <span class="pk-small">({formatRelativeDays(occurrence.startsAt)})</span>
               )}
             </li>
           ))}
@@ -172,7 +178,7 @@ function EventsPanel() {
   const rows = events.data?.events ?? [];
 
   return (
-    <PanelCard title="Upcoming events" viewAll={undefined}>
+    <PanelCard title="Upcoming events">
       <PanelState
         loading={events.loading}
         error={events.error}
@@ -180,26 +186,26 @@ function EventsPanel() {
         count={rows.length}
       />
       {rows.length > 0 && (
-        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+        <ul class="pk-stack pk-stack--snug" aria-label="Upcoming events">
           {rows.map((event) => {
             const relative = formatRelativeDays(event.startsAt);
             const viewer = "viewer" in event ? event.viewer : null;
             const basePath = "basePath" in event ? event.basePath : null;
             return (
-              <li key={event.id} class="small">
-                <div>
+              <li key={event.id} class="pk-stack pk-stack--tight">
+                <div class="pk-cluster">
                   {basePath ? (
-                    <a class="fw-semibold" href={basePath}>
+                    <a class="pk-strong" href={basePath}>
                       {event.name}
                     </a>
                   ) : (
-                    <span class="fw-semibold">{event.name}</span>
+                    <span class="pk-strong">{event.name}</span>
                   )}
                   {event.startsAt && (
-                    <span class="text-muted ms-2">{formatDateRange(event.startsAt, event.endsAt, event.timezone)}</span>
+                    <span class="pk-small">{formatDateRange(event.startsAt, event.endsAt, event.timezone)}</span>
                   )}
-                  {relative && <span class="text-muted ms-2">({relative})</span>}
-                  {"location" in event && event.location && <span class="text-muted ms-2">{event.location}</span>}
+                  {relative && <span class="pk-small">({relative})</span>}
+                  {"location" in event && event.location && <span class="pk-small">{event.location}</span>}
                 </div>
                 {viewer && <ViewerEventState viewer={viewer} />}
               </li>
@@ -227,11 +233,11 @@ function VotesPanel() {
         count={rows.length}
       />
       {rows.length > 0 && (
-        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+        <ul class="pk-stack pk-stack--tight" aria-label="Open votes">
           {rows.map((vote) => (
-            <li key={vote.id} class="small">
+            <li key={vote.id} class="pk-cluster">
               <Link href={votePath(vote)}>{vote.title}</Link>
-              <span class="text-muted ms-2">closes {fmt(vote.closesAt)}</span>
+              <span class="pk-small">closes {fmt(vote.closesAt)}</span>
               {vote.hasCastBallot ? (
                 <Badge status="completed" label="Voted" />
               ) : vote.canCastBallot ? (
@@ -262,9 +268,9 @@ function ApplicationsPanel() {
         count={rows.length}
       />
       {rows.length > 0 && (
-        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+        <ul class="pk-stack pk-stack--tight" aria-label="Your membership applications">
           {rows.map((application) => (
-            <li key={application.id} class="small">
+            <li key={application.id} class="pk-cluster">
               <Link href="/application">Application from {fmt(application.createdAt)}</Link>
               <Badge status={application.stage} label={application.stage.replaceAll("_", " ")} />
             </li>
@@ -291,9 +297,9 @@ function OrganizationsPanel() {
         count={rows.length}
       />
       {rows.length > 0 && (
-        <ul class="list-unstyled mb-0 d-flex flex-column gap-2">
+        <ul class="pk-stack pk-stack--tight" aria-label="Your organizations">
           {rows.map((organization) => (
-            <li key={organization.organizationId} class="small">
+            <li key={organization.organizationId} class="pk-cluster">
               <Link href={`/organizations/${encodeURIComponent(organization.organizationId)}`}>
                 {organization.name}
               </Link>
@@ -316,8 +322,8 @@ export function Home() {
   const firstName = profile.value?.preferredName || profile.value?.firstName || "";
 
   return (
-    <div class="d-flex flex-column gap-3 content-width-schedule">
-      <p class="text-muted mb-0">
+    <div class="pk pk-stack content-width-schedule">
+      <p class="pk-muted">
         {firstName ? `Welcome back, ${firstName}.` : "Welcome back."} Here is what is happening in your consortium.
       </p>
       {isMember && <AttentionPanel />}

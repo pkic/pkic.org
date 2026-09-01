@@ -3,7 +3,13 @@ import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { Button } from "../../../../ui/Button";
+import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
@@ -21,7 +27,7 @@ import {
 const API_BASE = "/api/v1/leadership/positions";
 const USER_CATALOG_ENDPOINT = "/api/v1/permissions/subjects";
 
-/** ISO date -> "1 Jun 2022" for display (starts_at/ends_at are date-only, no time component). */
+/** ISO date -> "Jun 1, 2022" for display (starts_at/ends_at are date-only, no time component). */
 function fmtDate(value: string | null): string {
   if (!value) return "—";
   return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -32,18 +38,21 @@ function fmtDate(value: string | null): string {
   });
 }
 
+/** The term as one phrase, so the column reads the same whether or not it has ended. */
+function term(position: LeadershipPosition): string {
+  return `${fmtDate(position.startsAt)} – ${position.endsAt ? fmtDate(position.endsAt) : "present"}`;
+}
+
 function AffiliationPicker({
   userId,
   initialValue,
   value,
   onChange,
-  disabled,
 }: {
   userId: string | null;
   initialValue: string | null | undefined;
   value: string | null | undefined;
   onChange: (identityId: string | null | undefined) => void;
-  disabled: boolean;
 }) {
   const [affiliations, setAffiliations] = useState<LeadershipAffiliation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -89,38 +98,50 @@ function AffiliationPicker({
   if (!userId) return null;
 
   return (
-    <select
-      class="form-select form-select-sm portal-leadership-affiliation"
-      aria-label="Membership affiliation"
-      value={value === undefined ? "" : (value ?? "none")}
-      onChange={(event) => {
-        const next = (event.target as HTMLSelectElement).value;
-        onChange(next === "none" ? null : next || undefined);
-      }}
-      disabled={disabled || loading}
-    >
-      {value === undefined && <option value="">Select affiliation…</option>}
-      <option value="none">No affiliation</option>
-      {affiliations.map((affiliation) => (
-        <option key={affiliation.identityId} value={affiliation.identityId}>
-          {affiliation.organizationName ?? "Individual membership"} ({affiliation.membershipCategory})
-        </option>
-      ))}
-    </select>
+    <Field label="Membership affiliation">
+      {(control) => (
+        <Select
+          {...control}
+          value={value === undefined ? "" : (value ?? "none")}
+          onChange={(event) => {
+            const next = (event.target as HTMLSelectElement).value;
+            onChange(next === "none" ? null : next || undefined);
+          }}
+          disabled={loading}
+        >
+          {value === undefined && <option value="">Select affiliation…</option>}
+          <option value="none">No affiliation</option>
+          {affiliations.map((affiliation) => (
+            <option key={affiliation.identityId} value={affiliation.identityId}>
+              {affiliation.organizationName ?? "Individual membership"} ({affiliation.membershipCategory})
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
   );
 }
 
-function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board" | "executive_council" }) {
+function AddPositionForm({
+  onAdded,
+  body,
+  label,
+}: {
+  onAdded: () => void;
+  body: "board" | "executive_council";
+  label: string;
+}) {
   const [picked, setPicked] = useState<PickedUser | null>(null);
   const [identityId, setIdentityId] = useState<string | null | undefined>(undefined);
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [busy, setBusy] = useState(false);
+  const incomplete = !picked || identityId === undefined || !title.trim() || !startsAt;
 
   async function submit(e: Event) {
     e.preventDefault();
-    if (!picked || identityId === undefined || !title.trim() || !startsAt) return;
+    if (busy || !picked || identityId === undefined || !title.trim() || !startsAt) return;
     setBusy(true);
     try {
       await postJson(
@@ -150,89 +171,87 @@ function AddPositionForm({ onAdded, body }: { onAdded: () => void; body: "board"
   }
 
   return (
-    <form onSubmit={submit} class="d-flex gap-2 align-items-center flex-wrap border rounded p-2 bg-light">
-      <div class="portal-leadership-user">
-        <UserPicker
-          endpoint={USER_CATALOG_ENDPOINT}
-          value={picked}
-          onChange={(user) => {
-            setPicked(user);
-            setIdentityId(undefined);
-          }}
-          disabled={busy}
+    <form class="pk-stack pk-stack--snug" aria-label={`Add a ${label} position`} onSubmit={(e) => void submit(e)}>
+      <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={busy}>
+        {/* The people search is several controls, so it is named by a legend
+            rather than by a label with no single control to point at. */}
+        <fieldset class="pk-fieldset pk-stack pk-stack--tight">
+          <legend class="pk-field__label">Member</legend>
+          <UserPicker
+            endpoint={USER_CATALOG_ENDPOINT}
+            value={picked}
+            onChange={(user) => {
+              setPicked(user);
+              setIdentityId(undefined);
+            }}
+            disabled={busy}
+          />
+        </fieldset>
+        <AffiliationPicker
+          userId={picked?.id ?? null}
+          initialValue={undefined}
+          value={identityId}
+          onChange={setIdentityId}
         />
+        <Field label="Title" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              placeholder="Board Member"
+              value={title}
+              onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+        <Field label="From" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="date"
+              value={startsAt}
+              onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+        <Field label="Till" help="Leave blank for a current position.">
+          {(control) => (
+            <TextInput
+              {...control}
+              type="date"
+              value={endsAt}
+              onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+      </fieldset>
+      <div class="pk-cluster">
+        <Button type="submit" size="sm" variant="primary" loading={busy} disabled={incomplete}>
+          Add
+        </Button>
       </div>
-      <AffiliationPicker
-        userId={picked?.id ?? null}
-        initialValue={undefined}
-        value={identityId}
-        onChange={setIdentityId}
-        disabled={busy}
-      />
-      <input
-        class="form-control form-control-sm portal-leadership-title"
-        type="text"
-        placeholder="Title (e.g. Board Member)"
-        value={title}
-        onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-        disabled={busy}
-      />
-      <input
-        class="form-control form-control-sm portal-leadership-date"
-        type="date"
-        title="From"
-        value={startsAt}
-        onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
-        disabled={busy}
-      />
-      <input
-        class="form-control form-control-sm portal-leadership-date"
-        type="date"
-        title="Till (optional — leave blank for a current position)"
-        placeholder="Till (optional)"
-        value={endsAt}
-        onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
-        disabled={busy}
-      />
-      <button
-        type="submit"
-        class="btn btn-sm btn-success"
-        disabled={busy || !picked || identityId === undefined || !title.trim() || !startsAt}
-      >
-        Add
-      </button>
     </form>
   );
 }
 
-function PositionRow({
+function PositionEditForm({
   position,
-  onChanged,
-  canGrant,
-  canRevoke,
+  onSaved,
+  onCancel,
 }: {
   position: LeadershipPosition;
-  onChanged: () => void;
-  canGrant: boolean;
-  canRevoke: boolean;
+  onSaved: () => void;
+  onCancel: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(position.title);
   const [identityId, setIdentityId] = useState<string | null | undefined>(position.identityId);
   const [startsAt, setStartsAt] = useState(position.startsAt);
   const [endsAt, setEndsAt] = useState(position.endsAt ?? "");
   const [busy, setBusy] = useState(false);
-
-  function startEdit() {
-    setTitle(position.title);
-    setIdentityId(position.identityId);
-    setStartsAt(position.startsAt);
-    setEndsAt(position.endsAt ?? "");
-    setEditing(true);
-  }
+  const incomplete = identityId === undefined || !title.trim() || !startsAt;
 
   async function save(e: Event) {
     e.preventDefault();
+    if (busy || incomplete) return;
     setBusy(true);
     try {
       await patchJson(
@@ -241,14 +260,79 @@ function PositionRow({
         leadershipPositionResponseSchema,
       );
       toast("Position updated", "success");
-      setEditing(false);
-      onChanged();
+      onSaved();
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
       setBusy(false);
     }
   }
+
+  return (
+    <form
+      class="pk-stack pk-stack--snug"
+      aria-label={`Edit ${position.name}'s position`}
+      onSubmit={(e) => void save(e)}
+    >
+      <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={busy}>
+        <AffiliationPicker
+          userId={position.userId}
+          initialValue={position.identityId}
+          value={identityId}
+          onChange={setIdentityId}
+        />
+        <Field label="Title" required>
+          {(control) => (
+            <TextInput {...control} value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
+          )}
+        </Field>
+        <Field label="From" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="date"
+              value={startsAt}
+              onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+        <Field label="Till" help="Leave blank for a current position.">
+          {(control) => (
+            <TextInput
+              {...control}
+              type="date"
+              value={endsAt}
+              onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+      </fieldset>
+      <div class="pk-cluster">
+        <Button type="submit" size="sm" variant="primary" loading={busy} disabled={incomplete}>
+          Save
+        </Button>
+        <Button size="sm" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function PositionMenu({
+  position,
+  canGrant,
+  canRevoke,
+  onEdit,
+  onChanged,
+}: {
+  position: LeadershipPosition;
+  canGrant: boolean;
+  canRevoke: boolean;
+  onEdit: () => void;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
 
   async function remove() {
     const confirmed = await confirmAction({
@@ -269,78 +353,90 @@ function PositionRow({
     }
   }
 
-  if (editing) {
-    return (
-      <form onSubmit={save} class="d-flex gap-2 align-items-center flex-wrap border rounded p-2">
-        <span class="small fw-semibold portal-leadership-name">{position.name}</span>
-        <AffiliationPicker
-          userId={position.userId}
-          initialValue={position.identityId}
-          value={identityId}
-          onChange={setIdentityId}
-          disabled={busy}
+  const actions = [
+    ...(canGrant ? [{ id: "edit", label: "Edit position", onSelect: onEdit, disabled: busy }] : []),
+    ...(canRevoke ? [{ id: "remove", label: "Remove position", onSelect: () => void remove(), disabled: busy }] : []),
+  ];
+  if (actions.length === 0) return null;
+
+  return <RowActions label={`Actions for ${position.name}`} actions={actions} />;
+}
+
+function positionColumns(
+  canGrant: boolean,
+  canRevoke: boolean,
+  editId: string | null,
+  setEditId: (id: string | null) => void,
+  onChanged: () => void,
+): ReadonlyArray<DataTableColumn<LeadershipPosition>> {
+  return [
+    { id: "name", header: "Name", cell: (position) => position.name },
+    { id: "title", header: "Position", cell: (position) => position.title },
+    {
+      id: "represents",
+      header: "Represents",
+      cell: (position) => position.organizationName ?? "Individual membership",
+    },
+    { id: "term", header: "Term", cell: term, cellClass: "pk-nowrap" },
+    {
+      id: "actions",
+      header: "Actions",
+      headerHidden: true,
+      align: "end",
+      cell: (position) => (
+        <PositionMenu
+          position={position}
+          canGrant={canGrant}
+          canRevoke={canRevoke}
+          onEdit={() => setEditId(editId === position.id ? null : position.id)}
+          onChanged={onChanged}
         />
-        <input
-          class="form-control form-control-sm portal-leadership-title"
-          type="text"
-          value={title}
-          onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
-          disabled={busy}
-        />
-        <input
-          class="form-control form-control-sm portal-leadership-date"
-          type="date"
-          title="From"
-          value={startsAt}
-          onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
-          disabled={busy}
-        />
-        <input
-          class="form-control form-control-sm portal-leadership-date"
-          type="date"
-          title="Till (optional)"
-          value={endsAt}
-          onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
-          disabled={busy}
-        />
-        <button
-          type="submit"
-          class="btn btn-sm btn-success"
-          disabled={busy || identityId === undefined || !title.trim() || !startsAt}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          disabled={busy}
-          onClick={() => setEditing(false)}
-        >
-          Cancel
-        </button>
-      </form>
-    );
-  }
+      ),
+    },
+  ];
+}
+
+function PositionsTable({
+  caption,
+  positions,
+  loading,
+  empty,
+  canGrant,
+  canRevoke,
+  onChanged,
+}: {
+  caption: string;
+  positions: readonly LeadershipPosition[];
+  loading: boolean;
+  empty: string;
+  canGrant: boolean;
+  canRevoke: boolean;
+  onChanged: () => void;
+}) {
+  const [editId, setEditId] = useState<string | null>(null);
 
   return (
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="portal-leadership-name">{position.name}</span>
-      <span class="text-muted small">{position.title}</span>
-      {position.organizationName && <span class="text-muted small">{position.organizationName}</span>}
-      <span class="text-muted small">
-        {fmtDate(position.startsAt)} – {position.endsAt ? fmtDate(position.endsAt) : "present"}
-      </span>
-      {(canGrant || canRevoke) && (
-        <RowActions
-          actions={[
-            ...(canGrant ? [{ id: "edit", label: "Edit position", onSelect: startEdit, disabled: busy }] : []),
-            ...(canRevoke
-              ? [{ id: "remove", label: "Remove position", onSelect: () => void remove(), disabled: busy }]
-              : []),
-          ]}
-        />
-      )}
-    </div>
+    <DataTable
+      caption={caption}
+      showCaption
+      columns={positionColumns(canGrant, canRevoke, editId, setEditId, onChanged)}
+      rows={positions}
+      rowKey={(position) => position.id}
+      loading={loading}
+      empty={<EmptyState title={empty} />}
+      detailRow={(position) =>
+        editId === position.id ? (
+          <PositionEditForm
+            position={position}
+            onSaved={() => {
+              setEditId(null);
+              onChanged();
+            }}
+            onCancel={() => setEditId(null)}
+          />
+        ) : null
+      }
+    />
   );
 }
 
@@ -379,49 +475,45 @@ export function LeadershipPositions({
   const loadError = currentPage.error ?? pastPage.error;
 
   return (
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white fw-semibold">{label}</div>
-      <div class="card-body d-flex flex-column gap-3">
+    // The panel names itself, so a page holding both bodies announces two
+    // regions rather than two unnamed sections.
+    <Panel class="pk" aria-label={label}>
+      <PanelHeader title={label} />
+      <PanelBody class="pk-stack">
         {loadError ? (
           <ErrorAlert error={loadError instanceof Error ? loadError : "Could not load leadership positions."} />
         ) : !currentPage.data || !pastPage.data ? (
           <Spinner label={`Loading ${label.toLowerCase()}…`} />
         ) : (
           <>
-            <div class="d-flex flex-column gap-2">
-              {current.length === 0 && <span class="text-muted fst-italic small">No current members</span>}
-              {current.map((p) => (
-                <PositionRow
-                  key={p.id}
-                  position={p}
-                  onChanged={() => void reload()}
+            <PositionsTable
+              caption={`Current ${label}`}
+              positions={current}
+              loading={currentPage.loading}
+              empty="No current members"
+              canGrant={canGrant}
+              canRevoke={canRevoke}
+              onChanged={() => void reload()}
+            />
+            {currentPage.pagerProps && <Pager {...currentPage.pagerProps} />}
+            {canGrant && <AddPositionForm body={body} label={label} onAdded={() => void reload()} />}
+            {past.length > 0 && (
+              <div class="pk-stack pk-stack--snug">
+                <PositionsTable
+                  caption={`Past ${label}`}
+                  positions={past}
+                  loading={pastPage.loading}
+                  empty="No past members"
                   canGrant={canGrant}
                   canRevoke={canRevoke}
+                  onChanged={() => void reload()}
                 />
-              ))}
-            </div>
-            {currentPage.pagerProps && <Pager {...currentPage.pagerProps} />}
-            {canGrant && <AddPositionForm body={body} onAdded={() => void reload()} />}
-            {past.length > 0 && (
-              <div>
-                <div class="small fw-semibold text-muted mb-2">Past positions</div>
-                <div class="d-flex flex-column gap-2">
-                  {past.map((p) => (
-                    <PositionRow
-                      key={p.id}
-                      position={p}
-                      onChanged={() => void reload()}
-                      canGrant={canGrant}
-                      canRevoke={canRevoke}
-                    />
-                  ))}
-                </div>
                 {pastPage.pagerProps && <Pager {...pastPage.pagerProps} />}
               </div>
             )}
           </>
         )}
-      </div>
-    </div>
+      </PanelBody>
+    </Panel>
   );
 }

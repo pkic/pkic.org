@@ -1,7 +1,18 @@
+/**
+ * Email outbox — the queue as the server reports it, plus the two bounded
+ * commands that act on it.
+ *
+ * The row checkbox is a real label-wrapped control carrying all three parts of
+ * the design system's check block; its name is visually hidden because the row
+ * beside it already says which message it selects, but it is still a name
+ * rather than an unlabelled box in a column of unlabelled boxes.
+ */
 import { useRef, useState } from "preact/hooks";
 import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
+import { Badge as ToneBadge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
 import { getJson, postJson } from "../../../../shared/api-client";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { fmt, toast } from "../../ui";
@@ -11,6 +22,11 @@ import {
   emailOutboxResponseSchema,
   type EmailOutboxRow,
 } from "../../../../../shared/schemas/email-outbox";
+import "../../../../ui/Content.css";
+import "../../../../ui/Field.css";
+
+/** The largest selection the process/reset endpoints accept in one request. */
+const MAX_SELECTION = 100;
 
 const loadPortalCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
@@ -18,72 +34,74 @@ const rowColumns: Column<EmailOutboxRow>[] = [
   {
     header: "Recipient",
     cell: (row) => (
-      <>
-        <div class="fw-semibold">{row.recipientName || row.recipientEmail}</div>
-        <div class="mono small text-muted">{row.recipientEmail}</div>
-        {row.eventName && <div class="small text-muted mt-1">{row.eventName}</div>}
-      </>
+      <div class="pk-stack pk-stack--tight">
+        <div class="pk-strong">{row.recipientName || row.recipientEmail}</div>
+        <div class="pk-mono pk-small pk-break">{row.recipientEmail}</div>
+        {row.eventName && <div class="pk-small">{row.eventName}</div>}
+      </div>
     ),
     sort: { asc: "recipient", desc: "-recipient" },
   },
   {
     header: "Message",
     cell: (row) => (
-      <>
-        <div class="fw-semibold">{row.subject || "PKI Consortium Update"}</div>
-        <div class="d-flex flex-wrap gap-1 mt-1">
-          <span class="small text-muted">
+      <div class="pk-stack pk-stack--tight">
+        <div class="pk-strong">{row.subject || "PKI Consortium Update"}</div>
+        <div class="pk-cluster">
+          <span class="pk-small">
             {row.templateKey}
             {row.templateVersion !== null ? ` v${row.templateVersion}` : ""}
           </span>
           <Badge status={row.messageType} />
         </div>
-      </>
+      </div>
     ),
     sort: { asc: "template", desc: "-template" },
   },
   {
     header: "Queue",
     cell: (row) => (
-      <>
-        <div class="d-flex flex-wrap gap-1 align-items-center">
+      <div class="pk-stack pk-stack--tight">
+        <div class="pk-cluster">
           <Badge status={row.status} />
-          <span class="small text-muted">Attempts {row.attempts}</span>
+          <span class="pk-small">Attempts {row.attempts}</span>
         </div>
-        <div class="small text-muted mt-2">Updated {fmt(row.updatedAt)}</div>
-      </>
+        <div class="pk-small">Updated {fmt(row.updatedAt)}</div>
+      </div>
     ),
     sort: { asc: "status", desc: "-status" },
   },
   {
     header: "Timing",
     cell: (row) => (
-      <>
-        <div class="small text-muted">Queued</div>
-        <div class="mono small">{fmt(row.createdAt)}</div>
-        <div class="small text-muted mt-1">Due</div>
-        <div class="mono small">{fmt(row.sendAfter)}</div>
-        {row.sentAt && <div class="small text-muted mt-1">Sent {fmt(row.sentAt)}</div>}
-      </>
+      <div class="pk-stack pk-stack--tight">
+        <div class="pk-small">Queued</div>
+        <div class="pk-mono">{fmt(row.createdAt)}</div>
+        <div class="pk-small">Due</div>
+        <div class="pk-mono">{fmt(row.sendAfter)}</div>
+        {row.sentAt && <div class="pk-small">Sent {fmt(row.sentAt)}</div>}
+      </div>
     ),
-    className: "small",
+    className: "pk-small",
     sort: { asc: "sendAfter", desc: "-sendAfter" },
   },
   {
     header: "Details",
     cell: (row) => (
-      <>
-        <div class="mono small">{row.id}</div>
-        {row.providerMessageId && <div class="mono small text-muted mt-1">{row.providerMessageId}</div>}
+      <div class="pk-stack pk-stack--tight">
+        <div class="pk-mono pk-small pk-break">{row.id}</div>
+        {row.providerMessageId && <div class="pk-mono pk-small pk-break">{row.providerMessageId}</div>}
         {row.lastError ? (
-          <details class="mt-2">
-            <summary class="small text-danger">Failure details</summary>
-            <div class="small text-danger mt-2">{row.lastError}</div>
+          <details>
+            {/* "Failure" is in the words, so the row does not depend on a tone
+                nobody can rely on to say that something went wrong. */}
+            <summary class="pk-small">Failure details</summary>
+            <div class="pk-small pk-break">{row.lastError}</div>
           </details>
         ) : (
-          <div class="small text-muted mt-2">No delivery error recorded.</div>
+          <div class="pk-small">No delivery error recorded.</div>
         )}
-      </>
+      </div>
     ),
   },
 ];
@@ -95,24 +113,25 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
   const columns: Column<EmailOutboxRow>[] = canManage
     ? [
         {
-          header: { label: "Select", className: "text-center" },
-          className: "text-center",
+          header: "Select",
           cell: (row) => (
-            <input
-              type="checkbox"
-              class="form-check-input"
-              aria-label={`Select ${row.subject || row.id}`}
-              checked={selected.has(row.id)}
-              disabled={!selected.has(row.id) && selected.size >= 100}
-              onChange={() =>
-                setSelected((current) => {
-                  const next = new Set(current);
-                  if (next.has(row.id)) next.delete(row.id);
-                  else next.add(row.id);
-                  return next;
-                })
-              }
-            />
+            <label class="pk-check">
+              <input
+                type="checkbox"
+                class="pk-check__input"
+                checked={selected.has(row.id)}
+                disabled={!selected.has(row.id) && selected.size >= MAX_SELECTION}
+                onChange={() =>
+                  setSelected((current) => {
+                    const next = new Set(current);
+                    if (next.has(row.id)) next.delete(row.id);
+                    else next.add(row.id);
+                    return next;
+                  })
+                }
+              />
+              <span class="pk-check__label pk-sr-only">Select {row.subject || row.id}</span>
+            </label>
           ),
         },
         ...rowColumns,
@@ -145,13 +164,13 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
   }
 
   return (
-    <div>
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
+    <div class="pk pk-stack pk-stack--snug">
+      <div class="pk-cluster pk-cluster--between">
+        <div class="pk-stack pk-stack--tight">
           <strong>Email Outbox</strong>
-          <p class="mb-0 text-muted small">Inspect queued, sent, delivered, failed, and retryable email rows.</p>
+          <p class="pk-small">Inspect queued, sent, delivered, failed, and retryable email rows.</p>
         </div>
-        {!canManage && <span class="badge text-bg-light border text-dark">Read only</span>}
+        {!canManage && <ToneBadge tone="neutral">Read only</ToneBadge>}
       </div>
       <ApiDataTable
         caption="Email outbox messages"
@@ -169,31 +188,31 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         toolbar={
           canManage
             ? () => (
-                <div class="d-flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-primary"
+                <div class="pk-cluster">
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     disabled={busy}
                     onClick={() => void process("/api/v1/email/outbox/process", { limit: 20 }, false)}
                   >
                     Process next 20 due
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-primary"
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     disabled={busy || selected.size === 0}
                     onClick={() => void process("/api/v1/email/outbox/process", { ids: [...selected] }, false)}
                   >
                     Process selected ({selected.size})
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-outline-danger"
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger-quiet"
                     disabled={busy || selected.size === 0}
                     onClick={() => void process("/api/v1/email/outbox/reset-failed", { ids: [...selected] }, true)}
                   >
                     Reset failed selected
-                  </button>
+                  </Button>
                 </div>
               )
             : undefined

@@ -1,5 +1,10 @@
-import type { ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { formatDateTime } from "../shared/ui";
+// `pk-datalist`, `pk-code-block` and `pk-answer-pre` are written here as class
+// names rather than reached through a component, so this module has to pull
+// their stylesheet into its own chunk. Without the import the markup renders
+// unstyled and nothing complains.
+import "../ui/Content.css";
 
 /** Matches an ISO-8601 instant with an explicit offset, e.g. "2026-08-21T10:00:00.000Z". */
 const ISO_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
@@ -44,12 +49,12 @@ function renderValue(value: unknown): ComponentChildren {
     const nestedEntries = Object.entries(value);
     if (nestedEntries.length === 0) return "—";
     return (
-      <dl class="details-summary-sublist mb-0">
+      <dl class="pk-datalist">
         {nestedEntries.map(([key, nestedValue]) => (
-          <div class="details-summary-row" key={key}>
+          <Fragment key={key}>
             <dt>{humanizeKey(key)}</dt>
             <dd>{formatPrimitiveText(nestedValue)}</dd>
-          </div>
+          </Fragment>
         ))}
       </dl>
     );
@@ -61,11 +66,16 @@ function renderValue(value: unknown): ComponentChildren {
   return formatPrimitiveText(value);
 }
 
+/**
+ * The shape the summary cannot read, kept rather than dropped. `<details>` is
+ * already a disclosure control the keyboard and a screen reader both
+ * understand, so it needs no role, no handler and no state of its own.
+ */
 function RawDetailsFallback({ value }: { value: unknown }) {
   return (
-    <details class="details-summary-raw">
-      <summary>Raw details</summary>
-      <pre class="mb-0 small text-body-secondary">{JSON.stringify(value, null, 2)}</pre>
+    <details>
+      <summary class="pk-small">Raw details</summary>
+      <pre class="pk-code-block pk-answer-pre">{JSON.stringify(value, null, 2)}</pre>
     </details>
   );
 }
@@ -78,6 +88,11 @@ function RawDetailsFallback({ value }: { value: unknown }) {
  * or deeper than that shape — a non-object root, or nesting past one level — falls back to a
  * collapsed raw-JSON view so no data is ever lost. An empty object or a nullish value renders
  * nothing.
+ *
+ * The pairs are direct children of the `<dl>`, not wrapped rows. `pk-datalist`
+ * is a two-column grid over `dl > dt` and `dl > dd`, so a wrapper element
+ * between them takes both out of the grid and leaves the browser's default
+ * 40px `dd` indent in place.
  */
 export function DetailsSummary({ value }: { value: unknown }) {
   if (value === null || value === undefined) return null;
@@ -88,12 +103,12 @@ export function DetailsSummary({ value }: { value: unknown }) {
   if (jsonDepth(value) > 2) return <RawDetailsFallback value={value} />;
 
   return (
-    <dl class="details-summary mb-0">
+    <dl class="pk-datalist">
       {entries.map(([key, entryValue]) => (
-        <div class="details-summary-row" key={key}>
+        <Fragment key={key}>
           <dt>{humanizeKey(key)}</dt>
           <dd>{renderValue(entryValue)}</dd>
-        </div>
+        </Fragment>
       ))}
     </dl>
   );

@@ -7,9 +7,20 @@ import {
 } from "../../../../../shared/schemas/group-events";
 import type { EventTermsReplaceInput } from "../../../../../shared/schemas/event-configuration";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { FormActions } from "../../../../components/FormActions";
+import { Spinner } from "../../../../components/Spinner";
+import { Alert } from "../../../../ui/Alert";
+import { Badge } from "../../../../ui/Badge";
+import { Button } from "../../../../ui/Button";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { TextInput } from "../../../../ui/TextControl";
 import { useData } from "../../../../hooks/useData";
 import { getJson, putJson } from "../../../../shared/api-client";
+
+// `pk-mono` — the term key and its version are identifiers, and Content.css
+// rides a lazy chunk rather than the entry stylesheet.
+import "../../../../ui/Content.css";
 
 type TermsResponse = z.infer<typeof groupEventTermsResponseSchema>;
 type TermInput = EventTermsReplaceInput["attendee"][number];
@@ -34,139 +45,148 @@ function toInput(term: TermsResponse["terms"][Audience][number]): TermInput {
   };
 }
 
+/**
+ * One term.
+ *
+ * The remove control names the audience and the ordinal rather than saying
+ * "Remove" alone: an event can carry forty of these across three audiences,
+ * and forty identically named buttons are indistinguishable to anyone reading
+ * the form control by control.
+ */
 function TermRow({
-  idPrefix,
+  audienceLabel,
+  ordinal,
   term,
   onChange,
   onRemove,
 }: {
-  idPrefix: string;
+  audienceLabel: string;
+  ordinal: number;
   term: TermInput;
   onChange: (term: TermInput) => void;
   onRemove: () => void;
 }) {
   const update = (patch: Partial<TermInput>) => onChange({ ...term, ...patch });
   return (
-    <div class="card border mb-2">
-      <div class="card-body py-2 px-3">
-        <div class="row g-2 mb-2">
-          <div class="col-md-3">
-            <label class="form-label small mb-1" for={`${idPrefix}-key`}>
-              Key
-            </label>
-            <input
-              id={`${idPrefix}-key`}
-              class="form-control form-control-sm"
+    <div class="pk-stack pk-stack--tight">
+      <div class="pk-grid pk-grid--tight">
+        <Field label="Key" required help="Stored with the acceptance, such as terms-of-service.">
+          {(control) => (
+            <TextInput
+              {...control}
+              class="pk-mono"
               autocomplete="off"
               value={term.termKey}
               onInput={(event) => update({ termKey: event.currentTarget.value })}
               placeholder="terms-of-service"
-              required
             />
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small mb-1" for={`${idPrefix}-version`}>
-              Version
-            </label>
-            <input
-              id={`${idPrefix}-version`}
-              class="form-control form-control-sm"
+          )}
+        </Field>
+        <Field label="Version" required help="Raise it when the wording changes, so past acceptances stay meaningful.">
+          {(control) => (
+            <TextInput
+              {...control}
+              class="pk-mono"
               autocomplete="off"
               value={term.version}
               onInput={(event) => update({ version: event.currentTarget.value })}
-              required
             />
-          </div>
-          <div class="col-md-5">
-            <label class="form-label small mb-1" for={`${idPrefix}-content-ref`}>
-              Link URL
-            </label>
-            <input
-              id={`${idPrefix}-content-ref`}
-              class="form-control form-control-sm"
+          )}
+        </Field>
+        <Field label="Link URL" help="The full text, if it lives on a page of its own.">
+          {(control) => (
+            <TextInput
+              {...control}
               type="url"
               autocomplete="off"
               value={term.contentRef ?? ""}
               onInput={(event) => update({ contentRef: event.currentTarget.value || undefined })}
               placeholder="https://…"
             />
-          </div>
-          <div class="col-md-1 d-flex align-items-end">
-            <label class="form-check mb-1">
-              <input
-                id={`${idPrefix}-required`}
-                class="form-check-input"
-                type="checkbox"
-                checked={term.required}
-                onChange={(event) => update({ required: event.currentTarget.checked })}
-              />
-              <span class="form-check-label small">Required</span>
-            </label>
-          </div>
-          <div class="col-md-1 d-flex align-items-end">
-            <button type="button" class="btn btn-sm btn-outline-danger" onClick={onRemove} aria-label="Remove term">
-              Remove
-            </button>
-          </div>
-        </div>
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="form-label small mb-1" for={`${idPrefix}-display-text`}>
-              Agreement text
-            </label>
-            <input
-              id={`${idPrefix}-display-text`}
-              class="form-control form-control-sm"
+          )}
+        </Field>
+      </div>
+
+      <div class="pk-grid pk-grid--roomy">
+        <Field label="Agreement text" required help="The sentence beside the checkbox.">
+          {(control) => (
+            <TextInput
+              {...control}
               autocomplete="off"
               value={term.displayText}
               onInput={(event) => update({ displayText: event.currentTarget.value })}
               placeholder="I agree to the event terms"
-              required
             />
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small mb-1" for={`${idPrefix}-help-text`}>
-              Help text
-            </label>
-            <input
-              id={`${idPrefix}-help-text`}
-              class="form-control form-control-sm"
+          )}
+        </Field>
+        <Field label="Help text" help="Optional detail shown under the agreement.">
+          {(control) => (
+            <TextInput
+              {...control}
               autocomplete="off"
               value={term.helpText ?? ""}
               onInput={(event) => update({ helpText: event.currentTarget.value || undefined })}
             />
-          </div>
-        </div>
+          )}
+        </Field>
+      </div>
+
+      <div class="pk-cluster">
+        <label class="pk-check">
+          <input
+            class="pk-check__input"
+            type="checkbox"
+            checked={term.required}
+            onChange={(event) => update({ required: event.currentTarget.checked })}
+          />
+          <span class="pk-check__label">Required to complete registration</span>
+        </label>
+        <Button size="sm" variant="danger-quiet" onClick={onRemove}>
+          Remove {audienceLabel.toLowerCase()} term {ordinal}
+        </Button>
       </div>
     </div>
   );
 }
 
+/**
+ * The terms one audience has to accept.
+ *
+ * The Bootstrap version nested a `<details>` inside the disclosure that
+ * already wraps this whole editor, and its summary emitted no heading. A Panel
+ * per audience puts a real heading in the outline instead, and the count is
+ * spelled out rather than left as a bare number in brackets.
+ */
 function AudienceTerms({
   audience,
   label,
   terms,
   onChange,
-  open,
-  idPrefix,
 }: {
   audience: Audience;
   label: string;
   terms: TermInput[];
   onChange: (terms: TermInput[]) => void;
-  open?: boolean;
-  idPrefix: string;
 }) {
   return (
-    <details class="border rounded p-2 mb-2" open={open}>
-      <summary class="fw-semibold small">
-        {label} <span class="text-muted">({terms.length})</span>
-      </summary>
-      <div class="pt-2">
+    <Panel>
+      <PanelHeader title={`${label} terms`}>
+        <Badge tone="neutral">
+          {terms.length} {terms.length === 1 ? "term" : "terms"}
+        </Badge>
+      </PanelHeader>
+      <PanelBody class="pk-stack">
+        {terms.length === 0 && (
+          <EmptyState
+            title={`No ${label.toLowerCase()} terms`}
+            body="Nothing has to be accepted by this audience yet."
+          />
+        )}
         {terms.map((term, index) => (
           <TermRow
             key={`${audience}-${term.termKey}-${index}`}
-            idPrefix={`${idPrefix}-${audience}-${index}`}
+            audienceLabel={label}
+            ordinal={index + 1}
             term={term}
             onChange={(next) =>
               onChange(terms.map((current, currentIndex) => (currentIndex === index ? next : current)))
@@ -174,15 +194,13 @@ function AudienceTerms({
             onRemove={() => onChange(terms.filter((_, currentIndex) => currentIndex !== index))}
           />
         ))}
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          onClick={() => onChange([...terms, emptyTerm()])}
-        >
-          Add {label.toLowerCase()} term
-        </button>
-      </div>
-    </details>
+        <div class="pk-cluster">
+          <Button size="sm" onClick={() => onChange([...terms, emptyTerm()])}>
+            Add {label.toLowerCase()} term
+          </Button>
+        </div>
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -231,38 +249,41 @@ function TermsForm({
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)}>
+    <form class="pk pk-stack" onSubmit={(event) => void submit(event)}>
       <ErrorAlert error={error} />
-      <AudienceTerms
-        audience="attendee"
-        label="Attendee"
-        idPrefix={event.id}
-        terms={terms.attendee}
-        onChange={(attendee) => setTerms({ ...terms, attendee })}
-        open
-      />
-      <AudienceTerms
-        audience="speaker"
-        label="Speaker"
-        idPrefix={event.id}
-        terms={terms.speaker}
-        onChange={(speaker) => setTerms({ ...terms, speaker })}
-      />
-      <AudienceTerms
-        audience="presentation"
-        label="Presentation upload"
-        idPrefix={event.id}
-        terms={terms.presentation}
-        onChange={(presentation) => setTerms({ ...terms, presentation })}
-      />
-      <FormActions
-        submitLabel="Save terms"
-        busyLabel="Saving terms…"
-        busy={saving}
-        onCancel={() => void reload()}
-        status={status}
-        submitVariant="primary"
-      />
+      {/* One disabled fieldset takes the whole form out of play while the save
+          is in flight, rather than each control deciding for itself. */}
+      <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+        <AudienceTerms
+          audience="attendee"
+          label="Attendee"
+          terms={terms.attendee}
+          onChange={(attendee) => setTerms({ ...terms, attendee })}
+        />
+        <AudienceTerms
+          audience="speaker"
+          label="Speaker"
+          terms={terms.speaker}
+          onChange={(speaker) => setTerms({ ...terms, speaker })}
+        />
+        <AudienceTerms
+          audience="presentation"
+          label="Presentation upload"
+          terms={terms.presentation}
+          onChange={(presentation) => setTerms({ ...terms, presentation })}
+        />
+
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" size="sm" loading={saving}>
+            {saving ? "Saving terms…" : "Save terms"}
+          </Button>
+          <Button size="sm" onClick={() => void reload()}>
+            Cancel
+          </Button>
+        </div>
+      </fieldset>
+
+      {status && <Alert tone="ok">{status}</Alert>}
     </form>
   );
 }
@@ -279,7 +300,7 @@ export function EventTermsEditor({
   onRevision: (updatedAt: string) => void;
 }) {
   const resource = useData(() => getJson(path(groupId, event.id), groupEventTermsResponseSchema), [groupId, event.id]);
-  if (resource.loading) return <p class="small text-muted">Loading terms…</p>;
+  if (resource.loading) return <Spinner label="Loading terms…" />;
   if (resource.error) return <ErrorAlert error={resource.error} />;
   if (!resource.data) return <></>;
   return (
