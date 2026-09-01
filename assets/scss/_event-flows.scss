@@ -1,38 +1,10 @@
 // ── Event flow container ────────────────────────────────────────────────────
 // Hosts registration, proposal, confirm, and manage forms. No visual card —
 // forms render as plain page content, consistent with other site forms.
-
-.event-flow {
-  .form-label {
-    font-weight: 600;
-  }
-
-  .invalid-feedback.d-block {
-    margin-top: 0.35rem;
-  }
-
-  // When a personal/consumer email domain is detected we show an advisory
-  // warning but don't block the form. Override Bootstrap's :valid green ring
-  // and replace the green checkmark with the amber warning triangle icon.
-  // SVG colour matches Bootstrap's --bs-warning (#ffc107).
-  .was-validated .form-control[data-personal-email]:valid,
-  .form-control[data-personal-email].is-valid {
-    border-color: var(--bs-warning-border-subtle);
-    // Amber exclamation-triangle-fill — matches Bootstrap icon positioning
-    // stylelint-disable-next-line function-disallowed-list
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='%23ffc107' d='M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right calc(0.375em + 0.1875rem) center;
-    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
-    padding-right: calc(1.5em + 0.75rem);
-    box-shadow: none;
-
-    &:focus {
-      border-color: var(--bs-warning);
-      box-shadow: 0 0 0 0.25rem rgba(var(--bs-warning-rgb), 0.25);
-    }
-  }
-}
+//
+// The container itself no longer styles its controls: labels, inputs and the
+// validation states come from the design system's Field and Button, so the
+// only rule `.event-flow` still owns is its narrow-viewport padding, below.
 
 // ── Multi-step wizard ────────────────────────────────────────────────────────
 
@@ -77,8 +49,8 @@
     left: 0;
     width: 50%;
     height: 2px;
-    background: var(--bs-border-color);
-    transition: background-color 0.35s ease;
+    background: var(--pk-line);
+    transition: background-color var(--pk-dur) ease;
   }
 
   // Right half of the connector (from bubble centre to item right-edge).
@@ -90,8 +62,8 @@
     left: 50%;
     width: 50%;
     height: 2px;
-    background: var(--bs-border-color);
-    transition: background-color 0.35s ease;
+    background: var(--pk-line);
+    transition: background-color var(--pk-dur) ease;
   }
 
   &:first-child::before { display: none; }
@@ -101,7 +73,7 @@
   &.is-done::before,
   &.is-done::after,
   &.is-active::before {
-    background: var(--page-accent, var(--bs-primary));
+    background: var(--page-accent, var(--pk-accent));
   }
 
   &.is-clickable {
@@ -111,18 +83,18 @@
       text-decoration: underline;
       text-decoration-color: transparent;
       text-underline-offset: 0.18em;
-      transition: color 0.15s ease, text-decoration-color 0.15s ease;
+      transition: color var(--pk-dur-fast) ease, text-decoration-color var(--pk-dur-fast) ease;
     }
 
     &:hover,
     &:focus-visible {
       .event-flow-stepper-label {
-        color: var(--bs-body-color);
+        color: var(--pk-ink);
         text-decoration-color: currentColor;
       }
 
       .event-flow-stepper-bubble {
-        box-shadow: 0 0 0 4px color-mix(in srgb, var(--page-accent, var(--bs-primary)) 16%, transparent);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--page-accent, var(--pk-accent)) 16%, transparent);
       }
     }
 
@@ -139,19 +111,19 @@
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: var(--bs-secondary-bg);
-  border: 2px solid var(--bs-border-color);
-  color: var(--bs-secondary-color);
+  background: var(--pk-surface-sunk);
+  border: 2px solid var(--pk-line);
+  color: var(--pk-ink-muted);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.72rem;
   font-weight: 700;
   transition:
-    background-color 0.25s ease,
-    border-color 0.25s ease,
-    color 0.25s ease,
-    box-shadow 0.25s ease;
+    background-color var(--pk-dur) ease,
+    border-color var(--pk-dur) ease,
+    color var(--pk-dur) ease,
+    box-shadow var(--pk-dur) ease;
 }
 
 .event-flow-stepper-check {
@@ -159,31 +131,31 @@
 }
 
 .event-flow-stepper-item.is-done .event-flow-stepper-bubble {
-  background: var(--page-accent, var(--bs-primary));
-  border-color: var(--page-accent, var(--bs-primary));
-  color: #fff;
+  background: var(--page-accent, var(--pk-accent));
+  border-color: var(--page-accent, var(--pk-accent));
+  color: var(--pk-on-solid);
 
   .event-flow-stepper-num { display: none; }
   .event-flow-stepper-check { display: inline; }
 }
 
 .event-flow-stepper-item.is-active .event-flow-stepper-bubble {
-  background: var(--page-accent, var(--bs-primary));
-  border-color: var(--page-accent, var(--bs-primary));
-  color: #fff;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--page-accent, var(--bs-primary)) 20%, transparent);
+  background: var(--page-accent, var(--pk-accent));
+  border-color: var(--page-accent, var(--pk-accent));
+  color: var(--pk-on-solid);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--page-accent, var(--pk-accent)) 20%, transparent);
 }
 
 .event-flow-stepper-label {
   font-size: 0.68rem;
   font-weight: 500;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   text-align: center;
   line-height: 1.2;
   white-space: nowrap;
 
   .is-active & {
-    color: var(--bs-body-color);
+    color: var(--pk-ink);
     font-weight: 600;
   }
 }
@@ -193,7 +165,7 @@
 .event-flow-step {
   // Fade in when a step is revealed. `hidden` attribute handles display:none;
   // the animation fires when hidden is removed.
-  animation: step-fade-in 0.2s ease both;
+  animation: step-fade-in var(--pk-dur) ease both;
 }
 
 @keyframes step-fade-in {
@@ -203,7 +175,7 @@
 
 // One-line context/intro text at the top of each step.
 .event-flow-step-intro {
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   font-size: 0.9rem;
   margin-bottom: 1.25rem;
 }
@@ -217,7 +189,7 @@
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--bs-border-color);
+  border-top: 1px solid var(--pk-line);
 }
 
 .event-flow-step-forward {
@@ -225,12 +197,12 @@
 }
 
 .event-flow-step-back {
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   text-decoration: none;
   padding-left: 0;
 
   &:hover {
-    color: var(--bs-body-color);
+    color: var(--pk-ink);
   }
 }
 
@@ -239,10 +211,10 @@
 [data-headshot-section] [data-headshot-preview] {
   width: 112px;
   height: 112px;
-  border-radius: 999px;
+  border-radius: var(--pk-radius-pill);
   overflow: hidden;
-  border: 1px solid var(--bs-border-color);
-  background: var(--bs-secondary-bg);
+  border: 1px solid var(--pk-line);
+  background: var(--pk-surface-sunk);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -269,7 +241,7 @@
   padding: 0.75rem;
   text-align: center;
   font-size: 0.75rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
 }
 
 
@@ -297,14 +269,14 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--bs-secondary-color);
+    color: var(--pk-ink-muted);
   }
 
   &::after {
     content: "";
     flex: 1 1 0;
     height: 1px;
-    background: var(--bs-border-color);
+    background: var(--pk-line);
   }
 }
 
@@ -314,7 +286,7 @@
 .event-flow-time-estimate {
   font-size: 0.68rem;
   font-weight: 500;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   opacity: 0.7;
   white-space: nowrap;
   margin-left: auto;
@@ -340,12 +312,12 @@
 // pending until the attendee can receive and use the confirmation link.
 
 .event-flow-review {
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
   overflow: hidden;
   margin-bottom: 1rem;
-  background: var(--bs-body-bg);
-  box-shadow: 0 0.35rem 1rem rgba(15, 23, 42, 0.04);
+  background: var(--pk-surface);
+  box-shadow: var(--pk-shadow-2);
 }
 
 .event-flow-review-header {
@@ -354,8 +326,8 @@
   gap: 1.25rem;
   align-items: center;
   padding: 1.1rem 1.25rem;
-  background: var(--bs-warning-bg-subtle);
-  border-bottom: 1px solid var(--bs-warning-border-subtle);
+  background: var(--pk-warn-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
 }
 
 .event-flow-review-eyebrow,
@@ -366,7 +338,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
 }
 
 .event-flow-review-title {
@@ -387,12 +359,12 @@
   margin: 0;
   font-size: clamp(1.1rem, 1.6vw, 1.35rem);
   font-weight: 750;
-  color: var(--bs-body-color);
+  color: var(--pk-ink);
 }
 
 .event-flow-review-email,
 .event-flow-review-email-inline {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--pk-font-mono);
   letter-spacing: 0.01em;
 }
 
@@ -408,10 +380,10 @@
   align-items: center;
   width: fit-content;
   padding: 0.16rem 0.45rem;
-  border: 1px solid var(--bs-warning-border-subtle);
-  border-radius: 999px;
-  background: var(--bs-body-bg);
-  color: var(--bs-warning-text-emphasis);
+  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
+  border-radius: var(--pk-radius-pill);
+  background: var(--pk-surface);
+  color: var(--pk-warn-ink);
   font-size: 0.76rem;
   font-weight: 700;
   text-align: left;
@@ -421,7 +393,7 @@
   margin: 0;
   font-size: 0.88rem;
   line-height: 1.45;
-  color: var(--bs-warning-text-emphasis);
+  color: var(--pk-warn-ink);
 }
 
 .event-flow-review-warning {
@@ -430,9 +402,9 @@
   gap: 0.7rem;
   align-items: flex-start;
   padding: 0.72rem 0.8rem;
-  border: 1px solid var(--bs-warning-border-subtle);
-  border-radius: var(--bs-border-radius);
-  background: color-mix(in srgb, var(--bs-warning-bg-subtle) 70%, var(--bs-body-bg));
+  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
+  border-radius: var(--pk-radius);
+  background: color-mix(in srgb, var(--pk-warn-soft) 70%, var(--pk-surface));
   text-align: left;
 
   .event-flow-review-help {
@@ -449,16 +421,16 @@
   height: 1.55rem;
   margin-top: 0.1rem;
   border-radius: 50%;
-  background: var(--bs-warning);
-  color: var(--bs-body-color);
+  background: var(--pk-warn);
+  color: var(--pk-ink-inverse);
   font-size: 1rem;
   font-weight: 850;
   line-height: 1;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-warning) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-warn) 20%, transparent);
 }
 
 .event-flow-review-section {
-  border-top: 1px solid var(--bs-border-color);
+  border-top: 1px solid var(--pk-line);
 
   &:first-of-type {
     border-top: 0;
@@ -466,9 +438,9 @@
 
   &:hover {
     .event-flow-review-edit {
-      color: var(--bs-primary);
-      border-color: var(--bs-primary);
-      background: color-mix(in srgb, var(--bs-primary) 8%, var(--bs-body-bg));
+      color: var(--pk-accent-ink);
+      border-color: var(--pk-accent);
+      background: color-mix(in srgb, var(--pk-accent) 8%, var(--pk-surface));
     }
   }
 }
@@ -479,7 +451,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.9rem 1.25rem 0.65rem;
-  background: var(--bs-tertiary-bg);
+  background: var(--pk-surface-sunk);
 }
 
 .event-flow-review-section-title {
@@ -493,28 +465,28 @@
   justify-content: center;
   min-height: 2rem;
   padding: 0.25rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--bs-primary) 35%, var(--bs-border-color));
-  border-radius: var(--bs-border-radius);
-  background: var(--bs-body-bg);
-  color: var(--bs-primary);
+  border: 1px solid color-mix(in srgb, var(--pk-accent) 35%, var(--pk-line));
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface);
+  color: var(--pk-accent-ink);
   font-size: 0.82rem;
   font-weight: 650;
   line-height: 1;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
+    background var(--pk-dur-fast) ease,
+    border-color var(--pk-dur-fast) ease,
+    color var(--pk-dur-fast) ease,
+    box-shadow var(--pk-dur-fast) ease;
 
   &:hover,
   &:focus-visible {
-    color: var(--bs-primary);
-    border-color: var(--bs-primary);
-    background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg));
+    color: var(--pk-accent-ink);
+    border-color: var(--pk-accent);
+    background: color-mix(in srgb, var(--pk-accent) 10%, var(--pk-surface));
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bs-primary);
+    outline: 2px solid var(--pk-accent);
     outline-offset: 2px;
   }
 }
@@ -528,27 +500,27 @@
   grid-template-columns: minmax(10rem, 0.42fr) minmax(0, 1fr);
   gap: 0.9rem;
   padding: 0.72rem 1.25rem;
-  border-top: 1px solid var(--bs-border-color-translucent);
-  transition: background 0.14s ease;
+  border-top: 1px solid var(--pk-line);
+  transition: background var(--pk-dur-fast) ease;
 
   &:first-child {
     border-top: 0;
   }
 
   &:hover {
-    background: color-mix(in srgb, var(--bs-primary) 4%, var(--bs-body-bg));
+    background: color-mix(in srgb, var(--pk-accent) 4%, var(--pk-surface));
   }
 
   dt {
     font-size: 0.82rem;
     font-weight: 650;
-    color: var(--bs-secondary-color);
+    color: var(--pk-ink-muted);
   }
 
   dd {
     margin: 0;
     font-weight: 600;
-    color: var(--bs-body-color);
+    color: var(--pk-ink);
     overflow-wrap: anywhere;
   }
 }
@@ -564,7 +536,7 @@
 .event-flow-terms-heading {
   margin: 1.35rem 0 0.65rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--bs-border-color);
+  border-top: 1px solid var(--pk-line);
 }
 
 .event-flow-terms-title {
@@ -575,7 +547,7 @@
 
 .event-flow-terms-help {
   margin: 0;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -587,10 +559,10 @@
   align-items: flex-start;
   margin-bottom: 1rem;
   padding: 1rem 1.05rem;
-  border: 1px solid var(--bs-warning-border-subtle);
-  border-radius: var(--bs-border-radius-lg);
-  background: var(--bs-warning-bg-subtle);
-  color: var(--bs-warning-text-emphasis);
+  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
+  border-radius: var(--pk-radius-lg);
+  background: var(--pk-warn-soft);
+  color: var(--pk-warn-ink);
   font-size: 1rem;
   line-height: 1.55;
 }
@@ -599,7 +571,7 @@
   margin: 0 0 0.55rem;
   font-size: 1.12rem;
   font-weight: 800;
-  color: var(--bs-body-color);
+  color: var(--pk-ink);
 }
 
 .event-flow-pending-steps {
@@ -612,14 +584,14 @@
 .event-flow-submission-review {
   padding: 0.95rem 1rem;
   margin-bottom: 1rem;
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius);
-  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface-sunk);
 }
 
 .event-flow-submission-review-value {
   margin-bottom: 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--pk-font-mono);
   font-size: 1.08rem;
   font-weight: 750;
   overflow-wrap: anywhere;
@@ -632,10 +604,6 @@
   gap: 0.65rem;
   align-items: center;
   justify-content: space-between;
-
-  .btn {
-    font-weight: 700;
-  }
 }
 
 @media (max-width: 575.98px) {
@@ -663,12 +631,11 @@
     grid-template-columns: 1fr;
   }
 
+  // Stacking the row is what makes the action fill the width. The button no
+  // longer sets its own, so the column stretches every child instead.
   .event-flow-submission-action {
+    flex-direction: column;
     align-items: stretch;
-
-    .btn {
-      width: 100%;
-    }
   }
 }
 
@@ -700,35 +667,35 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 0.875rem;
-  border: 1.5px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
-  background: var(--bs-body-bg);
+  border: 1.5px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+  background: var(--pk-surface);
   cursor: pointer;
   user-select: none;
   transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color var(--pk-dur) ease,
+    background var(--pk-dur) ease,
+    box-shadow var(--pk-dur) ease;
 
   &:hover {
-    border-color: var(--bs-success-border-subtle);
-    box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb), 0.08);
+    border-color: color-mix(in srgb, var(--pk-ok) 35%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-ok) 8%, transparent);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bs-success);
+    outline: 2px solid var(--pk-ok);
     outline-offset: 2px;
   }
 
   // ── Agreed / checked state ────────────────────────────────────────────────
   &.is-checked {
-    border-color: var(--bs-success);
-    background: var(--bs-success-bg-subtle);
+    border-color: var(--pk-ok);
+    background: var(--pk-ok-soft);
 
     .event-flow-consent-indicator {
-      background: var(--bs-success);
-      border-color: var(--bs-success);
-      color: #fff;
+      background: var(--pk-ok);
+      border-color: var(--pk-ok);
+      color: var(--pk-on-solid);
 
       .event-flow-consent-indicator-check {
         opacity: 1;
@@ -743,12 +710,12 @@
   // was also Bootstrap's spelling, which the isolation gate rejects in a
   // migrated surface.
   &[aria-invalid="true"] {
-    border-color: var(--bs-danger);
-    background: var(--bs-danger-bg-subtle);
-    box-shadow: 0 0 0 3px rgba(var(--bs-danger-rgb), 0.12);
+    border-color: var(--pk-danger);
+    background: var(--pk-danger-soft);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-danger) 12%, transparent);
 
     .event-flow-consent-indicator {
-      border-color: var(--bs-danger);
+      border-color: var(--pk-danger);
     }
   }
 }
@@ -760,20 +727,20 @@
   flex-shrink: 0;
   width: 1.25rem;
   height: 1.25rem;
-  border-radius: 0.3rem;
-  border: 2px solid #adb5bd;
-  background: #f8f9fa;
+  border-radius: var(--pk-radius-sm);
+  border: 2px solid var(--pk-line-strong);
+  background: var(--pk-surface-sunk);
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background var(--pk-dur-fast) ease,
+    border-color var(--pk-dur-fast) ease;
 
   .event-flow-consent-indicator-check {
     opacity: 0;
     transform: scale(0.5);
-    transition: opacity 0.12s ease, transform 0.12s ease;
+    transition: opacity var(--pk-dur-fast) ease, transform var(--pk-dur-fast) ease;
     display: block;
   }
 }
@@ -795,16 +762,16 @@
   gap: 0.25em;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   text-decoration: none;
   white-space: nowrap;
   padding: 0.2rem 0.45rem;
-  border-radius: var(--bs-border-radius);
-  transition: color 0.15s ease, background 0.15s ease;
+  border-radius: var(--pk-radius);
+  transition: color var(--pk-dur-fast) ease, background var(--pk-dur-fast) ease;
 
   &:hover {
-    color: var(--bs-body-color);
-    background: var(--bs-secondary-bg);
+    color: var(--pk-ink);
+    background: var(--pk-surface-sunk);
     text-decoration: none;
   }
 
@@ -818,9 +785,9 @@
   flex-shrink: 0;
   font-size: 0.7rem;
   font-weight: 500;
-  color: var(--bs-secondary-color);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.25rem;
+  color: var(--pk-ink-muted);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-sm);
   padding: 0.1em 0.4em;
   white-space: nowrap;
   line-height: 1.4;
@@ -835,50 +802,50 @@
   flex-direction: column;
   align-items: stretch;
   padding: 0;
-  border-color: var(--bs-warning-border-subtle);
+  border-color: color-mix(in srgb, var(--pk-warn) 35%, transparent);
   overflow: hidden;
 
   &:hover {
-    border-color: var(--bs-warning);
-    box-shadow: 0 0 0 3px rgba(var(--bs-warning-rgb), 0.12);
+    border-color: var(--pk-warn);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-warn) 12%, transparent);
   }
 
   &.is-checked {
-    border-color: var(--bs-success);
+    border-color: var(--pk-ok);
     box-shadow: none;
 
     &:hover {
-      border-color: var(--bs-success);
-      box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb), 0.08);
+      border-color: var(--pk-ok);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-ok) 8%, transparent);
     }
 
     .event-flow-consent-card-context {
-      background: var(--bs-success);
-      border-bottom-color: var(--bs-success);
+      background: var(--pk-ok);
+      border-bottom-color: var(--pk-ok);
 
       .event-flow-consent-card-icon {
-        color: rgba(255, 255, 255, 0.85);
+        color: color-mix(in srgb, var(--pk-on-solid) 85%, transparent);
       }
 
       .event-flow-consent-card-context-text {
-        color: #fff;
+        color: var(--pk-on-solid);
       }
     }
 
     .event-flow-consent-card-action {
-      background: var(--bs-success-bg-subtle);
+      background: var(--pk-ok-soft);
     }
   }
 
-  &.is-invalid {
-    border-color: var(--bs-danger);
-    box-shadow: 0 0 0 3px rgba(var(--bs-danger-rgb), 0.12);
+  &[aria-invalid="true"] {
+    border-color: var(--pk-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk-danger) 12%, transparent);
 
     .event-flow-consent-card-action {
-      background: var(--bs-danger-bg-subtle);
+      background: var(--pk-danger-soft);
 
       .event-flow-consent-indicator {
-        border-color: var(--bs-danger);
+        border-color: var(--pk-danger);
       }
     }
   }
@@ -889,24 +856,24 @@
     gap: 0.625rem;
     align-items: flex-start;
     padding: 0.75rem 0.9rem;
-    background: var(--bs-warning-bg-subtle);
-    border-bottom: 1px solid var(--bs-warning-border-subtle);
-    transition: background 0.2s ease, border-bottom-color 0.2s ease;
+    background: var(--pk-warn-soft);
+    border-bottom: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
+    transition: background var(--pk-dur) ease, border-bottom-color var(--pk-dur) ease;
   }
 
   .event-flow-consent-card-icon {
     flex-shrink: 0;
     margin-top: 0.1em;
-    color: color-mix(in srgb, var(--bs-warning) 70%, #000);
-    transition: color 0.2s ease;
+    color: var(--pk-warn-ink);
+    transition: color var(--pk-dur) ease;
   }
 
   .event-flow-consent-card-context-text {
     margin: 0;
     font-size: 0.8375rem;
     line-height: 1.55;
-    color: var(--bs-body-color);
-    transition: color 0.2s ease;
+    color: var(--pk-ink);
+    transition: color var(--pk-dur) ease;
   }
 
   // Bottom zone: the explicit agreement action
@@ -915,8 +882,8 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.7rem 0.9rem;
-    background: var(--bs-body-bg);
-    transition: background 0.18s ease;
+    background: var(--pk-surface);
+    transition: background var(--pk-dur) ease;
   }
 
   .event-flow-consent-card-label {
@@ -937,7 +904,7 @@
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: var(--bs-secondary-color);
+    color: var(--pk-ink-muted);
   }
 }
 
@@ -958,7 +925,7 @@
 }
 
 .event-flow-attendance-card {
-  --option-color: var(--page-accent);
+  --option-color: var(--page-accent, var(--pk-accent));
 
   position: relative;        // anchor for the radio dot
   flex: 1 1 0;               // equal-width columns
@@ -968,18 +935,18 @@
   text-align: center;
   gap: 0.6rem;
   padding: 1.2rem 1rem 1rem;
-  border: 1.5px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
+  border: 1.5px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
   cursor: pointer;
   user-select: none;
   transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color var(--pk-dur) ease,
+    background-color var(--pk-dur) ease,
+    box-shadow var(--pk-dur) ease;
 
   &:hover {
     border-color: color-mix(in srgb, var(--option-color) 55%, transparent);
-    background-color: color-mix(in srgb, var(--option-color) 4%, var(--bs-body-bg));
+    background-color: color-mix(in srgb, var(--option-color) 4%, var(--pk-surface));
     box-shadow: 0 4px 14px color-mix(in srgb, var(--option-color) 14%, transparent);
   }
 }
@@ -987,7 +954,7 @@
 .event-flow-attendance-card--in-person { --option-color: #e05c3b; }
 .event-flow-attendance-card--virtual { --option-color: #2b7de8; }
 .event-flow-attendance-card--on-demand { --option-color: #7b2be8; }
-.event-flow-attendance-card--default { --option-color: #198754; }
+.event-flow-attendance-card--default { --option-color: var(--pk-accent); }
 
 // Coloured rounded-square icon pill.
 .event-flow-attendance-icon {
@@ -996,10 +963,10 @@
   justify-content: center;
   width: 3rem;
   height: 3rem;
-  border-radius: 0.8rem;
+  border-radius: var(--pk-radius-lg);
   background-color: var(--option-color);
-  color: #fff;
-  transition: transform 0.2s ease;
+  color: var(--pk-on-solid);
+  transition: transform var(--pk-dur) ease;
 }
 
 // Title + description centred beneath the icon.
@@ -1013,14 +980,14 @@
 .event-flow-attendance-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--bs-body-color);
+  color: var(--pk-ink);
   line-height: 1.3;
-  transition: color 0.18s ease;
+  transition: color var(--pk-dur) ease;
 }
 
 .event-flow-attendance-desc {
   font-size: 0.75rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   line-height: 1.3;
 }
 
@@ -1032,10 +999,10 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--bs-warning-text-emphasis);
-  background-color: var(--bs-warning-bg-subtle);
-  border: 1px solid var(--bs-warning-border-subtle);
-  border-radius: 0.3rem;
+  color: var(--pk-warn-ink);
+  background-color: var(--pk-warn-soft);
+  border: 1px solid color-mix(in srgb, var(--pk-warn) 35%, transparent);
+  border-radius: var(--pk-radius-sm);
   padding: 0.1rem 0.4rem;
 }
 
@@ -1047,15 +1014,15 @@
   width: 1.05rem;
   height: 1.05rem;
   border-radius: 50%;
-  border: 2px solid var(--bs-border-color);
-  background-color: var(--bs-body-bg);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  border: 2px solid var(--pk-line);
+  background-color: var(--pk-surface);
+  transition: border-color var(--pk-dur-fast), box-shadow var(--pk-dur-fast);
 }
 
 // Checked state.
 .event-flow-attendance-input:checked + .event-flow-attendance-card {
   border-color: var(--option-color);
-  background-color: color-mix(in srgb, var(--option-color) 7%, var(--bs-body-bg));
+  background-color: color-mix(in srgb, var(--option-color) 7%, var(--pk-surface));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--option-color) 15%, transparent);
 
   .event-flow-attendance-icon {
@@ -1063,14 +1030,14 @@
   }
 
   .event-flow-attendance-title {
-    color: color-mix(in srgb, var(--option-color) 80%, var(--bs-body-color));
+    color: color-mix(in srgb, var(--option-color) 80%, var(--pk-ink));
   }
 
   .event-flow-attendance-radio {
     border-color: var(--option-color);
     // White ring + colour fill via nested inset shadows.
     box-shadow:
-      inset 0 0 0 3px var(--bs-body-bg),
+      inset 0 0 0 3px var(--pk-surface),
       inset 0 0 0 10px var(--option-color);
   }
 }
@@ -1085,16 +1052,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-
-  .badge {
-    border: 1px solid var(--bs-border-color);
-    font-size: 0.76rem;
-    font-weight: 500;
-  }
 }
 
 .event-flow-day-waitlist-offer {
-  color: var(--bs-info-text-emphasis);
+  color: var(--pk-info-ink);
   font-size: 0.9rem;
   font-weight: 600;
 }
@@ -1106,10 +1067,6 @@
 .event-flow-tags-controls {
   display: flex;
   gap: 0.5rem;
-
-  .form-control {
-    flex: 1 1 0;
-  }
 }
 
 .event-flow-tags-selected {
@@ -1130,14 +1087,14 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.2rem 0.5rem 0.2rem 0.65rem;
-  background: color-mix(in srgb, var(--page-accent, #0d6efd) 12%, var(--bs-body-bg));
-  border: 1px solid color-mix(in srgb, var(--page-accent, #0d6efd) 30%, transparent);
-  border-radius: 99px;
+  background: color-mix(in srgb, var(--page-accent, var(--pk-accent)) 12%, var(--pk-surface));
+  border: 1px solid color-mix(in srgb, var(--page-accent, var(--pk-accent)) 30%, transparent);
+  border-radius: var(--pk-radius-pill);
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--bs-body-color);
+  color: var(--pk-ink);
   line-height: 1.4;
-  animation: tag-pop 0.18s ease;
+  animation: tag-pop var(--pk-dur) ease;
 }
 
 @keyframes tag-pop {
@@ -1153,13 +1110,13 @@
   border: none;
   padding: 0;
   margin: 0;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   cursor: pointer;
   line-height: 1;
-  transition: color 0.12s;
+  transition: color var(--pk-dur-fast);
 
   &:hover {
-    color: var(--bs-danger);
+    color: var(--pk-danger-ink);
   }
 }
 
@@ -1177,29 +1134,29 @@
   display: inline-flex;
   align-items: center;
   padding: 0.22rem 0.65rem;
-  border: 1px solid var(--bs-border-color);
-  border-radius: 99px;
-  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-pill);
+  background: var(--pk-surface-sunk);
   font-size: 0.78rem;
   font-weight: 500;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   cursor: pointer;
   transition:
-    background-color 0.14s,
-    border-color 0.14s,
-    color 0.14s;
+    background-color var(--pk-dur-fast),
+    border-color var(--pk-dur-fast),
+    color var(--pk-dur-fast);
   line-height: 1.4;
 
   &:hover:not(.is-selected) {
-    background: color-mix(in srgb, var(--page-accent, #0d6efd) 10%, var(--bs-body-bg));
-    border-color: color-mix(in srgb, var(--page-accent, #0d6efd) 40%, transparent);
-    color: var(--bs-body-color);
+    background: color-mix(in srgb, var(--page-accent, var(--pk-accent)) 10%, var(--pk-surface));
+    border-color: color-mix(in srgb, var(--page-accent, var(--pk-accent)) 40%, transparent);
+    color: var(--pk-ink);
   }
 
   &.is-selected {
-    background: color-mix(in srgb, var(--page-accent, #0d6efd) 12%, var(--bs-body-bg));
-    border-color: color-mix(in srgb, var(--page-accent, #0d6efd) 50%, transparent);
-    color: var(--bs-body-color);
+    background: color-mix(in srgb, var(--page-accent, var(--pk-accent)) 12%, var(--pk-surface));
+    border-color: color-mix(in srgb, var(--page-accent, var(--pk-accent)) 50%, transparent);
+    color: var(--pk-ink);
     opacity: 0.5;
     cursor: default;
   }
@@ -1209,7 +1166,7 @@
 
 .event-flow-country-hint {
   font-size: 0.78rem;
-  color: var(--bs-info-text-emphasis);
+  color: var(--pk-info-ink);
   margin-top: 0.3rem;
 
   &[hidden] {
@@ -1217,18 +1174,13 @@
   }
 }
 
-// ── Legacy tag/rating wrappers (backwards compat) ────────────────────────────
+// ── Rating widget ────────────────────────────────────────────────────────────
+// The buttons are the design system's own. Only one thing is local: a row of
+// single digits reads as a row when the buttons are equal width, so the floor
+// is set on the children rather than on a class the markup no longer writes.
 
-.event-flow-tags {
-  .badge {
-    font-weight: 500;
-  }
-}
-
-.event-flow-rating {
-  .btn {
-    min-width: 2.3rem;
-  }
+.event-flow-rating > button {
+  min-width: 2.3rem;
 }
 
 // ── Post-submission success panel ────────────────────────────────────────────
@@ -1246,17 +1198,17 @@
   // Cancel the main h2 gradient clip-text so the success colour actually renders
   background: none;
   background-clip: unset;
-  -webkit-text-fill-color: var(--bs-success-text-emphasis);
-  color: var(--bs-success-text-emphasis);
+  -webkit-text-fill-color: var(--pk-ok-ink);
+  color: var(--pk-ok-ink);
   margin-bottom: 0.5rem;
 }
 
 .event-flow-success-body {
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 1.2rem;
 
   a {
-    color: var(--bs-primary);
+    color: var(--pk-accent-ink);
     font-weight: 500;
   }
 }
@@ -1267,9 +1219,9 @@
 // natural, valuable, and easy (Reciprocity + Social Proof + Low Friction).
 
 .event-flow-share {
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
-  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+  background: var(--pk-surface-sunk);
   // OG badge bleeds edge-to-edge; inner elements get their own padding
   padding: 0;
   margin-top: 1.25rem;
@@ -1281,12 +1233,12 @@
   font-size: 1rem;
   font-weight: 700;
   margin: 1rem 1.1rem 0.25rem;
-  color: var(--bs-body-color);
+  color: var(--pk-ink);
 }
 
 .event-flow-share-copy {
   font-size: 0.875rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin: 0 1.1rem 0.85rem;
 }
 
@@ -1326,9 +1278,9 @@
     flex: 1 1 0;
     min-width: 0;
     font-size: 0.78rem;
-    font-family: var(--bs-font-monospace);
-    color: var(--bs-secondary-color);
-    background: var(--bs-body-bg);
+    font-family: var(--pk-font-mono);
+    color: var(--pk-ink-muted);
+    background: var(--pk-surface);
   }
 
   .event-flow-share-copy-btn {
@@ -1350,7 +1302,7 @@
 
 .event-flow-share-socials-label {
   font-size: 0.75rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   white-space: nowrap;
   margin-right: 0.15rem;
 }
@@ -1380,8 +1332,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--pk-surface) 85%, transparent);
+  border-radius: var(--pk-radius);
   z-index: 1;
 }
 
@@ -1389,13 +1341,13 @@
   display: block;
   width: 100%;
   height: auto;
-  border-bottom: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid var(--pk-line);
 }
 
 .event-flow-share-og-hint {
   margin: 0 1.1rem 0.85rem;
   font-size: 0.75rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
 }
 
 // ── Invite colleagues by email ───────────────────────────────────────────────
@@ -1405,7 +1357,7 @@
 .event-flow-invite {
   margin-top: 0;
   padding: 0.85rem 1.1rem 0.1rem;
-  border-top: 1px solid var(--bs-border-color);
+  border-top: 1px solid var(--pk-line);
 }
 
 .event-flow-invite-fields {
@@ -1425,7 +1377,7 @@
 
 .event-flow-invite-copy {
   font-size: 0.8rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -1437,7 +1389,7 @@
 
 .event-flow-invite-paste-hint {
   font-size: 0.72rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-top: 0.25rem;
   margin-bottom: 0;
 }
@@ -1454,8 +1406,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--bs-secondary-color);
-  border-bottom: 1px solid var(--bs-border-color);
+  color: var(--pk-ink-muted);
+  border-bottom: 1px solid var(--pk-line);
   margin-bottom: 0.2rem;
 }
 
@@ -1472,27 +1424,23 @@
   grid-template-columns: 1fr 1fr 1.3fr 1.6rem;
   gap: 0.35rem;
   align-items: center;
-
-  .form-control {
-    min-width: 0;
-  }
 }
 
 .event-flow-invite-remove-btn {
   justify-self: center;
   background: none;
   border: none;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   font-size: 1.1rem;
   line-height: 1;
   padding: 0 0.25rem;
   cursor: pointer;
-  border-radius: var(--bs-border-radius-sm);
-  transition: color 0.12s, background-color 0.12s;
+  border-radius: var(--pk-radius-sm);
+  transition: color var(--pk-dur-fast), background-color var(--pk-dur-fast);
 
   &:hover {
-    color: var(--bs-danger);
-    background-color: var(--bs-danger-bg-subtle);
+    color: var(--pk-danger-ink);
+    background-color: var(--pk-danger-soft);
   }
 
   &[hidden] {
@@ -1535,28 +1483,16 @@
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.85rem 1rem;
-  border: 1.5px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
-  background: var(--bs-tertiary-bg);
+  border: 1.5px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+  background: var(--pk-surface-sunk);
   cursor: pointer;
   user-select: none;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition: border-color var(--pk-dur) ease, background var(--pk-dur) ease;
 
   &:has(input:checked) {
-    border-color: var(--bs-primary);
-    background: color-mix(in srgb, var(--bs-primary) 6%, var(--bs-body-bg));
-  }
-
-  .form-check-input {
-    margin-top: 0.2em;
-    flex-shrink: 0;
-    cursor: pointer;
-  }
-
-  .form-check-label {
-    cursor: pointer;
-    font-size: 0.9375rem;
-    line-height: 1.45;
+    border-color: var(--pk-accent);
+    background: color-mix(in srgb, var(--pk-accent) 6%, var(--pk-surface));
   }
 }
 
@@ -1580,15 +1516,15 @@
 
 .proposal-speaker-card {
   padding: 1.25rem;
-  border: 1.5px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
-  background: var(--bs-tertiary-bg);
+  border: 1.5px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+  background: var(--pk-surface-sunk);
   margin-bottom: 1rem;
-  transition: border-color 0.18s ease;
+  transition: border-color var(--pk-dur) ease;
 
   &:first-of-type {
-    border-color: var(--page-accent, var(--bs-primary));
-    background: color-mix(in srgb, var(--page-accent, var(--bs-primary)) 4%, var(--bs-body-bg));
+    border-color: var(--page-accent, var(--pk-accent));
+    background: color-mix(in srgb, var(--page-accent, var(--pk-accent)) 4%, var(--pk-surface));
   }
 }
 
@@ -1598,7 +1534,7 @@
   justify-content: space-between;
   margin-bottom: 1rem;
   padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid var(--pk-line);
 }
 
 .proposal-speaker-card-title {
@@ -1606,7 +1542,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
 }
 
 // ── Profile link widget ───────────────────────────────────────────────────────
@@ -1625,7 +1561,7 @@
 
 .profile-links-pill-icon {
   flex-shrink: 0;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   display: flex;
   align-items: center;
 }
@@ -1700,7 +1636,7 @@
 .event-flow-donation-cta {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--bs-border-color);
+  border-top: 1px solid var(--pk-line);
 }
 
 .event-flow-donation-cta-inner {
@@ -1716,7 +1652,7 @@
 }
 
 .event-flow-donation-cta-body {
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 1rem;
   font-size: 0.95rem;
 }
@@ -1727,7 +1663,7 @@
 
 .event-flow-donation-cta-disclaimer {
   font-size: 0.75rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 0;
 }
 

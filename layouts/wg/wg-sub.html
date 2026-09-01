@@ -201,7 +201,7 @@
       {{ if eq .status "planned" }}{{ $statusColor = "yellow-pale" }}{{ end }}
       {{ if eq .status "completed" }}{{ $statusColor = "blue-pale" }}{{ end }}
       <div class="bento-card">
-        <span class="bento-badge bg-{{ if eq .status "active" }}success{{ else if eq .status "planned" }}warning text-dark{{ else }}info{{ end }}">
+        <span class="bento-badge bento-badge--{{ if eq .status "active" }}ok{{ else if eq .status "planned" }}warn{{ else }}info{{ end }}">
           {{ .status | default "active" }}
         </span>
         <div class="bento-title">{{ .title }}</div>

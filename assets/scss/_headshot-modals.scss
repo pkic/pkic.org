@@ -24,8 +24,8 @@
 }
 
 /* Both cards carry `.pk`, so the base layer sets their ground and their ink
-   from the design system's tokens — which is also what takes the last two
-   `--bs-*` custom properties out of this file. */
+   from the design system's tokens — which is also what took the last two
+   Bootstrap custom properties out of this file. */
 #headshot-disclaimer-modal .hsd-card,
 #crop-headshot-modal .crop-headshot-card {
   width: 100%;

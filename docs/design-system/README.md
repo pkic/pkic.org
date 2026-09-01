@@ -171,9 +171,9 @@ These are translations, not second implementations. Anything that is a second
 implementation — the old row menu, the old modal, the old chart renderers —
 has been deleted rather than kept beside the system's version.
 
-## Removing Bootstrap (phase 5)
+## Bootstrap is gone
 
-`pnpm run report:bootstrap` is the countdown. At the time the system landed:
+`pnpm run report:bootstrap` reads zero. It started at:
 
 ```
   6642  assets/ts
@@ -183,14 +183,38 @@ has been deleted rather than kept beside the system's version.
   8797  total
 ```
 
-The route to zero is per-surface, not global. Migrate a surface onto the
-primitives, add its path to `scanned` in `scripts/check-design-isolation.mjs`,
-and it is held at zero from then on. The portal is the natural first target: it
-is a single Hugo shell, so it can drop `main.scss` entirely once its sections
-are migrated, and run framework-free while the public layouts are still being
-reworked.
+and the true figure was higher — the first detector missed about a thousand
+references, and later ones missed classes assigned at runtime, built as
+strings, or composed across template interpolation. Each gap was closed as it
+was found, and each is documented in the gate itself.
 
-Only then does the Hugo Module import leave `go.mod`.
+`go.mod` no longer requires `hugo-mod-bootstrap-scss`, `main.scss` imports no
+Bootstrap, and the compiled stylesheet went from 596 KiB raw / 81 KiB gzip to
+305 / 47 — a little under half. The budget in
+`scripts/lib/frontend-bundle-budget.mjs` came down with it, so the space does
+not quietly fill back up.
+
+What replaced it is in `assets/design` (tokens, base, utilities) and
+`assets/ts/ui` (the primitives), delivered as described under **Delivery**
+above. `scripts/check-design-isolation.mjs` holds every migrated surface at
+zero and can never let one regress.
+
+### Keeping it gone
+
+The gate is the guarantee, and it is worth knowing what it actually checks,
+because most of what it catches now is not a class in a `class=` attribute:
+
+- a Bootstrap class assigned at runtime (`className =`, `classList.add`)
+- a `pk-` class no stylesheet defines — a name that reads perfectly and
+  renders nothing
+- a class name composed across Hugo interpolation, where `{{ }}` splits the
+  token
+- an inline `style` attribute
+- a colour, type size, corner radius or duration written as a literal in CSS
+
+`scripts/adopt-design-surfaces.mjs` is how a surface joins that scope. It runs
+the real gate against the candidate and refuses anything that is not already
+at zero, so the list can never become a list of intentions.
 
 ## The preview
 

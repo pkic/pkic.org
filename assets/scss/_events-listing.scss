@@ -399,10 +399,10 @@
   // `style` attribute on the anchor, which the repository forbids.
   position: relative;
   z-index: 2;
-  // `btn-page-accent` carried the per-page accent through Bootstrap's
-  // `--bs-btn-*` variables. The design system's primary button reads its own
-  // token, so the accent reaches it the same way `.pkic-hero-media__scrim`
-  // hands it to the hero button.
+  // `btn-page-accent` carried the per-page accent through Bootstrap's own
+  // button variables. The design system's primary button reads its own token,
+  // so the accent reaches it the same way `.pkic-hero-media__scrim` hands it
+  // to the hero button.
   --pk-accent-strong: var(--page-accent, #{$green});
 }
 

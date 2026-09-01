@@ -1,8 +1,14 @@
 # Migrating a surface off Bootstrap
 
-Phase 5. The route to zero is per-surface: migrate a surface, add it to the
-gate's scope, and it can never regress. There is no big-bang step and no
-moment where the site is half-converted globally.
+**This is finished.** Bootstrap is gone: `go.mod` no longer requires it,
+`main.scss` no longer imports it, and `pnpm run report:bootstrap` reads zero.
+
+The document stays because the method is the useful part — it is how any
+framework gets removed from a codebase this size, and the traps it records are
+the ones that will catch the next person doing something similar. The route
+was per-surface: migrate a surface, add it to the gate's scope, and it can
+never regress. There was no big-bang step and no moment where the site was
+half-converted globally.
 
 ## Migrate the shared components first
 

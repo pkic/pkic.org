@@ -6,10 +6,15 @@ export const FRONTEND_BUNDLE_BUDGETS = Object.freeze({
 });
 
 // Compiled size of assets/scss/main.scss (public/scss/main.css after a Hugo
-// build). This ceiling locks in the current status quo (~591 KiB raw /
-// ~80 KiB gzip as of 2026-08) with a little headroom; it will be reduced
-// once the Bootstrap migration trims the compiled stylesheet.
-export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 640 * 1024, gzipBytes: 88 * 1024 });
+// build).
+//
+// This was 640 KiB / 88 KiB, holding the status quo of ~591 KiB raw / ~80 KiB
+// gzip, with a note saying it would come down once the Bootstrap migration
+// trimmed the stylesheet. It has: removing the framework took the compiled
+// sheet to 305 KiB raw / 47 KiB gzip, a little under half. The ceiling is
+// lowered to match, so the space Bootstrap used to occupy cannot quietly
+// fill back up.
+export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 340 * 1024, gzipBytes: 54 * 1024 });
 
 // The design system's entry stylesheet: tokens, the base layer, the utilities,
 // and the few primitives whose class names appear in server-rendered Hugo

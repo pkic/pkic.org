@@ -6,9 +6,9 @@
 
 .donation-form {
   max-width: 32rem;
-  background: var(--bs-body-bg);
-  border: 1px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
   padding: 1.75rem;
 
   // When embedded inside the event flow success panel, drop the card chrome
@@ -24,7 +24,7 @@
 }
 
 .donation-form-description {
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 1.25rem;
 }
 
@@ -80,7 +80,7 @@
 
   // "Most chosen" social-proof label
   &--popular {
-    border-color: var(--bs-primary);
+    border-color: var(--pk-accent);
   }
 }
 
@@ -90,12 +90,12 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--bs-primary);
+  color: var(--pk-accent-ink);
   margin-bottom: 0.1rem;
   line-height: 1;
 
   .donation-preset-btn[aria-pressed="true"] & {
-    color: rgba(255, 255, 255, 0.85);
+    color: color-mix(in srgb, var(--pk-on-solid) 85%, transparent);
   }
 }
 
@@ -117,7 +117,7 @@
 
 .donation-form-disclaimer {
   font-size: 0.8rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-top: 1rem;
   margin-bottom: 0;
 }
@@ -127,15 +127,15 @@
 .donation-badge {
   text-align: center;
   padding: 2rem 1rem;
-  border: 2px solid var(--bs-border-color);
-  border-radius: var(--bs-border-radius-lg);
+  border: 2px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
   margin: 1.5rem 0;
 }
 
 .donation-badge-amount {
   font-size: 2.5rem;
   font-weight: 700;
-  color: var(--bs-emphasis-color);
+  color: var(--pk-ink);
   line-height: 1.1;
   margin-bottom: 0.5rem;
 }
@@ -146,7 +146,7 @@
 }
 
 .donation-badge-body {
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 1.25rem;
   max-width: 480px;
   margin-left: auto;
@@ -173,7 +173,7 @@
 
 .donation-badge-disclaimer {
   font-size: 0.75rem;
-  color: var(--bs-secondary-color);
+  color: var(--pk-ink-muted);
   margin-bottom: 0;
   max-width: 420px;
   margin-left: auto;

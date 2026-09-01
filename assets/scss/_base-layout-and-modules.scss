@@ -607,7 +607,7 @@ main :is(h2, h3, h4):hover .header-link {
 // Scoped to known content containers so it never affects navbars, sidebars, related-topic panels, etc.
 // At rest: a very faint 1px hint — just enough to read as a link, not enough to crowd a list.
 // On hover: the stroke sweeps to full width and brightens, then a light glint races across it.
-:is(#content, .wg-main-content, .wg-prose, .wg-data-body) a:not(.btn):not([class]):not(:has(img)) {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) a:not([class]):not(:has(img)) {
   position: relative;
   color: color-mix(in srgb, var(--page-accent) 55%, #1a2332);
   text-decoration: none;
@@ -662,7 +662,7 @@ main :is(h2, h3, h4):hover .header-link {
 
 // Links inside dark pull-quote contexts — same brush-stroke technique as body-copy
 // links but adapted to white-on-dark. Covers all known content containers.
-:is(#content, .wg-main-content, .wg-prose, .wg-data-body) :is(blockquote, .callout-info) a:not(.btn):not([class]):not(:has(img)) {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) :is(blockquote, .callout-info) a:not([class]):not(:has(img)) {
   position: relative;
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
@@ -755,7 +755,7 @@ main :is(h2, h3, h4):hover .header-link {
   flex-shrink: 0;
 }
 
-@include media-breakpoint-up(xs) {
+@media (min-width: 0) {
   .agenda-time {
     width: 90px;
     min-width: 90px;
@@ -769,7 +769,7 @@ main :is(h2, h3, h4):hover .header-link {
   }
 }
 
-@include media-breakpoint-up(lg) {
+@media (min-width: 992px) {
   .agenda-time {
     width: 100px;
     min-width: 100px;

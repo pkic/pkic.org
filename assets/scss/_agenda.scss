@@ -741,7 +741,7 @@
 }
 
 // Responsive design - consolidated
-@include media-breakpoint-down(lg) {
+@media (max-width: 991.98px) {
   .agenda-grid {
     @for $i from 1 through 10 {
       &[data-locations="#{$i}"] {
@@ -774,7 +774,7 @@
   }
 }
 
-@include media-breakpoint-down(md) {
+@media (max-width: 767.98px) {
   .agenda-grid {
     grid-template-columns: 80px 1fr;
     gap: 0.25rem;

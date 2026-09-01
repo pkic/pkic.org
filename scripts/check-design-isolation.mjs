@@ -313,7 +313,10 @@ function walk(dir) {
       walk(full);
       continue;
     }
-    if (/\.(css|tsx?)$/.test(entry)) inspect(full);
+    // `.html` too. An adopted DIRECTORY used to have its templates skipped
+    // entirely — only an adopted file path was ever inspected — so a Hugo
+    // layout could sit inside a ratcheted directory carrying anything at all.
+    if (/\.(css|tsx?|html)$/.test(entry)) inspect(full);
   }
 }
 
@@ -336,6 +339,32 @@ function inspect(file) {
 
       if (code.includes("--bs-")) {
         report(file, lineNumber, line, "references a Bootstrap custom property");
+      }
+
+      /*
+       * A class name composed across template interpolation.
+       *
+       * `class="bento-badge bg-{{ if eq .status "active" }}success{{ end }}"`
+       * builds `bg-success` at render time, and the class-list check below
+       * cannot see it: the `{{` splits the token, and the expression's own
+       * quotes truncate the attribute. Two adopted templates were doing
+       * exactly this.
+       *
+       * So the interpolations are removed first, leaving the literal fragments
+       * the template contributes. A fragment that ends in a Bootstrap family
+       * prefix is the tell. Compose the whole name inside the branches instead
+       * — `bento-badge--{{ ... }}ok{{ ... }}` — which is also what makes the
+       * result greppable.
+       */
+      if (code.includes("{{")) {
+        const literal = code.replace(/\{\{[\s\S]*?\}\}/g, " ");
+        for (const match of literal.matchAll(/class(?:Name)?\s*=\s*"([^"]*)"/g)) {
+          for (const token of match[1].split(/\s+/)) {
+            if (token.length > 1 && token.endsWith("-") && isBootstrapClassList(`${token}x`)) {
+              report(file, lineNumber, line, "builds a Bootstrap class name across template interpolation");
+            }
+          }
+        }
       }
 
       // Every class list on the line, not just the first. A module that builds

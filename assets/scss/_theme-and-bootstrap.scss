@@ -1,5 +1,10 @@
-// required to get Bootstrap functions and variables
-@import "bootstrap/functions";
+// The brand palette and the site's own general element styles.
+//
+// This file used to import Bootstrap and override its variables. Bootstrap is
+// gone: every class it provided has been replaced by the design system in
+// `assets/design` and `assets/ts/ui`. What remains here is what was always
+// ours — the colour palette, the per-location colour map, and a handful of
+// element defaults for authored markdown content.
 
 // --- PKIC Variable Overrides & Custom Colors ---
 
@@ -124,12 +129,8 @@ $dark: $gray-800;
 $link-color: $primary;
 $link-hover-color: $primary;
 
-// Enable negative margins utility classes
-$enable-negative-margins: true;
-
-// Import Bootstrap after all custom variables and overrides
-@import "bootstrap/variables";
-@import "bootstrap/bootstrap";
+// Body ink. Was Bootstrap's `$body-color`; named for what it is.
+$ink: rgb(33, 37, 41);
 
 // CSS Custom Properties for easy use
 :root {
@@ -203,19 +204,44 @@ main {
                     // so position:sticky inside <main> still works correctly.
 }
 
+// Tables written in authored markdown. These used to `@extend` four Bootstrap
+// classes; the declarations are stated here instead, reading the design
+// system's tokens so a content table matches the tables the app renders.
+//
+// This is the legacy layer, so it applies to bare `<table>` in prose and loses
+// to `.pk-table` wherever a component draws one.
 table {
-  @extend .table;
-  @extend .table-bordered;
-  @extend .table-striped;
-  @extend .table-hover;
-
-  text-align: left;
   width: 100%;
   margin-top: 1.6em;
+  text-align: left;
+  border-collapse: collapse;
+  color: var(--pk-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+table th,
+table td {
+  padding: var(--pk-2) var(--pk-3);
+  border: 1px solid var(--pk-line);
+  vertical-align: top;
+}
+
+table tbody tr:nth-of-type(odd) {
+  background: var(--pk-surface-sunk);
+}
+
+table tbody tr:hover {
+  background: var(--pk-surface-raise);
 }
 
 thead {
-  @extend .table-dark;
+  background: var(--pk-ink);
+  color: var(--pk-ink-inverse);
+}
+
+thead th {
+  border-color: var(--pk-ink);
+  font-weight: 600;
 }
 
 main {
