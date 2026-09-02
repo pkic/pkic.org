@@ -37,14 +37,37 @@ rows show a button and others show the menu, depending on how many commands
 each row happens to have, reads as broken. The row is the primary affordance;
 the menu is its commands. A list whose API supports bulk operations
 gets selection checkboxes and the `BulkBar`; one that does not, does not grow
-decorative checkboxes. Filters the API supports render as `FilterSelect`s in
-the toolbar, not as concepts the reader must express through search syntax.
+decorative checkboxes. Filters the API supports belong to the column they
+narrow: a column declares its `filter` (the query parameter and its values)
+and the table draws the column's `…` menu — sort ascending, sort descending,
+the filter's values, hide the column — with the choice in force checked and
+the narrowed value stated under the column's name. The toolbar keeps only
+search, the create action and refresh. A row of selects above the table did
+not scale (ten filterable columns is ten selects) and each page drew it a
+little differently — the donations list had grown its own chips — which is
+exactly the non-uniformity a shared table exists to prevent. Hidden columns
+come back from the ⊞ menu at the end of the head.
 
-**A record with facets gets tabs, not a longer page.** Each tab loads its own
-bounded query when activated — a tab is precisely the license _not_ to fetch
-everything on first paint. The organization page stacked profile, logo,
-contacts and identities into one scroll while answering none of "which groups,
-which sponsorships, which events".
+**A record with facets gets tabs; an account gets its related lists on the
+page.** A tab loads its own bounded query when activated — a tab is precisely
+the license _not_ to fetch everything on first paint — and that is right for a
+workspace whose facets are large (a group's events, votes, forms). It is wrong
+for an account read the way a CRM reads one: an organization's page shows the
+organization, then who represents it, then its sponsorships, each a bounded
+query of its own, with the mark and the contacts beside them. Putting "who
+represents this organization" behind a tab made the first question a second
+step. The mark is the affordance for changing it — hover or focus the tile
+and it says so — not a panel with a header and a button.
+
+**A record page takes the width; its forms stay closed.** The record and its
+facts span the measure with the supporting column — logo, contacts, the
+pipeline — beside it (`pk-record`), never two cards packed into the top-left
+corner of a wide screen by an `auto-fill` grid sized for cards that never
+arrive. What can be changed is shown as facts first; the form that changes it
+opens behind Edit, Change, Advance stage. The organization page opened with
+its logo-replacement form standing beside the logo, and the sponsorship page
+with three forms and no record; a reader who opened a record to look at it
+was handed tasks.
 
 **Controls are sized by their importance, not their consequence.** A
 destructive action is distinguished by tone (`danger-quiet`) and confirmation,

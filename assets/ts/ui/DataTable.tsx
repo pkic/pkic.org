@@ -12,6 +12,7 @@
  */
 
 import { Fragment, type ComponentChildren } from "preact";
+import { Menu, type MenuItem } from "./Menu";
 
 // The skin is shared with the Markdown table render hook and ships in the
 // entry stylesheet; importing it here states the dependency rather than
@@ -82,6 +83,15 @@ export interface DataTableColumn<Row> {
    * buttons under a column with no name at all.
    */
   headerHidden?: boolean;
+  /**
+   * The column's own commands — sort this way, narrow to one value, hide the
+   * column — behind one trigger in its header. Every column that has any
+   * offers them from the same place, which is what lets a table with ten
+   * filterable columns keep a clean head instead of a toolbar of selects.
+   */
+  menu?: readonly MenuItem[];
+  /** What the column is narrowed to, stated under its name while a filter is in force. */
+  filterSummary?: string;
 }
 
 /**
@@ -133,6 +143,12 @@ export interface DataTableProps<Row> {
    * Return nothing for rows that have none.
    */
   detailRow?: (row: Row) => ComponentChildren;
+  /**
+   * A control that belongs to the table as a whole rather than to one column
+   * — the menu that brings hidden columns back — drawn at the end of the
+   * header row.
+   */
+  headerEnd?: ComponentChildren;
 }
 
 /**
@@ -203,6 +219,7 @@ export function DataTable<Row>({
   empty,
   rowAction,
   detailRow,
+  headerEnd,
 }: DataTableProps<Row>) {
   const keys = rows.map(rowKey);
   const allSelected = Boolean(selection) && keys.length > 0 && keys.every((key) => selection?.selected.has(key));
@@ -245,8 +262,29 @@ export function DataTable<Row>({
                 />
               </th>
             )}
-            {columns.map((column) => {
+            {columns.map((column, index) => {
               const sorted = sort?.columnId === column.id;
+              const last = index === columns.length - 1;
+              const name =
+                column.sortable && onSort ? (
+                  <button
+                    type="button"
+                    class="pk-table__sort"
+                    onClick={() => onSort(column.id, nextDirection(sort, column.id))}
+                  >
+                    <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                    {/* Only the direction in force is drawn: the column's `…`
+                        menu is where sorting is offered, so an idle ↕ beside
+                        it would be a second control saying the same thing. */}
+                    {sorted && (
+                      <span class="pk-table__arrow" aria-hidden="true">
+                        {sort.direction === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                );
               return (
                 <th
                   key={column.id}
@@ -254,20 +292,30 @@ export function DataTable<Row>({
                   class={classList(alignClass(column.align), widthClass(column.width))}
                   aria-sort={sorted ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
                 >
-                  {column.sortable && onSort ? (
-                    <button
-                      type="button"
-                      class="pk-table__sort"
-                      onClick={() => onSort(column.id, nextDirection(sort, column.id))}
-                    >
-                      <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
-                      <span class="pk-table__arrow" aria-hidden="true">
-                        {sorted ? (sort.direction === "asc" ? "↑" : "↓") : "↕"}
-                      </span>
-                    </button>
-                  ) : (
-                    <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                  {/* The name first and on its own, then its commands and —
+                      while it is narrowed — what it is narrowed to. The
+                      trigger is the `…` a row carries, so the head reads as
+                      the row's grammar applied to columns; its glyph is drawn
+                      by the stylesheet so the cell's text stays the name. */}
+                  {name}
+                  {((column.menu && column.menu.length > 0) || (headerEnd && last)) && (
+                    <span class="pk-table__head-tools">
+                      {column.menu && column.menu.length > 0 && (
+                        <span
+                          class={classList(
+                            "pk-table__head-menu",
+                            column.filterSummary ? "pk-table__head-menu--active" : undefined,
+                          )}
+                        >
+                          <Menu label={`${column.header} column options`} items={column.menu} heading={column.header}>
+                            <span class="pk-table__head-glyph" aria-hidden="true" />
+                          </Menu>
+                        </span>
+                      )}
+                      {headerEnd && last && <span class="pk-table__head-end">{headerEnd}</span>}
+                    </span>
                   )}
+                  {column.filterSummary && <span class="pk-table__head-filter">{column.filterSummary}</span>}
                 </th>
               );
             })}

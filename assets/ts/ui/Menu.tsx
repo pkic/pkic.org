@@ -41,6 +41,14 @@ export interface MenuItem {
   /** Renders in the destructive tone. Does not change behaviour. */
   danger?: boolean;
   disabled?: boolean;
+  /**
+   * A choice among alternatives — a sort direction, a filter value — carries
+   * its state: the item is announced as a radio item and drawn with a check
+   * when it is the one in force. Leave undefined for a plain command.
+   */
+  checked?: boolean;
+  /** Draws a rule above the item: the start of a new group of choices. */
+  separatorBefore?: boolean;
 }
 
 export interface MenuProps {
@@ -240,12 +248,25 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
                 itemRefs.current[index] = element;
               }}
               type="button"
-              role="menuitem"
+              role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+              aria-checked={item.checked === undefined ? undefined : item.checked ? "true" : "false"}
               disabled={item.disabled}
               tabIndex={index === activeIndex ? 0 : -1}
-              class={["pk-menu__item", item.danger ? "pk-menu__item--danger" : null].filter(Boolean).join(" ")}
+              class={[
+                "pk-menu__item",
+                item.danger ? "pk-menu__item--danger" : null,
+                item.checked !== undefined ? "pk-menu__item--choice" : null,
+                item.separatorBefore ? "pk-menu__item--separated" : null,
+              ]
+                .filter(Boolean)
+                .join(" ")}
               onClick={() => select(item)}
             >
+              {item.checked !== undefined && (
+                <span class="pk-menu__check" aria-hidden="true">
+                  {item.checked ? "✓" : ""}
+                </span>
+              )}
               {item.label}
             </button>
           ))}

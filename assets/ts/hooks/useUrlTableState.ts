@@ -24,6 +24,8 @@ export interface UrlTableState {
   sort: string;
   offset: number;
   pageSize: number;
+  /** Column filters in force, by the query parameter each one narrows. */
+  filters: Record<string, string>;
 }
 
 const KEYS = ["q", "sort", "offset", "size"] as const;
@@ -35,18 +37,32 @@ function readParams(namespace: string): Partial<UrlTableState> {
     const parsed = Number(value);
     return value !== null && Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
   };
+  // A filter travels as `<namespace>.f.<param>`, so a link to a narrowed list
+  // reopens narrowed the same way, and a page can carry filters for two lists.
+  const filters: Record<string, string> = {};
+  const prefix = `${namespace}.f.`;
+  for (const [key, value] of params) {
+    if (key.startsWith(prefix) && value) filters[key.slice(prefix.length)] = value;
+  }
   return {
     ...(raw("q") !== null ? { q: raw("q")! } : {}),
     ...(raw("sort") !== null ? { sort: raw("sort")! } : {}),
     ...(numeric(raw("offset")) !== undefined ? { offset: numeric(raw("offset")) } : {}),
     ...(numeric(raw("size")) !== undefined ? { pageSize: numeric(raw("size")) } : {}),
+    ...(Object.keys(filters).length > 0 ? { filters } : {}),
   };
 }
 
 function writeParams(namespace: string, state: UrlTableState | null, defaults: UrlTableState): void {
   const { path, params } = splitHash();
   for (const key of KEYS) params.delete(`${namespace}.${key}`);
+  for (const key of [...params.keys()]) {
+    if (key.startsWith(`${namespace}.f.`)) params.delete(key);
+  }
   if (state) {
+    for (const [param, value] of Object.entries(state.filters)) {
+      if (value) params.set(`${namespace}.f.${param}`, value);
+    }
     if (state.q) params.set(`${namespace}.q`, state.q);
     if (state.sort && state.sort !== defaults.sort) params.set(`${namespace}.sort`, state.sort);
     if (state.offset > 0) params.set(`${namespace}.offset`, String(state.offset));

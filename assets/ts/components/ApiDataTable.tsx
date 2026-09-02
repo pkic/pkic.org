@@ -52,6 +52,10 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * per surface, on the page's primary list.
    */
   urlState?: string;
+  /** Column filters in force before the reader touches anything, unless the URL says otherwise. */
+  initialFilters?: Record<string, string>;
+  /** Told each time a column filter changes, for a page whose framing depends on it. */
+  onFiltersChange?: (filters: Record<string, string>) => void;
   /**
    * The selection strip, rendered between the head and the table — the slot
    * the design system's list panel reserves for its bulk bar. The page owns
@@ -88,6 +92,8 @@ export function ApiDataTable<T, Response = unknown>({
   toolbar,
   createAction,
   urlState,
+  initialFilters,
+  onFiltersChange,
   bulkBar,
   actionsRef,
   onData,
@@ -98,6 +104,7 @@ export function ApiDataTable<T, Response = unknown>({
     sort: initialSort,
     offset: 0,
     pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
+    filters: initialFilters ?? {},
   });
   const pager = useOffsetPager(url.initial.pageSize, url.initial.offset);
   const resetKey = buildCollectionResetKey(endpoint, params);
@@ -105,10 +112,14 @@ export function ApiDataTable<T, Response = unknown>({
   const [sort, setSort] = useState(url.initial.sort);
   const [search, setSearch] = useState(url.initial.q);
   const [pendingSearch, setPendingSearch] = useState(url.initial.q);
+  // Column filters are the table's own state: a column declares what it can
+  // be narrowed by, the table keeps what it is narrowed to, and the query
+  // carries it. A page no longer threads a useState per filter into `params`.
+  const [filters, setFilters] = useState<Record<string, string>>(url.initial.filters);
   useEffect(() => {
-    url.mirror({ q: search, sort, offset: pager.offset, pageSize: pager.pageSize });
+    url.mirror({ q: search, sort, offset: pager.offset, pageSize: pager.pageSize, filters });
     // url.mirror is stable per namespace; mirroring reacts to state only.
-  }, [search, sort, pager.offset, pager.pageSize]);
+  }, [search, sort, pager.offset, pager.pageSize, filters]);
 
   function applySort(nextSort: string) {
     setSort(nextSort);
@@ -120,10 +131,20 @@ export function ApiDataTable<T, Response = unknown>({
     pager.resetPage();
   }
 
+  function applyFilter(param: string, value: string) {
+    const next = { ...filters };
+    if (value) next[param] = value;
+    else delete next[param];
+    setFilters(next);
+    onFiltersChange?.(next);
+    pager.resetPage();
+  }
+
   const collection = useServerCollection({
     endpoint,
     params: {
       ...params,
+      ...filters,
       ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
       ...(search ? { q: search } : {}),
       ...(sort ? { sort } : {}),
@@ -224,6 +245,8 @@ export function ApiDataTable<T, Response = unknown>({
             selection={selection}
             currentSort={sort}
             onSort={applySort}
+            filters={filters}
+            onFilterChange={applyFilter}
           />
           {paginate && !collection.loading && <Pager {...pagerProps} />}
         </>
