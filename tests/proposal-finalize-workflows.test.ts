@@ -159,25 +159,38 @@ describe("proposal finalize workflows", () => {
     expect(proposalRow.status).toBe("needs-work");
   });
 
-  it("double-finalize returns PROPOSAL_ALREADY_FINALIZED", async () => {
+  it("re-finalize updates the existing decision instead of blocking", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
       decidedByUserId: adminUserId,
-      finalStatus: "rejected",
+      finalStatus: "needs-work",
       minReviewsRequired: 0,
     });
 
-    await expect(
-      finalizeProposalDecision(env.DB, {
-        proposalId,
-        decidedByUserId: adminUserId,
-        finalStatus: "accepted",
-        minReviewsRequired: 0,
-      }),
-    ).rejects.toMatchObject({ code: "PROPOSAL_ALREADY_FINALIZED" });
+    await finalizeProposalDecision(env.DB, {
+      proposalId,
+      decidedByUserId: adminUserId,
+      finalStatus: "accepted",
+      minReviewsRequired: 0,
+    });
+
+    const decisions = await queryAll<{ final_status: string }>(
+      env.DB,
+      "SELECT final_status FROM proposal_decisions WHERE proposal_id = ?",
+      [proposalId],
+    );
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].final_status).toBe("accepted");
+
+    const [proposalRow] = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(proposalRow.status).toBe("accepted");
   });
 
   it("finalize HTTP handler: records decision and queues emails via outbox", async () => {
@@ -406,7 +419,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     await resetDb();
   });
 
-  it("finalize: double-finalize returns JSON 409 with PROPOSAL_ALREADY_FINALIZED", async () => {
+  it("finalize: double-finalize updates the recorded decision", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "double-finalize-token");
@@ -414,17 +427,23 @@ describe("proposal HTTP error responses (full router stack)", () => {
 
     // First finalize — must succeed
     const first = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
-      finalStatus: "rejected",
+      finalStatus: "needs-work",
     });
     expect(first.status).toBe(200);
 
-    // Second finalize — must return JSON 409, not a 500 or a crash
+    // Second finalize — changes the decision instead of being blocked
     const second = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
       finalStatus: "accepted",
     });
-    expect(second.status).toBe(409);
-    const body = (await second.json()) as { error?: { code?: string } };
-    expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
+    expect(second.status).toBe(200);
+
+    const decisions = await queryAll<{ final_status: string }>(
+      env.DB,
+      "SELECT final_status FROM proposal_decisions WHERE proposal_id = ?",
+      [proposalId],
+    );
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].final_status).toBe("accepted");
   });
 
   it("finalize: review threshold not met returns JSON 409", async () => {

@@ -885,6 +885,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   // Decision form
   const [decisionStatus, setDecisionStatus] = useState("");
   const [decisionNote, setDecisionNote] = useState("");
+  const [editingDecision, setEditingDecision] = useState(false);
   const [savingDecision, setSavingDecision] = useState(false);
   const [previewingDecision, setPreviewingDecision] = useState(false);
   const [decisionPreview, setDecisionPreview] = useState<DecisionPreviewResponse | null>(null);
@@ -932,6 +933,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
       );
       setDecisionNote(data.proposal.decision_note ?? "");
       setAbstractDraft(data.proposal.abstract);
+      setEditingDecision(false);
     }
   }, [data]);
 
@@ -1433,7 +1435,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 <h6 class="mb-0">Final Decision</h6>
               </div>
               <div class="card-body">
-                {proposal.decision_status ? (
+                {proposal.decision_status && !editingDecision ? (
                   <div class="alert alert-info mb-0">
                     <div class="d-flex gap-2 align-items-center mb-1">
                       <strong>Decision recorded:</strong>
@@ -1445,9 +1447,36 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     {proposal.decision_decided_at && (
                       <div class="small text-muted mt-2">Recorded {fmt(proposal.decision_decided_at)}</div>
                     )}
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm mt-3"
+                      onClick={() => setEditingDecision(true)}
+                    >
+                      Change decision
+                    </button>
                   </div>
                 ) : (
                   <>
+                    {proposal.decision_status && (
+                      <div class="alert alert-warning small py-2">
+                        Changing the decision will re-notify the applicant and update their status.{" "}
+                        <button
+                          type="button"
+                          class="btn btn-link btn-sm p-0 align-baseline"
+                          onClick={() => {
+                            setDecisionStatus(
+                              isNeedsWorkDecision(proposal.decision_status ?? "")
+                                ? "needs-work"
+                                : (proposal.decision_status ?? ""),
+                            );
+                            setDecisionNote(proposal.decision_note ?? "");
+                            setEditingDecision(false);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                     {!quorumMet && !loadingSub && (
                       <div class="alert alert-warning">
                         <strong>Quorum not met.</strong> {reviews.length} of {minReviewsRequired} required review

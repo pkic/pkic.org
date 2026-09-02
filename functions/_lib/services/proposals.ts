@@ -767,14 +767,6 @@ export async function finalizeProposalDecision(
     minReviewsRequired: number;
   },
 ): Promise<{ reviewCount: number }> {
-  const existingDecision = await first<{ id: string }>(db, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [
-    payload.proposalId,
-  ]);
-
-  if (existingDecision) {
-    throw new AppError(409, "PROPOSAL_ALREADY_FINALIZED", "Proposal already has a final decision");
-  }
-
   const reviewCountRow = await first<{ total: number }>(
     db,
     "SELECT COUNT(*) AS total FROM proposal_reviews WHERE proposal_id = ?",
@@ -799,53 +791,60 @@ export async function finalizeProposalDecision(
   }
 
   const now = nowIso();
-
-  await run(
-    db,
-    `INSERT INTO proposal_decisions (
-      id, proposal_id, decided_by_user_id, final_status,
-      decision_note, min_reviews_required, review_count, decided_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      uuid(),
-      payload.proposalId,
-      payload.decidedByUserId,
-      payload.finalStatus,
-      payload.decisionNote ?? null,
-      payload.minReviewsRequired,
-      reviewCount,
-      nowIso(),
-    ],
-  );
-
   const mappedStatus = payload.finalStatus;
-  await run(db, "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ?", [
-    mappedStatus,
-    now,
-    payload.proposalId,
-  ]);
 
-  await run(
-    db,
-    `UPDATE event_participants
-     SET status = ?, updated_at = ?
-     WHERE event_id = ?
-       AND source_type = 'proposal'
-       AND source_ref = ?
-       AND user_id IN (
-         SELECT user_id
-         FROM proposal_speakers
-         WHERE proposal_id = ?
-           AND status != 'declined'
-       )`,
-    [
-      payload.finalStatus === "accepted" ? "active" : "inactive",
-      now,
-      proposal.event_id,
-      payload.proposalId,
-      payload.proposalId,
-    ],
-  );
+  // Batched atomically so a concurrent re-finalize can't leave the decision,
+  // proposal status, and participant records disagreeing with each other.
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO proposal_decisions (
+          id, proposal_id, decided_by_user_id, final_status,
+          decision_note, min_reviews_required, review_count, decided_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(proposal_id) DO UPDATE SET
+          decided_by_user_id = excluded.decided_by_user_id,
+          final_status = excluded.final_status,
+          decision_note = excluded.decision_note,
+          min_reviews_required = excluded.min_reviews_required,
+          review_count = excluded.review_count,
+          decided_at = excluded.decided_at`,
+      )
+      .bind(
+        uuid(),
+        payload.proposalId,
+        payload.decidedByUserId,
+        payload.finalStatus,
+        payload.decisionNote ?? null,
+        payload.minReviewsRequired,
+        reviewCount,
+        now,
+      ),
+    db
+      .prepare("UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ?")
+      .bind(mappedStatus, now, payload.proposalId),
+    db
+      .prepare(
+        `UPDATE event_participants
+         SET status = ?, updated_at = ?
+         WHERE event_id = ?
+           AND source_type = 'proposal'
+           AND source_ref = ?
+           AND user_id IN (
+             SELECT user_id
+             FROM proposal_speakers
+             WHERE proposal_id = ?
+               AND status != 'declined'
+           )`,
+      )
+      .bind(
+        payload.finalStatus === "accepted" ? "active" : "inactive",
+        now,
+        proposal.event_id,
+        payload.proposalId,
+        payload.proposalId,
+      ),
+  ]);
 
   return { reviewCount };
 }
