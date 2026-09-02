@@ -159,7 +159,13 @@ describe("leadership positions roster", () => {
     const firstRow = container.querySelector("tbody tr");
     expect(firstRow?.textContent).toContain("Ada Lovelace");
     expect(firstRow?.textContent).toContain("Example Corp");
-    expect(firstRow?.textContent).toContain("Jun 1, 2022 – present");
+    // The term renders through the shared calendar-date helper: the viewer's
+    // own locale (never a pinned one), the UTC calendar (no zone shift).
+    const termStart = new Date("2022-06-01T00:00:00Z").toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    });
+    expect(firstRow?.textContent).toContain(`${termStart} – present`);
     // A member with no organization represents themselves; the column never
     // goes blank.
     expect(container.textContent).toContain("Individual membership");

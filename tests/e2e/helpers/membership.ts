@@ -88,12 +88,17 @@ export async function submitMembershipApplication(
   };
 }
 
-/** Opens one application's detail view from the Membership list, filtered by stage. */
+/**
+ * Opens one application's detail view from the Membership list, narrowed to
+ * a stage through the Stage column's menu. The menu names stages the way the
+ * badge does ("EC review" for `ec_review`), so the key is matched as words,
+ * case-insensitively, rather than through an option value.
+ */
 export async function openApplicationDetail(page: Page, email: string, stage: string): Promise<void> {
   await page.goto("/portal/#/membership/applications");
   await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
-  const stageFilter = page.locator("select").filter({ has: page.locator(`option[value="${stage}"]`) });
-  await stageFilter.selectOption(stage);
+  await page.getByRole("button", { name: "Stage column options" }).click();
+  await page.getByRole("menuitemradio", { name: new RegExp(`^${stage.replace(/_/g, " ")}$`, "i") }).click();
   const row = page.locator("tr").filter({ hasText: email });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
@@ -161,13 +166,21 @@ export async function transitionStageInUi(
  */
 export async function approveMemberThroughReview(
   page: Page,
-  options: { email: string; name: string; organizationName?: string; category?: string },
+  options: {
+    email: string;
+    name: string;
+    organizationName?: string;
+    category?: string;
+    /** Required (and true) for the individual-only categories H5/H6/H7 — the verified join path only offers them under this attestation. */
+    unaffiliatedAttestation?: boolean;
+  },
 ): Promise<{ email: string; userId: string; applicationId: string }> {
   const application = await submitMembershipApplication(page, {
     email: options.email,
     name: options.name,
     category: options.category ?? "F",
     ...(options.organizationName ? { organizationName: options.organizationName } : {}),
+    unaffiliatedAttestation: options.unaffiliatedAttestation,
   });
 
   for (const toStage of ["in_review", "in_consultation", "ec_review"]) {

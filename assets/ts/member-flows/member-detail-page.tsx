@@ -24,7 +24,8 @@ import { Markdown } from "../components/Markdown";
 import { NotFoundPanel } from "../components/NotFoundPanel";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import { memberInitials } from "../shared/member-display";
-import { findLinkedinUrl, getLinkLabel } from "../../shared/schemas/links";
+import { formatMonthYear } from "../shared/ui";
+import { getLinkLabel } from "../../shared/schemas/links";
 import {
   publicMemberDetailSchema,
   type PublicMemberDetail as MemberDetail,
@@ -49,43 +50,27 @@ function slugFromPathname(pathname: string): string | null {
 
 type PublicIdentity = MemberDetail["identities"][number];
 
-function LinkedInIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      fill="currentColor"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M0 1.146C0 .513.526 0 1.175 0h13.65C15.474 0 16 .513 16 1.146v13.708c0 .633-.526 1.146-1.175 1.146H1.175C.526 16 0 15.487 0 14.854V1.146zm4.943 12.248V6.169H2.542v7.225h2.401zm-1.2-8.212c.837 0 1.358-.554 1.358-1.248-.015-.709-.52-1.248-1.342-1.248-.822 0-1.359.54-1.359 1.248 0 .694.521 1.248 1.327 1.248h.016zm4.908 8.212V9.359c0-.216.016-.432.08-.586.173-.431.568-.878 1.232-.878.869 0 1.216.662 1.216 1.634v3.865h2.401V9.25c0-2.22-1.184-3.252-2.764-3.252-1.274 0-1.845.7-2.165 1.193v.025h-.016a5.54 5.54 0 0 1 .016-.025V6.169h-2.4c.03.678 0 7.225 0 7.225h2.4z" />
-    </svg>
-  );
-}
-
 /**
- * The LinkedIn link, as an icon with a name.
+ * The owner's featured profile link — the first link of their canonical,
+ * owner-ordered list, whatever the platform — labeled by its site.
  *
- * The icon is hidden from assistive technology and the name is carried as text
- * beside it: a `title` attribute is the weakest of the accessible-name sources,
- * and this page can show two of these links at once — "LinkedIn" twice says
- * nothing about whose profile either one opens.
+ * The accessible name carries the person's name beside the site label: this
+ * page can show several of these links at once, and a bare site name twice
+ * says nothing about whose profile either one opens.
  */
-function SocialLinks({ name, linkedin }: { name: string; linkedin?: string | null }) {
-  if (!linkedin) return null;
+function FeaturedLink({ name, url }: { name: string; url?: string | null }) {
+  if (!url) return null;
+  const label = getLinkLabel(url);
   return (
-    <a href={linkedin} target="_blank" rel="noopener">
-      <LinkedInIcon />
-      <span class="pk-sr-only">{name} on LinkedIn</span>
+    <a class="pk-small" href={url} target="_blank" rel="noopener" aria-label={`${name} on ${label}`}>
+      {label}
     </a>
   );
 }
 
-/** Every org link that isn't the LinkedIn one already shown as the heading icon. */
-function OtherLinks({ links, linkedin }: { links: string[]; linkedin: string | null }) {
-  const others = links.filter((url) => url !== linkedin);
+/** Every link after the featured one already shown beside the heading. */
+function OtherLinks({ links, featuredLink }: { links: string[]; featuredLink: string | null }) {
+  const others = links.filter((url) => url !== featuredLink);
   return (
     <>
       {others.map((url) => (
@@ -122,7 +107,7 @@ function IdentityCard({ identity }: { identity: PublicIdentity }) {
           <div class="pk-stack pk-stack--tight">
             <h3 class="pk-cluster">
               {identity.name}
-              <SocialLinks name={identity.name} linkedin={identity.linkedin} />
+              <FeaturedLink name={identity.name} url={identity.featuredLink} />
             </h3>
             {identity.jobTitle && <p class="pk-muted">{identity.jobTitle}</p>}
           </div>
@@ -135,9 +120,6 @@ function IdentityCard({ identity }: { identity: PublicIdentity }) {
 
 export function MemberDetailView({ member, directoryHref }: { member: MemberDetail; directoryHref: string }) {
   const colorIdx = member.name.length % 6;
-  // member.linkedin is already resolved server-side for org-less individuals;
-  // for organizations it's derived from the generic links list here.
-  const linkedin = member.linkedin ?? findLinkedinUrl(member.links);
   const namedLinks: Array<[string, string | null | undefined]> = [
     ["Website", member.website],
     ["Press", member.pressUrl],
@@ -175,7 +157,7 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
         )}
         <Panel>
           <PanelHeader title="Member details" headingLevel={2}>
-            <SocialLinks name={member.name} linkedin={linkedin} />
+            <FeaturedLink name={member.name} url={member.featuredLink} />
           </PanelHeader>
           <PanelBody>
             {/* A term/value list, which is what this always was: it used to be
@@ -184,7 +166,7 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
                 not see the layout. */}
             <dl class="pk-datalist pk-small">
               <dt>Member since</dt>
-              <dd>{new Date(member.memberSince).toLocaleDateString(undefined, { year: "numeric", month: "long" })}</dd>
+              <dd>{formatMonthYear(member.memberSince)}</dd>
               {namedLinks.map(([label, url]) =>
                 url ? (
                   <Fragment key={label}>
@@ -197,7 +179,7 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
                   </Fragment>
                 ) : null,
               )}
-              <OtherLinks links={member.links} linkedin={linkedin} />
+              <OtherLinks links={member.links} featuredLink={member.featuredLink} />
             </dl>
           </PanelBody>
         </Panel>

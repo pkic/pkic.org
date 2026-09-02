@@ -25,6 +25,7 @@ import { geolocationCountryResponseSchema } from "../../shared/schemas/geolocati
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { ButtonLink } from "../ui/Button";
 import {
   hasPendingRegistrationDayWaitlist,
   RegistrationDayStatusSummary,
@@ -98,9 +99,7 @@ function showSuccessPanel(
           {result.manageUrl && (
             <div class="event-flow-submission-action">
               <p class="pk-small">Wrong email address?</p>
-              <a href={result.manageUrl} class="pk-btn pk-btn--secondary">
-                Edit email address
-              </a>
+              <ButtonLink href={result.manageUrl}>Edit email address</ButtonLink>
             </div>
           )}
         </div>

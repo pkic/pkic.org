@@ -33,7 +33,7 @@ function person(overrides: PersonPayload = {}): PersonPayload {
     organizationLogoUrl: null,
     organizationWebsite: "https://engines.example/",
     photoUrl: "https://cdn.example/ada.jpg",
-    linkedin: "https://www.linkedin.com/in/ada/",
+    featuredLink: "https://www.linkedin.com/in/ada/",
     ...overrides,
   };
 }
@@ -81,16 +81,32 @@ afterEach(() => {
 });
 
 describe("public person card", () => {
-  it("names the profile link after the person rather than after the network", async () => {
+  it("names the featured link after the person rather than after the site", async () => {
     const container = await mount(
       <PublicPersonCard person={personRecord()} role="Chair" color="green" from="2025-01-01" />,
     );
 
-    const link = container.querySelector<HTMLAnchorElement>("a.person-card-linkedin");
-    // Ten cards on a page would otherwise offer ten links all called
-    // "LinkedIn", which is nothing to choose between out of context.
+    const link = container.querySelector<HTMLAnchorElement>("a.person-card-featured-link");
+    // Ten cards on a page would otherwise offer ten links all carrying the
+    // same site label, which is nothing to choose between out of context.
     expect(link?.getAttribute("aria-label")).toBe("Ada Lovelace on LinkedIn");
     expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("features whatever profile the owner put first, not a hardcoded platform", async () => {
+    const container = await mount(
+      <PublicPersonCard
+        person={personRecord({ featuredLink: "https://github.com/ada" })}
+        role="Chair"
+        color="green"
+        from="2025-01-01"
+      />,
+    );
+
+    const link = container.querySelector<HTMLAnchorElement>("a.person-card-featured-link");
+    expect(link?.getAttribute("href")).toBe("https://github.com/ada");
+    expect(link?.textContent).toBe("GitHub");
+    expect(link?.getAttribute("aria-label")).toBe("Ada Lovelace on GitHub");
   });
 
   it("does not make the photo repeat the name printed beside it", async () => {
@@ -102,10 +118,10 @@ describe("public person card", () => {
     expect(container.querySelector(".person-card-name")?.textContent).toBe("Ada Lovelace");
   });
 
-  it("renders initials, and no profile link at all, for a person with neither photo nor LinkedIn", async () => {
+  it("renders initials, and no profile link at all, for a person with neither photo nor links", async () => {
     const container = await mount(
       <PublicPersonCard
-        person={personRecord({ photoUrl: null, linkedin: null })}
+        person={personRecord({ photoUrl: null, featuredLink: null })}
         role="Chair"
         color="green"
         from="2025-01-01"
@@ -114,7 +130,7 @@ describe("public person card", () => {
 
     expect(container.querySelector(".person-card-avatar--initials")?.textContent).toBe("AL");
     // A control that does nothing when activated is worse than no control.
-    expect(container.querySelector("a.person-card-linkedin")).toBeNull();
+    expect(container.querySelector("a.person-card-featured-link")).toBeNull();
   });
 });
 
@@ -172,7 +188,7 @@ describe("public leadership widgets", () => {
       "Vice Chair",
     ]);
     expect(
-      [...container.querySelectorAll("a.person-card-linkedin")].map((link) => link.getAttribute("aria-label")),
+      [...container.querySelectorAll("a.person-card-featured-link")].map((link) => link.getAttribute("aria-label")),
     ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn"]);
   });
 });

@@ -11,6 +11,7 @@
  * owns the markup around it, so this attaches to the elements already there.
  */
 import { render } from "preact";
+import { TextInput } from "./ui/TextControl";
 import { INVITE_FORWARD_LIMIT } from "../shared/schemas/registration";
 import { q } from "./shared/form/helpers";
 import { parseContactText, type ParsedContact } from "./shared/invite-parser";
@@ -68,27 +69,24 @@ export function wireForwardList(root: HTMLElement): void {
     row.dataset.forwardRow = "";
     render(
       <>
-        <input
+        <TextInput
           type="text"
-          class="pk-input"
           placeholder="First name"
           data-fw-label="first name"
           data-fw="firstName"
           autocomplete="off"
           value={prefill?.firstName ?? ""}
         />
-        <input
+        <TextInput
           type="text"
-          class="pk-input"
           placeholder="Last name"
           data-fw-label="last name"
           data-fw="lastName"
           autocomplete="off"
           value={prefill?.lastName ?? ""}
         />
-        <input
+        <TextInput
           type="email"
-          class="pk-input"
           placeholder="Email *"
           data-fw-label="email address (required)"
           data-fw="email"

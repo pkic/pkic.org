@@ -4,11 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { OPENAPI_JSON_MAX_BYTES, openApiRoute } from "../functions/_lib/openapi/route";
 import { AppError } from "../functions/_lib/errors";
+import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 
 function testApp() {
   const app = new Hono();
   app.onError((error) => {
-    if (error instanceof AppError) return Response.json({ code: error.code }, { status: error.status });
+    if (error instanceof AppError) {
+      return Response.json({ code: error.code, details: error.details ?? null }, { status: error.status });
+    }
     throw error;
   });
   const openapi = fromHono(app);
@@ -61,7 +64,42 @@ describe("shared OpenAPI request validation", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ code: "INVALID_JSON" });
+    expect(await response.json()).toMatchObject({ code: "INVALID_JSON" });
+  });
+
+  it("reports refused fields through the shared {formErrors, fieldErrors} details contract", async () => {
+    const response = await testApp().request("/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: 42 }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { code: string; details: unknown };
+    expect(body.code).toBe("VALIDATION_ERROR");
+    // The browser's shared validation-map helpers read exactly this shape and
+    // pin each message to the field it names; chanfana's own `[{code, message,
+    // path}]` entries would reach the reader as a bare "Invalid request".
+    const details = apiValidationErrorDetailsSchema.parse(body.details);
+    expect(details.formErrors).toEqual([]);
+    // The `body` segment is transport framing, not a field name.
+    expect(Object.keys(details.fieldErrors ?? {})).toEqual(["value"]);
+    expect(details.fieldErrors?.value?.[0]).toMatch(/string/i);
+  });
+
+  it("reports a request that is not an object as a form-level error, not a field", async () => {
+    const response = await testApp().request("/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify("not-an-object"),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { code: string; details: unknown };
+    expect(body.code).toBe("VALIDATION_ERROR");
+    const details = apiValidationErrorDetailsSchema.parse(body.details);
+    expect(details.fieldErrors).toEqual({});
+    expect(details.formErrors?.length).toBeGreaterThan(0);
   });
 
   it("rejects JSON bodies above the shared streaming limit", async () => {
@@ -72,6 +110,6 @@ describe("shared OpenAPI request validation", () => {
     });
 
     expect(response.status).toBe(413);
-    expect(await response.json()).toEqual({ code: "REQUEST_BODY_TOO_LARGE" });
+    expect(await response.json()).toMatchObject({ code: "REQUEST_BODY_TOO_LARGE" });
   });
 });

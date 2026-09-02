@@ -7,7 +7,19 @@ import { publicOperation, requiresSession } from "./route-contract";
 import { sponsorCapacitySchema } from "./sponsor-access";
 import { publicStaffCapacitySchema } from "./staff-capacity";
 
-export const userAuthRequestSchema = emailRecoveryRequestSchema;
+/**
+ * A portal route a sign-in link may return to once the session exists: a path
+ * under the portal's own `#`, never a scheme or a host, so the link can only
+ * land inside the portal.
+ */
+export const portalReturnPathSchema = z
+  .string()
+  .max(200)
+  .regex(/^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@/%?]*$/, "Must be a portal path");
+
+export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
+  returnPath: portalReturnPathSchema.optional(),
+});
 export const userAuthVerifySchema = magicLinkVerifySchema;
 
 export const userIdentitySchema = z.object({

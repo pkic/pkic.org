@@ -2016,7 +2016,13 @@ VALUES
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'job_title', 'Role / Job Title', 'text', 0, NULL, NULL, 10, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'linkedin', 'LinkedIn Profile', 'url', 0, NULL, NULL, 20, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   -- Any professional profile that verifies the applicant is accepted —
+   -- LinkedIn works, and so does a leadership page at their employer. The
+   -- key stays 'linkedin' as the stored-answer identifier; on approval the
+   -- value joins the canonical links list, where no platform is special.
+   'linkedin', 'Professional profile (e.g., LinkedIn)', 'url', 0, NULL,
+   '{"placeholder": "https://www.linkedin.com/in/your-name or your employer''s page about you"}',
+   20, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'organization_website', 'Organization Website', 'url', 0, NULL, NULL, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),

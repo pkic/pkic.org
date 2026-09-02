@@ -108,16 +108,21 @@ export function GroupLeadershipAssignmentForm({
               assignment is in flight, including the search select's own
               controls, which no prop of this form reaches. */}
           <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={saving}>
-            <ServerSearchSelect
-              catalog={leadershipCapacityCatalog(groupId)}
-              label="Participation capacity"
-              value={membership?.id ?? null}
-              selectedLabel={membership ? capacityLabel(membership) : undefined}
-              placeholder="Select a person and Member capacity…"
-              searchPlaceholder="Search name, email, organization, or category…"
-              onChange={setMembership}
-              disabled={saving}
-            />
+            <Field label="Participation capacity">
+              {(control) => (
+                <ServerSearchSelect
+                  {...control}
+                  searchLabel="Participation capacity"
+                  catalog={leadershipCapacityCatalog(groupId)}
+                  value={membership?.id ?? null}
+                  selectedLabel={membership ? capacityLabel(membership) : undefined}
+                  placeholder="Select a person and Member capacity…"
+                  searchPlaceholder="Search name, email, organization, or category…"
+                  onChange={setMembership}
+                  disabled={saving}
+                />
+              )}
+            </Field>
             <Field label="Role">
               {(control) => (
                 <Select

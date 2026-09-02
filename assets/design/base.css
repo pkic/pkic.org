@@ -83,8 +83,12 @@
      * chooses the dark theme the tokens flip the ink to near-white and leave
      * the ground white underneath it. A theme the reader can choose has to
      * reach the page itself, not only the components drawn on it.
+     *
+     * The ground is the surface token, not the canvas: the public site is
+     * white in the light theme (its logo walls and cards sit directly on the
+     * page), and the portal shell paints the sunk canvas for itself.
      */
-    background: var(--pk-canvas);
+    background: var(--pk-surface);
     color: var(--pk-ink);
   }
 

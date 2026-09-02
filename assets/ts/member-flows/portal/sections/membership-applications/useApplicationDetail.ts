@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { toast } from "../../ui";
-import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
-import type { EcDecisionValue } from "../../../../../shared/schemas/ec-review";
+import type {
+  EcDecisionRecordInput,
+  MembershipApplicationDetail,
+} from "../../../../../shared/schemas/membership-application-management";
 import {
   membershipApplicationDetailSchema,
   ecDecisionRecordResponseSchema,
@@ -70,6 +72,8 @@ export function useApplicationDetail(applicationId: string) {
       await reload();
     } catch (e) {
       toast((e as Error).message, "error");
+      // The card keeps the draft and marks the field a refusal names.
+      throw e;
     }
   }
 
@@ -84,24 +88,22 @@ export function useApplicationDetail(applicationId: string) {
       await reload();
     } catch (e) {
       toast((e as Error).message, "error");
+      throw e;
     }
   }
 
-  async function recordEcDecision(params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) {
+  async function recordEcDecision(decision: EcDecisionRecordInput) {
     try {
       await postJson(
         `/api/v1/members/applications/${applicationId}/ec-decisions`,
-        {
-          ecMemberUserId: params.ecMemberUserId,
-          decision: params.decision,
-          reason: params.reason || undefined,
-        },
+        decision,
         ecDecisionRecordResponseSchema,
       );
       toast("EC decision recorded", "success");
       await reload();
     } catch (e) {
       toast((e as Error).message, "error");
+      throw e;
     }
   }
 

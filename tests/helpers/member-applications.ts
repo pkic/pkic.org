@@ -138,7 +138,7 @@ export async function seedMembershipApplicationForm(): Promise<string> {
     .run();
   const fields = [
     ["job_title", "Role / Job Title", "text", 0, null, null, null],
-    ["linkedin", "LinkedIn Profile", "url", 0, null, null, null],
+    ["linkedin", "Professional profile (e.g., LinkedIn)", "url", 0, null, null, null],
     ["organization_website", "Organization Website", "url", 0, null, null, null],
     ["about_yourself", "About Yourself", "textarea", 0, null, null, null],
     ["about_organization", "About Your Organization", "textarea", 0, null, null, null],

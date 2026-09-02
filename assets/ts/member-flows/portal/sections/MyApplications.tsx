@@ -22,6 +22,7 @@ import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import type { MyApplicationDetail, MyApplicationSummary } from "../types";
+import { useMembershipCategoryLabels } from "../../../hooks/useMembershipCategoryLabels";
 
 /**
  * One entry in the status history or the message list. Both are a headline
@@ -43,6 +44,7 @@ function LogEntry({ headline, at, body }: { headline: ComponentChildren; at: str
 function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<MyApplicationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { label: categoryLabel } = useMembershipCategoryLabels();
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +91,7 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
             <Panel>
               <PanelBody class="pk-stack pk-stack--tight">
                 <p class="pk-muted pk-small">
-                  {detail.organizationName ?? "Individual applicant"} — Category {detail.membershipCategory}
+                  {detail.organizationName ?? "Individual applicant"} — {categoryLabel(detail.membershipCategory)}
                 </p>
                 <p class="pk-muted pk-small">
                   Submitted {fmt(detail.createdAt)} — last updated {fmt(detail.stageEnteredAt)}
@@ -149,22 +151,32 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
   );
 }
 
-const APPLICATION_COLUMNS: ReadonlyArray<DataTableColumn<MyApplicationSummary>> = [
-  // The design system's table gives slack to no column on its own; the
-  // category is the row's subject, so a wide screen's slack lands there.
-  { id: "membershipCategory", header: "Category", width: "primary", cell: (app) => app.membershipCategory },
-  // The badge carries the status as words as well as a tone, so the column is
-  // readable without relying on colour.
-  { id: "stage", header: "Status", cell: (app) => <Badge status={app.stage} /> },
-  {
-    id: "createdAt",
-    header: "Submitted",
-    cell: (app) => fmtDate(app.createdAt),
-    // A date has a bounded length; saying so keeps the slack in the
-    // category column instead of stranding the date mid-screen.
-    width: "fit",
-  },
-];
+function applicationColumns(
+  categoryLabel: (code: string) => string,
+): ReadonlyArray<DataTableColumn<MyApplicationSummary>> {
+  return [
+    // The design system's table gives slack to no column on its own; the
+    // category is the row's subject, so a wide screen's slack lands there —
+    // and it reads as the catalog's words, not a bare letter code.
+    {
+      id: "membershipCategory",
+      header: "Category",
+      width: "primary",
+      cell: (app) => categoryLabel(app.membershipCategory),
+    },
+    // The badge carries the status as words as well as a tone, so the column is
+    // readable without relying on colour.
+    { id: "stage", header: "Status", cell: (app) => <Badge status={app.stage} /> },
+    {
+      id: "createdAt",
+      header: "Submitted",
+      cell: (app) => fmtDate(app.createdAt),
+      // A date has a bounded length; saying so keeps the slack in the
+      // category column instead of stranding the date mid-screen.
+      width: "fit",
+    },
+  ];
+}
 
 export function MyApplications() {
   const page = useApiPage(
@@ -174,6 +186,7 @@ export function MyApplications() {
     (data) => data.applications,
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const categories = useMembershipCategoryLabels((page.data?.applications.length ?? 0) > 0);
 
   if (selectedId) {
     return <ApplicationDetailView id={selectedId} onBack={() => setSelectedId(null)} />;
@@ -194,7 +207,7 @@ export function MyApplications() {
         <PanelBody>
           <DataTable
             caption="Your membership applications"
-            columns={APPLICATION_COLUMNS}
+            columns={applicationColumns(categories.label)}
             rows={applications}
             rowKey={(app) => app.id}
             loading={page.loading}
@@ -213,9 +226,9 @@ export function MyApplications() {
               />
             }
           />
+          {page.pagerProps && <Pager {...page.pagerProps} />}
         </PanelBody>
       </Panel>
-      {page.pagerProps && <Pager {...page.pagerProps} />}
     </div>
   );
 }

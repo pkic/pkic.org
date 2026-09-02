@@ -377,10 +377,16 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     const chairUserId = await insertUser("paul@example.test", ["Paul", "van Brouwershaven"]);
     const memberId = await insertMember(chairUserId, orgId);
     await env.DB.prepare(
-      `UPDATE identities SET job_title = ?
+      `UPDATE identities SET job_title = ?, links_json = ?
         WHERE user_id = ? AND organization_id = (SELECT organization_id FROM members WHERE id = ?)`,
     )
-      .bind("Deputy PKI Officer", chairUserId, memberId)
+      .bind(
+        "Deputy PKI Officer",
+        // Owner-ordered: the first link is not LinkedIn, and stays featured.
+        JSON.stringify(["https://github.com/paulvb", "https://www.linkedin.com/in/paulvb/"]),
+        chairUserId,
+        memberId,
+      )
       .run();
     const pastUserId = await insertUser("kirk@example.test", ["Kirk", "Hall"]);
 
@@ -408,6 +414,7 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
         jobTitle: string | null;
         organizationName: string | null;
         organizationWebsite: string | null;
+        featuredLink: string | null;
       }>;
       past: Array<{ name: string; endsAt: string | null }>;
     };
@@ -416,6 +423,9 @@ describe("leadership positions (consolidated migration 0035) — Board / Executi
     expect(body.current[0].jobTitle).toBe("Deputy PKI Officer");
     expect(body.current[0].organizationName).toBe("Digitorus");
     expect(body.current[0].organizationWebsite).toBe("https://digitorus.com");
+    // The featured link is the identity's first canonical link, whatever its
+    // platform — no platform is special-cased ahead of the owner's ordering.
+    expect(body.current[0].featuredLink).toBe("https://github.com/paulvb");
     expect(body.past).toHaveLength(1);
     expect(body.past[0].name).toBe("Kirk Hall");
     expect(body.past[0].endsAt).toBe("2025-02-01");

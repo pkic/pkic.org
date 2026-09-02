@@ -1,61 +1,46 @@
 /**
- * One organization's record.
+ * One organization's record, read like an account page in a CRM.
  *
  * The page opens with one statement of what it is — `PageHeader` carries the
- * trail, the name, and the qualifying badges — and then splits its facets
- * into tabs. The version this replaces said "organization" three times before
- * any content (section title, breadcrumb, kicker) and stacked profile, logo,
- * contacts, and the roster into one scroll; the anatomy calls both defects
- * out by name.
- *
- * Each tab's panel mounts only while its tab is selected, so its bounded
- * query runs when the reader asks for that facet — a tab is precisely the
- * license not to fetch everything on first paint. Only the record itself
- * (the detail GET the header needs) loads with the page.
+ * trail, the name, and the qualifying badges — and then shows the account:
+ * its profile, the people who represent it, and its sponsorships, with the
+ * mark and the contacts beside them. Nothing is behind a tab: a reader who
+ * opens an organization wants to see who is there, and a facet that costs
+ * one bounded query each does not need a click to earn it. The version this
+ * replaces split the same three lists into tabs and made "who represents
+ * this organization" a second step.
  */
-import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import {
   organizationDetailResponseSchema,
+  organizationManagementUpdateSchema,
   type OrganizationDetail as OrganizationDetailModel,
 } from "../../../../../shared/schemas/organization-management";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
-import { getJson } from "../../../../shared/api-client";
+import { ErrorAlert, friendlyErrorMessage } from "../../../../components/ErrorAlert";
+import { useContractForm } from "../../../../hooks/useContractForm";
+import { getJson, patchJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody } from "../../../../ui/Panel";
+import { toast } from "../../ui";
+import { draftFromOrganization, payloadFromDraft, type OrganizationDraft } from "./OrganizationDraft";
+import {
+  OrganizationAbout,
+  OrganizationContacts,
+  OrganizationLinks,
+  OrganizationMembershipCard,
+} from "./OrganizationProfile";
 import { Badge } from "../../../../ui/Badge";
 import { PageHeader } from "../../../../ui/PageHeader";
-import { TabList } from "../../../../ui/TabList";
 import { OrganizationLogo } from "./OrganizationLogo";
-import { OrganizationContacts, OrganizationProfile } from "./OrganizationProfile";
-import { OrganizationSponsorships } from "./OrganizationSponsorships";
+import { OrganizationActivity } from "./OrganizationActivity";
+import { OrganizationSponsorshipStanding } from "./OrganizationSponsorshipStanding";
 import { IdentityRoster } from "./IdentityRoster";
 // `pk-mono` on the category code comes from Content.css, which ships in a lazy
 // chunk rather than the entry stylesheet, so this module pulls it in itself.
 import "../../../../ui/Content.css";
-
-type DetailTab = "overview" | "identities" | "sponsorships";
-
-const TAB_LABELS: Record<DetailTab, string> = {
-  overview: "Overview",
-  identities: "Identities",
-  sponsorships: "Sponsorships",
-};
-
-const TAB_ID_PREFIX = "organization-detail";
-
-function panelIdFor(tab: DetailTab): string {
-  return `${TAB_ID_PREFIX}-${tab}-panel`;
-}
-
-/** Names itself and points back at the tab that revealed it — the other half of `role="tab"`'s contract. */
-function TabPanel({ tab, children }: { tab: DetailTab; children: ComponentChildren }) {
-  return (
-    <div id={panelIdFor(tab)} role="tabpanel" aria-labelledby={`${TAB_ID_PREFIX}-${tab}`}>
-      {children}
-    </div>
-  );
-}
 
 export function OrganizationDetail({
   organizationId,
@@ -73,7 +58,17 @@ export function OrganizationDetail({
   const [organization, setOrganization] = useState<OrganizationDetailModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<DetailTab>("overview");
+  // Editing is the page's mode, not a card's: one draft, one Save, and every
+  // card keeps its layout while its values become inputs.
+  const [draft, setDraft] = useState<OrganizationDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  // One basis for validation: the shared update contract the server parses
+  // decides what each field shows, live, and what Save may send.
+  const form = useContractForm(
+    organizationManagementUpdateSchema,
+    draft && organization ? payloadFromDraft(draft, organization.updatedAt) : {},
+  );
 
   const load = useCallback(async () => {
     if (!canRead) return;
@@ -104,18 +99,53 @@ export function OrganizationDetail({
   if (!organization) return null;
 
   const count = organization.activeIdentityCount;
-  const tabs: DetailTab[] = ["overview", "identities", ...(canReadSponsorships ? (["sponsorships"] as const) : [])];
-  const activeTab = tabs.includes(tab) ? tab : "overview";
+  const editing = draft !== null;
+  const onDraft = (next: Partial<OrganizationDraft>) =>
+    setDraft((current) => (current ? { ...current, ...next } : current));
+  const stopEditing = () => {
+    setDraft(null);
+    form.reset();
+    setSaveError("");
+  };
 
-  /*
-   * A viewer who may not edit and has no logo to look at has nothing to put in
-   * the supporting column, and the grid would hold its empty track open beside
-   * the profile — `pk-grid` uses `auto-fill` precisely so that a card keeps its
-   * size whether or not it has neighbours. So the second column is only asked
-   * for when something is going into it.
-   */
-  const hasSupport = canWrite || organization.logoUrl !== null;
-  const profile = <OrganizationProfile organization={organization} canWrite={canWrite} onSaved={load} />;
+  async function save() {
+    if (!draft || !organization) return;
+    // Nothing leaves the page until the contract accepts the whole draft.
+    const checked = form.submit();
+    if (!checked.data) {
+      setSaveError(checked.message);
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    try {
+      await patchJson(
+        `/api/v1/organizations/${encodeURIComponent(organization.id)}`,
+        checked.data,
+        organizationDetailResponseSchema,
+      );
+      toast("Organization updated", "success");
+      stopEditing();
+      await load();
+    } catch (caught) {
+      // A server refusal names its fields the same way the contract does.
+      const message = form.refuse(caught);
+      setSaveError(message);
+      toast(message, "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const cardProps = {
+    organization,
+    draft: draft ?? undefined,
+    onDraft: editing ? onDraft : undefined,
+    busy: saving,
+    fields: form.of,
+  };
+  // Every field on the page reports through the one contract while editing.
+  const liveHandlers = editing ? form.handlers : {};
 
   return (
     <section class="pk pk-stack" aria-label={organization.name}>
@@ -124,7 +154,8 @@ export function OrganizationDetail({
           { label: "Organizations", href: usePortalHashLocation.hrefs("/organizations") },
           { label: organization.name },
         ]}
-        title={organization.name}
+        // While editing, the title follows the Name field as it is typed.
+        title={draft?.name.trim() ? draft.name : organization.name}
         context={
           <>
             {organization.membershipCategory && (
@@ -132,50 +163,66 @@ export function OrganizationDetail({
                 Category <span class="pk-mono">{organization.membershipCategory}</span>
               </Badge>
             )}
-            {/* Reads as a sentence rather than as a bare number, and the
-                singular is not "1 identities". */}
+            {/* Reads as a sentence rather than as a bare number. */}
             <Badge tone={count > 0 ? "ok" : "warn"}>
-              {count} active {count === 1 ? "identity" : "identities"}
+              {count} active {count === 1 ? "representative" : "representatives"}
             </Badge>
           </>
         }
+        actions={
+          canWrite ? (
+            editing ? (
+              <>
+                <Button
+                  variant="primary"
+                  loading={saving}
+                  onClick={() => {
+                    void save();
+                  }}
+                >
+                  Save
+                </Button>
+                <Button disabled={saving} onClick={stopEditing}>
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setDraft(draftFromOrganization(organization))}>Edit</Button>
+            )
+          ) : undefined
+        }
       />
+      {saveError && <Alert tone="danger">{friendlyErrorMessage(saveError)}</Alert>}
 
-      <TabList
-        label={`${organization.name} sections`}
-        idPrefix={TAB_ID_PREFIX}
-        items={tabs.map((key) => ({ id: key, label: TAB_LABELS[key], panelId: panelIdFor(key) }))}
-        activeId={activeTab}
-        onSelect={(id) => setTab(id as DetailTab)}
-      />
-
-      {activeTab === "overview" && (
-        <TabPanel tab="overview">
-          {hasSupport ? (
-            <div class="pk-grid pk-grid--roomy">
-              {profile}
-              <div class="pk-stack">
-                <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
-                {canWrite && <OrganizationContacts organization={organization} onSaved={load} />}
-              </div>
-            </div>
-          ) : (
-            profile
-          )}
-        </TabPanel>
-      )}
-
-      {activeTab === "identities" && (
-        <TabPanel tab="identities">
+      {/* The account: what the organization says about itself and who
+          represents it take the width; its mark and its standing — as a
+          member, as a sponsor — and its contacts keep the column beside them.
+          The side column's lists share one term measure, so their values sit
+          on one edge. In edit mode the same cards carry inputs in place. */}
+      <div class="pk-record" {...liveHandlers}>
+        <div class="pk-stack">
+          <OrganizationAbout {...cardProps} />
           <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />
-        </TabPanel>
-      )}
-
-      {activeTab === "sponsorships" && canReadSponsorships && (
-        <TabPanel tab="sponsorships">
-          <OrganizationSponsorships organizationId={organization.id} />
-        </TabPanel>
-      )}
+          {/* What the account has done across the consortium, one bounded
+              query per tab, aggregated over its representatives. */}
+          <OrganizationActivity organizationId={organization.id} canReadSponsorships={canReadSponsorships} />
+        </div>
+        <div class="pk-stack pk-datalist-aligned">
+          {/* The identity card: the mark with the organization's links under
+              it — one card, so the mark is not a lone box above the rest. */}
+          <Panel aria-label="Identity">
+            <PanelBody class="pk-stack pk-stack--snug">
+              <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
+              <OrganizationLinks {...cardProps} />
+            </PanelBody>
+          </Panel>
+          <OrganizationMembershipCard {...cardProps} />
+          {canReadSponsorships && (
+            <OrganizationSponsorshipStanding organizationId={organization.id} canWrite={canWrite} />
+          )}
+          <OrganizationContacts {...cardProps} />
+        </div>
+      </div>
     </section>
   );
 }

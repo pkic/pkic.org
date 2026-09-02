@@ -2,6 +2,10 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  meetingInvitationVerificationUpdateSchema,
+  meetingJoinConfirmSchema,
+} from "../../assets/shared/schemas/meeting-entry";
 import { App } from "../../assets/ts/member-flows/meeting-join/App";
 import { MeetingJoinForm } from "../../assets/ts/member-flows/meeting-join/MeetingJoinForm";
 import {
@@ -10,6 +14,32 @@ import {
 } from "../../assets/ts/member-flows/meeting-join/invitation-fragment";
 
 const mounted: HTMLElement[] = [];
+
+const occurrence = {
+  id: "80000000-0000-4000-8000-000000000001",
+  seriesId: "60000000-0000-4000-8000-000000000001",
+  eventName: "Architecture meeting",
+  startsAt: "2026-09-01T13:00:00.000Z",
+  endsAt: "2026-09-01T14:00:00.000Z",
+  location: "Online",
+};
+
+const rulesTerm = {
+  id: "90000000-0000-4000-8000-000000000001",
+  key: "meeting-rules",
+  version: "v1",
+  displayText: "Follow the meeting rules",
+  required: true,
+  accepted: false,
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function fieldOf(control: HTMLElement): HTMLElement {
+  return control.closest<HTMLElement>(".pk-field")!;
+}
 
 /** The control a visible label points at, found the way a reader would. */
 function controlLabelled(root: ParentNode, label: string): HTMLInputElement {
@@ -98,7 +128,71 @@ describe("secure meeting join browser flow", () => {
     const button = container.querySelector<HTMLButtonElement>("button")!;
     expect(button.disabled).toBe(false);
     void act(() => button.click());
-    expect(onJoin).toHaveBeenCalledWith(["90000000-0000-4000-8000-000000000001"]);
+    // What is handed on is the join contract's own output: the accepted
+    // term with its version, the landing revision, the explicit intent.
+    expect(onJoin).toHaveBeenCalledTimes(1);
+    expect(meetingJoinConfirmSchema.parse(onJoin.mock.calls[0][0])).toEqual({
+      landingRevision: "a".repeat(64),
+      acceptedTerms: [{ termId: "90000000-0000-4000-8000-000000000001", version: "v1" }],
+      intentionalJoin: true,
+    });
+  });
+
+  it("posts the join the shared contract describes and follows the redirect it returns", async () => {
+    const occurrenceId = occurrence.id;
+    const requests: Array<{ url: string; method: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        requests.push({ url, method: init?.method ?? "GET", body });
+        if ((init?.method ?? "GET") === "GET") {
+          return jsonResponse({
+            occurrence,
+            name: "Authoritative Attendee",
+            affiliation: null,
+            terms: [rulesTerm],
+            landingRevision: "a".repeat(64),
+          });
+        }
+        return jsonResponse({
+          confirmationId: "82000000-0000-4000-8000-000000000001",
+          confirmedAt: "2026-09-01T13:00:00.000Z",
+          redirectUrl: "https://meet.example.test/room?token=0123456789abcdef",
+        });
+      }),
+    );
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, search: `?occurrence=${occurrenceId}`, assign });
+
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(async () => {
+      render(<App invitation={null} />, container);
+    });
+    await vi.waitFor(() => expect(container.textContent).toContain("Architecture meeting"));
+
+    const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    await act(async () => {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      buttonLabelled(container, "Agree and join meeting").click();
+    });
+    await vi.waitFor(() => expect(assign).toHaveBeenCalled());
+
+    const join = requests.find((request) => request.method === "POST");
+    expect(join?.url).toBe(`/api/v1/meetings/occurrences/${occurrenceId}/join`);
+    // The body has to satisfy the contract the route parses it with.
+    expect(meetingJoinConfirmSchema.parse(join?.body)).toEqual({
+      landingRevision: "a".repeat(64),
+      acceptedTerms: [{ termId: rulesTerm.id, version: "v1" }],
+      intentionalJoin: true,
+    });
+    expect(assign).toHaveBeenCalledWith("https://meet.example.test/room?token=0123456789abcdef");
   });
 
   it("creates and completes a nested invitation verification before using the canonical join resource", async () => {
@@ -157,11 +251,13 @@ describe("secure meeting join browser flow", () => {
       collection,
       expect.objectContaining({ method: "POST", body: JSON.stringify({ token: "pkc1_invitation" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      `${collection}/${verificationId}`,
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ code: "ABCDEFGH" }) }),
-    );
+    const [, verify] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(fetchMock.mock.calls[1][0]).toBe(`${collection}/${verificationId}`);
+    expect(verify.method).toBe("PATCH");
+    // The code is what the verification contract makes of the draft.
+    expect(meetingInvitationVerificationUpdateSchema.parse(JSON.parse(String(verify.body)))).toEqual({
+      code: "ABCDEFGH",
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       `/api/v1/meetings/occurrences/${occurrenceId}/join`,
@@ -277,27 +373,15 @@ describe("secure meeting join browser flow", () => {
     history.replaceState({}, "", "/");
   });
 
-  it("attaches a rejected verification code to the control it is about", async () => {
-    const occurrenceId = "80000000-0000-4000-8000-000000000002";
+  /** Mounts the guest verification step with the verification endpoint answering `verify`. */
+  async function mountVerification(occurrenceId: string, verify: () => Response) {
     const verificationId = "90000000-0000-4000-8000-000000000002";
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if ((init?.method ?? "GET") === "POST") {
-        return Promise.resolve(
-          new Response(JSON.stringify({ verificationId, expiresAt: "2026-09-01T13:00:00.000Z" }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        );
+        return Promise.resolve(jsonResponse({ verificationId, expiresAt: "2026-09-01T13:00:00.000Z" }));
       }
-      if (url.includes("/verifications/")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ error: { code: "INVALID_CODE", message: "That code is not correct." } }), {
-            status: 400,
-            headers: { "content-type": "application/json" },
-          }),
-        );
-      }
+      if (url.includes("/verifications/")) return Promise.resolve(verify());
       throw new Error(`Unexpected request: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -309,24 +393,91 @@ describe("secure meeting join browser flow", () => {
       render(<App invitation={{ token: "pkc1_invitation", occurrenceId }} />, container);
     });
     await vi.waitFor(() => expect(container.textContent).toContain("Verify your invitation"));
+    return { container, fetchMock };
+  }
 
+  async function typeCode(container: HTMLElement, value: string): Promise<HTMLInputElement> {
     const code = controlLabelled(container, "Verification code");
-    code.value = "WRONGCDE";
+    code.value = value;
     await act(async () => {
       code.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    return code;
+  }
+
+  it("refuses a code the contract rejects on the control, live, and sends nothing", async () => {
+    const { container, fetchMock } = await mountVerification("80000000-0000-4000-8000-000000000002", () =>
+      jsonResponse({ occurrenceId: "80000000-0000-4000-8000-000000000002", expiresAt: "2026-09-01T15:00:00.000Z" }),
+    );
+
+    // Too short, and containing a character the code alphabet leaves out: the
+    // contract says so on the control as it is typed, and the button waits.
+    const code = await typeCode(container, "ABC");
+    expect(fieldOf(code).classList.contains("pk-field--invalid")).toBe(true);
+    expect(code.getAttribute("aria-invalid")).toBe("true");
+    const message = container.querySelector(`#${code.getAttribute("aria-describedby") ?? ""}`);
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(buttonLabelled(container, "Verify invitation").disabled).toBe(true);
+    await act(async () => {
+      buttonLabelled(container, "Verify invitation").click();
+    });
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH"),
+    ).toHaveLength(0);
+
+    // Corrected: the control says it is good and the button is live.
+    await typeCode(container, "abcdefgh");
+    expect(code.value).toBe("ABCDEFGH");
+    expect(fieldOf(code).classList.contains("pk-field--ok")).toBe(true);
+    expect(buttonLabelled(container, "Verify invitation").disabled).toBe(false);
+  });
+
+  it("attaches a code the server refuses by name to the control it is about", async () => {
+    const { container } = await mountVerification("80000000-0000-4000-8000-000000000002", () =>
+      jsonResponse(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Invalid request",
+            details: { fieldErrors: { code: ["That code is not correct."] } },
+          },
+        },
+        400,
+      ),
+    );
+
+    const code = await typeCode(container, "WRNGCDEX");
     await act(async () => {
       buttonLabelled(container, "Verify invitation").click();
     });
     await vi.waitFor(() => expect(container.textContent).toContain("That code is not correct."));
 
     // The failure is the control's own, not a red box somewhere near it.
+    expect(fieldOf(code).classList.contains("pk-field--invalid")).toBe(true);
     expect(code.getAttribute("aria-invalid")).toBe("true");
-    const describedBy = code.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    const message = container.querySelector(`#${describedBy ?? ""}`);
+    const message = container.querySelector(`#${code.getAttribute("aria-describedby") ?? ""}`);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("That code is not correct.");
+    expect(document.activeElement).toBe(code);
+  });
+
+  it("states a refusal the server does not attribute to the code beside the control", async () => {
+    const { container } = await mountVerification("80000000-0000-4000-8000-000000000002", () =>
+      jsonResponse({ error: { code: "CHALLENGE_EXPIRED", message: "The challenge expired." } }, 410),
+    );
+
+    const code = await typeCode(container, "WRNGCDEX");
+    await act(async () => {
+      buttonLabelled(container, "Verify invitation").click();
+    });
+    await vi.waitFor(() => expect(container.textContent).toContain("The challenge expired."));
+
+    // The code said nothing wrong by the contract, so it is not marked; the
+    // refusal is announced on its own, where the reader is.
+    expect(code.getAttribute("aria-invalid")).toBeNull();
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.classList.contains("pk-alert--danger")).toBe(true);
+    expect(alert?.textContent).toContain("The challenge expired.");
   });
 
   it("tells an unauthenticated visitor with no invitation what to do next", async () => {

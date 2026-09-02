@@ -4,6 +4,7 @@ import { eventSponsorTiersResponseSchema } from "../../../../../../../shared/sch
 import { useEditorResource } from "../../../../../../hooks/useEditorResource";
 import { Alert, type AlertTone } from "../../../../../../ui/Alert";
 import { Button } from "../../../../../../ui/Button";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput } from "../../../../../../ui/TextControl";
 import { saveEditor } from "../../../../actions";
@@ -103,23 +104,19 @@ export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: bo
                   />
                 )}
               </Field>
-              <label class="pk-check">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  checked={tier.hasAttendeeDataAccess}
-                  onChange={(event) =>
-                    setTiers((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index
-                          ? { ...item, hasAttendeeDataAccess: (event.target as HTMLInputElement).checked }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-                <span class="pk-check__label">Attendee data access</span>
-              </label>
+              <Checkbox
+                checked={tier.hasAttendeeDataAccess}
+                onChange={(event) =>
+                  setTiers((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, hasAttendeeDataAccess: (event.target as HTMLInputElement).checked }
+                        : item,
+                    ),
+                  )
+                }
+                label="Attendee data access"
+              />
               {canWrite && (
                 <Button
                   variant="danger-quiet"

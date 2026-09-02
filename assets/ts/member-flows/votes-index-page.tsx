@@ -19,6 +19,7 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
+import { formatDate } from "../shared/ui";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { EmptyState } from "../components/EmptyState";
@@ -93,7 +94,7 @@ function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }
       )}
       <p class="pk-small">
         {vote.status === "closed" ? "Closed " : "Closes "}
-        {new Date(vote.closesAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+        {formatDate(vote.closesAt)}
       </p>
     </div>
   );

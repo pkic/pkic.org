@@ -264,7 +264,7 @@ async function expectParticipantRoster(page: Page): Promise<void> {
   const navigation = page.getByRole("navigation", { name: `${group.name} sections` });
   await navigation.getByRole("link", { name: "Members", exact: true }).click();
   const roster = page.getByRole("region", { name: "Members" });
-  await expect(roster.getByRole("listitem").filter({ hasText: "Synthetic Persona" })).toBeVisible();
+  await expect(roster.getByRole("row").filter({ hasText: "Synthetic Persona" })).toBeVisible();
   await expect(roster.getByLabel("Search members")).toBeVisible();
   // No row commands at all: neither the menu a multi-action row would show nor
   // the inline button a single-action row would.
@@ -309,7 +309,10 @@ test.describe("selected-group portal personas", () => {
     // The chair reaches group management through the group-centered sidebar:
     // the "Groups" entry, and this specific group listed under "Your groups".
     // The list shows names only; authority is expressed by the workspace tabs.
-    await expect(page.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
+    // The breadcrumb also links "Groups" (the trail), so the assertion names
+    // the sidebar landmark it means.
+    const sidebar = page.getByRole("complementary", { name: "Portal navigation" });
+    await expect(sidebar.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
     const sidebarGroups = page.locator(".portal-sidebar-groups");
     await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
   });
@@ -338,8 +341,11 @@ test.describe("selected-group portal personas", () => {
     await expectSections(page, ["Settings", "Members", "Leadership"]);
     await expect(page.getByRole("link", { name: "My Profile" })).toHaveCount(0);
     // Reaches group management the same way any manager does: the "Groups"
-    // sidebar entry and this group listed under "Your groups".
-    await expect(page.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
+    // sidebar entry and this group listed under "Your groups". The breadcrumb
+    // also links "Groups" (the trail), so the assertion names the sidebar
+    // landmark it means.
+    const sidebar = page.getByRole("complementary", { name: "Portal navigation" });
+    await expect(sidebar.getByRole("link", { name: "Groups", exact: true })).toBeVisible();
     const sidebarGroups = page.locator(".portal-sidebar-groups");
     await expect(sidebarGroups.getByRole("link", { name: group.name })).toBeVisible();
   });

@@ -8,6 +8,7 @@ import {
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { TextInput } from "../../../../ui/TextControl";
@@ -132,7 +133,6 @@ export function MeetingSeriesSettings({
     <div class="pk pk-stack">
       <form class="pk-stack" onSubmit={(event) => void save(event)}>
         <MeetingSeriesFields
-          idPrefix={`meeting-series-settings-${series.id}`}
           draft={draft}
           disabled={saving}
           scheduleLocked={series.occurrenceCount > 0}
@@ -146,19 +146,12 @@ export function MeetingSeriesSettings({
             and active state remain editable.
           </p>
         )}
-        {/* All three parts of the check block: `pk-check` on the label alone
-            renders the operating system's own control, in its accent rather
-            than ours, and no gate can see it. */}
-        <label class="pk-check" for={activeId}>
-          <input
-            id={activeId}
-            type="checkbox"
-            class="pk-check__input"
-            checked={active}
-            onChange={(e) => setActive(e.currentTarget.checked)}
-          />
-          <span class="pk-check__label">Active series</span>
-        </label>
+        <Checkbox
+          id={activeId}
+          checked={active}
+          onChange={(e) => setActive(e.currentTarget.checked)}
+          label="Active series"
+        />
         {/* `loading` rather than `disabled`: a disabled control loses focus,
             which throws a screen-reader user out of the form mid-save. */}
         <div class="pk-cluster">

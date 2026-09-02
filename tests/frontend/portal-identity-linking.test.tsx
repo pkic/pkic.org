@@ -100,7 +100,8 @@ describe("linking existing users as acting identities", () => {
     clickButton("Link existing user");
     await settle();
 
-    const search = container.querySelector<HTMLInputElement>("input")!;
+    // The picker's own field, not the list's search box beside the commands that opened it.
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search for a user"]')!;
     search.value = "alex";
     await act(async () => {
       search.dispatchEvent(new Event("input", { bubbles: true }));
@@ -173,7 +174,8 @@ describe("linking existing users as acting identities", () => {
     await settle();
     clickButton("Link existing user");
     await settle();
-    const search = container.querySelector<HTMLInputElement>("input")!;
+    // The picker's own field, not the list's search box beside the commands that opened it.
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search for a user"]')!;
     search.value = "alex";
     await act(async () => {
       search.dispatchEvent(new Event("input", { bubbles: true }));
@@ -212,9 +214,9 @@ describe("linking existing users as acting identities", () => {
 
     // The section carries its own name, so it is a region rather than an
     // anonymous box; the heading beside it says the same thing visually.
-    const region = container.querySelector('section[aria-label="Identities"]');
+    const region = container.querySelector('section[aria-label="Representatives"]');
     expect(region).not.toBeNull();
-    expect(region!.querySelector("h3")?.textContent).toBe("Identities");
+    expect(region!.querySelector("caption")?.textContent).toBe("Representatives");
 
     // The picker's group is named by a `<legend>`, because `UserPicker` owns
     // the id of the control inside it and no outside label can point at it.

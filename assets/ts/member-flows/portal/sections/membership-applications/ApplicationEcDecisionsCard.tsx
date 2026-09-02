@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { DataTable } from "../../../../ui/DataTable";
@@ -10,7 +11,11 @@ import { Select, TextInput } from "../../../../ui/TextControl";
 // `pk-mono` is written here as a class name rather than reached through a
 // component, so this module has to pull its stylesheet into its own chunk.
 import "../../../../ui/Content.css";
-import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
+import {
+  ecDecisionRecordSchema,
+  type EcDecisionRecordInput,
+  type MembershipApplicationDetail,
+} from "../../../../../shared/schemas/membership-application-management";
 import type { EcDecisionValue } from "../../../../../shared/schemas/ec-review";
 
 /** The two decisions, in the words the reader sees rather than the stored value. */
@@ -31,8 +36,9 @@ const DECISION_LABEL: Record<EcDecisionValue, string> = {
  * which vanish the moment anything is typed — and it failed silently: an empty
  * user id returned from the submit handler saying nothing, and the reason the
  * backend requires for a decline was described only in a placeholder. Each
- * control now names itself through a Field, and both refusals are reported on
- * the control they belong to.
+ * control now names itself through a Field, and the form is checked by the
+ * decision contract the route parses, so both refusals are reported on the
+ * control they belong to.
  */
 export function ApplicationEcDecisionsCard({
   detail,
@@ -41,40 +47,41 @@ export function ApplicationEcDecisionsCard({
 }: {
   detail: MembershipApplicationDetail;
   canApprove: boolean;
-  onRecordEcDecision: (params: { ecMemberUserId: string; decision: EcDecisionValue; reason?: string }) => Promise<void>;
+  onRecordEcDecision: (params: EcDecisionRecordInput) => Promise<void>;
 }) {
   const [ecMemberUserId, setEcMemberUserId] = useState("");
   const [ecDecision, setEcDecision] = useState<EcDecisionValue>("approve");
   const [ecReason, setEcReason] = useState("");
-  const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const memberMissing = attempted && ecMemberUserId.trim() === "";
-  // `ecDecisionCreateSchema` refuses a decline with no reason. Saying so here
-  // means the reader is told on the field rather than by a rejected request.
-  const reasonMissing = attempted && ecDecision === "decline" && ecReason.trim() === "";
+  const form = useContractForm(ecDecisionRecordSchema, {
+    // The override exists to name the member, so a blank identifier is sent
+    // as what was typed and refused by the contract here, rather than left
+    // out and sent as the reader's own decision.
+    ecMemberUserId: ecMemberUserId.trim(),
+    decision: ecDecision,
+    reason: ecReason.trim() ? ecReason : undefined,
+  });
 
   async function submitEcDecision(event: Event) {
     event.preventDefault();
     // A loading Button stays focusable and therefore clickable, so the guard
     // against recording the same decision twice belongs here rather than on it.
     if (saving) return;
-    setAttempted(true);
     setError("");
-    if (!ecMemberUserId.trim() || (ecDecision === "decline" && !ecReason.trim())) return;
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSaving(true);
     try {
-      await onRecordEcDecision({
-        ecMemberUserId: ecMemberUserId.trim(),
-        decision: ecDecision,
-        reason: ecReason.trim() || undefined,
-      });
+      await onRecordEcDecision(checked.data);
       setEcMemberUserId("");
       setEcReason("");
-      setAttempted(false);
+      form.reset();
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
@@ -115,28 +122,30 @@ export function ApplicationEcDecisionsCard({
           />
 
           {canApprove && (
-            <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submitEcDecision(event)}>
+            <form
+              noValidate
+              class="pk-stack pk-stack--snug"
+              {...form.handlers}
+              onSubmit={(event) => void submitEcDecision(event)}
+            >
               <h4>Record on behalf of an EC member</h4>
               <p class="pk-small">A staff override. The decision is attributed to the member you name.</p>
               <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={saving}>
-                <Field
-                  label="EC member user ID"
-                  required
-                  state={memberMissing ? "invalid" : undefined}
-                  message={memberMissing ? "Enter the user ID of the EC member this decision belongs to." : undefined}
-                >
+                <Field label="EC member user ID" required {...form.of("ecMemberUserId")}>
                   {(control) => (
                     <TextInput
                       {...control}
+                      name="ecMemberUserId"
                       value={ecMemberUserId}
                       onInput={(event) => setEcMemberUserId((event.target as HTMLInputElement).value)}
                     />
                   )}
                 </Field>
-                <Field label="Decision" required>
+                <Field label="Decision" required {...form.of("decision")}>
                   {(control) => (
                     <Select
                       {...control}
+                      name="decision"
                       value={ecDecision}
                       onChange={(event) => setEcDecision((event.target as HTMLSelectElement).value as EcDecisionValue)}
                     >
@@ -149,12 +158,12 @@ export function ApplicationEcDecisionsCard({
                   label="Reason"
                   required={ecDecision === "decline"}
                   help="Required when declining."
-                  state={reasonMissing ? "invalid" : undefined}
-                  message={reasonMissing ? "A reason is required when declining." : undefined}
+                  {...form.of("reason")}
                 >
                   {(control) => (
                     <TextInput
                       {...control}
+                      name="reason"
                       value={ecReason}
                       onInput={(event) => setEcReason((event.target as HTMLInputElement).value)}
                     />

@@ -139,6 +139,54 @@ describe("Sponsorship sales pipeline", () => {
     expect(updated.sponsorship.renewalDate).toBe("2027-01-01");
   });
 
+  it("accepts the create form's exact payloads — explicit nulls included — for both sponsor types", async () => {
+    const { organizationId } = await seedOrganization("Form Shaped Corp");
+
+    // What CreateSponsorshipForm sends: only the chosen type's fields, blanks
+    // as null. Issue #22's regression test: these bodies must stay accepted.
+    const consortium = await call(adminToken, "/api/v1/sponsors", {
+      method: "POST",
+      body: JSON.stringify({
+        sponsorType: "consortium",
+        organizationId,
+        tier: null,
+        contactName: null,
+        contactEmail: null,
+      }),
+    });
+    expect(consortium.status).toBe(201);
+
+    const event = await call(adminToken, "/api/v1/sponsors", {
+      method: "POST",
+      body: JSON.stringify({
+        sponsorType: "event",
+        eventId,
+        nonMemberName: "Walk-up Widgets",
+        tier: null,
+        contactName: null,
+        contactEmail: null,
+      }),
+    });
+    expect(event.status).toBe(201);
+  });
+
+  it("names the refused field in the shared validation details instead of a bare invalid request", async () => {
+    const response = await call(adminToken, "/api/v1/sponsors", {
+      method: "POST",
+      body: JSON.stringify({ sponsorType: "consortium", organizationId: "Acme Corp" }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    // The browser's shared validation-map contract pins this onto the
+    // Organization ID field; issue #22 was a bare "Invalid request" that
+    // named nothing.
+    expect(body.error.details?.fieldErrors?.organizationId?.length).toBeGreaterThan(0);
+  });
+
   it("rejects service API keys because sponsorship mutations require a user-backed staff identity", async () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
     const createResponse = await call(apiKey, "/api/v1/sponsors", {

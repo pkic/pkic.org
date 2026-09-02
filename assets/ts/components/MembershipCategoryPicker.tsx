@@ -1,7 +1,8 @@
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../shared/schemas/membership-categories";
-// `pk-field__label`, `pk-field__help` and the `pk-check` trio are written here
-// as class names rather than reached through a component, so this module has to
-// pull their stylesheet into its own chunk.
+import { Checkbox } from "../ui/Checkbox";
+// `pk-field__label` and `pk-field__help` are written here as class names
+// rather than reached through a component, so this module has to pull their
+// stylesheet into its own chunk.
 import "../ui/Field.css";
 
 /**
@@ -53,20 +54,14 @@ export function MembershipCategoryPicker({
         {MEMBERSHIP_CATEGORIES.map((category) => {
           const id = `${idPrefix}-${category}`;
           return (
-            // All three parts of the block: without `pk-check__input` on the
-            // input the browser draws its own control, in the operating
-            // system's accent rather than ours, and no gate can see it.
-            <label class="pk-check" key={category} for={id}>
-              <input
-                id={id}
-                class="pk-check__input"
-                type="checkbox"
-                checked={selectedSet.has(category)}
-                disabled={disabled}
-                onChange={(event) => toggle(category, (event.target as HTMLInputElement).checked)}
-              />
-              <span class="pk-check__label">{category}</span>
-            </label>
+            <Checkbox
+              key={category}
+              id={id}
+              checked={selectedSet.has(category)}
+              disabled={disabled}
+              onChange={(event) => toggle(category, (event.target as HTMLInputElement).checked)}
+              label={category}
+            />
           );
         })}
       </div>

@@ -1,16 +1,19 @@
 import { useState, useEffect } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { useContractForm, type FieldPresentation } from "../../../../hooks/useContractForm";
+import { Alert } from "../../../../ui/Alert";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Field, type FieldState } from "../../../../ui/Field";
+import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
 import {
+  emailTemplateCreateSchema,
   emailTemplatesListResponseSchema,
   emailTemplateExistsResponseSchema,
   emailTemplateVersionCreateResponseSchema,
@@ -25,8 +28,6 @@ import { EMAIL_TEMPLATES_API, getEmailTemplateEditorVersion } from "../../../../
 // module that writes the class has to import it or the text renders in the
 // body face.
 import "../../../../ui/Content.css";
-
-const TEMPLATE_KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 // ────────────────────────────────────────────────────────
 // Create new template
@@ -49,14 +50,26 @@ function CreateTemplate({
   const [messageType, setMessageType] = useState<EmailMessageType>("transactional");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [keyCheckStatus, setKeyCheckStatus] = useState<"idle" | "checking" | "exists" | "available">("idle");
+  // One basis for validation: the create contract — the key the route reads
+  // from its path and the version it reads from the body — decides what each
+  // field shows as it is typed and what Create may send.
+  const form = useContractForm(emailTemplateCreateSchema, {
+    key,
+    content: body,
+    subjectTemplate: subject.trim() ? subject : undefined,
+    contentType,
+    messageType,
+  });
 
   useEffect(() => {
     if (!canRead) {
       setKeyCheckStatus("idle");
       return;
     }
-    if (!key || !TEMPLATE_KEY_PATTERN.test(key)) {
+    // Only a key the contract accepts is worth asking the catalog about.
+    if (!emailTemplateCreateSchema.shape.key.safeParse(key).success) {
       setKeyCheckStatus("idle");
       return;
     }
@@ -69,48 +82,50 @@ function CreateTemplate({
     return () => clearTimeout(timer);
   }, [key]);
 
-  const keyError =
-    key && !TEMPLATE_KEY_PATTERN.test(key)
-      ? "Use lowercase letters, digits, and underscores only (must start with a letter)"
+  // The catalog's verdict on the key sits beside the contract's. A key the
+  // contract refuses is refused first; otherwise a key the catalog already
+  // holds is refused by the catalog, and a free one is said to be free —
+  // as a state with a mark, not a green border, and only the blocking one
+  // sets aria-invalid.
+  const keyContract = form.of("key");
+  const keyField: FieldPresentation =
+    keyContract.state === "invalid"
+      ? keyContract
       : keyCheckStatus === "exists"
-        ? "A template with this key already exists"
-        : null;
+        ? { state: "invalid", message: "A template with this key already exists" }
+        : keyCheckStatus === "available"
+          ? { state: "ok", message: "Key is available" }
+          : keyContract;
 
-  // A checked-and-good key gets a state of its own rather than a green border:
-  // Field draws each state as a mark as well as a hue, and only the blocking
-  // one sets aria-invalid.
-  const keyState: FieldState | undefined = keyError ? "invalid" : keyCheckStatus === "available" ? "ok" : undefined;
-  const keyMessage = keyError ?? (keyCheckStatus === "available" ? "Key is available" : undefined);
-
-  async function doCreate() {
-    if (!key || keyError) {
-      toast("Fix the template key first", "error");
-      return;
-    }
+  async function doCreate(event: Event) {
+    event.preventDefault();
     if (keyCheckStatus === "checking") {
       toast("Still checking key availability, please wait", "error");
       return;
     }
-    if (!body.trim()) {
-      toast("Body cannot be empty", "error");
+    if (keyCheckStatus === "exists") return;
+    setError("");
+    // Nothing is sent until the contract accepts the whole draft.
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
       return;
     }
     setSaving(true);
     try {
+      const { key: templateKey, ...version } = checked.data;
       await postJson(
-        `${EMAIL_TEMPLATES_API}/${encodeURIComponent(key)}/versions`,
-        {
-          content: body,
-          subjectTemplate: subject || undefined,
-          contentType,
-          messageType,
-        },
+        `${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`,
+        version,
         emailTemplateVersionCreateResponseSchema,
       );
-      toast(`Template "${key}" created as draft v1`, "success");
-      onCreated(key);
+      toast(`Template "${templateKey}" created as draft v1`, "success");
+      onCreated(templateKey);
     } catch (e) {
-      toast((e as Error).message, "error");
+      // A server refusal names its fields the same way the contract does.
+      const message = form.refuse(e);
+      setError(message);
+      toast(message, "error");
     } finally {
       setSaving(false);
     }
@@ -126,94 +141,106 @@ function CreateTemplate({
             </Button>
           )}
         </PanelHeader>
-        <PanelBody class="pk-stack">
-          <Field
-            label="Template key"
-            required
-            state={keyState}
-            message={keyMessage}
-            help={
-              keyCheckStatus === "checking"
-                ? "Checking availability…"
-                : "A unique identifier for this template. Cannot be changed later."
-            }
-          >
-            {(control) => (
-              <TextInput
-                {...control}
-                class="pk-mono"
-                autocomplete="off"
-                value={key}
-                placeholder="e.g. speaker_confirmation"
-                onInput={(e) => setKey((e.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
-
-          <div class="pk-grid pk-grid--tight">
-            <Field label="Content type">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={contentType}
-                  onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
-                >
-                  <option value="markdown">Markdown</option>
-                  <option value="html">HTML</option>
-                  <option value="text">Plain text</option>
-                </Select>
-              )}
-            </Field>
-            <Field label="Default message type">
-              {(control) => (
-                <Select
-                  {...control}
-                  value={messageType}
-                  onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
-                >
-                  <option value="transactional">Transactional</option>
-                  <option value="promotional">Promotional</option>
-                </Select>
-              )}
-            </Field>
-          </div>
-
-          <Field label="Subject template" help="Leave this empty to keep the subject the sending code supplies.">
-            {(control) => (
-              <TextInput
-                {...control}
-                class="pk-mono"
-                autocomplete="off"
-                value={subject}
-                placeholder="e.g. Your invitation to {{eventName}}"
-                onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
-              />
-            )}
-          </Field>
-
-          <Field label="Body" required>
-            {(control) => (
-              <Textarea
-                {...control}
-                class="pk-mono"
-                rows={12}
-                value={body}
-                placeholder="Template body content…"
-                onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-              />
-            )}
-          </Field>
-
-          <div class="pk-cluster">
-            <Button
-              variant="primary"
-              onClick={() => void doCreate()}
-              loading={saving}
-              disabled={!key || Boolean(keyError) || keyCheckStatus === "checking"}
+        <PanelBody>
+          <form noValidate class="pk-stack" {...form.handlers} onSubmit={(event) => void doCreate(event)}>
+            <Field
+              label="Template key"
+              required
+              {...keyField}
+              help={
+                keyCheckStatus === "checking"
+                  ? "Checking availability…"
+                  : "A unique identifier for this template. Cannot be changed later."
+              }
             >
-              {saving ? "Creating…" : "Create Template"}
-            </Button>
-          </div>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="key"
+                  class="pk-mono"
+                  autocomplete="off"
+                  value={key}
+                  placeholder="e.g. speaker_confirmation"
+                  onInput={(e) => setKey((e.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+
+            <div class="pk-grid pk-grid--tight">
+              <Field label="Content type" {...form.of("contentType")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    name="contentType"
+                    value={contentType}
+                    onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
+                  >
+                    <option value="markdown">Markdown</option>
+                    <option value="html">HTML</option>
+                    <option value="text">Plain text</option>
+                  </Select>
+                )}
+              </Field>
+              <Field label="Default message type" {...form.of("messageType")}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    name="messageType"
+                    value={messageType}
+                    onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+                  >
+                    <option value="transactional">Transactional</option>
+                    <option value="promotional">Promotional</option>
+                  </Select>
+                )}
+              </Field>
+            </div>
+
+            <Field
+              label="Subject template"
+              help="Leave this empty to keep the subject the sending code supplies."
+              {...form.of("subjectTemplate")}
+            >
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="subjectTemplate"
+                  class="pk-mono"
+                  autocomplete="off"
+                  value={subject}
+                  placeholder="e.g. Your invitation to {{eventName}}"
+                  onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+
+            <Field label="Body" required {...form.of("content")}>
+              {(control) => (
+                <Textarea
+                  {...control}
+                  name="content"
+                  class="pk-mono"
+                  rows={12}
+                  value={body}
+                  placeholder="Template body content…"
+                  onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+                />
+              )}
+            </Field>
+
+            {error && <Alert tone="danger">{error}</Alert>}
+
+            <div class="pk-cluster">
+              <Button
+                type="submit"
+                variant="primary"
+                loading={saving}
+                disabled={keyCheckStatus === "exists" || keyCheckStatus === "checking"}
+              >
+                {saving ? "Creating…" : "Create Template"}
+              </Button>
+            </div>
+          </form>
         </PanelBody>
       </Panel>
     </div>

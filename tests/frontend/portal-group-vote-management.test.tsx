@@ -13,7 +13,10 @@ import {
 } from "../../assets/shared/schemas/group-vote-proposals";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
-import { GroupVoteManagementControls } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
+import {
+  GroupVoteBallots,
+  GroupVoteSettings,
+} from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
 import { GroupVoteProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 // The `for`/`id` pair and a button's visible text are resolved by the
@@ -248,10 +251,7 @@ describe("selected-group vote management", () => {
     const container = document.createElement("div");
     document.body.append(container);
     await act(() =>
-      render(
-        <GroupVoteManagementControls groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />,
-        container,
-      ),
+      render(<GroupVoteSettings groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />, container),
     );
     const selects = container.querySelectorAll("select");
     await act(() => {
@@ -281,10 +281,7 @@ describe("selected-group vote management", () => {
     const container = document.createElement("div");
     document.body.append(container);
     await act(() =>
-      render(
-        <GroupVoteManagementControls groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />,
-        container,
-      ),
+      render(<GroupVoteSettings groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />, container),
     );
 
     // A <section> with no name is announced as nothing at all, and this one
@@ -307,13 +304,21 @@ describe("selected-group vote management", () => {
     expect(labeledControl<HTMLInputElement>(container, "Title").required).toBe(true);
     expect(labeledControl<HTMLInputElement>(container, "Closes at").required).toBe(true);
 
-    // The disclosure says whether it is open, rather than relying on the
-    // caption changing.
-    const ballots = buttonNamed(container, "Load identifiable ballots");
-    expect(ballots.getAttribute("aria-expanded")).toBe("false");
-    await act(() => ballots.click());
+    // The ballot audit is its own facet now — a tab on the vote's record
+    // page, not a disclosure inside the settings — so the settings surface
+    // must not fetch or render it.
+    expect(container.querySelector("table caption")).toBeNull();
+  });
+
+  it("renders the ballot audit as a named table that fetches on mount", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ballots: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GroupVoteBallots groupId={GROUP_ID} voteId={VOTE_ID} />, container));
     await settle();
-    expect(buttonNamed(container, "Hide identifiable ballots").getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector("table caption")?.textContent).toBe("Identifiable ballots");
   });
 
@@ -326,12 +331,12 @@ describe("selected-group vote management", () => {
     const container = document.createElement("div");
     document.body.append(container);
     await act(() =>
-      render(<GroupVoteManagementControls groupId={GROUP_ID} vote={managedVote()} onChanged={changed} />, container),
+      render(<GroupVoteSettings groupId={GROUP_ID} vote={managedVote()} onChanged={changed} />, container),
     );
     await act(() => {
       setValue(labeledControl<HTMLInputElement>(container, "Title"), "Revised architecture motion");
     });
-    await act(() => buttonNamed(container, "Save settings").click());
+    await act(() => buttonNamed(container, "Save changes").click());
     await settle();
 
     const alert = container.querySelector("[role='alert']");

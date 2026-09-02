@@ -130,13 +130,13 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
           </span>
         )}
         <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
-          Add leadership
+          Add leader
         </Button>
       </PanelHeader>
       <PanelBody class="pk-stack">
         <p class="pk-muted pk-small">
-          Parent leadership manages descendants by default. Local assignments extend inherited leadership; inherited
-          rows must be changed at their source group.
+          Leadership inherited from a parent group applies here automatically; inherited rows are changed at their
+          source group.
         </p>
         {mutationError && <ErrorAlert error={mutationError} />}
         {/* A failed load replaces the table rather than sitting above an empty

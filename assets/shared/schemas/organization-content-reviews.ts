@@ -111,7 +111,7 @@ export const organizationContentReviewApproveRouteSchema = {
 };
 
 export const organizationContentReviewRejectSchema = z.object({
-  reviewerNote: trimmedString(1, 2000),
+  reviewerNote: trimmedString(1, 2000, "Write the reason for the rejection before rejecting this submission."),
 });
 
 export const organizationContentReviewRejectRouteSchema = {

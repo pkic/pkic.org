@@ -3,7 +3,6 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SystemAuditLog } from "../../assets/ts/member-flows/portal/sections/SystemAuditLog";
-import { controlFor, labelNames } from "./helpers/labelled-control";
 
 let container: HTMLElement | null = null;
 
@@ -74,15 +73,21 @@ describe("portal system audit log", () => {
     expect(requests[0]?.pathname.startsWith("/api/v1/admin/")).toBe(false);
     expect(requests[0]?.pathname.startsWith("/api/v1/system/audit-log")).toBe(false);
 
-    // The filters are resolved through the `for`/`id` pair rather than through
-    // ids the surface used to hand-write, so the lookup fails exactly when the
-    // labelling is broken — which is the part worth asserting.
-    expect(labelNames(container)).toEqual(expect.arrayContaining(["Entity type", "Actor type", "Action"]));
-    const entityType = controlFor(container, "Entity type");
-    const actorType = controlFor(container, "Actor type");
-    const action = controlFor(container, "Action");
+    // The filters share the toolbar row, so — like the FilterSelects beside
+    // them on every other list — each carries its accessible name in
+    // `aria-label`. Resolving the control through that name fails exactly
+    // when the labelling is broken, which is the part worth asserting.
+    const filterByName = (name: string): HTMLInputElement => {
+      const match = container!.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
+      if (!match) throw new Error(`no filter is named "${name}"`);
+      return match;
+    };
+    const entityType = filterByName("Entity type");
+    const actorType = filterByName("Actor type");
+    const action = filterByName("Action");
     const form = entityType.form;
     expect(form).not.toBeNull();
+    expect(form?.getAttribute("aria-label")).toBe("Audit log filters");
 
     // The table names itself, so a page carrying several is not announced as
     // several tables all called "table".

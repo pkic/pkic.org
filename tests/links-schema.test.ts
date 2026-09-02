@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  findLinkedinUrl,
+  getFeaturedLink,
   getLinkLabel,
   hasDuplicateLink,
   MAX_LINKS,
@@ -87,10 +87,15 @@ describe("parseLinksJson self-validation (Phase 3 §3.5)", () => {
     expect(normalized.rejected).toEqual(["javascript:alert(1)", "HTTPS://EXAMPLE.COM/A"]);
   });
 
-  it("recognizes LinkedIn by parsed hostname, not a substring in an attacker-controlled URL", () => {
-    expect(findLinkedinUrl(["https://notlinkedin.com/path", "https://linkedin.com.evil.test/in/alice"])).toBeNull();
-    expect(findLinkedinUrl(["https://www.linkedin.com/in/alice"])).toBe("https://www.linkedin.com/in/alice");
-    expect(findLinkedinUrl(["https://jobs.linkedin.com/example"])).toBe("https://jobs.linkedin.com/example");
+  it("features the owner's first link, whatever its platform", () => {
+    // The owner orders the canonical list; no platform is special-cased, so a
+    // list that ranks another site above a well-known network still features
+    // the first entry.
+    expect(getFeaturedLink(["https://github.com/alice", "https://www.linkedin.com/in/alice"])).toBe(
+      "https://github.com/alice",
+    );
+    expect(getFeaturedLink(["https://www.linkedin.com/in/alice"])).toBe("https://www.linkedin.com/in/alice");
+    expect(getFeaturedLink([])).toBeNull();
   });
 
   it("shares strict client URL validation with the persistence schema", () => {

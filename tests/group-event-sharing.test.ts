@@ -321,6 +321,21 @@ describe("group event sharing", () => {
       page: { total: 1, hasMore: false },
     });
 
+    // The single record is the list row, fetched on its own: same
+    // capabilities, same occurrence count, so the record page and the list
+    // never disagree about what the viewer may do.
+    const seriesDetail = await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}`);
+    expect(seriesDetail.status, await seriesDetail.clone().text()).toBe(200);
+    expect(await seriesDetail.json()).toMatchObject({
+      series: {
+        id: fixture.seriesId,
+        ownerGroupId: fixture.ownerId,
+        profileKey: "workshop",
+        capabilities: ["view", "register"],
+        occurrenceCount: 1,
+      },
+    });
+
     const calendar = await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/calendar.ics`);
     expect(calendar.status, await calendar.clone().text()).toBe(200);
     expect(calendar.headers.get("content-type")).toContain("text/calendar");
@@ -345,6 +360,9 @@ describe("group event sharing", () => {
     const wrongSeriesList = await authenticatedRequest(fixture.memberToken, wrongSeriesContext);
     expect(wrongSeriesList.status).toBe(200);
     expect(await wrongSeriesList.json()).toMatchObject({ series: [], page: { total: 0 } });
+    expect((await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}`)).status).toBe(
+      404,
+    );
     expect(
       (await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}/calendar.ics`))
         .status,

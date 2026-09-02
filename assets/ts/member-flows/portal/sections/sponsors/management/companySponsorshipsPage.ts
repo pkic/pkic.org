@@ -16,19 +16,15 @@ export function companyDetailParams(key: string): Record<string, string> {
 export const COMPANY_SPONSORSHIPS_PAGE_SIZE = 200;
 
 /** Builds the bounded, offset-paginated fetch URL for one company's sponsorships page. */
-export function buildCompanySponsorshipsUrl(
-  companyKey: string,
-  filters: { type?: string; stage?: string },
-  offset: number,
-): string {
+export function buildCompanySponsorshipsUrl(companyKey: string, offset: number): string {
+  // A company's own page lists every sponsorship it holds: the list filters
+  // narrow which companies appear, not what a company is shown to hold.
   const params = new URLSearchParams({
     visibility: "all",
     ...companyDetailParams(companyKey),
     limit: String(COMPANY_SPONSORSHIPS_PAGE_SIZE),
     offset: String(offset),
   });
-  if (filters.type) params.set("type", filters.type);
-  if (filters.stage) params.set("stage", filters.stage);
   return `/api/v1/sponsors?${params.toString()}`;
 }
 

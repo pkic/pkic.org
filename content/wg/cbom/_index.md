@@ -17,7 +17,7 @@ heroDescription: A neutral methodology for defining Cryptographic Bill of Materi
 
 heroButton:
   label: Join the CBOM Profiles Working Group
-  link: /join/
+  link: /portal/#/groups/cbom
 
 wgID: CBOM
 color: teal

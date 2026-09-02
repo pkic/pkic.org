@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact";
 import { scopedAuditLogResponseSchema, type AuditLogEntry } from "../../shared/schemas/audit-log";
 import type { CollectionLoader } from "../hooks/useServerCollection";
 import { ApiDataTable } from "./ApiDataTable";
+import { formatDateTime } from "../shared/ui";
 import { EntityLink } from "./EntityLink";
 
 function actorCell(
@@ -58,8 +59,7 @@ export function AuditLogTable({
       columns={[
         {
           header: "When",
-          cell: (entry) =>
-            new Date(entry.created_at).toLocaleString("en-US", { dateStyle: "short", timeStyle: "medium" }),
+          cell: (entry) => formatDateTime(entry.created_at, { seconds: true }),
           className: "pk-nowrap pk-small pk-muted",
           sort: { asc: "createdAt", desc: "-createdAt", defaultDirection: "desc" },
         },

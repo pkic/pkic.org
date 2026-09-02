@@ -4,6 +4,11 @@
  * upcoming activity and the organizations the user represents. Every panel
  * renders a bounded self-scoped server page; nothing aggregates client-side
  * beyond selecting from one fetched page.
+ *
+ * Open votes appear exactly once: a ballot waiting on the reader sits in
+ * "Needs your voice", and the full record — including votes already cast —
+ * lives on the participation page. A second "Open votes" panel used to repeat
+ * the same vote a hand's width away from the first.
  */
 import type { ComponentChildren } from "preact";
 import { Link } from "wouter";
@@ -196,9 +201,10 @@ function EventsPanel() {
               <li key={event.id} class="pk-stack pk-stack--tight">
                 <div class="pk-cluster">
                   {basePath ? (
-                    <a class="pk-strong" href={basePath}>
-                      {event.name}
-                    </a>
+                    // No utility class: `.pk-strong` painted the anchor in
+                    // body ink, so the one clickable thing in the row was the
+                    // only line not dressed as a link.
+                    <a href={basePath}>{event.name}</a>
                   ) : (
                     <span class="pk-strong">{event.name}</span>
                   )}
@@ -212,40 +218,6 @@ function EventsPanel() {
               </li>
             );
           })}
-        </ul>
-      )}
-    </PanelCard>
-  );
-}
-
-function VotesPanel() {
-  const votes = useData(
-    () => getJson("/api/v1/users/current/votes?status=open&limit=5", currentUserVotesListResponseSchema),
-    [],
-  );
-  const rows = votes.data?.votes ?? [];
-
-  return (
-    <PanelCard title="Open votes">
-      <PanelState
-        loading={votes.loading}
-        error={votes.error}
-        empty="No votes are open in your groups."
-        count={rows.length}
-      />
-      {rows.length > 0 && (
-        <ul class="pk-stack pk-stack--tight" aria-label="Open votes">
-          {rows.map((vote) => (
-            <li key={vote.id} class="pk-cluster">
-              <Link href={votePath(vote)}>{vote.title}</Link>
-              <span class="pk-small">closes {fmt(vote.closesAt)}</span>
-              {vote.hasCastBallot ? (
-                <Badge status="completed" label="Voted" />
-              ) : vote.canCastBallot ? (
-                <Badge status="pending" label="Not voted yet" />
-              ) : null}
-            </li>
-          ))}
         </ul>
       )}
     </PanelCard>
@@ -273,7 +245,7 @@ function ApplicationsPanel() {
           {rows.map((application) => (
             <li key={application.id} class="pk-cluster">
               <Link href="/application">Application from {fmt(application.createdAt)}</Link>
-              <Badge status={application.stage} label={application.stage.replaceAll("_", " ")} />
+              <Badge status={application.stage} />
             </li>
           ))}
         </ul>
@@ -336,7 +308,6 @@ export function Home() {
         {isMember && <AttentionPanel />}
         {isMember && <MeetingsPanel />}
         <EventsPanel />
-        {isMember && <VotesPanel />}
         {isMember && <ApplicationsPanel />}
         {isMember && <OrganizationsPanel />}
       </div>

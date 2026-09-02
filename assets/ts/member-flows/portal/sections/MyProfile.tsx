@@ -12,6 +12,7 @@ import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { Alert } from "../../../ui/Alert";
 import { Badge } from "../../../ui/Badge";
 import { Button } from "../../../ui/Button";
+import { Checkbox } from "../../../ui/Checkbox";
 import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -20,12 +21,14 @@ import { Spinner } from "../../../ui/Spinner";
 import { Select, Textarea, TextInput } from "../../../ui/TextControl";
 import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
+import { formatCalendarDate } from "../../../shared/ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
 import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
 import { identityMutationResponseSchema } from "../../../../shared/schemas/identity";
 import type { ApiTableActions } from "../../../components/ApiDataTable";
 import { ActingIdentityDirectory } from "./OrganizationIdentityDirectory";
+import { useMembershipCategoryLabels } from "../../../hooks/useMembershipCategoryLabels";
 import "../../../ui/Content.css";
 
 const CURRENT_USER_API = "/api/v1/users/current";
@@ -55,6 +58,7 @@ export function MyProfile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const categories = useMembershipCategoryLabels();
 
   if (!current) return <Spinner label="Loading your profile…" />;
 
@@ -104,48 +108,12 @@ export function MyProfile() {
   return (
     <div class="pk pk-stack">
       <PageHeader title="My Profile" />
+      {/* The form is the page's work and leads; the headshot, visibility
+          toggle, membership summary and identity switcher keep it company as
+          an aside. The identities roster spans the full width below the grid —
+          a data table in a half-width column clipped its own status and role
+          columns and left the other column mostly empty. */}
       <div class="pk-grid pk-grid--roomy">
-        <div class="pk-stack">
-          <Panel>
-            <PanelBody>
-              <AdminHeadshotManager
-                initialUrl={current.headshotUrl}
-                alt={current.email}
-                emptyLabel="You"
-                uploadLabel="📷 Upload headshot"
-                helpText="JPEG, PNG, or WebP, up to 5MB."
-                uploadHeadshot={async (file) => {
-                  await replaceFile(`${CURRENT_USER_API}/headshot`, file, myHeadshotUploadResponseSchema);
-                  await refreshProfile();
-                  return { headshotUrl: profileSignal.value?.headshotUrl };
-                }}
-              />
-            </PanelBody>
-          </Panel>
-
-          {current.organizationId && (
-            <Panel>
-              <PanelBody>
-                <label class="pk-check">
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    role="switch"
-                    checked={current.showOnOrgProfile}
-                    disabled={visibilitySaving}
-                    onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
-                  />
-                  <span class="pk-check__label">
-                    Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
-                  </span>
-                </label>
-              </PanelBody>
-            </Panel>
-          )}
-
-          {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
-        </div>
-
         <div class="pk-stack">
           <Panel>
             <PanelBody>
@@ -251,6 +219,42 @@ export function MyProfile() {
               </form>
             </PanelBody>
           </Panel>
+        </div>
+
+        <div class="pk-stack">
+          <Panel>
+            <PanelBody>
+              <AdminHeadshotManager
+                initialUrl={current.headshotUrl}
+                alt={current.email}
+                emptyLabel="You"
+                helpText="JPEG, PNG, or WebP, up to 5MB."
+                uploadHeadshot={async (file) => {
+                  await replaceFile(`${CURRENT_USER_API}/headshot`, file, myHeadshotUploadResponseSchema);
+                  await refreshProfile();
+                  return { headshotUrl: profileSignal.value?.headshotUrl };
+                }}
+              />
+            </PanelBody>
+          </Panel>
+
+          {current.organizationId && (
+            <Panel>
+              <PanelBody>
+                <Checkbox
+                  role="switch"
+                  checked={current.showOnOrgProfile}
+                  disabled={visibilitySaving}
+                  onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
+                  label={
+                    <>
+                      Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
+                    </>
+                  }
+                />
+              </PanelBody>
+            </Panel>
+          )}
 
           <Panel>
             <PanelHeader title="Membership" />
@@ -260,16 +264,18 @@ export function MyProfile() {
                 <dt>Email in this capacity</dt>
                 <dd>{current.email}</dd>
                 <dt>Membership category</dt>
-                <dd>{current.membershipCategory}</dd>
+                <dd>{categories.label(current.membershipCategory)}</dd>
                 <dt>Member since</dt>
-                <dd>{new Date(current.memberSince).toLocaleDateString()}</dd>
+                <dd>{formatCalendarDate(current.memberSince)}</dd>
               </dl>
             </PanelBody>
           </Panel>
 
-          {current.organizationIdentities && <OrganizationIdentitiesCard current={current} />}
+          {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
         </div>
       </div>
+
+      {current.organizationIdentities && <OrganizationIdentitiesCard current={current} />}
     </div>
   );
 }
@@ -365,7 +371,7 @@ function ActiveIdentitySwitcher({ current }: { current: MyProfileType }) {
               <li key={identity.identityId} class="pk-cluster pk-cluster--between">
                 <span>
                   {identity.organizationName ?? "My individual identity"}{" "}
-                  <span class="pk-muted pk-small">({identity.membershipCategory})</span>
+                  <span class="pk-muted pk-small">(Category {identity.membershipCategory})</span>
                 </span>
                 {isActive ? (
                   <Badge tone="ok">Current</Badge>

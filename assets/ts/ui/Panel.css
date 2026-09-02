@@ -15,9 +15,12 @@
 
   .pk-panel__header {
     display: flex;
+    /* Actions drop under the title on a phone rather than pushing past the
+       panel's edge — "Add new person" was cut off at 375px. */
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: var(--pk-2) 1rem;
     padding: var(--pk-4) var(--pk-4);
     border-bottom: 1px solid var(--pk-line-soft);
   }

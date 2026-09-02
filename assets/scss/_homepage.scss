@@ -170,20 +170,90 @@
 // vocabulary `page-theme-gradient.html` resolves for the OG card. Each sets
 // `--pk-canvas`, which `base.css` already paints on a `.pk` root.
 $pkic-page-hero-themes: (
-  "default": (135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%),
-  "blue": (135deg, #08152e 0%, #0d2452 55%, #081a38 100%),
-  "green": (135deg, #0a1f14 0%, #0d3d24 55%, #0a2f14 100%),
-  "orange": (135deg, #1e0c05 0%, #3d1a08 55%, #2a140a 100%),
-  "purple": (135deg, #110820 0%, #2a0d3d 55%, #0e0820 100%),
-  "teal": (135deg, #051d1d 0%, #0b3838 55%, #051d24 100%),
-  "red": (135deg, #200808 0%, #3d0d0d 55%, #200a14 100%),
-  "blog": (135deg, #0c0e2a 0%, #142058 50%, #0a183a 100%),
-  "members": (135deg, #10082a 0%, #200d42 50%, #0c0820 100%),
-  "about": (135deg, #0a0c20 0%, #141c3a 50%, #0a1428 100%),
-  "events": (135deg, #1a0a04 0%, #38200a 50%, #1a1408 100%),
-  "resources": (135deg, #041a18 0%, #083430 50%, #041a24 100%),
-  "pqcc": (135deg, #0c1428 0%, #142050 50%, #0c1a2e 100%),
-  "activities": (135deg, #041816 0%, #083028 50%, #041820 100%)
+  "default": (
+    135deg,
+    #0a1f14 0%,
+    #0d3d24 55%,
+    #0a2f40 100%,
+  ),
+  "blue": (
+    135deg,
+    #08152e 0%,
+    #0d2452 55%,
+    #081a38 100%,
+  ),
+  "green": (
+    135deg,
+    #0a1f14 0%,
+    #0d3d24 55%,
+    #0a2f14 100%,
+  ),
+  "orange": (
+    135deg,
+    #1e0c05 0%,
+    #3d1a08 55%,
+    #2a140a 100%,
+  ),
+  "purple": (
+    135deg,
+    #110820 0%,
+    #2a0d3d 55%,
+    #0e0820 100%,
+  ),
+  "teal": (
+    135deg,
+    #051d1d 0%,
+    #0b3838 55%,
+    #051d24 100%,
+  ),
+  "red": (
+    135deg,
+    #200808 0%,
+    #3d0d0d 55%,
+    #200a14 100%,
+  ),
+  "blog": (
+    135deg,
+    #0c0e2a 0%,
+    #142058 50%,
+    #0a183a 100%,
+  ),
+  "members": (
+    135deg,
+    #10082a 0%,
+    #200d42 50%,
+    #0c0820 100%,
+  ),
+  "about": (
+    135deg,
+    #0a0c20 0%,
+    #141c3a 50%,
+    #0a1428 100%,
+  ),
+  "events": (
+    135deg,
+    #1a0a04 0%,
+    #38200a 50%,
+    #1a1408 100%,
+  ),
+  "resources": (
+    135deg,
+    #041a18 0%,
+    #083430 50%,
+    #041a24 100%,
+  ),
+  "pqcc": (
+    135deg,
+    #0c1428 0%,
+    #142050 50%,
+    #0c1a2e 100%,
+  ),
+  "activities": (
+    135deg,
+    #041816 0%,
+    #083028 50%,
+    #041820 100%,
+  ),
 );
 
 @each $name, $stops in $pkic-page-hero-themes {
@@ -367,6 +437,13 @@ $pkic-page-hero-themes: (
 
   // Was `lead mx-auto` on the markup. The measure and the centring are the
   // paragraph's own properties; the size reads the type scale.
+  // The band's stack is a flex column, and a child with a measure sits at
+  // the start of one unless the column centers it: the paragraph read as
+  // left-shifted under a centered heading.
+  .pk-stack {
+    align-items: center;
+  }
+
   .pkic-join-cta-body {
     max-width: 560px;
     margin-inline: auto;
@@ -652,12 +729,24 @@ $pkic-page-hero-themes: (
   height: 4px;
   background: linear-gradient(90deg, $green, $blue);
 
-  &.pkic-card-accent--blue   { background: $blue; }
-  &.pkic-card-accent--green  { background: $green; }
-  &.pkic-card-accent--teal   { background: $teal; }
-  &.pkic-card-accent--purple { background: $purple; }
-  &.pkic-card-accent--orange { background: $orange; }
-  &.pkic-card-accent--red    { background: $red; }
+  &.pkic-card-accent--blue {
+    background: $blue;
+  }
+  &.pkic-card-accent--green {
+    background: $green;
+  }
+  &.pkic-card-accent--teal {
+    background: $teal;
+  }
+  &.pkic-card-accent--purple {
+    background: $purple;
+  }
+  &.pkic-card-accent--orange {
+    background: $orange;
+  }
+  &.pkic-card-accent--red {
+    background: $red;
+  }
 }
 
 .pkic-card-icon {
@@ -719,44 +808,104 @@ $pkic-page-hero-themes: (
   overflow: hidden;
   margin-bottom: 2rem;
 
-  &.pkic-photo-grid--cols-1 { grid-template-columns: repeat(1, 1fr); }
-  &.pkic-photo-grid--cols-2 { grid-template-columns: repeat(2, 1fr); }
-  &.pkic-photo-grid--cols-3 { grid-template-columns: repeat(3, 1fr); }
-  &.pkic-photo-grid--cols-4 { grid-template-columns: repeat(4, 1fr); }
-  &.pkic-photo-grid--cols-5 { grid-template-columns: repeat(5, 1fr); }
-  &.pkic-photo-grid--cols-6 { grid-template-columns: repeat(6, 1fr); }
+  &.pkic-photo-grid--cols-1 {
+    grid-template-columns: repeat(1, 1fr);
+  }
+  &.pkic-photo-grid--cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  &.pkic-photo-grid--cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  &.pkic-photo-grid--cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  &.pkic-photo-grid--cols-5 {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  &.pkic-photo-grid--cols-6 {
+    grid-template-columns: repeat(6, 1fr);
+  }
 
-  &.pkic-photo-grid--gap-025 { gap: 0.25rem; }
-  &.pkic-photo-grid--gap-050 { gap: 0.5rem; }
-  &.pkic-photo-grid--gap-075 { gap: 0.75rem; }
-  &.pkic-photo-grid--gap-100 { gap: 1rem; }
+  &.pkic-photo-grid--gap-025 {
+    gap: 0.25rem;
+  }
+  &.pkic-photo-grid--gap-050 {
+    gap: 0.5rem;
+  }
+  &.pkic-photo-grid--gap-075 {
+    gap: 0.75rem;
+  }
+  &.pkic-photo-grid--gap-100 {
+    gap: 1rem;
+  }
 
-  &.pkic-photo-grid--row-160 { grid-auto-rows: 160px; }
-  &.pkic-photo-grid--row-180 { grid-auto-rows: 180px; }
-  &.pkic-photo-grid--row-200 { grid-auto-rows: 200px; }
-  &.pkic-photo-grid--row-220 { grid-auto-rows: 220px; }
-  &.pkic-photo-grid--row-240 { grid-auto-rows: 240px; }
-  &.pkic-photo-grid--row-260 { grid-auto-rows: 260px; }
-  &.pkic-photo-grid--row-280 { grid-auto-rows: 280px; }
-  &.pkic-photo-grid--row-300 { grid-auto-rows: 300px; }
+  &.pkic-photo-grid--row-160 {
+    grid-auto-rows: 160px;
+  }
+  &.pkic-photo-grid--row-180 {
+    grid-auto-rows: 180px;
+  }
+  &.pkic-photo-grid--row-200 {
+    grid-auto-rows: 200px;
+  }
+  &.pkic-photo-grid--row-220 {
+    grid-auto-rows: 220px;
+  }
+  &.pkic-photo-grid--row-240 {
+    grid-auto-rows: 240px;
+  }
+  &.pkic-photo-grid--row-260 {
+    grid-auto-rows: 260px;
+  }
+  &.pkic-photo-grid--row-280 {
+    grid-auto-rows: 280px;
+  }
+  &.pkic-photo-grid--row-300 {
+    grid-auto-rows: 300px;
+  }
 
   .pkic-photo-cell {
     position: relative;
     overflow: hidden;
 
-    &.pkic-photo-cell--col-span-1 { grid-column: span 1; }
-    &.pkic-photo-cell--col-span-2 { grid-column: span 2; }
-    &.pkic-photo-cell--col-span-3 { grid-column: span 3; }
-    &.pkic-photo-cell--col-span-4 { grid-column: span 4; }
-    &.pkic-photo-cell--col-span-5 { grid-column: span 5; }
-    &.pkic-photo-cell--col-span-6 { grid-column: span 6; }
+    &.pkic-photo-cell--col-span-1 {
+      grid-column: span 1;
+    }
+    &.pkic-photo-cell--col-span-2 {
+      grid-column: span 2;
+    }
+    &.pkic-photo-cell--col-span-3 {
+      grid-column: span 3;
+    }
+    &.pkic-photo-cell--col-span-4 {
+      grid-column: span 4;
+    }
+    &.pkic-photo-cell--col-span-5 {
+      grid-column: span 5;
+    }
+    &.pkic-photo-cell--col-span-6 {
+      grid-column: span 6;
+    }
 
-    &.pkic-photo-cell--row-span-1 { grid-row: span 1; }
-    &.pkic-photo-cell--row-span-2 { grid-row: span 2; }
-    &.pkic-photo-cell--row-span-3 { grid-row: span 3; }
-    &.pkic-photo-cell--row-span-4 { grid-row: span 4; }
-    &.pkic-photo-cell--row-span-5 { grid-row: span 5; }
-    &.pkic-photo-cell--row-span-6 { grid-row: span 6; }
+    &.pkic-photo-cell--row-span-1 {
+      grid-row: span 1;
+    }
+    &.pkic-photo-cell--row-span-2 {
+      grid-row: span 2;
+    }
+    &.pkic-photo-cell--row-span-3 {
+      grid-row: span 3;
+    }
+    &.pkic-photo-cell--row-span-4 {
+      grid-row: span 4;
+    }
+    &.pkic-photo-cell--row-span-5 {
+      grid-row: span 5;
+    }
+    &.pkic-photo-cell--row-span-6 {
+      grid-row: span 6;
+    }
 
     background-color: $gray-200;
 
@@ -776,7 +925,9 @@ $pkic-page-hero-themes: (
 
       &.pkic-photo-transition {
         opacity: 0;
-        transition: opacity 1.5s ease-in-out, transform 0.45s ease;
+        transition:
+          opacity 1.5s ease-in-out,
+          transform 0.45s ease;
         z-index: 1;
 
         &.active {
@@ -833,7 +984,9 @@ $pkic-page-hero-themes: (
   .bento-text {
     font-size: 0.95rem;
     line-height: 1.6;
-    p { margin-bottom: 0; }
+    p {
+      margin-bottom: 0;
+    }
   }
 }
 
@@ -903,13 +1056,19 @@ $pkic-page-hero-themes: (
 // WG alternating section background (subtle off-white tint)
 // ============================================================
 
+// The working group's own accent reaches the design-system buttons on its
+// join surfaces the way the hero and event pages hand it over: the strong
+// accent token is the page accent itself. Overriding `--pk-accent` alone
+// would not do it — the derived tokens resolve at the root, not here.
+.wg-alt-section,
+.wg-join {
+  --pk-accent-strong: var(--page-accent, #{$green});
+  --pk-accent-on: var(--pk-on-solid);
+}
+
 .wg-alt-section {
   background-color: #f4f6f8;
-  background-image: radial-gradient(
-    ellipse at 80% 50%,
-    rgba(90, 155, 213, 0.04) 0%,
-    transparent 70%
-  );
+  background-image: radial-gradient(ellipse at 80% 50%, rgba(90, 155, 213, 0.04) 0%, transparent 70%);
 }
 // ============================================================
 // Photographic page hero (hero.html, image branch)
@@ -993,7 +1152,7 @@ $pkic-page-hero-themes: (
 }
 
 .hero-sponsors-overlay {
-  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
   pointer-events: none;
   z-index: 10;
   display: none !important;

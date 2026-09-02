@@ -11,6 +11,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { Alert } from "../../../../ui/Alert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -132,15 +133,11 @@ function TermRow({
       </div>
 
       <div class="pk-cluster">
-        <label class="pk-check">
-          <input
-            class="pk-check__input"
-            type="checkbox"
-            checked={term.required}
-            onChange={(event) => update({ required: event.currentTarget.checked })}
-          />
-          <span class="pk-check__label">Required to complete registration</span>
-        </label>
+        <Checkbox
+          checked={term.required}
+          onChange={(event) => update({ required: event.currentTarget.checked })}
+          label="Required to complete registration"
+        />
         <Button size="sm" variant="danger-quiet" onClick={onRemove}>
           Remove {audienceLabel.toLowerCase()} term {ordinal}
         </Button>

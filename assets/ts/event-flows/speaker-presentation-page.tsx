@@ -3,6 +3,7 @@ import { setStatus } from "./boot";
 import { presentationUploadRequest } from "../../shared/presentation-upload";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
 import { getJson, requestJson } from "../shared/api-client";
+import { formatDate, formatDateTime } from "../shared/ui";
 import {
   speakerSelfServiceReadResponseSchema,
   speakerPresentationUploadResponseSchema,
@@ -45,7 +46,7 @@ async function main(): Promise<void> {
   if (proposalTitleEl) proposalTitleEl.textContent = data.proposal.title;
   if (deadlineEl) {
     if (data.proposal.presentationDeadline) {
-      deadlineEl.textContent = `Presentation deadline: ${new Date(data.proposal.presentationDeadline).toLocaleString()}`;
+      deadlineEl.textContent = `Presentation deadline: ${formatDateTime(data.proposal.presentationDeadline)}`;
     } else {
       deadlineEl.textContent = "";
     }
@@ -56,11 +57,7 @@ async function main(): Promise<void> {
   const uploader = data.proposal.presentationUploader;
   if (coSpeakerNotice && uploader) {
     const uploaderName = [uploader.firstName, uploader.lastName].filter(Boolean).join(" ") || "A co-presenter";
-    const uploadedDate = new Date(uploader.uploadedAt).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    const uploadedDate = formatDate(uploader.uploadedAt);
     coSpeakerNotice.textContent = `${uploaderName} already uploaded a presentation for this session on ${uploadedDate}. You only need to upload again if you want to replace it.`;
     coSpeakerNotice.hidden = false;
   }

@@ -12,14 +12,16 @@ import {
   RegistrationDayStatusSummary,
 } from "../components/RegistrationDayStatusSummary";
 import { findSubmitButton } from "../shared/form/helpers";
+import { useContractForm } from "../hooks/useContractForm";
 import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
+import { Button, ButtonLink } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import { TextInput } from "../ui/TextControl";
 import {
   registrationConfirmInfoResponseSchema,
   registrationConfirmResponseSchema,
+  registrationResendConfirmationSchema,
   okResponseSchema,
   type RegistrationConfirmResponse,
 } from "../../shared/schemas/registration";
@@ -34,9 +36,10 @@ import {
  *    severity, which is what a `Panel` is. Its `<strong>` stand-in for a
  *    heading is now a real one, through `PanelHeader`.
  *  - The resend panel reports its own outcome instead of writing into the
- *    page-level `[data-flow-status]` banner. A missing address is a `Field`
- *    state, so it carries `aria-invalid` and `aria-describedby` on the control
- *    the reader is standing in; a refused request is an `Alert` beside the
+ *    page-level `[data-flow-status]` banner. The address is checked by the
+ *    resend contract the route parses, and its verdict is a `Field` state,
+ *    so it carries `aria-invalid` and `aria-describedby` on the control the
+ *    reader is standing in; a refused request is an `Alert` beside the
  *    button. Routing both through `setStatus` announced them from the bottom
  *    of the page and repainted that element with Bootstrap's `alert-danger`.
  *  - The resend button keeps one accessible name in every state. Relabelling
@@ -85,19 +88,19 @@ function NextSteps({ manageUrl, hasPartialDayWaitlist }: { manageUrl: string; ha
               for a day, or cancel entirely.
             </p>
             <div class="pk-cluster">
-              <a class="pk-btn pk-btn--secondary pk-btn--sm" href={manageUrl}>
+              <ButtonLink href={manageUrl} size="sm">
                 Review or change registration
-              </a>
+              </ButtonLink>
             </div>
           </>
         ) : (
           <div class="pk-cluster">
-            <a class="pk-btn pk-btn--secondary pk-btn--sm" href={manageUrl}>
+            <ButtonLink href={manageUrl} size="sm">
               Manage registration
-            </a>
-            <a class="pk-btn pk-btn--secondary pk-btn--sm" href={`${manageUrl}#manage-headshot-file`}>
+            </ButtonLink>
+            <ButtonLink href={`${manageUrl}#manage-headshot-file`} size="sm">
               Upload headshot
-            </a>
+            </ButtonLink>
           </div>
         )}
       </PanelBody>
@@ -198,12 +201,6 @@ function showConfirmedPanel(
   root.appendChild(container);
 }
 
-/** What went wrong, and which control the reader should be pointed at. */
-interface ResendProblem {
-  scope: "email" | "request";
-  message: string;
-}
-
 /**
  * Replace the confirm form with a "link expired" panel that lets the attendee
  * request a fresh confirmation email without leaving the page.
@@ -225,12 +222,22 @@ function ResendButton({
 }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [enteredEmail, setEnteredEmail] = useState(email);
-  const [problem, setProblem] = useState<ResendProblem | null>(null);
+  // A refusal the contract does not attribute to the address field.
+  const [problem, setProblem] = useState<string | null>(null);
+  // With neither a registration id nor a known address the panel has to ask
+  // for one, and then the address is part of what the contract checks.
+  const asksForEmail = !email && !registrationId;
+  const form = useContractForm(registrationResendConfirmationSchema, {
+    ...(registrationId ? { id: registrationId } : {}),
+    token,
+    ...(asksForEmail ? { email: enteredEmail } : email ? { email } : {}),
+  });
 
   const sendFreshLink = useCallback(async () => {
-    const recoveryEmail = (email || enteredEmail).trim();
-    if (!registrationId && !email && !recoveryEmail) {
-      setProblem({ scope: "email", message: "Enter the email address you used for registration." });
+    // Nothing is sent that the resend contract refuses; the refused field
+    // shows its reason in place.
+    const checked = form.submit();
+    if (!checked.data) {
       setState("error");
       return;
     }
@@ -239,19 +246,15 @@ function ResendButton({
     try {
       await postJson(
         `${apiBase}/events/${eventSlug}/registrations/resend-confirmation`,
-        {
-          ...(registrationId ? { id: registrationId } : {}),
-          token,
-          ...(recoveryEmail ? { email: recoveryEmail } : {}),
-        },
+        checked.data,
         okResponseSchema,
       );
       setState("sent");
     } catch (error) {
-      setProblem({ scope: "request", message: normalizeValidation(error).globalMessage });
+      setProblem(form.refuse(error));
       setState("error");
     }
-  }, [apiBase, email, enteredEmail, eventSlug, registrationId, token]);
+  }, [apiBase, eventSlug, form]);
 
   useEffect(() => {
     if (autoSend && state === "idle") {
@@ -263,27 +266,22 @@ function ResendButton({
     return <Alert tone="ok">A new confirmation link is on its way — please check your inbox (and spam folder).</Alert>;
   }
 
-  const requestProblem = problem?.scope === "request" ? problem.message : null;
-  const emailProblem = problem?.scope === "email" ? problem.message : null;
-
-  if (!email && !registrationId) {
+  if (asksForEmail) {
     return (
       <form
+        noValidate
         class="pk-stack pk-stack--snug pk-start"
         onSubmit={(event) => {
           event.preventDefault();
           void sendFreshLink();
         }}
+        {...form.handlers}
       >
-        <Field
-          label="Email address"
-          required
-          state={emailProblem ? "invalid" : undefined}
-          message={emailProblem ?? undefined}
-        >
+        <Field label="Email address" required {...form.of("email")}>
           {(control) => (
             <TextInput
               {...control}
+              name="email"
               type="email"
               autocomplete="email"
               value={enteredEmail}
@@ -291,7 +289,7 @@ function ResendButton({
             />
           )}
         </Field>
-        {requestProblem && <Alert tone="danger">{requestProblem}</Alert>}
+        {problem && <Alert tone="danger">{problem}</Alert>}
         <div class="pk-cluster">
           <Button type="submit" variant="primary" loading={state === "sending"}>
             Send me a new link
@@ -303,7 +301,7 @@ function ResendButton({
 
   return (
     <div class="pk-stack pk-stack--snug">
-      {requestProblem && <Alert tone="danger">{requestProblem}</Alert>}
+      {problem && <Alert tone="danger">{problem}</Alert>}
       <div class="pk-cluster pk-cluster--center">
         <Button variant="primary" loading={state === "sending"} onClick={() => void sendFreshLink()}>
           Send me a new link

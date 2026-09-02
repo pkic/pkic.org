@@ -4,12 +4,10 @@
  * the occurrence settings form.
  *
  * What is asserted here is what a visual review cannot see: that every control
- * is reachable through its own label's `for`/`id` pair, that those ids are
- * still the ones the caller chose through `idPrefix` — the contract its two
- * parent forms address the controls by — that the encryption note is attached
- * to the control it explains rather than floating beside it, and that a
- * replacement URL the reader has not typed blocks submission instead of
- * posting an empty string over a configured one.
+ * is reachable through its own label's `for`/`id` pair, that the encryption
+ * note is attached to the control it explains rather than floating beside it,
+ * and that a replacement URL the reader has not typed blocks submission
+ * instead of posting an empty string over a configured one.
  */
 import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
@@ -21,8 +19,6 @@ import {
   type MeetingOccurrenceDraft,
 } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceFields";
 import { chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
-
-const ID_PREFIX = "meeting-occurrence-test";
 
 function draft(overrides: Partial<MeetingOccurrenceDraft> = {}): MeetingOccurrenceDraft {
   return {
@@ -47,7 +43,7 @@ function mount(node: ComponentChild): HTMLElement {
 }
 
 function mountFields(props: Partial<Parameters<typeof MeetingOccurrenceFields>[0]> = {}): HTMLElement {
-  return mount(<MeetingOccurrenceFields idPrefix={ID_PREFIX} draft={draft()} onChange={vi.fn()} {...props} />);
+  return mount(<MeetingOccurrenceFields draft={draft()} onChange={vi.fn()} {...props} />);
 }
 
 afterEach(() => {
@@ -58,28 +54,28 @@ afterEach(() => {
 });
 
 describe("meeting occurrence fields", () => {
-  it("names every control through its own label, and keeps the id its caller chose", () => {
+  it("names every control through its own label, typed for its value", () => {
     const page = mountFields({ existing: true, providerConfigured: true });
 
-    // The id is not cosmetic here: both parent forms address these controls
-    // by `idPrefix`, so a generated id would break them silently.
-    expect(controlFor(page, "Starts").id).toBe(`${ID_PREFIX}-starts`);
-    expect(controlFor(page, "Ends").id).toBe(`${ID_PREFIX}-ends`);
-    expect(controlFor(page, "Status").id).toBe(`${ID_PREFIX}-status`);
-    expect(controlFor(page, "Location override").id).toBe(`${ID_PREFIX}-location`);
-    expect(controlFor(page, "Meeting-provider URL").id).toBe(`${ID_PREFIX}-provider-action`);
+    // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
+    // when a label and its control stop agreeing.
+    expect(controlFor(page, "Starts").type).toBe("datetime-local");
+    expect(controlFor(page, "Ends").type).toBe("datetime-local");
+    expect(controlFor<HTMLSelectElement>(page, "Status").tagName).toBe("SELECT");
+    expect(controlFor(page, "Location override").type).toBe("text");
+    expect(controlFor<HTMLSelectElement>(page, "Meeting-provider URL").tagName).toBe("SELECT");
   });
 
   it("announces the two instants an occurrence cannot be without, and nothing as invalid up front", () => {
     const page = mountFields();
 
-    const required = [...page.querySelectorAll<HTMLElement>("[required]")].map((control) => control.id);
-    expect(required).toContain(`${ID_PREFIX}-starts`);
-    expect(required).toContain(`${ID_PREFIX}-ends`);
+    const required = [...page.querySelectorAll<HTMLElement>("[required]")];
+    expect(required).toContain(controlFor(page, "Starts"));
+    expect(required).toContain(controlFor(page, "Ends"));
     // A location override and a provider URL are both optional on a new
     // occurrence, so neither is marked.
-    expect(required).not.toContain(`${ID_PREFIX}-location`);
-    expect(required).not.toContain(`${ID_PREFIX}-provider-url`);
+    expect(required).not.toContain(controlFor(page, "Location override"));
+    expect(required).not.toContain(controlFor(page, "Meeting-provider URL"));
     // The marker is a word as well as a glyph.
     expect(page.textContent).toContain("(required)");
     expect(page.querySelector("[aria-invalid]")).toBeNull();
@@ -94,8 +90,10 @@ describe("meeting occurrence fields", () => {
 
     const url = controlFor(page, "Replacement URL");
     const describedBy = url.getAttribute("aria-describedby");
-    expect(describedBy).toBe(`${ID_PREFIX}-provider-help`);
-    expect(page.querySelector(`#${describedBy}`)?.textContent).toContain("encrypted and never returned by the API");
+    expect(describedBy).not.toBeNull();
+    expect(page.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain(
+      "encrypted and never returned by the API",
+    );
   });
 
   it("blocks a replacement the reader has not typed, and accepts one they have", async () => {
@@ -132,20 +130,21 @@ describe("meeting occurrence fields", () => {
     // one that does not exist.
     const fresh = mountFields({ existing: true });
     expect(labelNames(fresh)).toContain("Meeting-provider URL");
-    expect(fresh.querySelector(`#${ID_PREFIX}-provider-action`)).toBeNull();
-    expect(controlFor(fresh, "Meeting-provider URL").id).toBe(`${ID_PREFIX}-provider-url`);
+    const url = controlFor(fresh, "Meeting-provider URL");
+    expect(url.tagName).toBe("INPUT");
+    expect(url.type).toBe("url");
 
     // Configured, and keeping it: the URL field is gone, because the stored
     // value is never returned and an empty box would read as "no URL".
     const keeping = mountFields({ existing: true, providerConfigured: true });
-    expect(keeping.querySelector(`#${ID_PREFIX}-provider-url`)).toBeNull();
+    expect(controlFor<HTMLSelectElement>(keeping, "Meeting-provider URL").tagName).toBe("SELECT");
     expect(labelNames(keeping)).not.toContain("Replacement URL");
   });
 
   it("reports an edit through the callback rather than mutating the draft it was given", async () => {
     const onChange = vi.fn();
     const given = draft();
-    const page = mount(<MeetingOccurrenceFields idPrefix={ID_PREFIX} draft={given} onChange={onChange} />);
+    const page = mount(<MeetingOccurrenceFields draft={given} onChange={onChange} />);
 
     await typeInto(controlFor(page, "Location override"), "Room 2");
 

@@ -38,6 +38,79 @@
    */
   .pk-table-list {
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    /*
+     * THE FRAME — the list is one panel.
+     *
+     * The design system's list specimen is a single composed surface: head
+     * (title and tools), bulk bar, table, pager — inside one border. The
+     * portal used to draw the toolbar, the table and a centred pager as
+     * three blocks floating on the canvas; this is the same content given
+     * the panel it was designed for. The regions separate with rules, not
+     * gaps, which is why the flex gap is zero here.
+     */
+    gap: 0;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    overflow: hidden;
+  }
+
+  /* The head: search, filters and the list's actions, on the panel's own
+     band. */
+  .pk-table-list > .pk-toolbar {
+    padding: var(--pk-3) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  /* The bulk bar slots between the head and the rows; its own accent rule
+     and sunk ground come from BulkBar.css. */
+  .pk-table-list > .pk-bulk-bar {
+    border-bottom: 1px solid var(--pk-line);
+  }
+
+  /* The pager closes the panel: count at the start, controls at the end. */
+  .pk-table-list .pk-pager {
+    border-top: 1px solid var(--pk-line-soft);
+    padding: var(--pk-2) var(--pk-4);
+  }
+
+  /* Loading and error states occupy the table's region, padded like a row. */
+  .pk-table-list > .pk-center,
+  .pk-table-list > .pk-stack > .pk-alert,
+  .pk-table-list > .pk > .pk-alert {
+    margin: var(--pk-4);
+  }
+
+  /*
+   * Inside a page-authored `Panel` the list keeps its regions but hands the
+   * chrome back to the panel around it — one frame, never two. The stack
+   * gap returns because the outer panel's body supplies the padding and the
+   * rules would double against its edges.
+   */
+  .pk-panel .pk-table-list {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    gap: var(--pk-3);
+  }
+
+  .pk-panel .pk-table-list > .pk-toolbar {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .pk-panel .pk-table-list .pk-pager {
+    border-top: 0;
+    padding: 0;
+  }
+
+  .pk-panel .pk-table-list > .pk-center,
+  .pk-panel .pk-table-list > .pk-stack > .pk-alert,
+  .pk-panel .pk-table-list > .pk > .pk-alert {
+    margin: 0;
   }
 
   /*
@@ -65,6 +138,16 @@
    */
   .pk-table__col--primary {
     width: 99%;
+    /*
+     * The floor. `table-layout: auto` treats the 99% as a preference and can
+     * still crush this column toward its minimum when every other column's
+     * content asks for room — the audit log's details, a two-column list,
+     * collapsed to one character per line exactly that way. A primary column
+     * is the row's subject or its prose; it never makes sense narrower than
+     * a reading measure, and the table's own scroll region absorbs the
+     * difference on a narrow screen.
+     */
+    min-width: 18rem;
   }
 
   /*
@@ -183,6 +266,73 @@
 
   .pk-table__arrow {
     font-size: 0.85em;
+  }
+
+  /*
+   * A head cell is the column's name with its commands beside it. The trigger
+   * is quiet until the cell is hovered or the column is narrowed, so a table
+   * of twelve columns does not open with twelve dots along its head; the
+   * commands are there for whoever reaches for them.
+   */
+  /* A form opened from the list's toolbar sits inside the panel, under the head. */
+  .pk-table-list__inset {
+    padding: var(--pk-3) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line-soft);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-table__head-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+  }
+
+  .pk-table__head-menu {
+    display: inline-flex;
+    opacity: 0;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  /* The trigger glyphs are the stylesheet's, so a head cell's text is its name. */
+  .pk-table__head-glyph::before {
+    content: "⋯";
+  }
+  .pk-table__head-glyph--columns::before {
+    content: "⊞";
+  }
+
+  .pk-table__head-menu .pk-menu__trigger {
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 0;
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-table th:hover .pk-table__head-menu,
+  .pk-table th:focus-within .pk-table__head-menu,
+  .pk-table__head-menu--active,
+  .pk-table__head-menu:has([aria-expanded="true"]) {
+    opacity: 1;
+  }
+
+  .pk-table__head-end {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  /*
+   * What a narrowed column is narrowed to, stated under its name in the
+   * column's own voice rather than in a toolbar somewhere above the table.
+   */
+  .pk-table__head-filter {
+    display: block;
+    margin-top: 0.15rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--pk-accent-ink);
   }
 
   .pk-table__select {

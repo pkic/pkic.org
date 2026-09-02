@@ -21,6 +21,7 @@ import {
 import { Alert } from "../../ui/Alert";
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../ui/TextControl";
@@ -392,15 +393,11 @@ export function FormDefinitionEditor({
                   <Badge tone="neutral" dot={false}>
                     {position}
                   </Badge>
-                  <label class="pk-check">
-                    <input
-                      class="pk-check__input"
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={(e) => updateField(index, { required: (e.target as HTMLInputElement).checked })}
-                    />
-                    <span class="pk-check__label">Required</span>
-                  </label>
+                  <Checkbox
+                    checked={field.required}
+                    onChange={(e) => updateField(index, { required: (e.target as HTMLInputElement).checked })}
+                    label="Required"
+                  />
                   <span class="pk-cluster pk-push">
                     <Button
                       size="sm"

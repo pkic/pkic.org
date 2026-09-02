@@ -310,8 +310,17 @@ describe("canonical offset pagination", () => {
     const container = mount(<Donations />);
     await settle();
 
-    expect(container.textContent).toContain("All");
-    expect(container.textContent).toContain("1");
+    // The summary reaches the Status column's filter menu as counts.
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Status column options"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => {
+      trigger!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const all = [...container.querySelectorAll('[role="menuitemradio"]')].find((item) =>
+      item.textContent?.includes("All"),
+    );
+    expect(all?.textContent).toContain("All (1)");
     expect(requests).toHaveLength(1);
   });
 });

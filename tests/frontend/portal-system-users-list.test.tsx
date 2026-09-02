@@ -25,7 +25,6 @@ function mount(canGrantAccess: boolean, headshotUrl: string | null = null, onVie
                 active: 1,
                 created_at: "2026-01-01T00:00:00.000Z",
                 headshotUrl,
-                activeIdentityCount: 0,
                 member_id: null,
                 member_category: null,
                 member_status: null,
@@ -34,7 +33,8 @@ function mount(canGrantAccess: boolean, headshotUrl: string | null = null, onVie
                 links: [],
                 membership: null,
                 type: "contact_only",
-                eventParticipationCount: 0,
+                organizationNames: [],
+                organizationCount: 0,
               },
             ],
             page: { limit: 50, offset: 0, total: 1, hasMore: false },
@@ -118,7 +118,7 @@ describe("portal System Users list permissions", () => {
 });
 
 describe("portal System Users list controls", () => {
-  it("names the table and both toolbar filters, and sends the chosen role to the query", async () => {
+  it("names the table, keeps the filters in the column heads, and sends the chosen role to the query", async () => {
     const requested: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -138,18 +138,29 @@ describe("portal System Users list controls", () => {
 
     // Several tables can share a page, so this one says which it is.
     expect(container.querySelector("caption")?.textContent).toBe("User accounts");
-    const filters = [...container.querySelectorAll("select")].map((select) => select.getAttribute("aria-label"));
-    expect(filters).toEqual(expect.arrayContaining(["Filter by role", "Filter by participation"]));
-
-    const role = container.querySelector<HTMLSelectElement>("select[aria-label='Filter by role']")!;
-    role.value = "admin";
+    // No row of selects above the table: each filter lives in its column's
+    // own menu, beside the sort it shares a head with.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    const roleMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Role column options"]');
+    expect(roleMenu).not.toBeNull();
     await act(async () => {
-      role.dispatchEvent(new Event("change", { bubbles: true }));
+      roleMenu!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const admins = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
+      item.textContent!.includes("Administrators"),
+    );
+    expect(admins).not.toBeUndefined();
+    await act(async () => {
+      admins!.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await settle();
 
     expect(requested.some((url) => url.searchParams.get("role") === "admin")).toBe(true);
+    // The head says what the column is narrowed to.
+    const roleHead = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes("Role"));
+    expect(roleHead?.querySelector(".pk-table__head-filter")?.textContent).toBe("Administrators");
   });
 
   it("states a refused user listing as a sentence rather than an empty table", async () => {

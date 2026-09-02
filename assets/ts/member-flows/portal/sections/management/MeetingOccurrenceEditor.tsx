@@ -78,7 +78,6 @@ export function MeetingOccurrenceEditor({
   return (
     <form class="pk pk-stack" onSubmit={(event) => void save(event)}>
       <MeetingOccurrenceFields
-        idPrefix={`meeting-occurrence-settings-${occurrence.id}`}
         draft={draft}
         existing
         providerConfigured={occurrence.providerConfigured}

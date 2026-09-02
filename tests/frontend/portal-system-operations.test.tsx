@@ -490,8 +490,11 @@ describe("portal Operations command visibility", () => {
     });
     await settle();
 
-    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Scheduled Work");
-    // The read-only state is a word, not only a grey chip.
+    // The "Scheduled Work" tab already names the surface; the section is the
+    // named region and no heading repeats the tab. The read-only state is a
+    // word, not only a grey chip.
+    expect(container.querySelector('section[aria-label="Scheduled work"]')).not.toBeNull();
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Operational commands");
     expect(container.querySelector(".pk-badge")?.textContent).toBe("Read only");
 
     // The batch-size control owns a real label/for pair and its guidance is
@@ -534,7 +537,8 @@ describe("portal Operations command visibility", () => {
     // The failure is stated in plain words, not raw transport phrasing.
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side.");
     // And the surface around it survives, so the reader can retry.
-    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Scheduled Work");
+    expect(container.querySelector('section[aria-label="Scheduled work"]')).not.toBeNull();
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Operational commands");
     const label = [...container.querySelectorAll("label")].find((candidate) =>
       candidate.textContent?.startsWith("Reminder batch size"),
     );

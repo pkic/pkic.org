@@ -28,7 +28,7 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   // Creation is its own routed view, not a panel above the directory.
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
   const createForm = page.getByRole("region", { name: "Add organization" });
-  const organizationGroup = createForm.getByRole("group", { name: "Organization", exact: true });
+  const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
   await organizationGroup.getByLabel("Organization name").fill(organizationName);
   await organizationGroup.getByLabel("Membership category").selectOption("F");
   await organizationGroup.getByLabel("Member since").fill("2026-01-15");
@@ -52,6 +52,10 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   const organizationId = decodeURIComponent(page.url().split("/organizations/")[1].split(/[/?#]/)[0]);
 
+  // `LogoTile` is the whole affordance — the tile itself is the button, named
+  // "Upload logo" until a logo exists (then "Change logo") — no panel wraps
+  // it and no separate "Upload" button sits beside the picture.
+  await page.getByRole("button", { name: "Upload logo" }).click();
   await page.locator('input[type="file"][accept="image/svg+xml"]').setInputFiles({
     name: "logo.svg",
     mimeType: "image/svg+xml",

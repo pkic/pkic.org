@@ -17,6 +17,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Spinner } from "../../../../components/Spinner";
 import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { getJson, postJson, putJson } from "../../../../shared/api-client";
 import type { ServerCatalog } from "../../../../shared/server-catalog";
@@ -160,18 +161,23 @@ export function EventFormPlacementEditor({
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      <ServerSearchSelect
-        catalog={catalog}
-        label={title}
-        value={formId}
-        selectedLabel={formLabel}
-        placeholder={`No ${purpose === "event_registration" ? "registration" : "proposal submission"} questions`}
-        disabled={saving}
-        onChange={(form) => {
-          setFormId(form?.id ?? null);
-          setFormLabel(form?.title);
-        }}
-      />
+      <Field label={title}>
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            searchLabel={title}
+            catalog={catalog}
+            value={formId}
+            selectedLabel={formLabel}
+            placeholder={`No ${purpose === "event_registration" ? "registration" : "proposal submission"} questions`}
+            disabled={saving}
+            onChange={(form) => {
+              setFormId(form?.id ?? null);
+              setFormLabel(form?.title);
+            }}
+          />
+        )}
+      </Field>
       <div class="pk-cluster">
         {/* `loading` rather than `disabled` while a save is in flight: a
             disabled control loses focus, which throws a screen-reader user out

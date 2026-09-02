@@ -14,6 +14,7 @@ import { render, type ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
+import { formFieldRulesSchema } from "../../assets/shared/schemas/form-field-rules";
 import {
   buildFieldValidation,
   FieldConfigEditor,
@@ -220,17 +221,60 @@ describe("form field config editor", () => {
     expect((controlFor(root, "Validation JSON") as HTMLTextAreaElement).value).toContain('"helpText": "Pick one"');
   });
 
-  it("parses the JSON back into structured settings", () => {
-    const { root } = mountEditor(draft({ fieldType: "text", rawMode: true, rawValidationText: "{}" }));
+  it("parses the JSON back into structured settings, keeping what the controls cannot show", () => {
+    const { root, patches } = mountEditor(draft({ fieldType: "text", rawMode: true, rawValidationText: "{}" }));
 
+    // `requireTrue` is a rule the contract knows and the visual editor has no
+    // control for, so it survives in the overflow rather than being dropped.
     setValue(
       controlFor(root, "Validation JSON") as HTMLTextAreaElement,
-      '{"placeholder":"e.g. blue","maxLength":40,"unknownKey":1}',
+      '{"placeholder":"e.g. blue","maxLength":40,"requireTrue":true}',
     );
     click(button(root, "Visual"));
 
     expect((controlFor(root, "Placeholder") as HTMLInputElement).value).toBe("e.g. blue");
     expect((controlFor(root, "Max length") as HTMLInputElement).value).toBe("40");
+    expect(patches.at(-1)).toMatchObject({ rawMode: false, advancedValidationText: '{\n  "requireTrue": true\n}' });
+  });
+
+  it("refuses JSON the rules contract rejects on the text control, and stays in JSON mode", () => {
+    const { root } = mountEditor(draft({ fieldType: "text", rawMode: true, rawValidationText: "{}" }));
+
+    // Valid JSON, invalid rules: the contract is what says so, in place.
+    setValue(controlFor(root, "Validation JSON") as HTMLTextAreaElement, '{"minLength":50,"maxLength":40}');
+    click(button(root, "Visual"));
+
+    expect(button(root, "JSON").getAttribute("aria-pressed")).toBe("true");
+    const control = controlFor(root, "Validation JSON");
+    expect(control.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(control.getAttribute("aria-invalid")).toBe("true");
+    const message = document.getElementById(control.getAttribute("aria-describedby") ?? "");
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(message?.textContent).toContain("maxLength must not be below minLength");
+  });
+
+  it("checks the visual controls through the rules contract as they are typed", () => {
+    const { root } = mountEditor(draft({ fieldType: "text" }));
+
+    // A pattern outside the safe subset is refused on the pattern control.
+    const pattern = controlFor(root, "Pattern") as HTMLInputElement;
+    setValue(pattern, "(a|b)+");
+    expect(pattern.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(pattern.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(pattern)).toContain("safe, bounded regular-expression subset");
+    // The neighbouring control is untouched and says nothing.
+    expect(controlFor(root, "Pattern error message").getAttribute("aria-invalid")).toBeNull();
+
+    setValue(pattern, "^[a-z]{2,4}$");
+    expect(pattern.closest(".pk-field")?.classList.contains("pk-field--ok")).toBe(true);
+    expect(describedBy(pattern)).toBe("A regular expression.");
+
+    // A cross-field rule lands on the control the contract names.
+    setValue(controlFor(root, "Min length") as HTMLInputElement, "50");
+    const maxLength = controlFor(root, "Max length") as HTMLInputElement;
+    setValue(maxLength, "40");
+    expect(maxLength.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(maxLength)).toContain("maxLength must not be below minLength");
   });
 
   it("marks the JSON control invalid, in place, when it cannot be parsed", () => {
@@ -245,6 +289,7 @@ describe("form field config editor", () => {
     expect(labelled(root, "Placeholder")).toBeNull();
 
     const control = controlFor(root, "Validation JSON");
+    expect(control.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(control.getAttribute("aria-invalid")).toBe("true");
 
     // The failure is announced, and it is announced as the description of the
@@ -252,7 +297,7 @@ describe("form field config editor", () => {
     const messageId = control.getAttribute("aria-describedby");
     const message = messageId ? document.getElementById(messageId) : null;
     expect(message?.getAttribute("role")).toBe("alert");
-    expect(message?.textContent?.trim()).not.toBe("");
+    expect(message?.textContent).toContain("Not valid JSON");
     expect(describedBy(control)).not.toContain("Switch to Visual");
   });
 
@@ -270,10 +315,13 @@ describe("form field config editor", () => {
 });
 
 describe("buildFieldValidation", () => {
-  it("keeps only the keys the field type supports", () => {
-    expect(
-      buildFieldValidation(draft({ fieldType: "text", placeholder: "e.g. blue", minItems: "2", maxLength: "40" })),
-    ).toEqual({ placeholder: "e.g. blue", maxLength: 40 });
+  it("keeps only the keys the field type supports, as rules the contract accepts", () => {
+    const built = buildFieldValidation(
+      draft({ fieldType: "text", placeholder: "e.g. blue", minItems: "2", maxLength: "40" }),
+    );
+    // What the parent sends as `validation` has to satisfy the rules schema
+    // the route parses it with; a literal comparison alone would not say so.
+    expect(formFieldRulesSchema.parse(built)).toEqual({ placeholder: "e.g. blue", maxLength: 40 });
   });
 
   it("returns undefined when nothing was configured", () => {

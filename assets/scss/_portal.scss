@@ -32,6 +32,15 @@ $portal-sidebar-width: 240px;
   max-width: 400px;
 }
 
+// The audit log's three type-ahead filters share the toolbar row with the
+// list's search field; unbounded, `.pk-input`'s 100% width would give each
+// one a row of its own. `max-width`, because this sheet sits in the lowest
+// cascade layer and cannot out-rank the component's own `width: 100%` —
+// capping it does not need to.
+.portal-audit-filter {
+  max-width: 9rem;
+}
+
 .portal-access-role-permissions {
   max-height: 180px;
   overflow-y: auto;
@@ -285,6 +294,19 @@ $portal-sidebar-width: 240px;
   text-transform: none;
   letter-spacing: normal;
   color: inherit;
+}
+
+// The public site paints `main h2` as gradient text with a transparent fill —
+// an editorial device for article headings. Inside the application it made
+// every page title and level-2 panel heading render as a green-to-blue
+// gradient over the design system's declared ink, which stayed in the
+// computed style but never reached a pixel. Headings inside the portal read
+// the token sheet; the mark and brand surfaces carry the gradients.
+#portal-root h2 {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: currentColor;
 }
 
 // The confirmation dialog's styles are gone: it is now the design system's

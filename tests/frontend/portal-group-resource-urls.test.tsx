@@ -152,23 +152,23 @@ describe("URL-addressed group sub-resources", () => {
 
     const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
     await settle();
-    // The row itself opens and closes the detail; its activation names the
-    // form both ways.
-    const details = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
-      (button) => button.textContent === "Show details for Architecture survey",
+    // The row is a link to the form's own page, so its address is inspectable
+    // and it can be opened in a new tab.
+    const details = Array.from(container.querySelectorAll<HTMLAnchorElement>("a.pk-table__row-link")).find(
+      (link) => link.textContent === "Open Architecture survey",
     );
-    await act(async () => {
-      details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(container.textContent).toContain("Architecture survey");
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms/${placementId}`);
+    expect(details?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${placementId}`);
 
-    const hide = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
-      (button) => button.textContent === "Hide details for Architecture survey",
+    // Arriving on that URL renders the record page with its way back.
+    const record = mount(<GroupForms groupId={GROUP_ID} canManage={false} placementSegment={placementId} />);
+    await settle();
+    expect(record.textContent).toContain("Architecture survey");
+    const back = Array.from(record.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.textContent?.includes("All forms"),
     );
+    expect(back).toBeTruthy();
     await act(async () => {
-      hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms`);

@@ -111,3 +111,50 @@ test("permitted staff manage a custom role through the Settings portal", async (
   expect(retiredSystemRequests).toEqual([]);
   expect(removedAdminRequests).toEqual([]);
 });
+
+/**
+ * The Grants tab's "New grant" form is a second call site of `UserPicker`
+ * (against `/api/v1/permissions/subjects`, not the default `/api/v1/users`
+ * the organizations surface uses) that had zero browser coverage before this
+ * — the search-and-select sequence itself, not just the API it eventually
+ * calls, is what a schema mismatch in the shared picker breaks.
+ */
+test("permitted staff grant and revoke a permission through the Grants tab", async ({ page }) => {
+  const staffEmail = e2eAdminEmail("portal-access-control");
+  await signInToPortal(page, staffEmail);
+  await page.goto("/portal/#/system/access-control/grants");
+
+  await page.getByRole("button", { name: "New grant", exact: true }).click();
+  const grantForm = page.getByRole("form", { name: "Grant a permission" });
+  await expect(grantForm).toBeVisible();
+
+  const search = grantForm.getByLabel("Search for a user");
+  await search.fill(staffEmail);
+  const matches = page.getByRole("group", { name: "Matching users" });
+  const matchButton = matches.getByRole("button", { name: new RegExp(staffEmail.replace(/[.]/g, "\\.")) });
+  await expect(matchButton).toBeVisible({ timeout: 10_000 });
+  await matchButton.click();
+  await expect(search).toHaveValue(staffEmail);
+
+  const grantResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/permissions/grants" && response.request().method() === "POST",
+  );
+  await grantForm.getByRole("button", { name: "Grant permission" }).click();
+  expect((await grantResponse).status()).toBe(201);
+  await expect(page.getByText("Permission granted", { exact: true })).toBeVisible();
+
+  const grantRow = page.getByRole("row").filter({ hasText: staffEmail }).filter({ hasText: "membership:read" });
+  await expect(grantRow).toBeVisible();
+  await expect(grantRow).toContainText("Global");
+
+  const revokeResponse = page.waitForResponse(
+    (response) =>
+      /^\/api\/v1\/permissions\/grants\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "DELETE",
+  );
+  await runRowAction(page, grantRow, "Revoke grant");
+  await acceptConfirmDialog(page, "Revoke grant");
+  expect((await revokeResponse).status()).toBe(200);
+  await expect(grantRow).toHaveCount(0);
+});

@@ -5,11 +5,11 @@ import type {
   SponsorshipsListResponse,
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { Badge } from "../../../../../components/Badge";
-import { Badge as ToneBadge } from "../../../../../ui/Badge";
 import { Button } from "../../../../../ui/Button";
+import { PageHeader } from "../../../../../ui/PageHeader";
+import { usePortalHashLocation } from "../../../hash-location";
 import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
 import { EmptyState } from "../../../../../ui/EmptyState";
-import { SponsorshipDetail } from "./SponsorshipDetail";
 import type { useCompanySponsorships } from "./useCompanySponsorships";
 
 type CompanySponsorship = SponsorshipsListResponse["sponsorships"][number];
@@ -32,24 +32,11 @@ function sponsorshipLabel(sponsorship: CompanySponsorship): string {
 export function CompanyDetailPanel({
   selectedCompany,
   company,
-  canWrite,
 }: {
   selectedCompany: SponsorshipCompany;
   company: ReturnType<typeof useCompanySponsorships>;
-  canWrite: boolean;
 }) {
-  const {
-    companySponsorships,
-    companyPage,
-    companyLoading,
-    companyLoadingMore,
-    companyError,
-    selectedId,
-    setSelectedId,
-    loadMore,
-    backToCompanies,
-    reload,
-  } = company;
+  const { companySponsorships, companyPage, companyLoading, companyLoadingMore, companyError, loadMore } = company;
 
   const columns: ReadonlyArray<DataTableColumn<CompanySponsorship>> = [
     { id: "sponsorship", header: "Sponsorship", cell: (row) => <span class="pk-strong">{sponsorshipLabel(row)}</span> },
@@ -60,60 +47,49 @@ export function CompanyDetailPanel({
       cell: (row) => <Badge status={row.pipelineStage} />,
       cellClass: "pk-nowrap",
     },
-    {
-      id: "open",
-      header: "Currently open",
-      headerHidden: true,
-      align: "end",
-      cell: (row) => (row.id === selectedId ? <ToneBadge tone="accent">Showing</ToneBadge> : null),
-      cellClass: "pk-nowrap",
-    },
   ];
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button variant="link" size="sm" onClick={backToCompanies}>
-          ← Back to companies
-        </Button>
-      </div>
-      <h2>{selectedCompany.label}</h2>
+      {/* The trail is the way back: "Sponsors" is a real link to the list,
+          which the route reads to leave this company. No back button. */}
+      <PageHeader
+        trail={[
+          { label: "Sponsors", href: usePortalHashLocation.hrefs("/sponsors") },
+          { label: selectedCompany.label },
+        ]}
+        title={selectedCompany.label}
+      />
       {companyLoading && <Spinner label="Loading this company's sponsorships…" />}
       {companyError && <ErrorAlert error={companyError} />}
       {!companyLoading && !companyError && (
-        <div class="pk-grid pk-grid--roomy">
-          <div class="pk-stack pk-stack--snug">
-            <DataTable
-              caption={`${selectedCompany.label} sponsorships`}
-              columns={columns}
-              rows={companySponsorships}
-              rowKey={(row) => row.id}
-              rowAction={(row) => ({
-                // Names where the row goes, not what the control is: "Show
-                // Gold — Summit", never "View".
-                label: `Show ${sponsorshipLabel(row)}`,
-                onSelect: () => setSelectedId(row.id),
-              })}
-              empty={
-                <EmptyState
-                  title="No sponsorships for this company"
-                  body="Nothing matches the type and stage filters currently applied."
-                />
-              }
-            />
-            {companyPage?.hasMore && (
-              <div class="pk-cluster pk-cluster--center">
-                <Button size="sm" loading={companyLoadingMore} onClick={loadMore}>
-                  {companyLoadingMore ? "Loading…" : "Load more"}
-                </Button>
-              </div>
-            )}
-          </div>
-          <div>
-            {selectedId && (
-              <SponsorshipDetail key={selectedId} id={selectedId} canWrite={canWrite} onChanged={reload} />
-            )}
-          </div>
+        <div class="pk-stack pk-stack--snug">
+          {/* A sponsorship is a record with facets, so a row opens its routed
+              page rather than expanding a panel beside a table it then has to
+              share the width with. */}
+          <DataTable
+            caption={`${selectedCompany.label} sponsorships`}
+            columns={columns}
+            rows={companySponsorships}
+            rowKey={(row) => row.id}
+            rowAction={(row) => ({
+              label: `Open ${sponsorshipLabel(row)}`,
+              href: `#/sponsors/${encodeURIComponent(row.id)}`,
+            })}
+            empty={
+              <EmptyState
+                title="No sponsorships for this company"
+                body="Nothing matches the type and stage filters currently applied."
+              />
+            }
+          />
+          {companyPage?.hasMore && (
+            <div class="pk-cluster pk-cluster--center">
+              <Button size="sm" loading={companyLoadingMore} onClick={loadMore}>
+                {companyLoadingMore ? "Loading…" : "Load more"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

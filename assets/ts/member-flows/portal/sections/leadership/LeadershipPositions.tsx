@@ -13,6 +13,7 @@ import { Select, TextInput } from "../../../../ui/TextControl";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { deleteJson, getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
+import { formatCalendarDate } from "../../../../shared/ui";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
@@ -27,20 +28,9 @@ import {
 const API_BASE = "/api/v1/leadership/positions";
 const USER_CATALOG_ENDPOINT = "/api/v1/permissions/subjects";
 
-/** ISO date -> "Jun 1, 2022" for display (starts_at/ends_at are date-only, no time component). */
-function fmtDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 /** The term as one phrase, so the column reads the same whether or not it has ended. */
 function term(position: LeadershipPosition): string {
-  return `${fmtDate(position.startsAt)} – ${position.endsAt ? fmtDate(position.endsAt) : "present"}`;
+  return `${formatCalendarDate(position.startsAt)} – ${position.endsAt ? formatCalendarDate(position.endsAt) : "present"}`;
 }
 
 function AffiliationPicker({
@@ -426,6 +416,7 @@ function positionColumns(
 
 function PositionsTable({
   caption,
+  showCaption = false,
   positions,
   loading,
   empty,
@@ -434,6 +425,8 @@ function PositionsTable({
   onChanged,
 }: {
   caption: string;
+  /** Show the caption only where the panel header does not already say it. */
+  showCaption?: boolean;
   positions: readonly LeadershipPosition[];
   loading: boolean;
   empty: string;
@@ -446,7 +439,7 @@ function PositionsTable({
   return (
     <DataTable
       caption={caption}
-      showCaption
+      showCaption={showCaption}
       columns={positionColumns(canGrant, canRevoke, editId, setEditId, onChanged)}
       rows={positions}
       rowKey={(position) => position.id}
@@ -514,6 +507,9 @@ export function LeadershipPositions({
           <Spinner label={`Loading ${label.toLowerCase()}…`} />
         ) : (
           <>
+            {/* The panel header already names the body; a visible "Current
+                Board of Directors" directly beneath it said the name twice.
+                The full name stays in the caption for assistive technology. */}
             <PositionsTable
               caption={`Current ${label}`}
               positions={current}
@@ -529,6 +525,7 @@ export function LeadershipPositions({
               <div class="pk-stack pk-stack--snug">
                 <PositionsTable
                   caption={`Past ${label}`}
+                  showCaption
                   positions={past}
                   loading={pastPage.loading}
                   empty="No past members"

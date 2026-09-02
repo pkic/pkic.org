@@ -9,9 +9,9 @@ import {
   type EventRegistrationAttendanceDetailResponse,
 } from "../../assets/shared/schemas/event-registration-detail";
 import { DayAttendanceManager } from "../../assets/ts/components/event-registrations/DayAttendanceManager";
+import { controlFor } from "./helpers/labelled-control";
 
 const REGISTRATION_ENDPOINT = "/api/v1/groups/g1/events/e1/registrations/r1";
-const ID_PREFIX = "group-registration-r1";
 const DAY = "2026-09-01";
 
 const mounted: HTMLElement[] = [];
@@ -114,7 +114,6 @@ function mount(
         dayWaitlist={overrides.dayWaitlist ?? waiting}
         eventDays={overrides.eventDays ?? eventDays}
         registrationEndpoint={REGISTRATION_ENDPOINT}
-        idPrefix={ID_PREFIX}
         canVip={overrides.canVip ?? false}
         onReload={overrides.onReload ?? (() => undefined)}
       />,
@@ -128,6 +127,19 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+/**
+ * The design system's choice control whose line reads `text`. Its label wraps
+ * the control, so there is no `for` to resolve: the input inside is the one.
+ */
+function choice(container: HTMLElement, text: string): HTMLInputElement {
+  const label = [...container.querySelectorAll<HTMLLabelElement>("label.pk-check")].find(
+    (candidate) => candidate.querySelector(".pk-check__label")?.textContent === text,
+  );
+  const input = label?.querySelector<HTMLInputElement>("input");
+  if (!input) throw new Error(`no choice reads "${text}"`);
+  return input;
 }
 
 function button(container: HTMLElement, text: string): HTMLButtonElement {
@@ -159,10 +171,10 @@ describe("day attendance manager", () => {
     const reload = vi.fn();
     const container = mount({ onReload: reload });
 
-    const admit = container.querySelector<HTMLInputElement>(`#${ID_PREFIX}-admit-${DAY}`);
-    expect(admit?.disabled).toBe(false);
+    const admit = choice(container, "Admit day");
+    expect(admit.disabled).toBe(false);
     await act(async () => {
-      admit?.click();
+      admit.click();
     });
     await click(button(container, "Admit selected days"));
 
@@ -191,9 +203,9 @@ describe("day attendance manager", () => {
     installApi({ fails: true });
     const container = mount();
 
-    const admit = container.querySelector<HTMLInputElement>(`#${ID_PREFIX}-admit-${DAY}`);
+    const admit = choice(container, "Admit day");
     await act(async () => {
-      admit?.click();
+      admit.click();
     });
     await click(button(container, "Admit selected days"));
 
@@ -201,7 +213,7 @@ describe("day attendance manager", () => {
     expect(alert?.textContent).toContain("That day is no longer waitlisted.");
     // The words carry the failure; the tone only reinforces them.
     expect(container.textContent).not.toContain("registration update email was queued");
-    expect(container.querySelector<HTMLInputElement>(`#${ID_PREFIX}-admit-${DAY}`)?.checked).toBe(true);
+    expect(choice(container, "Admit day").checked).toBe(true);
   });
 
   it("names its table and wires the VIP reason to its own label and description", () => {
@@ -210,47 +222,69 @@ describe("day attendance manager", () => {
 
     expect(container.querySelector("caption")?.textContent).toBe("Attendance by event day");
 
-    const label = container.querySelector<HTMLLabelElement>(`label[for="${ID_PREFIX}-vip-reason"]`);
-    expect(label?.textContent?.trim()).toBe("Required reason");
-    const reason = container.querySelector<HTMLTextAreaElement>(`#${ID_PREFIX}-vip-reason`);
-    expect(reason?.getAttribute("aria-describedby")).toBe(`${ID_PREFIX}-vip-reason-help`);
-    expect(container.querySelector(`#${ID_PREFIX}-vip-reason-help`)?.textContent).toContain("At least three");
-    expect(reason?.getAttribute("aria-invalid")).toBeNull();
+    // Resolved through the label's own for/id pair, so the lookup fails
+    // exactly when the labelling contract does.
+    const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
+    expect(reason.tagName).toBe("TEXTAREA");
+    expect(reason.required).toBe(true);
+    const describedBy = reason.getAttribute("aria-describedby");
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain("At least three");
+    expect(reason.getAttribute("aria-invalid")).toBeNull();
 
     // Each day checkbox carries all three parts of the drawn control; only the
     // block class would render an operating-system default box.
-    const vipDay = container.querySelector<HTMLInputElement>(`#${ID_PREFIX}-vip-${DAY}`);
-    expect(vipDay?.classList.contains("pk-check__input")).toBe(true);
-    expect(vipDay?.parentElement?.classList.contains("pk-check")).toBe(true);
-    expect(
-      container
-        .querySelector<HTMLLabelElement>(`label[for="${ID_PREFIX}-vip-${DAY}"]`)
-        ?.classList.contains("pk-check__label"),
-    ).toBe(true);
+    const vipDay = choice(container, `Day one — ${DAY}`);
+    expect(vipDay.classList.contains("pk-check__input")).toBe(true);
+    expect(vipDay.closest("label")?.classList.contains("pk-check")).toBe(true);
   });
 
   it("marks a too-short VIP reason invalid, announces why, and blocks the override", async () => {
     const requests = installApi();
     const container = mount({ canVip: true });
 
-    const reason = container.querySelector<HTMLTextAreaElement>(`#${ID_PREFIX}-vip-reason`);
-    const vipDay = container.querySelector<HTMLInputElement>(`#${ID_PREFIX}-vip-${DAY}`);
+    const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
+    const vipDay = choice(container, `Day one — ${DAY}`);
     await act(async () => {
-      vipDay?.click();
-      if (reason) {
-        reason.value = "no";
-        reason.dispatchEvent(new Event("input", { bubbles: true }));
-      }
+      vipDay.click();
+      reason.value = "no";
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    expect(container.querySelector(`#${ID_PREFIX}-vip-reason`)?.getAttribute("aria-invalid")).toBe("true");
-    const help = container.querySelector(`#${ID_PREFIX}-vip-reason-help`);
-    expect(help?.getAttribute("role")).toBe("alert");
-    expect(help?.textContent).toContain("at least three characters");
+    // The verdict is the shared admission contract's own, shown once the
+    // reader has touched the field and announced as a blocking error.
+    expect(reason.getAttribute("aria-invalid")).toBe("true");
+    const message = container.querySelector('[role="alert"]');
+    expect(message?.textContent).toMatch(/3/);
+    expect(reason.getAttribute("aria-describedby")).toBe(message?.id);
     expect(button(container, "Apply VIP override").disabled).toBe(true);
 
     await click(button(container, "Apply VIP override"));
     expect(requests).toHaveLength(0);
+  });
+
+  it("applies a VIP override with a body the admission contract accepts", async () => {
+    const requests = installApi();
+    const reload = vi.fn();
+    const container = mount({ canVip: true, onReload: reload });
+
+    const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
+    await act(async () => {
+      choice(container, `Day one — ${DAY}`).click();
+      reason.value = "Keynote speaker escort";
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // A reason the contract accepts is marked as such, not merely left blank.
+    expect(reason.getAttribute("aria-invalid")).toBeNull();
+    expect(button(container, "Apply VIP override").disabled).toBe(false);
+    await click(button(container, "Apply VIP override"));
+
+    const admission = requests.find((request) => request.path === `${REGISTRATION_ENDPOINT}/admissions`);
+    const body = eventRegistrationSelectedDayAdmitSchema.parse(admission?.body);
+    expect(body).toEqual({ mode: "vip", reason: "Keynote speaker escort", dayDates: [DAY] });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("VIP override applied to 1 day");
+    // The form is spent: the reason is cleared for the next override.
+    expect(controlFor<HTMLTextAreaElement>(container, "Required reason").value).toBe("");
   });
 
   it("says so rather than rendering an empty table when the event has no days", () => {

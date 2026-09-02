@@ -147,8 +147,9 @@ describe("ActingIdentityDirectory", () => {
   it("says each contact role in words, not only as a tinted pill", async () => {
     const root = await mount(true);
 
+    // The row's state is a badge too now, so the roles follow it.
     const badges = [...root.querySelectorAll(".pk-badge")].map((badge) => badge.textContent);
-    expect(badges).toEqual(["Primary", "Secondary"]);
+    expect(badges).toEqual(["Active", "Primary", "Secondary"]);
   });
 
   it("dresses the identity's email as code and its details on the space scale", async () => {

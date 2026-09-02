@@ -2,11 +2,11 @@
 /**
  * The shared start/end/timezone row.
  *
- * The caller owns each control's `id` — every consumer passes an `idPrefix`
- * and addresses these controls by it — so what is worth asserting is that the
- * label and the id the caller chose still agree, that the required control is
- * marked in words as well as with an asterisk, and that an empty required
- * value is refused by the platform rather than quietly accepted.
+ * Each control is a design-system `Field`, so what is worth asserting is that
+ * every label resolves to its control through the `for`/`id` pair, that the
+ * required control is marked in words as well as with an asterisk, and that
+ * an empty required value is refused by the platform rather than quietly
+ * accepted.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -32,13 +32,12 @@ afterEach(() => {
 });
 
 describe("event schedule fields", () => {
-  it("binds every schedule label to the control the caller named, and marks the required one", () => {
+  it("binds every schedule label to its control, and marks the required one", () => {
     const container = mount(
       <EventScheduleFields
         startsAt="2026-09-01T09:00"
         endsAt="2026-09-01T17:00"
         timezone="Europe/Amsterdam"
-        idPrefix="event-general"
         onStartsAtChange={vi.fn()}
         onEndsAtChange={vi.fn()}
         onTimezoneChange={vi.fn()}
@@ -46,11 +45,10 @@ describe("event schedule fields", () => {
     );
 
     // Resolved through the `for`/`id` pair, so the lookup fails exactly when
-    // the caller's id and the label stop agreeing.
-    expect(controlFor(container, "Start date").id).toBe("event-general-starts-at");
-    expect(controlFor(container, "End date").id).toBe("event-general-ends-at");
+    // a label and its control stop agreeing.
+    expect(controlFor(container, "Start date").type).toBe("datetime-local");
+    expect(controlFor(container, "End date").type).toBe("datetime-local");
     const timezone = controlFor(container, "Timezone");
-    expect(timezone.id).toBe("event-general-timezone");
     expect(timezone.hasAttribute("required")).toBe(true);
     // The asterisk is decorative; the word behind it is what is announced.
     const marker = container.querySelector(".pk-field__required");
@@ -64,7 +62,6 @@ describe("event schedule fields", () => {
         startsAt=""
         endsAt=""
         timezone=""
-        idPrefix="event-general"
         timezonePlaceholder="Europe/Amsterdam"
         onStartsAtChange={vi.fn()}
         onEndsAtChange={vi.fn()}

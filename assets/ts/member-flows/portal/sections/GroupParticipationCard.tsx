@@ -10,7 +10,8 @@ import { groupMembershipMutationResponseSchema } from "../../../../shared/schema
 import { ApiClientError, postJson } from "../../../shared/api-client";
 import { confirmAction } from "../../../components/ConfirmDialog";
 import { Badge } from "../../../ui/Badge";
-import { Button } from "../../../ui/Button";
+import { Button, ButtonLink } from "../../../ui/Button";
+import { Checkbox } from "../../../ui/Checkbox";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { RowActions } from "../../../ui/RowActions";
 import { fmtDate, toast } from "../ui";
@@ -151,16 +152,13 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
                 const label = affiliationLabel(capacity);
                 const controlId = `group-${group.id}-capacity-${capacity.memberId}`;
                 return (
-                  <label class="pk-check" for={controlId} key={capacity.memberId}>
-                    <input
-                      class="pk-check__input"
-                      type="checkbox"
-                      id={controlId}
-                      checked={selected.has(capacity.memberId)}
-                      onChange={() => toggle(capacity.memberId)}
-                    />
-                    <span class="pk-check__label">{label}</span>
-                  </label>
+                  <Checkbox
+                    key={capacity.memberId}
+                    id={controlId}
+                    checked={selected.has(capacity.memberId)}
+                    onChange={() => toggle(capacity.memberId)}
+                    label={label}
+                  />
                 );
               })}
             </div>
@@ -171,9 +169,9 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
           {group.memberships.length > 0 && (
             // A destination, not an action, so it stays an anchor and merely
             // borrows the button's appearance.
-            <a href={`#/groups/${encodeURIComponent(group.id)}/meetings`} class="pk-btn pk-btn--secondary pk-btn--sm">
+            <ButtonLink href={`#/groups/${encodeURIComponent(group.id)}/meetings`} size="sm">
               Meetings and calendar
-            </a>
+            </ButtonLink>
           )}
           {available.length > 0 && (
             <Button

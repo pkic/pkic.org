@@ -14,6 +14,8 @@ import { proposalCreateSchema, proposalCreateResponseSchema } from "../../shared
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { ButtonLink } from "../ui/Button";
+import { Radio } from "../ui/Checkbox";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
 
@@ -44,19 +46,7 @@ function renderSessionTypes(root: HTMLElement, types: string[]): void {
       {types.map((type, i) => {
         const id = `type-${type}`;
         const label = SESSION_TYPE_LABELS[type] ?? type.replace(/_/g, " ");
-        return (
-          <label class="pk-check" htmlFor={id}>
-            <input
-              class="pk-check__input"
-              type="radio"
-              name="proposalType"
-              id={id}
-              value={type}
-              defaultChecked={i === 0}
-            />
-            <span class="pk-check__label">{label}</span>
-          </label>
-        );
+        return <Radio name="proposalType" id={id} value={type} defaultChecked={i === 0} label={label} />;
       })}
     </>,
     container,
@@ -226,9 +216,9 @@ function showSuccessPanel(
       </p>
       {result.manageUrl && (
         <p>
-          <a href={result.manageUrl} class="pk-btn pk-btn--secondary pk-btn--sm">
+          <ButtonLink href={result.manageUrl} size="sm">
             Manage your proposal →
-          </a>
+          </ButtonLink>
         </p>
       )}
       <p class="pk-small">

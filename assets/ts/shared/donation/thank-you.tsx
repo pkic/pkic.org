@@ -27,6 +27,7 @@ import { render, type ComponentChildren } from "preact";
 import type { z } from "zod";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { getJson, postJson } from "../api-client";
+import { formatDateTime } from "../ui";
 import { currencyInfo, toMajorUnit } from "../../../shared/constants/currencies";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
 import { classifyDonationPollResult, type DonationSession, type DonationSessionResponse } from "./session-poll";
@@ -37,7 +38,7 @@ import {
 } from "../../../shared/schemas/donation";
 import { IconLinkedIn, IconXTwitter } from "../../components/icons";
 import { Alert } from "../../ui/Alert";
-import { Button } from "../../ui/Button";
+import { Button, ButtonLink } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { Spinner } from "../../ui/Spinner";
@@ -183,30 +184,28 @@ function DonationBadge({
         <BadgeImage badgeUrl={badgeUrl} />
 
         <div class="pk-cluster pk-cluster--center">
-          <a
+          <ButtonLink
             href={`${badgeUrl}?download=1&name=${encodeURIComponent(badgeFilename)}`}
             download={badgeFilename}
-            class="pk-btn pk-btn--secondary pk-btn--sm"
+            size="sm"
           >
             <span aria-hidden="true">⬇</span> Download badge
-          </a>
+          </ButtonLink>
         </div>
 
         <div class="pk-cluster pk-cluster--center">
           <span class="pk-small">Spread the word:</span>
-          <a
+          <ButtonLink
             href={twitterHref}
-            class="pk-btn pk-btn--secondary"
             data-share-twitter
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Share on X / Twitter"
           >
             <IconXTwitter />X
-          </a>
-          <a
+          </ButtonLink>
+          <ButtonLink
             href={linkedinHref}
-            class="pk-btn pk-btn--secondary"
             data-share-linkedin
             target="_blank"
             rel="noopener noreferrer"
@@ -214,7 +213,7 @@ function DonationBadge({
           >
             <IconLinkedIn />
             LinkedIn
-          </a>
+          </ButtonLink>
         </div>
 
         {personalized && <ShareLinkRow shareUrl={shareUrl} />}
@@ -232,9 +231,7 @@ function DonationBadge({
 
 function AsyncPending({ methodType, expiresAt }: { methodType?: string | null; expiresAt?: number | null }) {
   const info = asyncPaymentWindow(methodType ?? null);
-  const deadline = expiresAt
-    ? new Date(expiresAt * 1000).toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })
-    : null;
+  const deadline = expiresAt ? formatDateTime(new Date(expiresAt * 1000).toISOString()) : null;
 
   return (
     <div class="pk">

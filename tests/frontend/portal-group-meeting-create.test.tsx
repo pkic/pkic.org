@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Scheduling a recurring meeting from a group's Meetings panel.
+ * Scheduling a recurring meeting from a group's Meetings view.
  *
- * What a screenshot cannot check: that the create form is a region a reader
- * can find by name among the several this screen renders, and that a rejected
- * create is announced as a sentence without throwing away what was typed.
+ * What a screenshot cannot check: that the create page is a region a reader
+ * can find by name, that its heading sits one rung below the workspace's,
+ * and that a rejected create is announced as a sentence without throwing away
+ * what was typed.
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -66,15 +67,16 @@ describe("scheduling a group meeting series", () => {
       }),
     );
 
-    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
+    // Creation is its own page under the meetings view, reached by the
+    // `new` segment rather than unfolded over the list.
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage seriesSegment="new" />);
     await settle();
-    await act(async () => buttonNamed(container, "New series").click());
 
-    // The form is a named region, so it is reachable and identifiable among
-    // the several sections this screen renders.
+    // The form is a named region, so it is reachable and identifiable, and
+    // its heading is the next rung below the workspace's own.
     const form = container.querySelector('[aria-label="Schedule a recurring meeting"]');
     expect(form).not.toBeNull();
-    expect(form?.querySelector("h4")?.textContent).toBe("Schedule a recurring meeting");
+    expect(form?.querySelector("h3")?.textContent).toBe("Schedule a recurring meeting");
 
     await typeInto(controlFor(container, "Meeting name"), "Architecture call");
     await act(async () => {

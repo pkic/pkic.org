@@ -106,7 +106,10 @@ export function OrganizationCreateForm({
         <PanelBody>
           <form class="pk-form" onSubmit={submit}>
             <fieldset class="pk-fieldset pk-field" disabled={busy}>
-              <legend class="pk-field__label">Organization</legend>
+              {/* "Details", because the page has already said "organization"
+                  twice by this line — the title and the field label carry
+                  the word; the legend only groups. */}
+              <legend class="pk-field__label">Details</legend>
               <div class="pk-stack pk-stack--snug">
                 <Field label="Organization name" required>
                   {(control) => (

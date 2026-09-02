@@ -10,6 +10,7 @@ import { EmptyState } from "../../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { Button } from "../../../../../ui/Button";
+import { Checkbox } from "../../../../../ui/Checkbox";
 import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { TextInput } from "../../../../../ui/TextControl";
@@ -119,21 +120,17 @@ export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
       cell: (tier) =>
         canWrite ? (
           /*
-           * All three parts of the check block. The name comes from real label
-           * text rather than an `aria-label`, so it survives translation and
-           * matches what a speech-input user would say; the text is hidden
-           * because the column header already carries it visually.
+           * The name comes from real label text rather than an `aria-label`,
+           * so it survives translation and matches what a speech-input user
+           * would say; the text is hidden because the column header already
+           * carries it visually.
            */
-          <label class="pk-check">
-            <input
-              form={formIdFor(tier)}
-              name="active"
-              type="checkbox"
-              class="pk-check__input"
-              defaultChecked={tier.active}
-            />
-            <span class="pk-check__label pk-sr-only">{`${tier.tier} active`}</span>
-          </label>
+          <Checkbox
+            form={formIdFor(tier)}
+            name="active"
+            defaultChecked={tier.active}
+            label={<span class="pk-sr-only">{`${tier.tier} active`}</span>}
+          />
         ) : tier.active ? (
           "Yes"
         ) : (

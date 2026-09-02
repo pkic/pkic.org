@@ -5,6 +5,7 @@ import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { Button } from "../../../ui/Button";
+import { Checkbox } from "../../../ui/Checkbox";
 import { Badge } from "../../../ui/Badge";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -12,6 +13,7 @@ import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
 import type { NotificationPreferences, PortalSession } from "../types";
 import { toast } from "../ui";
+import { useMembershipCategoryLabels } from "../../../hooks/useMembershipCategoryLabels";
 import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
 import {
   identitiesListResponseSchema,
@@ -122,18 +124,15 @@ function NotificationPreferencesCard() {
           preferences && (
             <div class="pk-stack pk-stack--snug">
               {(Object.keys(PREFERENCE_LABELS) as Array<keyof NotificationPreferences>).map((key) => (
-                <label class="pk-check" key={key}>
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    role="switch"
-                    id={`portal-notif-${key}`}
-                    checked={preferences[key]}
-                    disabled={savingKey === key}
-                    onChange={(event) => void toggle(key, (event.target as HTMLInputElement).checked)}
-                  />
-                  <span class="pk-check__label pk-small">{PREFERENCE_LABELS[key]}</span>
-                </label>
+                <Checkbox
+                  key={key}
+                  role="switch"
+                  id={`portal-notif-${key}`}
+                  checked={preferences[key]}
+                  disabled={savingKey === key}
+                  onChange={(event) => void toggle(key, (event.target as HTMLInputElement).checked)}
+                  label={<span class="pk-small">{PREFERENCE_LABELS[key]}</span>}
+                />
               ))}
             </div>
           )
@@ -155,6 +154,7 @@ function grantScopeLabel(grant: { contextType: string | null; contextId: string 
 function AccessSummaryCard({ session }: { session: PortalSession }) {
   const memberships = session.member ? (profile.value?.activeIdentities ?? []) : [];
   const staff = session.staff;
+  const categories = useMembershipCategoryLabels(memberships.length > 0);
 
   return (
     <Panel>
@@ -173,7 +173,11 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
                   ) : (
                     "Individual membership"
                   )}
-                  <Badge tone="neutral">Category {membership.membershipCategory}</Badge>
+                  {/* The category speaks its catalog label — a bare code told
+                      a member nothing about their own standing. Plain text,
+                      not a Badge: the pill's nowrap would push a long catalog
+                      label past a phone's edge. */}
+                  <span class="pk-muted"> — {categories.label(membership.membershipCategory)}</span>
                 </li>
               ))}
             </ul>

@@ -1,7 +1,7 @@
 import {
   meetingInvitationVerificationUpdateResponseSchema,
   meetingInvitationVerificationUpdateRouteSchema,
-} from "../../../../../../../../assets/shared/schemas/event-series";
+} from "../../../../../../../../assets/shared/schemas/meeting-entry";
 import {
   deriveMeetingGuestAuthorizationHash,
   issueMeetingGuestSession,

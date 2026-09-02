@@ -33,8 +33,13 @@ function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
 }
 
-function apiError(code: string, message: string, status: number): Response {
-  return json({ error: { code, message } }, status);
+function apiError(code: string, message: string, status: number, details?: unknown): Response {
+  return json({ error: { code, message, ...(details ? { details } : {}) } }, status);
+}
+
+/** A validation refusal the way the route reports one: the field it names. */
+function fieldRefusal(field: string, message: string): Response {
+  return apiError("VALIDATION", "Invalid request", 400, { fieldErrors: { [field]: [message] } });
 }
 
 async function settle(): Promise<void> {
@@ -99,6 +104,28 @@ function describedBy(control: HTMLElement): HTMLElement | null {
   return container?.querySelector<HTMLElement>(`[id="${control.getAttribute("aria-describedby") ?? ""}"]`) ?? null;
 }
 
+function fieldOf(control: HTMLElement): HTMLElement {
+  const field = control.closest<HTMLElement>(".pk-field");
+  if (!field) throw new Error("control is not inside a Field");
+  return field;
+}
+
+async function typeInto(control: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    control.value = value;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
+}
+
+async function choose(select: HTMLSelectElement, value: string): Promise<void> {
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
 afterEach(() => {
   if (container) {
     void act(() => render(null, container!));
@@ -126,11 +153,7 @@ describe("registration badge role panel", () => {
     // The forced/auto distinction is words, not the badge's color.
     expect(container?.textContent).toContain("Auto-detected from this registration.");
 
-    await act(async () => {
-      select.value = "speaker";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await settle();
+    await choose(select, "speaker");
     await act(async () => button("Save")?.click());
     await settle();
 
@@ -152,12 +175,7 @@ describe("registration badge role panel", () => {
     mount(<BadgeRolePanel slug={SLUG} regId={REG_ID} />);
     await settle();
 
-    const select = controlFor<HTMLSelectElement>("Role override");
-    await act(async () => {
-      select.value = "";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await settle();
+    await choose(controlFor<HTMLSelectElement>("Role override"), "");
     await act(async () => button("Save")?.click());
     await settle();
 
@@ -165,7 +183,48 @@ describe("registration badge role panel", () => {
     expect(registrationBadgePatchSchema.parse(patch?.body)).toEqual({ role: null });
   });
 
-  it("reports a rejected save on the control instead of a bare red sentence", async () => {
+  it("refuses a role the contract does not know at the control, and sends nothing", async () => {
+    const requests = stubFetch(() => json({ ...badge }));
+
+    mount(<BadgeRolePanel slug={SLUG} regId={REG_ID} />);
+    await settle();
+
+    // A value the catalog never offered — a stale option, a scripted change —
+    // is the contract's to refuse, before any request is made.
+    const select = controlFor<HTMLSelectElement>("Role override");
+    const rogue = document.createElement("option");
+    rogue.value = "janitor";
+    select.append(rogue);
+    await choose(select, "janitor");
+    await act(async () => button("Save")?.click());
+    await settle();
+
+    expect(fieldOf(select).classList.contains("pk-field--invalid")).toBe(true);
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(select)?.getAttribute("role")).toBe("alert");
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("marks the control when the server refuses the role it names", async () => {
+    stubFetch(({ method }) =>
+      method === "PATCH" ? fieldRefusal("role", "That role is not available for this event.") : json({ ...badge }),
+    );
+
+    mount(<BadgeRolePanel slug={SLUG} regId={REG_ID} />);
+    await settle();
+    await choose(controlFor<HTMLSelectElement>("Role override"), "speaker");
+    await act(async () => button("Save")?.click());
+    await settle();
+
+    const select = controlFor<HTMLSelectElement>("Role override");
+    expect(fieldOf(select).classList.contains("pk-field--invalid")).toBe(true);
+    expect(select.getAttribute("aria-invalid")).toBe("true");
+    const message = describedBy(select);
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(message?.textContent).toContain("That role is not available for this event.");
+  });
+
+  it("states a refusal the server does not attribute to the control as an alert beside it", async () => {
     stubFetch(({ method }) =>
       method === "PATCH"
         ? apiError("FORBIDDEN", "You cannot override the badge role for this event.", 403)
@@ -177,52 +236,56 @@ describe("registration badge role panel", () => {
     await act(async () => button("Save")?.click());
     await settle();
 
+    // The control said nothing wrong, so it is not marked invalid; the
+    // refusal is announced on its own.
     const select = controlFor<HTMLSelectElement>("Role override");
-    expect(select.getAttribute("aria-invalid")).toBe("true");
-    const message = describedBy(select);
-    expect(message?.getAttribute("role")).toBe("alert");
-    expect(message?.textContent).toContain("You cannot override the badge role for this event.");
+    expect(select.getAttribute("aria-invalid")).toBeNull();
+    const alert = container?.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You cannot override the badge role for this event.");
   });
 });
 
 describe("registration email editor", () => {
-  it("names the icon-only edit control and warns before the address is changed", async () => {
-    const requests = stubFetch(() => json({ success: true, registration: null, emailChanged: true }));
-    const onSaved = vi.fn();
+  const editName = "Change the registration email address, currently old@example.test";
 
+  function mountEditor(onSaved = vi.fn(), isCancelled = false) {
     mount(
       <RegistrationEmailEditor
         email="old@example.test"
         slug={SLUG}
         regId={REG_ID}
-        isCancelled={false}
+        isCancelled={isCancelled}
         onSaved={onSaved}
       />,
     );
+    return onSaved;
+  }
+
+  it("names the icon-only edit control and warns before the address is changed", async () => {
+    const requests = stubFetch(() => json({ success: true, registration: null, emailChanged: true }));
+    const onSaved = mountEditor();
 
     // A pencil glyph is not a name; the button carries one.
-    const edit = buttonNamed("Change the registration email address, currently old@example.test");
+    const edit = buttonNamed(editName);
     expect(edit).toBeInstanceOf(HTMLButtonElement);
     await act(async () => edit?.click());
     await settle();
 
     const input = controlFor<HTMLInputElement>("Email address");
     expect(input.type).toBe("email");
-    // The consequence is an advisory, so it is described without the control
+    // The consequence is guidance, so it is described without the control
     // being announced as invalid.
     expect(input.getAttribute("aria-invalid")).toBeNull();
     expect(describedBy(input)?.textContent).toContain("require re-confirmation");
 
-    await act(async () => {
-      input.value = "New@Example.test";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await settle();
+    await typeInto(input, "New@Example.test");
     await act(async () => button("Save")?.click());
     await settle();
 
     const patch = requests.find((request) => request.method === "PATCH");
     expect(patch?.url.pathname).toBe(REGISTRATION_PATH);
+    // The body is what the contract makes of the draft: normalized, not
+    // merely echoed.
     expect(eventRegistrationManagementUpdateSchema.parse(patch?.body)).toMatchObject({
       action: "update",
       email: "new@example.test",
@@ -232,11 +295,8 @@ describe("registration email editor", () => {
 
   it("says a cancelled registration will be restored before the address is changed", async () => {
     stubFetch(() => json({ success: true, registration: null }));
-
-    mount(
-      <RegistrationEmailEditor email="old@example.test" slug={SLUG} regId={REG_ID} isCancelled onSaved={vi.fn()} />,
-    );
-    await act(async () => buttonNamed("Change the registration email address, currently old@example.test")?.click());
+    mountEditor(vi.fn(), true);
+    await act(async () => buttonNamed(editName)?.click());
     await settle();
 
     expect(describedBy(controlFor<HTMLInputElement>("Email address"))?.textContent).toContain(
@@ -244,32 +304,44 @@ describe("registration email editor", () => {
     );
   });
 
-  it("keeps the editor open and marks the field invalid when the server refuses", async () => {
-    const onSaved = vi.fn();
-    stubFetch(() => apiError("CONFLICT", "That address already belongs to another registration.", 409));
-
-    mount(
-      <RegistrationEmailEditor
-        email="old@example.test"
-        slug={SLUG}
-        regId={REG_ID}
-        isCancelled={false}
-        onSaved={onSaved}
-      />,
-    );
-    await act(async () => buttonNamed("Change the registration email address, currently old@example.test")?.click());
+  it("refuses an address the contract rejects at the field, live, and sends nothing", async () => {
+    const requests = stubFetch(() => json({ success: true, registration: null }));
+    const onSaved = mountEditor();
+    await act(async () => buttonNamed(editName)?.click());
     await settle();
 
     const input = controlFor<HTMLInputElement>("Email address");
-    await act(async () => {
-      input.value = "taken@example.test";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await typeInto(input, "not an address");
+    // Refused as typed, in the contract's words, on the control.
+    expect(fieldOf(input).classList.contains("pk-field--invalid")).toBe(true);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(input)?.getAttribute("role")).toBe("alert");
+    expect(describedBy(input)?.textContent).toContain("valid email address");
+
+    await act(async () => button("Save")?.click());
     await settle();
+    expect(requests).toHaveLength(0);
+    expect(onSaved).not.toHaveBeenCalled();
+
+    // Corrected: the same field says it is good now, and the guidance returns.
+    await typeInto(input, "new@example.test");
+    expect(fieldOf(input).classList.contains("pk-field--ok")).toBe(true);
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("marks the field when the server refuses the address it names, and keeps the editor open", async () => {
+    const onSaved = vi.fn();
+    stubFetch(() => fieldRefusal("email", "That address already belongs to another registration."));
+    mountEditor(onSaved);
+    await act(async () => buttonNamed(editName)?.click());
+    await settle();
+
+    await typeInto(controlFor<HTMLInputElement>("Email address"), "taken@example.test");
     await act(async () => button("Save")?.click());
     await settle();
 
     const stillOpen = controlFor<HTMLInputElement>("Email address");
+    expect(fieldOf(stillOpen).classList.contains("pk-field--invalid")).toBe(true);
     expect(stillOpen.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(stillOpen);
     expect(message?.getAttribute("role")).toBe("alert");
@@ -277,26 +349,35 @@ describe("registration email editor", () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it("states a refusal the server does not attribute to the field as an alert, and keeps the editor open", async () => {
+    const onSaved = vi.fn();
+    stubFetch(() => apiError("CONFLICT", "This registration was changed by someone else.", 409));
+    mountEditor(onSaved);
+    await act(async () => buttonNamed(editName)?.click());
+    await settle();
+
+    await typeInto(controlFor<HTMLInputElement>("Email address"), "new@example.test");
+    await act(async () => button("Save")?.click());
+    await settle();
+
+    const stillOpen = controlFor<HTMLInputElement>("Email address");
+    expect(stillOpen.getAttribute("aria-invalid")).toBeNull();
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "This registration was changed by someone else.",
+    );
+    expect(stillOpen.value).toBe("new@example.test");
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it("closes without a request when the address is unchanged", async () => {
     const requests = stubFetch(() => json({ success: true, registration: null }));
-
-    mount(
-      <RegistrationEmailEditor
-        email="old@example.test"
-        slug={SLUG}
-        regId={REG_ID}
-        isCancelled={false}
-        onSaved={vi.fn()}
-      />,
-    );
-    await act(async () => buttonNamed("Change the registration email address, currently old@example.test")?.click());
+    mountEditor();
+    await act(async () => buttonNamed(editName)?.click());
     await settle();
     await act(async () => button("Save")?.click());
     await settle();
 
     expect(requests).toHaveLength(0);
-    expect(buttonNamed("Change the registration email address, currently old@example.test")).toBeInstanceOf(
-      HTMLButtonElement,
-    );
+    expect(buttonNamed(editName)).toBeInstanceOf(HTMLButtonElement);
   });
 });

@@ -30,29 +30,25 @@ const SCREENS = [
 ] as const;
 
 test.describe("the portal's appearance", () => {
-  for (const size of SIZES) {
-    test(`is composed at ${size.name} (${size.width}px)`, async ({ page }, testInfo) => {
-      await page.setViewportSize({ width: size.width, height: size.height });
-      await signInToPortal(page, e2eAdminEmail("portal-appearance"));
+  test("is composed at every size", async ({ page }) => {
+    // One sign-in for all sizes: each size signing in separately tripped the
+    // per-address sign-in limiter on the fourth attempt, which failed the
+    // widest size for a reason that had nothing to do with appearance.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await signInToPortal(page, e2eAdminEmail("portal-appearance"));
 
+    for (const size of SIZES) {
+      await page.setViewportSize({ width: size.width, height: size.height });
       for (const screen of SCREENS) {
         await page.goto(screen.path);
         await expect(page.locator("#portal-root")).toBeVisible();
-        // Let the list settle before measuring or shooting.
         await page.waitForLoadState("networkidle");
 
-        // Nothing may push the page sideways. A table that needs more room
-        // scrolls inside its own `pk-table__scroll`, not by moving the page.
         const sideways = await page.evaluate(
           () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
         );
         expect(sideways, `${screen.name} scrolls sideways at ${size.width}px`).toBe(false);
 
-        // The list fills the width it is given, and the slack all sits in the
-        // subject column rather than drifting between the others. This
-        // assertion replaced its own opposite: an earlier policy capped the
-        // list at a reading measure, and the maintainer's next complaint was
-        // "the pages are not using the full width".
         const layout = await page.evaluate(() => {
           const table = document.querySelector("table.pk-table");
           if (!table) return null;
@@ -67,15 +63,15 @@ test.describe("the portal's appearance", () => {
           };
         });
         if (layout) {
-          expect(layout.fills, `${screen.name}'s table leaves the width unused`).toBe(true);
+          expect(layout.fills, `${screen.name}'s table leaves the width unused at ${size.width}px`).toBe(true);
           expect(layout.hasPrimary, `${screen.name}'s table has no slack column`).toBe(true);
         }
 
-        await testInfo.attach(`${screen.name}-${size.name}`, {
+        await test.info().attach(`${screen.name}-${size.name}`, {
           body: await page.screenshot({ fullPage: false }),
           contentType: "image/png",
         });
       }
-    });
-  }
+    }
+  });
 });

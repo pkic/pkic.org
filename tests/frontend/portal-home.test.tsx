@@ -163,13 +163,7 @@ describe("portal landing", () => {
     await settle();
 
     const headings = [...container.querySelectorAll("h3")].map((heading) => heading.textContent);
-    expect(headings).toEqual([
-      "Needs your voice",
-      "Upcoming meetings",
-      "Upcoming events",
-      "Open votes",
-      "Your organizations",
-    ]);
+    expect(headings).toEqual(["Needs your voice", "Upcoming meetings", "Upcoming events", "Your organizations"]);
 
     // A list of links with no name is announced as "list"; several of them on
     // one page are indistinguishable.
@@ -222,6 +216,60 @@ describe("portal landing", () => {
     expect(link?.textContent).toBe("PQC Conference 2026");
     expect(events.textContent).toContain("Amsterdam");
     expect(events.querySelector("ul")?.getAttribute("aria-label")).toBe("Upcoming events");
+  });
+
+  it("lists an open ballot exactly once on the landing page", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    stubFeeds(
+      feeds({
+        "/api/v1/users/current/votes": {
+          votes: [
+            {
+              id: "60000000-0000-4000-8000-000000000001",
+              slug: "adopt-the-2027-budget",
+              title: "Adopt the 2027 budget",
+              description: null,
+              voteType: "motion",
+              ownerGroupId: "10000000-0000-4000-8000-000000000001",
+              ownerGroupName: "All Members",
+              electorateMode: "per_member",
+              thresholdType: "simple_majority",
+              questionFormId: null,
+              questionForm: null,
+              quorumPercent: null,
+              tieBreakMode: "none",
+              excludedMemberIds: null,
+              eligibleCategories: null,
+              opensAt: "2026-09-01T00:00:00.000Z",
+              closesAt: "2026-09-04T20:00:00.000Z",
+              currentRound: 1,
+              status: "open",
+              cancellationReason: null,
+              visibility: "private",
+              publicDetailLevel: "outcome_only",
+              createdAt: "2026-09-01T00:00:00.000Z",
+              updatedAt: "2026-09-01T00:00:00.000Z",
+              candidates: null,
+              canCastBallot: true,
+              hasCastBallot: false,
+              memberBallots: null,
+              result: null,
+            },
+          ],
+          page: onePage,
+        },
+      }),
+    );
+
+    const container = mount();
+    await settle();
+
+    // The vote is a to-do in "Needs your voice" — and nowhere else. A second
+    // "Open votes" panel used to repeat the same title a hand's width away.
+    const occurrences = container.textContent?.match(/Adopt the 2027 budget/g) ?? [];
+    expect(occurrences).toHaveLength(1);
+    const attention = panelNamed(container, "Needs your voice");
+    expect(attention.textContent).toContain("Vote on: Adopt the 2027 budget");
   });
 
   it("keeps an organization's standing in words, not in the badge colour alone", async () => {

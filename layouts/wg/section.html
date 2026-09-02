@@ -201,13 +201,13 @@
         {{ with .Params.wgID }}
         {{ partial "wg/chairs-app.html" (dict "slug" (. | lower) "label" $wgID "color" $color) }}
         {{ end }}
-        <div class="pk-center">
+        <div class="pk-center wg-join">
         {{ with $.Param "heroButton" }}
         <a href="{{ $.Param "heroButton.link" }}" class="pk-btn pk-btn--primary pk-btn--lg">
           {{ $.Param "heroButton.label" }}
         </a>
         {{ else }}
-        <a href="/join/" class="pk-btn pk-btn--primary pk-btn--lg">Join this Working Group</a>
+        <a href="/portal/#/groups/{{ lower ($.Param "wgID") }}" class="pk-btn pk-btn--primary pk-btn--lg">Join this Working Group</a>
         {{ end }}
         </div>
       </div>

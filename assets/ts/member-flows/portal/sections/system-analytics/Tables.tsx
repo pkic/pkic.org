@@ -59,7 +59,7 @@ export function SimpleTable({
         },
       ]}
       data={rows}
-      empty="No data"
+      empty="Nothing recorded for this period yet."
     />
   );
 }

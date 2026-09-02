@@ -28,7 +28,6 @@ import { Tabs } from "../../../../components/Tabs";
 import { Alert } from "../../../../ui/Alert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
-import { Chip } from "../../../../ui/Chip";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -324,7 +323,6 @@ export function Donations({
 function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean }) {
   const canReadAnalytics = portalHasGlobalPermission(portalSession.value, "analytics:read");
   const tab = subTab === "promoters" ? "promoters" : subTab === "stats" && canReadAnalytics ? "stats" : "list";
-  const [statusFilter, setStatusFilter] = useState("");
   const [summary, setSummary] = useState<DonationManagementListSummary>({ byStatus: {}, backfillable: 0, syncable: 0 });
   const [, navigate] = usePortalHashLocation();
   const actionsRef = useRef<ApiTableActions | null>(null);
@@ -366,6 +364,16 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
       cell: (d) => <StatusBadge status={d.status} />,
       width: "fit",
       sort: { asc: "status", desc: "-status" },
+      // The status filter lives in the column's own menu, like every other
+      // list's filters; each choice carries its count from the summary so the
+      // menu also answers "how many are pending" without a row of chips.
+      filter: {
+        param: "status",
+        options: FILTERS.map((f) => ({
+          value: f,
+          label: `${filterLabel(f)} (${String(f === "" ? total : (summary.byStatus[f] ?? 0))})`,
+        })),
+      },
     },
     {
       header: "Method",
@@ -410,29 +418,9 @@ function DonationsView({ subTab, canSync }: { subTab?: string; canSync: boolean 
           resolvePage={(d) => d.page}
           onData={(d) => setSummary(d.summary)}
           paginate
-          params={{
-            ...(statusFilter && { status: statusFilter }),
-          }}
           actionsRef={actionsRef}
-          toolbar={({ resetPage }) => (
+          toolbar={() => (
             <>
-              <div class="pk-cluster">
-                {FILTERS.map((f) => (
-                  <Chip
-                    key={f}
-                    pressed={statusFilter === f}
-                    onToggle={() => {
-                      setStatusFilter(f);
-                      resetPage();
-                    }}
-                  >
-                    {filterLabel(f)}{" "}
-                    <Badge tone="neutral" dot={false}>
-                      {f === "" ? total : (summary.byStatus[f] ?? 0)}
-                    </Badge>
-                  </Chip>
-                ))}
-              </div>
               {canSync && (
                 <DonationSyncActions
                   pending={pending}

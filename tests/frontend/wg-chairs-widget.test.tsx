@@ -66,7 +66,7 @@ function assignment(roleId: "role-group_lead" | "role-group_deputy_lead", name: 
       organizationLogoUrl: null,
       organizationWebsite: "https://example.test",
       photoUrl: null,
-      linkedin: `https://www.linkedin.com/in/${name.toLowerCase().replaceAll(" ", "-")}`,
+      featuredLink: `https://www.linkedin.com/in/${name.toLowerCase().replaceAll(" ", "-")}`,
     },
     sourceGroup: {
       id: inherited ? PARENT_GROUP_ID : GROUP_ID,
@@ -126,11 +126,11 @@ describe("WgChairsWidget", () => {
     expect(container.textContent).toContain("Grace Hopper");
     expect(container.textContent).toContain("Katherine Johnson");
     expect(container.textContent).toContain("Principal Cryptographer at Example Consortium");
-    // Each profile link is named after the person, not after the network:
-    // three links all called "LinkedIn" are nothing to choose between when
-    // they are read out on their own.
+    // Each featured link is named after the person, not after the site:
+    // three links all carrying the same site label are nothing to choose
+    // between when they are read out on their own.
     expect(
-      [...container.querySelectorAll("a.person-card-linkedin")].map((link) => link.getAttribute("aria-label")),
+      [...container.querySelectorAll("a.person-card-featured-link")].map((link) => link.getAttribute("aria-label")),
     ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn", "Katherine Johnson on LinkedIn"]);
   });
 

@@ -60,7 +60,7 @@ export const schedulerJobRunResponseSchema = successResponseSchema.extend({
 });
 
 export const schedulerJobStateUpdateSchema = z.discriminatedUnion("state", [
-  z.object({ state: z.literal("paused"), reason: trimmedString(3, 500) }),
+  z.object({ state: z.literal("paused"), reason: trimmedString(3, 500, "Give at least 3 characters.") }),
   z.object({ state: z.literal("active") }),
 ]);
 export type ScheduledJobStateUpdate = z.infer<typeof schedulerJobStateUpdateSchema>;

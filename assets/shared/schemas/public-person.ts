@@ -9,7 +9,8 @@ export const publicOrganizationPersonSchema = z.object({
   organizationLogoUrl: httpOrSameOriginUrlSchema.nullable(),
   organizationWebsite: httpUrlSchema.nullable(),
   photoUrl: httpOrSameOriginUrlSchema.nullable(),
-  linkedin: httpUrlSchema.nullable(),
+  // The person's owner-ordered featured profile link (links[0]), any platform.
+  featuredLink: httpUrlSchema.nullable(),
 });
 
 export type PublicOrganizationPerson = z.infer<typeof publicOrganizationPersonSchema>;

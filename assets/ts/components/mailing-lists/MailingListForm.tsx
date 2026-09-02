@@ -6,6 +6,7 @@ import {
   MAILING_LIST_PURPOSES,
   MAILING_LIST_SUBSCRIPTION_DEFAULTS,
 } from "../../../shared/schemas/mailing-lists";
+import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Select, TextInput } from "../../ui/TextControl";
 import { EnumSelect } from "../EnumSelect";
@@ -105,22 +106,26 @@ export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: 
             </Select>
           )}
         </Field>
-        <EnumSelect
-          id={`${idPrefix}-posting-policy`}
-          label="Posting policy"
-          value={draft.postingPolicy}
-          options={POSTING_POLICY_OPTIONS}
-          required
-          onChange={(value) => onChange({ postingPolicy: value })}
-        />
-        <EnumSelect
-          id={`${idPrefix}-moderation-policy`}
-          label="Moderation policy"
-          value={draft.moderationPolicy}
-          options={MODERATION_POLICY_OPTIONS}
-          required
-          onChange={(value) => onChange({ moderationPolicy: value })}
-        />
+        <Field label="Posting policy" required>
+          {(control) => (
+            <EnumSelect
+              {...control}
+              value={draft.postingPolicy}
+              options={POSTING_POLICY_OPTIONS}
+              onChange={(value) => onChange({ postingPolicy: value })}
+            />
+          )}
+        </Field>
+        <Field label="Moderation policy" required>
+          {(control) => (
+            <EnumSelect
+              {...control}
+              value={draft.moderationPolicy}
+              options={MODERATION_POLICY_OPTIONS}
+              onChange={(value) => onChange({ moderationPolicy: value })}
+            />
+          )}
+        </Field>
       </div>
 
       <MembershipCategoryPicker
@@ -131,26 +136,18 @@ export function MailingListForm({ draft, onChange, idPrefix = "mailing-list" }: 
       />
 
       <div class="pk-cluster">
-        <label class="pk-check">
-          <input
-            id={`${idPrefix}-primary-discussion`}
-            class="pk-check__input"
-            type="checkbox"
-            checked={draft.primaryDiscussion}
-            onChange={(event) => onChange({ primaryDiscussion: (event.target as HTMLInputElement).checked })}
-          />
-          <span class="pk-check__label">Primary discussion</span>
-        </label>
-        <label class="pk-check">
-          <input
-            id={`${idPrefix}-active`}
-            class="pk-check__input"
-            type="checkbox"
-            checked={draft.active}
-            onChange={(event) => onChange({ active: (event.target as HTMLInputElement).checked })}
-          />
-          <span class="pk-check__label">Active</span>
-        </label>
+        <Checkbox
+          id={`${idPrefix}-primary-discussion`}
+          checked={draft.primaryDiscussion}
+          onChange={(event) => onChange({ primaryDiscussion: (event.target as HTMLInputElement).checked })}
+          label="Primary discussion"
+        />
+        <Checkbox
+          id={`${idPrefix}-active`}
+          checked={draft.active}
+          onChange={(event) => onChange({ active: (event.target as HTMLInputElement).checked })}
+          label="Active"
+        />
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ heroDescription: Addressing cryptographic module, HSM, and TPM topics to strengt
 
 heroButton:
   label: Join the CM Working Group
-  link: /join/
+  link: /portal/#/groups/cm
 
 wgID: CM
 color: orange

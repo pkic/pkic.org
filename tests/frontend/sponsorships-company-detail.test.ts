@@ -51,18 +51,18 @@ describe("companyDetailParams", () => {
 
 describe("buildCompanySponsorshipsUrl", () => {
   it("builds a bounded, offset-paginated URL with no filters", () => {
-    const url = buildCompanySponsorshipsUrl("org:abc-123", {}, 0);
+    const url = buildCompanySponsorshipsUrl("org:abc-123", 0);
     expect(url).toBe("/api/v1/sponsors?visibility=all&organizationId=abc-123&limit=200&offset=0");
   });
 
   it("carries the offset forward for a 'Load more' page", () => {
-    const url = buildCompanySponsorshipsUrl("org:abc-123", {}, 200);
+    const url = buildCompanySponsorshipsUrl("org:abc-123", 200);
     expect(url).toBe("/api/v1/sponsors?visibility=all&organizationId=abc-123&limit=200&offset=200");
   });
 
-  it("includes type/stage filters when set", () => {
-    const url = buildCompanySponsorshipsUrl("nonmember:Acme", { type: "event", stage: "active" }, 0);
-    expect(url).toBe("/api/v1/sponsors?visibility=all&nonMemberName=Acme&limit=200&offset=0&type=event&stage=active");
+  it("lists everything a company holds, whatever the companies list is narrowed to", () => {
+    const url = buildCompanySponsorshipsUrl("nonmember:Acme", 0);
+    expect(url).toBe("/api/v1/sponsors?visibility=all&nonMemberName=Acme&limit=200&offset=0");
   });
 });
 

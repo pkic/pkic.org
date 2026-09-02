@@ -26,13 +26,10 @@ import {
   type LeadershipPublicResponse,
 } from "../../shared/schemas/leadership";
 import { getJson } from "../shared/api-client";
+import { formatMonthYear } from "../shared/ui";
 import { initialsFor, PublicPersonCard, PublicPersonOrgLink, type PublicPerson } from "./components/public-person-card";
 
 const API_BASE_FALLBACK = "/api/v1";
-
-function monthYear(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-}
 
 function TimelineItem({
   person,
@@ -62,7 +59,7 @@ function TimelineItem({
         <span class="person-tl-name">{person.name}</span>
         <span class="person-tl-role">{role}</span>
         <span class="person-tl-dates">
-          {monthYear(from)} – {monthYear(till)}
+          {formatMonthYear(from)} – {formatMonthYear(till)}
         </span>
         {person.organizationName && (
           <span class="person-tl-org">

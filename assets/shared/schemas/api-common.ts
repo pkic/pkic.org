@@ -62,8 +62,9 @@ export const frontendPathPattern = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/;
  */
 export const utcInstantSchema = z.iso.datetime({ precision: 3 });
 
-export function trimmedString(min: number, max: number): z.ZodString {
-  return z.string().trim().min(min).max(max);
+/** A trimmed, bounded string; `tooShort` is what a value under `min` is told. */
+export function trimmedString(min: number, max: number, tooShort?: string): z.ZodString {
+  return z.string().trim().min(min, tooShort).max(max);
 }
 
 export function boundedJsonObject<T extends z.ZodRawShape>(shape: T, maxLength: number) {

@@ -11,6 +11,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/management/GroupAuditLog";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 
 const navigate = vi.fn();
 
@@ -96,9 +97,12 @@ describe("group events list", () => {
     expect(controls).toContain("Open Architecture workshop");
     expect(controls).not.toContain("Details");
     expect(container.querySelector("table caption")?.textContent).toBe("Group events");
+    // Where the event is authored is a column, in product language, so the
+    // source filter has a column to live in.
+    expect(container.querySelector("tbody")?.textContent).toContain("Portal");
   });
 
-  it("names the source filter and sends the chosen source to the events query", async () => {
+  it("narrows by source from the Source column and sends the chosen source to the events query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -111,10 +115,10 @@ describe("group events list", () => {
     const container = mount(<GroupEvents groupId={GROUP_ID} canManage />);
     await settle();
 
-    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter events by source"]')!;
-    expect(filter).not.toBeNull();
+    // No select above the table: the filter is the Source column's own.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
     // The options speak product language, not the schema's `sourceMode` keys.
-    expect([...filter.options].map((option) => option.textContent)).toEqual([
+    expect(columnFilterOptions(container, "Source")).toEqual([
       "All sources",
       "Website content",
       "Portal",
@@ -123,14 +127,12 @@ describe("group events list", () => {
     // The default view is the server default: no `sourceMode` parameter at all.
     expect(requests.some((url) => url.searchParams.has("sourceMode"))).toBe(false);
 
-    filter.value = "portal";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(container, "Source", "Portal");
     await settle();
 
-    expect(requests.some((url) => url.searchParams.get("sourceMode") === "portal")).toBe(true);
+    expect(requests.at(-1)?.searchParams.get("sourceMode")).toBe("portal");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(columnFilterSummary(container, "Source")).toBe("Portal");
   });
 
   it("announces a failed event load as an alert instead of an empty list", async () => {

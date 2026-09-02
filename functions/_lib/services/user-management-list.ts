@@ -1,4 +1,5 @@
 import {
+  USER_LIST_ORGANIZATION_NAMES,
   USERS_SORT_COLUMNS,
   usersListResponseSchema,
   type UsersListQuery,
@@ -20,8 +21,12 @@ interface UserRow {
   created_at: string;
   headshot_r2_key: string | null;
   active_identity_count: number;
-  event_participation_count: number;
+  organization_names: string | null;
+  has_event_participation: number;
 }
+
+/** Separates organization names inside the aggregated column; never appears in a name. */
+const NAME_SEPARATOR = "\u001f";
 
 const USER_HAS_MEMBERSHIP = `(EXISTS (
     SELECT 1
@@ -58,6 +63,11 @@ export function buildUsersPageQuery(query: UsersListQuery) {
 
   return {
     source: {
+      // Two bounded subqueries per row: how many organizations the person
+      // actively represents, and the first few of their names. Names replace
+      // the old "1 active identity · 1 event" counts — a name tells the
+      // reader which Ada this is; a count of events did not, and cost a
+      // DISTINCT over the participation table for every row.
       selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.active, u.created_at,
               u.headshot_r2_key,
               (SELECT COUNT(*) FROM identities active_identity
@@ -65,9 +75,17 @@ export function buildUsersPageQuery(query: UsersListQuery) {
                   AND active_identity.started_at IS NOT NULL
                   AND active_identity.ended_at IS NULL
                   AND active_identity.blocked_at IS NULL) AS active_identity_count,
-              (SELECT COUNT(DISTINCT ep.event_id)
-                 FROM event_participant_role_sources ep
-                WHERE ep.user_id = u.id) AS event_participation_count`,
+              (SELECT group_concat(named.name, '${NAME_SEPARATOR}')
+                 FROM (SELECT o.name
+                         FROM identities named_identity
+                         JOIN organizations o ON o.id = named_identity.organization_id
+                        WHERE named_identity.user_id = u.id
+                          AND named_identity.started_at IS NOT NULL
+                          AND named_identity.ended_at IS NULL
+                          AND named_identity.blocked_at IS NULL
+                        ORDER BY o.name
+                        LIMIT ${String(USER_LIST_ORGANIZATION_NAMES)}) named) AS organization_names,
+              ${USER_HAS_EVENT_PARTICIPATION} AS has_event_participation`,
       fromSql: `FROM users u ${where}`,
       countFromSql: `FROM users u ${where}`,
       bindings,
@@ -82,12 +100,18 @@ export async function listUsers(db: DatabaseLike, query: UsersListQuery) {
   const { rows: users, total } = await queryPage<UserRow>(db, buildUsersPageQuery(query));
 
   const results = users.map(
-    ({ headshot_r2_key: headshotR2Key, event_participation_count: participationCount, ...row }) => ({
+    ({
+      headshot_r2_key: headshotR2Key,
+      active_identity_count: organizationCount,
+      organization_names: organizationNames,
+      has_event_participation: hasEventParticipation,
+      ...row
+    }) => ({
       ...row,
       headshotUrl: publicUserHeadshotPath(headshotR2Key),
-      activeIdentityCount: row.active_identity_count,
-      type: row.active_identity_count > 0 ? "member" : participationCount > 0 ? "event_attendee" : "contact_only",
-      eventParticipationCount: participationCount,
+      type: organizationCount > 0 ? "member" : hasEventParticipation ? "event_attendee" : "contact_only",
+      organizationNames: organizationNames ? organizationNames.split(NAME_SEPARATOR) : [],
+      organizationCount,
     }),
   );
   return usersListResponseSchema.parse({

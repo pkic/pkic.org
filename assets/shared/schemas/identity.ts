@@ -100,7 +100,10 @@ const identityProfileFields = {
 
 const identityActivationSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("invitation") }),
-  z.object({ mode: z.literal("immediate"), reason: trimmedString(1, 500) }),
+  z.object({
+    mode: z.literal("immediate"),
+    reason: trimmedString(1, 500, "Document why this identity is being activated immediately."),
+  }),
 ]);
 
 /** Invite an existing user or provision an attributable user by email. */

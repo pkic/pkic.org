@@ -110,6 +110,9 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   decline: "danger",
   // organization content review
   pending_review: "warn",
+  // vote proposals
+  open_for_endorsement: "warn",
+  endorsed: "ok",
   // sponsorship pipeline stages
   new_inquiry: "neutral",
   contacted: "info",
@@ -144,6 +147,7 @@ const STATUS_LABEL: Record<string, string> = {
   payment_pending: "Payment pending",
   budget_exhausted: "Budget exhausted",
   not_quorate: "Not decided — turnout too low",
+  open_for_endorsement: "Open for endorsement",
 };
 
 /**

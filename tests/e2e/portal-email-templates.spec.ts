@@ -44,7 +44,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(page.getByText(`Edit: ${templateKey}`, { exact: false })).toBeVisible();
 
   const revisedBody = "Hello {{firstName}}, this version is ready for immediate activation.";
-  await page.locator("#email-template-editor-body").fill(revisedBody);
+  await page.getByLabel("Body").fill(revisedBody);
   const previewResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/preview` && response.request().method() === "POST",
@@ -85,7 +85,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
     .filter({ hasText: templateKey })
     .getByRole("button", { name: "Edit", exact: false })
     .click();
-  await expect(page.locator("#email-template-editor-body")).toHaveValue(revisedBody);
+  await expect(page.getByLabel("Body")).toHaveValue(revisedBody);
   await expect(
     page
       .getByRole("row")

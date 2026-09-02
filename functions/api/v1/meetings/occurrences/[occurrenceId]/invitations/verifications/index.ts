@@ -1,7 +1,7 @@
 import {
   meetingInvitationVerificationCreateResponseSchema,
   meetingInvitationVerificationCreateRouteSchema,
-} from "../../../../../../../../assets/shared/schemas/event-series";
+} from "../../../../../../../../assets/shared/schemas/meeting-entry";
 import { verifyMeetingGuestInvitationForChallengeCreation } from "../../../../../../../_lib/auth/meeting-guest-challenge";
 import { serializeMeetingGuestChallengeCookie } from "../../../../../../../_lib/auth/meeting-guest-session";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";

@@ -19,6 +19,7 @@ import {
   type EventRegistrationSummary,
 } from "../../assets/shared/schemas/event-registrations";
 import { Registrations } from "../../assets/ts/member-flows/portal/sections/events/detail/Registrations";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { tabNames } from "./helpers/tabs";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
@@ -109,7 +110,7 @@ afterEach(() => {
 });
 
 describe("event registrations list", () => {
-  it("names every filter, including the two that used to announce only 'combo box'", async () => {
+  it("keeps status, email delivery and consent in their columns, and names the one view control left in the toolbar", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(listPage([registration()]))),
@@ -119,13 +120,27 @@ describe("event registrations list", () => {
     await settle();
     await settle();
 
-    // The status filter falls back to FilterSelect's generic name; the other
-    // three say which collection they narrow. Two of them used to say nothing.
-    expect(filterNames(page)).toEqual(["Filter", "Attendance changes", "Email delivery status", "Sponsor consent"]);
-    expect(filterNames(page)).not.toContain("");
+    // Three of the four filters narrow by a value a column shows, so they
+    // live in those columns' menus. The attendance-change view is the one
+    // control left above the table — it reshapes the columns and is reached
+    // from the attendance dashboard's links — and it says what it is; it
+    // used to announce only "combo box".
+    expect(filterNames(page)).toEqual(["Attendance changes"]);
+    expect(columnFilterOptions(page, "Status")).toEqual([
+      "All statuses",
+      "Registered",
+      "Pending confirmation",
+      "Cancelled",
+    ]);
+    expect(columnFilterOptions(page, "Email")).toEqual(["All email statuses", "Bounced", "Not bounced"]);
+    expect(columnFilterOptions(page, "Consent")).toEqual([
+      "All consent",
+      "Sponsor consent given",
+      "No sponsor consent",
+    ]);
   });
 
-  it("sends the consent and attendance-change choices to the registrations query", async () => {
+  it("sends the status, consent and attendance-change choices to the registrations query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -139,14 +154,17 @@ describe("event registrations list", () => {
     await settle();
     await settle();
 
-    const consent = page.querySelector<HTMLSelectElement>('select[aria-label="Sponsor consent"]')!;
-    consent.value = "true";
-    await act(async () => {
-      consent.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(page, "Consent", "Sponsor consent given");
     await settle();
-    expect(requests.some((url) => url.searchParams.get("consent") === "true")).toBe(true);
+    expect(requests.at(-1)?.searchParams.get("consent")).toBe("true");
+    expect(columnFilterSummary(page, "Consent")).toBe("Sponsor consent given");
+
+    await chooseColumnFilter(page, "Status", "Cancelled");
+    await settle();
+    // Both column filters travel together, from the first page.
+    expect(requests.at(-1)?.searchParams.get("status")).toBe("cancelled");
+    expect(requests.at(-1)?.searchParams.get("consent")).toBe("true");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
 
     const changes = page.querySelector<HTMLSelectElement>('select[aria-label="Attendance changes"]')!;
     changes.value = "left_in_person";
@@ -155,7 +173,25 @@ describe("event registrations list", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await settle();
-    expect(requests.some((url) => url.searchParams.get("attendance_change") === "left_in_person")).toBe(true);
+    expect(requests.at(-1)?.searchParams.get("attendance_change")).toBe("left_in_person");
+    // The view keeps the column filters that still have a column.
+    expect(requests.at(-1)?.searchParams.get("status")).toBe("cancelled");
+  });
+
+  it("states email delivery in words in its own column, not as a second badge in the status cell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(listPage([registration({ has_bounced: true })]))),
+    );
+
+    const page = mount(<Registrations slug="pqc-2026" />);
+    await settle();
+    await settle();
+
+    const heads = [...page.querySelectorAll("th")].map((th) => th.textContent!.trim());
+    expect(heads.some((head) => head.startsWith("Email"))).toBe(true);
+    const cells = [...page.querySelectorAll("tbody td")].map((td) => td.textContent!.trim());
+    expect(cells).toContain("Bounced");
   });
 
   it("names the table and states sponsor consent in words, not only as a green tick", async () => {
@@ -170,8 +206,11 @@ describe("event registrations list", () => {
 
     // Four unnamed tables on one page are announced as four tables.
     expect(page.querySelector("caption")?.textContent).toBe("Event registrations");
-    // The tick is decoration; the sentence beside it is the answer.
-    expect(page.querySelector(".pk-sr-only")?.textContent).toBe("Consented to share with sponsors");
+    // The tick is decoration; the sentence beside it is the answer. The
+    // consent cell is found by its sentence, since the row's other quiet
+    // states — a delivered email — say theirs the same way.
+    const hidden = [...page.querySelectorAll("tbody .pk-sr-only")].map((span) => span.textContent);
+    expect(hidden).toContain("Consented to share with sponsors");
     expect(page.textContent).toContain("✓");
   });
 

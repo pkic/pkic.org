@@ -222,13 +222,21 @@ function ProposalsCard() {
 export function Participation() {
   const session = portalSession.value;
   const isMember = Boolean(session?.member);
+  // A sponsor-capacity session has no Home; pointing it there would bounce
+  // the reader straight back to the sponsor workspace.
+  const hasHome = Boolean(session?.member || session?.staff);
 
   return (
     <div class="pk pk-stack">
       <PageHeader title="My participation" />
       <p class="pk-muted pk-small">
-        Your record across the consortium. Active items that need a decision also appear on{" "}
-        <Link href="/home">Home</Link>.
+        Your record across the consortium.
+        {hasHome && (
+          <>
+            {" "}
+            Active items that need a decision also appear on <Link href="/home">Home</Link>.
+          </>
+        )}
       </p>
       {/* The record panels flow into the width the page affords rather than
           stacking down a capped column. */}

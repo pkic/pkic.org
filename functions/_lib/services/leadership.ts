@@ -12,7 +12,7 @@
 import { all, first } from "../db/queries";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { parseLinksJson, findLinkedinUrl } from "../../../assets/shared/schemas/links";
+import { parseLinksJson, getFeaturedLink } from "../../../assets/shared/schemas/links";
 import { sanitizeLegacyHttpUrl } from "../../../assets/shared/schemas/urls";
 import { toPublicRoleProfile, type PublicRoleProfile } from "./membership/public-role-profile";
 import { prepareAuditLog } from "./audit";
@@ -50,7 +50,7 @@ export interface LeadershipPublicPerson {
   organizationLogoUrl: string | null;
   organizationWebsite: string | null;
   photoUrl: string | null;
-  linkedin: string | null;
+  featuredLink: string | null;
   startsAt: string;
   endsAt: string | null;
 }
@@ -295,7 +295,7 @@ export async function getLeadershipPublic(
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
     organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
     photoUrl: row.headshot_r2_key && row.photo_identity_id ? `/api/v1/members/${row.photo_identity_id}/logo` : null,
-    linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
+    featuredLink: getFeaturedLink(parseLinksJson(row.links_json)),
     startsAt: row.starts_at,
     endsAt: row.ends_at,
   });

@@ -17,8 +17,8 @@ import type { Sponsorship, SponsorshipCompany } from "../../assets/shared/schema
 
 type HookState = ReturnType<typeof useCompanySponsorships>;
 
-function Harness(props: { filters: { type: string; stage: string }; onState: (state: HookState) => void }) {
-  const state = useCompanySponsorships(props.filters);
+function Harness(props: { onState: (state: HookState) => void }) {
+  const state = useCompanySponsorships();
   props.onState(state);
   return null;
 }
@@ -91,7 +91,7 @@ describe("useCompanySponsorships out-of-order responses (P7-R01)", () => {
     };
 
     await act(() => {
-      render(h(Harness, { filters: { type: "", stage: "" }, onState }), container);
+      render(h(Harness, { onState }), container);
     });
 
     // Select the company: fires the initial offset-0 fetch.
@@ -124,10 +124,10 @@ describe("useCompanySponsorships out-of-order responses (P7-R01)", () => {
     expect(pending).toHaveLength(2);
     expect(latest.companyLoadingMore).toBe(true);
 
-    // Before A resolves, the user changes the stage filter — request B
-    // (offset=0, new filters) goes out, issued strictly after A.
+    // Before A resolves, the company is reloaded — request B (offset=0) goes
+    // out, issued strictly after A.
     await act(() => {
-      render(h(Harness, { filters: { type: "", stage: "closed" }, onState }), container);
+      latest.reload();
     });
     expect(pending).toHaveLength(3);
 

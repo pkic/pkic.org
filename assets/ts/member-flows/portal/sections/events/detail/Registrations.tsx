@@ -57,9 +57,9 @@ type RegistrationStats = EventRegistrationsListResponse["stats"];
 // ─── Registration list ────────────────────────────────────────────────────────
 
 function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: string; initialAttendanceChange?: string }) {
-  const [statusFilter, setStatusFilter] = useState("");
-  const [bouncedFilter, setBouncedFilter] = useState("");
-  const [consentFilter, setConsentFilter] = useState("");
+  // Not a column filter: the attendance-change view is seeded by the route
+  // (`…/registrations/left-in-person`), reshapes the columns and the empty
+  // sentence, and the table does not report its filters back to the page.
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -111,13 +111,46 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
     },
     {
       header: "Status",
-      cell: (r) => (
-        <>
-          <Badge status={r.status} />
-          {r.has_bounced && <Badge status="bounced" />}
-        </>
-      ),
+      cell: (r) => <Badge status={r.status} />,
+      width: "fit",
       sort: { asc: "status", desc: "-status" },
+      filter: {
+        param: "status",
+        options: [
+          { value: "", label: "All statuses" },
+          ...EVENT_REGISTRATION_STATUSES.map((status) => ({
+            value: status as string,
+            label: eventRegistrationStatusLabel(status),
+          })),
+        ],
+      },
+    },
+    {
+      // Whether the confirmation mail reached the attendee. The bounce used
+      // to be a second badge inside the Status cell while its filter sat in
+      // the toolbar; the value and the filter that narrows by it now share
+      // one column.
+      header: "Email",
+      cell: (r) =>
+        r.has_bounced ? (
+          <Badge status="bounced" />
+        ) : (
+          <>
+            <span class="pk-muted" aria-hidden="true">
+              —
+            </span>
+            <span class="pk-sr-only">Not bounced</span>
+          </>
+        ),
+      width: "fit",
+      filter: {
+        param: "bounced",
+        options: [
+          { value: "", label: "All email statuses" },
+          { value: "true", label: "Bounced" },
+          { value: "false", label: "Not bounced" },
+        ],
+      },
     },
     {
       header: "Attendance",
@@ -208,6 +241,15 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
                 </>
               ),
             className: "pk-center",
+            width: "fit" as const,
+            filter: {
+              param: "consent",
+              options: [
+                { value: "", label: "All consent" },
+                { value: "true", label: "Sponsor consent given" },
+                { value: "false", label: "No sponsor consent" },
+              ],
+            },
           },
           { header: "Source", cell: (r: Registration) => r.source_type ?? "—", className: "pk-small pk-muted" },
           {
@@ -290,33 +332,14 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         onData={(data) => setStats(data.stats)}
         paginate
         searchPlaceholder="Search name / email…"
-        params={{
-          ...(statusFilter && { status: statusFilter }),
-          ...(bouncedFilter && { bounced: bouncedFilter }),
-          ...(consentFilter && { consent: consentFilter }),
-          ...(attendanceChangeFilter && { attendance_change: attendanceChangeFilter }),
-        }}
+        params={attendanceChangeFilter ? { attendance_change: attendanceChangeFilter } : {}}
         actionsRef={tableRef}
         toolbar={({ resetPage }) => (
           <>
-            <FilterSelect
-              value={statusFilter}
-              options={[
-                { value: "", label: "All statuses" },
-                ...EVENT_REGISTRATION_STATUSES.map((status) => ({
-                  value: status,
-                  label: eventRegistrationStatusLabel(status),
-                })),
-              ]}
-              onChange={(value) => {
-                setStatusFilter(value);
-                resetPage();
-              }}
-            />
-            {/* Every filter is a FilterSelect, so each one carries its own
-                name. Two of these were bare `<select>` elements with no label
-                and no `aria-label` at all: a toolbar of four controls, two of
-                which announced only "combo box". */}
+            {/* Status, email delivery and sponsor consent narrow from their
+                own columns' menus. This one stays: it is a view of the list
+                rather than a value a column shows, arrived at from the
+                attendance dashboard's links as much as from here. */}
             <FilterSelect
               ariaLabel="Attendance changes"
               className="adm-filter-select"
@@ -329,34 +352,6 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
               ]}
               onChange={(value) => {
                 setAttendanceChangeFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Email delivery status"
-              className="adm-filter-select"
-              value={bouncedFilter}
-              options={[
-                { value: "", label: "All email statuses" },
-                { value: "true", label: "Bounced" },
-                { value: "false", label: "Not bounced" },
-              ]}
-              onChange={(value) => {
-                setBouncedFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Sponsor consent"
-              className="adm-filter-select"
-              value={consentFilter}
-              options={[
-                { value: "", label: "All consent" },
-                { value: "true", label: "Sponsor consent given" },
-                { value: "false", label: "No sponsor consent" },
-              ]}
-              onChange={(value) => {
-                setConsentFilter(value);
                 resetPage();
               }}
             />

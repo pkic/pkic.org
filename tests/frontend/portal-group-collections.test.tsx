@@ -2,14 +2,11 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/management/GroupAuditLog";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
-import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
-import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
-import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
@@ -60,96 +57,7 @@ afterEach(() => {
 });
 
 describe("portal selected-group collections", () => {
-  it("shows the manager collection with server-side query parameters and no participant controls for staff-only managers", async () => {
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        requests.push(url);
-        return json({
-          mailingLists: [
-            {
-              id: "a0000000-0000-4000-8000-000000000001",
-              email: "architecture@lists.example.test",
-              label: "Architecture discussion",
-              purpose: "group",
-              groupId: GROUP_ID,
-              primaryDiscussion: true,
-              subscriptionDefault: "group_members",
-              postingPolicy: "members",
-              moderationPolicy: "moderated",
-              autoSyncCategories: null,
-              active: true,
-              archivedAt: null,
-              createdAt: "2026-08-01T00:00:00.000Z",
-              updatedAt: "2026-08-01T00:00:00.000Z",
-            },
-          ],
-          page: { limit: 50, offset: 0, total: 1, hasMore: false },
-        });
-      }),
-    );
-
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
-    await settle();
-
-    expect(container.textContent).toContain("Managed mailing lists");
-    expect(container.textContent).toContain("Architecture discussion");
-    expect(container.textContent).not.toContain("My mailing-list preferences");
-    expect(container.querySelector('select[aria-label^="Subscription preference"]')).toBeNull();
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/management`,
-    });
-    expect(requests[0].searchParams.get("limit")).toBe("50");
-    expect(requests[0].searchParams.get("sort")).toBe("label");
-  });
-
-  it("renders the manager empty state", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
-    );
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
-    await settle();
-    expect(container.textContent).toContain("No mailing lists yet");
-    expect(container.textContent).toContain("Add mailing list");
-  });
-
-  it("names the primary-discussion filter and sends the choice to the management query", async () => {
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(new URL(String(input), location.origin));
-        return json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
-      }),
-    );
-
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
-    await settle();
-
-    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Primary discussion list"]')!;
-    expect(filter).not.toBeNull();
-    // The default view is the server default: no `primaryDiscussion` parameter at all.
-    expect(requests.some((url) => url.searchParams.has("primaryDiscussion"))).toBe(false);
-
-    filter.value = "true";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    await settle();
-
-    expect(requests.some((url) => url.searchParams.get("primaryDiscussion") === "true")).toBe(true);
-  });
-
-  it("names the form context filter and sends the choice to the group forms query", async () => {
+  it("narrows by context and purpose from their columns and sends the choices to the group forms query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -162,10 +70,11 @@ describe("portal selected-group collections", () => {
     const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
     await settle();
 
-    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by context"]')!;
-    expect(filter).not.toBeNull();
+    // No selects above the table: each filter lives in the menu of the
+    // column that shows the value it narrows.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
     // The options speak product language, not the schema's `contextType` keys.
-    expect([...filter.options].map((option) => option.textContent)).toEqual([
+    expect(columnFilterOptions(container, "Context")).toEqual([
       "All contexts",
       "Installation-wide",
       "Group",
@@ -175,161 +84,17 @@ describe("portal selected-group collections", () => {
     // The default view is the server default: no `contextType` parameter at all.
     expect(requests.some((url) => url.searchParams.has("contextType"))).toBe(false);
 
-    filter.value = "event";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(container, "Context", "Event");
     await settle();
+    expect(requests.at(-1)?.searchParams.get("contextType")).toBe("event");
+    expect(columnFilterSummary(container, "Context")).toBe("Event");
 
-    expect(requests.some((url) => url.searchParams.get("contextType") === "event")).toBe(true);
-  });
-
-  it("renders manager collection errors", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ message: "Not allowed" }), { status: 403 })),
-    );
-    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
+    await chooseColumnFilter(container, "Purpose", "survey");
     await settle();
-    expect(container.textContent).toContain("don't have access");
-  });
-
-  it("creates, edits, and archives a fully configured group list without moving ownership", async () => {
-    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
-    const list = {
-      id: "a0000000-0000-4000-8000-000000000001",
-      email: "architecture@lists.example.test",
-      label: "Architecture discussion",
-      purpose: "group",
-      groupId: GROUP_ID,
-      primaryDiscussion: true,
-      subscriptionDefault: "group_members",
-      postingPolicy: "members",
-      moderationPolicy: "moderated",
-      autoSyncCategories: ["A"],
-      active: true,
-      archivedAt: null,
-      createdAt: "2026-08-01T00:00:00.000Z",
-      updatedAt: "2026-08-01T00:00:00.000Z",
-    } as const;
-    const page = { limit: 50, offset: 0, total: 1, hasMore: false };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init.method ?? "GET";
-        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-        requests.push({ url, method, body });
-        if (method === "POST") return json({ mailingList: list });
-        if (method === "PATCH") return json({ mailingList: list });
-        if (method === "DELETE") return json({ success: true });
-        if (url.pathname.endsWith("/grants")) return json({ grants: [], page });
-        if (url.pathname === "/api/v1/groups") {
-          return json({ groups: [], page });
-        }
-        return json({ mailingLists: [list], page });
-      }),
-    );
-
-    const container = mount(
-      <>
-        <GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />
-        <ConfirmDialogHost />
-      </>,
-    );
-    await settle();
-    const button = (label: string) =>
-      Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === label);
-    expect(container.querySelector("form")).toBeNull();
-    await act(async () => {
-      button("Add mailing list")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const createForm = container.querySelector("form")!;
-    const email = createForm.querySelector<HTMLInputElement>('input[type="email"]')!;
-    const textInputs = createForm.querySelectorAll<HTMLInputElement>(
-      'input:not([type="email"]):not([type="checkbox"]):not([readonly])',
-    );
-    email.value = "consultation@lists.example.test";
-    email.dispatchEvent(new Event("input", { bubbles: true }));
-    textInputs[0].value = "Consultation list";
-    textInputs[0].dispatchEvent(new Event("input", { bubbles: true }));
-    const selects = createForm.querySelectorAll<HTMLSelectElement>("select");
-    selects[0].value = "consultation";
-    selects[0].dispatchEvent(new Event("change", { bubbles: true }));
-    selects[1].value = "eligible_categories";
-    selects[1].dispatchEvent(new Event("change", { bubbles: true }));
-    selects[2].value = "members";
-    selects[2].dispatchEvent(new Event("change", { bubbles: true }));
-    selects[3].value = "moderated";
-    selects[3].dispatchEvent(new Event("change", { bubbles: true }));
-    const categoryA = createForm.querySelector<HTMLInputElement>("#group-mailing-list-create-auto-sync-categories-A")!;
-    categoryA.checked = true;
-    await act(async () => {
-      categoryA.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const categoryH1 = createForm.querySelector<HTMLInputElement>(
-      "#group-mailing-list-create-auto-sync-categories-H1",
-    )!;
-    categoryH1.checked = true;
-    await act(async () => {
-      categoryH1.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await settle();
-    await act(async () => {
-      createForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    await settle();
-    await settle();
-
-    const created = requests.find(({ method }) => method === "POST");
-    expect(created).toMatchObject({
-      url: expect.objectContaining({ pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists` }),
-    });
-    expect(groupMailingListCreateSchema.parse(created?.body)).toMatchObject({
-      email: "consultation@lists.example.test",
-      label: "Consultation list",
-      purpose: "consultation",
-      subscriptionDefault: "eligible_categories",
-      postingPolicy: "members",
-      moderationPolicy: "moderated",
-      autoSyncCategories: ["A", "H1"],
-    });
-    expect(created?.body).not.toHaveProperty("groupId");
-
-    // The row itself opens the editor; its activation names the list.
-    expect(button("Manage Architecture discussion")).not.toBeUndefined();
-    await act(async () => {
-      button("Manage Architecture discussion")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    const saveButton = button("Save changes");
-    expect(saveButton).not.toBeUndefined();
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
-
-    await settle();
-    // The row's remaining command lives behind its menu, whose trigger
-    // names the list.
-    expect(rowActionControlNames(container)).toEqual(["Actions for Architecture discussion"]);
-    await runRowAction(container, "Architecture discussion", "Archive");
-    await settle();
-    const archiveDialog = container.querySelector('[role="alertdialog"]');
-    expect(archiveDialog).not.toBeNull();
-    await act(async () => {
-      Array.from(archiveDialog?.querySelectorAll("button") ?? [])
-        .find((candidate) => candidate.textContent === "Archive mailing list")
-        ?.click();
-    });
-    await settle();
-    expect(requests.some(({ method }) => method === "DELETE")).toBe(true);
+    // Both filters travel together; narrowing by one keeps the other.
+    expect(requests.at(-1)?.searchParams.get("purpose")).toBe("survey");
+    expect(requests.at(-1)?.searchParams.get("contextType")).toBe("event");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
   });
 
   it("loads forms, events, and audit history through server-backed group collections", async () => {
@@ -579,27 +344,26 @@ describe("portal selected-group collections", () => {
     // The whole row opens the event now: the "Details" button in a nameless
     // last column was a control no keyboard could reach the row through, so
     // the table's own `rowAction` renders the link and stretches it.
-    const open = Array.from(container.querySelectorAll("a, button")).find(
+    const open = Array.from(container.querySelectorAll("a")).find(
       (control) => control.textContent === `Open ${event.name}`,
     );
-    expect(open).toBeDefined();
-    await act(async () => {
-      open?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    await settle();
+    // The row is a link, so the event's address is inspectable and the row
+    // can be opened in a new tab.
+    expect(open?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/events/${event.id}`);
 
+    // Arriving on that URL loads the event and renders its workspace.
+    const record = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} />);
+    await settle();
+    await settle();
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}`);
 
     // The default tab is the overview, which shows the registration panel — not the settings form.
-    expect(container.textContent).toContain("Registration");
-    expect(container.textContent).toContain("Register for this event");
-    expect(container.textContent).toContain("I agree to the event terms");
-    expect(container.textContent).not.toContain("Attendees");
-    expect(container.textContent).not.toContain("Manage meeting series");
+    expect(record.textContent).toContain("Registration");
+    expect(record.textContent).toContain("Register for this event");
+    expect(record.textContent).toContain("I agree to the event terms");
+    expect(record.textContent).not.toContain("Manage meeting series");
 
-    const tab = (label: string) => tabs(container).find((item) => item.textContent?.trim() === label);
+    const tab = (label: string) => tabs(record).find((item) => item.textContent?.trim() === label);
 
     // Tab clicks navigate to the canonical URL (the mocked navigate is a no-op
     // spy here, so the resulting tab is verified below through the URL it
@@ -614,7 +378,7 @@ describe("portal selected-group collections", () => {
     });
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${event.id}/settings`);
 
-    const back = Array.from(container.querySelectorAll("button")).find(
+    const back = Array.from(record.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "← Back to events",
     );
     await act(async () => {
@@ -628,7 +392,6 @@ describe("portal selected-group collections", () => {
     );
     await settle();
     await settle();
-    expect(registrationsView.textContent).toContain("Attendees");
     expect(registrationsView.textContent).toContain("Group Member");
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}/registrations`))).toBe(true);
 

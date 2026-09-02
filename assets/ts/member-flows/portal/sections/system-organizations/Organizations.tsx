@@ -1,4 +1,5 @@
 import { useEffect } from "preact/hooks";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
@@ -143,6 +144,7 @@ export function Organizations({
 
   return (
     <section class="pk pk-stack">
+      <PageHeader title="Organizations" />
       <ApiDataTable
         caption="Organizations"
         urlState="organizations"

@@ -9,6 +9,7 @@ import { FilterSelect } from "../../assets/ts/components/FilterSelect";
 import { FormActions } from "../../assets/ts/components/FormActions";
 import { MembershipCategoryPicker } from "../../assets/ts/components/MembershipCategoryPicker";
 import { TimeZoneSelect } from "../../assets/ts/components/TimeZoneSelect";
+import { Field } from "../../assets/ts/ui/Field";
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { SeriesManagedNotice } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SeriesManagedNotice";
 import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SettingsEditor";
@@ -316,23 +317,25 @@ describe("shared management presentation components", () => {
   it("EnumSelect renders human labels for machine values and reports the machine value on change", () => {
     const onChange = vi.fn();
     const container = mount(
-      <EnumSelect
-        id="widget-status"
-        label="Status"
-        value="draft"
-        options={[
-          { value: "draft", label: "Draft" },
-          { value: "published", label: "Published" },
-        ]}
-        onChange={onChange}
-      />,
+      <Field label="Status">
+        {(control) => (
+          <EnumSelect
+            {...control}
+            value="draft"
+            options={[
+              { value: "draft", label: "Draft" },
+              { value: "published", label: "Published" },
+            ]}
+            onChange={onChange}
+          />
+        )}
+      </Field>,
     );
-    const select = container.querySelector<HTMLSelectElement>("#widget-status")!;
+    // The control renders no label of its own: the Field around it names it,
+    // and resolving through that label fails exactly when the pair is broken.
+    const select = controlFor<HTMLSelectElement>(container, "Status");
     expect(select.options).toHaveLength(2);
     expect(select.options[1].textContent).toBe("Published");
-    // The caller owns the id, so the label it writes has to reach that id and
-    // not a generated one.
-    expect(controlFor<HTMLSelectElement>(container, "Status")).toBe(select);
     select.value = "published";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -342,21 +345,22 @@ describe("shared management presentation components", () => {
 
   it("EnumSelect announces a required field in words, and survives a value outside its vocabulary", () => {
     const container = mount(
-      <EnumSelect
-        id="widget-policy"
-        label="Posting policy"
-        value={"retired" as "members" | "subscribers"}
-        required
-        help="Who may post to this list."
-        options={[
-          { value: "members", label: "Members" },
-          { value: "subscribers", label: "Subscribers" },
-        ]}
-        onChange={() => {}}
-      />,
+      <Field label="Posting policy" required help="Who may post to this list.">
+        {(control) => (
+          <EnumSelect
+            {...control}
+            value={"retired" as "members" | "subscribers"}
+            options={[
+              { value: "members", label: "Members" },
+              { value: "subscribers", label: "Subscribers" },
+            ]}
+            onChange={() => {}}
+          />
+        )}
+      </Field>,
     );
 
-    const select = container.querySelector<HTMLSelectElement>("#widget-policy")!;
+    const select = controlFor<HTMLSelectElement>(container, "Posting policy");
     // A value the contract no longer offers selects nothing rather than
     // inventing an option for itself, so a stale record cannot be silently
     // re-saved under a vocabulary term that does not exist.
@@ -371,16 +375,17 @@ describe("shared management presentation components", () => {
 
     // Help text is guidance, so it is described-by rather than part of the name.
     const helpId = select.getAttribute("aria-describedby");
-    expect(helpId).toBe("widget-policy-help");
     expect(container.querySelector(`[id="${helpId!}"]`)?.textContent).toBe("Who may post to this list.");
   });
 
   it("TimeZoneSelect keeps the submitted value as the raw IANA identifier typed or picked", () => {
     const onChange = vi.fn();
     const container = mount(
-      <TimeZoneSelect id="series-timezone" label="Time zone" value="Europe/Amsterdam" onChange={onChange} />,
+      <Field label="Time zone" required>
+        {(control) => <TimeZoneSelect {...control} value="Europe/Amsterdam" onChange={onChange} />}
+      </Field>,
     );
-    const input = container.querySelector<HTMLInputElement>("#series-timezone")!;
+    const input = controlFor(container, "Time zone");
     expect(input.value).toBe("Europe/Amsterdam");
     expect(container.querySelector(`#${input.getAttribute("list")}`)).not.toBeNull();
     input.value = "America/New_York";
@@ -392,19 +397,15 @@ describe("shared management presentation components", () => {
 
   it("TimeZoneSelect names its control, marks it required in words, and wires its guidance", () => {
     const container = mount(
-      <TimeZoneSelect
-        id="series-timezone"
-        label="Time zone"
-        value="Europe/Amsterdam"
-        help="Recurrence is expanded in this zone."
-        onChange={vi.fn()}
-      />,
+      <Field label="Time zone" required help="Recurrence is expanded in this zone.">
+        {(control) => <TimeZoneSelect {...control} value="Europe/Amsterdam" onChange={vi.fn()} />}
+      </Field>,
     );
 
     // Resolved through the label's own for/id pair, so the lookup fails
     // exactly when the labelling contract does.
     const input = controlFor(container, "Time zone");
-    expect(input.id).toBe("series-timezone");
+    expect(input.hasAttribute("required")).toBe(true);
     // The asterisk is decorative; the word behind it is what is announced.
     const marker = container.querySelector(".pk-field__required");
     expect(marker?.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
@@ -417,7 +418,7 @@ describe("shared management presentation components", () => {
 
   it("TimeZoneSelect leaves no orphaned required marker when the field is optional", () => {
     const container = mount(
-      <TimeZoneSelect id="series-timezone" label="Time zone" value="" required={false} onChange={vi.fn()} />,
+      <Field label="Time zone">{(control) => <TimeZoneSelect {...control} value="" onChange={vi.fn()} />}</Field>,
     );
 
     expect(controlFor(container, "Time zone").hasAttribute("required")).toBe(false);
@@ -494,7 +495,7 @@ describe("shared management presentation components", () => {
     for (const check of checks) {
       const input = check.querySelector<HTMLInputElement>("input.pk-check__input");
       expect(input).not.toBeNull();
-      expect(check.htmlFor).toBe(input!.id);
+      expect(check.control).toBe(input);
       expect(check.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
     }
   });

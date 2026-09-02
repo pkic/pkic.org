@@ -48,6 +48,14 @@ function renderValue(value: unknown): ComponentChildren {
   if (isPlainObject(value)) {
     const nestedEntries = Object.entries(value);
     if (nestedEntries.length === 0) return "—";
+    // A `{from, to}` pair is a transition, and it reads as one — "Pending →
+    // In review" — rather than as a two-row sub-list that widens the details
+    // cell for two words. Only the pure pair collapses; a change object that
+    // also names its field keeps the list.
+    if (nestedEntries.every(([key]) => key === "from" || key === "to")) {
+      const record = value as { from?: unknown; to?: unknown };
+      return `${formatPrimitiveText(record.from)} → ${formatPrimitiveText(record.to)}`;
+    }
     return (
       <dl class="pk-datalist">
         {nestedEntries.map(([key, nestedValue]) => (

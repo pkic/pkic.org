@@ -153,9 +153,11 @@ describe("SpeakerFormCard", () => {
     // All three parts of the choice control, because one alone renders the
     // platform's own checkbox and nothing else complains.
     expect(moderator.className).toContain("pk-check__input");
+    // The label wraps the control, so the whole line is the hit target and no
+    // `for` can go stale.
     const label = moderator.closest("label")!;
     expect(label.className).toContain("pk-check");
-    expect(label.htmlFor).toBe("role-spk-1-moderator");
+    expect(label.querySelector("input")).toBe(moderator);
     expect(label.querySelector(".pk-check__label")?.textContent).toBe("Moderator");
   });
 

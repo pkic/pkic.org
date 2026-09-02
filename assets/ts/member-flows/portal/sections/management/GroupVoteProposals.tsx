@@ -113,7 +113,9 @@ function GroupVoteProposalDetail({
               size="sm"
               variant="primary"
               disabled={busy}
-              onClick={() => void action(() => postJson(`${base}/endorse`, {}, groupVoteProposalEndorseResponseSchema))}
+              onClick={() =>
+                void action(() => postJson(`${base}/endorsement`, {}, groupVoteProposalEndorseResponseSchema))
+              }
             >
               Endorse
             </Button>
@@ -122,7 +124,9 @@ function GroupVoteProposalDetail({
             <Button
               size="sm"
               disabled={busy}
-              onClick={() => void action(() => deleteJson(`${base}/endorse`, groupVoteProposalMutationResponseSchema))}
+              onClick={() =>
+                void action(() => deleteJson(`${base}/endorsement`, groupVoteProposalMutationResponseSchema))
+              }
             >
               Withdraw endorsement
             </Button>
@@ -184,18 +188,6 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
 
   return (
     <div class="pk pk-stack">
-      {canParticipate && (
-        <div class="pk-cluster">
-          <Button
-            size="sm"
-            variant="primary"
-            aria-expanded={showCreate}
-            onClick={() => setShowCreate((shown) => !shown)}
-          >
-            {showCreate ? "Hide proposal form" : "Propose a vote"}
-          </Button>
-        </div>
-      )}
       {showCreate && <GroupVoteProposalForm groupId={groupId} onCreated={reload} />}
       <ApiDataTable
         caption="Vote proposals"
@@ -207,6 +199,15 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
         paginate
         searchPlaceholder="Search proposals…"
         initialSort="-created_at"
+        createAction={
+          canParticipate
+            ? {
+                label: showCreate ? "Hide proposal form" : "Propose a vote",
+                onSelect: () => setShowCreate((shown) => !shown),
+                expanded: showCreate,
+              }
+            : undefined
+        }
         columns={[
           {
             header: "Proposal",

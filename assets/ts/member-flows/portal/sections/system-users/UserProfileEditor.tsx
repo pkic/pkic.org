@@ -6,7 +6,9 @@ import {
   userUpdateSchema,
 } from "../../../../../shared/schemas/user-management";
 import { FormActions } from "../../../../components/FormActions";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { Button } from "../../../../ui/Button";
+import { Checkbox, Radio } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
@@ -22,7 +24,9 @@ type EditableUser = {
   isEcMember: boolean;
 };
 
-const NAME_FIELDS: Array<[string, keyof EditableUser]> = [
+type NameField = "firstName" | "lastName" | "preferredName";
+
+const NAME_FIELDS: Array<[string, NameField]> = [
   ["First name", "firstName"],
   ["Last name", "lastName"],
   ["Preferred name", "preferredName"],
@@ -41,15 +45,21 @@ function editFormFor(user: UserDetail): EditableUser {
 }
 
 /**
- * The address is checked against the canonical update contract rather than a
- * second regular expression written here: a rejection the server would issue
- * anyway is better said beside the control that caused it, and there is only
- * one definition of what a valid address is.
+ * The update the form would send, built from its draft. A cleared name is
+ * sent as null so the contract clears it; a blank address is left out so the
+ * current one is kept, which is what the field's help promises. Only a reader
+ * with access:grant may move the address or the role, so only then are they
+ * part of the request at all.
  */
-function emailProblem(email: string): string | null {
-  const trimmed = email.trim();
-  if (!trimmed) return null;
-  return userUpdateSchema.safeParse({ email: trimmed }).success ? null : "Enter a valid email address.";
+function payloadFromDraft(draft: EditableUser, canGrantAccess: boolean) {
+  return {
+    ...(canGrantAccess ? { email: draft.email.trim() ? draft.email : undefined, role: draft.role } : {}),
+    firstName: draft.firstName || null,
+    lastName: draft.lastName || null,
+    preferredName: draft.preferredName || null,
+    active: draft.active,
+    isEcMember: draft.isEcMember,
+  };
 }
 
 export function UserProfileEditor({
@@ -64,42 +74,39 @@ export function UserProfileEditor({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState<EditableUser>(() => editFormFor(user));
-
-  const emailError = canGrantAccess ? emailProblem(form.email) : null;
+  const [draft, setDraft] = useState<EditableUser>(() => editFormFor(user));
+  // One basis for validation: the update contract the server parses decides
+  // what each field shows as it is typed and what Save may send.
+  const form = useContractForm(userUpdateSchema, payloadFromDraft(draft, canGrantAccess));
 
   function update(patch: Partial<EditableUser>): void {
-    setForm((current) => ({ ...current, ...patch }));
+    setDraft((current) => ({ ...current, ...patch }));
   }
 
   function startEditing() {
-    setForm(editFormFor(user));
+    setDraft(editFormFor(user));
+    form.reset();
     setError("");
     setEditing(true);
   }
 
   async function save() {
-    if (emailError) return;
+    // Nothing leaves the page until the contract accepts the whole draft.
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      await patchJson(
-        `/api/v1/users/${encodeURIComponent(user.id)}`,
-        {
-          ...(canGrantAccess ? { email: form.email.trim().toLowerCase() || undefined, role: form.role } : {}),
-          firstName: form.firstName || null,
-          lastName: form.lastName || null,
-          preferredName: form.preferredName || null,
-          active: form.active,
-          isEcMember: form.isEcMember,
-        },
-        userUpdateResponseSchema,
-      );
+      await patchJson(`/api/v1/users/${encodeURIComponent(user.id)}`, checked.data, userUpdateResponseSchema);
       toast("User updated", "success");
       setEditing(false);
       await onSaved();
     } catch (cause) {
-      setError((cause as Error).message);
+      // A server refusal names its fields the same way the contract does.
+      setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
@@ -118,7 +125,9 @@ export function UserProfileEditor({
   return (
     <div class="pk">
       <form
+        noValidate
         class="pk-stack pk-stack--snug"
+        {...form.handlers}
         onSubmit={(event) => {
           event.preventDefault();
           void save();
@@ -129,11 +138,12 @@ export function UserProfileEditor({
         <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={saving}>
           <div class="pk-grid pk-grid--tight">
             {NAME_FIELDS.map(([label, field]) => (
-              <Field label={label} key={field}>
+              <Field label={label} key={field} {...form.of(field)}>
                 {(control) => (
                   <TextInput
                     {...control}
-                    value={form[field] as string}
+                    name={field}
+                    value={draft[field]}
                     onInput={(event) => update({ [field]: event.currentTarget.value })}
                   />
                 )}
@@ -142,15 +152,15 @@ export function UserProfileEditor({
             {canGrantAccess && (
               <Field
                 label="Email"
-                state={emailError ? "invalid" : undefined}
-                message={emailError ?? undefined}
                 help="Used to sign in. Leave unchanged to keep the current address."
+                {...form.of("email")}
               >
                 {(control) => (
                   <TextInput
                     {...control}
+                    name="email"
                     type="email"
-                    value={form.email}
+                    value={draft.email}
                     onInput={(event) => update({ email: event.currentTarget.value })}
                   />
                 )}
@@ -163,17 +173,14 @@ export function UserProfileEditor({
               <legend class="pk-field__label">Role</legend>
               <div class="pk-cluster">
                 {userRoleValueSchema.options.map((role) => (
-                  <label class="pk-check" for={`edit-role-${role}`} key={role}>
-                    <input
-                      class="pk-check__input"
-                      type="radio"
-                      id={`edit-role-${role}`}
-                      name="edit-role"
-                      checked={form.role === role}
-                      onChange={() => update({ role })}
-                    />
-                    <span class="pk-check__label">{role}</span>
-                  </label>
+                  <Radio
+                    key={role}
+                    name="role"
+                    value={role}
+                    checked={draft.role === role}
+                    onChange={() => update({ role })}
+                    label={role}
+                  />
                 ))}
               </div>
             </fieldset>
@@ -182,26 +189,18 @@ export function UserProfileEditor({
           <fieldset class="pk-fieldset pk-field">
             <legend class="pk-field__label">Standing</legend>
             <div class="pk-stack pk-stack--tight">
-              <label class="pk-check" for="edit-active">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  id="edit-active"
-                  checked={form.active}
-                  onChange={(event) => update({ active: event.currentTarget.checked })}
-                />
-                <span class="pk-check__label">Active</span>
-              </label>
-              <label class="pk-check" for="edit-ec-member">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  id="edit-ec-member"
-                  checked={form.isEcMember}
-                  onChange={(event) => update({ isEcMember: event.currentTarget.checked })}
-                />
-                <span class="pk-check__label">Executive Council member</span>
-              </label>
+              <Checkbox
+                name="active"
+                checked={draft.active}
+                onChange={(event) => update({ active: event.currentTarget.checked })}
+                label="Active"
+              />
+              <Checkbox
+                name="isEcMember"
+                checked={draft.isEcMember}
+                onChange={(event) => update({ isEcMember: event.currentTarget.checked })}
+                label="Executive Council member"
+              />
             </div>
           </fieldset>
         </fieldset>
@@ -212,7 +211,6 @@ export function UserProfileEditor({
           submitLabel="Save"
           busyLabel="Saving…"
           busy={saving}
-          disabled={Boolean(emailError)}
           onCancel={() => setEditing(false)}
           status={error || undefined}
           statusVariant="danger"

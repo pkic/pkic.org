@@ -26,7 +26,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { runRowAction } from "./helpers/data-table";
+import { openRow, runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
@@ -227,11 +227,12 @@ test.describe("Portal management browser-verification pass", () => {
     await form.getByLabel("Closes at").fill(closesAtLocal);
     await form.getByRole("button", { name: "Create vote", exact: true }).click();
 
-    // Success navigates to the created vote's own address, which opens its
-    // detail beneath the row rather than leaving the reader to find it.
+    // Success navigates to the created vote's own record page: its name as
+    // the record heading, its facets as tabs, and the list left behind.
     await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/[0-9a-fA-F-]{36}$`));
-    const row = page.getByRole("row").filter({ hasText: title });
-    await expect(row).toBeVisible();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    const voteTabs = page.getByRole("navigation", { name: `${title} sections` });
+    await voteTabs.getByRole("link", { name: "Settings" }).click();
     const detail = page.getByRole("region", { name: "Vote management" });
     await expect(detail).toBeVisible();
 
@@ -244,8 +245,9 @@ test.describe("Portal management browser-verification pass", () => {
     await visibilityForm.getByRole("button", { name: "Save visibility" }).click();
     await expect(visibility).toHaveValue("public");
 
-    await detail.getByRole("button", { name: "Load identifiable ballots" }).click();
-    await expect(detail.getByText("No ballots have been submitted.")).toBeVisible();
+    // The ballot audit is its own facet, fetched when its tab is opened.
+    await voteTabs.getByRole("link", { name: "Ballots" }).click();
+    await expect(page.getByText("No ballots have been submitted.")).toBeVisible();
   });
 
   test("vote proposals: a real member submission is moderated (reject guard + approve bypass)", async ({ page }) => {
@@ -312,14 +314,15 @@ test.describe("Portal management browser-verification pass", () => {
     await expectCurrentTab(page, "Proposals");
 
     // The expanded detail is a second table row containing the same title.
-    // Anchor the locator to the data row's Details action so it remains
-    // unique before and after expansion.
+    // Anchor the locator to the data row's own named row control — which reads
+    // "Show details for …" collapsed and "Hide details for …" expanded — so it
+    // stays unique before and after expansion.
     const proposalRow = page
       .getByRole("row")
       .filter({ hasText: title })
-      .filter({ has: page.getByRole("button", { name: "Details", exact: true }) });
+      .filter({ has: page.getByRole("button", { name: new RegExp(`^(?:Show|Hide) details for ${title}$`) }) });
     await expect(proposalRow).toBeVisible();
-    await proposalRow.getByRole("button", { name: "Details" }).click();
+    await openRow(proposalRow, `Show details for ${title}`);
     // The expanded proposal is a region named after the proposal, so it is
     // located the way a reader finds it rather than by a background utility.
     const detail = page.getByRole("region", { name: title });
@@ -366,11 +369,11 @@ test.describe("Portal management browser-verification pass", () => {
     // name, so it groups under its contact name. Drill into that company,
     // then pick its (only) sponsorship from the resulting list.
     await page.locator("tr").filter({ hasText: contactName }).click();
-    // The company's sponsorships are a table now, and each row activates
-    // through a control named after what it opens — located by that name
-    // rather than by the list class the markup happens to carry.
+    // The company's sponsorships are a table, and each row is a link to the
+    // sponsorship's own page, named after what it opens — located by that
+    // name rather than by the list class the markup happens to carry.
     await page
-      .getByRole("button", { name: /^Show / })
+      .getByRole("link", { name: /^Open / })
       .first()
       .click();
     // The detail panel names itself after the sponsor, so it is located by
@@ -383,12 +386,15 @@ test.describe("Portal management browser-verification pass", () => {
     // also present in the DOM but hidden.
     await expect(detail.locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
 
+    // Forms are closed until asked for; the record shows its facts first.
+    await detail.getByRole("button", { name: "Edit", exact: true }).click();
     await detail.getByLabel("Notes").fill("E2E verification note");
-    await detail.getByRole("button", { name: "Save fields" }).click();
+    await detail.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
 
+    await detail.getByRole("button", { name: "Advance stage" }).click();
     await detail.getByLabel("Advance to stage").selectOption("contacted");
-    await detail.getByRole("button", { name: "Advance" }).click();
+    await detail.getByRole("button", { name: "Advance", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
     await expect(detail.locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
     await expect(detail.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
@@ -431,6 +437,92 @@ test.describe("Portal management browser-verification pass", () => {
     );
     expect(index, "saved tier not found after reload").toBeGreaterThanOrEqual(0);
     await expect(tierRows.nth(index).getByRole("checkbox", { name: "Attendee data access" })).toBeChecked();
+  });
+
+  test("sponsors: the companies list's Stages and Sponsorships column filters narrow the pipeline", async ({
+    page,
+  }) => {
+    const contactName = `E2E Sponsor Filter Contact ${Date.now()}`;
+
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto("/portal/#/sponsors");
+    await page.getByRole("button", { name: "Create sponsorship" }).click();
+    const form = page.getByRole("form", { name: "Create sponsorship" });
+    await form.getByLabel("Type").selectOption("event");
+    await form.getByLabel("Contact name").fill(contactName);
+    await form.getByLabel("Contact email").fill(`e2e-sponsor-filter-${Date.now()}@example.test`);
+    await form.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.locator(".my-toast", { hasText: "Sponsorship created" })).toBeVisible();
+
+    const companyRow = page.locator("tr").filter({ hasText: contactName });
+    await expect(companyRow).toBeVisible();
+
+    // A fresh sponsorship starts at pipeline_stage='new_inquiry', so the
+    // Stages filter keeps it under "New Inquiry" and drops it under any
+    // other stage.
+    await page.getByRole("button", { name: "Stages column options" }).click();
+    await page.getByRole("menuitemradio", { name: "New Inquiry" }).click();
+    await expect(companyRow).toBeVisible();
+    await page.getByRole("button", { name: "Stages column options" }).click();
+    await page.getByRole("menuitemradio", { name: "Contacted" }).click();
+    await expect(companyRow).toHaveCount(0);
+    await page.getByRole("button", { name: "Stages column options" }).click();
+    await page.getByRole("menuitemradio", { name: "All stages" }).click();
+    await expect(companyRow).toBeVisible();
+
+    // The Sponsorships column filters by sponsor type: this fixture is
+    // type "event", so "Event" keeps it and "Consortium" drops it.
+    await page.getByRole("button", { name: "Sponsorships column options" }).click();
+    await page.getByRole("menuitemradio", { name: "Event", exact: true }).click();
+    await expect(companyRow).toBeVisible();
+    await page.getByRole("button", { name: "Sponsorships column options" }).click();
+    await page.getByRole("menuitemradio", { name: "Consortium" }).click();
+    await expect(companyRow).toHaveCount(0);
+    await page.getByRole("button", { name: "Sponsorships column options" }).click();
+    await page.getByRole("menuitemradio", { name: "All types" }).click();
+    await expect(companyRow).toBeVisible();
+  });
+
+  test("sponsor tier pricing: view and edit the global Settings tab, distinct from a per-event tier", async ({
+    page,
+  }) => {
+    await page.context().clearCookies();
+    await signInToPortal(page, ADMIN_EMAIL);
+    await page.goto("/portal/#/sponsors");
+    // The Settings tab is in-page tab state (`Tabs`/`useState`), not its own
+    // URL — reached by activating the tab, not by navigating to it.
+    await page.getByRole("tab", { name: "Settings" }).click();
+
+    const pricing = page.getByRole("region", { name: "Sponsorship tier pricing" });
+    await expect(pricing).toBeVisible({ timeout: 15_000 });
+    // Each row's amount/currency/active controls sit in one `<td>` apiece,
+    // associated with the row's own `<form>` by the HTML `form` attribute
+    // rather than by DOM nesting under a shared row element — so "first
+    // amount field" and "first Save button" are addressed as two
+    // same-position locators instead of scoping one through the other.
+    const firstAmountField = pricing.getByRole("spinbutton", { name: /amount in cents$/ }).first();
+    const firstSave = pricing.getByRole("button", { name: "Save", exact: true }).first();
+    await expect(firstAmountField).toBeVisible();
+
+    const updatedAmount = "123456";
+    await firstAmountField.fill(updatedAmount);
+
+    const saveResponse = page.waitForResponse(
+      (response) =>
+        /\/api\/v1\/sponsors\/tiers\/[^/]+$/.test(new URL(response.url()).pathname) &&
+        response.request().method() === "PATCH",
+    );
+    await firstSave.click();
+    expect((await saveResponse).status()).toBe(200);
+    await expect(page.locator(".my-toast", { hasText: "saved" })).toBeVisible();
+
+    // The active tab is in-memory state, not part of the URL, so a reload
+    // lands back on Management — re-activate Settings before re-reading it.
+    await page.reload();
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(pricing).toBeVisible({ timeout: 15_000 });
+    await expect(pricing.getByRole("spinbutton", { name: /amount in cents$/ }).first()).toHaveValue(updatedAmount);
   });
 
   test("event team: assign and revoke a role through the canonical event resource", async ({ page }) => {
@@ -492,7 +584,7 @@ test.describe("Portal management browser-verification pass", () => {
     );
     await page.goto(`/portal/#/events/${EVENT_SLUG}/promoters`);
     expect((await loaded).status()).toBe(200);
-    await expect(page.getByText(/Active Promoters|No promoter activity yet/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Active promoters|No promoter activity yet/).first()).toBeVisible({ timeout: 15_000 });
     expect(legacyRequests).toEqual([]);
   });
 
@@ -628,15 +720,21 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(detail.getByText("Slogan", { exact: true })).toBeVisible();
     await expect(detail.getByText(newSlogan)).toBeVisible();
 
-    // Rejecting without a note is blocked client-side — confirms the
-    // required-note guard without spending this org's one pending review.
+    // Rejecting without a note is refused by the shared reject contract at
+    // the field, in the contract's own words, without spending this org's
+    // one pending review and without a request.
     await detail.getByRole("button", { name: "Reject" }).click();
-    await expect(page.locator(".my-toast", { hasText: "A reviewer note is required to reject" })).toBeVisible();
+    const reviewerNote = detail.getByLabel("Reviewer note");
+    await expect(reviewerNote).toHaveAttribute("aria-invalid", "true");
+    await expect(detail.getByRole("alert").filter({ hasText: "Write the reason for the rejection" })).toBeVisible();
 
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
 
-    await page.getByLabel("Review status").selectOption("approved");
+    // The status filter is the Status column's own menu; the approved
+    // submission is found by narrowing the column to it.
+    await page.getByRole("button", { name: "Status column options" }).click();
+    await page.getByRole("menuitemradio", { name: "Approved", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: orgName })).toBeVisible();
     expect(canonicalRequests).toContain("GET /api/v1/organizations/content-reviews");
     expect(
@@ -677,7 +775,10 @@ test.describe("Portal management browser-verification pass", () => {
     const primaryRow = page.locator("tr").filter({ hasText: primaryEmail });
     await expect(primaryRow).toBeVisible({ timeout: 10_000 });
     await primaryRow.click();
-    await expect(page.getByText(`Primary User ${stamp}`)).toBeVisible({ timeout: 10_000 });
+    // The record's name appears as the PageHeader title and again as the
+    // breadcrumb's current-page crumb (the trail ends at the record), so the
+    // assertion names the heading it means.
+    await expect(page.getByRole("heading", { name: `Primary User ${stamp}` })).toBeVisible({ timeout: 10_000 });
 
     // Located by role and accessible name rather than by `.card`/`.card-header`:
     // the panel is a named region now, and a role does not break the next time
@@ -735,10 +836,10 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveClass(/active/);
     // The shared table sends search/filter/pagination to the backend. The
-    // stage filter is sufficient here because every earlier fixture has
-    // already moved out of ec_review.
-    const stageFilter = page.locator("select").filter({ has: page.locator('option[value="ec_review"]') });
-    await stageFilter.selectOption("ec_review");
+    // stage filter — the Stage column's own menu — is sufficient here because
+    // every earlier fixture has already moved out of ec_review.
+    await page.getByRole("button", { name: "Stage column options" }).click();
+    await page.getByRole("menuitemradio", { name: "EC review", exact: true }).click();
     const row = page.locator("tr").filter({ hasText: email });
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.click();

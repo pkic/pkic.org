@@ -93,7 +93,9 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
 
   await page.goto("/portal/#/system/audit-log");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByRole("status")).toBeVisible();
+  // Loading is skeleton rows under the real headers, announced by `aria-busy`
+  // on the table — there is no spinner with a status role any more.
+  await expect(page.locator('table[aria-busy="true"]')).toBeVisible();
   releaseInitialRequest();
 
   // The pager is located by its role and accessible name, and the current

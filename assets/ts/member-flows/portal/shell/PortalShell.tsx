@@ -237,7 +237,9 @@ export function PortalShell() {
                       />
                     </SectionWrapper>
                   ) : (
-                    <SectionWrapper title="Organizations">
+                    // No section title: MyOrganization's own PageHeader names
+                    // the record, and the anatomy allows each name exactly once.
+                    <SectionWrapper>
                       <MyOrganization organizationId={params.organizationId} />
                     </SectionWrapper>
                   )
@@ -256,7 +258,7 @@ export function PortalShell() {
                       />
                     </SectionWrapper>
                   ) : (
-                    <SectionWrapper title="Organizations">
+                    <SectionWrapper>
                       <RepresentedOrganizations />
                     </SectionWrapper>
                   )
@@ -505,7 +507,7 @@ export function PortalShell() {
                   return actingOrganizationId ? (
                     <PortalRouteRedirect to={`/organizations/${encodeURIComponent(actingOrganizationId)}`} />
                   ) : (
-                    <SectionWrapper title="Organizations">
+                    <SectionWrapper>
                       <MyOrganization />
                     </SectionWrapper>
                   );

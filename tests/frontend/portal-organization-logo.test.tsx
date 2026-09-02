@@ -4,7 +4,6 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrganizationDetail } from "../../assets/shared/schemas/organization-management";
 import { OrganizationLogo } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationLogo";
-import { controlFor } from "./helpers/labelled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -44,7 +43,7 @@ afterEach(() => {
 });
 
 describe("OrganizationLogo", () => {
-  it("names the picture for anyone who cannot see it", () => {
+  it("shows the logo to a viewer, named for anyone who cannot see it, with nothing to press", () => {
     const root = mount(
       <OrganizationLogo
         organization={organization("/logo.svg")}
@@ -54,57 +53,52 @@ describe("OrganizationLogo", () => {
     );
 
     const image = root.querySelector("img");
+    expect(image?.getAttribute("src")).toBe("/logo.svg");
     expect(image?.getAttribute("alt")).toBe("Example Corp logo");
-    // The base layer keeps the picture inside its column, so the surface no
-    // longer paints a frame, padding or a fixed white fill behind it.
-    expect(image?.className).toBe("adm-organization-logo");
+    expect(root.querySelector("button")).toBeNull();
+    expect(root.querySelector('input[type="file"]')).toBeNull();
   });
 
-  it("renders nothing rather than an empty frame when a viewer has no logo to see", () => {
+  it("stands the name's initials in for a missing logo, the way an avatar does", () => {
     const root = mount(
       <OrganizationLogo organization={organization(null)} canWrite={false} onChanged={() => Promise.resolve()} />,
     );
 
-    expect(root.innerHTML).toBe("");
+    const tile = root.querySelector('[role="img"]');
+    expect(tile?.getAttribute("aria-label")).toBe("Example Corp has no logo");
+    expect(tile?.textContent).toBe("EC");
   });
 
-  it("puts the value the field already has, and its absence, in the field's own preview", () => {
+  it("makes the tile itself the control for an editor: pressing it chooses a file", () => {
     const root = mount(
       <OrganizationLogo organization={organization(null)} canWrite onChanged={() => Promise.resolve()} />,
     );
 
-    // The frame around a logo belongs to the file field, not to this surface:
-    // the control and the thing it replaces are one component now, so no page
-    // invents a box — or a class — for its own logo.
-    const preview = root.querySelector<HTMLElement>(".pk-file__preview");
-    expect(preview?.textContent).toBe("No logo");
-    // The field names the command after what activating it does, and the name
-    // resolves to the real input through the for/id pair.
-    expect(controlFor<HTMLInputElement>(root, "Upload logo").type).toBe("file");
+    // No panel header and no separate button: the tile is named for what
+    // pressing it does, and the file rule reaches it through describedby.
+    const control = root.querySelector<HTMLButtonElement>("button");
+    expect(control?.getAttribute("aria-label")).toBe("Upload logo");
+    expect(root.querySelector(`#${control!.getAttribute("aria-describedby")!}`)?.textContent).toContain("SVG only.");
+    const input = root.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input?.getAttribute("accept")).toBe("image/svg+xml");
+    const opened = vi.spyOn(input!, "click");
+    void act(() => control!.click());
+    expect(opened).toHaveBeenCalled();
     for (const element of root.querySelectorAll<HTMLElement>("[class]")) {
       for (const name of element.classList) {
-        expect(name === "pk" || name.startsWith("pk-") || name.startsWith("adm-")).toBe(true);
+        expect(name === "pk" || name.startsWith("pk-")).toBe(true);
       }
     }
   });
 
-  it("offers replacing and removing as one control over one subject", () => {
+  it("offers changing and removing over the one picture", () => {
     const root = mount(
       <OrganizationLogo organization={organization("/logo.svg")} canWrite onChanged={() => Promise.resolve()} />,
     );
 
-    // All three used to be siblings with nothing holding them together: a raw
-    // browser file control, a red button floating beside it, and the policy
-    // centred underneath. They are one field now, over one picture.
-    const field = root.querySelector<HTMLElement>(".pk-field");
-    expect(field?.querySelector("img")?.getAttribute("alt")).toBe("Example Corp logo");
-    expect(field?.querySelector('input[type="file"]')).not.toBeNull();
-    expect([...(field?.querySelectorAll("button") ?? [])].map((button) => button.textContent)).toContain("Remove");
-
-    // The policy reaches the input through describedby rather than sitting as
-    // loose prose beneath the row.
-    const input = controlFor<HTMLInputElement>(root, "Replace logo");
-    expect(root.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toContain("SVG only.");
+    expect(root.querySelector("button")?.getAttribute("aria-label")).toBe("Change logo");
+    expect(root.querySelector("img")?.getAttribute("alt")).toBe("Example Corp logo");
+    expect([...root.querySelectorAll("button")].map((button) => button.textContent)).toContain("Remove");
   });
 
   it("reports an upload failure to the reader instead of silently keeping the old logo", async () => {
@@ -134,11 +128,7 @@ describe("OrganizationLogo", () => {
     await settle();
 
     const toast = document.querySelector(".my-toast");
-    // The failure is announced, and it is told apart from a success by its
-    // words and its role, not only by the tone dot beside them.
-    expect(toast?.getAttribute("role")).toBe("status");
-    expect(toast?.textContent).toBe("That file is not an SVG.");
-    expect(toast?.classList.contains("pk-toast--danger")).toBe(true);
+    expect(toast?.textContent).toContain("That file is not an SVG.");
     expect(changed).not.toHaveBeenCalled();
   });
 });

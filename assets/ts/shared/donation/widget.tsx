@@ -89,7 +89,7 @@ function CompactCurrencySelect() {
 }
 
 function SharedControls() {
-  const customId = useId();
+  const prefixId = useId();
 
   return (
     <>
@@ -100,30 +100,32 @@ function SharedControls() {
       <div class="pk-cluster" data-donation-presets />
 
       {/*
-        Hand-rolled rather than a `Field`, because the label carries the live
-        currency symbol: `initDonationForm` rewrites the span's text whenever
-        the currency changes, and `Field` takes its label as a string. Naming
-        the control "Or enter a custom amount ($)" also beats the `aria-label`
-        this replaces, which said "Custom donation amount" while the symbol sat
-        in a separate box the name never mentioned. It is still the system's
-        `pk-field` group around a `pk-field__control` box, so the parts the
-        component would have rendered are the ones written here.
+        The currency symbol is live: `initDonationForm` rewrites it whenever
+        the donor picks another currency, and `Field` takes its label as a
+        string, so the symbol cannot ride in the label. It sits in the control
+        box in front of the amount instead, and the control describes itself
+        by it, so a reader hears the field's name and then the currency it is
+        in. The inner span is the one the behaviour rewrites; the space that
+        keeps the symbol off the box stays outside it.
       */}
-      <div class="pk-field">
-        <label class="pk-field__label" for={customId}>
-          Or enter a custom amount (<span data-donation-currency-prefix>$</span>)
-        </label>
-        <div class="pk-field__control">
-          <TextInput
-            id={customId}
-            type="number"
-            data-donation-custom-input
-            placeholder="Other amount"
-            min={1}
-            step={1}
-          />
-        </div>
-      </div>
+      <Field label="Or enter a custom amount">
+        {(control) => (
+          <>
+            <span id={prefixId} class="pk-muted">
+              <span data-donation-currency-prefix>$</span>&nbsp;
+            </span>
+            <TextInput
+              {...control}
+              type="number"
+              data-donation-custom-input
+              placeholder="Other amount"
+              min={1}
+              step={1}
+              aria-describedby={prefixId}
+            />
+          </>
+        )}
+      </Field>
 
       <Button variant="primary" block data-donation-submit>
         Donate

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { EventFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, controlFor, openCombobox, typeInto } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -142,9 +142,7 @@ describe("portal event form placement management", () => {
     await settle();
 
     // The selector is named by a real label, not by a placeholder option.
-    expect(controlFor<HTMLSelectElement>(container, "Proposal submission questions").tagName.toLowerCase()).toBe(
-      "select",
-    );
+    expect(controlFor(container, "Proposal submission questions").getAttribute("role")).toBe("combobox");
     // Each disclosure button says whether the thing it opens is open.
     const create = buttonNamed(container, "Create proposal form");
     expect(create.getAttribute("aria-expanded")).toBe("false");
@@ -184,7 +182,7 @@ describe("portal event form placement management", () => {
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain("The service is temporarily unavailable.");
     // No selector is drawn for a placement that was never read.
-    expect(container.querySelector("select")).toBeNull();
+    expect(container.querySelector('[role="combobox"]')).toBeNull();
   });
 
   it("selects an available form through the server-backed catalog", async () => {
@@ -216,10 +214,9 @@ describe("portal event form placement management", () => {
     );
     await settle();
     await settle();
-    const select = controlFor<HTMLSelectElement>(container, "Proposal submission questions");
-    expect(select.querySelectorAll("option")).toHaveLength(3);
-    select.value = "30000000-0000-4000-8000-000000000002";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    // Both catalog forms plus the pick-nothing placeholder are listed.
+    expect(await openCombobox(container, "Proposal submission questions")).toHaveLength(3);
+    await chooseComboboxOption(container, "Proposal submission questions", "30000000-0000-4000-8000-000000000002");
     await settle();
     await act(async () => buttonNamed(container, "Save proposal form").click());
     await settle();
@@ -272,9 +269,8 @@ describe("portal event form placement management", () => {
     expect(requests.some(({ path }) => path.endsWith("/registration-settings"))).toBe(false);
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin"))).toBe(false);
 
-    const select = controlFor<HTMLSelectElement>(container, "Registration questions");
-    select.value = "";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    // Choosing the pick-nothing option is how a placement is cleared.
+    await chooseComboboxOption(container, "Registration questions", "");
     await settle();
     await act(async () => buttonNamed(container, "Save registration form").click());
     await settle();
@@ -333,9 +329,7 @@ describe("portal event form placement management", () => {
     );
     await settle();
     expect(container.textContent).toContain("Proposal submission questions");
-    expect(controlFor<HTMLSelectElement>(container, "Proposal submission questions").tagName.toLowerCase()).toBe(
-      "select",
-    );
+    expect(controlFor(container, "Proposal submission questions").getAttribute("role")).toBe("combobox");
 
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
     await settle();

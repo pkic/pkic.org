@@ -11,7 +11,12 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * asserts the exact accessible name the row is required to expose.
  */
 export async function openRow(row: Locator, actionName: string): Promise<void> {
-  const control = row.getByRole("button", { name: actionName, exact: true });
+  // A row that navigates carries a link (so it can be opened in a new tab);
+  // one that swaps state on the page carries a button. Both stretch across
+  // the row under the same accessible name.
+  const control = row
+    .getByRole("link", { name: actionName, exact: true })
+    .or(row.getByRole("button", { name: actionName, exact: true }));
   await expect(control).toBeVisible();
   await control.focus();
   await control.press("Enter");

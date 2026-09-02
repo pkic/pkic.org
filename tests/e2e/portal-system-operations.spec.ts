@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { runRowAction } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
 
@@ -46,31 +47,38 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
 
   await tab(page, "Scheduled Jobs").click();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/scheduler/jobs")).toBe(true);
-  const jobRow = page.getByRole("row", { name: /Working Group Chair Digest/ });
+  // The pause form expands as the job's own detail row, so the data row is
+  // anchored to its `…` menu — the one control the detail row does not carry —
+  // to stay unique while the form is open.
+  const jobRow = page
+    .getByRole("row", { name: /Working Group Chair Digest/ })
+    .filter({ has: page.getByRole("button", { name: "Actions for Working Group Chair Digest" }) });
   await expect(jobRow).toBeVisible();
   let paused = false;
   try {
-    await jobRow.getByRole("button", { name: "Pause", exact: true }).click();
-    await jobRow.getByLabel("Pause reason").fill("browser verification of scheduler controls");
+    // Row commands live behind the row's `…` menu, like every other list.
+    await runRowAction(page, jobRow, "Pause");
+    const pauseForm = page.getByRole("form", { name: "Pause Working Group Chair Digest" });
+    await pauseForm.getByLabel("Pause reason").fill("browser verification of scheduler controls");
     const pauseResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
         new URL(response.url()).pathname === "/api/v1/scheduler/jobs/working_group_chair_digest",
     );
-    await jobRow.getByRole("button", { name: "Confirm pause" }).click();
+    await pauseForm.getByRole("button", { name: "Confirm pause" }).click();
     expect((await pauseResponse).status()).toBe(200);
     paused = true;
-    await expect(jobRow.getByRole("button", { name: "Resume" })).toBeVisible();
+    await expect(jobRow.getByText("Paused", { exact: true })).toBeVisible();
 
     const resumeResponse = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
         new URL(response.url()).pathname === "/api/v1/scheduler/jobs/working_group_chair_digest",
     );
-    await jobRow.getByRole("button", { name: "Resume" }).click();
+    await runRowAction(page, jobRow, "Resume");
     expect((await resumeResponse).status()).toBe(200);
     paused = false;
-    await expect(jobRow.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await expect(jobRow.getByText("Active", { exact: true })).toBeVisible();
   } finally {
     if (paused) {
       await page.request.patch("/api/v1/scheduler/jobs/working_group_chair_digest", {

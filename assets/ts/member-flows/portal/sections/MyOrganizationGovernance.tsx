@@ -59,14 +59,13 @@ function SecondaryContactSection({
   const nominee = identities.find((identity) => identity.userId === org.pendingSecondaryContactUserId);
   return (
     <div class="pk-stack pk-stack--snug">
-      <h4>Secondary contact</h4>
       {org.isPrimaryContact ? (
         // The selector used to carry no label at all — only the heading above
         // it, which a screen reader does not attach to a control. The Field
         // supplies the for/id pair and hangs the explanation off the control
         // through aria-describedby rather than leaving it as loose prose.
         <Field
-          label="Nominated secondary contact"
+          label="Nominee"
           help="A second organization identity that can manage the organization profile. Nominations are held until confirmed by staff."
         >
           {(control) => (
@@ -149,8 +148,8 @@ export function OrganizationGovernanceCard({
   reload: () => Promise<void>;
 }) {
   return (
-    <Panel class="pk" aria-label="Governance">
-      <PanelHeader title="Governance" />
+    <Panel class="pk" aria-label="Secondary contact">
+      <PanelHeader title="Secondary contact" />
       <PanelBody class="pk-stack pk-stack--loose">
         <SecondaryContactSection organizationId={organizationId} org={org} reload={reload} />
       </PanelBody>

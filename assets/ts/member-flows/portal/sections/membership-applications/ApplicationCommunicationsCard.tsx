@@ -1,9 +1,12 @@
 import { useState } from "preact/hooks";
 import { fmt } from "../../ui";
-import type {
-  MembershipApplicationCommunication,
-  MembershipApplicationDetail,
+import {
+  applicationCommunicationCreateSchema,
+  applicationNoteCreateSchema,
+  type MembershipApplicationCommunication,
+  type MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { Alert } from "../../../../ui/Alert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
@@ -31,9 +34,10 @@ const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
  *
  * Both forms used to fail silently — a blank subject returned from the submit
  * handler with nothing said, and a rejected send left the fields full with no
- * explanation. Each control now names itself through a Field, an empty
- * required value is reported on the control it belongs to, and a failed
- * request is announced instead of discarded.
+ * explanation. Each control now names itself through a Field, each form is
+ * checked by the request contract its route parses, an empty required value
+ * is reported on the control it belongs to, and a failed request is announced
+ * instead of discarded.
  */
 export function ApplicationCommunicationsCard({
   detail,
@@ -48,35 +52,37 @@ export function ApplicationCommunicationsCard({
 }) {
   const [commSubject, setCommSubject] = useState("");
   const [commBody, setCommBody] = useState("");
-  const [commAttempted, setCommAttempted] = useState(false);
   const [commSending, setCommSending] = useState(false);
   const [commError, setCommError] = useState("");
+  const communication = useContractForm(applicationCommunicationCreateSchema, {
+    subject: commSubject,
+    body: commBody,
+  });
 
   const [noteBody, setNoteBody] = useState("");
-  const [noteAttempted, setNoteAttempted] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState("");
-
-  const subjectMissing = commAttempted && commSubject.trim() === "";
-  const bodyMissing = commAttempted && commBody.trim() === "";
-  const noteMissing = noteAttempted && noteBody.trim() === "";
+  const note = useContractForm(applicationNoteCreateSchema, { body: noteBody });
 
   async function submitCommunication(event: Event) {
     event.preventDefault();
     // A loading Button stays focusable and therefore clickable, so the guard
     // against sending the same message twice belongs here rather than on it.
     if (commSending) return;
-    setCommAttempted(true);
     setCommError("");
-    if (!commSubject.trim() || !commBody.trim()) return;
+    const checked = communication.submit();
+    if (!checked.data) {
+      setCommError(checked.message);
+      return;
+    }
     setCommSending(true);
     try {
-      await onSendCommunication({ subject: commSubject.trim(), body: commBody.trim() });
+      await onSendCommunication(checked.data);
       setCommSubject("");
       setCommBody("");
-      setCommAttempted(false);
+      communication.reset();
     } catch (error) {
-      setCommError((error as Error).message);
+      setCommError(communication.refuse(error));
     } finally {
       setCommSending(false);
     }
@@ -85,16 +91,19 @@ export function ApplicationCommunicationsCard({
   async function submitNote(event: Event) {
     event.preventDefault();
     if (noteSaving) return;
-    setNoteAttempted(true);
     setNoteError("");
-    if (!noteBody.trim()) return;
+    const checked = note.submit();
+    if (!checked.data) {
+      setNoteError(checked.message);
+      return;
+    }
     setNoteSaving(true);
     try {
-      await onAddNote(noteBody.trim());
+      await onAddNote(checked.data.body);
       setNoteBody("");
-      setNoteAttempted(false);
+      note.reset();
     } catch (error) {
-      setNoteError((error as Error).message);
+      setNoteError(note.refuse(error));
     } finally {
       setNoteSaving(false);
     }
@@ -145,18 +154,19 @@ export function ApplicationCommunicationsCard({
 
           {canWrite && (
             <>
-              <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submitCommunication(event)}>
+              <form
+                noValidate
+                class="pk-stack pk-stack--snug"
+                {...communication.handlers}
+                onSubmit={(event) => void submitCommunication(event)}
+              >
                 <h4>Send communication</h4>
                 <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={commSending}>
-                  <Field
-                    label="Subject"
-                    required
-                    state={subjectMissing ? "invalid" : undefined}
-                    message={subjectMissing ? "Enter a subject for the email." : undefined}
-                  >
+                  <Field label="Subject" required {...communication.of("subject")}>
                     {(control) => (
                       <TextInput
                         {...control}
+                        name="subject"
                         value={commSubject}
                         onInput={(event) => setCommSubject((event.target as HTMLInputElement).value)}
                       />
@@ -166,12 +176,12 @@ export function ApplicationCommunicationsCard({
                     label="Message"
                     required
                     help="Emailed to the applicant and recorded on this timeline."
-                    state={bodyMissing ? "invalid" : undefined}
-                    message={bodyMissing ? "Enter the message to send." : undefined}
+                    {...communication.of("body")}
                   >
                     {(control) => (
                       <Textarea
                         {...control}
+                        name="body"
                         rows={2}
                         value={commBody}
                         onInput={(event) => setCommBody((event.target as HTMLTextAreaElement).value)}
@@ -187,19 +197,24 @@ export function ApplicationCommunicationsCard({
                 </div>
               </form>
 
-              <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submitNote(event)}>
+              <form
+                noValidate
+                class="pk-stack pk-stack--snug"
+                {...note.handlers}
+                onSubmit={(event) => void submitNote(event)}
+              >
                 <h4>Add internal note</h4>
                 <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={noteSaving}>
                   <Field
                     label="Internal note"
                     required
                     help="Never emailed. Visible to staff only."
-                    state={noteMissing ? "invalid" : undefined}
-                    message={noteMissing ? "Enter the note to record." : undefined}
+                    {...note.of("body")}
                   >
                     {(control) => (
                       <Textarea
                         {...control}
+                        name="body"
                         rows={2}
                         value={noteBody}
                         onInput={(event) => setNoteBody((event.target as HTMLTextAreaElement).value)}

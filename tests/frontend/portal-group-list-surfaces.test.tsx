@@ -90,18 +90,16 @@ describe("the participant roster", () => {
 
     expect(page.querySelector("section")?.getAttribute("aria-label")).toBe("Members");
 
-    // The name used to be visually hidden, which is a name a sighted reader
-    // cannot use either. It is reached through the `for`/`id` pair now.
+    // The roster is the shared list panel now: its search is the toolbar's,
+    // labelled for the collection it filters.
     const search = controlFor(page, "Search members");
     expect(search.type).toBe("search");
-    const describedBy = search.getAttribute("aria-describedby");
-    expect(page.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain("organization they represent");
 
-    // The roster is announced as a list without the bullet a `<ul>` would put
-    // beside every face.
-    expect(page.querySelector('[role="list"]')).toBeTruthy();
-    expect(page.querySelectorAll('[role="listitem"]')).toHaveLength(1);
+    // A roster is a table — one row per member, the organization they
+    // represent beside them — with a caption that names it.
+    expect(page.querySelector("table caption")?.textContent).toBe("Members");
     expect(page.textContent).toContain("Ada Lovelace");
+    expect(page.textContent).toContain("Example Corp");
   });
 
   it("replaces the roster with the failure rather than claiming nobody matched", async () => {
@@ -112,7 +110,7 @@ describe("the participant roster", () => {
     const page = mount(<GroupMembersRoster groupId={GROUP_ID} />);
     await settle();
 
-    expect(page.textContent).not.toContain("No matching members.");
+    expect(page.textContent).not.toContain("No matching members");
     expect(page.querySelector('[role="alert"]')?.textContent).toContain("Not a participant here.");
   });
 
@@ -124,7 +122,7 @@ describe("the participant roster", () => {
     const page = mount(<GroupMembersRoster groupId={GROUP_ID} />);
     await settle();
 
-    expect(page.querySelector('[role="status"]')?.textContent).toContain("No matching members.");
+    expect(page.querySelector('[role="status"], .pk-table__empty')?.textContent).toContain("No matching members");
   });
 });
 
@@ -161,7 +159,7 @@ describe("the meeting series list", () => {
     return { series: rows, page: { limit: 50, offset: 0, total: rows.length, hasMore: false } };
   }
 
-  it("names each row's calendar and details control after the series", async () => {
+  it("names each row's record link and calendar control after the series", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(listResponse([series()]))),
@@ -171,12 +169,12 @@ describe("the meeting series list", () => {
 
     expect(page.querySelector("caption")?.textContent).toBe("Meeting series");
 
-    // The row itself opens the detail; the calendar download lives behind
-    // the row's menu, whose trigger names the series.
-    const rowLink = [...page.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find(
-      (control) => control.textContent === "Show details for Monthly sync",
+    // The row is a link to the series' own page; the calendar download lives
+    // behind the row's menu, whose trigger names the series.
+    const rowLink = [...page.querySelectorAll<HTMLAnchorElement>("a.pk-table__row-link")].find(
+      (control) => control.textContent === "Open Monthly sync",
     );
-    expect(rowLink).toBeTruthy();
+    expect(rowLink?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${SERIES_ID}`);
     expect(page.querySelector('button[aria-label="Actions for Monthly sync"]')).toBeTruthy();
   });
 
@@ -325,17 +323,15 @@ describe("the event form picker", () => {
     );
     await settle();
 
-    // A bare `<div>` cannot carry a name, so the pair is a named group and the
-    // sentence is its description rather than text floating below a control.
-    const group = page.querySelector('[role="group"]')!;
-    expect(group.getAttribute("aria-label")).toBe("Registration form");
-    const describedBy = group.getAttribute("aria-describedby");
+    // The picker is a design-system Field: the combobox is reached through
+    // the label that names it, and the sentence is the field's help, which
+    // the control describes itself by rather than text floating below it.
+    const picker = controlFor(page, "Registration form");
+    expect(picker.getAttribute("role")).toBe("combobox");
+    const describedBy = picker.getAttribute("aria-describedby");
     expect(page.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
       "Choose the form this event should use for registrations.",
     );
-
-    // The select inside it is still reached through its own label.
-    expect(controlFor<HTMLSelectElement>(page, "Registration form").tagName.toLowerCase()).toBe("select");
   });
 
   it("surfaces a catalog that could not be loaded", async () => {
@@ -404,12 +400,13 @@ describe("the group forms and votes collections", () => {
     expect(container.querySelector('section[aria-label="Group forms"]')).toBeTruthy();
     expect(container.querySelector("caption")?.textContent).toBe("Group forms");
 
-    // The row itself is the control that opens the form's detail, and its
-    // name says which form — not a column of buttons all called "Details".
-    const rowLink = [...container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find(
-      (control) => control.textContent === "Show details for Architecture survey",
+    // The row itself is the control that opens the form's record page, and
+    // its name says which form — a link, so it can be opened in a new tab.
+    const rowLink = [...container.querySelectorAll<HTMLAnchorElement>("a.pk-table__row-link")].find(
+      (control) => control.textContent === "Open Architecture survey",
     );
     expect(rowLink).toBeTruthy();
+    expect(rowLink?.getAttribute("href")).toContain(`/groups/${GROUP_ID}/forms/`);
   });
 
   it("switches the votes sections as a tab set, with the panel pointing back at its tab", async () => {

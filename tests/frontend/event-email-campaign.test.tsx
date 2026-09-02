@@ -8,6 +8,7 @@ import {
   eventEmailCampaignPreviewInputSchema,
 } from "../../assets/shared/schemas/event-email-campaigns";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -53,6 +54,11 @@ async function inputText(element: HTMLInputElement | HTMLTextAreaElement, value:
     element.value = value;
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+/** The send gate: the one checkbox on the surface, or null before a preview exists. */
+function confirmationBox(container: HTMLElement): HTMLInputElement | null {
+  return container.querySelector<HTMLInputElement>('input[type="checkbox"]');
 }
 
 function clickButton(container: HTMLElement, label: string): Promise<void> {
@@ -119,11 +125,8 @@ function stubCampaignFetch(routes: { previews: () => Response; campaigns?: () =>
 
 /** Fills subject and body, then renders a preview. */
 async function composeAndPreview(container: HTMLElement): Promise<void> {
-  await inputText(
-    container.querySelector<HTMLInputElement>('input[placeholder="Email subject"]')!,
-    "Working group update",
-  );
-  await inputText(container.querySelector<HTMLTextAreaElement>("textarea")!, "Hello {{firstName}}");
+  await inputText(controlFor(container, "Subject"), "Working group update");
+  await inputText(controlFor<HTMLTextAreaElement>(container, "Message"), "Hello {{firstName}}");
   await clickButton(container, "Preview Email");
   await settle();
 }
@@ -155,7 +158,7 @@ describe("event email campaign UI", () => {
     expect(previewInput.subjectOverride).toBe("Working group update");
     expect(previewInput.sendMode).toBe("personal");
 
-    const confirmation = container.querySelector<HTMLInputElement>("#em-confirm")!;
+    const confirmation = confirmationBox(container)!;
     await act(async () => confirmation.click());
     await clickButton(container, "Send Email");
     await settle();
@@ -186,20 +189,32 @@ describe("event email campaign UI", () => {
     const live = container.querySelector('[role="status"]')!;
     expect(live.textContent).toContain("Preview ready");
 
-    // The confirmation gate is a real labelled checkbox, not a bare box.
-    const confirmation = container.querySelector<HTMLInputElement>("#em-confirm")!;
-    expect(confirmation.type).toBe("checkbox");
+    // The confirmation gate is the design system's checkbox: the label wraps
+    // the control, so the whole line is the hit target.
+    const confirmation = confirmationBox(container)!;
     expect(confirmation.classList.contains("pk-check__input")).toBe(true);
-    const label = container.querySelector<HTMLLabelElement>('label[for="em-confirm"]')!;
-    expect(label.classList.contains("pk-check__label")).toBe(true);
-    expect(label.textContent).toContain("confirm sending");
+    const label = confirmation.closest("label")!;
+    expect(label.classList.contains("pk-check")).toBe(true);
+    expect(label.querySelector(".pk-check__label")?.textContent).toContain("confirm sending");
 
-    // Every control the surface owns carries a name.
-    const named = [...container.querySelectorAll<HTMLElement>("[id^='event-email-campaign-']")];
-    expect(named.length).toBeGreaterThan(5);
-    for (const control of named) {
-      expect(container.querySelector(`label[for="${control.id}"]`)).not.toBeNull();
-    }
+    // Every control the surface owns is named through its own label, and each
+    // label resolves to its control — the lookup fails exactly when the
+    // for/id pair is broken.
+    const names = [
+      "Template",
+      "Delivery mode",
+      "Message type",
+      "Subject",
+      "Message",
+      "Registration status",
+      "Attendance type",
+      "Specific day",
+      "Day waitlist",
+    ];
+    expect(labelNames(container)).toEqual(expect.arrayContaining(names));
+    for (const name of names) controlFor(container, name);
+    expect(controlFor<HTMLTextAreaElement>(container, "Message").tagName).toBe("TEXTAREA");
+    expect(controlFor(container, "Template").getAttribute("role")).toBe("combobox");
   });
 
   it("reports a failed preview and keeps the send gate closed", async () => {
@@ -217,7 +232,7 @@ describe("event email campaign UI", () => {
     expect(notify).toHaveBeenCalledWith("Recipient query failed.", "error");
     // No preview means no confirmation checkbox, and the send button stays
     // disabled: a failed preview can never become a send.
-    expect(container.querySelector("#em-confirm")).toBeNull();
+    expect(confirmationBox(container)).toBeNull();
     const send = [...container.querySelectorAll("button")].find((button) => button.textContent === "Send Email")!;
     expect(send.disabled).toBe(true);
   });
@@ -233,7 +248,7 @@ describe("event email campaign UI", () => {
       <EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} notify={notify} />,
     );
     await composeAndPreview(container);
-    await act(async () => container.querySelector<HTMLInputElement>("#em-confirm")!.click());
+    await act(async () => confirmationBox(container)!.click());
     await clickButton(container, "Send Email");
     await settle();
 

@@ -159,7 +159,7 @@ describe("proposal speaker removal UI", () => {
     // used to carry: the class is gone and a name cannot silently disappear
     // without the control becoming unusable anyway.
     const fetchGravatar = [...root.querySelectorAll("button")].find(
-      (button) => button.textContent === "🌐 Fetch from Gravatar",
+      (button) => button.textContent === "Fetch from Gravatar",
     );
     expect(fetchGravatar).toBeDefined();
     await act(() => fetchGravatar!.click());

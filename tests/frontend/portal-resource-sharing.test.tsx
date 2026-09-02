@@ -10,7 +10,7 @@ import {
 } from "../../assets/shared/schemas/resource-grants";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ResourceSharingEditor } from "../../assets/ts/member-flows/portal/sections/management/ResourceSharingEditor";
-import { buttonNamed, chooseOption, controlFor } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, chooseOption, controlFor } from "./helpers/labelled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const OWNER_GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -157,12 +157,11 @@ describe("portal resource sharing editor", () => {
       "true",
     );
 
-    // Both selects are resolved through the `for`/`id` pair that names them,
-    // so the lookup fails exactly when the labelling is broken.
+    // Both controls are resolved through the `for`/`id` pair that names
+    // them, so the lookup fails exactly when the labelling is broken.
     const capabilitySelect = controlFor<HTMLSelectElement>(container, "Capability");
     expect([...capabilitySelect.options].map((option) => option.value)).toContain(selectedCapability);
-    const groupSelect = controlFor<HTMLSelectElement>(container, "Group");
-    await chooseOption(groupSelect, GRANTEE_GROUP_ID);
+    await chooseComboboxOption(container, "Group", GRANTEE_GROUP_ID);
     await chooseOption(capabilitySelect, selectedCapability);
     await act(async () => buttonNamed(container, "Share").click());
     await settle();
@@ -221,7 +220,7 @@ describe("portal resource sharing editor", () => {
     await settle();
     await settle();
 
-    await chooseOption(controlFor<HTMLSelectElement>(container, "Group"), GRANTEE_GROUP_ID);
+    await chooseComboboxOption(container, "Group", GRANTEE_GROUP_ID);
     await act(async () => buttonNamed(container, "Share").click());
     await settle();
 

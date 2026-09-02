@@ -18,6 +18,7 @@ import {
 } from "../../assets/shared/schemas/event-series";
 import { MeetingAttendance } from "../../assets/ts/member-flows/portal/sections/management/MeetingAttendance";
 import { MeetingOccurrenceDetail } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceDetail";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { isCurrentTab, tabs } from "./helpers/tabs";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
@@ -168,7 +169,7 @@ describe("meeting occurrence attendance", () => {
     expect(container.querySelector("tbody")?.textContent).toContain("Verified");
   });
 
-  it("names the verification filter and sends the choice to the attendance query", async () => {
+  it("narrows by verification from the Attendance column and sends the choice to the attendance query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -181,19 +182,19 @@ describe("meeting occurrence attendance", () => {
     const container = mount(<MeetingAttendance base={BASE} occurrence={guestOccurrence()} />);
     await settle();
 
-    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Attendance verification"]')!;
-    expect(filter).not.toBeNull();
+    // No select above the table: the filter lives in the menu of the column
+    // that states verification.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    expect(columnFilterOptions(container, "Attendance")).toEqual(["All attendance", "Verified", "Not verified"]);
     // The default view is the server default: no `verified` parameter at all.
     expect(requests.some((url) => url.searchParams.has("verified"))).toBe(false);
 
-    filter.value = "false";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(container, "Attendance", "Not verified");
     await settle();
 
-    expect(requests.some((url) => url.searchParams.get("verified") === "false")).toBe(true);
+    expect(requests.at(-1)?.searchParams.get("verified")).toBe("false");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(columnFilterSummary(container, "Attendance")).toBe("Not verified");
   });
 
   it("states a refused attendance listing as a sentence rather than an empty table", async () => {

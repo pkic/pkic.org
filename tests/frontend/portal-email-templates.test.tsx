@@ -12,8 +12,9 @@
 import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { emailTemplateVersionSchema } from "../../assets/shared/schemas/email-templates";
+import { emailTemplateCreateSchema, emailTemplateVersionSchema } from "../../assets/shared/schemas/email-templates";
 import { EmailTemplates } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplates";
+import { submitForm } from "./helpers/labelled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -149,12 +150,15 @@ describe("portal email templates", () => {
     const created = requests.find(({ method }) => method === "POST");
     expect(created?.url.pathname).toBe(`/api/v1/email/templates/${templateKey}/versions`);
     // Parsed through the shared request schema, so a body that drifts from the
-    // contract fails here rather than at the endpoint.
-    expect(emailTemplateVersionSchema.parse(JSON.parse(created!.body!))).toEqual({
+    // contract fails here rather than at the endpoint; the key rides the path,
+    // and together they are the create contract the form validated through.
+    const body = JSON.parse(created!.body!);
+    expect(emailTemplateVersionSchema.parse(body)).toEqual({
       content: "Write-only template body",
       contentType: "markdown",
       messageType: "transactional",
     });
+    expect(emailTemplateCreateSchema.parse({ key: templateKey, ...body }).key).toBe(templateKey);
     expect(container!.textContent).toContain("Template created");
   });
 
@@ -225,7 +229,7 @@ describe("portal email templates", () => {
     await settle();
 
     expect(container!.textContent).toContain(`Edit: ${templateKey}`);
-    expect(container!.querySelector<HTMLTextAreaElement>("#email-template-editor-body")?.value).toBe(version.body);
+    expect(labelled<HTMLTextAreaElement>(container!, "Body").value).toBe(version.body);
   });
 
   it("blocks and announces a key the catalog already holds", async () => {
@@ -298,6 +302,74 @@ describe("portal email templates", () => {
     expect(container!.textContent).not.toContain("Template created");
   });
 
+  it("refuses an empty body and an empty key at the fields, and sends nothing", async () => {
+    const fetchMock = vi.fn(() => {
+      throw new Error("no request expected");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    mount(<EmailTemplates canRead={false} canWrite />);
+    await settle();
+
+    // Submitted past the browser's own `required` check, so the contract is
+    // what refuses the empty fields.
+    await submitForm(container!);
+
+    // Refused by the create contract on each field it names, in its words.
+    const bodyInput = labelled<HTMLTextAreaElement>(container!, "Body");
+    expect(bodyInput.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(bodyInput.getAttribute("aria-invalid")).toBe("true");
+    const bodyMessage = byId(container!, bodyInput.getAttribute("aria-describedby") ?? "");
+    expect(bodyMessage?.getAttribute("role")).toBe("alert");
+    expect(bodyMessage?.textContent).toContain("Body cannot be empty");
+    const keyInput = labelled<HTMLInputElement>(container!, "Template key");
+    expect(keyInput.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    // The first refused field takes focus.
+    expect(document.activeElement).toBe(keyInput);
+  });
+
+  it("marks the field a server refusal names and keeps the draft", async () => {
+    let posted = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        posted += 1;
+        return json(
+          {
+            error: {
+              code: "VALIDATION",
+              message: "Invalid request",
+              details: { fieldErrors: { content: ["Body is too long."] } },
+            },
+          },
+          400,
+        );
+      }),
+    );
+
+    mount(<EmailTemplates canRead={false} canWrite />);
+    await settle();
+
+    await typeInto(labelled<HTMLInputElement>(container!, "Template key"), "refused_template");
+    await typeInto(labelled<HTMLTextAreaElement>(container!, "Body"), "Body copy");
+    await act(async () => {
+      button(container!, "Create Template").click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await settle();
+
+    expect(posted).toBe(1);
+    const bodyInput = labelled<HTMLTextAreaElement>(container!, "Body");
+    expect(bodyInput.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(byId(container!, bodyInput.getAttribute("aria-describedby") ?? "")?.textContent).toContain(
+      "Body is too long.",
+    );
+    expect(document.activeElement).toBe(bodyInput);
+    expect(bodyInput.value).toBe("Body copy");
+    expect(container!.textContent).not.toContain("Template created");
+  });
+
   it("uses the canonical system API and keeps read-only users away from preview and writes", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
@@ -361,9 +433,8 @@ describe("portal email templates", () => {
     await settle();
 
     expect(requests.every((url) => url.pathname.startsWith("/api/v1/email/templates"))).toBe(true);
-    expect(container!.querySelector("#email-template-editor-body")).not.toBeNull();
-    expect(container!.querySelector("#email-template-editor-body")?.getAttribute("readonly")).not.toBeNull();
-    expect(container!.querySelector("#email-template-preview-data")).toBeNull();
+    expect(labelled<HTMLTextAreaElement>(container!, "Body").readOnly).toBe(true);
+    expect(fieldLabels(container!).some((label) => label.textContent?.startsWith("Preview data"))).toBe(false);
     expect(container!.textContent).not.toContain("Render Preview");
     expect(container!.textContent).not.toContain("Save as Draft");
     expect(container!.textContent).not.toContain("Activate");

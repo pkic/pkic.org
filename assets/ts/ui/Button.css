@@ -134,6 +134,13 @@
   .pk-btn--lg {
     font-size: var(--pk-text-lg);
     padding: calc(var(--pk-control-y) * 1.5) calc(var(--pk-control-x) * 1.4);
+    /* Large is the marketing size — heroes, banners, checkout steps — and its
+       labels are sentences, not verbs. The base `nowrap` is right for control
+       rows, but a sentence that cannot wrap pushes past a phone viewport (the
+       sponsors hero's CTA was a 403px button on a 375px screen), so the large
+       button wraps like the text it carries. */
+    white-space: normal;
+    text-align: center;
   }
 
   .pk-btn--icon {

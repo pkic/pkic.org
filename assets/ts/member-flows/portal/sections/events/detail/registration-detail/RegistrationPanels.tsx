@@ -4,14 +4,22 @@ import { Badge } from "../../../../../../components/Badge";
 import { getJson, patchJson } from "../../../../../../shared/api-client";
 import { toast } from "../../../../ui";
 import type { BadgeRoleInfo } from "../../types";
+import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { useData } from "../../../../../../hooks/useData";
 import { AuditLogTable } from "../../../../../../components/AuditLogTable";
 import { DetailsSummary } from "../../../../../../components/DetailsSummary";
+import { Alert } from "../../../../../../ui/Alert";
 import { Button } from "../../../../../../ui/Button";
 import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
-import { registrationBadgeResponseSchema } from "../../../../../../../shared/schemas/participant-roles";
-import { eventRegistrationManagementUpdateResponseSchema } from "../../../../../../../shared/schemas/route-contracts-event-registration-management";
+import {
+  registrationBadgePatchSchema,
+  registrationBadgeResponseSchema,
+} from "../../../../../../../shared/schemas/participant-roles";
+import {
+  eventRegistrationManagementUpdateResponseSchema,
+  eventRegistrationManagementUpdateSchema,
+} from "../../../../../../../shared/schemas/route-contracts-event-registration-management";
 import { eventRegistrationPath, eventRegistrationResourcePath } from "../registration-paths";
 
 /** "co_speaker" → "Co-speaker". */
@@ -23,7 +31,10 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
   const [info, setInfo] = useState<BadgeRoleInfo | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("");
+  const [saveError, setSaveError] = useState("");
+  // The badge patch contract the route parses decides what the control
+  // shows and what Save may send; an empty choice is the explicit null.
+  const form = useContractForm(registrationBadgePatchSchema, { role: selectedRole || null });
 
   const { loading } = useData(
     () =>
@@ -36,19 +47,27 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
   );
 
   async function handleSave() {
+    const checked = form.submit();
+    if (!checked.data) {
+      setSaveError(checked.message);
+      return;
+    }
     setSaving(true);
-    setSaveStatus("");
+    setSaveError("");
     try {
       const res = await patchJson(
         eventRegistrationResourcePath(slug, regId, "badge"),
-        { role: selectedRole || null },
+        checked.data,
         registrationBadgeResponseSchema,
       );
       setInfo(res);
       setSelectedRole(res.admin_override ?? "");
+      form.reset();
       toast("Badge role updated", "success");
     } catch (e) {
-      setSaveStatus((e as Error).message);
+      // A refusal that names the field lands on the control; the rest is
+      // stated beside the form.
+      setSaveError(form.refuse(e));
     } finally {
       setSaving(false);
     }
@@ -57,7 +76,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
   if (!info) return loading ? <Spinner label="Loading the badge role…" /> : null;
 
   return (
-    <div class="pk pk-stack pk-stack--snug">
+    <div class="pk pk-stack pk-stack--snug" {...form.handlers}>
       {/* Whether the role was forced or worked out from the registration is
           said in words beside the badge, not carried by the badge's tone. */}
       <div class="pk-cluster pk-small">
@@ -70,15 +89,11 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
         </span>
       </div>
 
-      <Field
-        label="Role override"
-        help="Leave on Auto to keep following the registration."
-        state={saveStatus ? "invalid" : undefined}
-        message={saveStatus || undefined}
-      >
+      <Field label="Role override" help="Leave on Auto to keep following the registration." {...form.of("role")}>
         {(control) => (
           <Select
             {...control}
+            name="role"
             value={selectedRole}
             disabled={saving}
             onChange={(e) => setSelectedRole((e.target as HTMLSelectElement).value)}
@@ -92,6 +107,8 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
           </Select>
         )}
       </Field>
+
+      {saveError && <Alert tone="danger">{saveError}</Alert>}
 
       <div class="pk-cluster">
         <Button variant="primary" size="sm" loading={saving} onClick={() => void handleSave()}>
@@ -136,6 +153,15 @@ export function RegistrationEmailEditor({
   const [value, setValue] = useState(email);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // The registration update contract the route parses checks the address as
+  // it is typed and is the only thing that may refuse it.
+  const form = useContractForm(eventRegistrationManagementUpdateSchema, { action: "update", email: value });
+
+  function stopEditing(): void {
+    setEditing(false);
+    setError("");
+    form.reset();
+  }
 
   if (!editing) {
     return (
@@ -161,8 +187,14 @@ export function RegistrationEmailEditor({
 
   async function handleSave() {
     const trimmed = value.trim().toLowerCase();
+    // Nothing to change is not a refusal: the editor simply closes.
     if (!trimmed || trimmed === email.toLowerCase()) {
-      setEditing(false);
+      stopEditing();
+      return;
+    }
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
       return;
     }
     setSaving(true);
@@ -170,40 +202,40 @@ export function RegistrationEmailEditor({
     try {
       await patchJson(
         eventRegistrationPath(slug, regId),
-        { action: "update", email: trimmed },
+        checked.data,
         eventRegistrationManagementUpdateResponseSchema,
       );
       toast("Email updated — confirmation sent to new address", "success");
-      setEditing(false);
+      stopEditing();
       onSaved();
     } catch (e) {
-      setError((e as Error).message);
+      setError(form.refuse(e));
     } finally {
       setSaving(false);
     }
   }
 
   /*
-   * The consequence of the edit is the field's own advisory message rather
-   * than a colored note beside it: an advisory is announced and described by
-   * the control without claiming the value is invalid, and a real failure
-   * replaces it with a blocking message on the same field.
+   * The consequence of the edit is the field's own guidance, described by the
+   * control without claiming the value is invalid. The contract's verdict on
+   * the address replaces it on the same field; a refusal the server does not
+   * attribute to the field is stated beside it.
    */
   return (
-    <div class="pk pk-stack pk-stack--tight">
+    <div class="pk pk-stack pk-stack--tight" {...form.handlers}>
       <Field
         label="Email address"
-        state={error ? "invalid" : "advisory"}
-        message={
-          error ||
-          (isCancelled
+        help={
+          isCancelled
             ? "Changing the email will restore this cancelled registration and send a confirmation email to the new address."
-            : "Changing the email will require re-confirmation.")
+            : "Changing the email will require re-confirmation."
         }
+        {...form.of("email")}
       >
         {(control) => (
           <TextInput
             {...control}
+            name="email"
             type="email"
             value={value}
             onInput={(e) => setValue((e.target as HTMLInputElement).value)}
@@ -212,18 +244,19 @@ export function RegistrationEmailEditor({
                 e.preventDefault();
                 void handleSave();
               }
-              if (e.key === "Escape") setEditing(false);
+              if (e.key === "Escape") stopEditing();
             }}
             disabled={saving}
             autoFocus
           />
         )}
       </Field>
+      {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster">
         <Button variant="primary" size="sm" loading={saving} onClick={() => void handleSave()}>
           {saving ? "Saving…" : "Save"}
         </Button>
-        <Button size="sm" disabled={saving} onClick={() => setEditing(false)}>
+        <Button size="sm" disabled={saving} onClick={stopEditing}>
           Cancel
         </Button>
       </div>

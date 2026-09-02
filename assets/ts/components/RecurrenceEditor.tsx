@@ -1,5 +1,6 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useId, useState } from "preact/hooks";
 
+import { Field } from "../ui/Field";
 import { Select, TextInput } from "../ui/TextControl";
 // `pk-mono` is written here as a class name rather than reached through a
 // component, so this module has to pull its stylesheet into its own chunk.
@@ -198,14 +199,12 @@ function coerceDate(value: string | Date | undefined): Date {
  * never changes shape.
  */
 export function RecurrenceEditor({
-  id,
   value,
   onChange,
   disabled = false,
   required = true,
   referenceDate,
 }: {
-  id: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
@@ -275,36 +274,23 @@ export function RecurrenceEditor({
     onChange(next);
   }
 
-  const helpId = `${id}-help`;
-  const summaryId = `${id}-summary`;
+  const summaryId = `${useId()}-summary`;
   const intervalUnit = mode === "weekly" ? "weeks" : "months";
   const currentShape = mode === ADVANCED_RECURRENCE_MODE ? null : shapeFor(mode, interval, ordinalWeekday);
 
   /*
-   * The label/control/help triple is written out with `Field`'s own classes
-   * rather than reached through the `Field` component, because `Field`
-   * generates the control's id with `useId` and these ids belong to the
-   * caller: `MeetingSeriesFields` derives every one of them from its own
-   * prefix so a page can hold two series editors at once. It is the same
-   * shape `EnumSelect` and `EventScheduleFields` already use, and
-   * `TextControl` imports Field.css so the classes ride this module's chunk.
-   * Each triple is a whole `pk-field` — the group the state modifiers are set
-   * on — with its control inside the `pk-field__control` box.
-   *
+   * Each control is a design-system `Field`, which owns its label and its id.
    * The ordinal and weekday choices used to carry an `aria-label` and no
    * visible label at all, and the interval's unit was a bare span beside the
-   * box — announced to nobody. Each control now has a real label naming both
-   * the choice and its unit.
+   * box — announced to nobody. Each control has a real label naming both the
+   * choice and its unit.
    */
   return (
     <div class="pk pk-stack pk-stack--snug">
-      <div class="pk-field">
-        <label class="pk-field__label" for={id}>
-          Repeats
-        </label>
-        <div class="pk-field__control">
+      <Field label="Repeats">
+        {(control) => (
           <Select
-            id={id}
+            {...control}
             value={mode}
             disabled={disabled}
             // The plain-English summary below is what the chosen shape actually
@@ -322,18 +308,15 @@ export function RecurrenceEditor({
             ))}
             <option value={ADVANCED_RECURRENCE_MODE}>Custom rule</option>
           </Select>
-        </div>
-      </div>
+        )}
+      </Field>
 
       {mode !== ADVANCED_RECURRENCE_MODE && mode !== "none" && (
         <div class="pk-grid pk-grid--tight">
-          <div class="pk-field">
-            <label class="pk-field__label" for={`${id}-interval`}>
-              Repeat every ({intervalUnit})
-            </label>
-            <div class="pk-field__control">
+          <Field label={`Repeat every (${intervalUnit})`}>
+            {(control) => (
               <TextInput
-                id={`${id}-interval`}
+                {...control}
                 type="number"
                 min={1}
                 max={MAX_RECURRENCE_INTERVAL}
@@ -341,17 +324,14 @@ export function RecurrenceEditor({
                 disabled={disabled}
                 onInput={(event) => updateInterval((event.target as HTMLInputElement).value)}
               />
-            </div>
-          </div>
+            )}
+          </Field>
           {mode === "monthly_by_ordinal_weekday" && (
             <>
-              <div class="pk-field">
-                <label class="pk-field__label" for={`${id}-ordinal`}>
-                  Week of the month
-                </label>
-                <div class="pk-field__control">
+              <Field label="Week of the month">
+                {(control) => (
                   <Select
-                    id={`${id}-ordinal`}
+                    {...control}
                     value={ordinalWeekday.ordinal}
                     disabled={disabled}
                     onChange={(event) =>
@@ -366,15 +346,12 @@ export function RecurrenceEditor({
                       </option>
                     ))}
                   </Select>
-                </div>
-              </div>
-              <div class="pk-field">
-                <label class="pk-field__label" for={`${id}-weekday`}>
-                  Weekday
-                </label>
-                <div class="pk-field__control">
+                )}
+              </Field>
+              <Field label="Weekday">
+                {(control) => (
                   <Select
-                    id={`${id}-weekday`}
+                    {...control}
                     value={ordinalWeekday.weekday}
                     disabled={disabled}
                     onChange={(event) =>
@@ -387,8 +364,8 @@ export function RecurrenceEditor({
                       </option>
                     ))}
                   </Select>
-                </div>
-              </div>
+                )}
+              </Field>
             </>
           )}
         </div>
@@ -405,25 +382,21 @@ export function RecurrenceEditor({
       )}
 
       {mode === ADVANCED_RECURRENCE_MODE && (
-        <div class="pk-field">
-          <label class="pk-field__label" for={`${id}-advanced`}>
-            Custom rule
-          </label>
-          <div class="pk-field__control">
+        <Field
+          label="Custom rule"
+          required={required}
+          help="RFC 5545 recurrence rule, for schedules the structured choices cannot express."
+        >
+          {(control) => (
             <TextInput
-              id={`${id}-advanced`}
+              {...control}
               class="pk-mono"
               value={advancedValue}
-              required={required}
               disabled={disabled}
-              aria-describedby={helpId}
               onInput={(event) => updateAdvanced((event.target as HTMLInputElement).value)}
             />
-          </div>
-          <p class="pk-field__help" id={helpId}>
-            RFC 5545 recurrence rule, for schedules the structured choices cannot express.
-          </p>
-        </div>
+          )}
+        </Field>
       )}
     </div>
   );

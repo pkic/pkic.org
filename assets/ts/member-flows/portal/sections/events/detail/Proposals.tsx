@@ -13,10 +13,7 @@ import { EventEmailCampaign } from "../../../../../components/events/EventEmailC
 import { EventFormResponses } from "./Forms";
 import { toast } from "../../../ui";
 import { eventProposalDetailViewPath } from "./proposal-paths";
-// The archive links are written as class names rather than rendered through
-// `Button`, because they are anchors. Button.css also ships with the entry
-// stylesheet, but the module that writes the class names asks for them.
-import "../../../../../ui/Button.css";
+import { ButtonLink } from "../../../../../ui/Button";
 
 function ProposalsList({ slug }: { slug: string }) {
   const [, navigate] = usePortalHashLocation();
@@ -29,20 +26,20 @@ function ProposalsList({ slug }: { slug: string }) {
       toolbarPrefix={(_, access) =>
         access?.canRead ? (
           <div class="pk-cluster" role="group" aria-label="Download event presentations">
-            <a
-              class="pk-btn pk-btn--secondary pk-btn--sm"
+            <ButtonLink
+              size="sm"
               href={`/api/v1/events/${encodeURIComponent(slug)}/presentations/archive`}
               title="Download the current presentation for every accepted proposal"
             >
               <span aria-hidden="true">↓</span> Current presentations
-            </a>
-            <a
-              class="pk-btn pk-btn--secondary pk-btn--sm"
+            </ButtonLink>
+            <ButtonLink
+              size="sm"
               href={`/api/v1/events/${encodeURIComponent(slug)}/presentations/archive?versions=all`}
               title="Download every retained presentation version for accepted proposals"
             >
               All presentation versions
-            </a>
+            </ButtonLink>
           </div>
         ) : null
       }

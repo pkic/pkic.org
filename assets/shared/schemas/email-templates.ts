@@ -45,12 +45,14 @@ export type EmailTemplateSummary = z.infer<typeof emailTemplateSummarySchema>;
 export const emailTemplatesListResponseSchema = paginatedResponseSchema("templates", emailTemplateSummarySchema);
 
 export const emailTemplatesListQuerySchema = searchableListQuerySchema(emailTemplatesSortValueSchema).extend({
+  // A prefix of a key, so it admits what keys are made of: the catalog's own
+  // keys carry hyphens (`org-content-rejected`), which the old pattern refused.
   templateKeyPrefix: z
     .string()
     .trim()
     .min(1)
     .max(80)
-    .regex(/^[a-z][a-z0-9_]*$/)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, "Use lower-case letters, digits, underscores and hyphens.")
     .optional(),
 });
 export type EmailTemplatesListQuery = z.infer<typeof emailTemplatesListQuerySchema>;
@@ -75,12 +77,20 @@ export const emailTemplatesListRouteSchema = {
 };
 
 export const emailTemplateVersionSchema = z.object({
-  content: z.string().min(1).max(500_000),
+  content: z.string().min(1, "Body cannot be empty").max(500_000),
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
   contentType: emailContentTypeSchema.optional(),
   messageType: emailMessageTypeSchema.optional(),
 });
 export type EmailTemplateVersionInput = z.infer<typeof emailTemplateVersionSchema>;
+
+/**
+ * Creating a template as one value: the key the route reads from its path and
+ * the first version it reads from the body. The create form chooses both at
+ * once, so it validates through the two parts together.
+ */
+export const emailTemplateCreateSchema = emailTemplateKeyParamsSchema.extend(emailTemplateVersionSchema.shape);
+export type EmailTemplateCreateInput = z.infer<typeof emailTemplateCreateSchema>;
 
 /** Lifecycle states persisted by email_template_versions. */
 export const emailTemplateVersionStatusSchema = z.enum(["draft", "active", "archived"]);

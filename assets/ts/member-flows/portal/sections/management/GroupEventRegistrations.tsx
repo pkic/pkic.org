@@ -27,21 +27,22 @@ export function GroupEventRegistrations({
   const tableActions = useRef<ApiTableActions | null>(null);
 
   return (
+    // The tab above already says Registrations; a second heading calling the
+    // same rows "Attendees" was one collection wearing two names.
     <div class="pk-stack pk-stack--snug">
-      <h3>Attendees</h3>
       {/* An outcome the reader did not ask to see, so it is announced
           politely rather than interrupting — which is what an `ok` Alert
           does — and its words say what happened without the tone. */}
       {managementMessage && <Alert tone="ok">{managementMessage}</Alert>}
       <ApiDataTable
-        caption="Event attendees"
+        caption="Registrations"
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`}
         responseSchema={eventAttendanceRegistrationsListResponseSchema}
         resolve={(response) => response.registrations}
         resolvePage={(response) => response.page}
         paginate
         actionsRef={tableActions}
-        searchPlaceholder="Search attendees…"
+        searchPlaceholder="Search registrations…"
         initialSort="display_name"
         columns={[
           {

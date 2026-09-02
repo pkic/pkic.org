@@ -8,7 +8,7 @@ import { fmt, toast } from "../../../../ui";
 import type { PageInfo } from "../../../../../../../shared/schemas/pagination";
 import { Alert } from "../../../../../../ui/Alert";
 import { Badge as ToneBadge } from "../../../../../../ui/Badge";
-import { Button } from "../../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import type { ProposalDetailRecord, ProposalInternalComment } from "./model";
 import { proposalResourcePath } from "./proposal-api";
@@ -97,9 +97,9 @@ export function ProposalSidebar({
               <Button variant="primary" block onClick={() => void onOpenManage()}>
                 Open proposer manage page
               </Button>
-              <a class="pk-btn pk-btn--secondary pk-btn--block" href={`mailto:${proposal.proposer_email}`}>
+              <ButtonLink block href={`mailto:${proposal.proposer_email}`}>
                 Email proposer
-              </a>
+              </ButtonLink>
               <Button block onClick={() => void navigator.clipboard.writeText(proposal.proposer_email)}>
                 Copy proposer email
               </Button>

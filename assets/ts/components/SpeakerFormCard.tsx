@@ -2,13 +2,15 @@ import type { ComponentChildren, Ref } from "preact";
 import { ProfileLinksInput, type ProfileLinksHandle } from "./ProfileLinksInput";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
 import { Button } from "../ui/Button";
+import { Radio } from "../ui/Checkbox";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
+import { Field, type FieldControlProps } from "../ui/Field";
 import { Textarea, TextInput } from "../ui/TextControl";
-// `pk-field`, `pk-field__label`, `pk-field__help`, `pk-field__message` and the
-// `pk-check` trio are written here as class names rather than reached through a
-// component, so this module has to pull their stylesheet into its own chunk.
-// `TextInput`/`Textarea` already import it; naming it here keeps the file
-// honest if those two are ever swapped for plain elements.
+// `pk-field`, `pk-field__label`, `pk-field__help` and `pk-field__message` are
+// written here as class names rather than reached through a component, so
+// this module has to pull their stylesheet into its own chunk. `TextInput`,
+// `Textarea` and `Radio` already import it; naming it here keeps the file
+// honest if those are ever swapped for plain elements.
 import "../ui/Field.css";
 
 export interface SpeakerFieldNames {
@@ -43,41 +45,20 @@ interface SpeakerFieldProps {
   help?: string;
   /** The validation path `applyFieldErrors` writes this control's message to. */
   errorPath?: string;
-  children: (control: { id: string; "aria-describedby": string | undefined }) => ComponentChildren;
+  children: (control: FieldControlProps) => ComponentChildren;
 }
 
 /**
- * One labelled control inside the speaker card.
- *
- * The id is supplied by the caller rather than generated, because these cards
- * are rendered into a plain HTML form whose validation writes each message
- * into the matching `[data-field-error]` slot after render. That makes the
- * slot a polite live region, and the control names it through
- * `aria-describedby` before any message exists — the relationship is markup
- * rather than runtime wiring, so it is right from the first paint.
+ * One labelled control inside the speaker card: the design system's `Field`,
+ * with the message slot the card's DOM-driven validator writes into after
+ * render (`applyFieldErrors` addresses it by `data-field-error`), and the
+ * caller's id so the surrounding form's markup can keep addressing it.
  */
 function SpeakerField({ id, label, optional = false, help, errorPath, children }: SpeakerFieldProps) {
-  const helpId = help ? `${id}-help` : undefined;
-  const errorId = errorPath ? `${id}-error` : undefined;
-  const describedBy = [helpId, errorId].filter(Boolean).join(" ") || undefined;
-
   return (
-    <div class="pk-field">
-      <label class="pk-field__label" for={id}>
-        {label}
-        {optional && <span class="pk-small"> (optional)</span>}
-      </label>
-      {/* The box the state mark is positioned against: `applyFieldErrors`
-          moves this field into a state, and the mark has nowhere to draw
-          without it. */}
-      <div class="pk-field__control">{children({ id, "aria-describedby": describedBy })}</div>
-      {help && (
-        <p class="pk-field__help" id={helpId}>
-          {help}
-        </p>
-      )}
-      {errorPath && <div class="pk-field__message" id={errorId} data-field-error={errorPath} aria-live="polite" />}
-    </div>
+    <Field id={id} label={optional ? `${label} (optional)` : label} help={help} errorSlot={errorPath}>
+      {children}
+    </Field>
   );
 }
 
@@ -171,28 +152,19 @@ export function SpeakerFormCard({
 
           {roleField && (
             // A fieldset with a legend names the radio group in the markup,
-            // which is what a reader hears on entering it. The previous
-            // `aria-label` sat on a plain div beside a visible "Role" label
-            // that pointed at no control at all.
+            // which is what a reader hears on entering it.
             <fieldset class="pk-fieldset pk-field">
               <legend class="pk-field__label">Role</legend>
               <div class="pk-cluster">
-                {SPEAKER_ROLE_OPTIONS.map((role, index) => {
-                  const id = `role-${idPrefix}-${role.value}`;
-                  return (
-                    <label class="pk-check" key={role.value} for={id}>
-                      <input
-                        class="pk-check__input"
-                        type="radio"
-                        name={roleField}
-                        id={id}
-                        value={role.value}
-                        defaultChecked={role.value === defaultRole || (!defaultRole && index === 0)}
-                      />
-                      <span class="pk-check__label">{role.label}</span>
-                    </label>
-                  );
-                })}
+                {SPEAKER_ROLE_OPTIONS.map((role, index) => (
+                  <Radio
+                    key={role.value}
+                    name={roleField}
+                    value={role.value}
+                    defaultChecked={role.value === defaultRole || (!defaultRole && index === 0)}
+                    label={role.label}
+                  />
+                ))}
               </div>
             </fieldset>
           )}

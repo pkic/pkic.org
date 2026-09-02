@@ -188,9 +188,13 @@ test.describe("portal sponsor workspace", () => {
     await page.goto("/");
     await page.goto(portalUrl);
     await expect(page).toHaveURL(/\/portal\/#\/sponsors$/);
-    await expect(page.getByRole("heading", { name: `Attendees — Post-Quantum Cryptography Conference` })).toBeVisible({
-      timeout: 15_000,
-    });
+    // The page header names the section once ("Sponsors"); the event is the
+    // header's context line and the attendee table's own caption, so the event
+    // name is asserted where it now lives instead of in a fused title.
+    await expect(page.getByRole("heading", { name: "Sponsors" })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("table", { name: "Consenting attendees for Post-Quantum Cryptography Conference" }),
+    ).toBeVisible();
     await expect(page.getByText("Leader sponsor")).toBeVisible();
     await expect(page.getByText(attendeeEmail)).toBeVisible();
     await expect(page.getByText("Casey Attendee")).toBeVisible();

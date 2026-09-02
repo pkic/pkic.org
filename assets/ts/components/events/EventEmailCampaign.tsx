@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
+import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
-import { Select, TextInput } from "../../ui/TextControl";
+import { Select, Textarea, TextInput } from "../../ui/TextControl";
 import { highlightTemplateSyntax } from "../../shared/email-template-syntax";
 import {
   eventEmailCampaignPreviewResponseSchema,
@@ -109,9 +111,8 @@ export function EventEmailCampaign({
   const [status, setStatus] = useState("Preview required before sending.");
   const [sending, setSending] = useState(false);
 
-  // backdrop refs for textarea highlight
+  // backdrop ref for textarea highlight
   const bodyPreRef = useRef<HTMLPreElement>(null);
-  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const templateRequestIdRef = useRef(0);
   const availableHelperLabels = availableHelperLabelsForAudience(audience);
   const availablePartials = availablePartialsForAudience(audience);
@@ -121,14 +122,24 @@ export function EventEmailCampaign({
     if (bodyPreRef.current) bodyPreRef.current.innerHTML = `${highlightTemplateSyntax(body)}\n`;
   }, [body]);
 
+  /**
+   * The body control. `Textarea` is a function component, and a ref on one
+   * resolves to the component rather than the DOM node, so the element is
+   * reached from the backdrop it shares a control box with.
+   */
+  function bodyControl(): HTMLTextAreaElement | null {
+    return bodyPreRef.current?.parentElement?.querySelector("textarea") ?? null;
+  }
+
   function handleBodyScroll() {
-    if (bodyPreRef.current && bodyTextareaRef.current) {
-      bodyPreRef.current.scrollTop = bodyTextareaRef.current.scrollTop;
+    const ta = bodyControl();
+    if (bodyPreRef.current && ta) {
+      bodyPreRef.current.scrollTop = ta.scrollTop;
     }
   }
 
   function insertSnippet(snippet: string) {
-    const ta = bodyTextareaRef.current;
+    const ta = bodyControl();
     if (!ta) return;
     const start = ta.selectionStart ?? 0;
     const end = ta.selectionEnd ?? 0;
@@ -253,113 +264,98 @@ export function EventEmailCampaign({
     <div class="pk pk-stack">
       {/* Template + mode */}
       <div class="pk-grid">
-        <ServerSearchSelect
-          catalog={emailTemplateCatalog("msg_")}
-          label="Template"
-          value={templateKey}
-          selectedLabel={templateKey}
-          placeholder="Write from scratch"
-          onChange={(template) => void handleTemplateChange(template?.template_key ?? "")}
-        />
-        <div class="pk-field">
-          <label class="pk-field__label" for="event-email-campaign-mode">
-            Delivery mode
-          </label>
-          <div class="pk-field__control">
+        <Field label="Template">
+          {(control) => (
+            <ServerSearchSelect
+              {...control}
+              catalog={emailTemplateCatalog("msg_")}
+              searchLabel="Template"
+              value={templateKey}
+              selectedLabel={templateKey}
+              placeholder="Write from scratch"
+              onChange={(template) => void handleTemplateChange(template?.template_key ?? "")}
+            />
+          )}
+        </Field>
+        <Field label="Delivery mode">
+          {(control) => (
             <Select
-              id="event-email-campaign-mode"
+              {...control}
               value={mode}
               onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
             >
               <option value="personal">Personal (1:1)</option>
               <option value="bcc_batch">Broadcast BCC</option>
             </Select>
-          </div>
-        </div>
-        <div class="pk-field">
-          <label class="pk-field__label" for="event-email-campaign-message-type">
-            Message type
-          </label>
-          <div class="pk-field__control">
+          )}
+        </Field>
+        <Field label="Message type">
+          {(control) => (
             <Select
-              id="event-email-campaign-message-type"
+              {...control}
               value={messageType}
               onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
             >
               <option value="transactional">Transactional</option>
               <option value="promotional">Promotional</option>
             </Select>
-          </div>
-        </div>
+          )}
+        </Field>
         {!personal && (
-          <div class="pk-field">
-            <label class="pk-field__label" for="event-email-campaign-batch-size">
-              BCC batch size
-            </label>
-            <div class="pk-field__control">
+          <Field label="BCC batch size">
+            {(control) => (
               <TextInput
-                id="event-email-campaign-batch-size"
+                {...control}
                 type="number"
                 min={1}
                 max={500}
                 value={batchSize}
                 onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)}
               />
-            </div>
-          </div>
+            )}
+          </Field>
         )}
       </div>
 
       {/* Subject */}
-      <div class="pk-field">
-        <label class="pk-field__label" for="event-email-campaign-subject">
-          Subject
-        </label>
-        <div class="pk-field__control">
+      <Field label="Subject">
+        {(control) => (
           <TextInput
-            id="event-email-campaign-subject"
+            {...control}
             type="text"
             placeholder="Email subject"
             value={subject}
             onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
           />
-        </div>
-      </div>
+        )}
+      </Field>
 
       {/* Body + variables sidebar */}
       <div class="pk-grid pk-grid--roomy">
-        <div class="pk-field">
-          <label class="pk-field__label" for="event-email-campaign-body">
-            Message <span class="pk-muted">(Markdown, {"{{variables}}"})</span>
-          </label>
-          {/* The overlay editor is this field's control box as well as the
-              backdrop's positioning context — both want `position: relative`,
-              so they are one element rather than two nested ones. */}
-          <div class="pk-field__control pk-overlay-editor">
-            <pre
-              ref={bodyPreRef}
-              aria-hidden="true"
-              class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
-            />
-            {/*
-             * Written out rather than composed from <Textarea>: the caret
-             * arithmetic in insertSnippet needs the element itself, and a ref
-             * on a Preact function component resolves to the component
-             * instance rather than the DOM node. The classes are exactly the
-             * ones <Textarea> applies.
-             */}
-            <textarea
-              id="event-email-campaign-body"
-              ref={bodyTextareaRef}
-              class="pk-input pk-input--textarea pk-mono pk-overlay-editor__input"
-              rows={14}
-              placeholder="Write your message here, or load a template above."
-              value={body}
-              onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-              onScroll={handleBodyScroll}
-            />
-          </div>
-        </div>
+        {/* The field's control box is the backdrop's positioning context —
+            both want `position: relative` — so the backdrop and the control
+            sit directly in the box the Field provides rather than in a second
+            box of their own. */}
+        <Field label="Message" help="Markdown, {{variables}}">
+          {(control) => (
+            <>
+              <pre
+                ref={bodyPreRef}
+                aria-hidden="true"
+                class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
+              />
+              <Textarea
+                {...control}
+                class="pk-mono pk-overlay-editor__input"
+                rows={14}
+                placeholder="Write your message here, or load a template above."
+                value={body}
+                onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+                onScroll={handleBodyScroll}
+              />
+            </>
+          )}
+        </Field>
         <Panel>
           <PanelHeader title="Template helpers" />
           <PanelBody class="pk-stack pk-stack--snug">
@@ -407,13 +403,10 @@ export function EventEmailCampaign({
       {/* Filters */}
       {audience === "attendees" ? (
         <div class="pk-grid">
-          <div class="pk-field">
-            <label class="pk-field__label" for="event-email-campaign-registration-status">
-              Registration status
-            </label>
-            <div class="pk-field__control">
+          <Field label="Registration status">
+            {(control) => (
               <Select
-                id="event-email-campaign-registration-status"
+                {...control}
                 value={attendeeStatus}
                 onChange={(e) =>
                   setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
@@ -425,15 +418,12 @@ export function EventEmailCampaign({
                   </option>
                 ))}
               </Select>
-            </div>
-          </div>
-          <div class="pk-field">
-            <label class="pk-field__label" for="event-email-campaign-attendance-type">
-              Attendance type
-            </label>
-            <div class="pk-field__control">
+            )}
+          </Field>
+          <Field label="Attendance type">
+            {(control) => (
               <Select
-                id="event-email-campaign-attendance-type"
+                {...control}
                 value={attendanceType}
                 onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
               >
@@ -442,15 +432,12 @@ export function EventEmailCampaign({
                 <option value="virtual">Virtual</option>
                 <option value="on_demand">On-demand</option>
               </Select>
-            </div>
-          </div>
-          <div class="pk-field">
-            <label class="pk-field__label" for="event-email-campaign-day">
-              Specific day
-            </label>
-            <div class="pk-field__control">
+            )}
+          </Field>
+          <Field label="Specific day">
+            {(control) => (
               <Select
-                id="event-email-campaign-day"
+                {...control}
                 value={dayFilter}
                 onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
               >
@@ -464,15 +451,12 @@ export function EventEmailCampaign({
                   );
                 })}
               </Select>
-            </div>
-          </div>
-          <div class="pk-field">
-            <label class="pk-field__label" for="event-email-campaign-day-waitlist">
-              Day waitlist
-            </label>
-            <div class="pk-field__control">
+            )}
+          </Field>
+          <Field label="Day waitlist">
+            {(control) => (
               <Select
-                id="event-email-campaign-day-waitlist"
+                {...control}
                 value={dayWaitlistStatus}
                 onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
               >
@@ -483,18 +467,15 @@ export function EventEmailCampaign({
                 <option value="accepted">Accepted offer</option>
                 <option value="none">Not waitlisted</option>
               </Select>
-            </div>
-          </div>
+            )}
+          </Field>
         </div>
       ) : (
         <div class="pk-grid">
-          <div class="pk-field">
-            <label class="pk-field__label" for="event-email-campaign-speaker-status">
-              Speaker status
-            </label>
-            <div class="pk-field__control">
+          <Field label="Speaker status">
+            {(control) => (
               <Select
-                id="event-email-campaign-speaker-status"
+                {...control}
                 value={speakerStatus}
                 onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
               >
@@ -503,8 +484,8 @@ export function EventEmailCampaign({
                 <option value="invited">Invited</option>
                 <option value="pending">Pending</option>
               </Select>
-            </div>
-          </div>
+            )}
+          </Field>
         </div>
       )}
 
@@ -559,18 +540,12 @@ export function EventEmailCampaign({
               />
             )}
             {previewTab === "text" && <pre class="pk-code-block pk-small pk-break">{preview.text}</pre>}
-            <div class="pk-check">
-              <input
-                class="pk-check__input"
-                type="checkbox"
-                id="em-confirm"
-                checked={previewConfirmed}
-                onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
-              />
-              <label class="pk-check__label pk-small" for="em-confirm">
-                I reviewed this email preview and confirm sending.
-              </label>
-            </div>
+            <Checkbox
+              class="pk-small"
+              checked={previewConfirmed}
+              onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
+              label="I reviewed this email preview and confirm sending."
+            />
           </PanelBody>
         </Panel>
       )}

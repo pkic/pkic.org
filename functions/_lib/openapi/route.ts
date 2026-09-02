@@ -6,13 +6,51 @@ import {
   type OpenAPIRouteSchema,
   type ValidatedData,
 } from "chanfana";
+import type { z } from "zod";
 import { AppError } from "../errors";
+import type { apiValidationErrorDetailsSchema } from "../../../assets/shared/schemas/api-common";
 import { JSON_REQUEST_MAX_BYTES, readBoundedJsonBody } from "../http-body";
 
 export { JSON_REQUEST_MAX_BYTES as OPENAPI_JSON_MAX_BYTES } from "../http-body";
 
 type RouteHandler<Context, Schema> = (context: Context, data: ValidatedData<Schema>) => Response | Promise<Response>;
 type BeforeValidation<Context> = (context: Context) => void | Promise<void>;
+
+/** One entry of chanfana's `ApiException.buildResponse()`. */
+interface ChanfanaErrorEntry {
+  code: number;
+  message: string;
+  path?: readonly string[] | null;
+}
+
+/** The request sections chanfana validates as one wrapper object. */
+const REQUEST_SECTIONS = new Set(["body", "query", "params", "headers"]);
+
+/**
+ * Translates chanfana's validation entries into the shared
+ * `apiValidationErrorDetailsSchema` shape (`{formErrors, fieldErrors}`) that
+ * the browser's validation-map helpers understand, so a refused request names
+ * the exact fields instead of reaching the reader as a bare "Invalid
+ * request". Issue paths arrive as `["body", "organizationId"]`; the section
+ * segment is transport framing, not a field name, so it is stripped, and an
+ * issue on a whole section (or with no path) becomes a form-level error.
+ */
+function sharedValidationDetails(
+  entries: readonly ChanfanaErrorEntry[],
+): z.infer<typeof apiValidationErrorDetailsSchema> {
+  const formErrors: string[] = [];
+  const fieldErrors: Record<string, string[]> = {};
+  for (const entry of entries) {
+    const path = Array.isArray(entry.path) ? [...entry.path] : [];
+    if (path.length > 0 && REQUEST_SECTIONS.has(path[0])) path.shift();
+    if (path.length === 0) {
+      formErrors.push(entry.message);
+    } else {
+      (fieldErrors[path.join(".")] ??= []).push(entry.message);
+    }
+  }
+  return { formErrors, fieldErrors };
+}
 
 /**
  * Wraps a route schema + handler in a chanfana `OpenAPIRoute` that actually
@@ -85,7 +123,12 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
         data = await this.getValidatedData<Schema>();
       } catch (error) {
         if (error instanceof ApiException) {
-          throw new AppError(error.status, "VALIDATION_ERROR", "Invalid request", error.buildResponse());
+          throw new AppError(
+            error.status,
+            "VALIDATION_ERROR",
+            "Invalid request",
+            sharedValidationDetails(error.buildResponse() as ChanfanaErrorEntry[]),
+          );
         }
         throw error;
       }

@@ -812,7 +812,6 @@ $adm-danger: #dc3545;
   .adm-pager {
     padding: 0.5rem 0;
     border-top: 1px solid #e9ecef;
-
   }
 
   // ── Promoters leaderboard ──────────────────────────────────────────────────
@@ -1062,9 +1061,11 @@ $adm-danger: #dc3545;
   }
 
   // ── Form field editor ────────────────────────────────────────────────────────
-
 }
 
 .adm-due-work-limit {
-  width: 78px;
+  // `max-width`, because this sheet sits in the lowest cascade layer and
+  // cannot out-rank the component's own `width: 100%` — capping it does not
+  // need to. A three-digit batch size never earned a full-measure field.
+  max-width: 6rem;
 }

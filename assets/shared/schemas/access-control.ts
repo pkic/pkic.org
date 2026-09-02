@@ -146,7 +146,10 @@ export const accessGrantRevokeRouteSchema = {
 };
 
 export const roleCreateSchema = z.object({
-  name: trimmedString(1, 80).regex(/^[a-z][a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only"),
+  name: trimmedString(1, 80, "Give the role a name.").regex(
+    /^[a-z][a-z0-9_]*$/,
+    "Use lowercase letters, numbers, and underscores only",
+  ),
   description: trimmedString(0, 400).optional(),
   permissions: z.array(permissionSchema).max(64).default([]),
 });

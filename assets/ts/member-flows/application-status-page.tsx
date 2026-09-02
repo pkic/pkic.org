@@ -8,6 +8,7 @@
  */
 import { render } from "preact";
 import { getJson } from "../shared/api-client";
+import { formatDate } from "../shared/ui";
 import { setStatus } from "../shared/form/helpers";
 import { Badge } from "../components/Badge";
 import {
@@ -42,8 +43,7 @@ export function StatusSummary({ data }: { data: ApplicationStatus }) {
         <Badge status={data.stage} />
       </p>
       <p class="pk-small">
-        Submitted {new Date(data.createdAt).toLocaleDateString()} — last updated{" "}
-        {new Date(data.stageEnteredAt).toLocaleDateString()}.
+        Submitted {formatDate(data.createdAt)} — last updated {formatDate(data.stageEnteredAt)}.
       </p>
     </div>
   );

@@ -387,14 +387,32 @@ describe("portal system donations", () => {
     // several, so each one has to say which it is.
     expect(captions(container)).toContain("Donations");
 
-    // The filters were `btn-outline-secondary` buttons carrying an `active`
-    // class, which said "selected" in colour only. Selection is aria-pressed
-    // now, so it survives without sight of the button.
-    const filters = Array.from(container.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"));
-    expect(filters).toHaveLength(6);
-    const pressed = filters.filter((button) => button.getAttribute("aria-pressed") === "true");
-    expect(pressed).toHaveLength(1);
-    expect(pressed[0]?.textContent).toContain("All");
+    // The status filter is the Status column's own menu, like every list's
+    // filters; the choice in force is a checked radio item, so it survives
+    // without sight of the control. No chips above the table any more.
+    expect(container.querySelector("button[aria-pressed]")).toBeNull();
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Status column options"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => {
+      trigger!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // The column sorts as well, so its menu opens with the two sort
+    // directions; the six statuses ("All" first) follow, each with its count.
+    const choices = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')).filter(
+      (c) => !c.textContent?.includes("Sort "),
+    );
+    expect(
+      choices.map((c) =>
+        c.textContent
+          ?.replace(/^✓/, "")
+          .trim()
+          .replace(/ \(\d+\)$/, ""),
+      ),
+    ).toEqual(["All", "Pending", "Awaiting", "Completed", "Expired", "Failed"]);
+    const checked = choices.filter((c) => c.getAttribute("aria-checked") === "true");
+    expect(checked).toHaveLength(1);
+    expect(checked[0]?.textContent).toContain("All");
   });
 
   it("names the promoter leaderboard and reaches each share link by keyboard", async () => {

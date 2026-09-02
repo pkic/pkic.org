@@ -8,6 +8,7 @@ import {
   emailTemplateVersionSchema,
   type EmailTemplateVersion,
 } from "../../assets/shared/schemas/email-templates";
+import { controlFor, labelNames } from "./helpers/labelled-control";
 
 const TEMPLATE_KEY = "welcome_email";
 const VERSIONS_PATH = `/api/v1/email/templates/${TEMPLATE_KEY}/versions`;
@@ -125,9 +126,9 @@ async function click(label: string): Promise<void> {
   await settle();
 }
 
-async function typeInto(selector: string, value: string): Promise<void> {
-  const field = container!.querySelector<HTMLTextAreaElement | HTMLInputElement>(selector);
-  if (!field) throw new Error(`No control matching ${selector}`);
+/** Types into the control the given label names, resolved through the for/id pair. */
+async function typeInto(label: string, value: string): Promise<void> {
+  const field = controlFor<HTMLTextAreaElement | HTMLInputElement>(container!, label);
   field.value = value;
   await act(() => {
     field.dispatchEvent(new Event("input", { bubbles: true }));
@@ -184,7 +185,7 @@ describe("portal email template editor", () => {
     expect(save().disabled).toBe(true);
 
     const revised = "Hello {{firstName}}, this revision is ready.";
-    await typeInto("#email-template-editor-body", revised);
+    await typeInto("Body", revised);
     await click("Render Preview");
 
     const preview = requests.find((request) => request.pathname === PREVIEW_PATH)!;
@@ -208,7 +209,7 @@ describe("portal email template editor", () => {
   it("re-fills the preview frame when the viewer switches back from the text tab", async () => {
     stubApi();
     await mount();
-    await typeInto("#email-template-editor-body", "Hello {{firstName}}!");
+    await typeInto("Body", "Hello {{firstName}}!");
     await click("Render Preview");
 
     await click("Text");
@@ -225,12 +226,12 @@ describe("portal email template editor", () => {
     const requests = stubApi();
     await mount();
 
-    await typeInto("#email-template-preview-data", "[1, 2, 3]");
+    await typeInto("Preview data (JSON)", "[1, 2, 3]");
     await click("Render Preview");
     expect(requests.some((request) => request.pathname === PREVIEW_PATH)).toBe(false);
     expect(toastMessages().join(" ")).toContain("Invalid preview JSON: Must be a JSON object");
 
-    await typeInto("#email-template-preview-data", "{ not json");
+    await typeInto("Preview data (JSON)", "{ not json");
     await click("Render Preview");
     expect(requests.some((request) => request.pathname === PREVIEW_PATH)).toBe(false);
     expect(button("Save as Draft")!.disabled).toBe(true);
@@ -240,7 +241,7 @@ describe("portal email template editor", () => {
     const requests = stubApi();
     await mount();
 
-    await typeInto("#email-template-editor-body", "   ");
+    await typeInto("Body", "   ");
     await click("Render Preview");
 
     expect(requests.some((request) => request.pathname === PREVIEW_PATH)).toBe(false);
@@ -251,7 +252,7 @@ describe("portal email template editor", () => {
     const requests = stubApi(() => apiError("Template expansion failed"));
     await mount();
 
-    await typeInto("#email-template-editor-body", "Hello {{#each broken}}");
+    await typeInto("Body", "Hello {{#each broken}}");
     await click("Render Preview");
 
     expect(requests.filter((request) => request.pathname === PREVIEW_PATH)).toHaveLength(1);
@@ -265,7 +266,7 @@ describe("portal email template editor", () => {
   it("reports a failed save and leaves the editor open", async () => {
     const requests = stubApi();
     await mount();
-    await typeInto("#email-template-editor-body", "Hello {{firstName}}, again.");
+    await typeInto("Body", "Hello {{firstName}}, again.");
     await click("Render Preview");
 
     vi.mocked(fetch).mockImplementationOnce(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -277,9 +278,7 @@ describe("portal email template editor", () => {
 
     expect(toastMessages()).toContain("Version conflict");
     // Still previewed, still editable — a failed save must not clear the draft.
-    expect(container!.querySelector<HTMLTextAreaElement>("#email-template-editor-body")!.value).toBe(
-      "Hello {{firstName}}, again.",
-    );
+    expect(controlFor<HTMLTextAreaElement>(container!, "Body").value).toBe("Hello {{firstName}}, again.");
     expect(button("Save as Draft")!.disabled).toBe(false);
   });
 
@@ -287,8 +286,8 @@ describe("portal email template editor", () => {
     stubApi();
     await mount({ canWrite: false });
 
-    expect(container!.querySelector<HTMLTextAreaElement>("#email-template-editor-body")!.readOnly).toBe(true);
-    expect(container!.querySelector("#email-template-preview-data")).toBeNull();
+    expect(controlFor<HTMLTextAreaElement>(container!, "Body").readOnly).toBe(true);
+    expect(labelNames(container!)).not.toContain("Preview data (JSON)");
     expect(previewFrame()).toBeNull();
     expect(button("Render Preview")).toBeUndefined();
     expect(button("Save as Draft")).toBeUndefined();

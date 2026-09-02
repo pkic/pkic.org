@@ -10,6 +10,7 @@ import type { EventDetail } from "../../types";
 import { toast } from "../../../../ui";
 import { Alert } from "../../../../../../ui/Alert";
 import { Button } from "../../../../../../ui/Button";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
@@ -287,22 +288,18 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
                     )}
                   </Field>
                   <div class="pk-cluster">
-                    <label class="pk-check">
-                      <input
-                        class="pk-check__input"
-                        type="checkbox"
-                        checked={sessionType.requiresPresentation}
-                        onChange={(changeEvent) => {
-                          const updated = [...sessionTypes];
-                          updated[index] = {
-                            ...updated[index],
-                            requiresPresentation: (changeEvent.target as HTMLInputElement).checked,
-                          };
-                          setSessionTypes(updated);
-                        }}
-                      />
-                      <span class="pk-check__label pk-small">Requires presentation</span>
-                    </label>
+                    <Checkbox
+                      checked={sessionType.requiresPresentation}
+                      onChange={(changeEvent) => {
+                        const updated = [...sessionTypes];
+                        updated[index] = {
+                          ...updated[index],
+                          requiresPresentation: (changeEvent.target as HTMLInputElement).checked,
+                        };
+                        setSessionTypes(updated);
+                      }}
+                      label={<span class="pk-small">Requires presentation</span>}
+                    />
                     <Button
                       size="sm"
                       variant="danger-quiet"

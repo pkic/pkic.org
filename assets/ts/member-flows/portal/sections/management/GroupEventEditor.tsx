@@ -21,8 +21,10 @@ import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { EventScheduleFields } from "../../../../components/EventScheduleFields";
 import { FormActions } from "../../../../components/FormActions";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { useData } from "../../../../hooks/useData";
 import { getJson, postJson, patchJson } from "../../../../shared/api-client";
+import { Alert } from "../../../../ui/Alert";
 import { Field } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { isoDateTimeValue } from "./meeting-form-utils";
@@ -96,6 +98,66 @@ function fieldValue(value: string): string | null {
   return value.trim() || null;
 }
 
+/** The schedule as the instants the contract carries. */
+interface ScheduleInstants {
+  startsAt: string | null;
+  endsAt: string | null;
+  /** The shared codec's reason when a wall clock cannot be placed in the zone. */
+  problem: string | null;
+}
+
+/**
+ * Converts the draft's wall clocks through the shared time-zone codec. A
+ * value the codec refuses — a DST gap, an unknown zone — is passed through as
+ * typed so the contract refuses it too and nothing is sent; the codec's own
+ * reason is kept for the form to state.
+ */
+function scheduleInstants(draft: EventDraft): ScheduleInstants {
+  let problem: string | null = null;
+  const place = (value: string): string | null => {
+    if (!fieldValue(value)) return null;
+    try {
+      return isoDateTimeValue(value, draft.timezone);
+    } catch (cause) {
+      problem ??= cause instanceof Error ? cause.message : "Enter a valid date and time";
+      return value;
+    }
+  };
+  return { startsAt: place(draft.startsAt), endsAt: place(draft.endsAt), problem };
+}
+
+/** The create body, as the group event create contract reads it. */
+function createPayload(draft: EventDraft, schedule: ScheduleInstants) {
+  return {
+    slug: draft.slug,
+    name: draft.name,
+    timezone: draft.timezone,
+    startsAt: schedule.startsAt,
+    endsAt: schedule.endsAt,
+    profileKey: draft.profileKey,
+    registrationPolicy: "no_registration",
+    visibility: draft.visibility,
+    inviteLimitAttendee: draft.inviteLimitAttendee,
+    location: fieldValue(draft.location),
+    links: draft.links,
+  };
+}
+
+/** The settings body, as the group event settings contract reads it. */
+function settingsPayload(draft: EventDraft, schedule: ScheduleInstants, event: GroupEvent) {
+  return {
+    expectedUpdatedAt: event.updatedAt,
+    name: draft.name,
+    timezone: draft.timezone,
+    startsAt: schedule.startsAt,
+    endsAt: schedule.endsAt,
+    inviteLimitAttendee: draft.inviteLimitAttendee,
+    visibility: draft.visibility,
+    location: fieldValue(draft.location),
+    links: draft.links,
+  };
+}
+
 export function GroupEventEditor({
   groupId,
   event,
@@ -114,6 +176,13 @@ export function GroupEventEditor({
   const eventRevision = `${groupId}:${event?.id ?? "new"}:${event?.updatedAt ?? ""}`;
   const renderedEventRevision = useRef(eventRevision);
   const isCreate = event === null;
+  // One basis for validation: the contract the route parses — create or
+  // settings — decides what each field shows, live, and what Save may send.
+  const schedule = scheduleInstants(draft);
+  const form = useContractForm(
+    isCreate ? groupEventCreateSchema : groupEventSettingsUpdateSchema,
+    isCreate ? createPayload(draft, schedule) : settingsPayload(draft, schedule, event),
+  );
   const profileCatalog = useData(
     () =>
       isCreate
@@ -137,6 +206,7 @@ export function GroupEventEditor({
     if (renderedEventRevision.current === eventRevision) return;
     renderedEventRevision.current = eventRevision;
     setDraft(initialDraft(event));
+    form.reset();
     setError(null);
     setStatus("");
   }, [eventRevision]);
@@ -155,29 +225,22 @@ export function GroupEventEditor({
 
   async function save(submitEvent: Event): Promise<void> {
     submitEvent.preventDefault();
+    // Nothing leaves the page until the contract accepts the whole draft. A
+    // wall clock the zone cannot place is stated in the codec's own words.
+    const checked = form.submit();
+    if (!checked.data) {
+      setStatus("");
+      setError(schedule.problem ?? checked.message);
+      return;
+    }
     setSaving(true);
     setError(null);
     setStatus("Saving…");
     try {
-      const startsAt = fieldValue(draft.startsAt) ? isoDateTimeValue(draft.startsAt, draft.timezone) : null;
-      const endsAt = fieldValue(draft.endsAt) ? isoDateTimeValue(draft.endsAt, draft.timezone) : null;
       if (isCreate) {
-        const input = groupEventCreateSchema.parse({
-          slug: draft.slug,
-          name: draft.name,
-          timezone: draft.timezone,
-          startsAt,
-          endsAt,
-          profileKey: standaloneEventProfileKeySchema.parse(draft.profileKey),
-          registrationPolicy: "no_registration",
-          visibility: draft.visibility,
-          inviteLimitAttendee: draft.inviteLimitAttendee,
-          location: fieldValue(draft.location),
-          links: draft.links,
-        });
         const response = await postJson(
           `/api/v1/groups/${encodeURIComponent(groupId)}/events`,
-          input,
+          checked.data,
           groupEventDetailResponseSchema,
         );
         setStatus("Event created");
@@ -185,27 +248,17 @@ export function GroupEventEditor({
         return;
       }
 
-      const input = groupEventSettingsUpdateSchema.parse({
-        expectedUpdatedAt: event.updatedAt,
-        name: draft.name,
-        timezone: draft.timezone,
-        startsAt,
-        endsAt,
-        inviteLimitAttendee: draft.inviteLimitAttendee,
-        visibility: draft.visibility,
-        location: fieldValue(draft.location),
-        links: draft.links,
-      });
       const response = await patchJson(
         `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}/settings`,
-        input,
+        checked.data,
         groupEventDetailResponseSchema,
       );
       setStatus("Event updated");
       await onSaved(response.event);
     } catch (cause) {
       setStatus("");
-      setError(cause instanceof Error ? cause.message : "Could not save this event.");
+      // A server refusal names its fields the same way the contract does.
+      setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
@@ -213,10 +266,9 @@ export function GroupEventEditor({
 
   const selectedProfile = availableProfiles.find((profile) => profile.key === draft.profileKey);
   // The catalog is only fetched when creating, so "nothing to choose from" is a
-  // create-time condition. It blocks submission, which is what makes it the
-  // Field's `invalid` state rather than advisory guidance: the message is
-  // announced, and the select carries `aria-invalid` to say why the form
-  // cannot be sent.
+  // create-time condition. It is not the contract's verdict on a value, so it
+  // is stated as an alert beside the form it blocks rather than as a field
+  // state; Create stays disabled until a profile can be chosen.
   const noProfilesAvailable =
     isCreate && !profileCatalog.loading && profileCatalog.error === null && availableProfiles.length === 0;
   const profileHelp =
@@ -225,19 +277,21 @@ export function GroupEventEditor({
       : (selectedProfile?.description ?? undefined);
 
   return (
-    <form class="pk pk-stack" onSubmit={(event) => void save(event)}>
+    <form noValidate class="pk pk-stack" onSubmit={(event) => void save(event)} {...form.handlers}>
       {error && <ErrorAlert error={error} />}
       {isCreate && profileCatalog.error && <ErrorAlert error={profileCatalog.error} />}
+      {noProfilesAvailable && <Alert tone="warn">No standalone event profiles are currently available.</Alert>}
 
       {/* One attribute takes the whole form out of play while it saves,
           including the link editor's own controls, which take no prop for it.
           The submit and cancel pair stays outside so it keeps focus. */}
       <fieldset class="pk-fieldset pk-stack" disabled={saving}>
         <div class="pk-grid pk-grid--roomy">
-          <Field label="Event name" required>
+          <Field label="Event name" required {...form.of("name")}>
             {(control) => (
               <TextInput
                 {...control}
+                name="name"
                 value={draft.name}
                 onInput={(inputEvent) => handleName((inputEvent.target as HTMLInputElement).value)}
               />
@@ -256,10 +310,12 @@ export function GroupEventEditor({
                 ? "Used in the event's address. Lower case, words joined by hyphens."
                 : "The address is fixed once the event exists."
             }
+            {...form.of("slug")}
           >
             {(control) => (
               <TextInput
                 {...control}
+                name="slug"
                 class="pk-mono"
                 value={draft.slug}
                 disabled={!isCreate}
@@ -270,7 +326,6 @@ export function GroupEventEditor({
         </div>
 
         <EventScheduleFields
-          idPrefix={`group-event-${event?.id ?? "new"}`}
           startsAt={draft.startsAt}
           endsAt={draft.endsAt}
           timezone={draft.timezone}
@@ -280,15 +335,11 @@ export function GroupEventEditor({
         />
 
         <div class="pk-grid pk-grid--roomy">
-          <Field
-            label="Event profile"
-            help={profileHelp}
-            state={noProfilesAvailable ? "invalid" : undefined}
-            message={noProfilesAvailable ? "No standalone event profiles are currently available." : undefined}
-          >
+          <Field label="Event profile" help={profileHelp} {...form.of("profileKey")}>
             {(control) => (
               <Select
                 {...control}
+                name="profileKey"
                 value={draft.profileKey}
                 disabled={!isCreate || profileCatalog.loading || availableProfiles.length === 0}
                 onChange={(inputEvent) =>
@@ -313,10 +364,11 @@ export function GroupEventEditor({
             </Field>
           )}
 
-          <Field label="Visibility">
+          <Field label="Visibility" {...form.of("visibility")}>
             {(control) => (
               <Select
                 {...control}
+                name="visibility"
                 value={draft.visibility}
                 onChange={(inputEvent) =>
                   update("visibility", (inputEvent.target as HTMLSelectElement).value as EventVisibility)
@@ -331,10 +383,11 @@ export function GroupEventEditor({
             )}
           </Field>
 
-          <Field label="Location">
+          <Field label="Location" {...form.of("location")}>
             {(control) => (
               <TextInput
                 {...control}
+                name="location"
                 value={draft.location}
                 onInput={(inputEvent) => update("location", (inputEvent.target as HTMLInputElement).value)}
               />
@@ -345,10 +398,12 @@ export function GroupEventEditor({
         <Field
           label="Peer invitation limit"
           help="Maximum number of attendee invitations each registered participant may send. Set this to 0 to disable peer invitations. Manager invitations are configured separately."
+          {...form.of("inviteLimitAttendee")}
         >
           {(control) => (
             <TextInput
               {...control}
+              name="inviteLimitAttendee"
               type="number"
               min={0}
               max={50}

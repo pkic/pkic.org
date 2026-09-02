@@ -7,16 +7,7 @@
   padding-block: var(--pk-5);
   background: #000;
   border-top: 3px solid transparent;
-  border-image: linear-gradient(
-      to right,
-      $green,
-      $teal,
-      $blue,
-      $yellow,
-      $orange,
-      $red
-    )
-    1;
+  border-image: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red) 1;
   color: rgba(#fff, 0.65);
   text-align: center;
   font-size: 1.1em;
@@ -42,8 +33,11 @@
   border-top: 1px solid rgba(#fff, 0.06);
   // Breathing room between the rule and the brand column: the logo was
   // sitting directly against the border, which reads as a collision rather
-  // than a section break.
-  padding-block: var(--pk-6);
+  // than a section break. `--pk-7` rather than `--pk-6` because the
+  // production footer holds 48px (`py-5`) on both sides of its body, and at
+  // 32px the brand logo still sat visibly closer to the rule than the site
+  // readers compare this footer against.
+  padding-block: var(--pk-7);
 }
 
 // Four columns on a desktop footer: the brand and the three link lists.
@@ -344,31 +338,9 @@
   transition: transform 0.2s ease;
 }
 
-/* Size by sponsor tier (level 1–6) — uniform margin, height does the work */
-.sponsor-lvl-1 {
-  height: 22px;
-  max-width: 110px;
-}
-.sponsor-lvl-2 {
-  height: 26px;
-  max-width: 130px;
-}
-.sponsor-lvl-3 {
-  height: 32px;
-  max-width: 155px;
-}
-.sponsor-lvl-4 {
-  height: 38px;
-  max-width: 180px;
-}
-.sponsor-lvl-5 {
-  height: 44px;
-  max-width: 210px;
-}
-.sponsor-lvl-6 {
-  height: 52px;
-  max-width: 240px;
-}
+/* Every logo on the wall is the same size. A sponsor is told apart by
+   keeping its color while member logos sit in grayscale; rank is the
+   sponsors page's job, where the tier wall sizes by weight. */
 
 .members a:hover .member-logo {
   filter: none;

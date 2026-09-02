@@ -9,6 +9,7 @@ import { parseContactText } from "../../shared/invite-parser";
 import { postJson } from "../../shared/api-client";
 import type { ToastType } from "../../shared/ui";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Textarea, TextInput } from "../../ui/TextControl";
@@ -331,18 +332,12 @@ export function BulkInviteComposer({
               height={600}
               title={`${label} invitation preview`}
             />
-            <div class="pk-check">
-              <input
-                id={confirmId}
-                class="pk-check__input"
-                type="checkbox"
-                checked={confirmed}
-                onChange={(input) => setConfirmed(input.currentTarget.checked)}
-              />
-              <label class="pk-check__label pk-small" for={confirmId}>
-                I reviewed this preview and confirm sending this email.
-              </label>
-            </div>
+            <Checkbox
+              id={confirmId}
+              checked={confirmed}
+              onChange={(input) => setConfirmed(input.currentTarget.checked)}
+              label={<span class="pk-small">I reviewed this preview and confirm sending this email.</span>}
+            />
           </PanelBody>
         </Panel>
       )}

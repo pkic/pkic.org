@@ -1,4 +1,4 @@
-import { findLinkedinUrl, parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { getFeaturedLink, parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
 
 export interface PublicRoleProfileRow {
@@ -21,7 +21,7 @@ export interface PublicRoleProfile {
   organizationLogoUrl: string | null;
   organizationWebsite: string | null;
   photoUrl: string | null;
-  linkedin: string | null;
+  featuredLink: string | null;
 }
 
 /** Canonical public mapping for forum and working-group role holders. */
@@ -33,6 +33,6 @@ export function toPublicRoleProfile(row: PublicRoleProfileRow): PublicRoleProfil
     organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
     organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
     photoUrl: row.headshot_r2_key && row.identity_id ? `/api/v1/members/${row.identity_id}/logo` : null,
-    linkedin: findLinkedinUrl(parseLinksJson(row.links_json)),
+    featuredLink: getFeaturedLink(parseLinksJson(row.links_json)),
   };
 }

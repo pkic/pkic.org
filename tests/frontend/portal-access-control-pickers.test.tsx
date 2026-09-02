@@ -11,7 +11,6 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ResourceCapabilities } from "../../assets/ts/member-flows/portal/sections/management/ResourceCapabilities";
 import {
   TargetPicker,
   type PickedTarget,
@@ -87,21 +86,5 @@ describe("permission target picker", () => {
     const alert = container.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).not.toBe("");
-  });
-});
-
-describe("resource capabilities", () => {
-  it("says so in words when a resource grants nothing", () => {
-    const container = mount(<ResourceCapabilities capabilities={[]} />);
-    expect(container.textContent).toBe("None");
-  });
-
-  it("reads each capability as text, not as a color", () => {
-    const container = mount(<ResourceCapabilities capabilities={["manage_attendance", "read"]} />);
-    const badges = [...container.querySelectorAll(".pk-badge")];
-    expect(badges.map((badge) => badge.textContent)).toEqual(["manage attendance", "read"]);
-    // A capability name is a label, not a status, so it carries no tone dot
-    // that would claim a meaning the list does not have.
-    expect(badges.every((badge) => !badge.classList.contains("pk-badge--dot"))).toBe(true);
   });
 });

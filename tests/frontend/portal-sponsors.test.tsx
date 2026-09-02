@@ -12,7 +12,6 @@ import { managedSponsorTiersResponseSchema } from "../../assets/shared/schemas/s
 import { SponsorshipTierConfig } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipTierConfig";
 import { Sponsorships } from "../../assets/ts/member-flows/portal/sections/sponsors/management";
 import { SponsorWorkspace } from "../../assets/ts/member-flows/portal/sections/sponsors";
-import { controlFor } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -160,7 +159,7 @@ describe("portal sponsor management", () => {
     const active = container.querySelector<HTMLLabelElement>("label.pk-check");
     expect(active?.querySelector("input.pk-check__input")).not.toBeNull();
     expect(active?.querySelector("span.pk-check__label")?.textContent).toBe("Leader active");
-    expect(active?.querySelector("span.pk-check__label")?.className).toContain("pk-sr-only");
+    expect(active?.querySelector("span.pk-check__label .pk-sr-only")?.textContent).toBe("Leader active");
     // The actions column is named for assistive technology even though its
     // header is not drawn.
     expect([...container.querySelectorAll("th")].map((th) => th.textContent)).toContain("Actions");
@@ -220,7 +219,7 @@ describe("portal sponsorship pipeline filters", () => {
     );
   }
 
-  it("names both pipeline filters through a for/id pair rather than an option label", async () => {
+  it("keeps both pipeline filters in their columns' menus, not in the toolbar", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => companiesPage([])),
@@ -229,13 +228,12 @@ describe("portal sponsorship pipeline filters", () => {
     const container = mount(<Sponsorships canWrite={false} />);
     await settle();
 
-    const type = controlFor<HTMLSelectElement>(container, "Type");
-    const stage = controlFor<HTMLSelectElement>(container, "Stage");
-    expect(type.tagName).toBe("SELECT");
-    expect(stage.tagName).toBe("SELECT");
-    // Two competing names for one control is the defect this replaced.
-    expect(type.getAttribute("aria-label")).toBeNull();
-    expect(stage.getAttribute("aria-label")).toBeNull();
+    // No selects in the toolbar: the stage filter is the Stages column's own
+    // menu and the type filter the Sponsorships column's, each named after
+    // the column it narrows.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    expect(container.querySelector('button[aria-label="Stages column options"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Sponsorships column options"]')).not.toBeNull();
   });
 
   it("sends the chosen stage to the companies query", async () => {
@@ -251,10 +249,18 @@ describe("portal sponsorship pipeline filters", () => {
     const container = mount(<Sponsorships canWrite={false} />);
     await settle();
 
-    const stage = controlFor<HTMLSelectElement>(container, "Stage");
-    stage.value = "contacted";
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stages column options"]');
+    if (!trigger) throw new Error("the stages column menu is not rendered");
     await act(async () => {
-      stage.dispatchEvent(new Event("change", { bubbles: true }));
+      trigger.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const contacted = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
+      item.textContent?.includes("Contacted"),
+    );
+    if (!contacted) throw new Error("the stage choices are not rendered");
+    await act(async () => {
+      contacted.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 

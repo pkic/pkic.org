@@ -331,3 +331,28 @@ export function formFieldOptionValues(value: unknown): string[] {
     .filter((option) => option.active)
     .map((option) => option.value);
 }
+
+/**
+ * One field's rules as the JSON text an editor holds them in. The text has to
+ * parse before the rules are checked, so a typo is refused as a typo, on the
+ * text control, rather than reaching the route as no rules at all. The rules
+ * themselves are read by the same contract the route parses.
+ */
+export const formFieldRulesTextSchema = z.object({
+  validation: z
+    .string()
+    .transform((text, context): unknown => {
+      const trimmed = text.trim();
+      if (!trimmed) return {};
+      try {
+        return JSON.parse(trimmed);
+      } catch (error) {
+        context.addIssue({
+          code: "custom",
+          message: `Not valid JSON: ${error instanceof Error ? error.message : "the text cannot be parsed"}`,
+        });
+        return z.NEVER;
+      }
+    })
+    .pipe(formFieldRulesSchema),
+});

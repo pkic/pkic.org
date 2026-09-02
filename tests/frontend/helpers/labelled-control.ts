@@ -16,7 +16,9 @@ function labelText(label: HTMLLabelElement): string {
 }
 
 /**
- * The control a label names, resolved through the `for`/`id` pair itself.
+ * The control a label names, resolved the way the platform resolves it: through
+ * the `for`/`id` pair when the label carries a `for`, and otherwise through the
+ * control the label wraps, which is how `Checkbox` and `Radio` bind theirs.
  *
  * The element type is the caller's to name — `controlFor<HTMLSelectElement>(…)`
  * for a select, `<HTMLTextAreaElement>` for a textarea. It defaults to an
@@ -26,7 +28,9 @@ function labelText(label: HTMLLabelElement): string {
 export function controlFor<Control extends HTMLElement = HTMLInputElement>(root: ParentNode, label: string): Control {
   const match = [...root.querySelectorAll("label")].find((candidate) => labelText(candidate) === label);
   if (!match) throw new Error(`no label reads "${label}"`);
-  const control = root.querySelector<Control>(`[id="${match.htmlFor}"]`);
+  const control = match.htmlFor
+    ? root.querySelector<Control>(`[id="${match.htmlFor}"]`)
+    : (match.control as Control | null);
   if (!control) throw new Error(`label "${label}" points at no control`);
   return control;
 }
@@ -84,4 +88,37 @@ export function buttonNamed(root: ParentNode, label: string): HTMLButtonElement 
 /** Every button's visible text, in document order. */
 export function buttonNames(root: ParentNode): string[] {
   return [...root.querySelectorAll("button")].map((button) => button.textContent ?? "");
+}
+
+/**
+ * Opens the design-system combobox named by `label` and returns its options.
+ *
+ * The listbox is resolved through the `aria-controls` wiring the combobox
+ * announces, so this fails exactly when the ARIA contract is broken.
+ */
+export async function openCombobox(root: ParentNode, label: string): Promise<HTMLElement[]> {
+  const input = controlFor(root, label);
+  if (input.getAttribute("aria-expanded") !== "true") {
+    // No timer here: `act` flushes the render, and a timer would never fire
+    // for a caller running under fake timers.
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+  }
+  const listboxId = input.getAttribute("aria-controls");
+  const listbox = listboxId ? (root.querySelector(`[id="${listboxId}"]`) ?? document.getElementById(listboxId)) : null;
+  if (!listbox) throw new Error(`combobox "${label}" controls no listbox`);
+  return [...listbox.querySelectorAll<HTMLElement>('[role="option"]')];
+}
+
+/** Picks the combobox option carrying `key` the way a pointer user would. */
+export async function chooseComboboxOption(root: ParentNode, label: string, key: string): Promise<void> {
+  const options = await openCombobox(root, label);
+  const match = options.find((option) => option.getAttribute("data-key") === key);
+  if (!match) throw new Error(`combobox "${label}" lists no option with key "${key}"`);
+  await act(async () => {
+    match.click();
+    await Promise.resolve();
+  });
 }

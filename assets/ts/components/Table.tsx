@@ -23,6 +23,7 @@
  */
 
 import type { ComponentChildren } from "preact";
+import { useState } from "preact/hooks";
 
 import {
   DataTable as SystemDataTable,
@@ -31,6 +32,8 @@ import {
   type DataTableSelection,
   type SortDirection,
 } from "../ui/DataTable";
+import { Menu, type MenuItem } from "../ui/Menu";
+import type { FilterOption } from "./FilterSelect";
 import "../ui/Content.css";
 
 export type HeadCell = string | { label: string; className?: string };
@@ -56,6 +59,27 @@ export interface Column<T> {
    * proportional share of a wide screen's leftover width.
    */
   width?: DataTableColumnWidth;
+  /**
+   * What the column can be narrowed by: the query parameter the server
+   * filters on and the values it accepts. The first option is the open state
+   * — "All stages" — and carries the empty value. The table owns which value
+   * is in force; the column only declares the vocabulary. This is where a
+   * list's filters live now, rather than as a row of selects in the toolbar:
+   * a table with ten filterable columns keeps a clean head, and the reader
+   * finds a column's filter where the column is.
+   */
+  filter?: ColumnFilter;
+  /**
+   * Whether the reader may take the column out of the table. The subject
+   * column and the row's actions cannot be hidden — a list without its subject
+   * is not a list — so those default to false; everything else to true.
+   */
+  hideable?: boolean;
+}
+
+export interface ColumnFilter {
+  param: string;
+  options: readonly FilterOption[];
 }
 
 /**
@@ -163,6 +187,10 @@ export interface DataTableProps<T> {
    * are the same strings `rowKey` produces.
    */
   selection?: DataTableSelection;
+  /** The column filters in force, by query parameter. */
+  filters?: Record<string, string>;
+  /** Called with the parameter and its new value ("" opens the column back up). */
+  onFilterChange?: (param: string, value: string) => void;
 }
 
 export function DataTable<T>({
@@ -178,7 +206,12 @@ export function DataTable<T>({
   onSort,
   loading,
   selection,
+  filters = {},
+  onFilterChange,
 }: DataTableProps<T>) {
+  // Hidden columns are the reader's choice for this visit; they are keyed by
+  // header so the choice survives a re-render that rebuilds the column list.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   // Row identity is by index when the caller has no key, so `rowKey` here is
   // an index lookup rather than a value the design system interprets.
   const indexOf = new Map<T, number>();
@@ -198,7 +231,71 @@ export function DataTable<T>({
   const slackIndex =
     primaryIndex >= 0 ? primaryIndex : columns.findIndex((column) => headLabel(column.header).trim().length > 0);
 
-  const systemColumns: DataTableColumn<T>[] = columns.map((column, index) => {
+  const canHide = (column: Column<T>, index: number) =>
+    column.hideable ?? (index !== slackIndex && headLabel(column.header).trim().length > 0);
+
+  /**
+   * The column's commands, in the order a reader reaches for them: the sort
+   * directions, then the values it can be narrowed to, then hiding it. Each
+   * choice shows whether it is the one in force, so the menu is also where the
+   * reader sees the table's current shape.
+   */
+  function menuFor(column: Column<T>, index: number): MenuItem[] {
+    const id = `column-${String(index)}`;
+    const items: MenuItem[] = [];
+    const columnSort = column.sort;
+    if (columnSort && onSort) {
+      items.push(
+        {
+          id: `${id}-asc`,
+          label: "Sort ascending",
+          checked: currentSort === columnSort.asc,
+          onSelect: () => onSort(columnSort.asc),
+        },
+        {
+          id: `${id}-desc`,
+          label: "Sort descending",
+          checked: currentSort === columnSort.desc,
+          onSelect: () => onSort(columnSort.desc),
+        },
+      );
+    }
+    const columnFilter = column.filter;
+    if (columnFilter && onFilterChange) {
+      const current = filters[columnFilter.param] ?? "";
+      columnFilter.options.forEach((option, position) => {
+        items.push({
+          id: `${id}-filter-${option.value || "all"}`,
+          label: option.label,
+          checked: current === option.value,
+          separatorBefore: position === 0 && items.length > 0,
+          onSelect: () => onFilterChange(columnFilter.param, option.value),
+        });
+      });
+    }
+    if (canHide(column, index)) {
+      items.push({
+        id: `${id}-hide`,
+        label: "Hide column",
+        separatorBefore: items.length > 0,
+        onSelect: () => setHidden((current) => new Set([...current, headLabel(column.header)])),
+      });
+    }
+    return items;
+  }
+
+  function filterSummaryFor(column: Column<T>): string | undefined {
+    if (!column.filter) return undefined;
+    const current = filters[column.filter.param];
+    if (!current) return undefined;
+    return column.filter.options.find((option) => option.value === current)?.label ?? current;
+  }
+
+  const visible = columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ column }) => !hidden.has(headLabel(column.header)));
+
+  const systemColumns: DataTableColumn<T>[] = visible.map(({ column, index }) => {
     const label = headLabel(column.header);
     // A column with no header is the row's actions: named for assistive
     // technology, unlabelled on screen, and at the end of the row. It is NOT
@@ -214,7 +311,30 @@ export function DataTable<T>({
       align: alignOf(headClass(column.header), column.className ?? "") ?? (isActions ? "end" : undefined),
       width: widthFor(column, index, slackIndex),
       cellClass: utilitiesOf(column.className),
+      menu: isActions ? undefined : menuFor(column, index),
+      filterSummary: filterSummaryFor(column),
     };
+  });
+
+  // Hidden columns come back from one place: a menu at the end of the head
+  // that lists every column the reader may hide, checked while it is shown.
+  const columnsMenu: MenuItem[] = columns.flatMap((column, index) => {
+    if (!canHide(column, index)) return [];
+    const label = headLabel(column.header);
+    return [
+      {
+        id: `columns-${String(index)}`,
+        label,
+        checked: !hidden.has(label),
+        onSelect: () =>
+          setHidden((current) => {
+            const next = new Set(current);
+            if (next.has(label)) next.delete(label);
+            else next.add(label);
+            return next;
+          }),
+      },
+    ];
   });
 
   // Which column the server's opaque sort string belongs to, and which way.
@@ -250,6 +370,13 @@ export function DataTable<T>({
       loading={loading}
       empty={empty}
       selection={selection}
+      headerEnd={
+        columnsMenu.length > 0 ? (
+          <Menu label="Choose columns" heading="Columns" items={columnsMenu} align="end">
+            <span class="pk-table__head-glyph pk-table__head-glyph--columns" aria-hidden="true" />
+          </Menu>
+        ) : undefined
+      }
     />
   );
 }

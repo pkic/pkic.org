@@ -60,7 +60,10 @@
   .pk-toolbar__controls {
     display: flex;
     align-items: center;
-    gap: var(--pk-3);
+    gap: var(--pk-2) var(--pk-3);
+    /* Controls wrap rather than crush: a row of filters and buttons that
+       runs out of room used to squeeze every select down to its caret. */
+    flex-wrap: wrap;
   }
 
   @media (max-width: 47.9375rem) {
@@ -77,7 +80,9 @@
 
     .pk-toolbar__controls {
       width: 100%;
-      justify-content: flex-end;
+      /* Under a full-width search box the commands read as a row from the
+         left; pushed to the right, a wrapped last button sat alone. */
+      justify-content: flex-start;
     }
   }
 }

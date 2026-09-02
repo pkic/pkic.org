@@ -154,7 +154,7 @@ test("a selected-group manager changes one attendee day through portal routes", 
   await openRow(row, `Open ${event.name}`);
   const detail = page.getByRole("region", { name: `${event.name} workspace` });
   await tab(detail, "Registrations").click();
-  await expect(detail.getByRole("heading", { name: "Attendees", exact: true })).toBeVisible();
+  await expect(detail.getByRole("region", { name: "Registrations", exact: true })).toBeVisible();
 
   const attendeeRow = detail.getByRole("row").filter({ hasText: attendeeEmail });
   await expect(attendeeRow).toBeVisible();

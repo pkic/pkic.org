@@ -7,12 +7,11 @@ import {
   type EventOccurrence,
   type GroupEventSeries,
 } from "../../assets/shared/schemas/event-series";
-import { GroupMeetingSeriesDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetingSeriesDetail";
 import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
 import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
-import { isCurrentTab, tabs } from "./helpers/tabs";
+import { groupEventSeriesFixture } from "./helpers/meeting-series-fixture";
 
 const navigate = vi.fn();
 
@@ -57,33 +56,7 @@ afterEach(() => {
 });
 
 function baseSeries(overrides: Partial<GroupEventSeries> = {}): GroupEventSeries {
-  return {
-    id: "60000000-0000-4000-8000-000000000005",
-    eventId: "70000000-0000-4000-8000-000000000005",
-    ownerGroupId: GROUP_ID,
-    eventName: "Architecture call",
-    eventSlug: "architecture-call",
-    profileKey: "meeting",
-    registrationPolicy: "no_registration",
-    visibility: "group_members",
-    memberEligibility: "owner_group",
-    guestPolicy: "occurrence_invitation",
-    startsAt: "2026-09-01T15:00:00.000Z",
-    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-    timezone: "Europe/Amsterdam",
-    durationMinutes: 60,
-    location: "Online",
-    providerType: null,
-    providerConfigured: false,
-    active: true,
-    inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
-    nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-    createdAt: "2026-08-01T00:00:00.000Z",
-    updatedAt: "2026-08-01T00:00:00.000Z",
-    capabilities: ["view", "manage"],
-    occurrenceCount: 0,
-    ...overrides,
-  };
+  return groupEventSeriesFixture(GROUP_ID, overrides);
 }
 
 const SERIES_INVITE_WINDOW = {
@@ -160,17 +133,11 @@ describe("portal group meeting management", () => {
     const onChanged = vi.fn(async () => {});
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={onChanged} />);
     expect(container.textContent).toContain("recurring schedule is locked");
-    // The recurrence editor and the time-zone input own their ids, which the
-    // series fields still hand them. Every other control is inside a `Field`,
-    // which pairs label and control by generated id, so it is resolved
-    // through that pair — the lookup then fails exactly when the labelling
-    // contract is broken rather than when an id is renamed.
-    for (const suffix of ["recurrence", "timezone"]) {
-      expect(
-        container.querySelector<HTMLInputElement>(`#meeting-series-settings-${series.id}-${suffix}`)?.disabled,
-      ).toBe(true);
-    }
-    for (const label of ["First occurrence", "Duration (minutes)"]) {
+    // Every control is inside a `Field`, which pairs label and control by
+    // generated id, so each is resolved through that pair — the lookup then
+    // fails exactly when the labelling contract is broken rather than when an
+    // id is renamed.
+    for (const label of ["Repeats", "Time zone", "First occurrence", "Duration (minutes)"]) {
       expect(controlFor(container, label).disabled).toBe(true);
     }
     await typeInto(controlFor(container, "Meeting name"), "Updated materialized call");
@@ -231,14 +198,12 @@ describe("portal group meeting management", () => {
         onChanged={onChanged}
       />,
     );
-    const locationInput = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-location`,
-    )!;
+    const locationInput = controlFor(container, "Location override");
     expect(locationInput.value).toBe("");
-    expect(container.querySelector(`#meeting-occurrence-settings-${occurrence.id}-provider-action`)).toBeNull();
-    const provider = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-provider-url`,
-    )!;
+    // No provider is configured, so the reader is asked for a URL rather than
+    // what to do with one that does not exist.
+    expect(controlFor(container, "Meeting-provider URL").tagName).toBe("INPUT");
+    const provider = controlFor(container, "Meeting-provider URL");
     provider.value = "https://meet.example.test/new-room";
     void act(() => {
       provider.dispatchEvent(new Event("input", { bubbles: true }));
@@ -287,13 +252,9 @@ describe("portal group meeting management", () => {
         onChanged={() => {}}
       />,
     );
-    const provider = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-provider-url`,
-    )!;
+    const provider = controlFor(container, "Meeting-provider URL");
     expect(provider.required).toBe(false);
-    const locationInput = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-location`,
-    )!;
+    const locationInput = controlFor(container, "Location override");
     locationInput.value = "Room 2";
     void act(() => {
       locationInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -456,7 +417,7 @@ describe("portal group meeting management", () => {
     // the text. Only the first renders an operating-system default control.
     const scope = controlFor(container, "Eligible for every occurrence in this series");
     expect(scope.classList.contains("pk-check__input")).toBe(true);
-    const scopeLabel = container.querySelector<HTMLLabelElement>(`label[for="${scope.id}"]`)!;
+    const scopeLabel = scope.closest("label")!;
     expect(scopeLabel.classList.contains("pk-check")).toBe(true);
     expect(scopeLabel.querySelector(".pk-check__label")?.textContent).toBe(
       "Eligible for every occurrence in this series",
@@ -520,77 +481,5 @@ describe("portal group meeting management", () => {
     expect(alert?.textContent).toContain("Someone else changed this at the same time.");
     expect(controlFor<HTMLInputElement>(container, "Meeting name").value).toBe("Renamed call");
     expect(buttonNamed(container, "Save series")).toBeDefined();
-  });
-
-  it("names each series panel after the series it belongs to, and links no tab to a missing id", async () => {
-    const series = baseSeries();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
-
-    // The tabs navigate, so they are links marked `aria-current` — not the
-    // ARIA tab pattern, and so the regions below are named sections rather
-    // than tabpanels pointing at ids no link carries.
-    expect(container.querySelector("[role='tabpanel']")).toBeNull();
-    const region = container.querySelector("section[aria-label]");
-    expect(region?.getAttribute("aria-label")).toBe("Architecture call occurrences");
-    for (const element of container.querySelectorAll("[aria-labelledby]")) {
-      const target = element.getAttribute("aria-labelledby")!;
-      expect(container.querySelector(`[id="${target}"]`)).not.toBeNull();
-    }
-  });
-
-  it("opens the tab given by an initial resourceTab", async () => {
-    const series = baseSeries();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(
-      <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
-    );
-
-    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings");
-    expect(isCurrentTab(settingsTab)).toBe(true);
-    expect(container.textContent).toContain("Save series");
-  });
-
-  it("falls back to the default tab for an unrecognized or unavailable resourceTab", async () => {
-    const series = baseSeries({ capabilities: ["view"] });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(
-      <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
-    );
-
-    expect(tabs(container)).toHaveLength(1);
-    const occurrencesTab = tabs(container)[0];
-    expect(isCurrentTab(occurrencesTab)).toBe(true);
-    expect(occurrencesTab?.textContent).toBe("Occurrences");
-  });
-
-  it("navigates to the canonical series tab URL when a tab is clicked", async () => {
-    const series = baseSeries();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
-
-    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings")!;
-    expect(settingsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${series.id}/settings`);
-
-    await act(async () => {
-      settingsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${series.id}/settings`);
   });
 });

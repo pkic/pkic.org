@@ -81,29 +81,12 @@ export function MeetingOccurrences({
 
   return (
     <div class="pk pk-stack">
-      {canManage && (
-        <div class="pk-cluster">
-          <Button
-            size="sm"
-            variant="primary"
-            aria-expanded={showCreate}
-            onClick={() => setShowCreate((shown) => !shown)}
-          >
-            {showCreate ? "Hide occurrence form" : "Add occurrence"}
-          </Button>
-        </div>
-      )}
       {canManage && showCreate && (
         <Panel>
           <PanelHeader title="New occurrence" />
           <PanelBody class="pk-stack">
             <form class="pk-stack" onSubmit={(event) => void create(event)}>
-              <MeetingOccurrenceFields
-                idPrefix={`meeting-occurrence-create-${series.id}`}
-                draft={draft}
-                disabled={saving}
-                onChange={setDraft}
-              />
+              <MeetingOccurrenceFields draft={draft} disabled={saving} onChange={setDraft} />
               <div class="pk-cluster">
                 <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
                   {saving ? "Creating…" : "Create occurrence"}
@@ -126,6 +109,15 @@ export function MeetingOccurrences({
         paginate
         initialSort="starts_at"
         actionsRef={actions}
+        createAction={
+          canManage
+            ? {
+                label: showCreate ? "Hide occurrence form" : "Add occurrence",
+                onSelect: () => setShowCreate((shown) => !shown),
+                expanded: showCreate,
+              }
+            : undefined
+        }
         columns={[
           {
             header: "Starts",

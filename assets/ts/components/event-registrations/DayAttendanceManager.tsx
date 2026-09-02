@@ -3,14 +3,18 @@ import type { EventDay } from "../../../shared/schemas/event-configuration";
 import {
   eventRegistrationAdmitResponseSchema,
   eventRegistrationDayAttendanceResponseSchema,
+  eventRegistrationSelectedDayAdmitSchema,
   type EventRegistrationAttendanceDetailResponse,
 } from "../../../shared/schemas/event-registration-detail";
+import { useContractForm } from "../../hooks/useContractForm";
 import { patchJson, postJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
 import { DataTable } from "../Table";
 import { Badge } from "../Badge";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
+import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select, Textarea } from "../../ui/TextControl";
 
@@ -26,7 +30,6 @@ export interface DayAttendanceManagerProps {
   dayWaitlist: AttendanceDetail["dayWaitlist"];
   eventDays: EventDay[];
   registrationEndpoint: string;
-  idPrefix: string;
   /** Server-derived effective event manage capability; never infer this in the component. */
   canVip?: boolean;
   onReload: () => void | Promise<void>;
@@ -43,7 +46,6 @@ export function DayAttendanceManager({
   dayWaitlist,
   eventDays,
   registrationEndpoint,
-  idPrefix,
   canVip = false,
   onReload,
   onSuccess,
@@ -56,6 +58,13 @@ export function DayAttendanceManager({
   const [vipReason, setVipReason] = useState("");
   const [applyingVip, setApplyingVip] = useState(false);
   const [message, setMessage] = useState<{ text: string; kind: "success" | "danger" } | null>(null);
+  // One basis for validation: the shared admission contract the server parses
+  // decides what the reason field shows, live, and what the override may send.
+  const vipForm = useContractForm(eventRegistrationSelectedDayAdmitSchema, {
+    mode: "vip",
+    reason: vipReason,
+    dayDates: vipDayDates,
+  });
 
   if (!eventDays.length) return <p class="pk pk-small">No event days configured.</p>;
 
@@ -76,10 +85,6 @@ export function DayAttendanceManager({
   const activeWaitlistCount = dayWaitlist.filter(
     (entry) => entry.status === "waiting" || entry.status === "offered",
   ).length;
-  const vipReasonId = `${idPrefix}-vip-reason`;
-  const vipReasonHelpId = `${idPrefix}-vip-reason-help`;
-  const vipReasonTooShort = vipReason.trim().length > 0 && vipReason.trim().length < 3;
-
   async function reloadWithSuccess(text: string): Promise<void> {
     onSuccess?.(text);
     await onReload();
@@ -153,24 +158,21 @@ export function DayAttendanceManager({
   }
 
   async function applyVipOverride(): Promise<void> {
-    const reason = vipReason.trim();
-    if (vipDayDates.length === 0 || reason.length < 3) return;
+    const checked = vipForm.submit();
+    if (!checked.data) return;
     setApplyingVip(true);
     setMessage(null);
     try {
-      await postJson(
-        `${registrationEndpoint}/admissions`,
-        { mode: "vip", reason, dayDates: vipDayDates },
-        eventRegistrationAdmitResponseSchema,
-      );
-      const admittedCount = vipDayDates.length;
+      await postJson(`${registrationEndpoint}/admissions`, checked.data, eventRegistrationAdmitResponseSchema);
+      const admittedCount = checked.data.dayDates.length;
       setVipDayDates([]);
       setVipReason("");
+      vipForm.reset();
       await reloadWithSuccess(
         `VIP override applied to ${admittedCount} ${admittedCount === 1 ? "day" : "days"}; the registration update email was queued.`,
       );
     } catch (error) {
-      setMessage({ text: (error as Error).message, kind: "danger" });
+      setMessage({ text: vipForm.refuse(error), kind: "danger" });
     } finally {
       setApplyingVip(false);
     }
@@ -270,22 +272,15 @@ export function DayAttendanceManager({
                 day.current === "in_person" &&
                 day.inPersonCapacity != null &&
                 day.inPersonCapacity > 0;
-              const inputId = `${idPrefix}-admit-${day.dayDate}`;
               return (
                 <div class="pk-stack pk-stack--tight">
-                  <div class="pk-check">
-                    <input
-                      id={inputId}
-                      type="checkbox"
-                      class="pk-check__input"
-                      checked={admitDayDates.includes(day.dayDate)}
-                      disabled={!canAdmit || admitting}
-                      onChange={(event) => setAdmitChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
-                    />
-                    <label class="pk-check__label pk-small" for={inputId}>
-                      Admit day
-                    </label>
-                  </div>
+                  <Checkbox
+                    class="pk-small"
+                    checked={admitDayDates.includes(day.dayDate)}
+                    disabled={!canAdmit || admitting}
+                    onChange={(event) => setAdmitChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
+                    label="Admit day"
+                  />
                   {canReturnToWaitlist && (
                     <div class="pk-cluster">
                       <Button
@@ -335,72 +330,55 @@ export function DayAttendanceManager({
               Requires the effective event <code>manage</code> capability. The narrower <code>manage_attendance</code>
               capability can admit only actively waitlisted days and cannot use this capacity override.
             </p>
-            <fieldset class="pk-fieldset pk-field" disabled={applyingVip}>
-              <legend class="pk-field__label">Days to admit</legend>
-              <div class="pk-cluster">
-                {rows
-                  .filter((day) => day.supportsInPerson)
-                  .map((day) => {
-                    const inputId = `${idPrefix}-vip-${day.dayDate}`;
-                    return (
-                      <div class="pk-check" key={day.dayDate}>
-                        <input
-                          id={inputId}
-                          type="checkbox"
-                          class="pk-check__input"
-                          checked={vipDayDates.includes(day.dayDate)}
-                          disabled={applyingVip}
-                          onChange={(event) => setVipChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
-                        />
-                        <label class="pk-check__label" for={inputId}>
-                          {day.label ? `${day.label} — ` : ""}
-                          {day.dayDate}
-                        </label>
-                      </div>
-                    );
-                  })}
-              </div>
-            </fieldset>
-            {/*
-             * The label carries an explicit `for`/`id` pair rather than going
-             * through Field, because `idPrefix` is this component's public
-             * contract: the caller addresses these controls by that prefix,
-             * and a generated id would quietly break it.
-             */}
-            <div class="pk-field">
-              <label class="pk-field__label" for={vipReasonId}>
-                Required reason
-              </label>
-              <div class="pk-field__control">
-                <Textarea
-                  id={vipReasonId}
-                  rows={2}
-                  minLength={3}
-                  maxLength={1000}
-                  required
-                  value={vipReason}
-                  disabled={applyingVip}
-                  aria-describedby={vipReasonHelpId}
-                  aria-invalid={vipReasonTooShort ? "true" : undefined}
-                  onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
-                />
-              </div>
-              <p class="pk-small" id={vipReasonHelpId} role={vipReasonTooShort ? "alert" : undefined}>
-                {vipReasonTooShort
-                  ? "Give at least three characters of reason before applying the override."
-                  : "At least three characters. This action is audited and queues a registration-update email."}
-              </p>
-            </div>
-            <div class="pk-cluster">
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={vipDayDates.length === 0 || vipReason.trim().length < 3}
-                loading={applyingVip}
-                onClick={() => void applyVipOverride()}
+            {/* The contract's handlers sit on the group so every control in it
+                reports being touched; the reason is the one they name. */}
+            <div class="pk-stack pk-stack--snug" {...vipForm.handlers}>
+              <fieldset class="pk-fieldset pk-field" disabled={applyingVip}>
+                <legend class="pk-field__label">Days to admit</legend>
+                <div class="pk-cluster">
+                  {rows
+                    .filter((day) => day.supportsInPerson)
+                    .map((day) => (
+                      <Checkbox
+                        key={day.dayDate}
+                        checked={vipDayDates.includes(day.dayDate)}
+                        disabled={applyingVip}
+                        onChange={(event) => setVipChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
+                        label={`${day.label ? `${day.label} — ` : ""}${day.dayDate}`}
+                      />
+                    ))}
+                </div>
+              </fieldset>
+              <Field
+                label="Required reason"
+                required
+                help="At least three characters. This action is audited and queues a registration-update email."
+                {...vipForm.of("reason")}
               >
-                {applyingVip ? "Applying…" : "Apply VIP override"}
-              </Button>
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    name="reason"
+                    rows={2}
+                    minLength={3}
+                    maxLength={1000}
+                    value={vipReason}
+                    disabled={applyingVip}
+                    onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
+                  />
+                )}
+              </Field>
+              <div class="pk-cluster">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={!vipForm.valid}
+                  loading={applyingVip}
+                  onClick={() => void applyVipOverride()}
+                >
+                  {applyingVip ? "Applying…" : "Apply VIP override"}
+                </Button>
+              </div>
             </div>
           </PanelBody>
         </Panel>

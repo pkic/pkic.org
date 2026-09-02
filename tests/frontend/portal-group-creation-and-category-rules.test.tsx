@@ -8,7 +8,14 @@ import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { groupCreateSchema } from "../../assets/shared/schemas/groups";
-import { buttonNamed, chooseOption, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
+import {
+  buttonNamed,
+  chooseComboboxOption,
+  controlFor,
+  labelNames,
+  submitForm,
+  typeInto,
+} from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 
@@ -127,7 +134,7 @@ describe("portal group creation and category policy", () => {
     await act(() => render(<GroupCreateForm onCreated={onCreated} />, container));
     await settle();
     await settle();
-    await chooseOption(controlFor<HTMLSelectElement>(container, "Group type"), "working_group");
+    await chooseComboboxOption(container, "Group type", "working_group");
     await settle();
 
     // Every editable field is reachable through its own label, and the two
@@ -212,7 +219,7 @@ describe("portal group creation and category policy", () => {
     await settle();
     await settle();
 
-    await chooseOption(controlFor<HTMLSelectElement>(container, "Group type"), "working_group");
+    await chooseComboboxOption(container, "Group type", "working_group");
     await settle();
     await typeInto(controlFor(container, "Name"), "Security Working Group");
     await submitForm(container);
@@ -325,7 +332,7 @@ describe("portal group creation and category policy", () => {
     await settle();
     expect(container.textContent).toContain("Organization member");
     expect(container.textContent).toContain("Student");
-    const studentJoin = container.querySelector<HTMLInputElement>('input[aria-label="Student may join"]')!;
+    const studentJoin = controlFor(container, "Student may join");
     await act(() => studentJoin.click());
     const save = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Save category rules",
@@ -347,8 +354,8 @@ describe("portal group creation and category policy", () => {
     // without a visible row header to read back.
     expect(container.querySelector("table caption")?.textContent).toBe("Membership category eligibility");
     expect(
-      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((input) =>
-        input.getAttribute("aria-label"),
+      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map(
+        (input) => input.closest("label")?.textContent,
       ),
     ).toEqual([
       "Organization member may join",
