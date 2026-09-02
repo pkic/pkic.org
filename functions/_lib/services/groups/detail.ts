@@ -34,6 +34,7 @@ export function publicGroupDetail(group: Group): PublicGroup {
     links: group.links,
     visibility: group.visibility,
     publicLeadership: group.publicLeadership,
+    publicRoster: group.publicRoster,
   };
 }
 

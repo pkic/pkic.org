@@ -45,6 +45,7 @@ interface GroupRow {
   automatic_enrollment_mode: "none" | "category";
   allow_automatic_opt_out: number;
   public_leadership: number;
+  public_roster: number;
   min_endorsers_for_ballot: number;
   active: number;
   revision: number;
@@ -66,7 +67,7 @@ const GROUP_SELECT = `SELECT
   parent_type.plural_label AS parent_type_plural_label,
   g.description, g.links_json, g.visibility, g.governance_inheritance_mode,
   g.eligibility_mode, g.automatic_enrollment_mode,
-  g.allow_automatic_opt_out, g.public_leadership, g.min_endorsers_for_ballot, g.active, g.revision,
+  g.allow_automatic_opt_out, g.public_leadership, g.public_roster, g.min_endorsers_for_ballot, g.active, g.revision,
   (SELECT COUNT(*) FROM group_memberships capacity
     WHERE capacity.group_id = g.id AND capacity.left_at IS NULL) AS membership_capacity_count,
   (SELECT COUNT(DISTINCT represented.member_id) FROM group_memberships represented
@@ -113,6 +114,7 @@ function mapGroup(row: GroupRow): Group {
     automaticEnrollmentMode: row.automatic_enrollment_mode,
     allowAutomaticOptOut: row.allow_automatic_opt_out === 1,
     publicLeadership: row.public_leadership === 1,
+    publicRoster: row.public_roster === 1,
     minEndorsersForBallot: row.min_endorsers_for_ballot,
     active: row.active === 1,
     revision: row.revision,
@@ -345,6 +347,7 @@ interface MembershipRow {
   membership_category: string | null;
   source: GroupMembership["source"];
   created_by_user_id: string | null;
+  title: string | null;
   joined_at: string;
   left_at: string | null;
 }
@@ -363,10 +366,16 @@ function mapMembership(row: MembershipRow): GroupMembership {
     membershipCategory: row.membership_category as GroupMembership["membershipCategory"],
     source: row.source,
     createdByUserId: row.created_by_user_id,
+    title: row.title,
     joinedAt: row.joined_at,
     leftAt: row.left_at,
   };
 }
+
+const MEMBERSHIP_SELECT = `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
+  u.first_name, u.last_name, u.email, o.name AS organization_name,
+  mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
+  gm.title, gm.joined_at, gm.left_at`;
 
 const MEMBERSHIP_FROM = `FROM group_memberships gm
   JOIN users u ON u.id = gm.user_id
@@ -380,6 +389,7 @@ const MEMBERSHIP_SORT_EXPRESSIONS = {
   organization_name: "LOWER(COALESCE(o.name, ''))",
   membership_category: "mca.category_code",
   joined_at: "gm.joined_at",
+  left_at: "gm.left_at",
 } satisfies Record<(typeof GROUP_MEMBERSHIP_SORT_COLUMNS)[number], string>;
 
 export function buildGroupMembershipsPageQuery(groupId: string, query: GroupMembershipsListQuery): OffsetPageQuery {
@@ -409,10 +419,7 @@ export function buildGroupMembershipsPageQuery(groupId: string, query: GroupMemb
   const fromSql = `${MEMBERSHIP_FROM} WHERE ${conditions.join(" AND ")}`;
   return {
     source: {
-      selectSql: `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
-        u.first_name, u.last_name, u.email, o.name AS organization_name,
-        mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
-        gm.joined_at, gm.left_at`,
+      selectSql: MEMBERSHIP_SELECT,
       fromSql,
       bindings,
     },
@@ -512,10 +519,7 @@ export async function listActiveGroupMembershipsForUser(
 ): Promise<GroupMembership[]> {
   const rows = await all<MembershipRow>(
     db,
-    `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
-            u.first_name, u.last_name, u.email, o.name AS organization_name,
-            mca.category_code AS membership_category, gm.source,
-            gm.created_by_user_id, gm.joined_at, gm.left_at
+    `${MEMBERSHIP_SELECT}
        ${MEMBERSHIP_FROM}
       WHERE gm.group_id = ? AND gm.user_id = ? AND gm.left_at IS NULL
       ORDER BY LOWER(COALESCE(o.name, '')), gm.member_id, gm.id`,
@@ -533,10 +537,7 @@ export async function listActiveGroupMembershipsForGroupsForUser(
   if (groupIds.length === 0) return byGroup;
   const rows = await all<MembershipRow>(
     db,
-    `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
-            u.first_name, u.last_name, u.email, o.name AS organization_name,
-            mca.category_code AS membership_category, gm.source,
-            gm.created_by_user_id, gm.joined_at, gm.left_at
+    `${MEMBERSHIP_SELECT}
        ${MEMBERSHIP_FROM}
        JOIN json_each(?) requested_group ON requested_group.value = gm.group_id
       WHERE gm.user_id = ? AND gm.left_at IS NULL

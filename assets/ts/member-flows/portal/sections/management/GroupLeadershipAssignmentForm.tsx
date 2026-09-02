@@ -1,24 +1,25 @@
 import { useState } from "preact/hooks";
 import {
-  GROUP_LEADERSHIP_ROLE_IDS,
+  defaultGroupLeadershipTitle,
   groupLeadershipAssignSchema,
   groupLeadershipListResponseSchema,
   groupMembershipsManagementListResponseSchema,
-  type GroupLeadershipAssignment,
+  type GroupLeadershipRoleId,
+  type GroupLeadershipTitles,
   type GroupMembership,
 } from "../../../../../shared/schemas/groups";
+import { EnumSelect } from "../../../../components/EnumSelect";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { FormActions } from "../../../../components/FormActions";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { ApiClientError, postJson } from "../../../../shared/api-client";
 import type { ServerCatalog } from "../../../../shared/server-catalog";
-import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
+import { fromCalendarDateInput, toCalendarDateInput } from "../../ui";
+import { GroupLeadershipTitleInput } from "./GroupLeadershipTermForm";
+import { capacityLabel, groupLeadershipRoleOptions } from "./group-leadership";
 
-function capacityLabel(membership: GroupMembership): string {
-  const capacity =
-    membership.memberType === "organization"
-      ? (membership.organizationName ?? "Organization")
-      : `Individual membership${membership.membershipCategory ? ` (${membership.membershipCategory})` : ""}`;
-  return `${membership.userName} — ${capacity}`;
+function participantLabel(membership: GroupMembership): string {
+  return `${membership.userName} — ${capacityLabel(membership)}`;
 }
 
 function leadershipCapacityCatalog(groupId: string): ServerCatalog<GroupMembership, unknown> {
@@ -30,79 +31,85 @@ function leadershipCapacityCatalog(groupId: string): ServerCatalog<GroupMembersh
     resolveItems: (response) => groupMembershipsManagementListResponseSchema.parse(response).memberships,
     resolvePage: (response) => groupMembershipsManagementListResponseSchema.parse(response).page,
     itemKey: (membership) => membership.id,
-    itemLabel: capacityLabel,
+    itemLabel: participantLabel,
   };
 }
 
+/**
+ * Assigns a leadership term to someone already participating in the group.
+ * The title follows the chosen role's default until the manager types their
+ * own; the term starts today unless backdated, and an end date in the past
+ * records history rather than granting anything.
+ */
 export function GroupLeadershipAssignmentForm({
   groupId,
+  titles,
   onAssigned,
   onCancel,
 }: {
   groupId: string;
+  titles: GroupLeadershipTitles;
   onAssigned: () => Promise<void>;
-  onCancel?: () => void;
+  onCancel: () => void;
 }) {
   const [membership, setMembership] = useState<GroupMembership | null>(null);
-  const [roleId, setRoleId] = useState<GroupLeadershipAssignment["roleId"]>("role-group_lead");
-  const [expiresAt, setExpiresAt] = useState("");
+  const [roleId, setRoleId] = useState<GroupLeadershipRoleId>("role-group_lead");
+  const [title, setTitle] = useState(defaultGroupLeadershipTitle(titles, "role-group_lead"));
+  const [titleEdited, setTitleEdited] = useState(false);
+  const [startsOn, setStartsOn] = useState(toCalendarDateInput(new Date().toISOString()));
+  const [endsOn, setEndsOn] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+
+  function selectRole(next: GroupLeadershipRoleId): void {
+    setRoleId(next);
+    if (!titleEdited) setTitle(defaultGroupLeadershipTitle(titles, next));
+  }
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
     if (!membership) return;
     setSaving(true);
     setError(null);
-    setSaved(false);
     try {
       const input = groupLeadershipAssignSchema.parse({
         userId: membership.userId,
         identityId: membership.identityId,
         roleId,
-        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+        title: title.trim(),
+        startsAt: fromCalendarDateInput(startsOn) ?? undefined,
+        endsAt: fromCalendarDateInput(endsOn),
       });
       await postJson(
         `/api/v1/groups/${encodeURIComponent(groupId)}/leadership`,
         input,
         groupLeadershipListResponseSchema,
       );
-      setMembership(null);
-      setExpiresAt("");
       await onAssigned();
-      setSaved(true);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : "Could not add this leadership assignment.");
+      setError(cause instanceof ApiClientError ? cause.message : "Could not add this leadership term.");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form class="border rounded p-3 d-flex flex-column gap-3" onSubmit={submit}>
-      <div class="d-flex justify-content-between align-items-start gap-2">
-        <div>
-          <h6 class="mb-1">Add local leadership</h6>
-          <p class="text-muted small mb-0">
-            Local assignments extend inherited leadership. An optional expiry ends the assignment automatically.
-          </p>
-        </div>
-        {onCancel && (
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel}>
-            Cancel
-          </button>
-        )}
+    <form class="border rounded p-3 d-flex flex-column gap-3 bg-light" onSubmit={submit}>
+      <div>
+        <h6 class="mb-1">Add leadership</h6>
+        <p class="text-muted small mb-0">
+          Choose a participant and the Member they lead on behalf of. An end date in the past records a former term
+          without granting access.
+        </p>
       </div>
       {error && <ErrorAlert error={error} />}
-      {saved && <div class="alert alert-success mb-0">Leadership assignment added.</div>}
-      <div class="row g-2 align-items-end">
-        <div class="col-lg-5">
+      <div class="row g-3">
+        <div class="col-lg-6">
           <ServerSearchSelect
             catalog={leadershipCapacityCatalog(groupId)}
-            label="Participation capacity"
+            label="Participant"
             value={membership?.id ?? null}
-            selectedLabel={membership ? capacityLabel(membership) : undefined}
+            selectedLabel={membership ? participantLabel(membership) : undefined}
             placeholder="Select a person and Member capacity…"
             searchPlaceholder="Search name, email, organization, or category…"
             onChange={setMembership}
@@ -110,44 +117,65 @@ export function GroupLeadershipAssignmentForm({
           />
         </div>
         <div class="col-lg-3">
-          <label class="form-label small fw-semibold" for="managed-group-leadership-role">
-            Role
-          </label>
-          <select
+          <EnumSelect
             id="managed-group-leadership-role"
-            class="form-select form-select-sm"
+            label="Role"
             value={roleId}
+            onChange={selectRole}
+            options={groupLeadershipRoleOptions(titles)}
             disabled={saving}
-            onChange={(event) =>
-              setRoleId((event.target as HTMLSelectElement).value as GroupLeadershipAssignment["roleId"])
-            }
-          >
-            {GROUP_LEADERSHIP_ROLE_IDS.map((id) => (
-              <option key={id} value={id}>
-                {GROUP_LEADERSHIP_ROLE_LABELS[id]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div class="col-lg-3">
-          <label class="form-label small fw-semibold" for="managed-group-leadership-expiry">
-            Expires (optional)
-          </label>
-          <input
-            id="managed-group-leadership-expiry"
-            class="form-control form-control-sm"
-            type="datetime-local"
-            value={expiresAt}
-            disabled={saving}
-            onInput={(event) => setExpiresAt((event.target as HTMLInputElement).value)}
+            size="md"
           />
         </div>
-        <div class="col-lg-1">
-          <button class="btn btn-sm btn-success w-100" type="submit" disabled={saving || !membership}>
-            {saving ? "Adding…" : "Add"}
-          </button>
+        <div class="col-lg-3">
+          <GroupLeadershipTitleInput
+            id="managed-group-leadership-title"
+            titles={titles}
+            roleId={roleId}
+            value={title}
+            disabled={saving}
+            onChange={(next) => {
+              setTitle(next);
+              setTitleEdited(true);
+            }}
+          />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label small fw-semibold" for="managed-group-leadership-starts">
+            Term starts
+          </label>
+          <input
+            id="managed-group-leadership-starts"
+            class="form-control"
+            type="date"
+            required
+            value={startsOn}
+            disabled={saving}
+            onInput={(event) => setStartsOn((event.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <label class="form-label small fw-semibold" for="managed-group-leadership-ends">
+            Term ends <span class="text-muted fw-normal">(optional)</span>
+          </label>
+          <input
+            id="managed-group-leadership-ends"
+            class="form-control"
+            type="date"
+            value={endsOn}
+            min={startsOn || undefined}
+            disabled={saving}
+            onInput={(event) => setEndsOn((event.target as HTMLInputElement).value)}
+          />
         </div>
       </div>
+      <FormActions
+        submitLabel="Assign leadership"
+        busyLabel="Adding…"
+        busy={saving}
+        disabled={!membership || !title.trim() || !startsOn}
+        onCancel={onCancel}
+      />
     </form>
   );
 }

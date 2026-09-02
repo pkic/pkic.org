@@ -75,8 +75,13 @@ function OrganizationBlock({ person }: { person: PublicPerson }) {
   );
 }
 
-function monthYear(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+/**
+ * "Jun 2022" for a tenure boundary. Service dates are UTC instants standing
+ * for a calendar day, so the month is read in UTC; a bare `YYYY-MM-DD` is
+ * accepted as well.
+ */
+export function monthYear(value: string): string {
+  return new Date(value.includes("T") ? value : `${value}T00:00:00Z`).toLocaleDateString("en-US", {
     month: "short",
     year: "numeric",
     timeZone: "UTC",

@@ -38,7 +38,7 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/votes",
     "/api/v1/votes/feed.rss",
     "/api/v1/geolocation/country",
-    "/api/v1/leadership/consortium-chairs",
+    "/api/v1/groups/all-members/directory",
     "/api/v1/invites/no-such-token/info",
     "/api/v1/registrations/access/no-such-token",
     "/api/v1/proposals/access/no-such-token",
@@ -209,7 +209,6 @@ describe("OpenAPI authorization declarations match runtime behavior", () => {
     "/api/v1/audit-log",
     "/api/v1/sponsors/companies",
     "/api/v1/members/applications",
-    "/api/v1/leadership/positions?body=board",
   ];
 
   it.each(declaredPermissionRequired)("%s demands a permission, not merely a session", async (path) => {

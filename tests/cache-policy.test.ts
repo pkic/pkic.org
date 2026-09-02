@@ -70,7 +70,6 @@ describe("cache policy middleware", () => {
     "/api/v1/permissions/targets",
     "/api/v1/roles",
     "/api/v1/users/user-1/roles",
-    "/api/v1/leadership/positions",
   ])("adds no-store to anonymous failures from the staff-only %s family", async (pathname) => {
     const response = await apiMiddlewareOnRequest(
       createMiddlewareContext(

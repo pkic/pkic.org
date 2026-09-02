@@ -15,7 +15,6 @@ const EmailTemplates = lazy(() =>
   import("./email-templates/EmailTemplates").then((module) => ({ default: module.EmailTemplates })),
 );
 const AccessControl = lazy(() => import("./access-control").then((module) => ({ default: module.AccessControl })));
-const Leadership = lazy(() => import("./leadership/Leadership").then((module) => ({ default: module.Leadership })));
 const SystemAnalytics = lazy(() =>
   import("./system-analytics/SystemAnalytics").then((module) => ({ default: module.SystemAnalytics })),
 );
@@ -94,11 +93,6 @@ export function SystemManagement({
             canGrant={portalHasGlobalPermission(session, "access:grant")}
             canRevoke={portalHasGlobalPermission(session, "access:revoke")}
             resourceId={resourceId}
-          />
-        ) : selected.path === "/system/leadership" ? (
-          <Leadership
-            canGrant={portalHasGlobalPermission(session, "access:grant")}
-            canRevoke={portalHasGlobalPermission(session, "access:revoke")}
           />
         ) : null}
       </Suspense>

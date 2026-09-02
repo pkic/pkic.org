@@ -33,6 +33,7 @@ const group = {
   automaticEnrollmentMode: "none" as const,
   allowAutomaticOptOut: false,
   publicLeadership: false,
+  publicRoster: false,
   minEndorsersForBallot: 1,
   active: true,
   revision: 0,

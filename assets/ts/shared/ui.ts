@@ -94,6 +94,33 @@ export function formatRelativeDays(instant: string | null | undefined): string |
   return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(days, "day");
 }
 
+/**
+ * A service date. Seats and leadership terms are stored as UTC instants that
+ * stand for a calendar date (a manager picks "1 June 2022", stored as that
+ * day's midnight UTC), so the UTC date is the meaning and rendering it in the
+ * viewer's zone would shift it by a day west of Greenwich.
+ */
+export function formatCalendarDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString(undefined, { dateStyle: "medium", timeZone: "UTC" });
+}
+
+/** "Jun 2022" in UTC, for public tenure lines that read as month and year. */
+export function formatCalendarMonth(value: string | null | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+/** The `YYYY-MM-DD` a date input shows for a stored service instant. */
+export function toCalendarDateInput(instant: string | null | undefined): string {
+  return instant ? instant.slice(0, 10) : "";
+}
+
+/** The UTC instant a picked `YYYY-MM-DD` service date is stored as; empty input yields null. */
+export function fromCalendarDateInput(date: string): string | null {
+  return date ? `${date}T00:00:00.000Z` : null;
+}
+
 /** Escape a value before inserting it into an intentionally generated HTML or SVG string. */
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")

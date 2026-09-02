@@ -22,6 +22,7 @@ interface GroupSettingsDraft {
   automaticEnrollmentMode: GroupSettingsDetail["automaticEnrollmentMode"];
   allowAutomaticOptOut: boolean;
   publicLeadership: boolean;
+  publicRoster: boolean;
   minEndorsersForBallot: number;
   active: boolean;
 }
@@ -37,6 +38,7 @@ function draftFromGroup(group: GroupSettingsDetail): GroupSettingsDraft {
     automaticEnrollmentMode: group.automaticEnrollmentMode,
     allowAutomaticOptOut: group.allowAutomaticOptOut,
     publicLeadership: group.publicLeadership,
+    publicRoster: group.publicRoster,
     minEndorsersForBallot: group.minEndorsersForBallot,
     active: group.active,
   };
@@ -86,6 +88,7 @@ export function GroupSettingsForm({
         automaticEnrollmentMode: draft.automaticEnrollmentMode,
         allowAutomaticOptOut: draft.allowAutomaticOptOut,
         publicLeadership: draft.publicLeadership,
+        publicRoster: draft.publicRoster,
         minEndorsersForBallot: draft.minEndorsersForBallot,
         active: draft.active,
       });
@@ -267,7 +270,17 @@ export function GroupSettingsForm({
               disabled={saving}
               onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
             />
-            <span class="form-check-label">Publish leadership</span>
+            <span class="form-check-label">Publish leadership on the public site</span>
+          </label>
+          <label class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              checked={draft.publicRoster}
+              disabled={saving}
+              onChange={(event) => setField("publicRoster", (event.target as HTMLInputElement).checked)}
+            />
+            <span class="form-check-label">Publish the member roster and its history on the public site</span>
           </label>
           <label class="form-check">
             <input

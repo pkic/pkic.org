@@ -32,6 +32,7 @@ interface GroupCreateDraft {
   automaticEnrollmentMode: Group["automaticEnrollmentMode"];
   allowAutomaticOptOut: boolean;
   publicLeadership: boolean;
+  publicRoster: boolean;
   minEndorsersForBallot: number;
 }
 
@@ -53,6 +54,7 @@ function draftFromType(type: GroupType | null): GroupCreateDraft {
     automaticEnrollmentMode: type?.defaultAutomaticEnrollmentMode ?? "none",
     allowAutomaticOptOut: type?.defaultAllowAutomaticOptOut ?? false,
     publicLeadership: false,
+    publicRoster: false,
     minEndorsersForBallot: 0,
   };
 }
@@ -77,6 +79,7 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
       links: current.links,
       parentGroupId: current.parentGroupId,
       publicLeadership: current.publicLeadership,
+      publicRoster: current.publicRoster,
       minEndorsersForBallot: current.minEndorsersForBallot,
     }));
   }, [typeSelected]);
@@ -103,6 +106,7 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
         automaticEnrollmentMode: draft.automaticEnrollmentMode,
         allowAutomaticOptOut: draft.allowAutomaticOptOut,
         publicLeadership: draft.publicLeadership,
+        publicRoster: draft.publicRoster,
         minEndorsersForBallot: draft.minEndorsersForBallot,
       }) satisfies GroupCreateInput;
       const response = await postJson("/api/v1/groups", input, groupResponseSchema);
@@ -257,6 +261,16 @@ export function GroupCreateForm({ onCreated }: { onCreated: (group: Group) => vo
             onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
           />
           <span class="form-check-label">Publish leadership</span>
+        </label>
+        <label class="form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            checked={draft.publicRoster}
+            disabled={saving}
+            onChange={(event) => setField("publicRoster", (event.target as HTMLInputElement).checked)}
+          />
+          <span class="form-check-label">Publish member roster</span>
         </label>
         {error && <ErrorAlert error={error} />}
         <button

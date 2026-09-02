@@ -40,9 +40,16 @@ interface GroupTypeRow {
   default_automatic_enrollment_mode: GroupType["defaultAutomaticEnrollmentMode"];
   default_allow_automatic_opt_out: number;
   default_visibility: GroupType["defaultVisibility"];
+  lead_title: string;
+  deputy_lead_title: string;
   active: number;
   sort_order: number;
 }
+
+const GROUP_TYPE_SELECT = `SELECT gt.key, gt.singular_label, gt.plural_label, gt.description,
+  gt.default_governance_inheritance_mode, gt.default_eligibility_mode,
+  gt.default_automatic_enrollment_mode, gt.default_allow_automatic_opt_out,
+  gt.default_visibility, gt.lead_title, gt.deputy_lead_title, gt.active, gt.sort_order`;
 
 function mapGroupType(row: GroupTypeRow): GroupType {
   return {
@@ -55,6 +62,7 @@ function mapGroupType(row: GroupTypeRow): GroupType {
     defaultAutomaticEnrollmentMode: row.default_automatic_enrollment_mode,
     defaultAllowAutomaticOptOut: row.default_allow_automatic_opt_out === 1,
     defaultVisibility: row.default_visibility,
+    leadershipTitles: { lead: row.lead_title, deputyLead: row.deputy_lead_title },
     active: row.active === 1,
     sortOrder: row.sort_order,
   };
@@ -80,10 +88,7 @@ export async function listGroupTypes(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const { rows, total } = await queryPage<GroupTypeRow>(db, {
     source: {
-      selectSql: `SELECT gt.key, gt.singular_label, gt.plural_label, gt.description,
-        gt.default_governance_inheritance_mode, gt.default_eligibility_mode,
-        gt.default_automatic_enrollment_mode, gt.default_allow_automatic_opt_out,
-        gt.default_visibility, gt.active, gt.sort_order`,
+      selectSql: GROUP_TYPE_SELECT,
       fromSql: `FROM group_types gt ${where}`,
       bindings,
     },
@@ -119,11 +124,7 @@ async function availableSlug(db: DatabaseLike, requested: string): Promise<strin
 async function requireActiveGroupType(db: DatabaseLike, key: string): Promise<GroupTypeRow> {
   const type = await first<GroupTypeRow>(
     db,
-    `SELECT key, singular_label, plural_label, description,
-            default_governance_inheritance_mode, default_eligibility_mode,
-            default_automatic_enrollment_mode, default_allow_automatic_opt_out,
-            default_visibility, active, sort_order
-       FROM group_types WHERE key = ? AND active = 1`,
+    `${GROUP_TYPE_SELECT} FROM group_types gt WHERE gt.key = ? AND gt.active = 1`,
     [key],
   );
   if (!type) throw new AppError(400, "GROUP_TYPE_INVALID", "The selected group type is not active");
@@ -199,8 +200,9 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
           `INSERT INTO groups
              (id, type_key, parent_group_id, name, slug, description, links_json, visibility,
               governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
-              allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot, active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+              allow_automatic_opt_out, public_leadership, public_roster, min_endorsers_for_ballot,
+              active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
         .bind(
           id,
@@ -216,6 +218,7 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
           input.automaticEnrollmentMode ?? type.default_automatic_enrollment_mode,
           (input.allowAutomaticOptOut ?? type.default_allow_automatic_opt_out === 1) ? 1 : 0,
           input.publicLeadership ? 1 : 0,
+          input.publicRoster ? 1 : 0,
           input.minEndorsersForBallot ?? 0,
           at,
           at,
@@ -317,6 +320,7 @@ export async function updateGroup(
   if (changes.automaticEnrollmentMode !== undefined) add("automatic_enrollment_mode", changes.automaticEnrollmentMode);
   if (changes.allowAutomaticOptOut !== undefined) add("allow_automatic_opt_out", changes.allowAutomaticOptOut ? 1 : 0);
   if (changes.publicLeadership !== undefined) add("public_leadership", changes.publicLeadership ? 1 : 0);
+  if (changes.publicRoster !== undefined) add("public_roster", changes.publicRoster ? 1 : 0);
   if (changes.minEndorsersForBallot !== undefined) add("min_endorsers_for_ballot", changes.minEndorsersForBallot);
   if (setters.length === 0) return existing;
   const at = nowIso();

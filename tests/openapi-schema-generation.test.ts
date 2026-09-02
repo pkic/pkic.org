@@ -109,13 +109,15 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/roles"].get).toBeDefined();
     expect(spec.paths["/api/v1/users/{userId}/roles"].get).toBeDefined();
     expect(spec.paths["/api/v1/system/access-control/grants"]).toBeUndefined();
-    expect(spec.paths["/api/v1/leadership/positions"].get).toBeDefined();
-    expect(spec.paths["/api/v1/leadership/positions"].post).toBeDefined();
-    expect(spec.paths["/api/v1/leadership/positions/{id}"].patch).toBeDefined();
-    expect(spec.paths["/api/v1/leadership/positions/{id}"].delete).toBeDefined();
-    expect(spec.paths["/api/v1/leadership/positions/users/{userId}/affiliations"].get).toBeDefined();
+    // Governance rosters are ordinary groups: seats and leadership terms are
+    // managed on the group resource, and the public directory serves both.
+    expect(spec.paths["/api/v1/groups/{groupId}/memberships/{membershipId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/leadership/{userRoleId}"].patch).toBeDefined();
+    expect(spec.paths["/api/v1/groups/{groupId}/directory"].get).toBeDefined();
+    expect(spec.paths["/api/v1/leadership/positions"]).toBeUndefined();
+    expect(spec.paths["/api/v1/leadership/consortium-chairs"]).toBeUndefined();
+    expect(spec.paths["/api/v1/leadership/{body}"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/leadership-positions"]).toBeUndefined();
-    expect(spec.paths["/api/v1/system/leadership-positions/{id}"]).toBeUndefined();
     expect(spec.paths["/api/v1/analytics/summary"].get).toBeDefined();
     expect(spec.paths["/api/v1/analytics/registrations"].get).toBeDefined();
     expect(spec.paths["/api/v1/analytics/donations"].get).toBeDefined();

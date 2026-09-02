@@ -61,6 +61,17 @@ Opting out of it cannot affect eligibility for unrelated groups. Consortium-wide
 events, forms, votes, proposals, meetings, and mailing lists use the same group
 resources in this group; they do not create a second global collaboration API.
 
+Governance bodies are ordinary groups too. The Board of Directors and the
+Executive Council are seeded groups of type board; a seat on either is a dated
+group membership, its chair is a capacity-bound leadership assignment, and the
+consortium chair and vice chair are the all-members group's leadership. There
+is no separate positions table, body vocabulary, or System page for rosters:
+the group's Members and Leadership tabs manage them, its "publish leadership"
+and "publish roster" switches decide what the public directory serves, and a
+task force or committee gets the same history without configuration. Each
+group type names its two leadership roles (Chair and Vice Chair, or Lead and
+Deputy Lead); each assignment keeps the exact title it was made with.
+
 ## Hierarchy and governance
 
 Groups have an optional parent group. The application prevents cycles and uses

@@ -3,10 +3,10 @@
  * content/wg/&lt;slug&gt;/_index.md `chair:`/`viceChair:` frontmatter and
  * layouts/wg/section.html's `{{ with .Params.chair }}` block, both of which
  * required a git commit + rebuild to update — chairs are now assigned in
- * the admin portal (Access Control → Working Groups / Chairs, backed by
- * user_roles) and this widget fetches them client-side from the public
- * generic GET /api/v1/groups/:slug/directory endpoint, with public
- * photo/LinkedIn/organization enrichment.
+ * the group's Leadership tab in the portal (capacity-bound user_roles with
+ * the title the group type configures) and this widget fetches them
+ * client-side from the public generic GET /api/v1/groups/:slug/directory
+ * endpoint, with public photo/LinkedIn/organization enrichment.
  *
  * Two render modes, chosen via the mount's `data-mode` attribute — both use
  * the same person-card.html-style ring card, differing only in avatar size
@@ -75,7 +75,7 @@ export function WgChairsWidget({
         <PublicPersonCard
           key={`${assignment.sourceGroup?.id ?? "private-source"}:${assignment.roleId}:${assignment.person.name}`}
           person={assignment.person}
-          role={`${wgLabel} ${assignment.roleId === "role-group_lead" ? "Chair" : "Vice Chair"}`}
+          role={`${wgLabel} ${assignment.title}`}
           color={color}
           avatarSize={avatarSize}
         />
