@@ -113,7 +113,9 @@ function GroupVoteProposalDetail({
               size="sm"
               variant="primary"
               disabled={busy}
-              onClick={() => void action(() => postJson(`${base}/endorse`, {}, groupVoteProposalEndorseResponseSchema))}
+              onClick={() =>
+                void action(() => postJson(`${base}/endorsement`, {}, groupVoteProposalEndorseResponseSchema))
+              }
             >
               Endorse
             </Button>
@@ -122,7 +124,9 @@ function GroupVoteProposalDetail({
             <Button
               size="sm"
               disabled={busy}
-              onClick={() => void action(() => deleteJson(`${base}/endorse`, groupVoteProposalMutationResponseSchema))}
+              onClick={() =>
+                void action(() => deleteJson(`${base}/endorsement`, groupVoteProposalMutationResponseSchema))
+              }
             >
               Withdraw endorsement
             </Button>
