@@ -6,7 +6,6 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
@@ -161,8 +160,6 @@ export function GroupVotes({
   const [, navigate] = usePortalHashLocation();
   const creating = voteSegment === NEW_GROUP_VOTE_SEGMENT;
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
   const tableActions = useRef<ApiTableActions | null>(null);
   const votesPath = `/groups/${encodeURIComponent(groupId)}/votes`;
 
@@ -232,41 +229,6 @@ export function GroupVotes({
             searchPlaceholder="Search votes…"
             initialSort="-closes_at"
             actionsRef={tableActions}
-            params={{
-              ...(statusFilter ? { status: statusFilter } : {}),
-              ...(typeFilter ? { type: typeFilter } : {}),
-            }}
-            toolbar={({ resetPage }) => (
-              // Both filters already exist on the votes contract; the
-              // toolbar exposes them rather than leaving status and type
-              // to search syntax.
-              <>
-                <FilterSelect
-                  ariaLabel="Filter votes by status"
-                  value={statusFilter}
-                  options={[
-                    { value: "", label: "All statuses" },
-                    ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
-                  ]}
-                  onChange={(value) => {
-                    setStatusFilter(value);
-                    resetPage();
-                  }}
-                />
-                <FilterSelect
-                  ariaLabel="Filter votes by type"
-                  value={typeFilter}
-                  options={[
-                    { value: "", label: "All types" },
-                    ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
-                  ]}
-                  onChange={(value) => {
-                    setTypeFilter(value);
-                    resetPage();
-                  }}
-                />
-              </>
-            )}
             columns={[
               {
                 header: "Vote",
@@ -278,12 +240,33 @@ export function GroupVotes({
                 ),
                 sort: { asc: "title", desc: "-title" },
               },
-              { header: "Type", cell: (vote) => <Badge status={vote.voteType} />, width: "fit" },
+              // Both filters already exist on the votes contract; each lives
+              // in the column that shows the value it narrows, rather than
+              // leaving status and type to search syntax.
+              {
+                header: "Type",
+                cell: (vote) => <Badge status={vote.voteType} />,
+                width: "fit",
+                filter: {
+                  param: "type",
+                  options: [
+                    { value: "", label: "All types" },
+                    ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
+                  ],
+                },
+              },
               {
                 header: "Status",
                 cell: (vote) => <Badge status={vote.status} />,
                 width: "fit",
                 sort: { asc: "status", desc: "-status" },
+                filter: {
+                  param: "status",
+                  options: [
+                    { value: "", label: "All statuses" },
+                    ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
+                  ],
+                },
               },
               {
                 // A date has a bounded length; the column says so instead

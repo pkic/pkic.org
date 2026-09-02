@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { organizationContentReviewRejectSchema } from "../../assets/shared/schemas/organization-content-reviews";
 import { OrganizationContentReviews } from "../../assets/ts/member-flows/portal/sections/OrganizationContentReviews";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 
 const REVIEW_ID = "00000000-0000-4000-8000-000000000101";
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000102";
@@ -208,7 +209,7 @@ describe("portal organization content reviews", () => {
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
-  it("renders a status-scoped empty page and sends status changes back to D1", async () => {
+  it("opens on the pending queue and sends a status chosen from the Status column back to D1", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -226,22 +227,29 @@ describe("portal organization content reviews", () => {
     document.body.append(container);
     await act(() => render(<OrganizationContentReviews />, container!));
     await settle();
-    expect(container.textContent).toContain("No pending organization content submissions.");
+    // The queue's default is what needs a decision, sent as the contract's
+    // `status` rather than left to the server, which would list everything.
+    expect(requests[0]?.searchParams.get("status")).toBe("pending");
+    expect(container.textContent).toContain("No organization content submissions match the current filters.");
 
-    // The filter sits inline in the list's toolbar, named through
-    // `aria-label` like every FilterSelect beside a search field.
-    const status = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by review status"]');
-    expect(status, "the review status filter is not rendered").toBeTruthy();
-    if (!status) throw new Error("unreachable");
-    await act(async () => {
-      status.value = "approved";
-      status.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await settle();
+    // No select above the table: the filter is the Status column's own, in
+    // its menu, with the pending queue as its open state and no "all
+    // statuses" — a moderation queue is not an archive.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    expect(columnFilterOptions(container, "Status")).toEqual(["Pending", "Approved", "Rejected", "Withdrawn"]);
+
+    await chooseColumnFilter(container, "Status", "Approved");
     await settle();
 
     expect(requests.at(-1)?.searchParams.get("status")).toBe("approved");
-    expect(container.textContent).toContain("No approved organization content submissions.");
+    // The head says what the column is narrowed to.
+    expect(columnFilterSummary(container, "Status")).toBe("Approved");
+
+    // Choosing the open state again drops back to the queue's default.
+    await chooseColumnFilter(container, "Status", "Pending");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("status")).toBe("pending");
+    expect(columnFilterSummary(container, "Status")).toBeUndefined();
   });
 
   it("renders a server error instead of presenting an empty queue", async () => {

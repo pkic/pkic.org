@@ -14,6 +14,7 @@ import {
   FormManagementDetail,
   FormManagementList,
 } from "../../assets/ts/components/forms/management/FormManagement";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { isCurrentTab, tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
@@ -195,18 +196,23 @@ describe("portal form management", () => {
     // the list renders no "New form" control of its own.
     expect(container.textContent).not.toContain("New form");
 
-    // The filters the API already accepts are real toolbar controls wired to
-    // the server params, not client-side row filtering.
-    const purposeFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by purpose"]');
-    const statusFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by status"]');
-    expect(purposeFilter).not.toBeNull();
-    expect(statusFilter).not.toBeNull();
+    // The filters the API already accepts live in the Purpose and Status
+    // columns' menus, wired to the server params — not client-side row
+    // filtering, and not a row of selects above the table.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    expect(columnFilterOptions(container, "Status")).toEqual(["All statuses", "active", "inactive", "archived"]);
 
-    purposeFilter!.value = "survey";
-    purposeFilter!.dispatchEvent(new Event("change", { bubbles: true }));
+    await chooseColumnFilter(container, "Purpose", "survey");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("purpose")).toBe("survey");
+    expect(columnFilterSummary(container, "Purpose")).toBe("survey");
+
+    await chooseColumnFilter(container, "Status", "archived");
     await settle();
     const lastRequest = requests.at(-1);
     expect(lastRequest?.searchParams.get("purpose")).toBe("survey");
+    expect(lastRequest?.searchParams.get("status")).toBe("archived");
+    expect(lastRequest?.searchParams.get("offset")).toBe("0");
   });
 
   it("does not offer global mutations for a community-owned form", async () => {
@@ -298,19 +304,27 @@ describe("portal form management", () => {
     // The default view sends the contract's boolean value, not a bespoke "1".
     expect(requests[0]?.searchParams.get("linkedOnly")).toBe("true");
 
-    const scope = container.querySelector<HTMLSelectElement>('select[aria-label="Form scope"]')!;
-    expect(scope).not.toBeNull();
-    scope.value = "";
-    await act(async () => {
-      scope.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    // The scope is a column — it says where each form belongs — and its menu
+    // is where the catalogue widens. The only select left in a toolbar is the
+    // response filter above the list, which scopes submissions, not forms.
+    const toolbarSelects = [...container.querySelectorAll('[role="toolbar"] select')];
+    expect(toolbarSelects.map((select) => select.getAttribute("aria-label"))).toEqual(["Submission status"]);
+    expect(columnFilterOptions(container, "Scope")).toEqual(["Linked to this event", "Linked and global forms"]);
+
+    await chooseColumnFilter(container, "Scope", "Linked and global forms");
     await settle();
 
-    // Widening the scope is the server default: the parameter is dropped.
+    // Widening sends the contract's `false` in place of the page's default.
     const last = requests.at(-1);
     expect(last?.pathname).toBe("/api/v1/events/pqc-2026/forms");
-    expect(last?.searchParams.has("linkedOnly")).toBe(false);
+    expect(last?.searchParams.get("linkedOnly")).toBe("false");
+    expect(last?.searchParams.get("purpose")).toBe("proposal_submission");
+    expect(columnFilterSummary(container, "Scope")).toBe("Linked and global forms");
+
+    // And narrowing again restores the default rather than dropping the scope.
+    await chooseColumnFilter(container, "Scope", "Linked to this event");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("linkedOnly")).toBe("true");
   });
 
   it("states a failed load as a sentence in an alert region rather than an empty panel", async () => {

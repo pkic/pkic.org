@@ -7,6 +7,7 @@ import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
+import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
 import { controlFor } from "./helpers/labelled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
@@ -183,14 +184,13 @@ describe("portal event invitations", () => {
     const listPath = `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites`;
     expect(requests[0]).toMatchObject({ method: "GET", url: expect.objectContaining({ pathname: listPath }) });
 
-    // The filter names the set it narrows: two of these panels can sit on one
-    // tab, and two controls both called "Invitation status" are the same
-    // control twice to anyone moving between them.
-    const status = container.querySelector<HTMLSelectElement>('select[aria-label="Attendee invitation status"]')!;
-    status.value = "sent";
-    status.dispatchEvent(new Event("change", { bubbles: true }));
+    // The status filter is the Status column's own, in its menu; no select
+    // sits above the table.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    await chooseColumnFilter(container, "Status", "Sent");
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("status")).toBe("sent");
+    expect(columnFilterSummary(container, "Status")).toBe("Sent");
 
     // Located through its label, which now names the list it searches, because
     // a page with several collections used to offer several fields all called
@@ -484,9 +484,17 @@ describe("portal event invitations", () => {
       "cannot be later than the event end",
     );
 
-    expect(Array.from(container.querySelectorAll("select")).map((select) => select.getAttribute("aria-label"))).toEqual(
-      ["Attendee invitation status", "Speaker invitation status"],
-    );
+    // Each set's status filter is in its own table's Status column, and each
+    // table is named after its set — so the two menus, which share a name,
+    // are told apart by the list they belong to rather than by two selects
+    // with two different names.
+    const statusMenus = Array.from(container.querySelectorAll('button[aria-label="Status column options"]'));
+    expect(statusMenus).toHaveLength(2);
+    expect(statusMenus.map((menu) => menu.closest("table")?.querySelector("caption")?.textContent)).toEqual([
+      "Attendee invitations",
+      "Speaker invitations",
+    ]);
+    expect(container.querySelectorAll("select")).toHaveLength(0);
 
     expect(
       Array.from(container.querySelectorAll("section[aria-label]")).map((s) => s.getAttribute("aria-label")),

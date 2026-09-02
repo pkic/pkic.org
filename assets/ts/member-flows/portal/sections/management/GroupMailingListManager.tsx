@@ -11,7 +11,6 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -35,8 +34,6 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
   const [editDraft, setEditDraft] = useState<MailingListDraft>(emptyMailingListDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  /** `""` lists every list; `"true"`/`"false"` narrow to the primary discussion list or the rest. */
-  const [primaryFilter, setPrimaryFilter] = useState("");
 
   async function createList(event: Event): Promise<void> {
     event.preventDefault();
@@ -148,25 +145,6 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
         createAction={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
         searchPlaceholder="Search managed mailing lists…"
         initialSort="label"
-        params={primaryFilter ? { primaryDiscussion: primaryFilter } : {}}
-        toolbar={({ resetPage }) => (
-          // The list contract already accepts `primaryDiscussion`; the
-          // toolbar exposes it so the group's primary discussion list can
-          // be found without scanning every row.
-          <FilterSelect
-            ariaLabel="Primary discussion list"
-            value={primaryFilter}
-            options={[
-              { value: "", label: "All lists" },
-              { value: "true", label: "Primary discussion list" },
-              { value: "false", label: "Other lists" },
-            ]}
-            onChange={(value) => {
-              setPrimaryFilter(value);
-              resetPage();
-            }}
-          />
-        )}
         columns={[
           {
             header: "Mailing list",
@@ -183,6 +161,34 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
             cell: (list) => list.purpose.replaceAll("_", " "),
             width: "fit",
             sort: { asc: "purpose", desc: "-purpose" },
+          },
+          {
+            // Which list is the group's primary discussion list. The list
+            // contract already accepts `primaryDiscussion`; the column shows
+            // the value and its menu narrows by it, so the primary list can
+            // be found without scanning every row — and without a select
+            // above the table filtering by something no column said.
+            header: "Role",
+            cell: (list) =>
+              list.primaryDiscussion ? (
+                "Primary discussion"
+              ) : (
+                <>
+                  <span class="pk-muted" aria-hidden="true">
+                    —
+                  </span>
+                  <span class="pk-sr-only">Other list</span>
+                </>
+              ),
+            width: "fit",
+            filter: {
+              param: "primaryDiscussion",
+              options: [
+                { value: "", label: "All lists" },
+                { value: "true", label: "Primary discussion list" },
+                { value: "false", label: "Other lists" },
+              ],
+            },
           },
           {
             header: "Status",

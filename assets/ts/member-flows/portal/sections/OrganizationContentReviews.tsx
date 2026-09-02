@@ -9,7 +9,6 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
-import { FilterSelect } from "../../../components/FilterSelect";
 import { Spinner } from "../../../components/Spinner";
 import { DataTable } from "../../../components/Table";
 import { getJson, postJson } from "../../../shared/api-client";
@@ -25,6 +24,15 @@ import "../../../ui/Content.css";
 
 const API_BASE = "/api/v1/organizations/content-reviews";
 type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
+
+/**
+ * The queue opens on what needs a decision. The server lists every status
+ * when none is asked for, so the page's fixed scope is "pending" and the
+ * Status column's filter overrides it: its open state carries no value and so
+ * falls back to this default, and each other status replaces it. There is
+ * deliberately no "all statuses" state — a moderation queue is not an archive.
+ */
+const DEFAULT_QUEUE_STATUS: ReviewStatus = "pending";
 
 const REVIEWER_NOTE_REQUIRED = "A reviewer note is required to reject";
 
@@ -182,7 +190,6 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
 }
 
 export function OrganizationContentReviews() {
-  const [status, setStatus] = useState<ReviewStatus>("pending");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const tableActions = useRef<ApiTableActions | null>(null);
 
@@ -197,20 +204,8 @@ export function OrganizationContentReviews() {
         paginate
         searchPlaceholder="organization, submitter, or note…"
         initialSort="-submittedAt"
-        params={{ status }}
+        params={{ status: DEFAULT_QUEUE_STATUS }}
         actionsRef={tableActions}
-        toolbar={({ resetPage }) => (
-          <FilterSelect
-            ariaLabel="Filter by review status"
-            value={status}
-            options={CONTENT_REVIEW_STATUSES.map((value) => ({ value, label: statusLabel(value) }))}
-            onChange={(next) => {
-              setStatus(next);
-              setSelectedId(null);
-              resetPage();
-            }}
-          />
-        )}
         columns={[
           {
             header: "Organization",
@@ -232,6 +227,13 @@ export function OrganizationContentReviews() {
             cell: (review) => <Badge status={review.status} />,
             width: "fit",
             sort: { asc: "status", desc: "-status" },
+            filter: {
+              param: "status",
+              options: CONTENT_REVIEW_STATUSES.map((value) => ({
+                value: value === DEFAULT_QUEUE_STATUS ? "" : value,
+                label: statusLabel(value),
+              })),
+            },
           },
           {
             // A date has a bounded length; the column says so instead of
@@ -251,7 +253,7 @@ export function OrganizationContentReviews() {
           label: `Open the content review for ${review.organizationName}`,
           onSelect: () => setSelectedId(review.id),
         })}
-        empty={`No ${status} organization content submissions.`}
+        empty="No organization content submissions match the current filters."
         rowKey={(review) => review.id}
       />
 

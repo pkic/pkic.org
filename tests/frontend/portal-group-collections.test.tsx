@@ -6,6 +6,7 @@ import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/mana
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
 import { GroupForms } from "../../assets/ts/member-flows/portal/sections/management/GroupForms";
 import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/management/GroupVotes";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
@@ -56,7 +57,7 @@ afterEach(() => {
 });
 
 describe("portal selected-group collections", () => {
-  it("names the form context filter and sends the choice to the group forms query", async () => {
+  it("narrows by context and purpose from their columns and sends the choices to the group forms query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -69,10 +70,11 @@ describe("portal selected-group collections", () => {
     const container = mount(<GroupForms groupId={GROUP_ID} canManage={false} />);
     await settle();
 
-    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter forms by context"]')!;
-    expect(filter).not.toBeNull();
+    // No selects above the table: each filter lives in the menu of the
+    // column that shows the value it narrows.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
     // The options speak product language, not the schema's `contextType` keys.
-    expect([...filter.options].map((option) => option.textContent)).toEqual([
+    expect(columnFilterOptions(container, "Context")).toEqual([
       "All contexts",
       "Installation-wide",
       "Group",
@@ -82,14 +84,17 @@ describe("portal selected-group collections", () => {
     // The default view is the server default: no `contextType` parameter at all.
     expect(requests.some((url) => url.searchParams.has("contextType"))).toBe(false);
 
-    filter.value = "event";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(container, "Context", "Event");
     await settle();
+    expect(requests.at(-1)?.searchParams.get("contextType")).toBe("event");
+    expect(columnFilterSummary(container, "Context")).toBe("Event");
 
-    expect(requests.some((url) => url.searchParams.get("contextType") === "event")).toBe(true);
+    await chooseColumnFilter(container, "Purpose", "survey");
+    await settle();
+    // Both filters travel together; narrowing by one keeps the other.
+    expect(requests.at(-1)?.searchParams.get("purpose")).toBe("survey");
+    expect(requests.at(-1)?.searchParams.get("contextType")).toBe("event");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
   });
 
   it("loads forms, events, and audit history through server-backed group collections", async () => {

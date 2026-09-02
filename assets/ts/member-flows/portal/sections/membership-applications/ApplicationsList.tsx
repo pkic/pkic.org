@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Alert } from "../../../../ui/Alert";
 import { getJson } from "../../../../shared/api-client";
 // `pk-mono` is written here as a class name rather than reached through a
@@ -12,11 +11,16 @@ import { APPLICATION_STAGES } from "../../../../../shared/schemas/member-applica
 import { membershipApplicationsListResponseSchema } from "../../../../../shared/schemas/membership-application-management";
 
 /**
- * Consultation queue visibility (Fix 5a): shown above the table only when
- * the stage filter is set to `in_consultation`. Fetches its own lightweight
- * count (limit=1, reading page.total) rather than plumbing the main table's
- * loaded data up, since ApiDataTable's actionsRef only exposes reload/
- * resetPage, not the fetched rows/page info.
+ * Consultation queue visibility: how many applications are waiting on the
+ * scheduled member-consultation batch, stated above the list whenever there
+ * are any. It fetches its own lightweight count (limit=1, reading page.total)
+ * rather than plumbing the main table's loaded data up, since ApiDataTable's
+ * actionsRef only exposes reload/resetPage, not the fetched rows/page info.
+ *
+ * It used to appear only while the stage filter was set to `in_consultation`.
+ * The filter now lives in the Stage column and is the table's own state, so
+ * the banner answers to the queue itself instead: a non-empty queue is worth
+ * a sentence whichever stage the reader is looking at.
  */
 function ConsultationQueueBanner() {
   const [count, setCount] = useState<number | null>(null);
@@ -38,11 +42,12 @@ function ConsultationQueueBanner() {
     };
   }, []);
 
+  if (!count) return null;
   return (
     <Alert tone="info">
       <div class="pk-cluster pk-cluster--between">
         <span>
-          <strong>{count ?? "…"}</strong> application{count === 1 ? "" : "s"} currently queued for member consultation.
+          <strong>{count}</strong> application{count === 1 ? "" : "s"} currently queued for member consultation.
         </span>
         <span class="pk-muted pk-small">Next scheduled batch: Mon &amp; Wed 07:15 UTC.</span>
       </div>
@@ -51,12 +56,11 @@ function ConsultationQueueBanner() {
 }
 
 export function ApplicationsList({ onViewApplication }: { onViewApplication: (id: string) => void }) {
-  const [stageFilter, setStageFilter] = useState("");
   const tableRef = useRef<ApiTableActions | null>(null);
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      {stageFilter === "in_consultation" && <ConsultationQueueBanner />}
+      <ConsultationQueueBanner />
       <ApiDataTable
         caption="Membership applications"
         urlState="applications"
@@ -68,24 +72,6 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
         initialSort="-created_at"
         actionsRef={tableRef}
         searchPlaceholder="applicant email or name"
-        params={stageFilter ? { stage: stageFilter } : {}}
-        toolbar={({ resetPage }) => (
-          // A toolbar has no room for a stacked label, so the filter carries
-          // its name in `aria-label` — and one that says which list it filters,
-          // because a page can hold several.
-          <FilterSelect
-            ariaLabel="Filter applications by stage"
-            value={stageFilter}
-            options={[
-              { value: "", label: "All stages" },
-              ...APPLICATION_STAGES.map((s) => ({ value: s as string, label: statusLabel(s) })),
-            ]}
-            onChange={(value) => {
-              setStageFilter(value);
-              resetPage();
-            }}
-          />
-        )}
         columns={[
           {
             header: "Applicant",
@@ -121,7 +107,17 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
           {
             header: "Stage",
             cell: (a) => <Badge status={a.stage} />,
+            width: "fit",
             sort: { asc: "stage", desc: "-stage" },
+            // The stage filter is the column's, beside the sort it shares a
+            // head with, rather than a select above the table.
+            filter: {
+              param: "stage",
+              options: [
+                { value: "", label: "All stages" },
+                ...APPLICATION_STAGES.map((s) => ({ value: s as string, label: statusLabel(s) })),
+              ],
+            },
           },
           {
             // A date has a bounded length; the column says so instead of

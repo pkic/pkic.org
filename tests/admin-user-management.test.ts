@@ -1038,7 +1038,8 @@ describe("users list — type filter", () => {
   interface ListedUser {
     email: string;
     type: "member" | "event_attendee" | "contact_only";
-    eventParticipationCount: number;
+    organizationNames: string[];
+    organizationCount: number;
   }
 
   async function listUsers(query: string): Promise<{ users: ListedUser[] }> {
@@ -1059,16 +1060,20 @@ describe("users list — type filter", () => {
     const data = await listUsers("type=member&q=type-member@example.test");
     expect(data.users.map((u) => u.email)).toEqual(["type-member@example.test"]);
     expect(data.users[0].type).toBe("member");
+    // An individual membership is one active representation with no
+    // organization to name.
+    expect(data.users[0].organizationCount).toBe(1);
+    expect(data.users[0].organizationNames).toEqual([]);
   });
 
-  it("classifies a user with direct event roles as an event attendee and counts distinct events", async () => {
+  it("classifies a user with direct event roles as an event attendee", async () => {
     const { eventId } = await setup();
     await seedEventParticipant(eventId, "type-attendee@example.test", 2);
 
     const data = await listUsers("type=event_attendee&q=type-attendee@example.test");
     expect(data.users.map((u) => u.email)).toEqual(["type-attendee@example.test"]);
     expect(data.users[0].type).toBe("event_attendee");
-    expect(data.users[0].eventParticipationCount).toBe(1);
+    expect(data.users[0].organizationCount).toBe(0);
   });
 
   it("classifies a bare user (no membership, no event participation) as 'contact_only'", async () => {
@@ -1078,7 +1083,7 @@ describe("users list — type filter", () => {
     const data = await listUsers("type=contact_only&q=type-contact@example.test");
     expect(data.users.map((u) => u.email)).toEqual(["type-contact@example.test"]);
     expect(data.users[0].type).toBe("contact_only");
-    expect(data.users[0].eventParticipationCount).toBe(0);
+    expect(data.users[0].organizationCount).toBe(0);
   });
 
   it("finds a long partial email without invoking D1's LIKE-pattern limit", async () => {

@@ -11,7 +11,6 @@ import { useRef, useState } from "preact/hooks";
 import type { Column } from "../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { BulkBar } from "../../../../ui/BulkBar";
 import { Button } from "../../../../ui/Button";
@@ -67,6 +66,16 @@ const rowColumns: Column<EmailOutboxRow>[] = [
       </div>
     ),
     sort: { asc: "template", desc: "-template" },
+    // Both filters already exist on the list contract; each lives in the
+    // column that shows the value it narrows, so status is not a concept the
+    // reader must express through search syntax.
+    filter: {
+      param: "messageType",
+      options: [
+        { value: "", label: "All types" },
+        ...MESSAGE_TYPE_OPTIONS.map((type) => ({ value: type as string, label: statusLabel(type) })),
+      ],
+    },
   },
   {
     header: "Queue",
@@ -80,6 +89,13 @@ const rowColumns: Column<EmailOutboxRow>[] = [
       </div>
     ),
     sort: { asc: "status", desc: "-status" },
+    filter: {
+      param: "status",
+      options: [
+        { value: "", label: "All statuses" },
+        ...STATUS_OPTIONS.map((status) => ({ value: status as string, label: statusLabel(status) })),
+      ],
+    },
   },
   {
     header: "Timing",
@@ -124,8 +140,6 @@ const rowColumns: Column<EmailOutboxRow>[] = [
 export function EmailOutbox({ canManage }: { canManage: boolean }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [messageTypeFilter, setMessageTypeFilter] = useState("");
   const actionsRef = useRef<ApiTableActions | null>(null);
   // The rows last handed to the table, so a selection checkbox can be named
   // after its message, and the BulkBar can state the page's total.
@@ -219,50 +233,19 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         initialSort="-createdAt"
         searchPlaceholder="Search recipient, subject, template, event, or error…"
         actionsRef={actionsRef}
-        params={{
-          ...(statusFilter ? { status: statusFilter } : {}),
-          ...(messageTypeFilter ? { messageType: messageTypeFilter } : {}),
-        }}
-        toolbar={({ resetPage }) => (
-          <>
-            {/* Both filters already exist on the list contract; the toolbar
-                exposes them instead of leaving status a concept the reader
-                must express through search syntax. */}
-            <FilterSelect
-              ariaLabel="Filter messages by status"
-              value={statusFilter}
-              options={[
-                { value: "", label: "All statuses" },
-                ...STATUS_OPTIONS.map((status) => ({ value: status as string, label: statusLabel(status) })),
-              ]}
-              onChange={(value) => {
-                setStatusFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Filter messages by type"
-              value={messageTypeFilter}
-              options={[
-                { value: "", label: "All types" },
-                ...MESSAGE_TYPE_OPTIONS.map((type) => ({ value: type as string, label: statusLabel(type) })),
-              ]}
-              onChange={(value) => {
-                setMessageTypeFilter(value);
-                resetPage();
-              }}
-            />
-            {canManage && (
-              <Button
-                variant="secondary"
-                disabled={busy}
-                onClick={() => void process("/api/v1/email/outbox/process", { limit: 20 }, false)}
-              >
-                Process next 20 due
-              </Button>
-            )}
-          </>
-        )}
+        toolbar={
+          canManage
+            ? () => (
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => void process("/api/v1/email/outbox/process", { limit: 20 }, false)}
+                >
+                  Process next 20 due
+                </Button>
+              )
+            : undefined
+        }
         selection={canManage ? { selected, onChange: setSelected, rowLabel } : undefined}
         load={loadPortalCollection}
         empty="No outbox rows match the current filters."

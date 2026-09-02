@@ -61,11 +61,20 @@ const userResponseBaseSchema = z.object({
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 
+/**
+ * How many organization names a listing carries per person. Almost everyone
+ * represents one; a handful represent two; the count says how many more
+ * there are without the query having to fetch them all.
+ */
+export const USER_LIST_ORGANIZATION_NAMES = 2;
+
 export const userListItemSchema = userResponseBaseSchema.extend({
   active: z.union([z.literal(0), z.literal(1)]),
-  activeIdentityCount: z.number().int().nonnegative(),
   type: z.enum(USER_TYPE_VALUES),
-  eventParticipationCount: z.number(),
+  /** The organizations this person actively represents, first names first. */
+  organizationNames: z.array(z.string()).max(USER_LIST_ORGANIZATION_NAMES),
+  /** How many active representations the person holds in total. */
+  organizationCount: z.number().int().nonnegative(),
 });
 export type UserListItem = z.infer<typeof userListItemSchema>;
 

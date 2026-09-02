@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
+import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
@@ -118,7 +119,7 @@ describe("portal group mailing lists", () => {
     expect(container.textContent).toContain("No mailing lists yet");
     expect(container.textContent).toContain("Add mailing list");
   });
-  it("names the primary-discussion filter and sends the choice to the management query", async () => {
+  it("narrows to the primary discussion list from the Role column and sends the choice to the management query", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -131,19 +132,19 @@ describe("portal group mailing lists", () => {
     const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
     await settle();
 
-    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Primary discussion list"]')!;
-    expect(filter).not.toBeNull();
+    // No select above the table: the filter lives in the menu of the column
+    // that shows which list is the group's primary discussion list.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
     // The default view is the server default: no `primaryDiscussion` parameter at all.
     expect(requests.some((url) => url.searchParams.has("primaryDiscussion"))).toBe(false);
 
-    filter.value = "true";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(container, "Role", "Primary discussion list");
     await settle();
 
-    expect(requests.some((url) => url.searchParams.get("primaryDiscussion") === "true")).toBe(true);
+    expect(requests.at(-1)?.searchParams.get("primaryDiscussion")).toBe("true");
+    // And the page went back to the start of the narrowed list.
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(columnFilterSummary(container, "Role")).toBe("Primary discussion list");
   });
   it("renders manager collection errors", async () => {
     vi.stubGlobal(

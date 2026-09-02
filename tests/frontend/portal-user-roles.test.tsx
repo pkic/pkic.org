@@ -63,7 +63,8 @@ function subject() {
     links: [],
     membership: null,
     type: "contact_only",
-    eventParticipationCount: 0,
+    organizationNames: [],
+    organizationCount: 0,
   };
 }
 
@@ -214,7 +215,8 @@ describe("UserRoles", () => {
 
     await pickUser(container);
     expect(container.querySelector(`form[aria-label="Assign a role to ${USER_EMAIL}"]`)).toBeNull();
-    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
+    // No row commands: the head's column menus are the table's own, not a way in.
+    expect(container.querySelector('tbody [aria-haspopup="menu"]')).toBeNull();
     expect(container.querySelector("caption")?.textContent).toBe(`Roles assigned to ${USER_EMAIL}`);
   });
 });

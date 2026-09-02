@@ -1,5 +1,5 @@
 /** Generic self-service participation view shared by every configured group type. */
-import { useEffect, useState } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 import type { z } from "zod";
 import { usePortalHashLocation } from "../hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
@@ -8,7 +8,6 @@ import { ApiDataTable } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
 import { EmptyState } from "../../../components/EmptyState";
 import { ErrorAlert } from "../../../components/ErrorAlert";
-import { FilterSelect } from "../../../components/FilterSelect";
 import { Pager } from "../../../components/Pager";
 import { Spinner } from "../../../components/Spinner";
 import { useApiPage } from "../../../hooks/useApiPage";
@@ -76,7 +75,6 @@ function MemberGroupCatalog() {
 }
 
 function AllGroups({ canCreate }: { canCreate: boolean }) {
-  const [activeFilter, setActiveFilter] = useState("");
   return (
     <ApiDataTable
       caption="All groups"
@@ -88,25 +86,6 @@ function AllGroups({ canCreate }: { canCreate: boolean }) {
       paginate
       initialSort="name"
       searchPlaceholder="Search groups…"
-      params={activeFilter ? { active: activeFilter } : {}}
-      toolbar={({ resetPage }) => (
-        // The contract already accepts `active`; the toolbar exposes it as a
-        // filter instead of leaving inactive groups a concept the reader must
-        // infer from the badge column.
-        <FilterSelect
-          ariaLabel="Filter groups by status"
-          value={activeFilter}
-          options={[
-            { value: "", label: "All statuses" },
-            { value: "true", label: "Active" },
-            { value: "false", label: "Inactive" },
-          ]}
-          onChange={(value) => {
-            setActiveFilter(value);
-            resetPage();
-          }}
-        />
-      )}
       columns={[
         {
           header: "Group",
@@ -138,6 +117,17 @@ function AllGroups({ canCreate }: { canCreate: boolean }) {
               <Badge status="inactive" />
             ),
           width: "fit",
+          // The contract already accepts `active`; the column it shows in is
+          // where the reader narrows by it, rather than a select above the
+          // table that left inactive groups a concept to infer from the badge.
+          filter: {
+            param: "active",
+            options: [
+              { value: "", label: "All statuses" },
+              { value: "true", label: "Active" },
+              { value: "false", label: "Inactive" },
+            ],
+          },
         },
       ]}
       empty={
