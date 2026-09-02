@@ -1,0 +1,60 @@
+id: syedamaham
+name: 
+slogan:
+website: https://www.syedamaham.dev
+# Business domains for email
+organizationDomains:
+  - atmosfair.de
+# Short description, longer content can be placed in `content/members/`
+description: Hey! This is my personal blog website where I decode the mysteries of software development and explore cutting-edge tech innovations.
+
+# membership
+memberSince: 2026-09-02
+memberType: H7
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.syedamaham.dev/articles
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Syeda Maham Fahim
+    role: Software Engineer
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/syedamahamfahim/
+    description: Syeda Maham is the Software Engineer at  and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
