@@ -5,7 +5,6 @@ import {
   eventIdSchema,
   jsonErrorResponse,
   normalizedEmailSchema,
-  tokenSchema,
   trimmedString,
   utcInstantSchema,
 } from "./api-common";
@@ -15,7 +14,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpsCapabilityUrlSchema } from "./urls";
 import { eventGroupGrantSchemas } from "./resource-grants";
 import { eventInviteValiditySchema, eventInviteWindowSchema } from "./event-invite-validity";
-import { publicOperation, requiresSession } from "./route-contract";
+import { requiresSession } from "./route-contract";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
@@ -266,65 +265,6 @@ export const eventOccurrenceGuestsListQuerySchema = listQuerySchema(["name", "em
 });
 export const eventOccurrenceGuestsListResponseSchema = paginatedResponseSchema("guests", eventOccurrenceGuestSchema);
 
-export const meetingTermAcceptanceSchema = z.object({
-  termId: databaseIdSchema,
-  version: trimmedString(1, 64),
-});
-export const meetingJoinConfirmSchema = z
-  .object({
-    landingRevision: z.string().regex(/^[a-f0-9]{64}$/),
-    acceptedTerms: z.array(meetingTermAcceptanceSchema).max(20),
-    intentionalJoin: z.literal(true),
-  })
-  .strict();
-export const meetingJoinOccurrenceSchema = z.object({
-  id: databaseIdSchema,
-  seriesId: databaseIdSchema,
-  eventName: z.string(),
-  startsAt: utcInstantSchema,
-  endsAt: utcInstantSchema,
-  location: z.string().nullable(),
-});
-export const meetingJoinTermSchema = z.object({
-  id: databaseIdSchema,
-  key: z.string(),
-  version: z.string(),
-  displayText: z.string(),
-  required: z.boolean(),
-  accepted: z.boolean(),
-});
-export const meetingJoinLandingSchema = z.object({
-  occurrence: meetingJoinOccurrenceSchema,
-  name: z.string(),
-  affiliation: z.string().nullable(),
-  terms: z.array(meetingJoinTermSchema),
-  landingRevision: z.string().regex(/^[a-f0-9]{64}$/),
-});
-export type MeetingJoinLanding = z.infer<typeof meetingJoinLandingSchema>;
-export const meetingJoinResponseSchema = z.object({
-  confirmationId: databaseIdSchema,
-  confirmedAt: z.string(),
-  redirectUrl: httpsCapabilityUrlSchema,
-});
-
-export const meetingInvitationVerificationCreateSchema = z.object({
-  token: tokenSchema,
-});
-export const meetingInvitationVerificationCreateResponseSchema = z.object({
-  verificationId: databaseIdSchema,
-  expiresAt: utcInstantSchema,
-});
-export const meetingInvitationVerificationUpdateSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .regex(/^[A-HJ-NP-Z2-9]{8}$/),
-});
-export const meetingInvitationVerificationUpdateResponseSchema = z.object({
-  occurrenceId: databaseIdSchema,
-  expiresAt: utcInstantSchema,
-});
-
 export const ATTENDANCE_VERIFICATION_SOURCES = ["microsoft_graph", "cloudflare_meet", "manual"] as const;
 export const attendanceVerificationSourceSchema = z.enum(ATTENDANCE_VERIFICATION_SOURCES);
 export const attendanceVerifySchema = z.object({
@@ -359,10 +299,6 @@ export const eventAttendanceListResponseSchema = paginatedResponseSchema(
 export const groupMeetingSeriesParamsSchema = z.object({ groupId: groupReferenceSchema });
 export const eventSeriesParamsSchema = groupMeetingSeriesParamsSchema.extend({ seriesId: databaseIdSchema });
 export const eventOccurrenceParamsSchema = eventSeriesParamsSchema.extend({ occurrenceId: databaseIdSchema });
-export const meetingJoinOccurrenceParamsSchema = z.object({ occurrenceId: databaseIdSchema });
-export const meetingInvitationVerificationParamsSchema = meetingJoinOccurrenceParamsSchema.extend({
-  verificationId: databaseIdSchema,
-});
 export const eventGuestParamsSchema = eventOccurrenceParamsSchema.extend({ guestId: databaseIdSchema });
 export const eventAttendanceParamsSchema = eventOccurrenceParamsSchema.extend({ confirmationId: databaseIdSchema });
 
@@ -390,11 +326,11 @@ export const groupMeetingSeriesListRouteSchema = {
     "404": jsonErrorResponse("Group not found or not visible."),
   },
 };
-export const groupMeetingSeriesCreateRouteSchema = {
+export const groupMeetingSeriesDetailRouteSchema = {
   ...requiresSession(),
   tags: ["Groups", "Meetings"],
-  summary: "Create a group-owned meeting series",
-  request: {
+  summary: "Get a meeting series through one group context",
+{
     params: groupMeetingSeriesParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventSeriesCreateSchema } } },
   },
@@ -523,77 +459,5 @@ export const eventOccurrenceAttendanceVerifyRouteSchema = {
     "403": jsonErrorResponse("Effective attendance-management capability is required."),
     "404": jsonErrorResponse("The group, meeting occurrence, or join confirmation was not found."),
     "409": jsonErrorResponse("The attendance target or management authority changed while the update was saved."),
-  },
-};
-export const meetingJoinLandingRouteSchema = {
-  ...requiresSession(),
-  tags: ["Meetings"],
-  summary: "Inspect a meeting occurrence through the authenticated attendee identity",
-  request: { params: meetingJoinOccurrenceParamsSchema },
-  responses: {
-    "200": {
-      description: "Minimal occurrence, authoritative identity, affiliation, and current terms.",
-      content: { "application/json": { schema: meetingJoinLandingSchema } },
-    },
-    "401": jsonErrorResponse("An authenticated member or verified guest session is required."),
-    "403": jsonErrorResponse("The authenticated attendee is not eligible for this occurrence."),
-  },
-};
-export const meetingJoinConfirmRouteSchema = {
-  ...requiresSession(),
-  tags: ["Meetings"],
-  summary: "Intentionally confirm meeting entry and obtain the provider redirect",
-  request: {
-    params: meetingJoinOccurrenceParamsSchema,
-    body: { required: true, content: { "application/json": { schema: meetingJoinConfirmSchema } } },
-  },
-  responses: {
-    "200": {
-      description: "Occurrence entry recorded and provider redirect returned.",
-      content: { "application/json": { schema: meetingJoinResponseSchema } },
-    },
-    "401": jsonErrorResponse("An authenticated member or verified guest session is required."),
-    "403": jsonErrorResponse("The authenticated attendee is not eligible for this occurrence."),
-    "409": jsonErrorResponse("The identity, terms, meeting state, or exact session changed before commit."),
-  },
-};
-
-export const meetingInvitationVerificationCreateRouteSchema = {
-  ...publicOperation(),
-  tags: ["Meetings"],
-  summary: "Start browser-bound verification for an invited meeting guest",
-  request: {
-    params: meetingJoinOccurrenceParamsSchema,
-    body: { required: true, content: { "application/json": { schema: meetingInvitationVerificationCreateSchema } } },
-  },
-  responses: {
-    "202": {
-      description: "A one-time verification code was sent to the invited address.",
-      content: { "application/json": { schema: meetingInvitationVerificationCreateResponseSchema } },
-    },
-    "404": jsonErrorResponse("The invitation is invalid, expired, or no longer eligible."),
-    "429": jsonErrorResponse("A verification code was requested too recently."),
-    "503": jsonErrorResponse("Verification is temporarily unavailable because rate limiting could not be enforced."),
-  },
-};
-
-export const meetingInvitationVerificationUpdateRouteSchema = {
-  ...publicOperation(),
-  tags: ["Meetings"],
-  summary: "Exchange a mailbox code and browser challenge for a guest session",
-  request: {
-    params: meetingInvitationVerificationParamsSchema,
-    body: { required: true, content: { "application/json": { schema: meetingInvitationVerificationUpdateSchema } } },
-  },
-  responses: {
-    "200": {
-      description: "Guest session established.",
-      content: { "application/json": { schema: meetingInvitationVerificationUpdateResponseSchema } },
-    },
-    "401": jsonErrorResponse("The code or browser challenge is invalid."),
-    "429": jsonErrorResponse("Too many verification attempts were made from this client."),
-    "409": jsonErrorResponse("The challenge was already used."),
-    "410": jsonErrorResponse("The challenge or invitation expired."),
-    "503": jsonErrorResponse("Verification is temporarily unavailable because rate limiting could not be enforced."),
   },
 };

@@ -1,7 +1,7 @@
 import { Fragment } from "preact";
 import { useState } from "preact/hooks";
 import type { z } from "zod";
-import type { meetingJoinLandingSchema } from "../../../shared/schemas/event-series";
+import type { meetingJoinLandingSchema } from "../../../shared/schemas/meeting-entry";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
 import { Panel, PanelBody } from "../../ui/Panel";

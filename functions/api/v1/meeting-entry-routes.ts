@@ -4,7 +4,7 @@ import {
   meetingJoinConfirmSchema,
   meetingJoinLandingRouteSchema,
   meetingJoinResponseSchema,
-} from "../../../assets/shared/schemas/event-series";
+} from "../../../assets/shared/schemas/meeting-entry";
 import { requestDb, type AdminContext } from "../../_lib/db/context";
 import { AppError } from "../../_lib/errors";
 import { jsonPrivate } from "../../_lib/http";
