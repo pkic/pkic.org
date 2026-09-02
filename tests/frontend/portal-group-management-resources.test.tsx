@@ -392,19 +392,19 @@ describe("portal group management resources", () => {
     // What a visual review cannot see: the panel names itself among the
     // group workspace's stack of panels, and the table is identifiable in a
     // page that holds several of them rather than announced as "table".
-    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Membership capacities");
-    expect(container.querySelector("caption")?.textContent).toBe("Active membership capacities in this group");
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Members");
+    expect(container.querySelector("caption")?.textContent).toBe("Members");
     // The actions column names each row's subject instead of the control, so
     // a roster of "Remove" buttons is still a roster of distinct controls.
     expect(rowActionControlNames(container)).toEqual(["Actions for Member Person"]);
 
     // The search box is reached through its own `for`/`id` pair, so this
     // lookup fails exactly when the labelling does.
-    const search = controlFor(container, "Search membership capacities");
+    const search = controlFor(container, "Search members");
     await typeInto(search, "member@example.test");
     await settle();
     void act(() => {
-      search.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("q")).toBe("member@example.test");

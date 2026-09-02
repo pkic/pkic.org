@@ -410,7 +410,7 @@ describe("portal organization self-service", () => {
 
     // The selector used to carry no name at all — a heading above it is not a
     // label, so the control announced itself as an unnamed combo box.
-    const select = controlFor<HTMLSelectElement>(container, "Nominated secondary contact");
+    const select = controlFor<HTMLSelectElement>(container, "Nominee");
     expect(select.tagName).toBe("SELECT");
     expect([...select.options].map((option) => option.textContent)).toEqual(["None", "Second Person"]);
 
@@ -434,7 +434,7 @@ describe("portal organization self-service", () => {
     await settle();
 
     expect(container.textContent).toContain("Pending: Second Person");
-    expect(() => controlFor(container, "Nominated secondary contact")).toThrow();
+    expect(() => controlFor(container, "Nominee")).toThrow();
   });
 
   it("says the sponsorship tier in words rather than by a text transform", async () => {

@@ -165,30 +165,6 @@ export function Sponsorships({
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      {/* Both filters carry a visible name through a real `for`/`id` pair.
-          They used to be two bare selects whose only clue was the "All types"
-          option, which a reader tabbing between form controls never sees. */}
-      <div class="pk-cluster pk-cluster--start">
-        <FilterSelect
-          label="Type"
-          value={type}
-          options={[
-            { value: "" as typeof type, label: "All types" },
-            ...SPONSOR_TYPES.map((t) => ({ value: t as typeof type, label: t })),
-          ]}
-          onChange={setType}
-        />
-        <FilterSelect
-          label="Stage"
-          value={stage}
-          options={[
-            { value: "" as typeof stage, label: "All stages" },
-            ...SPONSORSHIP_PIPELINE_STAGES.map((s) => ({ value: s as typeof stage, label: statusLabel(s) })),
-          ]}
-          onChange={setStage}
-        />
-      </div>
-
       {canWrite && showCreate && (
         <CreateSponsorshipForm
           onCreated={() => {
@@ -209,7 +185,42 @@ export function Sponsorships({
           resolvePage={(data) => data.page}
           paginate
           actionsRef={tableRef}
-          createAction={canWrite ? { label: "Create sponsorship", onSelect: () => setShowCreate(true) } : undefined}
+          createAction={
+            canWrite
+              ? { label: "Create sponsorship", onSelect: () => setShowCreate(true), disabled: showCreate }
+              : undefined
+          }
+          toolbar={({ resetPage }) => (
+            <>
+              {/* The list contract's two filters, in the panel head where
+                  every other list keeps them; each carries its name in
+                  `aria-label` through the shared control. */}
+              <FilterSelect
+                ariaLabel="Filter by sponsor type"
+                value={type}
+                options={[
+                  { value: "" as typeof type, label: "All types" },
+                  ...SPONSOR_TYPES.map((t) => ({ value: t as typeof type, label: statusLabel(t) })),
+                ]}
+                onChange={(value) => {
+                  setType(value);
+                  resetPage();
+                }}
+              />
+              <FilterSelect
+                ariaLabel="Filter by pipeline stage"
+                value={stage}
+                options={[
+                  { value: "" as typeof stage, label: "All stages" },
+                  ...SPONSORSHIP_PIPELINE_STAGES.map((s) => ({ value: s as typeof stage, label: statusLabel(s) })),
+                ]}
+                onChange={(value) => {
+                  setStage(value);
+                  resetPage();
+                }}
+              />
+            </>
+          )}
           columns={companyColumns}
           params={{ ...(type ? { type } : {}), ...(stage ? { stage } : {}) }}
           rowKey={(c) => c.key}

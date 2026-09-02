@@ -4,12 +4,13 @@ import {
   groupVoteMutationResponseSchema,
 } from "../../../../../shared/schemas/group-vote-management";
 import { THRESHOLD_TYPES, VOTE_ELECTORATE_MODES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
+import { statusLabel } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postValidated } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 
 interface CandidateDraft {
   name: string;
@@ -124,27 +125,30 @@ export function GroupVoteCreateForm({
               reader just pressed keeps focus instead of being disabled from
               under them. */}
           <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+            {/* What is being decided reads at full measure; only the paired
+                settings share a row below. */}
+            <Field label="Title" required>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  maxLength={300}
+                  value={title}
+                  onInput={(event) => setTitle(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+            <Field label="Description">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={3}
+                  maxLength={10000}
+                  value={description}
+                  onInput={(event) => setDescription(event.currentTarget.value)}
+                />
+              )}
+            </Field>
             <div class="pk-grid pk-grid--roomy">
-              <Field label="Title" required>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    maxLength={300}
-                    value={title}
-                    onInput={(event) => setTitle(event.currentTarget.value)}
-                  />
-                )}
-              </Field>
-              <Field label="Description">
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    maxLength={10000}
-                    value={description}
-                    onInput={(event) => setDescription(event.currentTarget.value)}
-                  />
-                )}
-              </Field>
               <Field label="Type">
                 {(control) => (
                   <Select
@@ -158,7 +162,7 @@ export function GroupVoteCreateForm({
                   >
                     {VOTE_TYPES.map((type) => (
                       <option key={type} value={type}>
-                        {type}
+                        {statusLabel(type)}
                       </option>
                     ))}
                   </Select>

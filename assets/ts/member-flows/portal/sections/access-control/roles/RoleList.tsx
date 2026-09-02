@@ -107,6 +107,10 @@ export function RoleList({
           header: "Description",
           cell: (r) => r.description ?? "—",
           className: "pk-small pk-muted",
+          // The prose column takes the wide screen's slack; left to the
+          // default, the mono role names claimed it and every description
+          // wrapped down three lines beside a metre of empty name column.
+          width: "primary",
           sort: { asc: "description", desc: "-description" },
         },
         {

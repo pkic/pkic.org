@@ -110,7 +110,7 @@ export function GroupWorkspace({
   groupId: string;
   view?: string;
   resourceId?: string;
-  /** A second URL segment below `resourceId`: the events, forms, and meetings views forward it as the resource's initial tab. */
+  /** A second URL segment below `resourceId`: the events, forms, meetings, and votes views forward it as the resource's initial tab. */
   resourceTab?: string;
   /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
   resourceDetailId?: string;
@@ -217,6 +217,7 @@ export function GroupWorkspace({
                 canManage={canManage}
                 canParticipate={canParticipate}
                 voteSegment={resourceId}
+                voteTab={resourceTab}
               />
             )}
             {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}

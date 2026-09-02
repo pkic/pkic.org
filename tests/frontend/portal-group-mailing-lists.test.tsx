@@ -90,8 +90,12 @@ describe("portal group mailing lists", () => {
     );
 
     const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    // While the page loads the table stays mounted and announces itself busy
+    // over skeleton rows, instead of collapsing to a spinner.
+    expect(container.querySelector('table[aria-busy="true"]')).not.toBeNull();
+    expect(container.querySelector(".pk-table__skeleton")).not.toBeNull();
     await settle();
+    expect(container.querySelector('table[aria-busy="true"]')).toBeNull();
 
     expect(container.textContent).toContain("Managed mailing lists");
     expect(container.textContent).toContain("Architecture discussion");

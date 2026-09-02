@@ -2,7 +2,6 @@ import { useRef, useState } from "preact/hooks";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../ui/Badge";
 import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { TextInput } from "../../../../ui/TextControl";
 import { OperationActions } from "./OperationActions";
 import { RetentionDueTable } from "./RetentionDueTable";
@@ -33,45 +32,49 @@ export function ScheduledWork({
   const canRunAnything = canManageEmail || canWriteMembership || canApproveMembership || canRunRetention;
 
   return (
-    // The frame, padding and rhythm the `action-card` rule drew by hand are
-    // the panel's own, and the "Read only" chip sits in the panel header's
-    // toolbar slot rather than in a flex row above it.
-    <Panel>
-      <PanelHeader title="Scheduled Work">{!canRunAnything && <Badge tone="neutral">Read only</Badge>}</PanelHeader>
-      <PanelBody class="pk-stack">
-        <Field label="Reminder batch size" help="How many reminders one run may send. Between 1 and 500.">
-          {(control) => (
-            <TextInput
-              {...control}
-              type="number"
-              class="adm-due-work-limit"
-              value={reminderLimit}
-              min={1}
-              max={500}
-              onInput={(event) =>
-                setReminderLimit(Number((event.target as HTMLInputElement).value) || DEFAULT_REMINDER_LIMIT)
-              }
-            />
-          )}
-        </Field>
+    // The "Scheduled Work" tab already names this surface, so it opens with
+    // its panels rather than a heading repeating the tab. Each region below
+    // is its own panel: the commands (with the reminder batch size that
+    // parametrizes them), then retention's pending list.
+    <section aria-label="Scheduled work" class="pk pk-stack">
+      {!canRunAnything && (
+        <div class="pk-cluster pk-cluster--end">
+          <Badge tone="neutral">Read only</Badge>
+        </div>
+      )}
 
-        <OperationActions
-          reminderLimit={reminderLimit}
-          canManageEmail={canManageEmail}
-          canRunRetention={canRunRetention}
-          canAnonymizeUsers={canAnonymizeUsers}
-          canWriteMembership={canWriteMembership}
-          canApproveMembership={canApproveMembership}
-          reload={() => retentionActionsRef.current?.reload() ?? Promise.resolve()}
-        />
+      <Field label="Reminder batch size" help="How many reminders one run may send. Between 1 and 500.">
+        {(control) => (
+          <TextInput
+            {...control}
+            type="number"
+            class="adm-due-work-limit"
+            value={reminderLimit}
+            min={1}
+            max={500}
+            onInput={(event) =>
+              setReminderLimit(Number((event.target as HTMLInputElement).value) || DEFAULT_REMINDER_LIMIT)
+            }
+          />
+        )}
+      </Field>
 
-        {canRunRetention && <RetentionDueTable actionsRef={retentionActionsRef} />}
+      <OperationActions
+        reminderLimit={reminderLimit}
+        canManageEmail={canManageEmail}
+        canRunRetention={canRunRetention}
+        canAnonymizeUsers={canAnonymizeUsers}
+        canWriteMembership={canWriteMembership}
+        canApproveMembership={canApproveMembership}
+        reload={() => retentionActionsRef.current?.reload() ?? Promise.resolve()}
+      />
 
-        <p class="pk-small">
-          Each command runs in the domain that owns the work, and is available only to staff holding that domain&apos;s
-          permission.
-        </p>
-      </PanelBody>
-    </Panel>
+      {canRunRetention && <RetentionDueTable actionsRef={retentionActionsRef} />}
+
+      <p class="pk-small">
+        Each command runs in the domain that owns the work, and is available only to staff holding that domain&apos;s
+        permission.
+      </p>
+    </section>
   );
 }

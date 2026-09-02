@@ -152,7 +152,7 @@ describe("sponsor attendee roster", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("This sponsorship no longer has attendee data access");
-    expect(alert?.textContent).toContain("Contact your PKIC representative");
+    expect(alert?.textContent).toContain("Contact the PKI Consortium");
     expect(container.querySelector("table")).toBeNull();
     expect(container.querySelector("a[download]")).toBeNull();
   });

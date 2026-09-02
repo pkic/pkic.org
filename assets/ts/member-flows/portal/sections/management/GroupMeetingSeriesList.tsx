@@ -7,7 +7,6 @@ import { EmptyState } from "../../../../components/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
 import { fmt } from "../../ui";
 import { GroupMeetingSeriesDetail } from "./GroupMeetingSeriesDetail";
-import { ResourceCapabilities } from "./ResourceCapabilities";
 
 export function GroupMeetingSeriesList({
   groupId,
@@ -77,7 +76,6 @@ export function GroupMeetingSeriesList({
           cell: (series) => <Badge status={series.active ? "active" : "inactive"} />,
           width: "fit",
         },
-        { header: "Access", cell: (series) => <ResourceCapabilities capabilities={series.capabilities} /> },
         {
           header: "",
           cell: (series) => (

@@ -10,9 +10,10 @@ extend the anatomy, not to hand-roll a layout.
 ```
 1  PageHeader   breadcrumb? · title · context chips · primary actions
 2  Tabs?        TabList, only when the record has more facets than fit one page
-3  Toolbar      search · filters · view actions   (lists only)
-4  Content      the table, the form, or the panels — full width
-5  Pager        (lists only)
+3  Content      full width — one of:
+   · List panel: ONE panel holding head (search · filters · actions),
+     bulk bar?, table, and pager (count left, page controls right)
+   · Form panels, detail panels
 ```
 
 ## Rules, each earned by a defect that reached the maintainer
@@ -48,6 +49,36 @@ which sponsorships, which events".
 **Controls are sized by their importance, not their consequence.** A
 destructive action is distinguished by tone (`danger-quiet`) and confirmation,
 never by being larger. The logo's Remove was the biggest control on the page.
+
+## Records inside a workspace — the nested-header decision
+
+A workspace (a group, and one day anything else that owns collections) keeps
+the five regions above for itself: its PageHeader is the page's `<h2>`, its
+tabs are the section switcher. The records living inside its tabs then come in
+exactly two shapes, and the choice between them is a rule, not taste:
+
+**A record with facets is a routed page.** An event, a vote, a form: each has
+its own URL under the workspace (`…/votes/:voteId/:tab?`), and renders a
+**record header** — a `← Back to <collection>` link, the record's name as an
+`<h3>` (`pk-record-title`; the shell owns `<h1>`, the workspace `<h2>`),
+status badges and one meta line — followed by its own tab row, each facet
+fetching only when opened. The workspace header stays above it: the reader
+keeps "where am I" (group) and gains "what am I on" (record) without either
+repeating the other. Never render a faceted record as an expansion between
+the rows of the list it came from — that is how the vote detail ended up
+drawing "Sharing" above the vote itself, with the rest of the list still
+poking out underneath.
+
+**A single-facet detail opens in place.** A row whose detail is one bounded
+form or quick view — a mailing list's settings, one meeting occurrence — may
+expand under its row (`detailRow`); the license ends the moment the detail
+grows a second facet or wants its own URL in someone's hands.
+
+One deliberate exception: a meeting **series** has facets (occurrences,
+settings) but the API has no single-series GET yet, so it opens in place from
+the row that already holds its data. When a `GET
+/groups/:id/meetings/series/:seriesId` exists, it becomes a routed record
+page like the others.
 
 ## What this is not
 

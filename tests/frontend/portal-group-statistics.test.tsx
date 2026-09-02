@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatDateTime } from "../../assets/shared/format-date";
 import { GroupStatistics } from "../../assets/ts/member-flows/portal/sections/management/GroupStatistics";
 import { groupStatsQuerySchema } from "../../assets/shared/schemas/group-statistics";
 import { chooseOption, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
@@ -90,13 +91,16 @@ describe("portal group statistics", () => {
 
     resolveResponse(json(baseStats));
     await settle();
-    expect(container.textContent).toContain("Distinct users");
-    expect(container.textContent).toContain("Member participation rows");
+    expect(container.textContent).toContain("Distinct people");
+    expect(container.textContent).toContain("One per Member represented");
     expect(statValue(container, "People")).toBe("2");
-    expect(statValue(container, "Membership capacities")).toBe("3");
+    expect(statValue(container, "Memberships")).toBe("3");
     expect(statValue(container, "Active people")).toBe("2");
     expect(statValue(container, "Actions")).toBe("4");
-    expect(container.textContent).toContain("2026-08-26 12:00:00 UTC");
+    // Instants render through the shared localized formatter, never as raw
+    // ISO strings pinned to UTC.
+    expect(container.textContent).toContain(formatDateTime("2026-08-26T12:00:00.000Z"));
+    expect(container.textContent).not.toContain("2026-08-26T12:00:00.000Z");
   });
 
   it("names every window control through a for/id pair and names each region", async () => {
@@ -109,15 +113,15 @@ describe("portal group statistics", () => {
 
     // `controlFor` resolves through the label's `for` and the control's `id`,
     // so it throws exactly when that pair is broken.
-    expect(controlFor<HTMLSelectElement>(container, "Population scope").tagName).toBe("SELECT");
-    expect(controlFor(container, "From (UTC)").getAttribute("type")).toBe("date");
-    expect(controlFor(container, "To (UTC, exclusive)").getAttribute("type")).toBe("date");
+    expect(controlFor<HTMLSelectElement>(container, "Count people who").tagName).toBe("SELECT");
+    expect(controlFor(container, "From").getAttribute("type")).toBe("date");
+    expect(controlFor(container, "To").getAttribute("type")).toBe("date");
 
-    const from = controlFor(container, "From (UTC)");
+    const from = controlFor(container, "From");
     expect(describedBy(from, container)?.textContent).toContain("beginning of available history");
 
     const regions = [...container.querySelectorAll("section")].map((section) => section.getAttribute("aria-label"));
-    expect(regions).toEqual(["Group statistics", "Participation", "Activity"]);
+    expect(regions).toEqual(["Reporting window", "Participation", "Activity"]);
   });
 
   it("uses the shared schema-backed UTC window controls and sends filtering to D1", async () => {
@@ -139,9 +143,9 @@ describe("portal group statistics", () => {
     );
     const container = mount();
     await settle();
-    await chooseOption(controlFor<HTMLSelectElement>(container, "Population scope"), "historical");
-    await typeInto(controlFor(container, "From (UTC)"), "2026-08-01");
-    await typeInto(controlFor(container, "To (UTC, exclusive)"), "2026-08-26");
+    await chooseOption(controlFor<HTMLSelectElement>(container, "Count people who"), "historical");
+    await typeInto(controlFor(container, "From"), "2026-08-01");
+    await typeInto(controlFor(container, "To"), "2026-08-26");
     await submitForm(container);
     await settle();
 
@@ -155,7 +159,7 @@ describe("portal group statistics", () => {
       from: "2026-08-01T00:00:00.000Z",
       to: "2026-08-26T00:00:00.000Z",
     });
-    expect(container.textContent).toContain("Historical window");
+    expect(container.textContent).toContain("Participated during the window");
   });
 
   it("marks the offending boundary invalid rather than issuing a request", async () => {
@@ -165,19 +169,19 @@ describe("portal group statistics", () => {
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await typeInto(controlFor(container, "From (UTC)"), "2026-08-26");
-    await typeInto(controlFor(container, "To (UTC, exclusive)"), "2026-08-01");
+    await typeInto(controlFor(container, "From"), "2026-08-26");
+    await typeInto(controlFor(container, "To"), "2026-08-01");
     await submitForm(container);
     await settle();
 
     // A window that ends before it starts is rejected by the shared schema on
     // the `to` path, so that is the control that carries the error.
-    const to = controlFor(container, "To (UTC, exclusive)");
+    const to = controlFor(container, "To");
     expect(to.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(to, container);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("to must be later than from");
-    expect(controlFor(container, "From (UTC)").getAttribute("aria-invalid")).toBeNull();
+    expect(controlFor(container, "From").getAttribute("aria-invalid")).toBeNull();
     // The rejected window never reached the server.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -206,6 +210,6 @@ describe("portal group statistics", () => {
     expect(statValue(zeroContainer, "People")).toBe("0");
     const empty = zeroContainer.querySelector(".pk-empty-state");
     expect(empty?.getAttribute("role")).toBe("status");
-    expect(empty?.textContent).toContain("No activity recorded in this UTC window.");
+    expect(empty?.textContent).toContain("No activity recorded in this window.");
   });
 });

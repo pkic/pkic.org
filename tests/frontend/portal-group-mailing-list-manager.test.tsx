@@ -92,7 +92,7 @@ describe("group mailing-list management surface", () => {
 
     // The region a screen reader lands in, found by the name it announces —
     // the same name the end-to-end spec navigates by.
-    const region = container.querySelector<HTMLElement>('section[aria-label="Mailing-list management"]');
+    const region = container.querySelector<HTMLElement>('section[aria-label="Managed mailing lists"]');
     expect(region).not.toBeNull();
 
     // A page with several tables announces several tables unless each is named.

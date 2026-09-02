@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "preact/compat";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
 import { VOTE_STATUSES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
@@ -11,15 +12,19 @@ import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
-import { Panel, PanelBody } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { VoteDetails } from "../Votes/VoteDetails";
 import { GroupVoteCreateForm } from "./GroupVoteCreateForm";
-import { GroupVoteManagementControls } from "./GroupVoteManagementControls";
+import { GroupVoteBallots, GroupVoteSettings } from "./GroupVoteManagementControls";
 import { GroupVoteProposals } from "./GroupVoteProposals";
-import { ResourceCapabilities } from "./ResourceCapabilities";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
+// `pk-record-title` ships in Content.css; the module that names it loads it.
+import "../../../../ui/Content.css";
+
+const GroupVoteStatistics = lazy(() =>
+  import("./GroupVoteStatistics").then((module) => ({ default: module.GroupVoteStatistics })),
+);
 
 /** Reserved vote segment that routes to the creation page instead of a vote's detail. */
 const NEW_GROUP_VOTE_SEGMENT = "new";
@@ -30,17 +35,130 @@ function GroupVotesRedirect({ onLeave }: { onLeave: () => void }) {
   return null;
 }
 
+/** The vote record's facets. Each one loads its data when it is opened. */
+const VOTE_RECORD_TABS = [
+  { key: "overview", label: "Overview", manage: false },
+  { key: "statistics", label: "Statistics", manage: true },
+  { key: "ballots", label: "Ballots", manage: true },
+  { key: "settings", label: "Settings", manage: true },
+  { key: "sharing", label: "Sharing", manage: true },
+] as const;
+
+type VoteRecordTab = (typeof VOTE_RECORD_TABS)[number]["key"];
+
+/**
+ * A vote's own page: the way back to the list, the vote as the subject —
+ * title, type, status, and when it closes — and one tab per facet, each
+ * fetching only when opened. It replaces an expansion between the list's
+ * rows that stacked sharing above the vote itself and hid the ballot audit
+ * and the statistics behind "Load …" buttons.
+ */
+function GroupVoteRecord({
+  groupId,
+  voteId,
+  initialTab,
+  onLeave,
+}: {
+  groupId: string;
+  voteId: string;
+  /** The URL-addressed tab segment, if any. Undefined or unavailable selects Overview. */
+  initialTab?: string;
+  onLeave: () => void;
+}) {
+  const [, navigate] = usePortalHashLocation();
+  const detail = useData(
+    () =>
+      getJson(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(voteId)}`,
+        groupVoteDetailResponseSchema,
+      ),
+    [groupId, voteId],
+  );
+  const vote = detail.data?.vote.id === voteId ? detail.data.vote : null;
+  const canManage = vote?.capabilities.includes("manage") ?? false;
+  const tabs = VOTE_RECORD_TABS.filter(
+    (item) => (!item.manage || canManage) && (item.key !== "sharing" || vote?.ownerGroupId === groupId),
+  ).map(({ key, label }) => ({ key, label }));
+  const requested = initialTab as VoteRecordTab | undefined;
+  const tab: VoteRecordTab = tabs.some((item) => item.key === requested) ? (requested as VoteRecordTab) : "overview";
+
+  function tabPath(key: string): string {
+    const base = `/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(voteId)}`;
+    return key === "overview" ? base : `${base}/${key}`;
+  }
+
+  return (
+    <div class="pk pk-stack">
+      <div class="pk-cluster">
+        <Button variant="link" size="sm" onClick={onLeave}>
+          ← All votes
+        </Button>
+      </div>
+      {detail.loading && !vote && <Spinner label="Loading vote…" />}
+      {detail.error && <ErrorAlert error={detail.error} />}
+      {vote && (
+        <>
+          <div class="pk-stack pk-stack--tight">
+            <h3 class="pk-record-title">{vote.title}</h3>
+            <div class="pk-cluster">
+              <Badge status={vote.voteType} />
+              <Badge status={vote.status} />
+              <span class="pk-small pk-muted">Closes {fmt(vote.closesAt)}</span>
+            </div>
+          </div>
+          {tabs.length > 1 && (
+            <Tabs
+              items={tabs}
+              active={tab}
+              label={`${vote.title} sections`}
+              onChange={(key) => navigate(tabPath(key))}
+              hrefFor={tabPath}
+            />
+          )}
+          {tab === "overview" && (
+            <VoteDetails
+              vote={vote}
+              ballotEndpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(voteId)}/ballots`}
+              onChanged={detail.reload}
+            />
+          )}
+          {tab === "statistics" && canManage && (
+            <Suspense fallback={<Spinner label="Loading vote statistics…" />}>
+              <GroupVoteStatistics groupId={groupId} voteId={voteId} />
+            </Suspense>
+          )}
+          {tab === "ballots" && canManage && <GroupVoteBallots groupId={groupId} voteId={voteId} />}
+          {tab === "settings" && canManage && (
+            <GroupVoteSettings groupId={groupId} vote={vote} onChanged={detail.reload} />
+          )}
+          {tab === "sharing" && canManage && vote.ownerGroupId === groupId && (
+            <ResourceSharingEditor
+              kind="vote"
+              groupId={groupId}
+              resourceId={vote.id}
+              ownerGroupId={vote.ownerGroupId}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function GroupVotes({
   groupId,
   canManage,
   canParticipate,
   voteSegment,
+  voteTab,
 }: {
   groupId: string;
   canManage: boolean;
   canParticipate: boolean;
   /** `undefined` for the list, `"new"` for the create page, or a vote id for its detail. */
   voteSegment?: string;
+  /** The URL-addressed tab segment below a vote id. */
+  voteTab?: string;
 }) {
   const idBase = useId();
   const tabIdPrefix = `${idBase}-tab`;
@@ -50,23 +168,8 @@ export function GroupVotes({
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [selectedVoteId, setSelectedVoteId] = useState<string | null>(creating ? null : (voteSegment ?? null));
   const tableActions = useRef<ApiTableActions | null>(null);
   const votesPath = `/groups/${encodeURIComponent(groupId)}/votes`;
-  const detail = useData(
-    () =>
-      selectedVoteId
-        ? getJson(
-            `/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(selectedVoteId)}`,
-            groupVoteDetailResponseSchema,
-          )
-        : Promise.resolve(null),
-    [groupId, selectedVoteId],
-  );
-
-  async function reloadSelectedVote(): Promise<void> {
-    await Promise.all([detail.reload(), tableActions.current?.reload()]);
-  }
 
   function leaveCreatePage(): void {
     navigate(votesPath);
@@ -81,7 +184,7 @@ export function GroupVotes({
       // screen rather than layered over the list.
       <div class="pk pk-stack">
         <div class="pk-cluster">
-          <Button size="sm" onClick={leaveCreatePage}>
+          <Button variant="link" size="sm" onClick={leaveCreatePage}>
             ← All votes
           </Button>
         </div>
@@ -94,169 +197,130 @@ export function GroupVotes({
     );
   }
 
+  if (voteSegment) {
+    // A vote is a record with facets, so it gets its own page rather than an
+    // expansion between the list's rows.
+    return <GroupVoteRecord groupId={groupId} voteId={voteSegment} initialTab={voteTab} onLeave={leaveCreatePage} />;
+  }
+
   return (
-    <div class="pk">
-      <Panel aria-label="Votes">
-        {/* The strip was a `<ul>` of buttons wearing `nav-link`: it looked
-            like a tab set and announced itself as a list, so nothing told a
-            screen reader which of the two was showing or that the arrows
-            move between them. Nothing here navigates — both panels are on
-            this page — so it is the WAI-ARIA tab pattern, with the panel
-            pointing back at the tab that opened it. */}
-        <PanelBody class="pk-stack">
-          <Tabs
-            label="Vote sections"
-            idPrefix={tabIdPrefix}
-            active={tab}
-            onChange={(key) => setTab(key as "votes" | "proposals")}
-            items={[
-              { key: "votes", label: "All votes", panelId },
-              { key: "proposals", label: "Proposals", panelId },
-            ]}
-          />
-          <div id={panelId} role="tabpanel" aria-labelledby={`${tabIdPrefix}-${tab}`} class="pk-stack">
-            {tab === "proposals" ? (
-              <GroupVoteProposals groupId={groupId} canParticipate={canParticipate} />
-            ) : (
-              <ApiDataTable
-                caption="All votes"
-                endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes`}
-                responseSchema={groupVotesListResponseSchema}
-                resolve={(response) => response.votes}
-                resolvePage={(response) => response.page}
-                paginate
-                createAction={
-                  canManage
-                    ? { label: "Create vote", onSelect: () => navigate(`${votesPath}/${NEW_GROUP_VOTE_SEGMENT}`) }
-                    : undefined
-                }
-                searchPlaceholder="Search votes…"
-                initialSort="-closes_at"
-                actionsRef={tableActions}
-                params={{
-                  ...(statusFilter ? { status: statusFilter } : {}),
-                  ...(typeFilter ? { type: typeFilter } : {}),
-                }}
-                toolbar={({ resetPage }) => (
-                  // Both filters already exist on the votes contract; the
-                  // toolbar exposes them rather than leaving status and type
-                  // to search syntax.
-                  <>
-                    <FilterSelect
-                      ariaLabel="Filter votes by status"
-                      value={statusFilter}
-                      options={[
-                        { value: "", label: "All statuses" },
-                        ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
-                      ]}
-                      onChange={(value) => {
-                        setStatusFilter(value);
-                        resetPage();
-                      }}
-                    />
-                    <FilterSelect
-                      ariaLabel="Filter votes by type"
-                      value={typeFilter}
-                      options={[
-                        { value: "", label: "All types" },
-                        ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
-                      ]}
-                      onChange={(value) => {
-                        setTypeFilter(value);
-                        resetPage();
-                      }}
-                    />
-                  </>
-                )}
-                columns={[
-                  {
-                    header: "Vote",
-                    cell: (vote) => (
-                      <div class="pk-stack pk-stack--tight">
-                        <span class="pk-strong">{vote.title}</span>
-                        {vote.description && <span class="pk-small">{vote.description}</span>}
-                      </div>
-                    ),
-                    sort: { asc: "title", desc: "-title" },
-                  },
-                  { header: "Type", cell: (vote) => <Badge status={vote.voteType} />, width: "fit" },
-                  {
-                    header: "Status",
-                    cell: (vote) => <Badge status={vote.status} />,
-                    width: "fit",
-                    sort: { asc: "status", desc: "-status" },
-                  },
-                  {
-                    // A date has a bounded length; the column says so instead
-                    // of wearing `pk-nowrap` while still claiming slack.
-                    header: "Closes",
-                    cell: (vote) => fmt(vote.closesAt),
-                    width: "fit",
-                    sort: { asc: "closes_at", desc: "-closes_at", defaultDirection: "desc" },
-                  },
-                  { header: "Access", cell: (vote) => <ResourceCapabilities capabilities={vote.capabilities} /> },
-                ]}
-                empty={
-                  canManage ? (
-                    // The way out is named, not repeated: the toolbar above
-                    // already carries "Create vote", and a second button
-                    // with that same name is one command answering to two
-                    // controls.
-                    <EmptyState title="No votes yet" body="Use Create vote above to get started." />
-                  ) : (
-                    "No votes are available through this group."
-                  )
-                }
-                rowKey={(vote) => vote.id}
-                // Activating a row opens its detail in place — the same rule
-                // as every other list. The "Details" button column this
-                // replaces left the row itself inert.
-                rowAction={(vote) => ({
-                  label:
-                    selectedVoteId === vote.id ? `Hide details for ${vote.title}` : `Show details for ${vote.title}`,
-                  onSelect: () => setSelectedVoteId((current) => (current === vote.id ? null : vote.id)),
-                })}
-                detailRow={(vote) => {
-                  if (selectedVoteId !== vote.id) return null;
-                  if (detail.loading) return <Spinner label="Loading vote…" />;
-                  if (detail.error) return <ErrorAlert error={detail.error} />;
-                  if (detail.data?.vote.id !== vote.id) return null;
-                  return (
-                    // The expanded cell has no padding of its own — DataTable
-                    // zeroes it so the row's owner decides — so the panel body
-                    // supplies it on the space scale, and its `gap` replaces
-                    // the margins the stacked editors each used to carry.
-                    <PanelBody class="pk-stack">
-                      {detail.data.vote.capabilities.includes("manage") && (
-                        <>
-                          {detail.data.vote.ownerGroupId === groupId && (
-                            <ResourceSharingEditor
-                              kind="vote"
-                              groupId={groupId}
-                              resourceId={detail.data.vote.id}
-                              ownerGroupId={detail.data.vote.ownerGroupId}
-                            />
-                          )}
-                          <GroupVoteManagementControls
-                            groupId={groupId}
-                            vote={detail.data.vote}
-                            onChanged={reloadSelectedVote}
-                          />
-                        </>
-                      )}
-                      <VoteDetails
-                        vote={detail.data.vote}
-                        ballotEndpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(vote.id)}/ballots`}
-                        onChanged={reloadSelectedVote}
-                      />
-                    </PanelBody>
-                  );
-                }}
-              />
+    <div class="pk pk-stack">
+      {/* Nothing here navigates — both collections live on this page — so it
+          is the WAI-ARIA tab pattern, with the panel pointing back at the tab
+          that opened it. The tabs stand above the list panel the way the
+          workspace's own tabs stand above its content. */}
+      <Tabs
+        label="Vote sections"
+        idPrefix={tabIdPrefix}
+        active={tab}
+        onChange={(key) => setTab(key as "votes" | "proposals")}
+        items={[
+          { key: "votes", label: "All votes", panelId },
+          { key: "proposals", label: "Proposals", panelId },
+        ]}
+      />
+      <div id={panelId} role="tabpanel" aria-labelledby={`${tabIdPrefix}-${tab}`} class="pk-stack">
+        {tab === "proposals" ? (
+          <GroupVoteProposals groupId={groupId} canParticipate={canParticipate} />
+        ) : (
+          <ApiDataTable
+            caption="All votes"
+            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/votes`}
+            responseSchema={groupVotesListResponseSchema}
+            resolve={(response) => response.votes}
+            resolvePage={(response) => response.page}
+            paginate
+            createAction={
+              canManage
+                ? { label: "Create vote", onSelect: () => navigate(`${votesPath}/${NEW_GROUP_VOTE_SEGMENT}`) }
+                : undefined
+            }
+            searchPlaceholder="Search votes…"
+            initialSort="-closes_at"
+            actionsRef={tableActions}
+            params={{
+              ...(statusFilter ? { status: statusFilter } : {}),
+              ...(typeFilter ? { type: typeFilter } : {}),
+            }}
+            toolbar={({ resetPage }) => (
+              // Both filters already exist on the votes contract; the
+              // toolbar exposes them rather than leaving status and type
+              // to search syntax.
+              <>
+                <FilterSelect
+                  ariaLabel="Filter votes by status"
+                  value={statusFilter}
+                  options={[
+                    { value: "", label: "All statuses" },
+                    ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
+                  ]}
+                  onChange={(value) => {
+                    setStatusFilter(value);
+                    resetPage();
+                  }}
+                />
+                <FilterSelect
+                  ariaLabel="Filter votes by type"
+                  value={typeFilter}
+                  options={[
+                    { value: "", label: "All types" },
+                    ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
+                  ]}
+                  onChange={(value) => {
+                    setTypeFilter(value);
+                    resetPage();
+                  }}
+                />
+              </>
             )}
-          </div>
-        </PanelBody>
-      </Panel>
+            columns={[
+              {
+                header: "Vote",
+                cell: (vote) => (
+                  <div class="pk-stack pk-stack--tight">
+                    <span class="pk-strong">{vote.title}</span>
+                    {vote.description && <span class="pk-small">{vote.description}</span>}
+                  </div>
+                ),
+                sort: { asc: "title", desc: "-title" },
+              },
+              { header: "Type", cell: (vote) => <Badge status={vote.voteType} />, width: "fit" },
+              {
+                header: "Status",
+                cell: (vote) => <Badge status={vote.status} />,
+                width: "fit",
+                sort: { asc: "status", desc: "-status" },
+              },
+              {
+                // A date has a bounded length; the column says so instead
+                // of wearing `pk-nowrap` while still claiming slack.
+                header: "Closes",
+                cell: (vote) => fmt(vote.closesAt),
+                width: "fit",
+                sort: { asc: "closes_at", desc: "-closes_at", defaultDirection: "desc" },
+              },
+            ]}
+            empty={
+              canManage ? (
+                // The way out is named, not repeated: the toolbar above
+                // already carries "Create vote", and a second button
+                // with that same name is one command answering to two
+                // controls.
+                <EmptyState title="No votes yet" body="Use Create vote above to get started." />
+              ) : (
+                "No votes are available through this group."
+              )
+            }
+            rowKey={(vote) => vote.id}
+            // A vote is a URL-addressed record; the row is a link to it, so
+            // it can be opened in a new tab and the address bar follows.
+            rowAction={(vote) => ({
+              label: `Open ${vote.title}`,
+              href: `#${votesPath}/${encodeURIComponent(vote.id)}`,
+            })}
+          />
+        )}
+      </div>
     </div>
   );
 }

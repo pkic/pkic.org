@@ -184,18 +184,6 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
 
   return (
     <div class="pk pk-stack">
-      {canParticipate && (
-        <div class="pk-cluster">
-          <Button
-            size="sm"
-            variant="primary"
-            aria-expanded={showCreate}
-            onClick={() => setShowCreate((shown) => !shown)}
-          >
-            {showCreate ? "Hide proposal form" : "Propose a vote"}
-          </Button>
-        </div>
-      )}
       {showCreate && <GroupVoteProposalForm groupId={groupId} onCreated={reload} />}
       <ApiDataTable
         caption="Vote proposals"
@@ -207,6 +195,15 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
         paginate
         searchPlaceholder="Search proposals…"
         initialSort="-created_at"
+        createAction={
+          canParticipate
+            ? {
+                label: showCreate ? "Hide proposal form" : "Propose a vote",
+                onSelect: () => setShowCreate((shown) => !shown),
+                expanded: showCreate,
+              }
+            : undefined
+        }
         columns={[
           {
             header: "Proposal",

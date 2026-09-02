@@ -35,7 +35,14 @@ export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onJump
   if (rowCount === 0 && !hasMore && offset === 0) return null;
 
   if (page <= 1 && !hasMore && total <= Math.min(...PAGE_SIZE_OPTIONS)) {
-    return <p class="pk pk-small pk-center">{total === 1 ? "1 item" : `${total} items`}</p>;
+    // The count keeps the pager's own frame and its left edge — the article's
+    // list panel puts the count at the start of the footer row, and a lone
+    // centred line under a left-aligned table read as a caption for nothing.
+    return (
+      <div class="pk pk-pager">
+        <span class="pk-pager__summary">{total === 1 ? "1 item" : `${total} items`}</span>
+      </div>
+    );
   }
 
   // Without a total the server has only told us whether there is more, so the

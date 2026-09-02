@@ -4,7 +4,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { SponsorshipDetail } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail";
 import { useSponsorshipEventHistory } from "../../assets/ts/member-flows/portal/sections/sponsors/management/useSponsorshipEventHistory";
-import { buttonNamed, controlFor, groupNames, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, namedGroup, typeInto } from "./helpers/labelled-control";
 
 type HistoryState = ReturnType<typeof useSponsorshipEventHistory>;
 
@@ -260,17 +260,21 @@ describe("sponsorship event history", () => {
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Acme Sponsor");
 
     for (const [label, tag] of [
-      ["Assigned staff user ID", "INPUT"],
       ["Renewal date", "INPUT"],
-      ["Notes", "INPUT"],
+      ["Notes", "TEXTAREA"],
       ["Advance to stage", "SELECT"],
       ["Note (optional)", "INPUT"],
     ] as const) {
       expect(controlFor(container, label).tagName).toBe(tag);
     }
-    // The two write groups are named, so the repeated note fields are
-    // announced inside the group they belong to.
-    expect(groupNames(container)).toEqual(["Sponsorship record", "Pipeline stage"]);
+    // Assignment is a search-as-you-type picker over real users — the record
+    // stores a user id, but nobody types a UUID. The picker lives in its own
+    // named group and carries the shared control's accessible name.
+    const assignedGroup = namedGroup(container, "Assigned staff");
+    expect(assignedGroup.querySelector('input[aria-label="Search for a user"]')).not.toBeNull();
+    // The write groups are named, so the repeated note fields are announced
+    // inside the group they belong to.
+    expect(groupNames(container)).toEqual(["Sponsorship record", "Assigned staff", "Pipeline stage"]);
     void act(() => render(null, container));
   });
 

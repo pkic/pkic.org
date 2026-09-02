@@ -104,12 +104,18 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
             sort: { asc: "organization_name", desc: "-organization_name" },
           },
           {
+            // The slack column: the category labels are the longest prose in
+            // the row ("Certification Authorities and Trust Service
+            // Providers"), so the wide screen's leftover width belongs here.
+            // Left to the default it went to the applicant, and the labels
+            // wrapped down four-line ribbons beside a half-empty name column.
             header: "Category",
             cell: (a) => (
               <>
                 {a.membershipCategoryLabel} <span class="pk-mono pk-muted pk-small">({a.membershipCategory})</span>
               </>
             ),
+            width: "primary",
             sort: { asc: "membership_category", desc: "-membership_category" },
           },
           {

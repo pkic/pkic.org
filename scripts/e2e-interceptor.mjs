@@ -21,6 +21,12 @@ const outbox = [];
 
 const server = createServer((req, res) => {
   const url = req.url ?? "";
+  // The worker reaches this server through pooled connections. Node's
+  // default 5s keepAliveTimeout closes idle pooled sockets from this end,
+  // and a send racing that close fails with a reset instead of a clean
+  // response. Refusing reuse removes that race: every send opens a fresh
+  // connection, which at e2e volume costs nothing.
+  res.setHeader("Connection", "close");
 
   // Wrangler worker POSTs email payloads here instead of SendGrid
   if (req.method === "POST" && url === "/") {

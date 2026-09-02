@@ -30,7 +30,10 @@ import "../../../../ui/Content.css";
 const MINIMUM_PAUSE_REASON = 3;
 
 function titleFromKey(jobKey: string): string {
-  return jobKey.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+  return jobKey
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bEc\b/g, "EC");
 }
 
 function formatInterval(seconds: number): string {
@@ -289,12 +292,11 @@ export function ScheduledJobs() {
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      <div class="pk-stack pk-stack--tight">
-        <strong>Scheduled Jobs</strong>
-        <p class="pk-small">
-          Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
-        </p>
-      </div>
+      {/* The "Scheduled Jobs" tab already names this surface; only the
+          sentence the reader needs stays. */}
+      <p class="pk-small">
+        Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
+      </p>
       {error ? (
         <Alert tone="danger" title="Could not load the scheduled jobs.">
           {error}

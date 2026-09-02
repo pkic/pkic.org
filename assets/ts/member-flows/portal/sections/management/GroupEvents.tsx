@@ -1,5 +1,4 @@
 import { useId, useRef, useState } from "preact/hooks";
-import { usePortalHashLocation } from "../../hash-location";
 import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
@@ -38,8 +37,9 @@ export function GroupEvents({
   initialEventTab?: string;
   initialEventDetailId?: string;
 }) {
-  const [, navigate] = usePortalHashLocation();
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(initialEventId ?? null);
+  // The event id arrives from the URL; rows are links, so this surface never
+  // drives navigation itself.
+  const selectedEventId = initialEventId ?? null;
   const [showCreate, setShowCreate] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"" | EventSourceMode>("");
   const tableActions = useRef<ApiTableActions | null>(null);
@@ -54,15 +54,6 @@ export function GroupEvents({
         : Promise.resolve(null),
     [groupId, selectedEventId],
   );
-
-  function selectEvent(eventId: string | null): void {
-    setSelectedEventId(eventId);
-    navigate(
-      eventId
-        ? `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`
-        : `/groups/${encodeURIComponent(groupId)}/events`,
-    );
-  }
 
   if (selectedEventId) {
     return (
@@ -100,80 +91,79 @@ export function GroupEvents({
           </PanelBody>
         </Panel>
       )}
-      <Panel>
-        <PanelBody>
-          <ApiDataTable
-            caption="Group events"
-            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
-            responseSchema={groupEventsListResponseSchema}
-            resolve={(response) => response.events}
-            resolvePage={(response) => response.page}
-            paginate
-            actionsRef={tableActions}
-            createAction={canManage ? { label: "Create event", onSelect: () => setShowCreate(true) } : undefined}
-            searchPlaceholder="Search events…"
-            initialSort="next_occurrence_at"
-            params={sourceFilter ? { sourceMode: sourceFilter } : {}}
-            toolbar={({ resetPage }) => (
-              // The list contract already accepts `sourceMode`; the toolbar
-              // exposes it as a source filter instead of leaving where an
-              // event is authored a concept search cannot express.
-              <FilterSelect
-                ariaLabel="Filter events by source"
-                value={sourceFilter}
-                options={[
-                  { value: "" as "" | EventSourceMode, label: "All sources" },
-                  ...EVENT_SOURCE_MODES.map((mode) => ({
-                    value: mode as "" | EventSourceMode,
-                    label: EVENT_SOURCE_LABELS[mode],
-                  })),
-                ]}
-                onChange={(value) => {
-                  setSourceFilter(value);
-                  resetPage();
-                }}
-              />
-            )}
-            columns={[
-              {
-                header: "Event",
-                cell: (event) => (
-                  <div class="pk-stack pk-stack--tight">
-                    <span class="pk-strong">{event.name}</span>
-                    {event.location && <span class="pk-small">{event.location}</span>}
-                  </div>
-                ),
-                sort: { asc: "name", desc: "-name" },
-              },
-              {
-                header: "Profile",
-                cell: (event) => <Badge status={event.profileKey ?? "event"} />,
-                width: "fit",
-              },
-              {
-                // A date has a bounded length; the column says so instead of
-                // wearing `pk-nowrap` while still claiming slack.
-                header: "Next",
-                cell: (event) => fmt(event.nextOccurrenceAt ?? event.startsAt),
-                width: "fit",
-                sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
-              },
+      <ApiDataTable
+        caption="Group events"
+        endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
+        responseSchema={groupEventsListResponseSchema}
+        resolve={(response) => response.events}
+        resolvePage={(response) => response.page}
+        paginate
+        actionsRef={tableActions}
+        createAction={canManage ? { label: "Create event", onSelect: () => setShowCreate(true) } : undefined}
+        searchPlaceholder="Search events…"
+        initialSort="next_occurrence_at"
+        params={sourceFilter ? { sourceMode: sourceFilter } : {}}
+        toolbar={({ resetPage }) => (
+          // The list contract already accepts `sourceMode`; the toolbar
+          // exposes it as a source filter instead of leaving where an
+          // event is authored a concept search cannot express.
+          <FilterSelect
+            ariaLabel="Filter events by source"
+            value={sourceFilter}
+            options={[
+              { value: "" as "" | EventSourceMode, label: "All sources" },
+              ...EVENT_SOURCE_MODES.map((mode) => ({
+                value: mode as "" | EventSourceMode,
+                label: EVENT_SOURCE_LABELS[mode],
+              })),
             ]}
-            empty={
-              canManage ? (
-                <EmptyState title="No events yet" body="Create an event to get started." />
-              ) : (
-                "No events are available through this group."
-              )
-            }
-            rowKey={(event) => event.id}
-            // The whole row opens the event. It used to be a "Details" button in
-            // a nameless last column, which meant the row itself was inert and
-            // the button repeated once per row with the same accessible name.
-            rowAction={(event) => ({ label: `Open ${event.name}`, onSelect: () => selectEvent(event.id) })}
+            onChange={(value) => {
+              setSourceFilter(value);
+              resetPage();
+            }}
           />
-        </PanelBody>
-      </Panel>
+        )}
+        columns={[
+          {
+            header: "Event",
+            cell: (event) => (
+              <div class="pk-stack pk-stack--tight">
+                <span class="pk-strong">{event.name}</span>
+                {event.location && <span class="pk-small">{event.location}</span>}
+              </div>
+            ),
+            sort: { asc: "name", desc: "-name" },
+          },
+          {
+            header: "Profile",
+            cell: (event) => <Badge status={event.profileKey ?? "event"} />,
+            width: "fit",
+          },
+          {
+            // A date has a bounded length; the column says so instead of
+            // wearing `pk-nowrap` while still claiming slack.
+            header: "Next",
+            cell: (event) => fmt(event.nextOccurrenceAt ?? event.startsAt),
+            width: "fit",
+            sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
+          },
+        ]}
+        empty={
+          canManage ? (
+            <EmptyState title="No events yet" body="Create an event to get started." />
+          ) : (
+            "No events are available through this group."
+          )
+        }
+        rowKey={(event) => event.id}
+        // The whole row opens the event. It used to be a "Details" button in
+        // a nameless last column, which meant the row itself was inert and
+        // the button repeated once per row with the same accessible name.
+        rowAction={(event) => ({
+          label: `Open ${event.name}`,
+          href: `#/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`,
+        })}
+      />
     </div>
   );
 }

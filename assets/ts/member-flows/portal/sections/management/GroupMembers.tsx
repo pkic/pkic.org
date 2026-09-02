@@ -1,88 +1,35 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   groupMembershipMutationResponseSchema,
   groupMembershipsManagementListResponseSchema,
   type GroupMembership,
+  type GroupMembershipSource,
 } from "../../../../../shared/schemas/groups";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Pager } from "../../../../components/Pager";
-import { Button } from "../../../../ui/Button";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
-import { Spinner } from "../../../../components/Spinner";
-import { TextInput } from "../../../../ui/TextControl";
-import { useApiPage } from "../../../../hooks/useApiPage";
-import { ApiClientError, deleteJson } from "../../../../shared/api-client";
+import { deleteJson, ApiClientError } from "../../../../shared/api-client";
+import { fmtDate } from "../../ui";
 import { GroupMemberAddForm } from "./GroupMemberAddForm";
 import { GroupMembersRoster } from "./GroupMembersRoster";
 
+/** Who they participate for, said in the row's own words. */
 function capacityLabel(membership: GroupMembership): string {
   if (membership.memberType === "organization") return membership.organizationName ?? "Organization";
-  return `Individual membership${membership.membershipCategory ? ` (${membership.membershipCategory})` : ""}`;
+  return "Individual member";
 }
 
-function membershipColumns(
-  endingId: string | null,
-  onEnd: (membership: GroupMembership) => void,
-): ReadonlyArray<DataTableColumn<GroupMembership>> {
-  return [
-    {
-      id: "person",
-      header: "Person",
-      // The design system's table gives slack to no column on its own; the
-      // person is the row's subject, so a wide screen's slack lands here.
-      width: "primary",
-      cell: (membership) => <PersonCell name={membership.userName} email={membership.email} size="sm" />,
-    },
-    {
-      id: "capacity",
-      header: "Participation capacity",
-      cell: (membership) => (
-        <span class="pk-stack pk-stack--tight">
-          <span>{capacityLabel(membership)}</span>
-          {membership.membershipCategory && <span class="pk-small">Category {membership.membershipCategory}</span>}
-        </span>
-      ),
-    },
-    {
-      id: "source",
-      header: "Source",
-      // Bounded vocabulary; the column hugs it instead of claiming slack.
-      width: "fit",
-      cell: (membership) => membership.source.replaceAll("_", " "),
-    },
-    {
-      // The header used to read "Action" and was rendered visibly above a
-      // column of menus, which names the column after the control rather than
-      // after what the column holds. It names the row's subject for assistive
-      // technology now and shows nothing.
-      id: "actions",
-      header: "Actions",
-      headerHidden: true,
-      align: "end",
-      cell: (membership) => (
-        <RowActions
-          subject={membership.userName}
-          actions={[
-            {
-              id: "remove",
-              label: endingId === membership.id ? "Removing…" : "Remove",
-              onSelect: () => {
-                onEnd(membership);
-              },
-              disabled: endingId !== null,
-            },
-          ]}
-        />
-      ),
-    },
-  ];
-}
+/** How the membership came to be, in product language rather than enum keys. */
+const SOURCE_LABELS: Record<GroupMembershipSource, string> = {
+  self_service: "Joined",
+  organization_contact: "Added by their organization",
+  staff: "Added by staff",
+  automatic_policy: "Enrolled automatically",
+  migration: "Migrated",
+};
 
 /**
  * The Members tab. A caller who cannot manage the group (only `participate`)
@@ -103,18 +50,10 @@ export function GroupMembers({
 }
 
 function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChanged: () => Promise<void> }) {
-  const [pendingSearch, setPendingSearch] = useState("");
-  const [search, setSearch] = useState("");
   const [endingId, setEndingId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const page = useApiPage(
-    `/api/v1/groups/${encodeURIComponent(groupId)}/memberships`,
-    { active: "true", sort: "user_name", ...(search ? { q: search } : {}) },
-    groupMembershipsManagementListResponseSchema,
-    (data) => data.memberships,
-    25,
-  );
+  const listActions = useRef<ApiTableActions | null>(null);
 
   async function endMembership(membership: GroupMembership): Promise<void> {
     const label = `${membership.userName} on behalf of ${capacityLabel(membership)}`;
@@ -137,96 +76,101 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
         `/api/v1/groups/${encodeURIComponent(groupId)}/memberships/${encodeURIComponent(membership.id)}`,
         groupMembershipMutationResponseSchema,
       );
-      await Promise.all([page.reload(), onChanged()]);
+      await Promise.all([listActions.current?.reload(), onChanged()]);
     } catch (cause) {
-      setMutationError(cause instanceof ApiClientError ? cause.message : "Could not end this membership capacity.");
+      setMutationError(cause instanceof ApiClientError ? cause.message : "Could not end this membership.");
     } finally {
       setEndingId(null);
     }
   }
 
-  if (!page.data && page.loading) return <Spinner label="Loading membership capacities…" />;
-
   return (
-    // The panel names itself: the group workspace stacks several of these, and
-    // an unnamed <section> is announced as nothing at all.
-    <Panel class="pk" aria-label="Membership capacities">
-      <PanelHeader title="Membership capacities">
-        <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
-          Add person
-        </Button>
-      </PanelHeader>
-      <PanelBody class="pk-stack">
-        <p class="pk-muted pk-small">
-          Each row is one person participating through one Member. A person representing multiple organizations may
-          therefore appear more than once.
-        </p>
-        {showAddForm && (
-          <GroupMemberAddForm
-            groupId={groupId}
-            onAdded={async () => {
-              await Promise.all([page.reload(), onChanged()]);
-              setShowAddForm(false);
-            }}
-            onCancel={() => setShowAddForm(false)}
-          />
-        )}
-        {/* The search runs on submit rather than on every keystroke, so the
-            field and its button are stacked rather than clustered: the label
-            sits above the control, which no cluster can align a button to
-            without guessing at the label's height. */}
-        <form
-          class="pk-stack pk-stack--snug"
-          role="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSearch(pendingSearch.trim());
+    <div class="pk pk-stack">
+      {showAddForm && (
+        <GroupMemberAddForm
+          groupId={groupId}
+          onAdded={async () => {
+            await Promise.all([listActions.current?.reload(), onChanged()]);
+            setShowAddForm(false);
           }}
-        >
-          <Field
-            label="Search membership capacities"
-            help="Matches a person's name or email, the organization they represent, or the membership category."
-          >
-            {(control) => (
-              <TextInput
-                {...control}
-                type="search"
-                placeholder="Search name, email, organization, or category…"
-                value={pendingSearch}
-                onInput={(event) => setPendingSearch((event.target as HTMLInputElement).value)}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+      {mutationError && <ErrorAlert error={mutationError} />}
+      <ApiDataTable
+        caption="Members"
+        endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
+        responseSchema={groupMembershipsManagementListResponseSchema}
+        resolve={(response) => response.memberships}
+        resolvePage={(response) => response.page}
+        paginate
+        initialSort="user_name"
+        params={{ active: "true" }}
+        actionsRef={listActions}
+        searchPlaceholder="Search name, email, organization, or category…"
+        createAction={{ label: "Add person", onSelect: () => setShowAddForm(true) }}
+        columns={[
+          {
+            header: "Person",
+            // The person is the row's subject, so a wide screen's slack
+            // lands here.
+            width: "primary",
+            cell: (membership: GroupMembership) => (
+              <PersonCell name={membership.userName} email={membership.email} size="sm" />
+            ),
+            sort: { asc: "user_name", desc: "-user_name", defaultDirection: "asc" },
+          },
+          {
+            // A person representing several organizations appears once per
+            // organization; this column is what tells those rows apart.
+            header: "Represents",
+            cell: (membership: GroupMembership) => capacityLabel(membership),
+            sort: { asc: "organization_name", desc: "-organization_name", defaultDirection: "asc" },
+          },
+          {
+            header: "Category",
+            width: "fit",
+            cell: (membership: GroupMembership) => membership.membershipCategory ?? "—",
+            sort: { asc: "membership_category", desc: "-membership_category", defaultDirection: "asc" },
+          },
+          {
+            header: "Joined",
+            width: "fit",
+            cell: (membership: GroupMembership) => fmtDate(membership.joinedAt),
+            sort: { asc: "joined_at", desc: "-joined_at", defaultDirection: "desc" },
+          },
+          {
+            header: "Source",
+            width: "fit",
+            cell: (membership: GroupMembership) => SOURCE_LABELS[membership.source] ?? membership.source,
+          },
+          {
+            header: "",
+            cell: (membership: GroupMembership) => (
+              <RowActions
+                subject={membership.userName}
+                actions={[
+                  {
+                    id: "remove",
+                    label: endingId === membership.id ? "Removing…" : "Remove",
+                    onSelect: () => {
+                      void endMembership(membership);
+                    },
+                    disabled: endingId !== null,
+                  },
+                ]}
               />
-            )}
-          </Field>
-          <div class="pk-cluster">
-            <Button type="submit" size="sm">
-              Search
-            </Button>
-          </div>
-        </form>
-        {mutationError && <ErrorAlert error={mutationError} />}
-        {/* A failed load replaces the table rather than sitting above an empty
-            one: "No matching active membership capacities" is a claim about
-            the group, and the surface does not know that when the request did
-            not arrive. */}
-        {page.error ? (
-          <ErrorAlert error={page.error.message} />
-        ) : (
-          <DataTable
-            caption="Active membership capacities in this group"
-            columns={membershipColumns(endingId, (membership) => void endMembership(membership))}
-            rows={page.data?.memberships ?? []}
-            rowKey={(membership) => membership.id}
-            loading={page.loading}
-            empty={
-              <EmptyState
-                title="No matching active membership capacities."
-                body="Nobody participates in this group through a Member capacity that matches this search."
-              />
-            }
+            ),
+          },
+        ]}
+        empty={
+          <EmptyState
+            title="No members match"
+            body="Nobody participates in this group through a membership that matches this search."
           />
-        )}
-        {page.pagerProps && <Pager {...page.pagerProps} />}
-      </PanelBody>
-    </Panel>
+        }
+        rowKey={(membership: GroupMembership) => membership.id}
+      />
+    </div>
   );
 }

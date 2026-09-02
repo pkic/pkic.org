@@ -300,7 +300,7 @@ describe("portal group leadership management", () => {
     await settle();
 
     expect(container.querySelector(`input[placeholder="${SEARCH_PLACEHOLDER}"]`)).toBeNull();
-    await act(async () => buttonNamed(container, "Add leadership").click());
+    await act(async () => buttonNamed(container, "Add leader").click());
     await pickCapacity(container);
 
     await chooseOption(controlFor<HTMLSelectElement>(container, "Role"), "role-group_deputy_lead");

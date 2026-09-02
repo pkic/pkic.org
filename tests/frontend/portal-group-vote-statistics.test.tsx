@@ -2,7 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GroupVoteManagementControls } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
+import { GroupVoteSettings } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
 import type { GroupVoteDetail } from "../../assets/shared/schemas/group-votes";
 import { GroupVoteStatistics } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteStatistics";
 
@@ -192,7 +192,7 @@ describe("group vote statistics", () => {
     expect(container.querySelector("section[aria-label='Vote statistics']")).toBeNull();
   });
 
-  it("does not request statistics until a manager explicitly expands the control", async () => {
+  it("does not request statistics from the settings facet — statistics are their own tab", async () => {
     const requests: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -207,20 +207,12 @@ describe("group vote statistics", () => {
     document.body.append(container);
 
     await act(() =>
-      render(
-        <GroupVoteManagementControls groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />,
-        container,
-      ),
+      render(<GroupVoteSettings groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />, container),
     );
     await settle();
+    // The settings facet holds the lifecycle and the forms; the statistics
+    // tab is what runs the statistics query, and only when it is opened.
     expect(requests.some((request) => request.endsWith("/statistics"))).toBe(false);
-
-    const button = Array.from(container.querySelectorAll("button")).find(
-      (candidate) => candidate.textContent === "Load vote statistics",
-    );
-    expect(button).toBeDefined();
-    await act(() => (button as HTMLButtonElement).click());
-    await settle();
-    expect(requests).toContain(`GET /api/v1/groups/${GROUP_ID}/votes/${VOTE_ID}/statistics`);
+    expect(requests.some((request) => request.endsWith("/ballots"))).toBe(false);
   });
 });
