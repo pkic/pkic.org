@@ -54,3 +54,50 @@ test("permitted staff manage donations through the neutral resource API", async 
   expect(legacyRequests).toEqual([]);
   expect(analyticsRequests).toEqual(["/api/v1/analytics/donations"]);
 });
+
+test("permitted staff filter donations by status and open the donation's badge and sync controls", async ({ page }) => {
+  await signInToPortal(page, e2eAdminEmail("portal-donations"));
+  await page.goto("/portal/#/donations");
+
+  const donorCell = page.getByRole("cell", { name: /E2E Donor — Example Organization/ });
+  const donorRow = page.locator("tr").filter({ has: donorCell });
+  await expect(donorRow).toBeVisible();
+
+  // The Status column's own menu narrows the list — matching the seeded
+  // donation's "completed" status keeps its row, any other status hides it.
+  const statusFilterRequest = () =>
+    page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/v1/donations" && response.request().method() === "GET",
+    );
+  await page.getByRole("button", { name: "Status column options" }).click();
+  let filtered = statusFilterRequest();
+  await page.getByRole("menuitemradio", { name: /^Completed \(\d+\)$/ }).click();
+  const completedUrl = new URL((await filtered).url());
+  expect(completedUrl.searchParams.get("status")).toBe("completed");
+  await expect(donorRow).toBeVisible();
+
+  await page.getByRole("button", { name: "Status column options" }).click();
+  filtered = statusFilterRequest();
+  await page.getByRole("menuitemradio", { name: /^Pending \(\d+\)$/ }).click();
+  const pendingUrl = new URL((await filtered).url());
+  expect(pendingUrl.searchParams.get("status")).toBe("pending");
+  await expect(donorRow).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitemradio", { name: /^All \(\d+\)$/ }).click();
+  await expect(donorRow).toBeVisible();
+
+  // The toolbar's sync controls reflect a reconciled donation: nothing is
+  // pending or backfillable, so "Sync all" is present but has nothing to do.
+  await expect(page.getByRole("button", { name: /^Sync (all|donations)/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^Sync pending/ })).toHaveCount(0);
+
+  await donorCell.click();
+  await expect(page).toHaveURL(new RegExp(`/portal/#/donations/detail/${DONATION_ID}$`));
+  // A completed, fully-settled donation needs no sync action of its own, and
+  // offers its badge for download instead.
+  await expect(page.getByRole("button", { name: /^Sync with Stripe/ })).toHaveCount(0);
+  const badgeLink = page.getByRole("link", { name: "Download badge" });
+  await expect(badgeLink).toBeVisible();
+  await expect(badgeLink).toHaveAttribute("href", new RegExp(`/api/v1/donations/checkouts/[^/]+/badge\\?name=`));
+});
