@@ -177,13 +177,27 @@ describe("portal group statistics", () => {
     // A window that ends before it starts is rejected by the shared schema on
     // the `to` path, so that is the control that carries the error.
     const to = controlFor(container, "To");
+    expect(to.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(to.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(to, container);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("to must be later than from");
     expect(controlFor(container, "From").getAttribute("aria-invalid")).toBeNull();
+    // The refused control takes focus, and the form says the window was not
+    // applied.
+    expect(document.activeElement).toBe(to);
+    expect(container.querySelector(".pk-alert--danger")?.textContent).toContain("Please correct");
     // The rejected window never reached the server.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Corrected: the boundary says it is good now, the form-level message
+    // goes, and the window is applied.
+    await typeInto(to, "2026-08-27");
+    expect(to.closest(".pk-field")?.classList.contains("pk-field--ok")).toBe(true);
+    await submitForm(container);
+    await settle();
+    expect(container.querySelector(".pk-alert--danger")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("reports shared API errors and an explicit zero-activity state", async () => {

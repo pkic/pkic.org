@@ -8,6 +8,7 @@ import {
 import { getJson } from "../shared/api-client";
 import type { ServerCatalog } from "../shared/server-catalog";
 import { Alert } from "../ui/Alert";
+import type { FieldControlProps } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { applyPopupPosition, measurePopupPosition, type PopupPosition } from "../ui/popup-placement";
 // The matches float over whatever follows the field, so they borrow the
@@ -15,6 +16,7 @@ import { applyPopupPosition, measurePopupPosition, type PopupPosition } from "..
 // renders a `Menu` here, so the stylesheet has to be imported by name:
 // component CSS ships in each component's own lazy chunk.
 import "../ui/Menu.css";
+import "./ControlStack.css";
 
 const SELECTOR_PAGE_SIZE = 25;
 /** Below this many characters a query is noise, so the full first page shows instead. */
@@ -22,9 +24,15 @@ const MINIMUM_QUERY_LENGTH = 2;
 const SEARCH_DEBOUNCE_MS = 300;
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
-export interface ServerSearchSelectProps<Item, Response> {
+export interface ServerSearchSelectProps<Item, Response> extends FieldControlProps {
   catalog: ServerCatalog<Item, Response>;
-  label: string;
+  /**
+   * What is being searched — "Working group", "Template". It names the listbox
+   * of matches and shapes the default search placeholder. The visible label is
+   * the caller's `Field`, which also hands down the id and ARIA this control
+   * carries.
+   */
+  searchLabel: string;
   value: string | null;
   selectedLabel?: string;
   placeholder?: string;
@@ -40,6 +48,10 @@ export interface ServerSearchSelectProps<Item, Response> {
 /**
  * Shared type-ahead selector; filtering, sorting, and paging stay on the
  * server.
+ *
+ * It is a control, not a field: it renders inside the caller's `Field`, which
+ * owns the label, the help text and any validation state. The input, the
+ * popup and the load error stack inside that field's control box.
  *
  * The interaction is the WAI-ARIA combobox pattern, honoured rather than
  * approximated: one text input carries `role="combobox"` with
@@ -60,7 +72,7 @@ export interface ServerSearchSelectProps<Item, Response> {
  */
 export function ServerSearchSelect<Item, Response>({
   catalog,
-  label,
+  searchLabel,
   value,
   selectedLabel,
   placeholder = "Select…",
@@ -71,6 +83,7 @@ export function ServerSearchSelect<Item, Response>({
   excludeValues = [],
   onChange,
   load = loadCollection,
+  ...control
 }: ServerSearchSelectProps<Item, Response>) {
   // `query` is the reader's in-progress text; null means "not editing", where
   // the input shows the chosen value's label instead. `search` is the
@@ -80,7 +93,6 @@ export function ServerSearchSelect<Item, Response>({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [position, setPosition] = useState<PopupPosition | null>(null);
-  const inputId = useId();
   const listboxId = useId();
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -282,38 +294,31 @@ export function ServerSearchSelect<Item, Response>({
           : "";
 
   return (
-    <div class="pk-stack pk-stack--tight">
-      <div class="pk-field">
-        <label class="pk-field__label" for={inputId}>
-          {label}
-        </label>
-        <div class="pk-field__control" ref={anchorRef}>
-          <TextInput
-            id={inputId}
-            type="text"
-            role="combobox"
-            autocomplete="off"
-            aria-haspopup="listbox"
-            aria-expanded={open ? "true" : "false"}
-            aria-controls={open ? listboxId : undefined}
-            aria-autocomplete="list"
-            aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
-            placeholder={searchPlaceholder ?? `Search ${label.toLowerCase()}…`}
-            value={query ?? displayLabel}
-            disabled={disabled}
-            onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
-            onKeyDown={handleKeyDown}
-            onClick={() => !disabled && !open && setOpen(true)}
-            onBlur={close}
-          />
-        </div>
-      </div>
+    <div class="pk-control-stack" ref={anchorRef}>
+      <TextInput
+        {...control}
+        type="text"
+        role="combobox"
+        autocomplete="off"
+        aria-haspopup="listbox"
+        aria-expanded={open ? "true" : "false"}
+        aria-controls={open ? listboxId : undefined}
+        aria-autocomplete="list"
+        aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        placeholder={searchPlaceholder ?? `Search ${searchLabel.toLowerCase()}…`}
+        value={query ?? displayLabel}
+        disabled={disabled}
+        onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
+        onKeyDown={handleKeyDown}
+        onClick={() => !disabled && !open && setOpen(true)}
+        onBlur={close}
+      />
       {open && (
         // Pressing anywhere in the popup — an option, the scrollbar — must
         // not steal focus from the input, or the blur would close the list
         // under the pointer.
         <div ref={popupRef} class="pk-menu__popup" onMouseDown={(event) => event.preventDefault()}>
-          <div id={listboxId} role="listbox" aria-label={label} class="pk-menu__options">
+          <div id={listboxId} role="listbox" aria-label={searchLabel} class="pk-menu__options">
             {allowEmpty && (
               <div
                 id={optionId(0)}

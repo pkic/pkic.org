@@ -72,8 +72,10 @@ test("permitted staff manage organizations through the canonical domain API", as
   // which opens with one statement of the record and its facets as tabs.
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/[0-9a-fA-F-]{36}$/);
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
-  // An account page, not tabs: the representatives sit under the profile.
-  await expect(page.getByRole("tablist")).toHaveCount(0);
+  // An account page, not a page split into tabs: the record's own facts and
+  // its representatives sit directly on the page. (The page does carry one
+  // tablist of its own now — the Activity section's groups/events/proposals
+  // history — which is a facet's internal navigation, not the page's.)
   await expect(page.getByRole("region", { name: "Representatives" })).toBeVisible();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
@@ -94,10 +96,11 @@ test("permitted staff manage organizations through the canonical domain API", as
   expect((await associateResponse).status()).toBe(201);
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
 
-  // The account page answers "which sponsorships" from the canonical staff
-  // pipeline list, bounded to this organization, as one of its own bounded
-  // queries — an honest empty state here, since this organization has none.
-  // The request is observed on a reload, since the page already made it.
+  // The account page answers "is this organization a sponsor" from the
+  // canonical staff pipeline list, bounded to this organization, as one of
+  // its own bounded queries — an honest "not a sponsor" here, since this
+  // organization has none. The request is observed on a reload, since the
+  // page already made it.
   const sponsorshipsResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/v1/sponsors" && response.request().method() === "GET",
   );
@@ -105,7 +108,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   const sponsorshipsUrl = new URL((await sponsorshipsResponse).url());
   expect(sponsorshipsUrl.searchParams.get("visibility")).toBe("all");
   expect(sponsorshipsUrl.searchParams.get("organizationId")).toBeTruthy();
-  await expect(page.getByText("No sponsorships", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Sponsorship" }).getByText("Not a sponsor.")).toBeVisible();
 
   // Ordinary additions are invitations. The exact user must accept before
   // this identity grants organization or group capacity or exposes its
@@ -183,4 +186,213 @@ test("permitted staff manage organizations through the canonical domain API", as
     ]),
   );
   expect(legacyRequests).toEqual([]);
+});
+
+/**
+ * Regression coverage for the "Link existing user" path: it goes through
+ * `UserPicker`, a shared search-and-select component whose Zod response
+ * schema once disagreed with what `/api/v1/users` actually returns — every
+ * search failed with "Could not search users." until the schema was
+ * loosened to match. Nothing exercised that autocomplete through a real
+ * browser, so the break shipped unnoticed. This types into the same search
+ * box, waits for a real result to render, and picks it — the exact sequence
+ * that broke.
+ */
+test("permitted staff link an existing user as a representative through the UserPicker search", async ({ page }) => {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const organizationName = `E2E Link Existing User Org ${suffix}`;
+  const staffEmail = e2eAdminEmail("portal-organizations");
+
+  await signInToPortal(page, staffEmail);
+  await page.goto("/portal/#/organizations");
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/new$/);
+
+  const createForm = page.getByRole("region", { name: "Add organization" });
+  const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
+  await organizationGroup.getByLabel("Organization name").fill(organizationName);
+  await organizationGroup.getByLabel("Membership category").selectOption("F");
+  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+
+  const createResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/organizations" && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Create organization" }).click();
+  expect((await createResponse).status()).toBe(201);
+  await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+
+  // Reached by role/name alone rather than by climbing from a panel header:
+  // the Representatives list is compact, with "Link existing user" living in
+  // the list's own toolbar next to search/Refresh, and its form opening
+  // inside the list panel rather than a fixed spot under a heading.
+  await page.getByRole("button", { name: "Link existing user", exact: true }).click();
+
+  const search = page.getByLabel("Search for a user");
+  await expect(search).toBeVisible();
+  await search.fill(staffEmail);
+
+  // The picker debounces and calls `GET /api/v1/users`, the same endpoint —
+  // and response shape — that the production bug's stricter schema refused
+  // to parse. Waiting for the real matching-users popup, not just the
+  // network response, proves the client actually rendered what came back.
+  const matches = page.getByRole("group", { name: "Matching users" });
+  const matchButton = matches.getByRole("button", { name: new RegExp(staffEmail.replace(/[.]/g, "\\.")) });
+  await expect(matchButton).toBeVisible({ timeout: 10_000 });
+  await matchButton.click();
+  await expect(search).toHaveValue(staffEmail);
+
+  const linkResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/organizations\/[^/]+\/identities$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Link", exact: true }).click();
+  expect((await linkResponse).status()).toBe(201);
+  await expect(page.getByText("Identity invitation sent", { exact: true })).toBeVisible();
+
+  // Linking always invites — it never activates on the spot the way creating
+  // an organization with a founding person can — so the roster shows the
+  // representative as pending, not active.
+  const linkedRow = page.getByRole("row").filter({ hasText: staffEmail });
+  await expect(linkedRow).toBeVisible();
+  await expect(linkedRow).toContainText("Invitation pending");
+});
+
+// A single edge-to-edge rect is rejected server-side as "The SVG has no
+// visible content" — cropping-to-content finds nothing to crop to. A distinct
+// inset shape over a background is what the sanitizer treats as real content,
+// matching the fixture svg-logo-upload.spec.ts already proves works.
+const PROFILE_LOGO_SVG = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">' +
+    '<rect width="120" height="120" fill="#ffffff"/>' +
+    '<rect x="30" y="30" width="60" height="60" fill="#204060"/></svg>',
+  "utf-8",
+);
+
+/**
+ * Creates a bare organization (no founding people) and lands on its detail
+ * page — the shared setup for the Profile and Logo tests below, kept out of
+ * each so neither test carries more of the create flow than it needs.
+ */
+async function createBareOrganization(page: import("@playwright/test").Page, organizationName: string) {
+  await page.goto("/portal/#/organizations");
+  await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
+  const createForm = page.getByRole("region", { name: "Add organization" });
+  const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
+  await organizationGroup.getByLabel("Organization name").fill(organizationName);
+  await organizationGroup.getByLabel("Membership category").selectOption("F");
+  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  await page.getByRole("button", { name: "Create organization" }).click();
+  await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
+}
+
+/**
+ * Editing is page-level now: one "Edit" in the `PageHeader` puts every card
+ * into edit mode at once (each keeps its layout, its values becoming inputs
+ * named by `aria-label`), and one "Save" sends one PATCH carrying every
+ * field. There is no per-card Edit button and no separate editor form —
+ * this exercises fields from three different cards in the one edit/save
+ * round trip the page actually offers.
+ */
+test("permitted staff edit the organization through the page-level Edit/Save", async ({ page }) => {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  // The whole detail page is itself a region named after the organization
+  // ("Add organization" -> the org's own name), so this deliberately avoids
+  // the word "About" or "Identity" in the fixture name — either would match
+  // a substring `getByRole("region", { name: ... })` lookup for those cards.
+  const organizationName = `E2E Profile Edit Org ${suffix}`;
+  const patchRequests: string[] = [];
+
+  await signInToPortal(page, e2eAdminEmail("portal-organizations"));
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (/^\/api\/v1\/organizations\/[^/]+$/.test(url.pathname) && request.method() === "PATCH") {
+      patchRequests.push(url.pathname);
+    }
+  });
+  await createBareOrganization(page, organizationName);
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+
+  // About card.
+  await page.getByLabel("Slogan").fill("Security, standardized.");
+  // Identity card — under the logo, not with the About prose.
+  await page.getByLabel("Website").fill("https://e2e-profile-edit.example.invalid");
+  // Membership card. The field is labeled "Category" here — narrower than
+  // the create form's "Membership category" label for the same underlying
+  // value, scoped so it cannot match anything else named "Category".
+  const membershipEdit = page.getByRole("region", { name: "Membership", exact: true });
+  await membershipEdit.getByLabel("Category").selectOption("A");
+  await membershipEdit.getByLabel("Member since").fill("2025-06-01");
+
+  const saveResponse = page.waitForResponse(
+    (response) =>
+      /^\/api\/v1\/organizations\/[^/]+$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await saveResponse).status()).toBe(200);
+  await expect(page.getByText("Organization updated", { exact: true })).toBeVisible();
+
+  // Editing closed and every field from every card landed in the one PATCH.
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+  expect(patchRequests).toHaveLength(1);
+
+  await expect(
+    page.getByRole("region", { name: "About", exact: true }).getByText("Security, standardized."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Identity", exact: true }).getByRole("link", { name: "Website", exact: true }),
+  ).toHaveAttribute("href", "https://e2e-profile-edit.example.invalid");
+  const membership = page.getByRole("region", { name: "Membership", exact: true });
+  await expect(definitionFor(membership, "Category")).toHaveText("A");
+
+  // The formatted "Member since" display is locale-dependent; re-opening
+  // edit round-trips it back into the date input, whose value is always the
+  // normalized ISO form regardless of display locale.
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Member since")).toHaveValue("2025-06-01");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+});
+
+test("permitted staff remove an organization's logo", async ({ page }) => {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const organizationName = `E2E Logo Remove Org ${suffix}`;
+
+  await signInToPortal(page, e2eAdminEmail("portal-organizations"));
+  await createBareOrganization(page, organizationName);
+
+  // Upload, then remove — the tile only offers Remove once a logo exists.
+  // `LogoTile` is the whole affordance — no panel wraps it — so its controls
+  // are reached directly rather than through a "Logo" region that no longer
+  // exists. There is only one logo tile on the page, so this stays unambiguous.
+  const logo = page;
+  await logo.getByRole("button", { name: "Upload logo" }).click();
+  const uploadResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PUT",
+    { timeout: 20_000 },
+  );
+  await page.locator('input[type="file"][accept="image/svg+xml"]').setInputFiles({
+    name: "logo.svg",
+    mimeType: "image/svg+xml",
+    buffer: PROFILE_LOGO_SVG,
+  });
+  expect((await uploadResponse).status()).toBe(200);
+  await expect(page.locator(".my-toast", { hasText: "Logo uploaded" })).toBeVisible({ timeout: 20_000 });
+  await expect(logo.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+
+  const removeResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "DELETE",
+  );
+  await logo.getByRole("button", { name: "Remove", exact: true }).click();
+  await acceptConfirmDialog(page, "Remove");
+  expect((await removeResponse).status()).toBe(200);
+  await expect(logo.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(logo.getByRole("button", { name: "Upload logo" })).toBeVisible();
 });

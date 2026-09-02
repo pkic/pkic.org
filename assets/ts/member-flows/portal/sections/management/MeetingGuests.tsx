@@ -14,6 +14,7 @@ import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
@@ -162,22 +163,18 @@ export function MeetingGuests({
                   )}
                 </Field>
               </fieldset>
-              <label class="pk-check" for={seriesWideId}>
-                <input
-                  id={seriesWideId}
-                  type="checkbox"
-                  class="pk-check__input"
-                  checked={seriesWide}
-                  disabled={saving}
-                  onChange={(e) => {
-                    const checked = e.currentTarget.checked;
-                    setSeriesWide(checked);
-                    const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
-                    if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
-                  }}
-                />
-                <span class="pk-check__label">Eligible for every occurrence in this series</span>
-              </label>
+              <Checkbox
+                id={seriesWideId}
+                checked={seriesWide}
+                disabled={saving}
+                onChange={(e) => {
+                  const checked = e.currentTarget.checked;
+                  setSeriesWide(checked);
+                  const startsAt = checked ? seriesInviteWindow.startsAt : occurrence.startsAt;
+                  if (startsAt) setExpiresAt(localDateTimeValue(startsAt, timeZone));
+                }}
+                label="Eligible for every occurrence in this series"
+              />
               {error && <ErrorAlert error={error} />}
               <div class="pk-cluster">
                 <Button type="submit" variant="primary" size="sm" loading={saving}>

@@ -3,13 +3,17 @@ import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { Spinner } from "../../../../../../components/Spinner";
 import { presentationUploadRequest } from "../../../../../../../shared/presentation-upload";
 import { deleteJson, postJson, requestJson } from "../../../../../../shared/api-client";
-import { presentationVersionResponseSchema } from "../../../../../../../shared/schemas/presentation-versions";
+import {
+  presentationVersionResponseSchema,
+  presentationVersionReviewRequestSchema,
+} from "../../../../../../../shared/schemas/presentation-versions";
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import { fmt, toast } from "../../../../ui";
 import { Badge } from "../../../../../../components/Badge";
+import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../ui/Alert";
 import { Badge as ToneBadge } from "../../../../../../ui/Badge";
-import { Button } from "../../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
@@ -18,7 +22,6 @@ import type { PresentationVersion, PresentationVersionReview } from "./model";
 import { proposalResourcePath } from "./proposal-api";
 // `pk-datalist` is written here as a class name rather than reached through a
 // component, so this module has to pull its stylesheet into its own chunk.
-// The `pk-btn` classes on the download anchor ride the Button import above.
 import "../../../../../../ui/Content.css";
 
 function formatBytes(bytes: number | null): string {
@@ -68,6 +71,20 @@ export function PresentationVersionsTab({
   // read back, where a toast that has already faded cannot be.
   const [error, setError] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  // One review form is open at a time, checked by the review contract the
+  // route parses: it decides what each control shows and what Save may send.
+  const review = useContractForm(presentationVersionReviewRequestSchema, {
+    status: reviewStatus,
+    note: reviewNote.trim() || null,
+  });
+
+  function openReview(versionId: string | null): void {
+    setReviewingId(versionId);
+    setReviewNote("");
+    setReviewStatus("approved");
+    setReviewError(null);
+    review.reset();
+  }
 
   async function handlePresentationUpload(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -91,20 +108,26 @@ export function PresentationVersionsTab({
   }
 
   async function handleReview(versionId: string) {
+    const checked = review.submit();
+    if (!checked.data) {
+      setReviewError(checked.message);
+      return;
+    }
     setSavingReview(true);
     setReviewError(null);
     try {
       await postJson(
         proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}/reviews`),
-        { status: reviewStatus, note: reviewNote.trim() || null },
+        checked.data,
         presentationVersionResponseSchema,
       );
       toast("Review saved", "success");
-      setReviewingId(null);
-      setReviewNote("");
+      openReview(null);
       onReload();
     } catch (caught) {
-      setReviewError((caught as Error).message);
+      // A refusal that names a field lands on that control; the rest is
+      // stated inside the form.
+      setReviewError(review.refuse(caught));
     } finally {
       setSavingReview(false);
     }
@@ -216,25 +239,20 @@ export function PresentationVersionsTab({
             )}
 
             <div class="pk-cluster">
-              <a
+              <ButtonLink
                 href={proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}/content`)}
-                class="pk-btn pk-btn--secondary pk-btn--sm"
+                size="sm"
                 download
               >
                 Download
-              </a>
+              </ButtonLink>
               {canManage && (
                 <>
                   <Button
                     size="sm"
                     aria-expanded={reviewingId === version.id ? "true" : "false"}
                     aria-controls={reviewFormId(version.id)}
-                    onClick={() => {
-                      setReviewingId(reviewingId === version.id ? null : version.id);
-                      setReviewNote("");
-                      setReviewStatus("approved");
-                      setReviewError(null);
-                    }}
+                    onClick={() => openReview(reviewingId === version.id ? null : version.id)}
                   >
                     Review
                   </Button>
@@ -251,11 +269,12 @@ export function PresentationVersionsTab({
             </div>
 
             {canManage && reviewingId === version.id && (
-              <div class="pk-stack pk-stack--snug" id={reviewFormId(version.id)}>
-                <Field label="Review outcome">
+              <div class="pk-stack pk-stack--snug" id={reviewFormId(version.id)} {...review.handlers}>
+                <Field label="Review outcome" {...review.of("status")}>
                   {(control) => (
                     <Select
                       {...control}
+                      name="status"
                       value={reviewStatus}
                       disabled={savingReview}
                       onChange={(event) =>
@@ -273,12 +292,12 @@ export function PresentationVersionsTab({
                 <Field
                   label="Note for the speaker"
                   help="Optional. The speaker sees this alongside the outcome."
-                  state={reviewError ? "invalid" : undefined}
-                  message={reviewError ?? undefined}
+                  {...review.of("note")}
                 >
                   {(control) => (
                     <Textarea
                       {...control}
+                      name="note"
                       rows={3}
                       value={reviewNote}
                       disabled={savingReview}
@@ -286,6 +305,7 @@ export function PresentationVersionsTab({
                     />
                   )}
                 </Field>
+                {reviewError && <Alert tone="danger">{reviewError}</Alert>}
                 <div class="pk-cluster">
                   <Button
                     variant="primary"
@@ -295,7 +315,7 @@ export function PresentationVersionsTab({
                   >
                     {savingReview ? "Saving…" : "Save review"}
                   </Button>
-                  <Button size="sm" onClick={() => setReviewingId(null)}>
+                  <Button size="sm" onClick={() => openReview(null)}>
                     Cancel
                   </Button>
                 </div>

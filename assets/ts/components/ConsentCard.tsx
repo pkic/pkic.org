@@ -7,18 +7,19 @@
  * Three separate modules then reached into that markup after a failed
  * validation to add and remove Bootstrap's `is-invalid` on the card.
  *
- * All of it is now one real `<input type="checkbox" required>` with a real
- * label, which brings its own semantics, its own keyboard behaviour and — the
- * point of the rewrite — its own validity. `form.checkValidity()`, which both
+ * All of it is now the design system's `Checkbox`: one real, `required`
+ * checkbox input with a real label, which brings its own semantics, its own
+ * keyboard behaviour and — the point of the rewrite — its own validity. `form.checkValidity()`, which both
  * the submit path and the step-navigation path already call, fires an
  * `invalid` event on every control that fails, so the card learns it is
  * required-and-unagreed from the platform instead of from a script poking at
  * its class list.
  */
 
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useState } from "preact/hooks";
 
 import { Badge } from "../ui/Badge";
+import { Checkbox } from "../ui/Checkbox";
 import { StateIcon } from "../ui/Field";
 import { IconExternalLink, IconInfoCircle } from "./icons";
 import type { RequiredTerm } from "../shared/types";
@@ -35,21 +36,12 @@ interface ConsentCardProps {
 export function ConsentCard({ term }: ConsentCardProps) {
   const [checked, setChecked] = useState(false);
   const [invalid, setInvalid] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const id = `consent-${term.termKey}-${term.version}`.replace(/[^a-zA-Z0-9_-]/g, "-");
   const helpId = `${id}-help`;
   const messageId = `${id}-message`;
   const label = termLabel(term);
   const help = term.helpText?.trim();
-
-  useEffect(() => {
-    const input = inputRef.current;
-    if (!input) return undefined;
-    const markInvalid = () => setInvalid(true);
-    input.addEventListener("invalid", markInvalid);
-    return () => input.removeEventListener("invalid", markInvalid);
-  }, []);
 
   const handleChange = useCallback(
     (event: Event) => {
@@ -80,30 +72,27 @@ export function ConsentCard({ term }: ConsentCardProps) {
       )}
 
       <div class="pk-cluster">
-        <div class="pk-check">
-          <input
-            ref={inputRef}
-            // `data-consent-input` is how the vanilla event-flow modules find
-            // the consent inputs in a form they did not render. Removing it
-            // would silently drop consents out of every public submission. It
-            // is an attribute rather than a class so that no stylesheet can
-            // reach these controls by reaching for the hook.
-            data-consent-input
-            class="pk-check__input"
-            type="checkbox"
-            id={id}
-            name="consents"
-            value={`${term.termKey}:${term.version}`}
-            required={term.required}
-            checked={checked}
-            aria-invalid={invalid ? "true" : undefined}
-            aria-describedby={describedBy || undefined}
-            onChange={handleChange}
-          />
-          <label class="pk-check__label" for={id}>
-            {label}
-          </label>
-        </div>
+        <Checkbox
+          // `data-consent-input` is how the vanilla event-flow modules find
+          // the consent inputs in a form they did not render. Removing it
+          // would silently drop consents out of every public submission. It
+          // is an attribute rather than a class so that no stylesheet can
+          // reach these controls by reaching for the hook.
+          data-consent-input
+          id={id}
+          name="consents"
+          value={`${term.termKey}:${term.version}`}
+          required={term.required}
+          checked={checked}
+          aria-invalid={invalid ? "true" : undefined}
+          aria-describedby={describedBy || undefined}
+          // `form.checkValidity()` fires `invalid` at every control that
+          // fails, so the card learns it is required-and-unagreed from the
+          // platform rather than from a script poking at its class list.
+          onInvalid={() => setInvalid(true)}
+          onChange={handleChange}
+          label={label}
+        />
 
         {/* "Optional" was a colour-free pill before and stays one, now as the
             system's neutral Badge rather than a bespoke chip. */}

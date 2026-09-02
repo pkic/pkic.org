@@ -166,13 +166,21 @@ export async function transitionStageInUi(
  */
 export async function approveMemberThroughReview(
   page: Page,
-  options: { email: string; name: string; organizationName?: string; category?: string },
+  options: {
+    email: string;
+    name: string;
+    organizationName?: string;
+    category?: string;
+    /** Required (and true) for the individual-only categories H5/H6/H7 — the verified join path only offers them under this attestation. */
+    unaffiliatedAttestation?: boolean;
+  },
 ): Promise<{ email: string; userId: string; applicationId: string }> {
   const application = await submitMembershipApplication(page, {
     email: options.email,
     name: options.name,
     category: options.category ?? "F",
     ...(options.organizationName ? { organizationName: options.organizationName } : {}),
+    unaffiliatedAttestation: options.unaffiliatedAttestation,
   });
 
   for (const toStage of ["in_review", "in_consultation", "ec_review"]) {

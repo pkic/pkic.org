@@ -71,8 +71,8 @@ rows — and one Save sends one PATCH with the record's revision; Cancel puts
 the values back. Nothing else moves: no separate form opens, no card is
 replaced. The fields are the design system's `Field` with its typed controls
 (`TextInput`, `Textarea`, `Select`) — never an invented input style — and
-they are checked live the way the join form's are (`useLiveFields`, the
-Preact half of `installLiveValidation`): a URL is `type="url"` held to the
+they are checked live through the one shared request contract the server
+parses (`useContractForm`): a URL is `type="url"` held to the
 shared link contract, a date is a date input, a category is a select, and a
 field shows the ok or invalid state with its mark and reason as it is typed
 in or left. Save validates the draft through the shared Zod update contract

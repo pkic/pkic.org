@@ -8,7 +8,7 @@ import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../../components/forms/FormResponseViews";
 import { Alert } from "../../../../../ui/Alert";
-import { Button } from "../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { TextInput } from "../../../../../ui/TextControl";
@@ -222,9 +222,9 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
                   <Button size="sm" onClick={() => void handleCopyReferralLink(shareUrl)}>
                     Copy link
                   </Button>
-                  <a class="pk-btn pk-btn--secondary pk-btn--sm" href={ogBadgeUrl} target="_blank" rel="noopener">
+                  <ButtonLink size="sm" href={ogBadgeUrl} target="_blank" rel="noopener">
                     View badge ↗
-                  </a>
+                  </ButtonLink>
                   <Button size="sm" loading={regenerating} onClick={() => void handleRegenerateBadge()}>
                     {regenerating ? "Regenerating…" : "Regenerate badge"}
                   </Button>

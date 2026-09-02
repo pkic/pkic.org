@@ -62,19 +62,16 @@ function updateDraft<K extends keyof MeetingSeriesDraft>(
  * one twelve-column row, so the columns reflow by how much room a field needs
  * instead of by a breakpoint triplet written per field.
  *
- * `idPrefix` still names the controls this component hands to a child that
- * owns its own labelling — the recurrence editor and the time-zone input.
- * Everything else is inside a `Field`, which pairs the label and the control
- * by generated id, so those ids are no longer the component's to choose.
+ * Every control is inside a `Field`, which pairs the label and the control by
+ * generated id — the recurrence editor's fields and the time-zone input
+ * included — so no id here is the component's to choose.
  */
 export function MeetingSeriesFields({
-  idPrefix,
   draft,
   disabled = false,
   scheduleLocked = false,
   onChange,
 }: {
-  idPrefix: string;
   draft: MeetingSeriesDraft;
   disabled?: boolean;
   scheduleLocked?: boolean;
@@ -128,19 +125,21 @@ export function MeetingSeriesFields({
 
       <div class="pk-grid pk-grid--roomy">
         <RecurrenceEditor
-          id={`${idPrefix}-recurrence`}
           value={draft.recurrenceRule}
           disabled={scheduleDisabled}
           referenceDate={draft.startsAt}
           onChange={(value) => updateDraft(draft, onChange, "recurrenceRule", value)}
         />
-        <TimeZoneSelect
-          id={`${idPrefix}-timezone`}
-          label="Time zone"
-          value={draft.timezone}
-          disabled={scheduleDisabled}
-          onChange={(value) => updateDraft(draft, onChange, "timezone", value)}
-        />
+        <Field label="Time zone" required>
+          {(control) => (
+            <TimeZoneSelect
+              {...control}
+              value={draft.timezone}
+              disabled={scheduleDisabled}
+              onChange={(value) => updateDraft(draft, onChange, "timezone", value)}
+            />
+          )}
+        </Field>
         <Field label="Duration (minutes)" required>
           {(control) => (
             <TextInput

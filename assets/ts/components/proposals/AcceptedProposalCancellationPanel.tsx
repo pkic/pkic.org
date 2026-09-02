@@ -2,6 +2,7 @@ import { useState } from "preact/hooks";
 import { formatDateTime } from "../../shared/ui";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Textarea } from "../../ui/TextControl";
@@ -86,18 +87,12 @@ export function AcceptedProposalCancellationPanel({
               />
             )}
           </Field>
-          <label class="pk-check" for={CONFIRM_ID}>
-            <input
-              id={CONFIRM_ID}
-              class="pk-check__input"
-              type="checkbox"
-              checked={confirmed}
-              onChange={(event) => setConfirmed((event.target as HTMLInputElement).checked)}
-            />
-            <span class="pk-check__label">
-              I understand that every speaker linked to this proposal will be notified.
-            </span>
-          </label>
+          <Checkbox
+            id={CONFIRM_ID}
+            checked={confirmed}
+            onChange={(event) => setConfirmed((event.target as HTMLInputElement).checked)}
+            label="I understand that every speaker linked to this proposal will be notified."
+          />
           <div class="pk-cluster">
             <Button type="submit" variant="danger" loading={saving} disabled={saving || !comment.trim() || !confirmed}>
               {saving ? "Canceling…" : "Cancel accepted session"}

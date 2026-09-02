@@ -332,7 +332,7 @@ describe("portal group creation and category policy", () => {
     await settle();
     expect(container.textContent).toContain("Organization member");
     expect(container.textContent).toContain("Student");
-    const studentJoin = container.querySelector<HTMLInputElement>('input[aria-label="Student may join"]')!;
+    const studentJoin = controlFor(container, "Student may join");
     await act(() => studentJoin.click());
     const save = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Save category rules",
@@ -354,8 +354,8 @@ describe("portal group creation and category policy", () => {
     // without a visible row header to read back.
     expect(container.querySelector("table caption")?.textContent).toBe("Membership category eligibility");
     expect(
-      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map((input) =>
-        input.getAttribute("aria-label"),
+      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map(
+        (input) => input.closest("label")?.textContent,
       ),
     ).toEqual([
       "Organization member may join",

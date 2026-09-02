@@ -5,6 +5,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Alert } from "../../../../ui/Alert";
 import { Badge, type BadgeTone } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 import { postJson } from "../../../../shared/api-client";
@@ -75,7 +76,6 @@ export function TemplateEditor({
 
   const subjectPreRef = useRef<HTMLPreElement>(null);
   const bodyPreRef = useRef<HTMLPreElement>(null);
-  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorFocusRef = useRef<"subject" | "body">("body");
   const historyRef = useRef<ApiTableActions | null>(null);
@@ -90,8 +90,9 @@ export function TemplateEditor({
   useEffect(() => {
     if (bodyPreRef.current) {
       bodyPreRef.current.innerHTML = `${highlightTemplateSyntax(body)}\n`;
-      if (bodyTextareaRef.current) {
-        bodyPreRef.current.scrollTop = bodyTextareaRef.current.scrollTop;
+      const control = bodyControl();
+      if (control) {
+        bodyPreRef.current.scrollTop = control.scrollTop;
       }
     }
   }, [body]);
@@ -105,10 +106,20 @@ export function TemplateEditor({
     }
   }, [previewHtml, previewTab]);
 
+  /**
+   * The body control. `Textarea` is a function component, and a ref on one
+   * resolves to the component rather than the DOM node, so the element is
+   * reached from the backdrop it shares a control box with.
+   */
+  function bodyControl(): HTMLTextAreaElement | null {
+    return bodyPreRef.current?.parentElement?.querySelector("textarea") ?? null;
+  }
+
   function handleBodyScroll() {
-    if (bodyPreRef.current && bodyTextareaRef.current) {
-      bodyPreRef.current.scrollTop = bodyTextareaRef.current.scrollTop;
-      bodyPreRef.current.scrollLeft = bodyTextareaRef.current.scrollLeft;
+    const control = bodyControl();
+    if (bodyPreRef.current && control) {
+      bodyPreRef.current.scrollTop = control.scrollTop;
+      bodyPreRef.current.scrollLeft = control.scrollLeft;
     }
   }
 
@@ -119,7 +130,7 @@ export function TemplateEditor({
       editorFocusRef.current = "subject";
     } else {
       setBody((b) => {
-        const el = bodyTextareaRef.current;
+        const el = bodyControl();
         if (!el) return b + snippet;
         const start = el.selectionStart ?? el.value.length;
         const end = el.selectionEnd ?? el.value.length;
@@ -141,9 +152,8 @@ export function TemplateEditor({
     setBody(newBody);
     setContentType(version.content_type ?? "markdown");
     setMessageType(version.message_type ?? "transactional");
-    if (bodyTextareaRef.current) {
-      bodyTextareaRef.current.value = newBody;
-    }
+    const control = bodyControl();
+    if (control) control.value = newBody;
     toast(`Loaded v${version.version} into editor`, "info");
   }
 
@@ -256,18 +266,10 @@ export function TemplateEditor({
               {isLayout && <Alert tone="info">This template controls the outer email shell used for all emails.</Alert>}
               {!isLayout && (
                 <div class="pk-grid">
-                  {/* Written out rather than composed from <Field>: every
-                      control on this screen is addressed by a fixed id, which
-                      <Field> generates for itself. The markup is the one
-                      <Field> builds — the group carries any state modifier and
-                      the control sits in the box the state mark reads. */}
-                  <div class="pk-field">
-                    <label class="pk-field__label" for="email-template-editor-content-type">
-                      Content type
-                    </label>
-                    <div class="pk-field__control">
+                  <Field label="Content type">
+                    {(control) => (
                       <Select
-                        id="email-template-editor-content-type"
+                        {...control}
                         value={contentType}
                         disabled={!canWrite}
                         onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
@@ -276,15 +278,12 @@ export function TemplateEditor({
                         <option value="html">HTML</option>
                         <option value="text">Plain text</option>
                       </Select>
-                    </div>
-                  </div>
-                  <div class="pk-field">
-                    <label class="pk-field__label" for="email-template-editor-message-type">
-                      Default message type
-                    </label>
-                    <div class="pk-field__control">
+                    )}
+                  </Field>
+                  <Field label="Default message type">
+                    {(control) => (
                       <Select
-                        id="email-template-editor-message-type"
+                        {...control}
                         value={messageType}
                         disabled={!canWrite}
                         onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
@@ -292,86 +291,71 @@ export function TemplateEditor({
                         <option value="transactional">Transactional</option>
                         <option value="promotional">Promotional</option>
                       </Select>
-                    </div>
-                  </div>
+                    )}
+                  </Field>
                 </div>
               )}
 
-              {/* Subject with highlight backdrop */}
-              <div class="pk-field">
-                <label class="pk-field__label" for="email-template-editor-subject">
-                  Subject template <span class="pk-muted">(supports conditions and variables)</span>
-                </label>
-                {/* The overlay editor is this field's control box: both are the
-                    positioned box its contents are placed against, so they are
-                    one element rather than two nested ones. */}
-                <div class="pk-field__control pk-overlay-editor">
-                  <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
-                  <TextInput
-                    id="email-template-editor-subject"
-                    class="pk-mono pk-overlay-editor__input"
-                    value={subject}
-                    disabled={!canWrite}
-                    placeholder="e.g. Your invitation to {{eventName}}"
-                    onInput={(e) => {
-                      setSubject((e.target as HTMLInputElement).value);
-                      hasPreviewedRef.current = false;
-                    }}
-                    onFocus={() => {
-                      editorFocusRef.current = "subject";
-                    }}
-                  />
-                </div>
-              </div>
+              {/* Subject with highlight backdrop. The field's control box is
+                  the backdrop's positioning context — both want
+                  `position: relative` — so the backdrop and the control sit
+                  directly in the box the Field provides rather than in a
+                  second box of their own. */}
+              <Field label="Subject template" help="Supports conditions and variables.">
+                {(control) => (
+                  <>
+                    <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
+                    <TextInput
+                      {...control}
+                      class="pk-mono pk-overlay-editor__input"
+                      value={subject}
+                      disabled={!canWrite}
+                      placeholder="e.g. Your invitation to {{eventName}}"
+                      onInput={(e) => {
+                        setSubject((e.target as HTMLInputElement).value);
+                        hasPreviewedRef.current = false;
+                      }}
+                      onFocus={() => {
+                        editorFocusRef.current = "subject";
+                      }}
+                    />
+                  </>
+                )}
+              </Field>
 
               {/* Body with highlight backdrop */}
-              <div class="pk-field">
-                <label class="pk-field__label" for="email-template-editor-body">
-                  Body{" "}
-                  <span class="pk-muted">
-                    (supports {"{{variables}}"}, {"{{#if}}...{{/if}}"}, {"{{#each}}...{{/each}}"})
-                  </span>
-                </label>
-                <div class="pk-field__control pk-overlay-editor">
-                  <pre
-                    ref={bodyPreRef}
-                    aria-hidden="true"
-                    class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
-                  ></pre>
-                  {/*
-                   * Written out rather than composed from <Textarea>: the caret
-                   * arithmetic in insertSnippet needs the element itself, and a
-                   * ref on a Preact function component resolves to the
-                   * component instance rather than the DOM node. The classes
-                   * are exactly the ones <Textarea> applies.
-                   */}
-                  <textarea
-                    id="email-template-editor-body"
-                    ref={bodyTextareaRef}
-                    class="pk-input pk-input--textarea pk-mono pk-overlay-editor__input"
-                    rows={16}
-                    defaultValue={body}
-                    readOnly={!canWrite}
-                    onInput={(e) => {
-                      setBody((e.target as HTMLTextAreaElement).value);
-                      hasPreviewedRef.current = false;
-                    }}
-                    onFocus={() => {
-                      editorFocusRef.current = "body";
-                    }}
-                    onScroll={handleBodyScroll}
-                  />
-                </div>
-              </div>
+              <Field label="Body" help="Supports {{variables}}, {{#if}}...{{/if}}, {{#each}}...{{/each}}.">
+                {(control) => (
+                  <>
+                    <pre
+                      ref={bodyPreRef}
+                      aria-hidden="true"
+                      class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
+                    ></pre>
+                    <Textarea
+                      {...control}
+                      class="pk-mono pk-overlay-editor__input"
+                      rows={16}
+                      defaultValue={body}
+                      readOnly={!canWrite}
+                      onInput={(e) => {
+                        setBody((e.target as HTMLTextAreaElement).value);
+                        hasPreviewedRef.current = false;
+                      }}
+                      onFocus={() => {
+                        editorFocusRef.current = "body";
+                      }}
+                      onScroll={handleBodyScroll}
+                    />
+                  </>
+                )}
+              </Field>
 
               {/* Partials */}
-              <div class="pk-field">
-                <label class="pk-field__label" for="email-template-partial">
-                  Insert partial
-                </label>
-                <div class="pk-field__control">
+              <Field label="Insert partial">
+                {(control) => (
                   <Select
-                    id="email-template-partial"
+                    {...control}
                     disabled={!canWrite}
                     onChange={(e) => {
                       const sel = e.target as HTMLSelectElement;
@@ -387,8 +371,8 @@ export function TemplateEditor({
                       </option>
                     ))}
                   </Select>
-                </div>
-              </div>
+                )}
+              </Field>
 
               {/* Template helpers */}
               <div class="pk-stack pk-stack--snug">
@@ -418,13 +402,22 @@ export function TemplateEditor({
                 ))}
               </div>
 
-              {/* Preview data */}
+              {/* Preview data. The reset sits under the field rather than in
+                  its label row: the label names the control and nothing else. */}
               {canWrite && (
-                <div class="pk-field">
-                  <div class="pk-cluster pk-cluster--between">
-                    <label class="pk-field__label" for="email-template-preview-data">
-                      Preview data (JSON)
-                    </label>
+                <div class="pk-stack pk-stack--tight">
+                  <Field label="Preview data (JSON)">
+                    {(control) => (
+                      <Textarea
+                        {...control}
+                        class="pk-mono"
+                        rows={6}
+                        value={previewData}
+                        onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
+                      />
+                    )}
+                  </Field>
+                  <div class="pk-cluster pk-cluster--end">
                     <Button
                       variant="link"
                       size="sm"
@@ -432,15 +425,6 @@ export function TemplateEditor({
                     >
                       Reset to defaults
                     </Button>
-                  </div>
-                  <div class="pk-field__control">
-                    <Textarea
-                      id="email-template-preview-data"
-                      class="pk-mono"
-                      rows={6}
-                      value={previewData}
-                      onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
-                    />
                   </div>
                 </div>
               )}

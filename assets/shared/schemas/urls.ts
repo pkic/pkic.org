@@ -32,7 +32,14 @@ function isHttpsUrl(value: string): boolean {
 }
 
 /** Canonical absolute-link contract. Userinfo and non-HTTP schemes are never accepted. */
-export const httpUrlSchema = z.string().trim().url().max(MAX_URL_LENGTH).refine(isHttpUrl, "Must be an HTTP(S) URL");
+// The refusal reaches a form field, so it says what a person can do about it.
+const URL_MESSAGE = "Enter a full web address, such as https://example.com.";
+export const httpUrlSchema = z
+  .string()
+  .trim()
+  .url(URL_MESSAGE)
+  .max(MAX_URL_LENGTH, `Use at most ${String(MAX_URL_LENGTH)} characters.`)
+  .refine(isHttpUrl, URL_MESSAGE);
 
 /** Generated signed links can legitimately exceed the user-supplied URL limit. */
 export const httpCapabilityUrlSchema = z

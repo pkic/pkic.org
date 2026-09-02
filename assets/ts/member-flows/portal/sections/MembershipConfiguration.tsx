@@ -24,6 +24,7 @@ import { Spinner } from "../../../components/Spinner";
 import { FormDefinitionEditor, type EditableFormDetail } from "../../../components/forms/FormDefinitionEditor";
 import { Badge } from "../../../ui/Badge";
 import { Button } from "../../../ui/Button";
+import { Checkbox } from "../../../ui/Checkbox";
 import { Field } from "../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Textarea, TextInput } from "../../../ui/TextControl";
@@ -227,18 +228,14 @@ function MembershipSettingsForm({ initial, canWrite }: { initial: MembershipSett
               )}
             </Field>
           ))}
-          <label class="pk-check">
-            <input
-              class="pk-check__input"
-              type="checkbox"
-              checked={settings.autoReminderOnHolds}
-              disabled={!canWrite || saving}
-              onChange={(inputEvent) =>
-                setSettings({ ...settings, autoReminderOnHolds: (inputEvent.target as HTMLInputElement).checked })
-              }
-            />
-            <span class="pk-check__label">Send automatic reminders three days before an on-hold deadline</span>
-          </label>
+          <Checkbox
+            checked={settings.autoReminderOnHolds}
+            disabled={!canWrite || saving}
+            onChange={(inputEvent) =>
+              setSettings({ ...settings, autoReminderOnHolds: (inputEvent.target as HTMLInputElement).checked })
+            }
+            label="Send automatic reminders three days before an on-hold deadline"
+          />
           {canWrite && (
             <div class="pk-cluster">
               <Button type="submit" variant="primary" size="sm" loading={saving}>
@@ -341,16 +338,12 @@ function MembershipCategoryEditor({
               />
             )}
           </Field>
-          <label class="pk-check">
-            <input
-              class="pk-check__input"
-              type="checkbox"
-              checked={draft.isVoting}
-              disabled={!canWrite || saving}
-              onChange={(event) => setDraft({ ...draft, isVoting: (event.target as HTMLInputElement).checked })}
-            />
-            <span class="pk-check__label">This category has consortium and group voting rights</span>
-          </label>
+          <Checkbox
+            checked={draft.isVoting}
+            disabled={!canWrite || saving}
+            onChange={(event) => setDraft({ ...draft, isVoting: (event.target as HTMLInputElement).checked })}
+            label="This category has consortium and group voting rights"
+          />
           {canWrite && (
             <div class="pk-cluster">
               <Button type="submit" size="sm" loading={saving}>

@@ -108,32 +108,26 @@ describe("recurrence shape <-> RRULE round trip", () => {
 describe("RecurrenceEditor component", () => {
   it("shows the matching shape and interval for a known rule", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=3" onChange={onChange} />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=3" onChange={onChange} />);
+    const select = controlFor<HTMLSelectElement>(container, "Repeats");
     expect(select.value).toBe("weekly");
-    expect(container.querySelector<HTMLInputElement>("#series-recurrence-interval")?.value).toBe("3");
+    expect(intervalControl(container).value).toBe("3");
     expect(container.textContent).toContain("Repeats every 3 weeks.");
-    expect(container.querySelector("#series-recurrence-advanced")).toBeNull();
+    expect(labelNames(container)).not.toContain("Custom rule");
   });
 
   it("shows an ad-hoc single-occurrence rule as Does not repeat with no interval control", () => {
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value={SINGLE_OCCURRENCE_RULE} onChange={vi.fn()} />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    const container = mount(<RecurrenceEditor value={SINGLE_OCCURRENCE_RULE} onChange={vi.fn()} />);
+    const select = controlFor<HTMLSelectElement>(container, "Repeats");
     expect(select.value).toBe("none");
-    expect(container.querySelector("#series-recurrence-interval")).toBeNull();
+    expect(labelNames(container).some((name) => name.startsWith("Repeat every ("))).toBe(false);
     expect(container.textContent).toContain("One meeting only — does not repeat.");
   });
 
   it("choosing Does not repeat writes the one-occurrence rule via onChange", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />);
+    const select = controlFor<HTMLSelectElement>(container, "Repeats");
     select.value = "none";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -143,10 +137,8 @@ describe("RecurrenceEditor component", () => {
 
   it("changing the interval writes the widened rule via onChange", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;INTERVAL=1" onChange={onChange} />,
-    );
-    const interval = container.querySelector<HTMLInputElement>("#series-recurrence-interval")!;
+    const container = mount(<RecurrenceEditor value="FREQ=MONTHLY;INTERVAL=1" onChange={onChange} />);
+    const interval = intervalControl(container);
     interval.value = "2";
     void act(() => {
       interval.dispatchEvent(new Event("input", { bubbles: true }));
@@ -156,10 +148,8 @@ describe("RecurrenceEditor component", () => {
 
   it("ignores an out-of-range interval instead of emitting an invalid rule", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
-    );
-    const interval = container.querySelector<HTMLInputElement>("#series-recurrence-interval")!;
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />);
+    const interval = intervalControl(container);
     interval.value = "0";
     void act(() => {
       interval.dispatchEvent(new Event("input", { bubbles: true }));
@@ -169,34 +159,30 @@ describe("RecurrenceEditor component", () => {
 
   it("opens directly in custom mode for a rule that matches no shape", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={onChange} />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    const container = mount(<RecurrenceEditor value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={onChange} />);
+    const select = controlFor<HTMLSelectElement>(container, "Repeats");
     expect(select.value).toBe(ADVANCED_RECURRENCE_MODE);
-    const advanced = container.querySelector<HTMLInputElement>("#series-recurrence-advanced")!;
+    const advanced = controlFor(container, "Custom rule");
     expect(advanced.value).toBe("FREQ=MONTHLY;BYMONTHDAY=15");
     expect(container.textContent).toContain("RFC 5545 recurrence rule");
   });
 
   it("switching to the monthly ordinal-weekday shape exposes ordinal and weekday controls", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
-    );
-    const select = container.querySelector<HTMLSelectElement>("#series-recurrence")!;
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />);
+    const select = controlFor<HTMLSelectElement>(container, "Repeats");
     select.value = "monthly_by_ordinal_weekday";
     void act(() => {
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith(expect.stringMatching(/^FREQ=MONTHLY;INTERVAL=1;BYDAY=-?\d[A-Z]{2}$/));
 
-    const weekday = container.querySelector<HTMLSelectElement>("#series-recurrence-weekday")!;
+    const weekday = controlFor<HTMLSelectElement>(container, "Weekday");
     weekday.value = "FR";
     void act(() => {
       weekday.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    const ordinal = container.querySelector<HTMLSelectElement>("#series-recurrence-ordinal")!;
+    const ordinal = controlFor<HTMLSelectElement>(container, "Week of the month");
     ordinal.value = "-1";
     void act(() => {
       ordinal.dispatchEvent(new Event("change", { bubbles: true }));
@@ -207,10 +193,8 @@ describe("RecurrenceEditor component", () => {
 
   it("editing the raw string in custom mode passes it straight through", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={onChange} />,
-    );
-    const advanced = container.querySelector<HTMLInputElement>("#series-recurrence-advanced")!;
+    const container = mount(<RecurrenceEditor value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={onChange} />);
+    const advanced = controlFor(container, "Custom rule");
     advanced.value = "FREQ=MONTHLY;BYMONTHDAY=1,15";
     void act(() => {
       advanced.dispatchEvent(new Event("input", { bubbles: true }));
@@ -219,39 +203,31 @@ describe("RecurrenceEditor component", () => {
   });
 
   it("disables the controls when disabled is set", () => {
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={vi.fn()} disabled />,
-    );
-    expect(container.querySelector<HTMLSelectElement>("#series-recurrence")?.disabled).toBe(true);
-    expect(container.querySelector<HTMLInputElement>("#series-recurrence-interval")?.disabled).toBe(true);
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=1" onChange={vi.fn()} disabled />);
+    expect(controlFor<HTMLSelectElement>(container, "Repeats").disabled).toBe(true);
+    expect(intervalControl(container).disabled).toBe(true);
   });
 
   it("binds every structured control to a visible label, including its unit", () => {
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU" onChange={vi.fn()} />,
-    );
+    const container = mount(<RecurrenceEditor value="FREQ=MONTHLY;INTERVAL=2;BYDAY=2TU" onChange={vi.fn()} />);
 
     // The ordinal and weekday choices used to carry only an aria-label, and
     // the interval's unit was a bare span announced to nobody.
     expect(labelNames(container)).toEqual(["Repeats", "Repeat every (months)", "Week of the month", "Weekday"]);
-    expect(controlFor<HTMLSelectElement>(container, "Repeats").id).toBe("series-recurrence");
-    expect(controlFor(container, "Repeat every (months)").id).toBe("series-recurrence-interval");
+    expect(controlFor<HTMLSelectElement>(container, "Repeats").tagName).toBe("SELECT");
+    expect(controlFor(container, "Repeat every (months)").type).toBe("number");
     expect(controlFor<HTMLSelectElement>(container, "Week of the month").value).toBe("2");
     expect(controlFor<HTMLSelectElement>(container, "Weekday").value).toBe("TU");
   });
 
   it("says weeks rather than months once the shape is weekly", () => {
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=3" onChange={vi.fn()} />,
-    );
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=3" onChange={vi.fn()} />);
 
     expect(labelNames(container)).toEqual(["Repeats", "Repeat every (weeks)"]);
   });
 
   it("announces the plain-English summary with the control that sets it", () => {
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=3" onChange={vi.fn()} />,
-    );
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=3" onChange={vi.fn()} />);
 
     const select = controlFor<HTMLSelectElement>(container, "Repeats");
     const summary = container.querySelector(`#${select.getAttribute("aria-describedby")!}`);
@@ -259,12 +235,13 @@ describe("RecurrenceEditor component", () => {
   });
 
   it("names the custom rule and hangs the RFC reference off it", () => {
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={vi.fn()} />,
-    );
+    const container = mount(<RecurrenceEditor value="FREQ=MONTHLY;BYMONTHDAY=15" onChange={vi.fn()} />);
 
     const advanced = controlFor(container, "Custom rule");
-    expect(advanced.id).toBe("series-recurrence-advanced");
+    // The rule is what the series stores, so the field says it is required —
+    // in words as well as with the asterisk.
+    expect(advanced.required).toBe(true);
+    expect(container.querySelector(".pk-field__required .pk-field__sr")?.textContent).toBe("(required)");
     // In custom mode there is no structured shape, so the select describes
     // nothing rather than pointing at a summary that is not rendered.
     expect(controlFor<HTMLSelectElement>(container, "Repeats").getAttribute("aria-describedby")).toBeNull();
@@ -274,9 +251,7 @@ describe("RecurrenceEditor component", () => {
 
   it("keeps an unparsable interval out of the rule and leaves the control showing it", () => {
     const onChange = vi.fn();
-    const container = mount(
-      <RecurrenceEditor id="series-recurrence" value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />,
-    );
+    const container = mount(<RecurrenceEditor value="FREQ=WEEKLY;INTERVAL=1" onChange={onChange} />);
 
     // Above MAX_RECURRENCE_INTERVAL, and a non-number: neither may reach the
     // caller as a rule the shared schema would then have to reject.
@@ -286,9 +261,19 @@ describe("RecurrenceEditor component", () => {
   });
 });
 
+/**
+ * The interval control, found through whichever unit its label currently
+ * names — the label is the only handle the reader has on it.
+ */
+function intervalControl(container: HTMLElement): HTMLInputElement {
+  const label = labelNames(container).find((name) => name.startsWith("Repeat every ("));
+  if (!label) throw new Error("no interval control is on the page");
+  return controlFor(container, label);
+}
+
 /** Types a value into the interval control the way the browser would. */
 function typeInterval(container: HTMLElement, value: string): void {
-  const interval = container.querySelector<HTMLInputElement>("#series-recurrence-interval")!;
+  const interval = intervalControl(container);
   interval.value = value;
   void act(() => {
     interval.dispatchEvent(new Event("input", { bubbles: true }));

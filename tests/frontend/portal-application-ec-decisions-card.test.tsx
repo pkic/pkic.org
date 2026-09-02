@@ -7,19 +7,29 @@
  * history names itself among the column of tables on the page, that every
  * control in the override form is reachable through its own label rather than
  * through a placeholder that disappears when typing starts, that the two ways
- * the form can refuse a submission are announced on the field they belong to,
- * and that a rejected request is stated on the surface instead of discarded.
+ * the shared decision contract can refuse a submission are announced on the
+ * field they belong to, that a refusal the server names lands on the same
+ * field, and that a rejected request is stated on the surface instead of
+ * discarded.
  */
 import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ecDecisionCreateSchema, type EcDecisionValue } from "../../assets/shared/schemas/ec-review";
-import type { MembershipApplicationDetail } from "../../assets/shared/schemas/membership-application-management";
+import { ecDecisionCreateSchema } from "../../assets/shared/schemas/ec-review";
+import {
+  ecDecisionRecordSchema,
+  type EcDecisionRecordInput,
+  type MembershipApplicationDetail,
+} from "../../assets/shared/schemas/membership-application-management";
 import { ApplicationEcDecisionsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationEcDecisionsCard";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
+import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
 import { buttonNamed, chooseOption, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
 
 const NOW = "2026-08-31T09:00:00.000Z";
+const EC_MEMBER_ID = "00000000-0000-4000-8000-0000000000e1";
+const OTHER_EC_MEMBER_ID = "00000000-0000-4000-8000-0000000000e2";
 
 function detail(overrides: Partial<MembershipApplicationDetail> = {}): MembershipApplicationDetail {
   return {
@@ -48,7 +58,7 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
 const DECISION = {
   id: "ec-decision-1",
   applicationId: "00000000-0000-4000-8000-000000000401",
-  ecMemberUserId: "ec-member-1",
+  ecMemberUserId: EC_MEMBER_ID,
   decision: "approve" as const,
   reason: "Meets every criterion.",
   createdAt: NOW,
@@ -74,6 +84,23 @@ function card(overrides: Partial<Parameters<typeof ApplicationEcDecisionsCard>[0
   return <ApplicationEcDecisionsCard detail={detail()} canApprove onRecordEcDecision={async () => {}} {...overrides} />;
 }
 
+function fieldOf(control: HTMLElement): HTMLElement {
+  const field = control.closest<HTMLElement>(".pk-field");
+  if (!field) throw new Error("control is not inside a Field");
+  return field;
+}
+
+/** The message a control points at through `aria-describedby`. */
+function describedBy(root: ParentNode, control: HTMLElement): HTMLElement | null {
+  const id = control.getAttribute("aria-describedby");
+  return id ? root.querySelector<HTMLElement>(`[id="${id}"]`) : null;
+}
+
+/** A refused request, as the API client raises one. */
+function refused(status: number, code: string, message: string, fieldErrors?: Record<string, string[]>) {
+  return new ApiClientError({ error: { code, message, details: fieldErrors ? { fieldErrors } : undefined } }, status);
+}
+
 describe("the EC decisions card", () => {
   it("captions the decision history so it is identifiable among the page's tables", () => {
     const root = mount(card({ detail: detail({ ecDecisions: [DECISION] }) }));
@@ -81,7 +108,7 @@ describe("the EC decisions card", () => {
     const caption = root.querySelector("caption");
     expect(caption?.textContent).toBe("Executive Committee decisions on this application");
     expect(root.textContent).toContain("Meets every criterion.");
-    expect(root.textContent).toContain("ec-member-1");
+    expect(root.textContent).toContain(EC_MEMBER_ID);
   });
 
   it("says the region is empty rather than leaving it blank", () => {
@@ -107,17 +134,23 @@ describe("the EC decisions card", () => {
     expect(root.textContent).toContain("Meets every criterion.");
   });
 
-  it("reports a missing EC member on the field instead of returning in silence", async () => {
+  it("refuses a missing EC member on the field instead of returning in silence", async () => {
     const onRecordEcDecision = vi.fn(async () => {});
     const root = mount(card({ onRecordEcDecision }));
 
     await submitForm(root);
 
+    // The override names the member, so the empty identifier is sent to the
+    // contract as typed and refused by it — with the contract's own words.
     const control = controlFor(root, "EC member user ID");
+    expect(fieldOf(control).classList.contains("pk-field--invalid")).toBe(true);
     expect(control.getAttribute("aria-invalid")).toBe("true");
-    const message = root.querySelector(`#${control.getAttribute("aria-describedby")!}`);
-    expect(message?.textContent).toContain("Enter the user ID of the EC member");
+    const message = describedBy(root, control);
     expect(message?.getAttribute("role")).toBe("alert");
+    const contract = ecDecisionRecordSchema.safeParse({ ecMemberUserId: "", decision: "approve" });
+    expect(contract.success).toBe(false);
+    expect(message?.textContent).toContain(normalizeValidation(contract.error).fields.ecMemberUserId);
+    expect(document.activeElement).toBe(control);
     expect(onRecordEcDecision).not.toHaveBeenCalled();
   });
 
@@ -125,19 +158,21 @@ describe("the EC decisions card", () => {
     const onRecordEcDecision = vi.fn(async () => {});
     const root = mount(card({ onRecordEcDecision }));
 
-    await typeInto(controlFor(root, "EC member user ID"), "ec-member-2");
+    await typeInto(controlFor(root, "EC member user ID"), OTHER_EC_MEMBER_ID);
     await chooseOption(controlFor<HTMLSelectElement>(root, "Decision"), "decline");
     await submitForm(root);
 
     const reason = controlFor(root, "Reason");
+    expect(fieldOf(reason).classList.contains("pk-field--invalid")).toBe(true);
     expect(reason.getAttribute("aria-invalid")).toBe("true");
+    expect(describedBy(root, reason)?.textContent).toContain("A reason is required when declining");
     expect(onRecordEcDecision).not.toHaveBeenCalled();
     // The same refusal the backend contract makes, stated before the request.
     expect(ecDecisionCreateSchema.safeParse({ decision: "decline" }).success).toBe(false);
   });
 
-  it("records a valid decision as the shared create contract and clears the form", async () => {
-    const recordedCalls: Array<{ ecMemberUserId: string; decision: EcDecisionValue; reason?: string }> = [];
+  it("records a valid decision as the shared record contract and clears the form", async () => {
+    const recordedCalls: EcDecisionRecordInput[] = [];
     const root = mount(
       card({
         onRecordEcDecision: async (params) => {
@@ -146,40 +181,63 @@ describe("the EC decisions card", () => {
       }),
     );
 
-    await typeInto(controlFor(root, "EC member user ID"), "  ec-member-3  ");
+    await typeInto(controlFor(root, "EC member user ID"), `  ${OTHER_EC_MEMBER_ID}  `);
     await chooseOption(controlFor<HTMLSelectElement>(root, "Decision"), "decline");
     await typeInto(controlFor(root, "Reason"), "  Insufficient evidence of eligibility.  ");
     await submitForm(root);
 
-    const recorded = recordedCalls[0];
-    expect(recorded.ecMemberUserId).toBe("ec-member-3");
+    expect(recordedCalls).toHaveLength(1);
     // Parsed through the canonical schema rather than compared to a literal,
     // so the assertion breaks if the payload stops being a valid decision.
-    expect(ecDecisionCreateSchema.parse({ decision: recorded.decision, reason: recorded.reason })).toEqual({
+    expect(ecDecisionRecordSchema.parse(recordedCalls[0])).toEqual({
+      ecMemberUserId: OTHER_EC_MEMBER_ID,
       decision: "decline",
       reason: "Insufficient evidence of eligibility.",
     });
     expect(controlFor(root, "EC member user ID").value).toBe("");
     expect(controlFor(root, "Reason").value).toBe("");
+    expect(controlFor(root, "EC member user ID").getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("marks the field a server refusal names and keeps what was typed", async () => {
+    const root = mount(
+      card({
+        onRecordEcDecision: async () => {
+          throw refused(400, "VALIDATION", "Invalid request", {
+            ecMemberUserId: ["That user is not on the Executive Council."],
+          });
+        },
+      }),
+    );
+
+    await typeInto(controlFor(root, "EC member user ID"), OTHER_EC_MEMBER_ID);
+    await submitForm(root);
+
+    const control = controlFor(root, "EC member user ID");
+    expect(fieldOf(control).classList.contains("pk-field--invalid")).toBe(true);
+    expect(describedBy(root, control)?.textContent).toContain("That user is not on the Executive Council.");
+    expect(document.activeElement).toBe(control);
+    expect(control.value).toBe(OTHER_EC_MEMBER_ID);
   });
 
   it("states a refused request on the surface and keeps what was typed", async () => {
     const root = mount(
       card({
         onRecordEcDecision: async () => {
-          throw new Error("That user is not on the Executive Committee.");
+          throw refused(409, "NOT_IN_EC_REVIEW", "This application is not in EC review.");
         },
       }),
     );
 
-    await typeInto(controlFor(root, "EC member user ID"), "not-an-ec-member");
+    await typeInto(controlFor(root, "EC member user ID"), OTHER_EC_MEMBER_ID);
     await submitForm(root);
 
     // A toast can be gone before the reader looks up; the card must say so
     // itself, and must not discard the identifier that was typed.
     const alert = root.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("That user is not on the Executive Committee.");
-    expect(controlFor(root, "EC member user ID").value).toBe("not-an-ec-member");
+    expect(alert?.textContent).toContain("This application is not in EC review.");
+    expect(controlFor(root, "EC member user ID").value).toBe(OTHER_EC_MEMBER_ID);
+    expect(controlFor(root, "EC member user ID").getAttribute("aria-invalid")).toBeNull();
     expect(buttonNamed(root, "Record").disabled).toBe(false);
   });
 });

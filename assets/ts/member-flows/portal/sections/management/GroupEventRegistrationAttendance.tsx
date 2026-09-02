@@ -56,7 +56,6 @@ export function GroupEventRegistrationAttendance({
         dayWaitlist={detail.data.dayWaitlist}
         eventDays={detail.data.eventDays}
         registrationEndpoint={registrationEndpoint}
-        idPrefix={`group-registration-${registrationId}`}
         canVip={canVip}
         onReload={detail.reload}
         onSuccess={(message) => void onUpdated?.(message)}

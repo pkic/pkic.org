@@ -22,6 +22,7 @@ import {
   type MembershipApplicationDetail,
 } from "../../assets/shared/schemas/membership-application-management";
 import { ApplicationCommunicationsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationCommunicationsCard";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { buttonNamed, buttonNames, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 
 const NOW = "2026-08-31T09:00:00.000Z";
@@ -99,6 +100,17 @@ async function submit(form: HTMLFormElement): Promise<void> {
   });
 }
 
+/** A refused request, as the API client raises one. */
+function refused(status: number, code: string, message: string, fieldErrors?: Record<string, string[]>) {
+  return new ApiClientError({ error: { code, message, details: fieldErrors ? { fieldErrors } : undefined } }, status);
+}
+
+function fieldOf(control: HTMLElement): HTMLElement {
+  const field = control.closest<HTMLElement>(".pk-field");
+  if (!field) throw new Error("control is not inside a Field");
+  return field;
+}
+
 /** The message a control points at through `aria-describedby`. */
 function describedBy(root: ParentNode, control: HTMLElement): HTMLElement | null {
   const id = control.getAttribute("aria-describedby");
@@ -174,7 +186,9 @@ describe("membership application communications card", () => {
 
     expect(onSendCommunication).not.toHaveBeenCalled();
 
+    // Refused by the request contract the route parses, on the field itself.
     const subject = controlFor(page, "Subject");
+    expect(fieldOf(subject).classList.contains("pk-field--invalid")).toBe(true);
     expect(subject.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(page, subject);
     expect(message?.textContent).toContain("Enter a subject for the email.");
@@ -214,7 +228,7 @@ describe("membership application communications card", () => {
   it("announces a rejected send and keeps what was typed", async () => {
     const page = mountCard({
       onSendCommunication: vi.fn(async () => {
-        throw new Error("The mail service refused this message.");
+        throw refused(502, "MAIL_FAILED", "The mail service refused this message.");
       }),
     });
 
@@ -232,6 +246,28 @@ describe("membership application communications card", () => {
     expect(buttonNamed(page, "Send")).toBeDefined();
   });
 
+  it("marks the field a server refusal names and keeps what was typed", async () => {
+    const page = mountCard({
+      onSendCommunication: vi.fn(async () => {
+        throw refused(400, "VALIDATION", "Invalid request", { subject: ["Subject is too long."] });
+      }),
+    });
+
+    await typeInto(controlFor(page, "Subject"), "Decision");
+    await typeInto(controlFor<HTMLTextAreaElement>(page, "Message"), "The EC has reviewed it.");
+    await submit(formUnder(page, "Send communication"));
+
+    // The refusal lands on the field the server named, the way the
+    // contract's own refusal would, and the draft survives it.
+    const subject = controlFor(page, "Subject");
+    expect(fieldOf(subject).classList.contains("pk-field--invalid")).toBe(true);
+    expect(describedBy(page, subject)?.textContent).toContain("Subject is too long.");
+    expect(document.activeElement).toBe(subject);
+    expect(subject.value).toBe("Decision");
+    // The other form is untouched by this one's refusal.
+    expect(controlFor<HTMLTextAreaElement>(page, "Internal note").getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("records a note the canonical contract accepts, and reports an empty one", async () => {
     const added: unknown[] = [];
     const page = mountCard({
@@ -243,8 +279,11 @@ describe("membership application communications card", () => {
     await submit(formUnder(page, "Add internal note"));
     expect(added).toHaveLength(0);
     const note = controlFor<HTMLTextAreaElement>(page, "Internal note");
+    expect(fieldOf(note).classList.contains("pk-field--invalid")).toBe(true);
     expect(note.getAttribute("aria-invalid")).toBe("true");
-    expect(describedBy(page, note)?.textContent).toContain("Enter the note to record.");
+    const message = describedBy(page, note);
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(message?.textContent).toContain("Enter the note to record.");
 
     await typeInto(note, "  Chased the signed agreement.  ");
     await submit(formUnder(page, "Add internal note"));

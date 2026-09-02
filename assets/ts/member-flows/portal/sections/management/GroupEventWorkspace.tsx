@@ -11,7 +11,7 @@ import { getLinkLabel } from "../../../../../shared/schemas/links";
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
-import { Button } from "../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../ui/Button";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { formatEventWhen } from "../../ui";
 import { EventStats } from "../events/detail/EventStats";
@@ -273,12 +273,9 @@ export function GroupEventWorkspace({
                             action, so it stays an anchor and borrows the
                             button's appearance rather than its element. */}
                         {event.seriesId && (
-                          <a
-                            class="pk-btn pk-btn--secondary pk-btn--sm"
-                            href={`#/groups/${encodeURIComponent(groupId)}/meetings`}
-                          >
+                          <ButtonLink size="sm" href={`#/groups/${encodeURIComponent(groupId)}/meetings`}>
                             Manage meeting series
-                          </a>
+                          </ButtonLink>
                         )}
                       </div>
                     )}

@@ -313,7 +313,7 @@ describe("generic group participation card", () => {
     expect(checkboxes).toHaveLength(2);
 
     for (const checkbox of checkboxes) {
-      const label = container.querySelector<HTMLLabelElement>(`label[for="${checkbox.id}"]`);
+      const label = checkbox.closest("label");
       expect(checkbox.id).not.toBe("");
       expect(label).not.toBeNull();
       expect(label?.textContent?.trim()).not.toBe("");

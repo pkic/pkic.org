@@ -12,6 +12,7 @@ import { DayAttendancePicker } from "../../../../components/DayAttendancePicker"
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
+import { Radio } from "../../../../ui/Checkbox";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Spinner } from "../../../../ui/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -48,16 +49,13 @@ function attendanceTypeOptions(): JSX.Element {
       <legend class="pk-field__label">How will you attend?</legend>
       <div class="pk-stack pk-stack--tight">
         {ATTENDANCE_TYPES.map((attendanceType) => (
-          <label class="pk-check" key={attendanceType}>
-            <input
-              class="pk-check__input"
-              type="radio"
-              name="attendanceType"
-              value={attendanceType}
-              required={attendanceType === ATTENDANCE_TYPES[0]}
-            />
-            <span class="pk-check__label">{ATTENDANCE_LABELS[attendanceType]}</span>
-          </label>
+          <Radio
+            key={attendanceType}
+            name="attendanceType"
+            value={attendanceType}
+            required={attendanceType === ATTENDANCE_TYPES[0]}
+            label={ATTENDANCE_LABELS[attendanceType]}
+          />
         ))}
       </div>
     </fieldset>

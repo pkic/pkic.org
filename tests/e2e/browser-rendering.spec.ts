@@ -1305,9 +1305,10 @@ test.describe("browser workflows", () => {
       timeout: 15_000,
     });
 
-    const speakerUserId = await coSpeakerCard.locator('textarea[id^="speaker-bio-"]').evaluate((element) => {
-      return (element as HTMLTextAreaElement).id.replace("speaker-bio-", "");
-    });
+    const speakerUserId = await coSpeakerCard
+      .locator("form[data-speaker-user-id]")
+      .getAttribute("data-speaker-user-id");
+    if (!speakerUserId) throw new Error("the co-speaker card names no user id");
     const proposerHeadshotResult = await page.evaluate(
       async ({ token, userId }) => {
         const formData = new FormData();

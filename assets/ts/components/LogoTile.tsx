@@ -9,7 +9,7 @@
  * open next to the picture — the common pattern for a profile picture, here
  * for an organization's mark.
  */
-import { useRef } from "preact/hooks";
+import { useId, useRef } from "preact/hooks";
 import { Button } from "../ui/Button";
 import { initialsFrom } from "../ui/Avatar";
 import { useLogoCommands, type LogoManagerProps } from "./LogoManager";
@@ -25,6 +25,7 @@ export interface LogoTileProps extends Omit<LogoManagerProps, "hint" | "uploadLa
 }
 
 export function LogoTile(props: LogoTileProps) {
+  const hintId = useId();
   const { busy, attempt, upload, remove } = useLogoCommands(props);
   const inputRef = useRef<HTMLInputElement>(null);
   const label = props.imageUrl ? "Change logo" : "Upload logo";
@@ -51,7 +52,7 @@ export function LogoTile(props: LogoTileProps) {
         type="button"
         class="pk-logo-tile__control"
         aria-label={label}
-        aria-describedby={props.hint ? "pk-logo-tile-hint" : undefined}
+        aria-describedby={props.hint ? hintId : undefined}
         disabled={busy}
         onClick={() => inputRef.current?.click()}
       >
@@ -76,7 +77,7 @@ export function LogoTile(props: LogoTileProps) {
       {/* The file rule is announced with the control, not drawn under the
           mark as a loose sentence: the veil already says what pressing does. */}
       {props.hint && (
-        <span id="pk-logo-tile-hint" class="pk-sr-only">
+        <span id={hintId} class="pk-sr-only">
           {props.hint}
         </span>
       )}

@@ -35,7 +35,7 @@ import type { ParsedContact } from "../invite-parser";
 import { registrationInviteCreateSchema, peerInviteResultSchema } from "../../../shared/schemas/registration";
 import { postJson, ApiClientError } from "../api-client";
 import { Alert } from "../../ui/Alert";
-import { Button } from "../../ui/Button";
+import { Button, ButtonLink } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { Spinner } from "../../ui/Spinner";
@@ -126,13 +126,13 @@ function OgBadge({
         height={315}
       />
       <div class="pk-cluster pk-cluster--center">
-        <a
+        <ButtonLink
           href={`${ogBadgeUrl}?download=1&name=${encodeURIComponent(badgeFilename)}`}
           download={badgeFilename}
-          class="pk-btn pk-btn--secondary pk-btn--sm"
+          size="sm"
         >
           <span aria-hidden="true">⬇</span> Download badge
-        </a>
+        </ButtonLink>
       </div>
     </div>
   );
@@ -177,35 +177,23 @@ function SocialLinks({
   return (
     <div class="pk-cluster">
       <span class="pk-small">Share on:</span>
-      <a
+      <ButtonLink
         href={twitterUrl}
         target="_blank"
         rel="noopener noreferrer"
-        class="pk-btn pk-btn--secondary pk-btn--sm"
+        size="sm"
         aria-label="Share on X / Twitter"
       >
         <IconXTwitter />X
-      </a>
-      <a
-        href={blueskyUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="pk-btn pk-btn--secondary pk-btn--sm"
-        aria-label="Share on Bluesky"
-      >
+      </ButtonLink>
+      <ButtonLink href={blueskyUrl} target="_blank" rel="noopener noreferrer" size="sm" aria-label="Share on Bluesky">
         <IconBluesky />
         Bluesky
-      </a>
-      <a
-        href={redditUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="pk-btn pk-btn--secondary pk-btn--sm"
-        aria-label="Share on Reddit"
-      >
+      </ButtonLink>
+      <ButtonLink href={redditUrl} target="_blank" rel="noopener noreferrer" size="sm" aria-label="Share on Reddit">
         <IconReddit />
         Reddit
-      </a>
+      </ButtonLink>
     </div>
   );
 }
@@ -520,16 +508,16 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
         </p>
 
         <div class="pk-cluster">
-          <a
+          <ButtonLink
             href={linkedinUrl}
             target="_blank"
             rel="noopener noreferrer"
-            class="pk-btn pk-btn--primary"
+            variant="primary"
             aria-label="Share on LinkedIn"
           >
             <IconLinkedIn />
             Share on LinkedIn
-          </a>
+          </ButtonLink>
         </div>
 
         {canInvite && <InvitePanel manageToken={manageToken as string} eventSlug={eventSlug as string} />}

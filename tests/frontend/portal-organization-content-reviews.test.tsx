@@ -201,12 +201,70 @@ describe("portal organization content reviews", () => {
     await act(async () => button("Reject")?.click());
     await settle();
 
+    // Refused by the rejection contract the route parses, on the field.
     const note = controlFor<HTMLTextAreaElement>("Reviewer note");
+    expect(note.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(note.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(note);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("Write the reason for the rejection");
+    expect(document.activeElement).toBe(note);
     expect(requests.some((request) => request.method === "POST")).toBe(false);
+  });
+
+  it("marks the note when the server refuses it, and keeps the submission open", async () => {
+    let rejected = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        if (method === "GET" && url.pathname.endsWith(`/${REVIEW_ID}`)) {
+          return json({ review: { ...summary, diff: [], logoStagingR2Key: null, currentLogoR2Key: null } });
+        }
+        if (method === "POST" && url.pathname.endsWith(`/${REVIEW_ID}/reject`)) {
+          rejected += 1;
+          return json(
+            {
+              error: {
+                code: "VALIDATION",
+                message: "Invalid request",
+                details: { fieldErrors: { reviewerNote: ["Notes must not contain links."] } },
+              },
+            },
+            400,
+          );
+        }
+        return json({ reviews: [summary], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<OrganizationContentReviews />, container!));
+    await settle();
+    await act(async () => button("Open the content review for Example Member")?.click());
+    await settle();
+
+    const note = controlFor<HTMLTextAreaElement>("Reviewer note");
+    await act(async () => {
+      note.value = "See https://example.test";
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Reject")?.click());
+    await settle();
+
+    // The refusal lands on the field the server named, the way the
+    // contract's own refusal would, and the note survives it.
+    expect(rejected).toBe(1);
+    expect(note.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(describedBy(note)?.textContent).toContain("Notes must not contain links.");
+    expect(document.activeElement).toBe(note);
+    expect(note.value).toBe("See https://example.test");
+    expect(button("Reject")).toBeDefined();
   });
 
   it("opens on the pending queue and sends a status chosen from the Status column back to D1", async () => {

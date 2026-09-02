@@ -226,8 +226,9 @@ describe("bulk invite composer", () => {
     const confirm = container.querySelector<HTMLInputElement>("#invite-confirm-attendee");
     expect(confirm?.classList.contains("pk-check__input")).toBe(true);
     expect(confirm?.parentElement?.classList.contains("pk-check")).toBe(true);
-    const confirmLabel = container.querySelector<HTMLLabelElement>('label[for="invite-confirm-attendee"]');
-    expect(confirmLabel?.classList.contains("pk-check__label")).toBe(true);
+    expect(confirm?.closest("label")?.querySelector(".pk-check__label")?.textContent).toBe(
+      "I reviewed this preview and confirm sending this email.",
+    );
 
     // The preview is untrusted author HTML and must stay fully sandboxed.
     const frame = container.querySelector<HTMLIFrameElement>("iframe");

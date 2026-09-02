@@ -86,12 +86,7 @@ export function MeetingOccurrences({
           <PanelHeader title="New occurrence" />
           <PanelBody class="pk-stack">
             <form class="pk-stack" onSubmit={(event) => void create(event)}>
-              <MeetingOccurrenceFields
-                idPrefix={`meeting-occurrence-create-${series.id}`}
-                draft={draft}
-                disabled={saving}
-                onChange={setDraft}
-              />
+              <MeetingOccurrenceFields draft={draft} disabled={saving} onChange={setDraft} />
               <div class="pk-cluster">
                 <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
                   {saving ? "Creating…" : "Create occurrence"}

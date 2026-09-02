@@ -7,9 +7,11 @@ import {
   isProposalDecisionTransitionAllowed,
   PROPOSAL_DECISION_STATUSES,
 } from "../../../shared/schemas/proposal-status";
+import { useContractForm } from "../../hooks/useContractForm";
 import { Alert } from "../../ui/Alert";
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select, Textarea } from "../../ui/TextControl";
@@ -71,19 +73,26 @@ export function ProposalDecisionPanel({
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
   const [selectedPreviewId, setSelectedPreviewId] = useState("");
+  // One basis for validation: the finalize contract the route parses decides
+  // what each field shows — a needs-work decision without a note is refused
+  // on the note — and what Preview and Record may send.
+  const form = useContractForm(finalizeProposalSchema, {
+    finalStatus: decisionStatus || undefined,
+    decisionNote: decisionNote.trim() || undefined,
+  });
 
   const quorumMet = reviewCount >= minReviewsRequired;
   const availableDecisionStatuses = PROPOSAL_DECISION_STATUSES.filter((status) =>
     isProposalDecisionTransitionAllowed(proposal.status, proposal.decision_status, status),
   );
   const canRecordDecision = availableDecisionStatuses.length > 0;
-  const needsWorkRequiresNote = decisionStatus === "needs-work" && !decisionNote.trim();
   const selectedPreview =
     preview?.messages.find((message) => message.id === selectedPreviewId) ?? preview?.messages[0] ?? null;
 
   useEffect(() => {
     setDecisionStatus("");
     setDecisionNote("");
+    form.reset();
   }, [proposal]);
 
   useEffect(() => {
@@ -100,20 +109,15 @@ export function ProposalDecisionPanel({
     );
   }, [preview]);
 
-  function decisionInput(): ProposalDecisionInput | null {
-    if (!decisionStatus) return null;
-    return { finalStatus: decisionStatus, decisionNote: decisionNote.trim() || undefined };
-  }
-
   async function handlePreview(): Promise<void> {
-    const input = decisionInput();
-    if (!input || needsWorkRequiresNote) return;
+    const checked = form.submit();
+    if (!checked.data) return;
     setPreviewing(true);
     try {
-      setPreview(await onPreview(input));
+      setPreview(await onPreview(checked.data));
       setPreviewConfirmed(false);
     } catch (error) {
-      notify((error as Error).message, "error");
+      notify(form.refuse(error), "error");
     } finally {
       setPreviewing(false);
     }
@@ -121,19 +125,20 @@ export function ProposalDecisionPanel({
 
   async function handleDecision(event: Event): Promise<void> {
     event.preventDefault();
-    const input = decisionInput();
-    if (!input) return;
+    const checked = form.submit();
+    if (!checked.data) return;
     if (!preview || !previewConfirmed) {
       notify("Preview and confirm the outgoing email first", "error");
       return;
     }
     setSaving(true);
     try {
-      await onFinalize(input);
+      await onFinalize(checked.data);
       notify("Decision saved", "success");
       onFinalized();
     } catch (error) {
-      notify((error as Error).message, "error");
+      // A server refusal names its fields the same way the contract does.
+      notify(form.refuse(error), "error");
     } finally {
       setSaving(false);
     }
@@ -181,11 +186,12 @@ export function ProposalDecisionPanel({
                   {minReviewsRequired !== 1 ? "s" : ""} completed. Add more reviews before finalizing.
                 </Alert>
               )}
-              <form onSubmit={(event) => void handleDecision(event)} class="pk-stack">
-                <Field label="Decision">
+              <form noValidate onSubmit={(event) => void handleDecision(event)} class="pk-stack" {...form.handlers}>
+                <Field label="Decision" {...form.of("finalStatus")}>
                   {(c) => (
                     <Select
                       {...c}
+                      name="finalStatus"
                       value={decisionStatus}
                       onChange={(event) =>
                         setDecisionStatus(
@@ -202,21 +208,18 @@ export function ProposalDecisionPanel({
                     </Select>
                   )}
                 </Field>
-                {/* The decision above is a `Field`; this was a hand-copied
-                    imitation of one — a bare `<label>` naming no control, its
-                    help text a loose div, and a `pk-field__message` with no
-                    `pk-field` to take its state from, which is why the missing
-                    note showed neither the red border nor the ✕. */}
+                {/* The note is required exactly when the contract requires it,
+                    and the contract is what says so — on this field. */}
                 <Field
                   label="Note to applicant"
                   required={decisionStatus === "needs-work"}
                   help="Sent in the decision email · Markdown supported"
-                  state={needsWorkRequiresNote ? "invalid" : undefined}
-                  message="A note is required when requesting changes."
+                  {...form.of("decisionNote")}
                 >
                   {(c) => (
                     <Textarea
                       {...c}
+                      name="decisionNote"
                       value={decisionNote}
                       onInput={(event) => setDecisionNote((event.target as HTMLTextAreaElement).value)}
                       placeholder={
@@ -232,7 +235,7 @@ export function ProposalDecisionPanel({
                     type="button"
                     variant="secondary"
                     onClick={() => void handlePreview()}
-                    disabled={previewing || !decisionStatus || needsWorkRequiresNote}
+                    disabled={previewing || !form.valid}
                     loading={previewing}
                   >
                     {previewing ? "Previewing…" : "Preview emails"}
@@ -311,18 +314,13 @@ export function ProposalDecisionPanel({
                               />
                             ))}
                           {previewTab === "text" && <pre class="pk-code-block pk-small">{selectedPreview.text}</pre>}
-                          <div class="pk-check">
-                            <input
-                              class="pk-check__input"
-                              type="checkbox"
-                              id="proposal-decision-preview-confirm"
-                              checked={previewConfirmed}
-                              onChange={(event) => setPreviewConfirmed((event.target as HTMLInputElement).checked)}
-                            />
-                            <label class="pk-check__label pk-small" for="proposal-decision-preview-confirm">
-                              I reviewed the outgoing email preview and confirm this decision send.
-                            </label>
-                          </div>
+                          <Checkbox
+                            id="proposal-decision-preview-confirm"
+                            class="pk-small"
+                            label="I reviewed the outgoing email preview and confirm this decision send."
+                            checked={previewConfirmed}
+                            onChange={(event) => setPreviewConfirmed((event.target as HTMLInputElement).checked)}
+                          />
                         </div>
                       </div>
                     </PanelBody>
@@ -331,15 +329,7 @@ export function ProposalDecisionPanel({
                 <Button
                   type="submit"
                   variant="primary"
-                  disabled={
-                    saving ||
-                    !canRecordDecision ||
-                    !decisionStatus ||
-                    !quorumMet ||
-                    needsWorkRequiresNote ||
-                    !preview ||
-                    !previewConfirmed
-                  }
+                  disabled={saving || !canRecordDecision || !form.valid || !quorumMet || !preview || !previewConfirmed}
                   loading={saving}
                   title={!quorumMet ? `Requires ${minReviewsRequired} reviews` : undefined}
                 >

@@ -113,7 +113,7 @@ export type MemberCapacityUpdateInput = z.infer<typeof memberCapacityUpdateSchem
 export const individualMembershipGrantSchema = z.object({
   userId: databaseIdSchema,
   membershipCategory: individualMembershipCategorySchema,
-  activationReason: trimmedString(1, 500),
+  activationReason: trimmedString(1, 500, "Document why this identity is being activated immediately."),
 });
 
 export const MEMBER_CAPACITY_SORT_COLUMNS = [

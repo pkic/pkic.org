@@ -11,9 +11,12 @@ import {
   schedulerJobRunResponseSchema,
   schedulerJobsListResponseSchema,
   schedulerJobStateResponseSchema,
+  schedulerJobStateUpdateSchema,
   type ScheduledJobResource,
+  type ScheduledJobStateUpdate,
 } from "../../../../../shared/schemas/scheduler";
 import { Badge, statusLabel } from "../../../../components/Badge";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import type { MenuItem } from "../../../../ui/Menu";
@@ -25,9 +28,6 @@ import { Textarea } from "../../../../ui/TextControl";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import "../../../../ui/Content.css";
-
-/** The shortest reason the state endpoint accepts. Mirrors the shared schema. */
-const MINIMUM_PAUSE_REASON = 3;
 
 function titleFromKey(jobKey: string): string {
   return jobKey
@@ -151,32 +151,49 @@ function PauseForm({
   reason: string;
   onReason: (value: string) => void;
   onCancel: () => void;
-  onConfirm: () => void;
+  /** Sends the pause; a rejection is thrown back so the form can show it. */
+  onConfirm: (update: ScheduledJobStateUpdate) => Promise<void>;
 }) {
-  const trimmed = reason.trim();
-  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_PAUSE_REASON;
+  // One basis for validation: the state contract the endpoint parses decides
+  // what the reason shows as it is typed and what Confirm may send.
+  const form = useContractForm(schedulerJobStateUpdateSchema, { state: "paused", reason });
+  const [error, setError] = useState("");
+
+  async function confirm(event: Event) {
+    event.preventDefault();
+    setError("");
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
+    try {
+      await onConfirm(checked.data);
+    } catch (confirmError) {
+      // A server refusal names its field the same way the contract does.
+      setError(form.refuse(confirmError));
+    }
+  }
 
   return (
     <form
+      noValidate
       class="pk-stack pk-stack--snug"
       aria-label={`Pause ${titleFromKey(job.jobKey)}`}
-      onSubmit={(event) => {
-        event.preventDefault();
-        onConfirm();
-      }}
+      {...form.handlers}
+      onSubmit={(event) => void confirm(event)}
     >
       <Field
         label="Pause reason"
         required
         help="Recorded with the pause and shown beside the job until it resumes."
-        state={tooShort ? "invalid" : undefined}
-        message={tooShort ? `Give at least ${MINIMUM_PAUSE_REASON} characters.` : undefined}
+        {...form.of("reason")}
       >
         {(control) => (
           <Textarea
             {...control}
+            name="reason"
             rows={2}
-            minLength={MINIMUM_PAUSE_REASON}
             maxLength={500}
             value={reason}
             disabled={busy}
@@ -184,11 +201,12 @@ function PauseForm({
           />
         )}
       </Field>
+      {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster pk-cluster--end">
         <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" size="sm" variant="primary" disabled={busy || trimmed.length < MINIMUM_PAUSE_REASON}>
+        <Button type="submit" size="sm" variant="primary" disabled={busy}>
           Confirm pause
         </Button>
       </div>
@@ -227,22 +245,29 @@ export function ScheduledJobs() {
     setJobs((current) => current.map((job) => (job.jobKey === updated.jobKey ? updated : job)));
   }
 
-  async function updateState(job: ScheduledJobResource, state: "active" | "paused"): Promise<void> {
+  /** Sends one state change; a rejection is thrown so the caller can say where. */
+  async function updateState(job: ScheduledJobResource, update: ScheduledJobStateUpdate): Promise<void> {
     setBusyJob(job.jobKey);
     try {
       const response = await patchJson(
         `/api/v1/scheduler/jobs/${encodeURIComponent(job.jobKey)}`,
-        state === "paused" ? { state, reason: pauseReason } : { state },
+        update,
         schedulerJobStateResponseSchema,
       );
       replaceJob(response.job);
       setPauseJob(null);
       setPauseReason("");
-      toast(state === "paused" ? "Scheduled job paused." : "Scheduled job resumed.", "success");
-    } catch (updateError) {
-      toast((updateError as Error).message, "error");
+      toast(update.state === "paused" ? "Scheduled job paused." : "Scheduled job resumed.", "success");
     } finally {
       setBusyJob(null);
+    }
+  }
+
+  async function resume(job: ScheduledJobResource): Promise<void> {
+    try {
+      await updateState(job, { state: "active" });
+    } catch (resumeError) {
+      toast((resumeError as Error).message, "error");
     }
   }
 
@@ -269,7 +294,7 @@ export function ScheduledJobs() {
   const controls: JobControls = {
     busyJob,
     onRun: (job) => void runNow(job),
-    onResume: (job) => void updateState(job, "active"),
+    onResume: (job) => void resume(job),
     onStartPause: (job) => {
       setPauseJob(job.jobKey);
       setPauseReason("");
@@ -322,7 +347,7 @@ export function ScheduledJobs() {
                 reason={pauseReason}
                 onReason={setPauseReason}
                 onCancel={() => setPauseJob(null)}
-                onConfirm={() => void updateState(job, "paused")}
+                onConfirm={(update) => updateState(job, update)}
               />
             ) : null
           }

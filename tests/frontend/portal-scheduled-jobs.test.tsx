@@ -197,15 +197,19 @@ describe("portal scheduled-job management", () => {
     );
     expect(reason.getAttribute("aria-invalid")).toBeNull();
 
-    // A reason the endpoint would reject is announced before submission, and
-    // the submit control stays inert.
+    // A reason the endpoint would reject is refused by the endpoint's own
+    // contract as it is typed, on the field, and confirming sends nothing.
     await act(() => {
       reason.value = "ab";
       reason.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    expect(reason.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(reason.getAttribute("aria-invalid")).toBe("true");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Give at least 3 characters.");
-    expect(button(container, "Confirm pause").disabled).toBe(true);
+    await act(() => button(container!, "Confirm pause").click());
+    await settle();
+    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
+    expect(document.activeElement).toBe(reason);
 
     await act(() => {
       reason.value = "investigating delivery failures";
@@ -230,5 +234,66 @@ describe("portal scheduled-job management", () => {
     expect(schedulerJobRunCreateSchema.parse(runs[0].body)).toEqual({});
     expect(requests.some(({ path }) => path.endsWith("/pause") || path.endsWith("/resume"))).toBe(false);
     expect(container.textContent).toContain("Succeeded");
+  });
+});
+
+describe("portal scheduled-job pause refusals", () => {
+  it("marks the reason when the endpoint refuses it, and keeps the pause form open", async () => {
+    let patched = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") {
+          return json({ jobs: [scheduledJob({ capabilities: { manageState: true, run: true } })] });
+        }
+        if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
+          patched += 1;
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "VALIDATION",
+                message: "Invalid request",
+                details: { fieldErrors: { reason: ["That reason is not specific enough."] } },
+              },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ScheduledJobs />, container!));
+    await settle();
+
+    await runRowAction(container, "Retention", "Pause");
+    const reasonLabel = [...container.querySelectorAll("label")].find((label) =>
+      label.textContent?.startsWith("Pause reason"),
+    )!;
+    const reason = document.getElementById(reasonLabel.htmlFor) as HTMLTextAreaElement;
+    await act(() => {
+      reason.value = "investigating";
+      reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => button(container!, "Confirm pause").click());
+    await settle();
+
+    // The refusal lands on the field the server named, the way the
+    // contract's own refusal would, and the draft survives it.
+    expect(patched).toBe(1);
+    expect(reason.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(document.getElementById(reason.getAttribute("aria-describedby")!)?.textContent).toContain(
+      "That reason is not specific enough.",
+    );
+    expect(document.activeElement).toBe(reason);
+    expect(reason.value).toBe("investigating");
+    expect(container.querySelector('form[aria-label="Pause Retention"]')).not.toBeNull();
   });
 });

@@ -111,12 +111,7 @@ function CreateMeetingSeries({
             Configure attendance eligibility, registration, and guest access once for the recurring series.
           </p>
           {error && <ErrorAlert error={error} />}
-          <MeetingSeriesFields
-            idPrefix="managed-group-meeting-create"
-            draft={draft}
-            disabled={saving}
-            onChange={setDraft}
-          />
+          <MeetingSeriesFields draft={draft} disabled={saving} onChange={setDraft} />
           <div class="pk-cluster">
             {/* `loading` announces the save through aria-busy and shows the
                 spinner; `disabled` is what actually stops a second submit. */}

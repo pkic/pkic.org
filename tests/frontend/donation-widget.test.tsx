@@ -93,7 +93,7 @@ describe("donation widget markup", () => {
       "Email",
       "Organization (optional)",
       "Currency",
-      "Or enter a custom amount ($)",
+      "Or enter a custom amount",
     ]);
 
     // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
@@ -101,7 +101,14 @@ describe("donation widget markup", () => {
     expect(controlFor(widget, "Full name").required).toBe(true);
     expect(controlFor(widget, "Full name").hasAttribute("data-donation-name-input")).toBe(true);
     expect(controlFor<HTMLSelectElement>(widget, "Currency").tagName).toBe("SELECT");
-    expect(controlFor(widget, "Or enter a custom amount ($)").type).toBe("number");
+    const custom = controlFor(widget, "Or enter a custom amount");
+    expect(custom.type).toBe("number");
+    // The currency symbol is live and the label is a string, so the symbol sits
+    // with the control and the control describes itself by it.
+    const prefix = widget.querySelector("[data-donation-currency-prefix]");
+    expect(prefix?.textContent).toBe("$");
+    const description = widget.querySelector(`[id="${custom.getAttribute("aria-describedby")!}"]`);
+    expect(description?.contains(prefix!)).toBe(true);
   });
 
   it("exposes the outcome line as a live region that exists before there is a message", () => {
@@ -115,7 +122,7 @@ describe("donation widget markup", () => {
   it("keeps the currency select named when the identity fields are hidden", () => {
     const widget = place(buildDonationWidget({ hideIdentityFields: true }));
 
-    expect(labelNames(widget)).toEqual(["Or enter a custom amount ($)"]);
+    expect(labelNames(widget)).toEqual(["Or enter a custom amount"]);
     const currency = widget.querySelector<HTMLSelectElement>("[data-donation-currency]");
     expect(currency?.getAttribute("aria-label")).toBe("Currency");
     // The identity values still travel, they are just not asked for again.

@@ -5,6 +5,7 @@ import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { Button } from "../../../ui/Button";
+import { Checkbox } from "../../../ui/Checkbox";
 import { Badge } from "../../../ui/Badge";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -123,18 +124,15 @@ function NotificationPreferencesCard() {
           preferences && (
             <div class="pk-stack pk-stack--snug">
               {(Object.keys(PREFERENCE_LABELS) as Array<keyof NotificationPreferences>).map((key) => (
-                <label class="pk-check" key={key}>
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    role="switch"
-                    id={`portal-notif-${key}`}
-                    checked={preferences[key]}
-                    disabled={savingKey === key}
-                    onChange={(event) => void toggle(key, (event.target as HTMLInputElement).checked)}
-                  />
-                  <span class="pk-check__label pk-small">{PREFERENCE_LABELS[key]}</span>
-                </label>
+                <Checkbox
+                  key={key}
+                  role="switch"
+                  id={`portal-notif-${key}`}
+                  checked={preferences[key]}
+                  disabled={savingKey === key}
+                  onChange={(event) => void toggle(key, (event.target as HTMLInputElement).checked)}
+                  label={<span class="pk-small">{PREFERENCE_LABELS[key]}</span>}
+                />
               ))}
             </div>
           )

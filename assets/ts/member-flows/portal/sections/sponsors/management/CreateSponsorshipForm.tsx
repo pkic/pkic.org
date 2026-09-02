@@ -211,18 +211,23 @@ export function CreateSponsorshipForm({
               {draft.sponsorType === "consortium" ? (
                 canPickOrganizations ? (
                   <div class="pk-stack pk-stack--tight">
-                    <ServerSearchSelect
-                      catalog={memberOrganizationCatalog}
-                      label="Member organization"
-                      value={draft.organizationId || null}
-                      selectedLabel={organizationLabel}
-                      allowEmpty={false}
-                      searchPlaceholder="Search member organizations…"
-                      onChange={(organization) => {
-                        setOrganizationLabel(organization?.name);
-                        setDraft((d) => ({ ...d, organizationId: organization?.id ?? "" }));
-                      }}
-                    />
+                    <Field label="Member organization">
+                      {(control) => (
+                        <ServerSearchSelect
+                          {...control}
+                          searchLabel="Member organization"
+                          catalog={memberOrganizationCatalog}
+                          value={draft.organizationId || null}
+                          selectedLabel={organizationLabel}
+                          allowEmpty={false}
+                          searchPlaceholder="Search member organizations…"
+                          onChange={(organization) => {
+                            setOrganizationLabel(organization?.name);
+                            setDraft((d) => ({ ...d, organizationId: organization?.id ?? "" }));
+                          }}
+                        />
+                      )}
+                    </Field>
                     {/* The picker draws no message slot of its own, so the
                         contract's refusal — always "an organization is
                         required" here, since picking can't produce a bad id —
@@ -251,18 +256,23 @@ export function CreateSponsorshipForm({
               ) : (
                 <>
                   <div class="pk-stack pk-stack--tight">
-                    <ServerSearchSelect
-                      catalog={sponsorableEventCatalog}
-                      label="Event"
-                      value={draft.eventId || null}
-                      selectedLabel={eventLabel}
-                      placeholder="No linked event"
-                      searchPlaceholder="Search events…"
-                      onChange={(event) => {
-                        setEventLabel(event ? sponsorableEventLabel(event) : undefined);
-                        setDraft((d) => ({ ...d, eventId: event?.id ?? "" }));
-                      }}
-                    />
+                    <Field label="Event">
+                      {(control) => (
+                        <ServerSearchSelect
+                          {...control}
+                          searchLabel="Event"
+                          catalog={sponsorableEventCatalog}
+                          value={draft.eventId || null}
+                          selectedLabel={eventLabel}
+                          placeholder="No linked event"
+                          searchPlaceholder="Search events…"
+                          onChange={(event) => {
+                            setEventLabel(event ? sponsorableEventLabel(event) : undefined);
+                            setDraft((d) => ({ ...d, eventId: event?.id ?? "" }));
+                          }}
+                        />
+                      )}
+                    </Field>
                     {fieldErrors.eventId && <Alert tone="danger">{fieldErrors.eventId}</Alert>}
                   </div>
                   <Field label="Non-member name" {...fieldFor("nonMemberName")}>
