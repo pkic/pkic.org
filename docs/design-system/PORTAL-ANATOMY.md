@@ -74,11 +74,12 @@ form or quick view — a mailing list's settings, one meeting occurrence — may
 expand under its row (`detailRow`); the license ends the moment the detail
 grows a second facet or wants its own URL in someone's hands.
 
-One deliberate exception: a meeting **series** has facets (occurrences,
-settings) but the API has no single-series GET yet, so it opens in place from
-the row that already holds its data. When a `GET
-/groups/:id/meetings/series/:seriesId` exists, it becomes a routed record
-page like the others.
+A meeting **series** (occurrences, settings) is the same shape as the others,
+at `…/meetings/:seriesId/:tab?`. It was the one exception for as long as the
+API had no single-series GET and the row was the only place its data lived;
+`GET /groups/:id/meetings/series/:seriesId` now returns exactly the list
+row's projection — effective capabilities and occurrence count included — so
+the record fetches itself by id and no faceted record opens in place anymore.
 
 ## What this is not
 

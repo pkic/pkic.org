@@ -197,8 +197,8 @@ export function GroupWorkspace({
                 key={`${group.id}:${resourceId ?? ""}`}
                 groupId={group.id}
                 canManage={canManage}
-                initialSeriesId={resourceId}
-                initialSeriesTab={resourceTab}
+                seriesSegment={resourceId}
+                seriesTab={resourceTab}
               />
             )}
             {view === "forms" && (

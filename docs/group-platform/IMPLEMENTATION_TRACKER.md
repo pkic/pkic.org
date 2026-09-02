@@ -802,6 +802,16 @@ Status: Complete
       The focused Playwright run passes against the real local Worker, migrated
       D1 state, and intercepted sign-in email.
 - [x] Add /api/v1/groups/:groupId/meetings/series routes.
+- [x] Add the single-series GET and route meeting series onto workspace
+      record pages.
+      Evidence: `GET /api/v1/groups/:groupId/meetings/series/:seriesId`
+      returns the list row's projection — effective capabilities and
+      occurrence count — through the same group-context access policy as the
+      list, and the portal opens a series at
+      `#/groups/:groupId/meetings/:seriesId/:tab?` as a routed record page with
+      a back link, record title, and occurrence and settings facets, the same
+      shape as votes, forms, and events. Creation is its own page at
+      `…/meetings/new`.
 - [x] Add series occurrence, guest, join, and attendance routes.
       Evidence: the mounted router exposes canonical series, occurrence,
       calendar, materialization, guest, attendance-list, and

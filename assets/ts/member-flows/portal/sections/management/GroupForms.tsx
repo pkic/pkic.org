@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
+import { HashRedirect } from "../../HashRedirect";
 import { usePortalHashLocation } from "../../hash-location";
 import { FORM_PLACEMENT_CONTEXT_TYPES, FORM_PURPOSES, type FormPlacement } from "../../../../../shared/schemas/forms";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
@@ -23,12 +24,6 @@ const FORM_CONTEXT_LABELS: Record<FormPlacement["contextType"], string> = {
   event: "Event",
   organization: "Organization",
 };
-
-/** Returns to the forms list from an effect, not render — see its call site below. */
-function GroupFormsRedirect({ onLeave }: { onLeave: () => void }) {
-  useEffect(() => onLeave(), [onLeave]);
-  return null;
-}
 
 export function GroupForms({
   groupId,
@@ -59,8 +54,7 @@ export function GroupForms({
   }
 
   if (creating) {
-    // Navigating away belongs in an effect, not in render.
-    if (!canManage) return <GroupFormsRedirect onLeave={leaveCreatePage} />;
+    if (!canManage) return <HashRedirect to={formsPath} />;
     return (
       // Creation is a page of its own: a heading that names what is being
       // created, a way back, and no list competing for the same screen.

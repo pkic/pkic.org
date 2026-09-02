@@ -159,7 +159,7 @@ describe("the meeting series list", () => {
     return { series: rows, page: { limit: 50, offset: 0, total: rows.length, hasMore: false } };
   }
 
-  it("names each row's calendar and details control after the series", async () => {
+  it("names each row's record link and calendar control after the series", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(listResponse([series()]))),
@@ -169,12 +169,12 @@ describe("the meeting series list", () => {
 
     expect(page.querySelector("caption")?.textContent).toBe("Meeting series");
 
-    // The row itself opens the detail; the calendar download lives behind
-    // the row's menu, whose trigger names the series.
-    const rowLink = [...page.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find(
-      (control) => control.textContent === "Show details for Monthly sync",
+    // The row is a link to the series' own page; the calendar download lives
+    // behind the row's menu, whose trigger names the series.
+    const rowLink = [...page.querySelectorAll<HTMLAnchorElement>("a.pk-table__row-link")].find(
+      (control) => control.textContent === "Open Monthly sync",
     );
-    expect(rowLink).toBeTruthy();
+    expect(rowLink?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${SERIES_ID}`);
     expect(page.querySelector('button[aria-label="Actions for Monthly sync"]')).toBeTruthy();
   });
 

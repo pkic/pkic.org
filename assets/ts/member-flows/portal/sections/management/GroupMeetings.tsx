@@ -1,13 +1,18 @@
-import { useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { eventSeriesCreateSchema, eventSeriesResponseSchema } from "../../../../../shared/schemas/event-series";
-import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ApiClientError, postJson } from "../../../../shared/api-client";
+import { HashRedirect } from "../../HashRedirect";
+import { usePortalHashLocation } from "../../hash-location";
 import { GroupMeetingSeriesList } from "./GroupMeetingSeriesList";
+import { GroupMeetingSeriesRecord } from "./GroupMeetingSeriesRecord";
 import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
 import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
+
+/** Reserved series segment that routes to the creation page instead of a series' record. */
+const NEW_MEETING_SERIES_SEGMENT = "new";
 
 function defaultStart(): string {
   const start = new Date();
@@ -47,7 +52,7 @@ function CreateMeetingSeries({
   onCancel,
 }: {
   groupId: string;
-  onCreated: () => Promise<void>;
+  onCreated: (createdSeriesId: string) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
@@ -76,9 +81,12 @@ function CreateMeetingSeries({
         location: draft.location.trim() || null,
         providerType: null,
       });
-      await postJson(`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`, input, eventSeriesResponseSchema);
-      setDraft(initialDraft());
-      await onCreated();
+      const created = await postJson(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`,
+        input,
+        eventSeriesResponseSchema,
+      );
+      onCreated(created.series.id);
     } catch (cause) {
       setError(
         cause instanceof ApiClientError || cause instanceof Error
@@ -91,10 +99,8 @@ function CreateMeetingSeries({
   }
 
   return (
-    // Nested inside the meetings panel, so its heading sits one rung below
-    // that panel's rather than as another sibling of it.
     <Panel aria-label="Schedule a recurring meeting">
-      <PanelHeader title="Schedule a recurring meeting" headingLevel={4}>
+      <PanelHeader title="Schedule a recurring meeting">
         <Button size="sm" disabled={saving} onClick={onCancel}>
           Cancel
         </Button>
@@ -127,37 +133,67 @@ function CreateMeetingSeries({
 export function GroupMeetings({
   groupId,
   canManage,
-  initialSeriesId,
-  initialSeriesTab,
+  seriesSegment,
+  seriesTab,
 }: {
   groupId: string;
   canManage: boolean;
-  initialSeriesId?: string;
-  /** The URL-addressed tab segment for `initialSeriesId`'s detail view. */
-  initialSeriesTab?: string;
+  /** `undefined` for the list, `"new"` for the create page, or a series id for its record. */
+  seriesSegment?: string;
+  /** The URL-addressed tab segment below a series id. */
+  seriesTab?: string;
 }) {
-  const listActions = useRef<ApiTableActions | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  return (
-    // The list is its own panel — head, table, pager inside one frame — so
-    // this wrapper only stacks the create form above it while it is open.
-    <div class="pk pk-stack">
-      {canManage && showCreate && (
+  const [, navigate] = usePortalHashLocation();
+  const meetingsPath = `/groups/${encodeURIComponent(groupId)}/meetings`;
+
+  function leaveToList(): void {
+    navigate(meetingsPath);
+  }
+
+  if (seriesSegment === NEW_MEETING_SERIES_SEGMENT) {
+    if (!canManage) return <HashRedirect to={meetingsPath} />;
+    return (
+      // Creation is a page of its own: a way back, and the create form —
+      // which names what is being created in its own heading — alone on the
+      // screen rather than layered over the list.
+      <div class="pk pk-stack">
+        <div class="pk-cluster">
+          <Button variant="link" size="sm" onClick={leaveToList}>
+            ← All meeting series
+          </Button>
+        </div>
         <CreateMeetingSeries
           groupId={groupId}
-          onCreated={async () => {
-            setShowCreate(false);
-            await listActions.current?.reload();
-          }}
-          onCancel={() => setShowCreate(false)}
+          onCreated={(createdSeriesId) => navigate(`${meetingsPath}/${encodeURIComponent(createdSeriesId)}`)}
+          onCancel={leaveToList}
         />
-      )}
+      </div>
+    );
+  }
+
+  if (seriesSegment) {
+    // A series is a record with facets — occurrences, settings — so it gets
+    // its own page rather than an expansion between the list's rows.
+    return (
+      <GroupMeetingSeriesRecord
+        groupId={groupId}
+        seriesId={seriesSegment}
+        initialTab={seriesTab}
+        onLeave={leaveToList}
+      />
+    );
+  }
+
+  return (
+    // The list is its own panel — head, table, pager inside one frame.
+    <div class="pk">
       <GroupMeetingSeriesList
         groupId={groupId}
-        actionsRef={listActions}
-        initialSeriesId={initialSeriesId}
-        initialSeriesTab={initialSeriesTab}
-        createAction={canManage ? { label: "New series", onSelect: () => setShowCreate(true) } : undefined}
+        createAction={
+          canManage
+            ? { label: "New series", onSelect: () => navigate(`${meetingsPath}/${NEW_MEETING_SERIES_SEGMENT}`) }
+            : undefined
+        }
       />
     </div>
   );

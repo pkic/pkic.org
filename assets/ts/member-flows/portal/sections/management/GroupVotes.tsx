@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "preact/compat";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
 import { VOTE_STATUSES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
@@ -12,6 +12,7 @@ import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
+import { HashRedirect } from "../../HashRedirect";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { VoteDetails } from "../Votes/VoteDetails";
@@ -28,12 +29,6 @@ const GroupVoteStatistics = lazy(() =>
 
 /** Reserved vote segment that routes to the creation page instead of a vote's detail. */
 const NEW_GROUP_VOTE_SEGMENT = "new";
-
-/** Returns to the votes list from an effect, not render — see its call site below. */
-function GroupVotesRedirect({ onLeave }: { onLeave: () => void }) {
-  useEffect(() => onLeave(), [onLeave]);
-  return null;
-}
 
 /** The vote record's facets. Each one loads its data when it is opened. */
 const VOTE_RECORD_TABS = [
@@ -176,8 +171,7 @@ export function GroupVotes({
   }
 
   if (creating) {
-    // Navigating away belongs in an effect, not in render.
-    if (!canManage) return <GroupVotesRedirect onLeave={leaveCreatePage} />;
+    if (!canManage) return <HashRedirect to={votesPath} />;
     return (
       // Creation is a page of its own: a way back, and the create form —
       // which names what is being created in its own heading — alone on the

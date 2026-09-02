@@ -115,75 +115,66 @@ afterEach(() => {
 });
 
 describe("portal group management resources", () => {
-  it("lists and creates recurring meetings only through canonical group routes", async () => {
+  const SERIES_ID = "60000000-0000-4000-8000-000000000001";
+  const MEETING_SERIES = {
+    id: SERIES_ID,
+    eventId: "70000000-0000-4000-8000-000000000001",
+    ownerGroupId: GROUP_ID,
+    eventName: "Architecture call",
+    eventSlug: "architecture-call",
+    profileKey: "meeting",
+    registrationPolicy: "no_registration",
+    visibility: "group_members",
+    memberEligibility: "owner_group",
+    guestPolicy: "occurrence_invitation",
+    startsAt: "2026-09-01T15:00:00.000Z",
+    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
+    timezone: "Europe/Amsterdam",
+    durationMinutes: 60,
+    location: "https://meet.example.test/architecture",
+    providerType: null,
+    providerConfigured: false,
+    active: true,
+    inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
+    nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    capabilities: ["view", "register", "attend", "manage_attendance", "manage"],
+    occurrenceCount: 0,
+  } as const;
+  const SERIES_PAGE = { limit: 25, offset: 0, total: 1, hasMore: false };
+
+  function requestUrl(input: RequestInfo | URL): URL {
+    return new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.origin);
+  }
+
+  it("creates a recurring meeting series on its own page and opens the new record", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
-    let created = false;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
-        requests.push({ url, method, body });
-        const series = {
-          id: "60000000-0000-4000-8000-000000000001",
-          eventId: "70000000-0000-4000-8000-000000000001",
-          ownerGroupId: GROUP_ID,
-          eventName: "Architecture call",
-          eventSlug: "architecture-call",
-          profileKey: "meeting",
-          registrationPolicy: "no_registration",
-          visibility: "group_members",
-          memberEligibility: "owner_group",
-          guestPolicy: "occurrence_invitation",
-          startsAt: "2026-09-01T15:00:00.000Z",
-          recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-          timezone: "Europe/Amsterdam",
-          durationMinutes: 60,
-          location: "https://meet.example.test/architecture",
-          providerType: null,
-          providerConfigured: false,
-          active: true,
-          inviteWindow: {
-            startsAt: null,
-            endsAt: null,
-            timezone: "Europe/Amsterdam",
-          },
-          nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-          createdAt: "2026-08-01T00:00:00.000Z",
-          updatedAt: "2026-08-01T00:00:00.000Z",
-          capabilities: ["view", "register", "attend", "manage_attendance", "manage"],
-          occurrenceCount: 0,
-        } as const;
-        if (method === "POST") {
-          created = true;
-          return json({ series });
-        }
-        return json({
-          series: created ? [series] : [],
-          page: { limit: 25, offset: 0, total: created ? 1 : 0, hasMore: false },
-        });
+        requests.push({ url: requestUrl(input), method, body });
+        if (method === "POST") return json({ series: MEETING_SERIES });
+        return json({ series: [], page: { ...SERIES_PAGE, total: 0 } });
       }),
     );
-    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
+    const list = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
 
-    expect(container.textContent).toContain("No meeting series yet");
-    // The create form is absent until it is asked for, and present once it
-    // is — said by the name the reader would look for, not by an id.
-    expect(labelNames(container)).not.toContain("Meeting name");
-    const newSeries = [...container.querySelectorAll("button")].find((button) => button.textContent === "New series")!;
-    await act(async () => newSeries.click());
-    expect(labelNames(container)).toContain("Meeting name");
-    await typeInto(controlFor(container, "Meeting name"), "Architecture call");
+    expect(list.textContent).toContain("No meeting series yet");
+    // "New series" is a place: it navigates to the create page rather than
+    // unfolding a form over the list.
+    expect(labelNames(list)).not.toContain("Meeting name");
+    await act(async () => buttonNamed(list, "New series").click());
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/new`);
+
+    const createPage = mount(<GroupMeetings groupId={GROUP_ID} canManage seriesSegment="new" />);
+    expect(labelNames(createPage)).toContain("Meeting name");
+    await typeInto(controlFor(createPage, "Meeting name"), "Architecture call");
     await settle();
-    const create = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Create meeting series",
-    )!;
-    await act(async () => create.click());
+    await act(async () => buttonNamed(createPage, "Create meeting series").click());
     await settle();
     await settle();
 
@@ -199,131 +190,80 @@ describe("portal group management resources", () => {
         guestPolicy: "occurrence_invitation",
       },
     });
-    expect(container.textContent).toContain("Architecture call");
-    // The calendar download is a command behind the row's menu, and it
-    // navigates to the canonical group route.
-    const openWindow = vi.spyOn(window, "open").mockReturnValue(null);
-    await runRowAction(container, "Architecture call", "Download calendar");
-    expect(openWindow).toHaveBeenCalledWith(
-      `/api/v1/groups/${GROUP_ID}/meetings/series/60000000-0000-4000-8000-000000000001/calendar.ics`,
-      "_self",
-    );
-    openWindow.mockRestore();
+    // The new series is the next thing to look at, so creation lands on it.
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${SERIES_ID}`);
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     expect(requests.some(({ url }) => url.pathname.includes("/admin/"))).toBe(false);
   });
 
-  it("navigates to and from a meeting series' canonical URL when its detail is opened and closed", async () => {
-    const seriesId = "60000000-0000-4000-8000-000000000001";
-    const series = {
-      id: seriesId,
-      eventId: "70000000-0000-4000-8000-000000000001",
-      ownerGroupId: GROUP_ID,
-      eventName: "Architecture call",
-      eventSlug: "architecture-call",
-      profileKey: "meeting",
-      registrationPolicy: "no_registration",
-      visibility: "group_members",
-      memberEligibility: "owner_group",
-      guestPolicy: "occurrence_invitation",
-      startsAt: "2026-09-01T15:00:00.000Z",
-      recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-      timezone: "Europe/Amsterdam",
-      durationMinutes: 60,
-      location: "https://meet.example.test/architecture",
-      providerType: null,
-      providerConfigured: false,
-      active: true,
-      inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
-      nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-      createdAt: "2026-08-01T00:00:00.000Z",
-      updatedAt: "2026-08-01T00:00:00.000Z",
-      capabilities: ["view", "manage"],
-      occurrenceCount: 0,
-    } as const;
-    const page = { limit: 25, offset: 0, total: 1, hasMore: false };
+  it("sends a reader without the manage capability from the create page back to the list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ series: [], page: { ...SERIES_PAGE, total: 0 } })),
+    );
+
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage={false} seriesSegment="new" />);
+    await settle();
+
+    expect(labelNames(container)).not.toContain("Meeting name");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings`);
+  });
+
+  it("links each meeting series row to its record and keeps the calendar download behind the row's menu", async () => {
+    const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        if (url.pathname.endsWith("/occurrences")) return json({ occurrences: [], page });
-        return json({ series: [series], page });
+        requests.push(requestUrl(input));
+        return json({ series: [MEETING_SERIES], page: SERIES_PAGE });
       }),
     );
 
     const container = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
-    // The row itself opens and closes the detail; its activation names the
-    // series both ways.
-    const details = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
-      (button) => button.textContent === "Show details for Architecture call",
-    );
-    await act(async () => {
-      details?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${seriesId}`);
 
-    const hide = Array.from(container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")).find(
-      (button) => button.textContent === "Hide details for Architecture call",
+    // A series is a URL-addressed record, so the row is a link to it — it can
+    // be opened in a new tab — and nothing unfolds between the rows.
+    const rowLink = container.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
+    expect(rowLink?.textContent).toBe("Open Architecture call");
+    expect(rowLink?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${SERIES_ID}`);
+    expect(container.querySelector("button.pk-table__row-link")).toBeNull();
+
+    // The calendar download is a command behind the row's menu, and it
+    // navigates to the canonical group route.
+    const openWindow = vi.spyOn(window, "open").mockReturnValue(null);
+    await runRowAction(container, "Architecture call", "Download calendar");
+    expect(openWindow).toHaveBeenCalledWith(
+      `/api/v1/groups/${GROUP_ID}/meetings/series/${SERIES_ID}/calendar.ics`,
+      "_self",
     );
-    await act(async () => {
-      hide?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings`);
+    openWindow.mockRestore();
+    expect(requests.some((url) => url.pathname.includes("working-groups"))).toBe(false);
+    expect(requests.some((url) => url.pathname.includes("/admin/"))).toBe(false);
   });
 
-  it("opens a meeting series from its URL-addressed initial series and reports a failed occurrences fetch", async () => {
-    const seriesId = "60000000-0000-4000-8000-000000000001";
-    const series = {
-      id: seriesId,
-      eventId: "70000000-0000-4000-8000-000000000001",
-      ownerGroupId: GROUP_ID,
-      eventName: "Architecture call",
-      eventSlug: "architecture-call",
-      profileKey: "meeting",
-      registrationPolicy: "no_registration",
-      visibility: "group_members",
-      memberEligibility: "owner_group",
-      guestPolicy: "occurrence_invitation",
-      startsAt: "2026-09-01T15:00:00.000Z",
-      recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-      timezone: "Europe/Amsterdam",
-      durationMinutes: 60,
-      location: "https://meet.example.test/architecture",
-      providerType: null,
-      providerConfigured: false,
-      active: true,
-      inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
-      nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-      createdAt: "2026-08-01T00:00:00.000Z",
-      updatedAt: "2026-08-01T00:00:00.000Z",
-      capabilities: ["view", "manage"],
-      occurrenceCount: 0,
-    } as const;
-    const page = { limit: 25, offset: 0, total: 1, hasMore: false };
+  it("opens a meeting series record from its URL segment and reports a failed occurrences fetch", async () => {
+    const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
+        const url = requestUrl(input);
+        requests.push(url);
         if (url.pathname.endsWith("/occurrences")) {
           return new Response(JSON.stringify({ message: "Server error" }), { status: 500 });
         }
-        return json({ series: [series], page });
+        return json({ series: MEETING_SERIES });
       }),
     );
 
-    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage initialSeriesId={seriesId} />);
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage seriesSegment={SERIES_ID} />);
     await settle();
     await settle();
 
+    // The record fetches its own series by id rather than borrowing a list
+    // row, so a copied URL lands on the same page the row would have opened.
+    expect(requests.map((url) => url.pathname)).toContain(`/api/v1/groups/${GROUP_ID}/meetings/series/${SERIES_ID}`);
+    expect(container.querySelector("h3.pk-record-title")?.textContent).toBe("Architecture call");
     expect(container.textContent).toContain("on our side");
   });
 
