@@ -1,6 +1,7 @@
 import { clearFieldErrors, findControlFieldError, findFieldErrorTarget, setFieldMessage } from "./validation-map";
 import { applyFieldState, type FieldState } from "../../ui/field-state";
 import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
+import { httpUrlSchema } from "../../../shared/schemas/urls";
 import { isPersonalEmailAddress } from "../../../shared/constants/email-domains";
 
 /**
@@ -51,7 +52,36 @@ function applyEmailValidity(field: HTMLInputElement): void {
   field.dataset.emailFormatError = "true";
 }
 
-type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+/**
+ * A `type="url"` control is held to the shared link contract — HTTP(S) only,
+ * no userinfo — not merely to the browser's looser idea of a URL, so the
+ * field says the same thing the server will.
+ */
+function applyUrlValidity(field: HTMLInputElement): void {
+  if (field.type !== "url") return;
+
+  const value = field.value.trim();
+  const result = value.length === 0 ? null : httpUrlSchema.safeParse(value);
+  if (result === null || result.success) {
+    if (field.dataset.urlFormatError === "true") {
+      field.setCustomValidity("");
+      delete field.dataset.urlFormatError;
+    }
+    return;
+  }
+
+  field.setCustomValidity(result.error.issues[0]?.message ?? "Invalid URL");
+  field.dataset.urlFormatError = "true";
+}
+
+export type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+/** The shared-contract checks a control carries beyond its own constraints. */
+export function applyControlValidity(control: FormControl): void {
+  if (!(control instanceof HTMLInputElement)) return;
+  applyEmailValidity(control);
+  applyUrlValidity(control);
+}
 
 /**
  * The state a control is in once it has been checked.
@@ -62,7 +92,7 @@ type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
  * the success mark because their `value` is the option's value whether or not
  * it is selected, so it says nothing about whether the group was answered.
  */
-function fieldStateFor(control: FormControl): FieldState | null {
+export function fieldStateFor(control: FormControl): FieldState | null {
   if (!control.checkValidity()) return "invalid";
   if (control instanceof HTMLInputElement) {
     if (control.dataset.personalEmail === "true") return "advisory";
@@ -98,9 +128,7 @@ function validateNativeFields(form: HTMLFormElement): boolean {
       continue;
     }
 
-    if (field instanceof HTMLInputElement) {
-      applyEmailValidity(field);
-    }
+    applyControlValidity(field);
 
     if (!field.checkValidity()) {
       allValid = false;
@@ -127,11 +155,9 @@ export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElem
       return;
     }
 
-    if (target instanceof HTMLInputElement) {
-      applyEmailValidity(target);
-      if (target.type === "email") {
-        applyEmailWarning(target, form);
-      }
+    applyControlValidity(target);
+    if (target instanceof HTMLInputElement && target.type === "email") {
+      applyEmailWarning(target, form);
     }
 
     if (target.checkValidity()) {

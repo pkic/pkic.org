@@ -79,12 +79,6 @@
     pointer-events: none;
   }
 
-  .pk-logo-tile__hint {
-    font-size: var(--pk-text-xs);
-    color: var(--pk-ink-muted);
-    text-align: center;
-  }
-
   .pk-logo-tile__actions {
     opacity: 0;
     transition: opacity var(--pk-dur-fast) var(--pk-ease);

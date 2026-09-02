@@ -70,6 +70,13 @@ function ContactRole({ identity }: { identity?: ActiveActingIdentity }) {
   );
 }
 
+function statusTone(identity: { state: string }): "ok" | "warn" | "danger" | "neutral" {
+  if (identity.state === "active") return "ok";
+  if (identity.state === "pending") return "warn";
+  if (identity.state === "blocked") return "danger";
+  return "neutral";
+}
+
 function statusLabel(identity: ActingIdentity): string {
   if (identity.state === "blocked") return "Blocked";
   if (identity.state === "ended") return "Ended";
@@ -121,6 +128,9 @@ export function ActingIdentityDirectory({
   onChanged,
   actionsRef,
   createAction,
+  caption = "Organization identities",
+  toolbar,
+  inset,
   empty,
 }: {
   organizationId: string;
@@ -131,6 +141,12 @@ export function ActingIdentityDirectory({
   actionsRef?: MutableRef<ApiTableActions | null>;
   /** The directory's create affordance, rendered in its own toolbar row alongside search and refresh. */
   createAction?: { label: string; onSelect: () => void };
+  /** The list's name; the organization page calls it Representatives. */
+  caption?: string;
+  /** Extra commands for the list's toolbar, beside search and refresh. */
+  toolbar?: ComponentChildren;
+  /** A form the toolbar opened, drawn inside the list panel under its head. */
+  inset?: ComponentChildren;
   /**
    * What an empty directory says.
    *
@@ -151,14 +167,18 @@ export function ActingIdentityDirectory({
 
   if (!canManage) {
     return (
-      <DataTable
-        caption="Organization identities"
-        columns={activeColumns()}
-        data={activeIdentities}
-        empty={empty ?? "No representatives yet"}
-        rowKey={(identity) => identity.userId}
-        rowAction={(identity) => identityRowAction(identity.userId, identity.name ?? identity.email)}
-      />
+      // The same framed, named list a manager gets, without the commands: a
+      // viewer's roster is still the page's Representatives region.
+      <section class="pk pk-panel pk-table-list" aria-label={caption}>
+        <DataTable
+          caption={caption}
+          columns={activeColumns()}
+          data={activeIdentities}
+          empty={empty ?? "No representatives yet"}
+          rowKey={(identity) => identity.userId}
+          rowAction={(identity) => identityRowAction(identity.userId, identity.name ?? identity.email)}
+        />
+      </section>
     );
   }
 
@@ -238,7 +258,9 @@ export function ActingIdentityDirectory({
 
   return (
     <ApiDataTable
-      caption="Organization identities"
+      caption={caption}
+      toolbar={toolbar ? () => toolbar : undefined}
+      inset={inset}
       endpoint={`/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`}
       responseSchema={identitiesListResponseSchema}
       resolve={(response) => response.identities}
@@ -270,15 +292,20 @@ export function ActingIdentityDirectory({
         },
         {
           header: "Status",
-          cell: (identity) => <span>{statusLabel(identity)}</span>,
+          // A state is a badge, and a badge does not wrap: "Invitation
+          // pending" broke across two lines as plain text in a narrow column.
+          cell: (identity) => <Badge tone={statusTone(identity)}>{statusLabel(identity)}</Badge>,
+          width: "fit",
           sort: { asc: "updated_at", desc: "-updated_at", defaultDirection: "desc" },
         },
         {
           header: "Contact role",
           cell: (identity) => <ContactRole identity={activeByIdentityId.get(identity.id)} />,
+          width: "fit",
         },
         {
           header: "On profile",
+          width: "fit",
           cell: (identity) =>
             statusLabel(identity) === "Active" ? (
               <span>{identity.showOnOrganizationProfile ? "Shown on profile" : "Hidden"}</span>

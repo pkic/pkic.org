@@ -26,7 +26,11 @@ import {
   typeInto,
 } from "./helpers/labelled-control";
 import { OrganizationCreateForm } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationCreateForm";
-import { OrganizationProfile } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile";
+import {
+  OrganizationAbout,
+  OrganizationLinks,
+} from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile";
+import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
 
@@ -270,89 +274,183 @@ describe("portal organization create form", () => {
 });
 
 describe("portal organization profile", () => {
-  it("presents the read-only record as a term/value list inside a named region", () => {
-    const container = mount(
-      <OrganizationProfile organization={detail().organization} canWrite={false} onSaved={() => Promise.resolve()} />,
-    );
+  it("presents what the organization says about itself as prose inside a named region", () => {
+    const container = mount(<OrganizationAbout organization={detail().organization} />);
 
-    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Profile");
-    const list = container.querySelector("dl");
-    expect(list?.className).toContain("pk-datalist");
-    const terms = [...container.querySelectorAll("dt")].map((term) => term.textContent);
-    // The membership category is not among them: it qualifies the record's
-    // subject, so the page states it once, as a badge beside the organization's
-    // name. `portal-organization-detail-shell` holds that end of the contract.
-    // What the organization says about itself, then where to find it, then
-    // its standing — the reader's order, not the schema's.
-    expect(terms).toEqual(["Slogan", "Description", "Website", "Blog", "Press", "Careers", "Member since", "Created"]);
-    expect(container.querySelectorAll("dd")).toHaveLength(terms.length);
-    // An absent value is a dash rather than an empty cell, and the list — not
-    // this surface — decides what one looks like. The fixture has no slogan.
-    const slogan = container.querySelectorAll("dd")[0];
-    expect(slogan?.textContent).toBe("—");
-    // A stored URL is the link it is, so the record is navigable rather than
-    // eight lines of text to copy out by hand.
-    expect(container.querySelector<HTMLAnchorElement>("dd a")?.href).toBe("https://example.test/");
-    // Contacts are a separate, secondary region the page places itself; the
-    // record panel no longer renders them from the inside.
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("About");
+    // Prose is prose: no term/value rows announcing "Description" as a field,
+    // no table, no inputs while reading.
+    expect(container.querySelector("dl")).toBeNull();
+    expect(container.querySelector("input, textarea")).toBeNull();
+    expect(container.textContent).not.toContain("Member since");
     expect(container.textContent).not.toContain("Contacts");
-    expect(container.querySelector("table")).toBeNull();
   });
 
-  it("patches the shared update contract from label-addressed controls", async () => {
+  it("names each stored URL for what it is, under the mark", () => {
+    const container = mount(<OrganizationLinks organization={detail().organization} />);
+    // A stored URL is the link it is, named for what it is rather than shown
+    // as eight lines of text to copy out by hand; absent ones are not listed.
+    const links = [...container.querySelectorAll<HTMLAnchorElement>('[aria-label="Links"] a')];
+    expect(links.map((link) => link.textContent)).toEqual(["Website"]);
+    expect(links[0]?.href).toBe("https://example.test/");
+  });
+
+  function stubAccount(onPatch: (body: unknown) => Response) {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(typeof input === "string" ? input : input.toString(), location.origin);
+        const method = init?.method ?? "GET";
         const rawBody = init?.body;
-        requests.push({
-          method: init?.method ?? "GET",
-          path: url.pathname,
-          body: typeof rawBody === "string" ? JSON.parse(rawBody) : null,
-        });
+        const body = typeof rawBody === "string" ? JSON.parse(rawBody) : null;
+        requests.push({ method, path: url.pathname, body });
+        if (method === "PATCH") return onPatch(body);
+        if (url.pathname.endsWith("/identities")) {
+          return json({ identities: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
+        if (url.pathname.endsWith("/groups")) {
+          return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
         return json(detail());
       }),
     );
-    const onSaved = vi.fn(() => Promise.resolve());
-    const container = mount(<OrganizationProfile organization={detail().organization} canWrite onSaved={onSaved} />);
+    return requests;
+  }
 
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  async function openEditing(): Promise<HTMLElement> {
+    const container = mount(
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite
+        canManageIdentities
+        canReadSponsorships={false}
+      />,
+    );
+    await settle();
     await act(async () => buttonNamed(container, "Edit").click());
+    return container;
+  }
+
+  async function leave(control: HTMLElement): Promise<void> {
+    await act(async () => {
+      control.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+  }
+
+  function fieldOf(control: HTMLElement): HTMLElement {
+    const field = control.closest<HTMLElement>(".pk-field");
+    if (!field) throw new Error("control is not inside a Field");
+    return field;
+  }
+
+  it("edits the whole account in place through labelled fields and patches the shared update contract once", async () => {
+    const requests = stubAccount(() => json(detail()));
+    const container = await openEditing();
+
+    // The cards keep their places; their content becomes the design system's
+    // fields, each named through a label, each typed for its value.
+    expect(fieldOf(controlFor(container, "Slogan")).closest('section[aria-label="About"]')).not.toBeNull();
+    expect(controlFor(container, "Blog feed").type).toBe("url");
+    expect(controlFor(container, "Blog feed").getAttribute("inputmode")).toBe("url");
+    expect(controlFor(container, "Member since").type).toBe("date");
+    expect(controlFor<HTMLSelectElement>(container, "Category").tagName).toBe("SELECT");
+    expect(controlFor<HTMLSelectElement>(container, "Primary contact").tagName).toBe("SELECT");
+    expect(controlFor<HTMLTextAreaElement>(container, "Description").tagName).toBe("TEXTAREA");
 
     await typeInto(controlFor(container, "Slogan"), "Trust, verified");
-    await submitForm(container);
+    await typeInto(controlFor(container, "Blog"), "https://example.test/blog");
+    // The title follows the name as it is typed.
+    await typeInto(controlFor(container, "Name"), "Example Org");
+    expect(container.querySelector("header h2")?.textContent).toBe("Example Org");
 
-    const patched = requests.find((request) => request.method === "PATCH");
-    expect(patched?.path).toBe(`/api/v1/organizations/${organizationId}`);
-    const parsed = organizationManagementUpdateSchema.parse(patched?.body);
+    await act(async () => buttonNamed(container, "Save").click());
+    await settle();
+
+    const patched = requests.filter((request) => request.method === "PATCH");
+    expect(patched).toHaveLength(1);
+    expect(patched[0]?.path).toBe(`/api/v1/organizations/${organizationId}`);
+    const parsed = organizationManagementUpdateSchema.parse(patched[0]?.body);
     expect(parsed.slogan).toBe("Trust, verified");
-    expect(parsed.name).toBe("Example Organization");
+    expect(parsed.blogUrl).toBe("https://example.test/blog");
+    expect(parsed.name).toBe("Example Org");
     expect(parsed.membershipCategory).toBe("F");
+    expect(parsed.website).toBe("https://example.test");
     expect(parsed.revision).toBe("2026-01-01T00:00:00.000Z");
-    expect(parsed.blogUrl).toBeNull();
-    expect(onSaved).toHaveBeenCalledTimes(1);
+    // Saved: the page reads again, with no fields left standing.
+    expect([...container.querySelectorAll("label")].some((label) => label.textContent === "Slogan")).toBe(false);
   });
 
-  it("keeps the editor open and announces a rejected save", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: { code: "STALE_REVISION", message: "Someone else saved first." } }), {
-            status: 409,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
-    );
-    const onSaved = vi.fn(() => Promise.resolve());
-    const container = mount(<OrganizationProfile organization={detail().organization} canWrite onSaved={onSaved} />);
+  it("checks a field live, the way the join form does, and refuses the save at the field", async () => {
+    const requests = stubAccount(() => json(detail()));
+    const container = await openEditing();
 
-    await act(async () => buttonNamed(container, "Edit").click());
+    const feed = controlFor(container, "Blog feed");
+    await typeInto(feed, "rss please");
+    await leave(feed);
+    // Refused as typed: the field shows the invalid state with its reason.
+    expect(fieldOf(feed).classList.contains("pk-field--invalid")).toBe(true);
+    expect(feed.getAttribute("aria-invalid")).toBe("true");
+    expect(fieldOf(feed).querySelector('[role="alert"]')?.textContent).toBeTruthy();
+
+    await act(async () => buttonNamed(container, "Save").click());
+    await settle();
+    // Nothing was sent; the refused field holds focus.
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+    expect(document.activeElement).toBe(feed);
+
+    // Corrected: the same field shows it is good now.
+    await typeInto(feed, "https://example.test/feed.xml");
+    await leave(feed);
+    expect(fieldOf(feed).classList.contains("pk-field--ok")).toBe(true);
+    expect(feed.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("marks the field a server refusal names, and keeps the page editing", async () => {
+    stubAccount(
+      () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "VALIDATION",
+              message: "Invalid request",
+              details: { fieldErrors: { website: ["Must be an HTTP(S) URL"] } },
+            },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+    );
+    const container = await openEditing();
+    await act(async () => buttonNamed(container, "Save").click());
+    await settle();
+
+    const website = controlFor(container, "Website");
+    expect(fieldOf(website).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(website).querySelector('[role="alert"]')?.textContent).toContain("Must be an HTTP(S) URL");
+    expect(document.activeElement).toBe(website);
+  });
+
+  it("keeps the page editing and announces a rejected save", async () => {
+    stubAccount(
+      () =>
+        new Response(JSON.stringify({ error: { code: "STALE_REVISION", message: "Someone else saved first." } }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const container = await openEditing();
     await typeInto(controlFor(container, "Slogan"), "Trust, verified");
-    await submitForm(container);
+    await act(async () => buttonNamed(container, "Save").click());
+    await settle();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Someone else saved first.");
-    expect(onSaved).not.toHaveBeenCalled();
     expect(controlFor(container, "Slogan").value).toBe("Trust, verified");
   });
 });

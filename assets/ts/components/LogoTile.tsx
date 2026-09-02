@@ -73,8 +73,10 @@ export function LogoTile(props: LogoTileProps) {
           if (file) void upload(file);
         }}
       />
+      {/* The file rule is announced with the control, not drawn under the
+          mark as a loose sentence: the veil already says what pressing does. */}
       {props.hint && (
-        <span id="pk-logo-tile-hint" class="pk-logo-tile__hint">
+        <span id="pk-logo-tile-hint" class="pk-sr-only">
           {props.hint}
         </span>
       )}

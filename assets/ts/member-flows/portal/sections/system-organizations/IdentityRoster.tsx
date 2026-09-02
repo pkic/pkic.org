@@ -9,7 +9,6 @@ import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { postValidated } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { TextInput } from "../../../../ui/TextControl";
 import { ActingIdentityDirectory } from "../OrganizationIdentityDirectory";
 import { toast } from "../../ui";
@@ -208,67 +207,53 @@ export function IdentityRoster({
     await directoryRef.current?.reload();
   };
 
+  // One compact list, not a panel around a panel: the two ways of adding a
+  // representative are commands in the list's own toolbar beside search and
+  // refresh, and the form either opens inside the panel under that head.
+  const toolbar = canManageIdentities ? (
+    <>
+      <Button
+        aria-expanded={addMode === "link"}
+        onClick={() => setAddMode((current) => (current === "link" ? "closed" : "link"))}
+      >
+        {addMode === "link" ? "Cancel" : "Link existing user"}
+      </Button>
+      <Button
+        variant="primary"
+        aria-expanded={addMode === "email"}
+        onClick={() => setAddMode((current) => (current === "email" ? "closed" : "email"))}
+      >
+        {addMode === "email" ? "Cancel" : "Add new person"}
+      </Button>
+    </>
+  ) : undefined;
+  const inset =
+    addMode === "link" && canManageIdentities ? (
+      <LinkExistingUserForm organizationId={organization.id} onAdded={afterAdded} onCancel={closeAdd} />
+    ) : addMode === "email" && canManageIdentities ? (
+      <AddIdentityForm organizationId={organization.id} onAdded={afterAdded} onCancel={closeAdd} />
+    ) : undefined;
+
   return (
-    // The name is on the section itself rather than on an id-linked span: a
-    // `<section>` is only a named region when it carries one, and `PanelHeader`
-    // owns the heading element.
-    <Panel class="pk" aria-label="Representatives">
-      <PanelHeader title="Representatives">
-        {canManageIdentities && (
-          <>
-            <Button
-              size="sm"
-              aria-expanded={addMode === "link"}
-              onClick={() => setAddMode((current) => (current === "link" ? "closed" : "link"))}
-            >
-              {addMode === "link" ? "Cancel" : "Link existing user"}
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              aria-expanded={addMode === "email"}
-              onClick={() => setAddMode((current) => (current === "email" ? "closed" : "email"))}
-            >
-              {addMode === "email" ? "Cancel" : "Add new person"}
-            </Button>
-          </>
-        )}
-      </PanelHeader>
-      <PanelBody class="pk-stack">
-        {addMode === "link" && canManageIdentities && (
-          <LinkExistingUserForm organizationId={organization.id} onAdded={afterAdded} onCancel={closeAdd} />
-        )}
-        {addMode === "email" && canManageIdentities && (
-          <AddIdentityForm organizationId={organization.id} onAdded={afterAdded} onCancel={closeAdd} />
-        )}
-        <ActingIdentityDirectory
-          organizationId={organization.id}
-          activeIdentities={organization.identities}
-          canManage={canManageIdentities}
-          onChanged={onChanged}
-          actionsRef={directoryRef}
-          /*
-           * "No identities" in a table cell says a query returned nothing. It
-           * does not say what an identity is, nor what to do about it — and on
-           * a new organization that empty table is the whole page.
-           *
-           * The state names the two controls that fill it rather than
-           * repeating them: both already sit in this panel's header, directly
-           * above, and a second button under the same accessible name is
-           * ambiguous to anyone navigating by name rather than by sight.
-           */
-          empty={
-            <EmptyState
-              title="No representatives yet"
-              body={
-                canManageIdentities
-                  ? 'A representative is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
-                  : "A representative is a person who acts for this organization. Nobody does yet."
-              }
-            />
+    <ActingIdentityDirectory
+      caption="Representatives"
+      organizationId={organization.id}
+      activeIdentities={organization.identities}
+      canManage={canManageIdentities}
+      onChanged={onChanged}
+      actionsRef={directoryRef}
+      toolbar={toolbar}
+      inset={inset}
+      empty={
+        <EmptyState
+          title="No representatives yet"
+          body={
+            canManageIdentities
+              ? 'A representative is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
+              : "A representative is a person who acts for this organization. Nobody does yet."
           }
         />
-      </PanelBody>
-    </Panel>
+      }
+    />
   );
 }

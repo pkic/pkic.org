@@ -62,6 +62,12 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * the `BulkBar` itself because the commands, the cap, and the selection
    * state are the page's; the slot only fixes where the strip appears.
    */
+  /**
+   * A form the list's own toolbar opened — link a person, add a new one —
+   * drawn inside the list panel between its head and its rows, so the
+   * command and its consequence share one surface.
+   */
+  inset?: ComponentChildren;
   bulkBar?: ComponentChildren;
   actionsRef?: MutableRef<ApiTableActions | null>;
   onData?: (data: Response) => void;
@@ -94,6 +100,7 @@ export function ApiDataTable<T, Response = unknown>({
   urlState,
   initialFilters,
   onFiltersChange,
+  inset,
   bulkBar,
   actionsRef,
   onData,
@@ -221,6 +228,8 @@ export function ApiDataTable<T, Response = unknown>({
           </Button>
         </Toolbar>
       )}
+
+      {inset && <div class="pk-table-list__inset">{inset}</div>}
 
       {bulkBar}
 

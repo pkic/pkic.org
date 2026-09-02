@@ -8,6 +8,9 @@ import { OrganizationMemberProfileGet } from "./profile";
 import { OrganizationContentReviewPost, OrganizationContentReviewsGet } from "./content-reviews";
 import { OrganizationContentReviewDelete } from "./content-reviews/[reviewId]";
 import { OrganizationActiveSponsorshipGet } from "./sponsorships/active";
+import { OrganizationGroupsGet } from "./groups";
+import { OrganizationEventsGet } from "./events";
+import { OrganizationProposalsGet } from "./proposals";
 import {
   OrganizationSecondaryContactNominationDelete,
   OrganizationSecondaryContactNominationPut,
@@ -19,6 +22,11 @@ export const openapi = fromHono(app);
 openapi.get("/", OrganizationGet);
 openapi.patch("/", OrganizationUpdate);
 openapi.get("/profile", OrganizationMemberProfileGet);
+// The account record's activity: what the organization's representatives do
+// elsewhere in the system, each as its own bounded, canonical collection.
+openapi.get("/groups", OrganizationGroupsGet);
+openapi.get("/events", OrganizationEventsGet);
+openapi.get("/proposals", OrganizationProposalsGet);
 openapi.get("/content/reviews", OrganizationContentReviewsGet);
 openapi.post("/content/reviews", OrganizationContentReviewPost);
 openapi.delete("/content/reviews/:reviewId", OrganizationContentReviewDelete);

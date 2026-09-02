@@ -170,9 +170,13 @@ describe("organization detail shell", () => {
     expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("Example Organization");
 
     // An account page: the people who represent the organization are on the
-    // page itself, under the profile, not behind a tab.
-    expect(container.querySelector('[role="tablist"]')).toBeNull();
-    expect(container.querySelector('section[aria-label="Representatives"]')).not.toBeNull();
+    // page itself, under the profile; what the account has done across the
+    // consortium follows below them, one tab per relation.
+    const representatives = container.querySelector('section[aria-label="Representatives"]');
+    const activity = container.querySelector('section[aria-label="Activity"]');
+    expect(representatives).not.toBeNull();
+    expect(activity?.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(representatives!.compareDocumentPosition(activity!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("loads the account in bounded queries: the record, its representatives, its sponsorships", async () => {
@@ -187,6 +191,9 @@ describe("organization detail shell", () => {
         requests.push(url.pathname + url.search);
         if (url.pathname === "/api/v1/sponsors") {
           return json({ sponsorships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
+        if (url.pathname.endsWith("/groups")) {
+          return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
         }
         return json(url.pathname.endsWith("/identities") ? identityPage() : detail());
       }),
@@ -222,6 +229,9 @@ describe("organization detail shell", () => {
           location.origin,
         );
         requests.push(url.pathname);
+        if (url.pathname.endsWith("/groups")) {
+          return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+        }
         return json(url.pathname.endsWith("/identities") ? identityPage() : detail());
       }),
     );

@@ -48,16 +48,37 @@ little differently — the donations list had grown its own chips — which is
 exactly the non-uniformity a shared table exists to prevent. Hidden columns
 come back from the ⊞ menu at the end of the head.
 
-**A record with facets gets tabs; an account gets its related lists on the
-page.** A tab loads its own bounded query when activated — a tab is precisely
-the license _not_ to fetch everything on first paint — and that is right for a
-workspace whose facets are large (a group's events, votes, forms). It is wrong
-for an account read the way a CRM reads one: an organization's page shows the
-organization, then who represents it, then its sponsorships, each a bounded
-query of its own, with the mark and the contacts beside them. Putting "who
-represents this organization" behind a tab made the first question a second
-step. The mark is the affordance for changing it — hover or focus the tile
-and it says so — not a panel with a header and a button.
+**An account is read like a CRM record.** Organizations and the people who
+represent them are the consortium's CRM. An organization page opens with the
+trail, the name and its qualifying badges; the main column says what the
+organization says about itself — slogan as the lead, description as prose,
+links as a row (prose is never a term/value list) — then who represents it,
+then its Activity: Groups, Events, Proposals and Sponsorships as tabs, each a
+bounded query fetched when opened, aggregating what the organization's people
+do across the system. The side column carries the mark (a tile that is itself
+the control for changing it), the Membership facts, the Sponsorship standing
+in one sentence — never an empty headed table — and the Contacts. Term/value
+lists on one surface share one term measure (`pk-datalist-aligned`) so their
+values sit on one edge; a state is a badge and never wraps. A record with
+large facets (a group workspace) keeps its facets as tabs for the same reason
+the account's activity does: a tab is the license not to fetch what nobody is
+looking at.
+
+**A record is edited where it is read.** One Edit in the page header turns
+the record's values into inputs in place — the name in the title, the slogan
+on its own line, the links under the mark, the membership facts in their
+rows — and one Save sends one PATCH with the record's revision; Cancel puts
+the values back. Nothing else moves: no separate form opens, no card is
+replaced. The fields are the design system's `Field` with its typed controls
+(`TextInput`, `Textarea`, `Select`) — never an invented input style — and
+they are checked live the way the join form's are (`useLiveFields`, the
+Preact half of `installLiveValidation`): a URL is `type="url"` held to the
+shared link contract, a date is a date input, a category is a select, and a
+field shows the ok or invalid state with its mark and reason as it is typed
+in or left. Save validates the draft through the shared Zod update contract
+and reads a refusal — the contract's or the server's — through the shared
+validation map (`normalizeValidation`), so a refused field is marked, says
+why, and takes focus, and never learns a rule the server does not apply.
 
 **A record page takes the width; its forms stay closed.** The record and its
 facts span the measure with the supporting column — logo, contacts, the

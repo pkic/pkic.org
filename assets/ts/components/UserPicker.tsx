@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { userCatalogListResponseSchema, type UserCatalogItem } from "../../shared/schemas/user-catalog";
+import { z } from "zod";
+import { paginatedResponseSchema } from "../../shared/schemas/pagination";
+import { userCatalogItemSchema } from "../../shared/schemas/user-catalog";
 import { buildServerCollectionUrl, createLatestRequestGate } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
 import { Alert } from "../ui/Alert";
@@ -9,6 +11,20 @@ import { TextInput } from "../ui/TextControl";
 // renders a `Menu` here, so the stylesheet has to be imported by name:
 // component CSS ships in each component's own lazy chunk.
 import "../ui/Menu.css";
+
+/**
+ * What the picker reads off a row, whichever list answers it. It is offered
+ * the staff user list by default and the permissions catalog by some callers;
+ * the two agree on a person's id, email and name, and only the catalog
+ * carries the organization. Parsing with the catalog's full contract refused
+ * every users-list reply — "Could not search users." on the organization
+ * page's Link existing user form.
+ */
+const userPickerItemSchema = userCatalogItemSchema
+  .pick({ id: true, email: true, first_name: true, last_name: true })
+  .extend({ organization_name: z.string().nullable().optional() });
+type UserCatalogItem = z.infer<typeof userPickerItemSchema>;
+const userPickerListResponseSchema = paginatedResponseSchema("users", userPickerItemSchema);
 
 export interface PickedUser {
   id: string;
@@ -97,7 +113,7 @@ export function UserPicker({
       try {
         const data = await getJson(
           buildServerCollectionUrl(endpoint, { limit: "8", offset: "0", sort: "email", q: term }),
-          userCatalogListResponseSchema,
+          userPickerListResponseSchema,
           { signal: request.signal },
         );
         if (!request.isCurrent()) return;
