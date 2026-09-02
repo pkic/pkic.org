@@ -387,7 +387,7 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(detail.locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
 
     await detail.getByLabel("Notes").fill("E2E verification note");
-    await detail.getByRole("button", { name: "Save fields" }).click();
+    await detail.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
 
     await detail.getByLabel("Advance to stage").selectOption("contacted");
