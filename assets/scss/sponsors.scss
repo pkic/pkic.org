@@ -21,6 +21,20 @@
 // A phone takes the same five rungs shifted one step down the scale
 // (`--pk-2` through `--pk-6`), so the proportions survive the narrow screen
 // instead of being replaced by a second set of numbers.
+// Logo height per catalog display weight (1 = Bronze … 6 = Diamond; 7 and 8
+// are headroom for a tier above Diamond). The same map serves every width;
+// the phone only narrows the box the logo sits in.
+$sponsors-tier-heights: (
+  1: 1.25rem,
+  2: 1.5rem,
+  3: 1.875rem,
+  4: 2.375rem,
+  5: 3.125rem,
+  6: 4.5rem,
+  7: 5rem,
+  8: 5.5rem,
+);
+
 .sponsors {
   --sponsors-edge-inset: var(--pk-2);
   --sponsors-caption-gap: var(--pk-3);
@@ -67,10 +81,17 @@
   // The band carries its own weight class, so the sizes below are declared
   // once for the tier rather than repeated onto every logo in it.
   .sponsors-tier {
-    // Rank is expressed as how tall a tier's logos are allowed to be. Each
-    // step up the catalog's display weight adds the same amount, so the whole
-    // catalog sits on one ramp rather than on a table of hand-set sizes.
-    --sponsors-logo-height: calc(1.25rem + 0.375rem * (var(--sponsor-weight, 1) - 1));
+    // Rank is expressed as how tall a tier's logos are allowed to be. The
+    // ramp steepens toward the top: the lower tiers step up gently so a
+    // seven-logo Platinum row still shares one line, while Titanium and
+    // Diamond pull clearly away — a flat, even ramp read as every sponsor
+    // being the same size.
+    --sponsors-logo-height: 1.25rem;
+    @each $weight, $height in $sponsors-tier-heights {
+      &.sponsor-weight-#{$weight} {
+        --sponsors-logo-height: #{$height};
+      }
+    }
     // One box for every logo in the band, because logos disagree wildly about
     // their aspect ratio — this wall holds wordmarks past 10:1 beside glyphs
     // that are square. Contained in a shared rectangle, a wide wordmark and a

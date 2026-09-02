@@ -903,6 +903,16 @@ $pkic-page-hero-themes: (
 // WG alternating section background (subtle off-white tint)
 // ============================================================
 
+// The working group's own accent reaches the design-system buttons on its
+// join surfaces the way the hero and event pages hand it over: the strong
+// accent token is the page accent itself. Overriding `--pk-accent` alone
+// would not do it — the derived tokens resolve at the root, not here.
+.wg-alt-section,
+.wg-join {
+  --pk-accent-strong: var(--page-accent, #{$green});
+  --pk-accent-on: var(--pk-on-solid);
+}
+
 .wg-alt-section {
   background-color: #f4f6f8;
   background-image: radial-gradient(

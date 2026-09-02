@@ -338,31 +338,9 @@
   transition: transform 0.2s ease;
 }
 
-/* Size by sponsor tier (level 1–6) — uniform margin, height does the work */
-.sponsor-lvl-1 {
-  height: 22px;
-  max-width: 110px;
-}
-.sponsor-lvl-2 {
-  height: 26px;
-  max-width: 130px;
-}
-.sponsor-lvl-3 {
-  height: 32px;
-  max-width: 155px;
-}
-.sponsor-lvl-4 {
-  height: 38px;
-  max-width: 180px;
-}
-.sponsor-lvl-5 {
-  height: 44px;
-  max-width: 210px;
-}
-.sponsor-lvl-6 {
-  height: 52px;
-  max-width: 240px;
-}
+/* Every logo on the wall is the same size. A sponsor is told apart by
+   keeping its color while member logos sit in grayscale; rank is the
+   sponsors page's job, where the tier wall sizes by weight. */
 
 .members a:hover .member-logo {
   filter: none;

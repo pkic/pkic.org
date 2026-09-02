@@ -15,7 +15,7 @@
 {{- $p := .Paginator -}}
 {{- if gt $p.TotalPages 1 -}}
 {{- $window := 2 -}}
-<nav class="pk-pager" aria-label="{{ or (.Param "paginationLabel") "Page navigation" }}">
+<nav class="pk-pager pk-pager--center" aria-label="{{ or (.Param "paginationLabel") "Page navigation" }}">
   <ol class="pk-pager__list">
     <li class="pk-pager__item">
       {{- if $p.HasPrev }}
