@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { portalMagicLinkToken } from "../../assets/ts/member-flows/portal/App";
+import { portalMagicLinkToken } from "../../assets/ts/member-flows/portal/hash-route";
 import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,

@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 
-function clientIpForIdentity(email: string): string {
+/** A stable per-identity client address, so parallel sign-ins do not share one rate-limit bucket. */
+export function clientIpForIdentity(email: string): string {
   const suffix = createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 8);
   return `2001:db8::${suffix.slice(0, 4)}:${suffix.slice(4)}`;
 }

@@ -3,6 +3,16 @@ import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import type { DatabaseLike } from "../types";
 import { prepareAuditLog } from "./audit";
 
+/**
+ * The verify route a sign-in link opens. A return path rides along as `next`
+ * so the portal can land the reader where the sign-in started — a working
+ * group they came to join — even when the email opens in a fresh tab.
+ */
+export function portalVerifyLinkBase(appBaseUrl: string, returnPath?: string): string {
+  const base = `${appBaseUrl}/portal/#/verify`;
+  return returnPath ? `${base}?next=${encodeURIComponent(returnPath)}` : base;
+}
+
 function magicLinkUrl(baseUrl: string, token: string): string {
   const url = new URL(baseUrl);
   const separator = url.hash.includes("?") ? "&" : "?";

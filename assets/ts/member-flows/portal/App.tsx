@@ -25,6 +25,7 @@ import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 import { SponsorAccess } from "./sections/sponsors/Access";
+import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { portalDefaultPath } from "./shell/portal-navigation";
 import type { PortalSession } from "./types";
 import { McpAuthorization } from "./shell/McpAuthorization";
@@ -33,16 +34,6 @@ async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
   savePortalSession(session);
   return session;
-}
-
-function portalHashPath(hash: string): string {
-  return (hash.replace(/^#/, "").split("?", 1)[0] || "/").replace(/\/$/, "") || "/";
-}
-
-export function portalMagicLinkToken(hash: string): string | null {
-  if (portalHashPath(hash) !== "/verify") return null;
-  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
-  return new URLSearchParams(query).get("token");
 }
 
 export function App() {
@@ -78,9 +69,12 @@ export function App() {
         try {
           const session = await verifyMagicLink(userToken);
           // Session establishment may have restored a recorded return path;
-          // only replace the hash when it still carries the verify token.
+          // only replace the hash when it still carries the verify token. The
+          // link itself may name where to land — the route the sign-in began
+          // on — and that wins over the session's default page.
           if (portalHashPath(window.location.hash) === "/verify") {
-            history.replaceState({}, "", `/portal/#${portalDefaultPath(session)}`);
+            const next = portalMagicLinkReturnPath(window.location.hash);
+            history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(session)}`);
           }
         } catch (err) {
           if (!cancelled) {

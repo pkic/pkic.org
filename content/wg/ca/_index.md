@@ -17,7 +17,7 @@ heroDescription: Discussions and information sharing for publicly trusted Certif
 
 heroButton:
   label: Join the CA Working Group
-  link: /join/
+  link: /portal/#/groups/ca
 
 wgID: CA
 color: green

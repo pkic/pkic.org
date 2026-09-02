@@ -20,7 +20,7 @@ heroDescription: Preparing the PKI ecosystem for the quantum computing era.
 
 heroButton:
   label: Join the PQC Working Group
-  link: /join/
+  link: /portal/#/groups/pqc
 
 wgID: PQC
 color: blue

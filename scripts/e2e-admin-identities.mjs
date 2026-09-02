@@ -42,6 +42,7 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-proposal-states-rejected",
   "portal-colleague-self-service",
   "portal-group-self-service",
+  "portal-sign-in-return-path",
   "portal-personas-provisioning",
   "portal-persona-interested",
   "portal-persona-voting",

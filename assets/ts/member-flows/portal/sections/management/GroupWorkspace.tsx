@@ -19,6 +19,7 @@ import { Tabs } from "../../../../components/Tabs";
 import { Badge } from "../../../../ui/Badge";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { useData } from "../../../../hooks/useData";
+import { useEffect } from "preact/hooks";
 import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
 import { portalSession } from "../../state";
@@ -120,10 +121,24 @@ export function GroupWorkspace({
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
     [groupId],
   );
+  // A link from the public site names a group by its slug — `/groups/pqc` —
+  // and the API resolves either. The workspace, though, keys everything it
+  // renders on the id, so a slug is canonicalized to the id path on arrival
+  // and the rest of the URL rides along.
+  const loaded = detail.data?.group;
+  const arrivedBySlug = loaded !== undefined && loaded.id !== groupId && loaded.slug === groupId;
+  useEffect(() => {
+    if (!loaded || !arrivedBySlug) return;
+    const rest = [view, resourceId, resourceTab, resourceDetailId]
+      .filter((segment): segment is string => Boolean(segment))
+      .map(encodeURIComponent)
+      .join("/");
+    navigate(`/groups/${encodeURIComponent(loaded.id)}${rest ? `/${rest}` : ""}`);
+  }, [loaded, arrivedBySlug, view, resourceId, resourceTab, resourceDetailId, navigate]);
   // While a different group loads, useData still holds the previous group's
   // data; rendering it would leave the old workspace on screen with no
   // feedback. Treat it as absent so the switch shows a spinner immediately.
-  const group = detail.data?.group.id === groupId ? detail.data.group : undefined;
+  const group = loaded && loaded.id === groupId ? loaded : undefined;
   const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
   const views = groupContextNavigation(capabilities);
   const canManage = capabilities.includes("manage");

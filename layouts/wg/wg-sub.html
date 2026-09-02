@@ -358,7 +358,7 @@
       {{ $wg.Params.heroButton.label }}
     </a>
     {{ else }}
-    <a href="/join/" class="pk-btn pk-btn--primary pk-btn--lg">Join this Working Group</a>
+    <a href="/portal/#/groups/{{ lower $wg.Params.wgID }}" class="pk-btn pk-btn--primary pk-btn--lg">Join this Working Group</a>
     {{ end }}
     <div>
       <a href="{{ $base }}." class="pk-btn pk-btn--secondary pk-btn--sm">← Back to {{ $wg.Title }}</a>
