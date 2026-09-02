@@ -10,6 +10,9 @@ import {
 } from "../functions/_lib/services/events/catalog";
 import { buildGroupsPageQuery } from "../functions/_lib/services/groups/read-model";
 import { buildUserOrganizationsPageQuery } from "../functions/_lib/services/user-organizations";
+import { buildOrganizationGroupsPageQuery } from "../functions/_lib/services/organization-activity/group-participation";
+import { buildOrganizationEventsPageQuery } from "../functions/_lib/services/organization-activity/event-participation";
+import { buildOrganizationProposalsPageQuery } from "../functions/_lib/services/organization-activity/proposal-submissions";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
 import { insertOrganization, insertUser, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
@@ -149,5 +152,76 @@ describe("admin list D1 query plans", () => {
     expect(countBindings).toEqual(bindings);
     const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
     expect(projectionPlan).toContain("idx_identities_user_lifecycle");
+  });
+  it("counts an organization's group participation without its aggregate projection", async () => {
+    const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(
+      buildOrganizationGroupsPageQuery("organization-1", {
+        q: "cryptography",
+        sort: "-representativeCount",
+        limit: 25,
+        offset: 50,
+      }),
+    );
+
+    expect(pageSql).toMatch(/representative_count|first_joined_at|latest_joined_at/i);
+    expect(countSql).toMatch(/^SELECT COUNT\(DISTINCT g\.id\) AS total\s+FROM identities representative/i);
+    expect(countSql).not.toMatch(
+      /MIN\(|MAX\(|representative_count|first_joined_at|latest_joined_at|group_types|GROUP BY/i,
+    );
+    expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
+    expect(countBindings).toEqual(bindings);
+
+    // Driven from the organization's few identities, never from every active
+    // capacity in the system.
+    const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
+    expect(projectionPlan).toContain("idx_identities_organization_lifecycle");
+    expect(projectionPlan).toContain("idx_group_memberships_user_active");
+    expect(projectionPlan).not.toMatch(/SCAN (gm|g)\b/);
+  });
+
+  it("counts an organization's event participation without the role or registration projections", async () => {
+    const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(
+      buildOrganizationEventsPageQuery("organization-1", {
+        q: "summit",
+        when: "upcoming",
+        sort: "-startsAt",
+        limit: 25,
+        offset: 50,
+      }),
+    );
+
+    expect(pageSql).toMatch(/group_concat\(DISTINCT activity\.participant_role\)/i);
+    expect(countSql).toMatch(/SELECT COUNT\(DISTINCT e\.id\) AS total\s+FROM events e/i);
+    expect(countSql).not.toMatch(/group_concat|registration_count|participant_roles|CASE WHEN|GROUP BY/i);
+    // The upcoming/past predicate is shared, so the filter cannot drift
+    // between the rows shown and the total claimed.
+    expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
+    expect(countBindings).toEqual(bindings);
+
+    const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
+    expect(projectionPlan).toContain("idx_identities_organization_lifecycle");
+  });
+
+  it("counts an organization's proposals without the proposer join the projection needs", async () => {
+    const { pageSql, countSql, bindings, countBindings, pagePlan } = await explainOffsetPage(
+      buildOrganizationProposalsPageQuery("organization-1", {
+        q: "quantum",
+        status: "active",
+        sort: "-submittedAt",
+        limit: 25,
+        offset: 50,
+      }),
+    );
+
+    expect(pageSql).toMatch(/JOIN users proposer|proposer_email/i);
+    expect(countSql).toMatch(/SELECT COUNT\(\*\) AS total\s+FROM session_proposals proposal/i);
+    expect(countSql).not.toMatch(/JOIN users proposer|proposer_email|proposer_first_name/i);
+    // `status=active` expands to the shared inactive-status list; both
+    // statements must bind the identical vocabulary.
+    expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));
+    expect(countBindings).toEqual(bindings);
+
+    const projectionPlan = pagePlan.results.map((row) => String((row as { detail?: unknown }).detail)).join("\n");
+    expect(projectionPlan).toContain("idx_identities_organization_lifecycle");
   });
 });
