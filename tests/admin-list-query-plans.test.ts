@@ -101,10 +101,10 @@ describe("admin list D1 query plans", () => {
       }),
     );
 
-    expect(pageSql).toMatch(/event_participation_count|COUNT\(DISTINCT ep\.event_id\)|ORDER BY r2\.joined_at/i);
+    expect(pageSql).toMatch(/organization_names|has_event_participation|active_identity_count/i);
     expect(countSql).toMatch(/^SELECT COUNT\(\*\) AS total\s+FROM users u/i);
     expect(countSql).not.toMatch(
-      /event_participation_count|COUNT\(DISTINCT ep\.event_id\)|ORDER BY r2\.joined_at|LEFT JOIN members|member_category_assignments/i,
+      /organization_names|group_concat|has_event_participation|active_identity_count|LEFT JOIN members|member_category_assignments/i,
     );
     expect(countSql).toMatch(/NOT \(EXISTS[\s\S]+identities[\s\S]+event_participant_role_sources/i);
     expect(occurrences(pageSql, /INSTR\(/g)).toBe(occurrences(countSql, /INSTR\(/g));

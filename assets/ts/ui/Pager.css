@@ -21,6 +21,18 @@
     color: var(--pk-ink-muted);
   }
 
+  /*
+   * A pager standing alone under a public listing — the blog, a taxonomy —
+   * has no count to balance against, so it centers instead of hugging the
+   * right edge the way the list panel's footer does.
+   */
+  .pk-pager--center {
+    justify-content: center;
+  }
+  .pk-pager--center .pk-pager__list {
+    margin-left: 0;
+  }
+
   .pk-pager__summary {
     font-size: var(--pk-text-sm);
     color: var(--pk-ink-muted);

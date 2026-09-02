@@ -7,7 +7,6 @@ import { EVENT_SOURCE_MODES, type EventSourceMode } from "../../../../../shared/
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -41,7 +40,6 @@ export function GroupEvents({
   // drives navigation itself.
   const selectedEventId = initialEventId ?? null;
   const [showCreate, setShowCreate] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"" | EventSourceMode>("");
   const tableActions = useRef<ApiTableActions | null>(null);
   const createHeadingId = useId();
   const detail = useData(
@@ -102,27 +100,6 @@ export function GroupEvents({
         createAction={canManage ? { label: "Create event", onSelect: () => setShowCreate(true) } : undefined}
         searchPlaceholder="Search events…"
         initialSort="next_occurrence_at"
-        params={sourceFilter ? { sourceMode: sourceFilter } : {}}
-        toolbar={({ resetPage }) => (
-          // The list contract already accepts `sourceMode`; the toolbar
-          // exposes it as a source filter instead of leaving where an
-          // event is authored a concept search cannot express.
-          <FilterSelect
-            ariaLabel="Filter events by source"
-            value={sourceFilter}
-            options={[
-              { value: "" as "" | EventSourceMode, label: "All sources" },
-              ...EVENT_SOURCE_MODES.map((mode) => ({
-                value: mode as "" | EventSourceMode,
-                label: EVENT_SOURCE_LABELS[mode],
-              })),
-            ]}
-            onChange={(value) => {
-              setSourceFilter(value);
-              resetPage();
-            }}
-          />
-        )}
         columns={[
           {
             header: "Event",
@@ -138,6 +115,22 @@ export function GroupEvents({
             header: "Profile",
             cell: (event) => <Badge status={event.profileKey ?? "event"} />,
             width: "fit",
+          },
+          {
+            // Where the event is authored. The list contract already accepts
+            // `sourceMode`; the column shows the value and its menu narrows by
+            // it, instead of a select above the table filtering by something
+            // no column said.
+            header: "Source",
+            cell: (event) => (event.sourceMode ? EVENT_SOURCE_LABELS[event.sourceMode] : "—"),
+            width: "fit",
+            filter: {
+              param: "sourceMode",
+              options: [
+                { value: "", label: "All sources" },
+                ...EVENT_SOURCE_MODES.map((mode) => ({ value: mode as string, label: EVENT_SOURCE_LABELS[mode] })),
+              ],
+            },
           },
           {
             // A date has a bounded length; the column says so instead of

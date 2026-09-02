@@ -2,7 +2,7 @@ import { processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { json } from "../../../_lib/http";
 import { logInfo } from "../../../_lib/logging";
 import { prepareMagicLinkRequestHttp } from "../../../_lib/auth/http-flow";
-import { requestUserSignInLink } from "../../../_lib/services/user-auth-flow";
+import { portalVerifyLinkBase, requestUserSignInLink } from "../../../_lib/services/user-auth-flow";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";
 import { userAuthRequestRouteSchema } from "../../../../assets/shared/schemas/user-auth";
@@ -17,7 +17,7 @@ export const UserAuthRequestLink = openApiRoute(userAuthRequestRouteSchema, asyn
     userAgentHash: http.userAgentHash,
     ttlMinutes: http.magicLinkTtlMinutes,
     signingSecret: http.secret,
-    magicLinkBaseUrl: `${http.appBaseUrl}/portal/#/verify`,
+    magicLinkBaseUrl: portalVerifyLinkBase(http.appBaseUrl, data.body.returnPath),
   });
 
   if (!result.outboxId) {

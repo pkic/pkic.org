@@ -128,4 +128,12 @@
     letter-spacing: -0.01em;
     color: var(--pk-ink);
   }
+
+  /* The record's name with its badges beside it, wrapping under it when narrow. */
+  .pk-record-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-3);
+  }
 }

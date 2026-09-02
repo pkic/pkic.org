@@ -340,8 +340,6 @@ export function FormManagementCreate({
 }
 
 export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: string) => void }) {
-  const [purposeFilter, setPurposeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   return (
     <div class="pk">
       <ApiDataTable
@@ -355,52 +353,39 @@ export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: strin
         initialPageSize={25}
         initialSort="title"
         searchPlaceholder="Search forms…"
-        params={{
-          ...(purposeFilter ? { purpose: purposeFilter } : {}),
-          ...(statusFilter ? { status: statusFilter } : {}),
-        }}
-        toolbar={({ resetPage }) => (
-          // Both filters already exist on the list contract; the toolbar
-          // exposes them instead of leaving purpose and status concepts the
-          // reader must express through search syntax.
-          <>
-            <FilterSelect
-              ariaLabel="Filter forms by purpose"
-              value={purposeFilter}
-              options={[
-                { value: "", label: "All purposes" },
-                ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
-              ]}
-              onChange={(value) => {
-                setPurposeFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Filter forms by status"
-              value={statusFilter}
-              options={[
-                { value: "", label: "All statuses" },
-                ...FORM_STATUSES.map((status) => ({ value: status as string, label: status })),
-              ]}
-              onChange={(value) => {
-                setStatusFilter(value);
-                resetPage();
-              }}
-            />
-          </>
-        )}
         columns={[
           // The presentational vocabulary is the column's, not a wrapper
           // span's: `Table` translates these onto the design system's cell
           // utilities and alignment in one place.
           { header: "Key", cell: (form: FormSummary) => form.key, className: "pk-mono pk-small" },
+          // Both filters already exist on the list contract; each lives in
+          // the column that shows the value it narrows, instead of leaving
+          // purpose and status concepts the reader must express through
+          // search syntax.
           {
             header: "Purpose",
             cell: (form: FormSummary) => form.purpose.replace(/_/g, " "),
             width: "fit",
+            filter: {
+              param: "purpose",
+              options: [
+                { value: "", label: "All purposes" },
+                ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
+              ],
+            },
           },
-          { header: "Status", cell: (form: FormSummary) => <Badge status={form.status} />, width: "fit" },
+          {
+            header: "Status",
+            cell: (form: FormSummary) => <Badge status={form.status} />,
+            width: "fit",
+            filter: {
+              param: "status",
+              options: [
+                { value: "", label: "All statuses" },
+                ...FORM_STATUSES.map((status) => ({ value: status as string, label: status })),
+              ],
+            },
+          },
           { header: "Scope", cell: (form: FormSummary) => formScopeLabel(form), className: "pk-small" },
           {
             header: { label: "Fields", className: "pk-end" },
@@ -433,8 +418,6 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
   const [status, setStatus] = useState("");
   const [attendanceType, setAttendanceType] = useState("");
   const [attendanceOptions, setAttendanceOptions] = useState<Array<{ value: string; label: string }>>([]);
-  /** `"true"` narrows to forms linked to this event; `""` lets global forms in as well. */
-  const [linkedScope, setLinkedScope] = useState<"" | "true">("true");
   const formsEndpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/forms`;
   const submissionParams = {
     eventSlug,
@@ -484,31 +467,34 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
           responseSchema={formsListResponseSchema}
           resolve={(response) => response.forms}
           resolvePage={(response) => response.page}
-          params={{ purpose, ...(linkedScope ? { linkedOnly: linkedScope } : {}) }}
+          // The catalogue opens on the forms linked to this event: that is
+          // the page's fixed scope, and the Scope column's filter overrides
+          // it. Its open state carries no value, so the default below holds;
+          // the widened state sends the contract's `false` in its place.
+          params={{ purpose, linkedOnly: "true" }}
           paginate
           initialPageSize={25}
           initialSort="title"
           searchPlaceholder="Search event forms…"
-          toolbar={({ resetPage }) => (
-            // The list contract already accepts `linkedOnly`; the toolbar
-            // exposes the scope instead of hiding the catalogue's global
-            // forms with no way to reach them.
-            <FilterSelect
-              ariaLabel="Form scope"
-              value={linkedScope}
-              options={[
-                { value: "true" as "" | "true", label: "Linked to this event" },
-                { value: "" as "" | "true", label: "Linked and global forms" },
-              ]}
-              onChange={(value) => {
-                setLinkedScope(value);
-                resetPage();
-              }}
-            />
-          )}
           columns={[
             { header: "Title", cell: (form: FormSummary) => form.title },
             { header: "Key", cell: (form: FormSummary) => form.key, className: "pk-mono pk-small" },
+            {
+              // Where the form belongs. The list contract already accepts
+              // `linkedOnly`; the column shows the scope and its menu widens
+              // it, instead of hiding the catalogue's global forms with no
+              // way to reach them.
+              header: "Scope",
+              cell: (form: FormSummary) => formScopeLabel(form),
+              width: "fit",
+              filter: {
+                param: "linkedOnly",
+                options: [
+                  { value: "", label: "Linked to this event" },
+                  { value: "false", label: "Linked and global forms" },
+                ],
+              },
+            },
             { header: "Responses", cell: (form: FormSummary) => form.submission_count, className: "pk-end pk-mono" },
           ]}
           rowAction={(form: FormSummary) => ({

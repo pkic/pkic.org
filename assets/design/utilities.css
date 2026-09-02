@@ -131,6 +131,26 @@
   }
 
   /*
+   * A record page: the record itself takes the width, a supporting column
+   * — logo, contacts, a stage — keeps a reading measure beside it. `auto-fill`
+   * is wrong here: it packs both into the left corner of a wide screen and
+   * leaves the rest empty, because it is sizing tracks for cards that never
+   * arrive. Below the measure the two stack.
+   */
+  .pk-record {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--pk-gap, var(--pk-4));
+    align-items: start;
+  }
+
+  @media (min-width: 64rem) {
+    .pk-record {
+      grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+    }
+  }
+
+  /*
    * A figure that stands beside the prose rather than across it.
    *
    * Rendered Markdown can hand a shortcode one thing about an illustration —

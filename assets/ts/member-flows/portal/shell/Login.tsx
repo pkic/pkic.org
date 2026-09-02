@@ -22,6 +22,8 @@ import { MagicLinkSubmitButton, SignInError } from "../../../components/MagicLin
 import { useMagicLinkRequest } from "../../../hooks/useMagicLinkRequest";
 import { emailFromSubmitEvent } from "../../../shared/form/helpers";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
+import { userAuthRequestSchema } from "../../../../shared/schemas/user-auth";
+import { portalReturnPath } from "../hash-route";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
@@ -29,7 +31,11 @@ import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { TextInput } from "../../../ui/TextControl";
 
 async function requestMagicLink(email: string): Promise<void> {
-  await postJson("/api/v1/auth/request-link", { email }, successResponseSchema);
+  // The route the sign-in interrupted rides along, so the link the email
+  // carries brings the reader back to it — a working group they came to
+  // join — rather than to the portal's front page.
+  const body = userAuthRequestSchema.parse({ email, returnPath: portalReturnPath(window.location.hash) });
+  await postJson("/api/v1/auth/request-link", body, successResponseSchema);
   // Always show success to prevent email enumeration (as in the shared auth flow).
 }
 

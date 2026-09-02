@@ -3,7 +3,7 @@ import {
   meetingJoinConfirmSchema,
   meetingJoinLandingSchema,
   meetingJoinResponseSchema,
-} from "../../../../assets/shared/schemas/event-series";
+} from "../../../../assets/shared/schemas/meeting-entry";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";

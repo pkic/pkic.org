@@ -46,17 +46,6 @@ async function waitForElement<T extends Element>(find: () => T | null): Promise<
   throw new Error("Expected element was not rendered.");
 }
 
-/** Selects one of the record's facets the way a reader does: by its tab. */
-async function openTab(container: HTMLElement, name: string): Promise<void> {
-  const tab = await waitForElement(
-    () =>
-      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
-        (candidate) => candidate.textContent === name,
-      ) ?? null,
-  );
-  await act(async () => tab.click());
-}
-
 function detail() {
   return organizationDetailResponseSchema.parse({
     organization: {
@@ -375,7 +364,6 @@ describe("portal System Organizations", () => {
     await settle();
     expect(readOnly.textContent).not.toContain("Edit");
     expect(readOnly.textContent).not.toContain("Remove");
-    await openTab(readOnly, "Identities");
     await settle();
     expect(readOnly.textContent).not.toContain("Add new person");
     expect(readOnly.textContent).not.toContain("Link existing user");
@@ -393,7 +381,6 @@ describe("portal System Organizations", () => {
     expect(writer.textContent).toContain("Edit");
     expect(writer.textContent).toContain("Contacts");
     // Reading another facet is a tab away, and its bounded query runs then.
-    await openTab(writer, "Identities");
     const menuTrigger = await waitForElement(() =>
       writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
@@ -444,7 +431,6 @@ describe("portal System Organizations", () => {
       />,
     );
     await settle();
-    await openTab(container, "Identities");
     const addButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent?.trim() === "Add new person",
     );
@@ -510,7 +496,6 @@ describe("portal System Organizations", () => {
         />
       </>,
     );
-    await openTab(container, "Identities");
     const menuTrigger = await waitForElement(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
@@ -556,7 +541,6 @@ describe("portal System Organizations", () => {
         />
       </>,
     );
-    await openTab(container, "Identities");
     const menuTrigger = await waitForElement(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );

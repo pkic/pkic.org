@@ -1,40 +1,18 @@
-import { useRef, useState, type MutableRef } from "preact/hooks";
-import { usePortalHashLocation } from "../../hash-location";
 import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/event-series";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
 import { fmt } from "../../ui";
-import { GroupMeetingSeriesDetail } from "./GroupMeetingSeriesDetail";
 
 export function GroupMeetingSeriesList({
   groupId,
-  actionsRef,
-  initialSeriesId,
-  initialSeriesTab,
   createAction,
 }: {
   groupId: string;
-  actionsRef?: MutableRef<ApiTableActions | null>;
-  initialSeriesId?: string;
-  /** The URL-addressed tab segment for `initialSeriesId`'s detail view. */
-  initialSeriesTab?: string;
   createAction?: { label: string; onSelect: () => void; disabled?: boolean };
 }) {
-  const [, navigate] = usePortalHashLocation();
-  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(initialSeriesId ?? null);
-  const localActions = useRef<ApiTableActions | null>(null);
-  const effectiveActions = actionsRef ?? localActions;
-
-  function selectSeries(seriesId: string | null): void {
-    setSelectedSeriesId(seriesId);
-    navigate(
-      seriesId
-        ? `/groups/${encodeURIComponent(groupId)}/meetings/${encodeURIComponent(seriesId)}`
-        : `/groups/${encodeURIComponent(groupId)}/meetings`,
-    );
-  }
+  const meetingsPath = `/groups/${encodeURIComponent(groupId)}/meetings`;
 
   return (
     <ApiDataTable
@@ -47,7 +25,6 @@ export function GroupMeetingSeriesList({
       createAction={createAction}
       searchPlaceholder="Search meeting name or location…"
       initialSort="next_occurrence_at"
-      actionsRef={effectiveActions}
       columns={[
         {
           header: "Meeting series",
@@ -80,7 +57,7 @@ export function GroupMeetingSeriesList({
           header: "",
           cell: (series) => (
             // Row commands live behind the row's menu; the row itself opens
-            // the detail. The calendar file is a navigation the menu starts.
+            // the record. The calendar file is a navigation the menu starts.
             <RowActions
               subject={series.eventName}
               actions={[
@@ -113,25 +90,12 @@ export function GroupMeetingSeriesList({
         )
       }
       rowKey={(series) => series.id}
-      // Activating a row opens its detail in place — the same rule as every
-      // other list. The "Details" button this replaces left the row inert.
+      // A series is a URL-addressed record; the row is a link to it, so it
+      // can be opened in a new tab and the address bar follows.
       rowAction={(series) => ({
-        label:
-          selectedSeriesId === series.id
-            ? `Hide details for ${series.eventName}`
-            : `Show details for ${series.eventName}`,
-        onSelect: () => selectSeries(selectedSeriesId === series.id ? null : series.id),
+        label: `Open ${series.eventName}`,
+        href: `#${meetingsPath}/${encodeURIComponent(series.id)}`,
       })}
-      detailRow={(series) =>
-        selectedSeriesId === series.id ? (
-          <GroupMeetingSeriesDetail
-            groupId={groupId}
-            series={series}
-            initialTab={initialSeriesTab}
-            onChanged={() => effectiveActions.current?.reload()}
-          />
-        ) : null
-      }
     />
   );
 }

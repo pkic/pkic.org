@@ -268,6 +268,66 @@
     font-size: 0.85em;
   }
 
+  /*
+   * A head cell is the column's name with its commands beside it. The trigger
+   * is quiet until the cell is hovered or the column is narrowed, so a table
+   * of twelve columns does not open with twelve dots along its head; the
+   * commands are there for whoever reaches for them.
+   */
+  .pk-table__head-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0.25rem;
+    vertical-align: middle;
+  }
+
+  .pk-table__head-menu {
+    display: inline-flex;
+    opacity: 0;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  /* The trigger glyphs are the stylesheet's, so a head cell's text is its name. */
+  .pk-table__head-glyph::before {
+    content: "⋯";
+  }
+  .pk-table__head-glyph--columns::before {
+    content: "⊞";
+  }
+
+  .pk-table__head-menu .pk-menu__trigger {
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 0;
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-table th:hover .pk-table__head-menu,
+  .pk-table th:focus-within .pk-table__head-menu,
+  .pk-table__head-menu--active,
+  .pk-table__head-menu:has([aria-expanded="true"]) {
+    opacity: 1;
+  }
+
+  .pk-table__head-end {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  /*
+   * What a narrowed column is narrowed to, stated under its name in the
+   * column's own voice rather than in a toolbar somewhere above the table.
+   */
+  .pk-table__head-filter {
+    display: block;
+    margin-top: 0.15rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--pk-accent-ink);
+  }
+
   .pk-table__select {
     width: 1px;
   }

@@ -116,6 +116,26 @@
   }
 
   /*
+   * A choice item reserves the check's column whether or not it is the one
+   * in force, so the labels in a group line up and the check does not push
+   * one of them sideways.
+   */
+  .pk-menu__check {
+    display: inline-block;
+    width: 1em;
+    flex: 0 0 1em;
+    text-align: center;
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-menu__item--separated {
+    margin-top: 0.25rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--pk-line-soft);
+    border-radius: 0;
+  }
+
+  /*
    * Disabled items are shown, not removed. Keeping the menu's shape stable
    * across permission levels means a reader who has used it before can still
    * aim at the right row, and an unavailable action explains itself where a

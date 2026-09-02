@@ -155,7 +155,7 @@ export function ActingIdentityDirectory({
         caption="Organization identities"
         columns={activeColumns()}
         data={activeIdentities}
-        empty={empty ?? "No identities yet"}
+        empty={empty ?? "No representatives yet"}
         rowKey={(identity) => identity.userId}
         rowAction={(identity) => identityRowAction(identity.userId, identity.name ?? identity.email)}
       />
@@ -304,7 +304,7 @@ export function ActingIdentityDirectory({
           // The same `createAction` is already the toolbar's button, so this
           // state names it rather than rendering it a second time under the
           // same accessible name.
-          <EmptyState title="No identities yet" body={`Use ${createAction.label} above to get started.`} />
+          <EmptyState title="No representatives yet" body={`Use ${createAction.label} above to get started.`} />
         ) : (
           "No identities"
         ))

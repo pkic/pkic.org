@@ -236,7 +236,7 @@ describe("sponsorship event history", () => {
     await act(flush);
 
     const section = historySection(container, id);
-    expect(container.querySelector(`#sponsorship-history-heading-${id}`)?.textContent).toBe("Pipeline history");
+    expect(container.querySelector(`#sponsorship-history-heading-${id}`)?.textContent).toBe("History");
     expect(section.querySelectorAll("ol > li")).toHaveLength(1);
     expect(section.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-21T12:00:00.000Z");
     expect(section.querySelector("[aria-live='polite']")?.textContent).toContain("1 history entry loaded");
@@ -259,6 +259,14 @@ describe("sponsorship event history", () => {
     // class, which is what the end-to-end spec now relies on.
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Acme Sponsor");
 
+    // Both forms are closed until asked for: a reader who opened the record
+    // to look at it is shown its facts, not three forms.
+    expect(container.querySelector("form")).toBeNull();
+    await act(async () => {
+      buttonNamed(container, "Edit").click();
+      buttonNamed(container, "Advance stage").click();
+      await flush();
+    });
     for (const [label, tag] of [
       ["Renewal date", "INPUT"],
       ["Notes", "TEXTAREA"],
@@ -272,9 +280,13 @@ describe("sponsorship event history", () => {
     // named group and carries the shared control's accessible name.
     const assignedGroup = namedGroup(container, "Assigned staff");
     expect(assignedGroup.querySelector('input[aria-label="Search for a user"]')).not.toBeNull();
-    // The write groups are named, so the repeated note fields are announced
-    // inside the group they belong to.
-    expect(groupNames(container)).toEqual(["Sponsorship record", "Assigned staff", "Pipeline stage"]);
+    // Each form is named for what it does, so the repeated note fields are
+    // announced inside the form they belong to.
+    expect(groupNames(container)).toEqual(["Assigned staff"]);
+    expect([...container.querySelectorAll("form")].map((form) => form.getAttribute("aria-label"))).toEqual([
+      "Edit sponsorship record",
+      "Advance pipeline stage",
+    ]);
     void act(() => render(null, container));
   });
 
@@ -299,6 +311,10 @@ describe("sponsorship event history", () => {
     await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
     await act(flush);
 
+    await act(async () => {
+      buttonNamed(container, "Advance stage").click();
+      await flush();
+    });
     await typeInto(controlFor(container, "Note (optional)"), "Waiting on signature");
 
     const advance = buttonNamed(container, "Advance");

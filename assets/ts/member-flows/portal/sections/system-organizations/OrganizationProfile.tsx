@@ -193,13 +193,24 @@ const CONTACT_FIELDS = [
  */
 export function OrganizationContacts({
   organization,
+  canEdit,
   onSaved,
 }: {
   organization: OrganizationDetail;
+  canEdit: boolean;
   onSaved: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<(typeof CONTACT_FIELDS)[number][1] | null>(null);
   const [error, setError] = useState("");
+  // Read until edited: the panel names the contacts, and the selects that
+  // change them appear only when the reader asks to change them.
+  const [editing, setEditing] = useState(false);
+
+  function contactName(userId: string | null): string | null {
+    if (!userId) return null;
+    const representative = organization.identities.find((candidate) => candidate.userId === userId);
+    return representative ? representative.name : null;
+  }
 
   async function update(field: (typeof CONTACT_FIELDS)[number][1], userId: string) {
     setBusy(field);
@@ -223,39 +234,56 @@ export function OrganizationContacts({
 
   return (
     <Panel aria-label="Contacts">
-      <PanelHeader title="Contacts" />
+      <PanelHeader title="Contacts">
+        {canEdit && (
+          <Button size="sm" onClick={() => setEditing((current) => !current)} aria-expanded={editing}>
+            {editing ? "Done" : "Edit"}
+          </Button>
+        )}
+      </PanelHeader>
       <PanelBody class="pk-stack">
-        <div class="pk-grid">
-          {CONTACT_FIELDS.map(([label, field]) => (
-            <Field key={field} label={label}>
-              {(control) => (
-                <Select
-                  {...control}
-                  value={organization[field] ?? ""}
-                  disabled={busy !== null}
-                  onChange={(event) => void update(field, (event.target as HTMLSelectElement).value)}
-                >
-                  <option value="">None</option>
-                  {organization.identities
-                    // One person cannot hold both contact roles; the service
-                    // enforces it, the select simply hides the collision.
-                    .filter(
-                      (representative) =>
-                        representative.userId !==
-                        organization[
-                          field === "primaryContactUserId" ? "secondaryContactUserId" : "primaryContactUserId"
-                        ],
-                    )
-                    .map((representative) => (
-                      <option key={representative.userId} value={representative.userId}>
-                        {representative.name} ({representative.email})
-                      </option>
-                    ))}
-                </Select>
-              )}
-            </Field>
-          ))}
-        </div>
+        {!editing && (
+          <DescriptionList
+            density="compact"
+            items={CONTACT_FIELDS.map(([label, field]) => ({
+              term: label,
+              value: contactName(organization[field]),
+            }))}
+          />
+        )}
+        {editing && (
+          <div class="pk-grid">
+            {CONTACT_FIELDS.map(([label, field]) => (
+              <Field key={field} label={label}>
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={organization[field] ?? ""}
+                    disabled={busy !== null}
+                    onChange={(event) => void update(field, (event.target as HTMLSelectElement).value)}
+                  >
+                    <option value="">None</option>
+                    {organization.identities
+                      // One person cannot hold both contact roles; the service
+                      // enforces it, the select simply hides the collision.
+                      .filter(
+                        (representative) =>
+                          representative.userId !==
+                          organization[
+                            field === "primaryContactUserId" ? "secondaryContactUserId" : "primaryContactUserId"
+                          ],
+                      )
+                      .map((representative) => (
+                        <option key={representative.userId} value={representative.userId}>
+                          {representative.name} ({representative.email})
+                        </option>
+                      ))}
+                  </Select>
+                )}
+              </Field>
+            ))}
+          </div>
+        )}
         {error && <Alert tone="danger">{friendlyErrorMessage(error)}</Alert>}
       </PanelBody>
     </Panel>
@@ -286,13 +314,20 @@ function profileLink(url: string | null) {
  * organization's name, where the page states what this record is.
  */
 function ProfileSummary({ organization }: { organization: OrganizationDetail }) {
-  const items: DescriptionListItem[] = [
-    { term: "Website", value: profileLink(organization.website) },
+  // What the organization says about itself first, then where to find it,
+  // then its standing here. The record's own bookkeeping closes the list:
+  // a reader opens a profile for the organization, not for its row.
+  const about: DescriptionListItem[] = [
     { term: "Slogan", value: organization.slogan },
     { term: "Description", value: organization.description },
+  ];
+  const links: DescriptionListItem[] = [
+    { term: "Website", value: profileLink(organization.website) },
     { term: "Blog", value: profileLink(organization.blogUrl) },
     { term: "Press", value: profileLink(organization.pressUrl) },
     { term: "Careers", value: profileLink(organization.careersUrl) },
+  ];
+  const standing: DescriptionListItem[] = [
     // A calendar date, not an instant: the contract is `z.iso.date()`, and
     // `fmt` would widen it into a moment with a time of day and a zone that
     // the value never carried. AGENTS.md forbids that widening explicitly.
@@ -300,7 +335,19 @@ function ProfileSummary({ organization }: { organization: OrganizationDetail }) 
     { term: "Created", value: fmt(organization.createdAt) },
   ];
 
-  return <DescriptionList items={items} density="compact" />;
+  return (
+    <div class="pk-stack">
+      <DescriptionList items={about} density="compact" />
+      <section class="pk-stack pk-stack--tight" aria-label="Links">
+        <h3 class="pk-small pk-strong">Links</h3>
+        <DescriptionList items={links} density="compact" />
+      </section>
+      <section class="pk-stack pk-stack--tight" aria-label="Membership">
+        <h3 class="pk-small pk-strong">Membership</h3>
+        <DescriptionList items={standing} density="compact" />
+      </section>
+    </div>
+  );
 }
 
 export function OrganizationProfile({

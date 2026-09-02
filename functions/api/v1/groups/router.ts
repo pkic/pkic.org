@@ -23,7 +23,7 @@ import {
 import { GroupMailingListManagementList } from "./[groupId]/mailing-lists/management";
 import { GroupAutomaticEnrollmentPreference } from "./[groupId]/automatic-enrollment";
 import { GroupMeetingSeriesCreate, GroupMeetingSeriesList } from "./[groupId]/meetings/series/index";
-import { GroupMeetingSeriesUpdate } from "./[groupId]/meetings/series/[seriesId]/index";
+import { GroupMeetingSeriesGet, GroupMeetingSeriesUpdate } from "./[groupId]/meetings/series/[seriesId]/index";
 import { GroupMeetingSeriesCalendar } from "./[groupId]/meetings/series/[seriesId]/calendar";
 import { GroupMeetingSeriesMaterialize } from "./[groupId]/meetings/series/[seriesId]/materialize";
 import {
@@ -185,6 +185,7 @@ openapi.post("/:groupId/events/:eventId/registrations", GroupEventRegistrationCr
 registerGroupEventInviteRoutes(openapi);
 openapi.get("/:groupId/meetings/series", GroupMeetingSeriesList);
 openapi.post("/:groupId/meetings/series", GroupMeetingSeriesCreate);
+openapi.get("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesGet);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);
 openapi.get("/:groupId/meetings/series/:seriesId/calendar.ics", GroupMeetingSeriesCalendar);
 openapi.post("/:groupId/meetings/series/:seriesId/materialize", GroupMeetingSeriesMaterialize);

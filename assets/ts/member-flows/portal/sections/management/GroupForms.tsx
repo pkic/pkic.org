@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef } from "preact/hooks";
+import { HashRedirect } from "../../HashRedirect";
 import { usePortalHashLocation } from "../../hash-location";
 import { FORM_PLACEMENT_CONTEXT_TYPES, FORM_PURPOSES, type FormPlacement } from "../../../../../shared/schemas/forms";
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { GroupFormDetail } from "./GroupFormDetail";
@@ -14,8 +14,6 @@ import { GroupFormEditor } from "./GroupFormEditor";
 /** Reserved placement segment that routes to the creation page instead of a placement's detail. */
 const NEW_GROUP_FORM_SEGMENT = "new";
 
-type FormContextFilter = "" | FormPlacement["contextType"];
-
 /** Where a placement is anchored, in product language rather than schema keys. */
 const FORM_CONTEXT_LABELS: Record<FormPlacement["contextType"], string> = {
   installation: "Installation-wide",
@@ -23,12 +21,6 @@ const FORM_CONTEXT_LABELS: Record<FormPlacement["contextType"], string> = {
   event: "Event",
   organization: "Organization",
 };
-
-/** Returns to the forms list from an effect, not render — see its call site below. */
-function GroupFormsRedirect({ onLeave }: { onLeave: () => void }) {
-  useEffect(() => onLeave(), [onLeave]);
-  return null;
-}
 
 export function GroupForms({
   groupId,
@@ -45,8 +37,6 @@ export function GroupForms({
 }) {
   const [, navigate] = usePortalHashLocation();
   const creating = placementSegment === NEW_GROUP_FORM_SEGMENT;
-  const [purposeFilter, setPurposeFilter] = useState("");
-  const [contextFilter, setContextFilter] = useState<FormContextFilter>("");
   const tableActions = useRef<ApiTableActions | null>(null);
   const formsPath = `/groups/${encodeURIComponent(groupId)}/forms`;
 
@@ -59,8 +49,7 @@ export function GroupForms({
   }
 
   if (creating) {
-    // Navigating away belongs in an effect, not in render.
-    if (!canManage) return <GroupFormsRedirect onLeave={leaveCreatePage} />;
+    if (!canManage) return <HashRedirect to={formsPath} />;
     return (
       // Creation is a page of its own: a heading that names what is being
       // created, a way back, and no list competing for the same screen.
@@ -125,47 +114,6 @@ export function GroupForms({
         }
         searchPlaceholder="Search forms…"
         initialSort="title"
-        params={{
-          ...(purposeFilter ? { purpose: purposeFilter } : {}),
-          ...(contextFilter ? { contextType: contextFilter } : {}),
-        }}
-        toolbar={({ resetPage }) => (
-          // The list contract already accepts `purpose` and
-          // `contextType`; the toolbar exposes them rather than leaving
-          // them to search syntax.
-          <>
-            <FilterSelect
-              ariaLabel="Filter forms by purpose"
-              value={purposeFilter}
-              options={[
-                { value: "", label: "All purposes" },
-                ...FORM_PURPOSES.map((purpose) => ({
-                  value: purpose as string,
-                  label: purpose.replace(/_/g, " "),
-                })),
-              ]}
-              onChange={(value) => {
-                setPurposeFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Filter forms by context"
-              value={contextFilter}
-              options={[
-                { value: "" as FormContextFilter, label: "All contexts" },
-                ...FORM_PLACEMENT_CONTEXT_TYPES.map((contextType) => ({
-                  value: contextType as FormContextFilter,
-                  label: FORM_CONTEXT_LABELS[contextType],
-                })),
-              ]}
-              onChange={(value) => {
-                setContextFilter(value);
-                resetPage();
-              }}
-            />
-          </>
-        )}
         columns={[
           {
             header: "Form",
@@ -177,11 +125,38 @@ export function GroupForms({
             ),
             sort: { asc: "title", desc: "-title" },
           },
+          // The list contract already accepts `purpose` and `contextType`;
+          // each lives in the column that shows the value it narrows, rather
+          // than being left to search syntax or to a select above the table.
           {
             header: "Purpose",
             cell: (row) => <Badge status={row.form.purpose} />,
             width: "fit",
             sort: { asc: "purpose", desc: "-purpose" },
+            filter: {
+              param: "purpose",
+              options: [
+                { value: "", label: "All purposes" },
+                ...FORM_PURPOSES.map((purpose) => ({ value: purpose as string, label: purpose.replace(/_/g, " ") })),
+              ],
+            },
+          },
+          {
+            // Where the placement is anchored, in product language rather
+            // than the schema's `contextType` keys.
+            header: "Context",
+            cell: (row) => FORM_CONTEXT_LABELS[row.placement.contextType],
+            width: "fit",
+            filter: {
+              param: "contextType",
+              options: [
+                { value: "", label: "All contexts" },
+                ...FORM_PLACEMENT_CONTEXT_TYPES.map((contextType) => ({
+                  value: contextType as string,
+                  label: FORM_CONTEXT_LABELS[contextType],
+                })),
+              ],
+            },
           },
           {
             header: "Audience",

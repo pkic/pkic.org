@@ -6,6 +6,7 @@ import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/secti
 import { ApplicationsList } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList";
 import { ApplicationTimelineCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationTimelineCard";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000201";
 const NOW = "2026-08-27T12:00:00.000Z";
@@ -99,11 +100,17 @@ describe("portal membership-application management", () => {
 
     expect(page.textContent).toContain("General Member");
     expect(page.textContent).toContain("(F)");
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.pathname).toBe("/api/v1/members/applications");
-    expect(requests[0]?.searchParams.get("limit")).toBe("50");
-    expect(requests[0]?.searchParams.get("offset")).toBe("0");
-    expect(requests[0]?.searchParams.get("sort")).toBe("-created_at");
+    // Two reads of the same collection: the list itself, and the consultation
+    // queue's one-row count probe beside it. Nothing else.
+    expect(requests).toHaveLength(2);
+    const list = requests.find((url) => !url.searchParams.has("stage"));
+    expect(list?.pathname).toBe("/api/v1/members/applications");
+    expect(list?.searchParams.get("limit")).toBe("50");
+    expect(list?.searchParams.get("offset")).toBe("0");
+    expect(list?.searchParams.get("sort")).toBe("-created_at");
+    const probe = requests.find((url) => url.searchParams.get("stage") === "in_consultation");
+    expect(probe?.pathname).toBe("/api/v1/members/applications");
+    expect(probe?.searchParams.get("limit")).toBe("1");
     expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
 
     // The row's control, not the row: the `<tr>` click handler this replaced
@@ -112,7 +119,7 @@ describe("portal membership-application management", () => {
     expect(open).toHaveBeenCalledWith(APPLICATION_ID);
   });
 
-  it("names the stage filter and sends the chosen stage to the collection query", async () => {
+  it("narrows by stage from the Stage column, sends it to the collection query, and states the consultation queue", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -122,31 +129,47 @@ describe("portal membership-application management", () => {
           location.origin,
         );
         requests.push(url);
-        return json({ applications: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+        // The queue's count probe reads `page.total` off a one-row page; the
+        // list itself is empty at every stage.
+        const total = url.searchParams.get("limit") === "1" ? 3 : 0;
+        return json({ applications: [], page: { limit: 50, offset: 0, total, hasMore: false } });
       }),
     );
 
     const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
     await settle();
 
-    // A toolbar filter with no visible label still says which list it filters.
-    const filter = page.querySelector<HTMLSelectElement>("select[aria-label='Filter applications by stage']")!;
-    expect(filter).not.toBeNull();
-    // And the table it controls names itself, so several tables on one page
-    // are told apart.
+    // No select above the table: the stage filter is the Stage column's own.
+    expect(page.querySelector('[role="toolbar"] select')).toBeNull();
+    // And the table names itself, so several tables on one page are told apart.
     expect(page.querySelector("caption")?.textContent).toBe("Membership applications");
+    // The default view is the server default: no `stage` on the list request.
+    expect(requests.some((url) => !url.searchParams.has("stage"))).toBe(true);
 
-    filter.value = "in_consultation";
-    await act(async () => {
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(page, "Stage", "In consultation");
     await settle();
 
-    expect(requests.some((url) => url.searchParams.get("stage") === "in_consultation")).toBe(true);
-    // The consultation banner is a status region, announced without stealing
-    // focus from the filter that revealed it.
-    expect(page.querySelector('[role="status"].pk-alert')?.textContent).toContain("queued for member consultation");
+    expect(requests.at(-1)?.searchParams.get("stage")).toBe("in_consultation");
+    expect(requests.at(-1)?.searchParams.get("limit")).toBe("50");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(columnFilterSummary(page, "Stage")).toBe("In consultation");
+    // The consultation queue is a status region above the list, stating the
+    // probe's count in words, announced without stealing focus.
+    const banner = page.querySelector('[role="status"].pk-alert');
+    expect(banner?.textContent).toContain("3 applications currently queued for member consultation");
+  });
+
+  it("says nothing about the consultation queue while it is empty", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ applications: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
+    await settle();
+
+    expect(page.querySelector('[role="status"].pk-alert')).toBeNull();
+    expect(page.textContent).not.toContain("queued for member consultation");
   });
 
   it("states a refused application listing as a sentence instead of an empty table", async () => {

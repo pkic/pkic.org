@@ -5,7 +5,7 @@ import {
   meetingJoinLandingSchema,
   meetingJoinResponseSchema,
   type MeetingJoinLanding,
-} from "../../../shared/schemas/event-series";
+} from "../../../shared/schemas/meeting-entry";
 import { Spinner } from "../../components/Spinner";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";

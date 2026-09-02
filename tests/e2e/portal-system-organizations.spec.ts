@@ -72,11 +72,9 @@ test("permitted staff manage organizations through the canonical domain API", as
   // which opens with one statement of the record and its facets as tabs.
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/[0-9a-fA-F-]{36}$/);
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
-
-  // The roster is the Identities facet; its bounded query runs when the tab
-  // is selected, not on first paint.
-  await page.getByRole("tab", { name: "Identities" }).click();
+  // An account page, not tabs: the representatives sit under the profile.
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Representatives" })).toBeVisible();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Add new person", exact: true }).click();
@@ -96,13 +94,14 @@ test("permitted staff manage organizations through the canonical domain API", as
   expect((await associateResponse).status()).toBe(201);
   await expect(page.getByText(secondaryEmail, { exact: true })).toBeVisible();
 
-  // The sponsorships facet answers "which sponsorships" from the canonical
-  // staff pipeline list, bounded to this organization — an honest empty state
-  // here, since this organization has none.
+  // The account page answers "which sponsorships" from the canonical staff
+  // pipeline list, bounded to this organization, as one of its own bounded
+  // queries — an honest empty state here, since this organization has none.
+  // The request is observed on a reload, since the page already made it.
   const sponsorshipsResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/api/v1/sponsors" && response.request().method() === "GET",
   );
-  await page.getByRole("tab", { name: "Sponsorships" }).click();
+  await page.reload();
   const sponsorshipsUrl = new URL((await sponsorshipsResponse).url());
   expect(sponsorshipsUrl.searchParams.get("visibility")).toBe("all");
   expect(sponsorshipsUrl.searchParams.get("organizationId")).toBeTruthy();
@@ -131,8 +130,9 @@ test("permitted staff manage organizations through the canonical domain API", as
   await userSearch.fill(secondaryEmail);
   await userSearch.press("Enter");
   const secondaryUserRow = page.locator("tr").filter({ hasText: secondaryEmail });
-  await expect(secondaryUserRow).toContainText("Member · 1 active identity");
-  await expect(secondaryUserRow).not.toContainText(organizationName);
+  // The list names who the person represents — the organization itself —
+  // rather than counting their identities.
+  await expect(secondaryUserRow).toContainText(organizationName);
   await secondaryUserRow.click();
   // Located by role rather than by the class the record used to carry: the
   // user's name is a real heading now.

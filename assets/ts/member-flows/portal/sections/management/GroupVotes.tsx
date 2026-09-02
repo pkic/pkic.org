@@ -1,17 +1,17 @@
 import { lazy, Suspense } from "preact/compat";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
+import { useId, useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
 import { VOTE_STATUSES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
+import { HashRedirect } from "../../HashRedirect";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { VoteDetails } from "../Votes/VoteDetails";
@@ -28,12 +28,6 @@ const GroupVoteStatistics = lazy(() =>
 
 /** Reserved vote segment that routes to the creation page instead of a vote's detail. */
 const NEW_GROUP_VOTE_SEGMENT = "new";
-
-/** Returns to the votes list from an effect, not render — see its call site below. */
-function GroupVotesRedirect({ onLeave }: { onLeave: () => void }) {
-  useEffect(() => onLeave(), [onLeave]);
-  return null;
-}
 
 /** The vote record's facets. Each one loads its data when it is opened. */
 const VOTE_RECORD_TABS = [
@@ -166,8 +160,6 @@ export function GroupVotes({
   const [, navigate] = usePortalHashLocation();
   const creating = voteSegment === NEW_GROUP_VOTE_SEGMENT;
   const [tab, setTab] = useState<"votes" | "proposals">("votes");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
   const tableActions = useRef<ApiTableActions | null>(null);
   const votesPath = `/groups/${encodeURIComponent(groupId)}/votes`;
 
@@ -176,8 +168,7 @@ export function GroupVotes({
   }
 
   if (creating) {
-    // Navigating away belongs in an effect, not in render.
-    if (!canManage) return <GroupVotesRedirect onLeave={leaveCreatePage} />;
+    if (!canManage) return <HashRedirect to={votesPath} />;
     return (
       // Creation is a page of its own: a way back, and the create form —
       // which names what is being created in its own heading — alone on the
@@ -238,41 +229,6 @@ export function GroupVotes({
             searchPlaceholder="Search votes…"
             initialSort="-closes_at"
             actionsRef={tableActions}
-            params={{
-              ...(statusFilter ? { status: statusFilter } : {}),
-              ...(typeFilter ? { type: typeFilter } : {}),
-            }}
-            toolbar={({ resetPage }) => (
-              // Both filters already exist on the votes contract; the
-              // toolbar exposes them rather than leaving status and type
-              // to search syntax.
-              <>
-                <FilterSelect
-                  ariaLabel="Filter votes by status"
-                  value={statusFilter}
-                  options={[
-                    { value: "", label: "All statuses" },
-                    ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
-                  ]}
-                  onChange={(value) => {
-                    setStatusFilter(value);
-                    resetPage();
-                  }}
-                />
-                <FilterSelect
-                  ariaLabel="Filter votes by type"
-                  value={typeFilter}
-                  options={[
-                    { value: "", label: "All types" },
-                    ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
-                  ]}
-                  onChange={(value) => {
-                    setTypeFilter(value);
-                    resetPage();
-                  }}
-                />
-              </>
-            )}
             columns={[
               {
                 header: "Vote",
@@ -284,12 +240,33 @@ export function GroupVotes({
                 ),
                 sort: { asc: "title", desc: "-title" },
               },
-              { header: "Type", cell: (vote) => <Badge status={vote.voteType} />, width: "fit" },
+              // Both filters already exist on the votes contract; each lives
+              // in the column that shows the value it narrows, rather than
+              // leaving status and type to search syntax.
+              {
+                header: "Type",
+                cell: (vote) => <Badge status={vote.voteType} />,
+                width: "fit",
+                filter: {
+                  param: "type",
+                  options: [
+                    { value: "", label: "All types" },
+                    ...VOTE_TYPES.map((type) => ({ value: type as string, label: statusLabel(type) })),
+                  ],
+                },
+              },
               {
                 header: "Status",
                 cell: (vote) => <Badge status={vote.status} />,
                 width: "fit",
                 sort: { asc: "status", desc: "-status" },
+                filter: {
+                  param: "status",
+                  options: [
+                    { value: "", label: "All statuses" },
+                    ...VOTE_STATUSES.map((status) => ({ value: status as string, label: statusLabel(status) })),
+                  ],
+                },
               },
               {
                 // A date has a bounded length; the column says so instead

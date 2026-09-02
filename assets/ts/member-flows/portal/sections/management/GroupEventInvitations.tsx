@@ -10,7 +10,6 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { Badge } from "../../../../components/Badge";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { FilterSelect } from "../../../../components/FilterSelect";
 import { Alert } from "../../../../ui/Alert";
 import { Field } from "../../../../ui/Field";
 import type { MenuItem } from "../../../../ui/Menu";
@@ -27,9 +26,7 @@ import {
   type BulkInviteType,
 } from "../../../../components/event-invites/BulkInviteComposer";
 
-type InviteStatusFilter = "" | EventInviteSummary["status"];
-
-const INVITE_STATUS_FILTERS: ReadonlyArray<{ value: InviteStatusFilter; label: string }> = [
+const INVITE_STATUS_FILTERS: ReadonlyArray<{ value: "" | EventInviteSummary["status"]; label: string }> = [
   { value: "", label: "All statuses" },
   { value: "sent", label: "Sent" },
   { value: "accepted", label: "Accepted" },
@@ -62,7 +59,6 @@ export function GroupEventInvitations({
   inviteType?: BulkInviteType;
 }) {
   const tableActions = useRef<ApiTableActions | null>(null);
-  const [status, setStatus] = useState<InviteStatusFilter>("");
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -166,21 +162,6 @@ export function GroupEventInvitations({
             paginate
             searchPlaceholder="Search invitations…"
             initialSort="-created_at"
-            params={status ? { status } : undefined}
-            toolbar={({ resetPage }) => (
-              // Two of these panels sit on one tab, so the filter says which
-              // set of invitations it narrows rather than offering two
-              // controls both called "Invitation status".
-              <FilterSelect
-                ariaLabel={`${label} invitation status`}
-                value={status}
-                options={INVITE_STATUS_FILTERS}
-                onChange={(next) => {
-                  setStatus(next);
-                  resetPage();
-                }}
-              />
-            )}
             columns={[
               {
                 header: "Invitee",
@@ -199,6 +180,11 @@ export function GroupEventInvitations({
                 cell: (invite) => <Badge status={invite.status} />,
                 width: "fit",
                 sort: { asc: "status", desc: "-status" },
+                // Two of these panels sit on one tab. The filter lives in
+                // this column's menu, inside a table named after its set,
+                // so the two are told apart by the list they belong to
+                // rather than by two selects with two different names.
+                filter: { param: "status", options: INVITE_STATUS_FILTERS },
               },
               {
                 // Dates have a bounded length; the columns say so instead of

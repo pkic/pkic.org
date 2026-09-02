@@ -7,12 +7,11 @@ import {
   type EventOccurrence,
   type GroupEventSeries,
 } from "../../assets/shared/schemas/event-series";
-import { GroupMeetingSeriesDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetingSeriesDetail";
 import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
 import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
-import { isCurrentTab, tabs } from "./helpers/tabs";
+import { groupEventSeriesFixture } from "./helpers/meeting-series-fixture";
 
 const navigate = vi.fn();
 
@@ -57,33 +56,7 @@ afterEach(() => {
 });
 
 function baseSeries(overrides: Partial<GroupEventSeries> = {}): GroupEventSeries {
-  return {
-    id: "60000000-0000-4000-8000-000000000005",
-    eventId: "70000000-0000-4000-8000-000000000005",
-    ownerGroupId: GROUP_ID,
-    eventName: "Architecture call",
-    eventSlug: "architecture-call",
-    profileKey: "meeting",
-    registrationPolicy: "no_registration",
-    visibility: "group_members",
-    memberEligibility: "owner_group",
-    guestPolicy: "occurrence_invitation",
-    startsAt: "2026-09-01T15:00:00.000Z",
-    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-    timezone: "Europe/Amsterdam",
-    durationMinutes: 60,
-    location: "Online",
-    providerType: null,
-    providerConfigured: false,
-    active: true,
-    inviteWindow: { startsAt: null, endsAt: null, timezone: "Europe/Amsterdam" },
-    nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
-    createdAt: "2026-08-01T00:00:00.000Z",
-    updatedAt: "2026-08-01T00:00:00.000Z",
-    capabilities: ["view", "manage"],
-    occurrenceCount: 0,
-    ...overrides,
-  };
+  return groupEventSeriesFixture(GROUP_ID, overrides);
 }
 
 const SERIES_INVITE_WINDOW = {
@@ -520,77 +493,5 @@ describe("portal group meeting management", () => {
     expect(alert?.textContent).toContain("Someone else changed this at the same time.");
     expect(controlFor<HTMLInputElement>(container, "Meeting name").value).toBe("Renamed call");
     expect(buttonNamed(container, "Save series")).toBeDefined();
-  });
-
-  it("names each series panel after the series it belongs to, and links no tab to a missing id", async () => {
-    const series = baseSeries();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
-
-    // The tabs navigate, so they are links marked `aria-current` — not the
-    // ARIA tab pattern, and so the regions below are named sections rather
-    // than tabpanels pointing at ids no link carries.
-    expect(container.querySelector("[role='tabpanel']")).toBeNull();
-    const region = container.querySelector("section[aria-label]");
-    expect(region?.getAttribute("aria-label")).toBe("Architecture call occurrences");
-    for (const element of container.querySelectorAll("[aria-labelledby]")) {
-      const target = element.getAttribute("aria-labelledby")!;
-      expect(container.querySelector(`[id="${target}"]`)).not.toBeNull();
-    }
-  });
-
-  it("opens the tab given by an initial resourceTab", async () => {
-    const series = baseSeries();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(
-      <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
-    );
-
-    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings");
-    expect(isCurrentTab(settingsTab)).toBe(true);
-    expect(container.textContent).toContain("Save series");
-  });
-
-  it("falls back to the default tab for an unrecognized or unavailable resourceTab", async () => {
-    const series = baseSeries({ capabilities: ["view"] });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(
-      <GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} initialTab="settings" onChanged={() => {}} />,
-    );
-
-    expect(tabs(container)).toHaveLength(1);
-    const occurrencesTab = tabs(container)[0];
-    expect(isCurrentTab(occurrencesTab)).toBe(true);
-    expect(occurrencesTab?.textContent).toBe("Occurrences");
-  });
-
-  it("navigates to the canonical series tab URL when a tab is clicked", async () => {
-    const series = baseSeries();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
-    );
-
-    const container = mount(<GroupMeetingSeriesDetail groupId={GROUP_ID} series={series} onChanged={() => {}} />);
-
-    const settingsTab = tabs(container).find((item) => item.textContent === "Series settings")!;
-    expect(settingsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/${series.id}/settings`);
-
-    await act(async () => {
-      settingsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${series.id}/settings`);
   });
 });
