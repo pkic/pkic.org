@@ -86,18 +86,46 @@ const SORT_EXPRESSIONS = {
   created_at: "series.created_at",
 } satisfies Record<(typeof EVENT_SERIES_SORT_COLUMNS)[number], string>;
 
-export function buildGroupEventSeriesPageQuery(
+/**
+ * The group-context series projection: every series the viewer may see
+ * through `groupId`, with the grants, occurrence count, and access flags that
+ * `toGroupEventSeries` turns into effective capabilities. The list page and
+ * the single record both read from it, so a row looks the same wherever it
+ * is fetched.
+ */
+function buildGroupEventSeriesProjection(
   groupId: string,
   access: GroupResourceContextAccess | LiveGroupResourceContextAccess,
-  query: z.infer<typeof eventSeriesListQuerySchema>,
-) {
+): { sql: string; bindings: unknown[]; conditions: string[] } {
   const live = "memberEvidence" in access;
   const accessibleEvents = live
     ? buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view")
     : buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const managerAccess = live ? "group_access.manager_access" : access.manager ? "1" : "0";
-  const conditions = ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR series.active = 1)`];
-  const bindings: unknown[] = [...accessibleEvents.bindings, groupId];
+  return {
+    sql: `WITH ${accessibleEvents.sql}
+      ${EVENT_SERIES_SELECT},
+      GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
+      (SELECT COUNT(*) FROM event_occurrences occurrence WHERE occurrence.series_id = series.id) AS occurrence_count,
+      ${live ? "group_access.member_access" : access.member ? "1" : "0"} AS member_access,
+      ${managerAccess} AS manager_access
+      FROM accessible_resource accessible
+      JOIN events event ON event.id = accessible.resource_id
+      JOIN event_series series ON series.event_id = event.id
+      ${live ? "CROSS JOIN group_access" : ""}
+      LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?`,
+    bindings: [...accessibleEvents.bindings, groupId],
+    conditions: ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR series.active = 1)`],
+  };
+}
+
+export function buildGroupEventSeriesPageQuery(
+  groupId: string,
+  access: GroupResourceContextAccess | LiveGroupResourceContextAccess,
+  query: z.infer<typeof eventSeriesListQuerySchema>,
+) {
+  const projection = buildGroupEventSeriesProjection(groupId, access);
+  const { conditions, bindings } = projection;
   const search = query.q ? buildD1TextSearchFilter(query.q, ["event.name", "event.slug", "series.location"]) : null;
   if (search) {
     conditions.push(search.sql);
@@ -112,17 +140,7 @@ export function buildGroupEventSeriesPageQuery(
     bindings.push(query.profileKey);
   }
   return {
-    sql: `WITH ${accessibleEvents.sql}
-      ${EVENT_SERIES_SELECT},
-      GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities,
-      (SELECT COUNT(*) FROM event_occurrences occurrence WHERE occurrence.series_id = series.id) AS occurrence_count,
-      ${live ? "group_access.member_access" : access.member ? "1" : "0"} AS member_access,
-      ${live ? "group_access.manager_access" : access.manager ? "1" : "0"} AS manager_access
-      FROM accessible_resource accessible
-      JOIN events event ON event.id = accessible.resource_id
-      JOIN event_series series ON series.event_id = event.id
-      ${live ? "CROSS JOIN group_access" : ""}
-      LEFT JOIN event_group_grants grant_row ON grant_row.event_id = event.id AND grant_row.group_id = ?
+    sql: `${projection.sql}
       WHERE ${conditions.join(" AND ")}
       GROUP BY series.id`,
     bindings,
@@ -143,6 +161,32 @@ export async function listGroupEventSeries(
     buildGroupEventSeriesPageQuery(groupId, liveGroupResourceContextAccess(viewer, groupId), query),
   );
   return { series: rows.map((row) => toGroupEventSeries(row, groupId)), total };
+}
+
+/**
+ * One series as the viewer sees it through `groupId`: the same projection as
+ * a list row, so the record page and the list agree on capabilities and the
+ * occurrence count. A series outside the viewer's reach is not found, not
+ * forbidden — the list would not have shown it either.
+ */
+export async function getGroupEventSeriesDetail(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupId: string,
+  seriesId: string,
+): Promise<GroupEventSeries> {
+  const projection = buildGroupEventSeriesProjection(groupId, liveGroupResourceContextAccess(viewer, groupId));
+  const row = await first<GroupEventSeriesRow>(
+    db,
+    `${projection.sql}
+      WHERE ${[...projection.conditions, "series.id = ?"].join(" AND ")}
+      GROUP BY series.id`,
+    [...projection.bindings, seriesId],
+  );
+  if (!row) {
+    throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
+  }
+  return toGroupEventSeries(row, groupId);
 }
 
 async function getEventSeriesRowById(db: DatabaseLike, seriesId: string): Promise<EventSeriesRow | null> {

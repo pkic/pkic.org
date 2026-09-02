@@ -351,6 +351,7 @@ Canonical group routes use the following shape:
     /api/v1/groups/:groupId/votes
     /api/v1/groups/:groupId/votes/:voteId/statistics
     /api/v1/groups/:groupId/meetings/series
+    /api/v1/groups/:groupId/meetings/series/:seriesId
     /api/v1/groups/:groupId/meetings/series/:seriesId/occurrences
     /api/v1/groups/:groupId/mailing-lists
     /api/v1/groups/:groupId/stats

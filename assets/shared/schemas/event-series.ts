@@ -310,6 +310,8 @@ const eventManagementErrorResponses = {
 };
 
 export const eventSeriesResponseSchema = z.object({ series: eventSeriesSchema });
+/** One series through a group context, projected exactly like a list row. */
+export const groupEventSeriesResponseSchema = z.object({ series: groupEventSeriesSchema });
 export const eventOccurrenceResponseSchema = z.object({ occurrence: eventOccurrenceSchema });
 export const eventOccurrenceGuestResponseSchema = z.object({ guest: eventOccurrenceGuestSchema });
 export const eventAttendanceResponseSchema = z.object({ confirmation: eventOccurrenceJoinConfirmationSchema });
@@ -330,7 +332,21 @@ export const groupMeetingSeriesDetailRouteSchema = {
   ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Get a meeting series through one group context",
-{
+  request: { params: eventSeriesParamsSchema },
+  responses: {
+    "200": {
+      description: "The meeting series with its effective capabilities and occurrence count in the selected group.",
+      content: { "application/json": { schema: groupEventSeriesResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("The meeting series is not available through this group."),
+  },
+};
+export const groupMeetingSeriesCreateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Meetings"],
+  summary: "Create a group-owned meeting series",
+  request: {
     params: groupMeetingSeriesParamsSchema,
     body: { required: true, content: { "application/json": { schema: eventSeriesCreateSchema } } },
   },
