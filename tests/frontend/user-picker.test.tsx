@@ -204,3 +204,51 @@ describe("UserPicker request ordering", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+describe("UserPicker response contract", () => {
+  const mounted: HTMLElement[] = [];
+
+  afterEach(() => {
+    for (const container of mounted.splice(0)) {
+      void act(() => render(null, container));
+      container.remove();
+    }
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("accepts the staff users list, which carries no organization name, as well as the catalog", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockResolvedValue({ users: [], page: { limit: 8, offset: 0, total: 0, hasMore: false } });
+    const container = document.createElement("div");
+    mounted.push(container);
+    await act(() => render(h(UserPicker, { value: null, onChange: vi.fn() }), container));
+    const input = container.querySelector("input") as HTMLInputElement;
+    input.value = "admin@";
+    await act(() => {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+
+    // The default endpoint is the staff users list, and the schema the picker
+    // hands to the client must accept what that list answers with: id, email
+    // and names, no organization. Parsing with the catalog's full contract
+    // refused every reply and reported "Could not search users."
+    const [url, schema] = vi.mocked(getJson).mock.calls[0];
+    expect(url).toContain("/api/v1/users?");
+    const usersListReply = {
+      users: [
+        { id: "00000000-0000-4000-8000-000000000001", email: "admin@pkic.org", first_name: "PKIC", last_name: "Admin" },
+      ],
+      page: { limit: 8, offset: 0, total: 1, hasMore: false },
+    };
+    expect(schema.safeParse(usersListReply).success).toBe(true);
+    const catalogReply = {
+      users: [{ ...usersListReply.users[0], organization_name: "PKI Consortium" }],
+      page: usersListReply.page,
+    };
+    expect(schema.safeParse(catalogReply).success).toBe(true);
+  });
+});
