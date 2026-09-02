@@ -113,10 +113,8 @@ describe("shared mailing-list form model", () => {
     expect(container.textContent).toContain("Moderation policy");
     expect(container.textContent).toContain("Auto-sync categories");
 
-    const postingPolicy = container.querySelector<HTMLSelectElement>("#mailing-list-posting-policy")!;
-    expect(postingPolicy.value).toBe("members");
-    const moderationPolicy = container.querySelector<HTMLSelectElement>("#mailing-list-moderation-policy")!;
-    expect(moderationPolicy.value).toBe("moderated");
+    expect(controlFor<HTMLSelectElement>(container, "Posting policy").value).toBe("members");
+    expect(controlFor<HTMLSelectElement>(container, "Moderation policy").value).toBe("moderated");
 
     const categoryA = container.querySelector<HTMLInputElement>("#mailing-list-auto-sync-categories-A")!;
     expect(categoryA.checked).toBe(true);

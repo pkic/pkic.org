@@ -5,6 +5,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
 import { useApiPage } from "../../../../hooks/useApiPage";
 import { Alert } from "../../../../ui/Alert";
+import { ButtonLink } from "../../../../ui/Button";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
@@ -84,13 +85,12 @@ export function SponsorAttendees({
         {/* A download is a navigation to a representation of this list, so it
             is an anchor wearing the button's clothes rather than a button that
             fakes one. */}
-        <a
-          class="pk-btn pk-btn--secondary"
+        <ButtonLink
           href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
           download={`attendees-${capacity.eventSlug}.csv`}
         >
           Download CSV
-        </a>
+        </ButtonLink>
       </div>
 
       <p class="pk-small">

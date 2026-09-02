@@ -1,4 +1,5 @@
 import { Alert } from "../../../../../../ui/Alert";
+import { ButtonLink } from "../../../../../../ui/Button";
 import type { EventDetail } from "../../types";
 
 /**
@@ -21,15 +22,14 @@ export function SeriesManagedNotice({ event }: { event: Pick<EventDetail, "owner
           </p>
           {ownerGroupId && seriesId ? (
             // A link, not a Button: this navigates, so it must be openable in
-            // a new tab and say where it goes. The `pk-btn` classes ship with
-            // the entry stylesheet, so no import rides with them.
+            // a new tab and say where it goes.
             <div class="pk-cluster">
-              <a
-                class="pk-btn pk-btn--secondary pk-btn--sm"
+              <ButtonLink
+                size="sm"
                 href={`#/groups/${encodeURIComponent(ownerGroupId)}/meetings/${encodeURIComponent(seriesId)}`}
               >
                 Open meeting series <span aria-hidden="true">→</span>
-              </a>
+              </ButtonLink>
             </div>
           ) : (
             // The italic that used to carry "this is an aside" is gone: the

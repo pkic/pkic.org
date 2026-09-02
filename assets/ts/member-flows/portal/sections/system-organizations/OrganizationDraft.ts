@@ -4,12 +4,10 @@
  * record's revision. Every card reads the same draft, so editing keeps the
  * page's own layout instead of collapsing into a form.
  */
-import {
-  organizationManagementUpdateSchema,
-  type OrganizationDetail,
-  type OrganizationManagementUpdateInput,
+import type {
+  OrganizationDetail,
+  OrganizationManagementUpdateInput,
 } from "../../../../../shared/schemas/organization-management";
-import { normalizeValidation } from "../../../../shared/form/validation-map";
 
 export const ORGANIZATION_TEXT_FIELDS = [
   "name",
@@ -68,21 +66,4 @@ export function payloadFromDraft(draft: OrganizationDraft, revision: string): Or
     secondaryContactUserId: draft.secondaryContactUserId || null,
     revision,
   } as OrganizationManagementUpdateInput;
-}
-
-/**
- * The draft against the shared update contract — the same rules the server
- * applies — with a refusal read through the shared validation map, so a
- * field is told the same thing whichever side refused it.
- */
-export function validateDraft(
-  draft: OrganizationDraft,
-  revision: string,
-):
-  | { payload: OrganizationManagementUpdateInput; fields: null }
-  | { payload: null; fields: Record<string, string>; message: string } {
-  const result = organizationManagementUpdateSchema.safeParse(payloadFromDraft(draft, revision));
-  if (result.success) return { payload: result.data, fields: null };
-  const refusal = normalizeValidation(result.error);
-  return { payload: null, fields: refusal.fields, message: refusal.globalMessage };
 }

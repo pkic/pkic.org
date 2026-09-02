@@ -17,6 +17,16 @@ export const organizationIdentityParamsSchema = organizationIdentityCollectionPa
   identityId: databaseIdSchema,
 });
 
+/**
+ * Creating an identity as one value: the organization the route reads from
+ * its path and the identity it reads from the body. A form that picks the
+ * organization and describes the identity at once validates through both.
+ */
+export const organizationIdentityCreateRequestSchema = z.intersection(
+  organizationIdentityCollectionParamsSchema,
+  identityCreateSchema,
+);
+
 export const organizationIdentitiesListRouteSchema = {
   ...requiresSession(),
   tags: ["Organizations"],

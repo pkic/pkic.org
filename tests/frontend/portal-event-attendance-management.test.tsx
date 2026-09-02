@@ -4,6 +4,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eventAttendanceRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
 import { GroupEventRegistrations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrations";
+import { controlFor } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -168,6 +169,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * The design system's choice control whose line reads `text`. Its label wraps
+ * the control, so there is no `for` to resolve: the input inside is the one.
+ */
+function choice(container: HTMLElement, text: string): HTMLInputElement | null {
+  const label = [...container.querySelectorAll<HTMLLabelElement>("label.pk-check")].find(
+    (candidate) => candidate.querySelector(".pk-check__label")?.textContent === text,
+  );
+  return label?.querySelector<HTMLInputElement>("input") ?? null;
+}
+
 describe("portal event attendance management", () => {
   it("returns an accepted in-person day to its per-day waitlist through the canonical group route", async () => {
     const requests = installApi(false);
@@ -200,9 +212,7 @@ describe("portal event attendance management", () => {
     const container = mount();
     await openAttendance(container);
 
-    const checkbox = container.querySelector<HTMLInputElement>(
-      `#group-registration-${REGISTRATION_ID}-admit-2026-09-01`,
-    );
+    const checkbox = choice(container, "Admit day");
     expect(checkbox).not.toBeNull();
     expect(checkbox?.disabled).toBe(false);
     await act(async () => {
@@ -244,8 +254,10 @@ describe("portal event attendance management", () => {
     await openAttendance(container);
 
     expect(container.textContent).toContain("Requires the effective event manage capability");
-    const vipDay = container.querySelector<HTMLInputElement>(`#group-registration-${REGISTRATION_ID}-vip-2026-09-01`);
-    const reason = container.querySelector<HTMLTextAreaElement>(`#group-registration-${REGISTRATION_ID}-vip-reason`);
+    const vipDay = [...container.querySelectorAll<HTMLLabelElement>("label.pk-check")]
+      .find((candidate) => candidate.querySelector(".pk-check__label")?.textContent?.endsWith("2026-09-01"))
+      ?.querySelector<HTMLInputElement>("input");
+    const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
     expect(vipDay).not.toBeNull();
     expect(reason).not.toBeNull();
     await act(async () => {

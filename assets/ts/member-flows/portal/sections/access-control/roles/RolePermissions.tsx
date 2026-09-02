@@ -1,10 +1,8 @@
 import { PERMISSIONS, type Permission } from "../../../../../../shared/schemas/permissions";
-// `pk-check`, `pk-check__input` and `pk-check__label` come from Field.css and
-// `pk-mono` from Content.css. Both are written here as class names rather than
-// reached through a component, so this module pulls the stylesheets into its
-// own chunk: a label carrying only `pk-check` renders an operating-system
-// default checkbox, and nothing complains.
-import "../../../../../ui/Field.css";
+import { Checkbox } from "../../../../../ui/Checkbox";
+// `pk-mono` comes from Content.css and is written here as a class name rather
+// than reached through a component, so this module pulls the stylesheet into
+// its own chunk.
 import "../../../../../ui/Content.css";
 
 /**
@@ -27,18 +25,13 @@ export function PermissionCheckboxes({
     // arrangement.
     <div class="pk-cluster portal-access-role-permissions">
       {PERMISSIONS.map((permission) => (
-        // The label wraps the control, so the two are bound without a `for`/`id`
-        // pair to keep in step.
-        <label key={permission} class="pk-check">
-          <input
-            class="pk-check__input"
-            type="checkbox"
-            checked={selected.has(permission)}
-            onChange={() => onToggle(permission)}
-            disabled={disabled}
-          />
-          <span class="pk-check__label pk-mono pk-small">{permission}</span>
-        </label>
+        <Checkbox
+          key={permission}
+          checked={selected.has(permission)}
+          onChange={() => onToggle(permission)}
+          disabled={disabled}
+          label={<span class="pk-mono pk-small">{permission}</span>}
+        />
       ))}
     </div>
   );

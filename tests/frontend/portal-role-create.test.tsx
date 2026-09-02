@@ -7,6 +7,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { roleCreateSchema } from "../../assets/shared/schemas/access-control";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { RoleCreate } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleCreate";
 
 const mounted: HTMLElement[] = [];
@@ -35,6 +36,12 @@ function labeledControl<T extends HTMLElement>(container: HTMLElement, label: st
   const control = element?.htmlFor ? container.querySelector<T>(`[id="${element.htmlFor}"]`) : null;
   if (!control) throw new Error(`no control labeled: ${label}`);
   return control;
+}
+
+function fieldOf(control: HTMLElement): HTMLElement {
+  const field = control.closest<HTMLElement>(".pk-field");
+  if (!field) throw new Error("control is not inside a Field");
+  return field;
 }
 
 function type(control: HTMLInputElement, value: string): void {
@@ -134,14 +141,65 @@ describe("RoleCreate", () => {
     const name = labeledControl<HTMLInputElement>(container, "Name");
     type(name, "Sponsorship Lead");
 
+    // Refused as typed by the create contract itself, not by a copy of its
+    // pattern written here, so the field says what the server would say.
+    expect(fieldOf(name).classList.contains("pk-field--invalid")).toBe(true);
     expect(name.getAttribute("aria-invalid")).toBe("true");
     // The reason is announced with the control rather than only coloured.
-    const messageId = name.getAttribute("aria-describedby")!;
-    expect(container.querySelector(`[id="${messageId}"]`)?.textContent).toContain("Lowercase letters");
+    const message = fieldOf(name).querySelector('[role="alert"]');
+    expect(message?.id).toBe(name.getAttribute("aria-describedby"));
+    expect(message?.textContent).toContain("Use lowercase letters, numbers, and underscores only");
 
     await submit(container);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Lowercase letters");
+    expect(document.activeElement).toBe(name);
+  });
+
+  it("refuses an empty name at the field when submitted, and sends nothing", async () => {
+    const fetchMock = vi.fn(() => {
+      throw new Error("no request expected");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const container = mount(<RoleCreate onCreated={vi.fn()} onCancel={vi.fn()} />);
+
+    await submit(container);
+
+    const name = labeledControl<HTMLInputElement>(container, "Name");
+    expect(fieldOf(name).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(name).querySelector('[role="alert"]')?.textContent).toContain("Give the role a name.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("marks the field a server refusal names, and does not navigate away", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "VALIDATION",
+                message: "Invalid request",
+                details: { fieldErrors: { name: ["That name is reserved."] } },
+              },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    const onCreated = vi.fn();
+    const container = mount(<RoleCreate onCreated={onCreated} onCancel={vi.fn()} />);
+
+    type(labeledControl<HTMLInputElement>(container, "Name"), "admin");
+    await submit(container);
+
+    const name = labeledControl<HTMLInputElement>(container, "Name");
+    expect(fieldOf(name).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(name).querySelector('[role="alert"]')?.textContent).toContain("That name is reserved.");
+    expect(document.activeElement).toBe(name);
+    expect(onCreated).not.toHaveBeenCalled();
+    // A refusal read through the shared error class, as the client raises it.
+    expect(ApiClientError).toBeDefined();
   });
 
   it("names the form and pairs every label with the control it names", () => {

@@ -3,6 +3,7 @@ import {
   CONTENT_REVIEW_STATUSES,
   organizationContentReviewDecisionResponseSchema,
   organizationContentReviewDetailResponseSchema,
+  organizationContentReviewRejectSchema,
   organizationContentReviewsListResponseSchema,
   type OrganizationContentReviewDetail,
 } from "../../../../shared/schemas/organization-content-reviews";
@@ -11,6 +12,7 @@ import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { DataTable } from "../../../components/Table";
+import { useContractForm } from "../../../hooks/useContractForm";
 import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
 import { Button } from "../../../ui/Button";
@@ -33,8 +35,6 @@ type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
  * deliberately no "all statuses" state — a moderation queue is not an archive.
  */
 const DEFAULT_QUEUE_STATUS: ReviewStatus = "pending";
-
-const REVIEWER_NOTE_REQUIRED = "A reviewer note is required to reject";
 
 function formatDiffValue(value: unknown): string {
   return Array.isArray(value) ? value.join("\n") : String(value ?? "");
@@ -63,8 +63,10 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewerNote, setReviewerNote] = useState("");
-  const [noteError, setNoteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // One basis for validation: the rejection contract the route parses decides
+  // what the note shows and what Reject may send. Approval carries no body.
+  const form = useContractForm(organizationContentReviewRejectSchema, { reviewerNote });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,29 +89,32 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
   }, [load]);
 
   async function decide(action: "approve" | "reject") {
-    const note = reviewerNote.trim();
-    if (action === "reject" && !note) {
-      // The refusal is attached to the control that caused it, so a screen
-      // reader hears which field is blocking rather than only a toast that has
-      // already gone by the time focus returns to the form.
-      setNoteError("Write the reason for the rejection before rejecting this submission.");
-      toast(REVIEWER_NOTE_REQUIRED, "error");
-      return;
+    let body: unknown = {};
+    if (action === "reject") {
+      // The refusal lands on the control that caused it, so a screen reader
+      // hears which field is blocking rather than only a toast that has gone
+      // by the time focus returns to the form.
+      const checked = form.submit();
+      if (!checked.data) {
+        setError(checked.message);
+        return;
+      }
+      body = checked.data;
     }
 
-    setNoteError(null);
     setBusy(true);
     setError(null);
     try {
       await postJson(
         `${API_BASE}/${encodeURIComponent(reviewId)}/${action}`,
-        action === "reject" ? { reviewerNote: note } : {},
+        body,
         organizationContentReviewDecisionResponseSchema,
       );
       toast(action === "approve" ? "Approved and applied" : "Rejected", "success");
       await onDecided();
     } catch (caught) {
-      const message = (caught as Error).message;
+      // A server refusal names its field the same way the contract does.
+      const message = form.refuse(caught);
       setError(message);
       toast(message, "error");
     } finally {
@@ -126,7 +131,8 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
     // regions rather than an unnamed box below a table.
     <Panel aria-label={detail.organizationName}>
       <PanelHeader title={detail.organizationName} />
-      <PanelBody class="pk-stack pk-stack--snug">
+      {/* The body is the note's ancestor, so it reports to the one contract. */}
+      <PanelBody class="pk-stack pk-stack--snug" {...form.handlers}>
         <p class="pk-muted pk-small">
           Submitted by {detail.submitterName} ({detail.submitterEmail}) on {fmt(detail.submittedAt)}
         </p>
@@ -156,12 +162,12 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
             <Field
               label="Reviewer note"
               help="Required to reject. Sent to the organization with the decision."
-              state={noteError ? "invalid" : undefined}
-              message={noteError ?? undefined}
+              {...form.of("reviewerNote")}
             >
               {(control) => (
                 <Textarea
                   {...control}
+                  name="reviewerNote"
                   rows={3}
                   maxlength={2000}
                   value={reviewerNote}

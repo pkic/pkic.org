@@ -165,16 +165,21 @@ export function ResourceSharingEditor({
               the submit button stays outside so it can keep focus while the
               request is in flight. */}
           <fieldset class="pk-fieldset pk-grid pk-grid--roomy" disabled={saving}>
-            <ServerSearchSelect
-              catalog={managedGroupCatalog}
-              label="Group"
-              value={selectedGroup?.id ?? null}
-              selectedLabel={selectedGroup?.name}
-              placeholder="Select a group…"
-              disabled={saving}
-              excludeValues={[ownerGroupId]}
-              onChange={(group) => setSelectedGroup(group)}
-            />
+            <Field label="Group">
+              {(control) => (
+                <ServerSearchSelect
+                  {...control}
+                  searchLabel="Group"
+                  catalog={managedGroupCatalog}
+                  value={selectedGroup?.id ?? null}
+                  selectedLabel={selectedGroup?.name}
+                  placeholder="Select a group…"
+                  disabled={saving}
+                  excludeValues={[ownerGroupId]}
+                  onChange={(group) => setSelectedGroup(group)}
+                />
+              )}
+            </Field>
             <Field label="Capability">
               {(control) => (
                 <Select

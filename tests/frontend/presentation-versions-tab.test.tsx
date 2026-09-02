@@ -67,6 +67,42 @@ async function openReviewForm(root: HTMLElement) {
   await act(() => buttonNamed(root, "Review").click());
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+/** Stubs fetch with one answer and records every request body. */
+function stubFetch(respond: () => Response): string[] {
+  const bodies: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(init?.body?.toString() ?? "");
+      return respond();
+    }),
+  );
+  return bodies;
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+async function typeNote(root: HTMLElement, value: string): Promise<HTMLTextAreaElement> {
+  const textarea = root.querySelector("textarea") as HTMLTextAreaElement;
+  await act(() => {
+    textarea.value = value;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  return textarea;
+}
+
+function fieldOf(control: HTMLElement): HTMLElement {
+  return control.closest<HTMLElement>(".pk-field")!;
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   if (!container) return;
@@ -97,6 +133,12 @@ describe("presentation versions tab", () => {
     // The end-to-end spec reads the review outcome through this hook, and it
     // has to stay a word rather than a colour.
     expect(root.querySelector("[data-presentation-review-status]")?.textContent).toBe("Needs revision");
+
+    // The download is a destination drawn as a button: the design system's
+    // link, with the same classes a Button beside it carries.
+    const download = [...card.querySelectorAll("a")].find((link) => link.textContent === "Download");
+    expect(download?.classList.contains("pk-btn")).toBe(true);
+    expect(download?.hasAttribute("download")).toBe(true);
 
     // The disclosure says, in markup, what it controls and whether it is open.
     const reviewButton = buttonNamed(root, "Review");
@@ -131,17 +173,7 @@ describe("presentation versions tab", () => {
   });
 
   it("sends the review the shared request schema describes", async () => {
-    const bodies: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        bodies.push(init?.body?.toString() ?? "");
-        return new Response(JSON.stringify({ version }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }),
-    );
+    const bodies = stubFetch(() => jsonResponse({ version }));
     const reloads: number[] = [];
     const root = mount({ onReload: () => reloads.push(1) });
     await openReviewForm(root);
@@ -151,15 +183,9 @@ describe("presentation versions tab", () => {
       select.value = "needs_revision";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    const textarea = root.querySelector("textarea") as HTMLTextAreaElement;
-    await act(() => {
-      textarea.value = "  Please add speaker notes.  ";
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await typeNote(root, "  Please add speaker notes.  ");
     await act(() => buttonNamed(root, "Save review").click());
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settle();
 
     expect(bodies).toHaveLength(1);
     // The contract, not a literal: the body has to satisfy the schema the
@@ -171,46 +197,78 @@ describe("presentation versions tab", () => {
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).toBeNull();
   });
 
-  it("reports a rejected review on the field the reviewer was filling in", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "You cannot review this version." } }), {
-            status: 403,
-            headers: { "content-type": "application/json" },
-          }),
+  it("refuses a note the contract rejects on the field, live, and sends nothing", async () => {
+    const bodies = stubFetch(() => jsonResponse({ version }));
+    const root = mount();
+    await openReviewForm(root);
+
+    // The contract caps the note; the field says so as it is typed, before
+    // Save is pressed, and Save then sends nothing.
+    const textarea = await typeNote(root, "x".repeat(4001));
+    expect(fieldOf(textarea).classList.contains("pk-field--invalid")).toBe(true);
+    expect(textarea.getAttribute("aria-invalid")).toBe("true");
+    const messageId = textarea.getAttribute("aria-describedby");
+    expect(root.querySelector(`#${messageId}`)?.getAttribute("role")).toBe("alert");
+
+    await act(() => buttonNamed(root, "Save review").click());
+    await settle();
+    expect(bodies).toHaveLength(0);
+    expect(root.querySelector(`#${REVIEW_FORM_ID}`)).not.toBeNull();
+
+    // Corrected: the same field says it is good now.
+    await typeNote(root, "Short and clear.");
+    expect(fieldOf(textarea).classList.contains("pk-field--ok")).toBe(true);
+  });
+
+  it("marks the field a server refusal names, and keeps the form open", async () => {
+    stubFetch(() =>
+      jsonResponse(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Invalid request",
+            details: { fieldErrors: { note: ["The note must not contain a URL."] } },
+          },
+        },
+        400,
       ),
     );
     const root = mount();
     await openReviewForm(root);
+    await typeNote(root, "See https://example.test");
     await act(() => buttonNamed(root, "Save review").click());
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settle();
 
-    // The form stays open with the reviewer's work in it.
+    // The form stays open with the reviewer's work in it, and the field the
+    // server named carries its reason.
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).not.toBeNull();
-
     const textarea = root.querySelector("textarea") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("See https://example.test");
+    expect(fieldOf(textarea).classList.contains("pk-field--invalid")).toBe(true);
     expect(textarea.getAttribute("aria-invalid")).toBe("true");
-    const messageId = textarea.getAttribute("aria-describedby");
-    const message = root.querySelector(`#${messageId}`) as HTMLElement;
+    const message = root.querySelector(`#${textarea.getAttribute("aria-describedby")}`) as HTMLElement;
     expect(message.getAttribute("role")).toBe("alert");
-    expect(message.textContent).toContain("You cannot review this version.");
+    expect(message.textContent).toContain("The note must not contain a URL.");
+  });
+
+  it("states a refusal the server does not attribute to a field inside the form", async () => {
+    stubFetch(() => jsonResponse({ error: { code: "FORBIDDEN", message: "You cannot review this version." } }, 403));
+    const root = mount();
+    await openReviewForm(root);
+    await act(() => buttonNamed(root, "Save review").click());
+    await settle();
+
+    // The form stays open; the fields said nothing wrong, so neither is
+    // marked, and the refusal is announced where the reviewer is working.
+    const form = root.querySelector(`#${REVIEW_FORM_ID}`) as HTMLElement;
+    expect(form).not.toBeNull();
+    expect(form.querySelector("textarea")?.getAttribute("aria-invalid")).toBeNull();
+    const alert = form.querySelector('[role="alert"]') as HTMLElement;
+    expect(alert.textContent).toContain("You cannot review this version.");
   });
 
   it("states an upload failure in a live region above the list", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: { code: "TOO_LARGE", message: "That file is too large." } }), {
-            status: 413,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
-    );
+    stubFetch(() => jsonResponse({ error: { code: "TOO_LARGE", message: "That file is too large." } }, 413));
     const root = mount();
 
     const fileInput = root.querySelector('input[type="file"]') as HTMLInputElement;
@@ -223,9 +281,7 @@ describe("presentation versions tab", () => {
     await act(() => {
       fileInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await settle();
 
     const alert = root.querySelector('[role="alert"]') as HTMLElement;
     expect(alert.textContent).toContain("That file is too large.");

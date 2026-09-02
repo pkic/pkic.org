@@ -8,6 +8,7 @@ import type { FormPlacement } from "../../../../../shared/schemas/forms";
 import { patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
@@ -106,16 +107,12 @@ export function GroupFormPlacementEditor({
             )}
           </Field>
         </div>
-        <label class="pk-check" for={activeId}>
-          <input
-            id={activeId}
-            class="pk-check__input"
-            type="checkbox"
-            checked={active}
-            onChange={(event) => setActive(event.currentTarget.checked)}
-          />
-          <span class="pk-check__label">Accept responses while within the availability window</span>
-        </label>
+        <Checkbox
+          id={activeId}
+          checked={active}
+          onChange={(event) => setActive(event.currentTarget.checked)}
+          label="Accept responses while within the availability window"
+        />
       </fieldset>
       <div class="pk-cluster">
         <Button type="submit" variant="primary" loading={saving}>

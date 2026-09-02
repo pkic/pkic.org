@@ -33,6 +33,31 @@ export interface ButtonProps extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonEle
   children?: ComponentChildren;
 }
 
+interface ButtonLook {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  /** Renders square, for an icon-only control. Requires `aria-label`. */
+  icon?: boolean;
+  block?: boolean;
+}
+
+/** The classes for a look; `extra` is whatever `class` the caller passed. */
+function buttonClasses(
+  { variant = "secondary", size = "md", icon = false, block = false }: ButtonLook,
+  extra: unknown,
+) {
+  return [
+    "pk-btn",
+    `pk-btn--${variant}`,
+    size === "md" ? null : `pk-btn--${size}`,
+    icon ? "pk-btn--icon" : null,
+    block ? "pk-btn--block" : null,
+    typeof extra === "string" ? extra : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function Button({
   variant = "secondary",
   size = "md",
@@ -45,16 +70,7 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
-  const classes = [
-    "pk-btn",
-    `pk-btn--${variant}`,
-    size === "md" ? null : `pk-btn--${size}`,
-    icon ? "pk-btn--icon" : null,
-    block ? "pk-btn--block" : null,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const classes = buttonClasses({ variant, size, icon, block }, className);
 
   const inert = Boolean(disabled) || loading;
 
@@ -71,5 +87,23 @@ export function Button({
       {loading && <span class="pk-btn__spinner" aria-hidden="true" />}
       {children}
     </button>
+  );
+}
+
+export interface ButtonLinkProps
+  extends Omit<JSX.AnchorHTMLAttributes<HTMLAnchorElement>, "size" | "icon">, ButtonLook {
+  href: string;
+  children?: ComponentChildren;
+}
+
+/**
+ * A link drawn as a button: for a destination, where `Button` is for an
+ * action. Same looks, same classes, so a row of the two lines up.
+ */
+export function ButtonLink({ variant, size, icon, block, class: className, children, ...rest }: ButtonLinkProps) {
+  return (
+    <a {...rest} class={buttonClasses({ variant, size, icon, block }, className)}>
+      {children}
+    </a>
   );
 }

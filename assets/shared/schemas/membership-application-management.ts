@@ -171,8 +171,8 @@ export const applicationStageTransitionRouteSchema = {
 };
 
 export const applicationCommunicationCreateSchema = z.object({
-  subject: z.string().trim().min(1).max(200),
-  body: z.string().trim().min(1).max(20000),
+  subject: z.string().trim().min(1, "Enter a subject for the email.").max(200),
+  body: z.string().trim().min(1, "Enter the message to send.").max(20000),
   templateKey: z.string().trim().max(80).optional(),
 });
 
@@ -195,7 +195,7 @@ export const applicationCommunicationCreateRouteSchema = {
 };
 
 export const applicationNoteCreateSchema = z.object({
-  body: z.string().trim().min(1).max(20000),
+  body: z.string().trim().min(1, "Enter the note to record.").max(20000),
 });
 
 export const applicationNoteCreateRouteSchema = {
@@ -219,6 +219,7 @@ export const applicationNoteCreateRouteSchema = {
 export const ecDecisionRecordSchema = ecDecisionCreateSchema.safeExtend({
   ecMemberUserId: databaseIdSchema.optional(),
 });
+export type EcDecisionRecordInput = z.infer<typeof ecDecisionRecordSchema>;
 
 export const ecDecisionRecordRouteSchema = {
   tags: ["Membership"],

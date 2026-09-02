@@ -18,6 +18,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { ApiClientError, getJson, postJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
@@ -157,25 +158,35 @@ export function GroupCreateForm({
                 submit control stays outside it so the button the reader just
                 pressed keeps focus instead of being disabled from under them. */}
             <fieldset class="pk-fieldset pk-stack" disabled={saving}>
-              <ServerSearchSelect
-                catalog={activeGroupTypeCatalog}
-                label="Group type"
-                value={draft.typeKey}
-                selectedLabel={typeSelected?.pluralLabel}
-                allowEmpty={false}
-                onChange={(type) => {
-                  setTypeSelected(type);
-                  setField("typeKey", type?.key ?? null);
-                }}
-              />
-              <ServerSearchSelect
-                catalog={managedGroupCatalog}
-                label="Parent group (optional)"
-                value={draft.parentGroupId}
-                selectedLabel={undefined}
-                placeholder="Top-level group"
-                onChange={(group) => setField("parentGroupId", group?.id ?? null)}
-              />
+              <Field label="Group type">
+                {(control) => (
+                  <ServerSearchSelect
+                    {...control}
+                    searchLabel="Group type"
+                    catalog={activeGroupTypeCatalog}
+                    value={draft.typeKey}
+                    selectedLabel={typeSelected?.pluralLabel}
+                    allowEmpty={false}
+                    onChange={(type) => {
+                      setTypeSelected(type);
+                      setField("typeKey", type?.key ?? null);
+                    }}
+                  />
+                )}
+              </Field>
+              <Field label="Parent group (optional)">
+                {(control) => (
+                  <ServerSearchSelect
+                    {...control}
+                    searchLabel="Parent group (optional)"
+                    catalog={managedGroupCatalog}
+                    value={draft.parentGroupId}
+                    selectedLabel={undefined}
+                    placeholder="Top-level group"
+                    onChange={(group) => setField("parentGroupId", group?.id ?? null)}
+                  />
+                )}
+              </Field>
               <div class="pk-grid pk-grid--roomy">
                 <Field label="Name" required>
                   {(control) => (
@@ -251,31 +262,25 @@ export function GroupCreateForm({
                 </Field>
               </div>
               <div class="pk-stack pk-stack--snug">
-                <label class="pk-check">
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    checked={draft.allowAutomaticOptOut}
-                    disabled={automaticEnrollmentOff}
-                    onChange={(event) => setField("allowAutomaticOptOut", event.currentTarget.checked)}
-                  />
-                  {/* The control is unavailable because of another answer, not
-                      because it is off, so the reason is written out rather
-                      than left to the greyed-out styling. */}
-                  <span class="pk-check__label">
-                    Allow people to opt out of automatic enrollment
-                    {automaticEnrollmentOff && " — available once automatic enrollment is set"}
-                  </span>
-                </label>
-                <label class="pk-check">
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    checked={draft.publicLeadership}
-                    onChange={(event) => setField("publicLeadership", event.currentTarget.checked)}
-                  />
-                  <span class="pk-check__label">Publish leadership</span>
-                </label>
+                {/* The control is unavailable because of another answer, not
+                    because it is off, so the reason is written out rather
+                    than left to the greyed-out styling. */}
+                <Checkbox
+                  checked={draft.allowAutomaticOptOut}
+                  disabled={automaticEnrollmentOff}
+                  onChange={(event) => setField("allowAutomaticOptOut", event.currentTarget.checked)}
+                  label={
+                    <>
+                      Allow people to opt out of automatic enrollment
+                      {automaticEnrollmentOff && " — available once automatic enrollment is set"}
+                    </>
+                  }
+                />
+                <Checkbox
+                  checked={draft.publicLeadership}
+                  onChange={(event) => setField("publicLeadership", event.currentTarget.checked)}
+                  label="Publish leadership"
+                />
               </div>
             </fieldset>
             {error && <ErrorAlert error={error} />}

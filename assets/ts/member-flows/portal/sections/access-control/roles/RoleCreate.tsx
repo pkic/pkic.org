@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
-import { postValidated } from "../../../../../shared/api-client";
+import { postJson } from "../../../../../shared/api-client";
+import { useContractForm } from "../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
@@ -10,9 +11,7 @@ import { roleCreateSchema, roleResponseEnvelopeSchema } from "../../../../../../
 import type { Permission } from "../../../../../../shared/schemas/permissions";
 import { PermissionCheckboxes } from "./RolePermissions";
 
-/** The identifier shape the create contract accepts, so the field can say so before the server does. */
-const ROLE_NAME_PATTERN = "^[a-z][a-z0-9_]*$";
-const ROLE_NAME_RULE = /^[a-z][a-z0-9_]*$/;
+/** What the create contract accepts as an identifier, said before the reader finds out the hard way. */
 const ROLE_NAME_HELP = "Lowercase letters, numbers, and underscores only, starting with a letter.";
 
 /** Distinct create-role view: replaces the roles list rather than layering above it. */
@@ -28,11 +27,13 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
    * appears without moving focus out of the form.
    */
   const [formError, setFormError] = useState<string | null>(null);
-
-  const trimmedName = name.trim();
-  // An empty field is not yet wrong — it is unfinished — so the invalid state
-  // waits until there is something to judge. `required` already covers empty.
-  const nameInvalid = trimmedName !== "" && !ROLE_NAME_RULE.test(trimmedName);
+  // One basis for validation: the create contract the server parses decides
+  // what the name field shows as it is typed and what may be sent.
+  const form = useContractForm(roleCreateSchema, {
+    name,
+    description: description || undefined,
+    permissions: Array.from(selected),
+  });
 
   function toggle(permission: Permission) {
     setSelected((prev) => {
@@ -46,30 +47,20 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
   async function handleCreate(e: Event) {
     e.preventDefault();
     setFormError(null);
-    if (!trimmedName) {
-      setFormError("Give the role a name.");
-      return;
-    }
-    if (nameInvalid) {
-      setFormError(ROLE_NAME_HELP);
+    // Nothing is sent until the contract accepts the whole draft.
+    const checked = form.submit();
+    if (!checked.data) {
+      setFormError(checked.message);
       return;
     }
     setSubmitting(true);
     try {
-      const created = await postValidated(
-        "/api/v1/roles",
-        roleCreateSchema,
-        {
-          name: trimmedName,
-          description: description.trim() || undefined,
-          permissions: Array.from(selected),
-        },
-        roleResponseEnvelopeSchema,
-      );
+      const created = await postJson("/api/v1/roles", checked.data, roleResponseEnvelopeSchema);
       toast("Role created", "success");
       onCreated(created.role.id);
     } catch (err) {
-      setFormError((err as Error).message);
+      // A server refusal names its fields the same way the contract does.
+      setFormError(form.refuse(err));
     } finally {
       setSubmitting(false);
     }
@@ -87,33 +78,34 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
         <PanelBody>
           {/* The form is named, so the panel it sits in and the form itself are
               distinguishable to anything navigating by landmark or by form. */}
-          <form class="pk-stack" aria-label="New role" onSubmit={(e) => void handleCreate(e)}>
+          <form
+            noValidate
+            class="pk-stack"
+            aria-label="New role"
+            {...form.handlers}
+            onSubmit={(e) => void handleCreate(e)}
+          >
             {/* One `disabled` takes the whole form out of play while the
                 request is in flight, including the permission checkboxes this
                 surface renders through a child component. */}
             <fieldset class="pk-fieldset pk-stack" disabled={submitting}>
               <div class="pk-grid pk-grid--roomy">
-                <Field
-                  label="Name"
-                  required
-                  help={ROLE_NAME_HELP}
-                  state={nameInvalid ? "invalid" : undefined}
-                  message={nameInvalid ? ROLE_NAME_HELP : undefined}
-                >
+                <Field label="Name" required help={ROLE_NAME_HELP} {...form.of("name")}>
                   {(control) => (
                     <TextInput
                       {...control}
+                      name="name"
                       value={name}
                       onInput={(e) => setName((e.target as HTMLInputElement).value)}
                       placeholder="e.g. sponsorship_lead"
-                      pattern={ROLE_NAME_PATTERN}
                     />
                   )}
                 </Field>
-                <Field label="Description">
+                <Field label="Description" {...form.of("description")}>
                   {(control) => (
                     <TextInput
                       {...control}
+                      name="description"
                       value={description}
                       onInput={(e) => setDescription((e.target as HTMLInputElement).value)}
                     />

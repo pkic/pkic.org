@@ -20,6 +20,8 @@ import {
   typeInto,
 } from "./helpers/labelled-control";
 import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
+// Resolved through the mock below, which keeps the real class.
+import { ApiClientError } from "../../assets/ts/shared/api-client";
 
 const apiClient = vi.hoisted(() => ({
   patchJson: vi.fn(),
@@ -28,7 +30,30 @@ const apiClient = vi.hoisted(() => ({
   deleteJson: vi.fn(),
   requestJson: vi.fn(),
 }));
-vi.mock("../../assets/ts/shared/api-client", () => apiClient);
+vi.mock("../../assets/ts/shared/api-client", async (importOriginal) => ({
+  // The error class stays real, so a refusal is read the way the form reads it.
+  ...(await importOriginal<typeof import("../../assets/ts/shared/api-client")>()),
+  ...apiClient,
+}));
+
+/**
+ * The choice control whose wrapping label reads `label`. A Checkbox or Radio
+ * wraps its control in the label, so there is no `for` to follow.
+ */
+function choiceNamed(root: ParentNode, label: string): HTMLInputElement {
+  const match = [...root.querySelectorAll<HTMLLabelElement>("label.pk-check")].find(
+    (candidate) => candidate.querySelector(".pk-check__label")?.textContent === label,
+  );
+  const control = match?.querySelector<HTMLInputElement>("input");
+  if (!control) throw new Error(`no choice control reads "${label}"`);
+  return control;
+}
+
+function fieldOf(control: HTMLElement): HTMLElement {
+  const field = control.closest<HTMLElement>(".pk-field");
+  if (!field) throw new Error("control is not inside a Field");
+  return field;
+}
 
 const mounted: HTMLElement[] = [];
 
@@ -72,13 +97,13 @@ describe("portal System Users profile permissions", () => {
     const container = mount(false);
     expect(container.querySelectorAll('input[type="text"]')).toHaveLength(3);
     expect(container.querySelector('input[type="email"]')).toBeNull();
-    expect(container.querySelector('input[name="edit-role"]')).toBeNull();
+    expect(container.querySelector('input[name="role"]')).toBeNull();
   });
 
   it("exposes email and role controls only with access:grant", () => {
     const container = mount(true);
     expect(container.querySelector('input[type="email"]')).not.toBeNull();
-    expect(container.querySelector('input[name="edit-role"]')).not.toBeNull();
+    expect(container.querySelector('input[name="role"]')).not.toBeNull();
   });
 
   it("stores preferred names on the user rather than an acting identity", async () => {
@@ -104,7 +129,7 @@ describe("portal System Users profile permissions", () => {
     // The body is what the canonical update contract accepts, not merely what
     // this form happens to send.
     const lastCall = apiClient.patchJson.mock.calls.at(-1);
-    expect(userUpdateSchema.safeParse(lastCall?.[1]).success).toBe(true);
+    expect(userUpdateSchema.parse(lastCall?.[1])).toMatchObject({ preferredName: "Ada", firstName: "Ada" });
   });
 
   it("names every control it draws and groups the ones that belong together", () => {
@@ -120,35 +145,63 @@ describe("portal System Users profile permissions", () => {
       expect(label.querySelector("input.pk-check__input")).not.toBeNull();
       expect(label.querySelector("span.pk-check__label")).not.toBeNull();
     }
-    expect(controlFor(container, "Active").checked).toBe(true);
-    expect(controlFor(container, "Executive Council member").checked).toBe(false);
+    expect(choiceNamed(container, "Active").checked).toBe(true);
+    expect(choiceNamed(container, "Executive Council member").checked).toBe(false);
   });
 
-  it("marks a malformed address invalid, blocks the save, and clears once it is fixed", async () => {
+  it("refuses a malformed address at the field, sends nothing, and clears once it is fixed", async () => {
     apiClient.patchJson.mockClear();
     const container = mount(true);
     const email = controlFor(container, "Email");
     await typeInto(email, "not-an-address");
 
+    // Refused as typed by the update contract rather than by a second regular
+    // expression written here: the field shows the invalid state with the
+    // contract's own reason, announced rather than only coloured.
+    expect(fieldOf(email).classList.contains("pk-field--invalid")).toBe(true);
     expect(email.getAttribute("aria-invalid")).toBe("true");
-    const messageId = email.getAttribute("aria-describedby");
-    expect(messageId).toBeTruthy();
-    const message = container.querySelector(`[id="${messageId}"]`)!;
-    // Announced, and readable without being able to tell red from gray.
+    const message = container.querySelector(`[id="${email.getAttribute("aria-describedby")}"]`)!;
     expect(message.getAttribute("role")).toBe("alert");
-    expect(message.textContent).toContain("Enter a valid email address.");
-    expect(buttonNamed(container, "Save").disabled).toBe(true);
+    expect(message.textContent).toMatch(/email/i);
 
     await submitForm(container);
+    // Nothing was sent; the refused field holds focus.
     expect(apiClient.patchJson).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(email);
 
     await typeInto(email, "ada@example.test");
     expect(email.getAttribute("aria-invalid")).toBeNull();
-    expect(buttonNamed(container, "Save").disabled).toBe(false);
+    expect(fieldOf(email).classList.contains("pk-field--ok")).toBe(true);
+  });
+
+  it("marks the field a server refusal names, and keeps the form open", async () => {
+    apiClient.patchJson.mockRejectedValueOnce(
+      new ApiClientError(
+        {
+          error: {
+            code: "VALIDATION",
+            message: "Invalid request",
+            details: { fieldErrors: { email: ["Email already in use"] } },
+          },
+        },
+        400,
+      ),
+    );
+    const container = mount(true);
+    await submitForm(container);
+
+    const email = controlFor(container, "Email");
+    expect(fieldOf(email).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(email).querySelector('[role="alert"]')?.textContent).toContain("Email already in use");
+    expect(document.activeElement).toBe(email);
+    // Still editing, so the refused draft is not silently discarded.
+    expect(container.querySelector("form")).not.toBeNull();
   });
 
   it("reports a rejected save as an alert instead of leaving the form looking saved", async () => {
-    apiClient.patchJson.mockRejectedValueOnce(new Error("Email already in use"));
+    apiClient.patchJson.mockRejectedValueOnce(
+      new ApiClientError({ error: { code: "CONFLICT", message: "Email already in use" } }, 409),
+    );
     const container = mount(true);
     await submitForm(container);
 

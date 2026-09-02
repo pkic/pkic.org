@@ -4,7 +4,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { formatDate } from "../../../../shared/ui";
 import { Badge } from "../../../../components/Badge";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../ui/Button";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
@@ -137,13 +137,9 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
             {d.status === "completed" && (
               // A link, not a button: it fetches a file from a URL, so it can
               // be opened in a new tab and copied like any other address.
-              <a
-                class="pk-btn pk-btn--secondary pk-btn--sm"
-                href={badgeUrl}
-                download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
-              >
+              <ButtonLink size="sm" href={badgeUrl} download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}>
                 Download badge
-              </a>
+              </ButtonLink>
             )}
           </>
         }

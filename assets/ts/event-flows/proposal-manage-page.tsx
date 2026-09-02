@@ -13,6 +13,7 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { Panel, PanelBody } from "../ui/Panel";
+import { Field } from "../ui/Field";
 import { Select, Textarea, TextInput } from "../ui/TextControl";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
@@ -178,7 +179,6 @@ export function ProposalManageSpeakerCard({
   // The shared option labels rather than an underscore-stripping replace, so
   // a role reads the same in the badge as it does in the select below it.
   const roleLabel = SPEAKER_ROLE_OPTIONS.find((option) => option.value === speaker.role)?.label ?? speaker.role;
-  const bioHelpId = `speaker-bio-help-${speaker.userId}`;
 
   return (
     <Panel data-speaker-card data-speaker-email={speaker.email} aria-label={`Speaker ${speakerName}`}>
@@ -239,84 +239,74 @@ export function ProposalManageSpeakerCard({
             )}
           </div>
 
-          <form class="pk-stack" onSubmit={(event) => void saveProfile(event)}>
+          <form class="pk-stack" data-speaker-user-id={speaker.userId} onSubmit={(event) => void saveProfile(event)}>
             <div class="pk-grid">
-              <div class="pk-field">
-                <label class="pk-field__label" for={`speaker-first-name-${speaker.userId}`}>
-                  First name
-                </label>
-                <TextInput
-                  id={`speaker-first-name-${speaker.userId}`}
-                  value={firstName}
-                  onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
-                />
-              </div>
-              <div class="pk-field">
-                <label class="pk-field__label" for={`speaker-last-name-${speaker.userId}`}>
-                  Last name
-                </label>
-                <TextInput
-                  id={`speaker-last-name-${speaker.userId}`}
-                  value={lastName}
-                  onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
-                />
-              </div>
-              <div class="pk-field">
-                <label class="pk-field__label" for={`speaker-role-${speaker.userId}`}>
-                  Role
-                </label>
-                <Select
-                  id={`speaker-role-${speaker.userId}`}
-                  value={role}
-                  onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
-                >
-                  {SPEAKER_ROLE_OPTIONS.filter((option) => isCurrentProposer || option.value !== "proposer").map(
-                    (option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ),
-                  )}
-                </Select>
-              </div>
-              <div class="pk-field">
-                <label class="pk-field__label" for={`speaker-organization-${speaker.userId}`}>
-                  Organization
-                </label>
-                <TextInput
-                  id={`speaker-organization-${speaker.userId}`}
-                  value={organizationName}
-                  onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
-                />
-              </div>
-              <div class="pk-field">
-                <label class="pk-field__label" for={`speaker-job-title-${speaker.userId}`}>
-                  Job title
-                </label>
-                <TextInput
-                  id={`speaker-job-title-${speaker.userId}`}
-                  value={jobTitle}
-                  onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
-                />
-              </div>
+              <Field label="First name">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={firstName}
+                    onInput={(event) => setFirstName((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Last name">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={lastName}
+                    onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Role">
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={role}
+                    onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
+                  >
+                    {SPEAKER_ROLE_OPTIONS.filter((option) => isCurrentProposer || option.value !== "proposer").map(
+                      (option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ),
+                    )}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Organization">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={organizationName}
+                    onInput={(event) => setOrganizationName((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
+              <Field label="Job title">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={jobTitle}
+                    onInput={(event) => setJobTitle((event.target as HTMLInputElement).value)}
+                  />
+                )}
+              </Field>
             </div>
-            <div class="pk-field">
-              <label class="pk-field__label" for={`speaker-bio-${speaker.userId}`}>
-                Biography
-              </label>
-              <Textarea
-                id={`speaker-bio-${speaker.userId}`}
-                rows={4}
-                value={biography}
-                // Wired to the control rather than merely sitting under it, so
-                // the guidance is announced with the field it is about.
-                aria-describedby={bioHelpId}
-                onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
-              />
-              <p class="pk-field__help" id={bioHelpId}>
-                Visible to attendees on the event program.
-              </p>
-            </div>
+            <Field label="Biography" help="Visible to attendees on the event program.">
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={4}
+                  value={biography}
+                  // Wired to the control rather than merely sitting under it, so
+                  // the guidance is announced with the field it is about.
+                  onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
+                />
+              )}
+            </Field>
             <ProfileLinksInput ref={linksRef} fieldName={`speaker-links-${speaker.userId}`} />
             <div class="pk-cluster">
               <Button type="submit" variant="primary" size="sm" loading={saving}>

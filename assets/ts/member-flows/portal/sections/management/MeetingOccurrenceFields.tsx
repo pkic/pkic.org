@@ -2,22 +2,21 @@
  * The fields describing one meeting occurrence, shared by the create form and
  * the occurrence settings form.
  *
- * Every control carries an explicit `for`/`id` pair built from `idPrefix`
- * rather than going through `Field`, because `idPrefix` is this component's
- * public contract: its callers address these controls by that prefix, and a
- * generated id would quietly break them. `LabelledField` hands the id down to
- * the control it names, so the pair cannot drift the way two hand-written
- * attributes can.
+ * Every control is a design-system `Field`, which owns the label, the required
+ * marker and the control's id; the parent forms reach a control through the
+ * label that names it. The encryption note under the provider controls is one
+ * paragraph both of them describe themselves by, rather than a help text
+ * repeated under each.
  *
  * The fields are one `pk-grid`, whose columns are as many as fit rather than a
  * breakpoint triplet written per field. The create form and the settings form
  * then reflow from the same markup instead of each choosing its own widths.
  */
 
-import type { ComponentChildren } from "preact";
+import { useId } from "preact/hooks";
 import { EVENT_OCCURRENCE_STATUSES, type EventOccurrenceStatus } from "../../../../../shared/schemas/event-series";
+import { Field } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
-import "../../../../ui/Field.css";
 
 export type ProviderUrlAction = "keep" | "replace" | "remove";
 
@@ -30,53 +29,6 @@ export interface MeetingOccurrenceDraft {
   providerJoinUrl: string;
 }
 
-/** What a control inside a `LabelledField` must spread onto its element. */
-interface LabelledControlProps {
-  id: string;
-  required?: true;
-  "aria-describedby"?: string;
-}
-
-/**
- * A label and the control it names, paired by a caller-chosen id.
- *
- * The same shape as `Field`'s render prop, so a control moves between the two
- * without being rewritten — the only difference is who picks the id. It also
- * builds the same markup: the group is a `pk-field`, which is the only element
- * a validation modifier is ever set on, and the control sits in the
- * `pk-field__control` box the state mark is positioned against.
- */
-function LabelledField({
-  id,
-  label,
-  required = false,
-  describedBy,
-  children,
-}: {
-  id: string;
-  label: string;
-  required?: boolean;
-  describedBy?: string;
-  children: (control: LabelledControlProps) => ComponentChildren;
-}) {
-  return (
-    <div class="pk-field">
-      <label class="pk-field__label" for={id}>
-        {label}
-        {required && (
-          <span class="pk-field__required">
-            <span aria-hidden="true">*</span>
-            <span class="pk-field__sr">(required)</span>
-          </span>
-        )}
-      </label>
-      <div class="pk-field__control">
-        {children({ id, required: required || undefined, "aria-describedby": describedBy })}
-      </div>
-    </div>
-  );
-}
-
 function updateDraft<K extends keyof MeetingOccurrenceDraft>(
   draft: MeetingOccurrenceDraft,
   onChange: (draft: MeetingOccurrenceDraft) => void,
@@ -87,27 +39,25 @@ function updateDraft<K extends keyof MeetingOccurrenceDraft>(
 }
 
 export function MeetingOccurrenceFields({
-  idPrefix,
   draft,
   existing = false,
   providerConfigured = false,
   disabled = false,
   onChange,
 }: {
-  idPrefix: string;
   draft: MeetingOccurrenceDraft;
   existing?: boolean;
   providerConfigured?: boolean;
   disabled?: boolean;
   onChange: (draft: MeetingOccurrenceDraft) => void;
 }) {
-  const providerHelpId = `${idPrefix}-provider-help`;
+  const providerHelpId = `${useId()}-provider-help`;
   const showProviderAction = existing && providerConfigured;
   const showProviderUrl = !existing || !providerConfigured || draft.providerUrlAction === "replace";
 
   return (
     <div class="pk pk-grid">
-      <LabelledField id={`${idPrefix}-starts`} label="Starts" required>
+      <Field label="Starts" required>
         {(control) => (
           <TextInput
             {...control}
@@ -117,9 +67,9 @@ export function MeetingOccurrenceFields({
             onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
           />
         )}
-      </LabelledField>
+      </Field>
 
-      <LabelledField id={`${idPrefix}-ends`} label="Ends" required>
+      <Field label="Ends" required>
         {(control) => (
           <TextInput
             {...control}
@@ -129,10 +79,10 @@ export function MeetingOccurrenceFields({
             onInput={(event) => updateDraft(draft, onChange, "endsAt", event.currentTarget.value)}
           />
         )}
-      </LabelledField>
+      </Field>
 
       {existing && (
-        <LabelledField id={`${idPrefix}-status`} label="Status">
+        <Field label="Status">
           {(control) => (
             <Select
               {...control}
@@ -149,10 +99,10 @@ export function MeetingOccurrenceFields({
               ))}
             </Select>
           )}
-        </LabelledField>
+        </Field>
       )}
 
-      <LabelledField id={`${idPrefix}-location`} label="Location override">
+      <Field label="Location override">
         {(control) => (
           <TextInput
             {...control}
@@ -161,14 +111,15 @@ export function MeetingOccurrenceFields({
             onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
           />
         )}
-      </LabelledField>
+      </Field>
 
       <div class="pk-stack pk-stack--snug">
         {showProviderAction && (
-          <LabelledField id={`${idPrefix}-provider-action`} label="Meeting-provider URL" describedBy={providerHelpId}>
+          <Field label="Meeting-provider URL">
             {(control) => (
               <Select
                 {...control}
+                aria-describedby={providerHelpId}
                 value={draft.providerUrlAction}
                 disabled={disabled}
                 onChange={(event) =>
@@ -180,25 +131,24 @@ export function MeetingOccurrenceFields({
                 <option value="remove">Remove configured URL</option>
               </Select>
             )}
-          </LabelledField>
+          </Field>
         )}
         {showProviderUrl && (
-          <LabelledField
-            id={`${idPrefix}-provider-url`}
+          <Field
             label={providerConfigured ? "Replacement URL" : "Meeting-provider URL"}
             required={existing && providerConfigured && draft.providerUrlAction === "replace"}
-            describedBy={providerHelpId}
           >
             {(control) => (
               <TextInput
                 {...control}
+                aria-describedby={providerHelpId}
                 type="url"
                 value={draft.providerJoinUrl}
                 disabled={disabled}
                 onInput={(event) => updateDraft(draft, onChange, "providerJoinUrl", event.currentTarget.value)}
               />
             )}
-          </LabelledField>
+          </Field>
         )}
         <p class="pk-small" id={providerHelpId}>
           The provider URL is encrypted and never returned by the API.

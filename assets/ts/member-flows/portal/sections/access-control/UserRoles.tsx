@@ -120,19 +120,24 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                       request is in flight, including the pickers this surface
                       cannot reach a prop into. */}
                   <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={submitting}>
-                    <ServerSearchSelect
-                      catalog={roleCatalog}
-                      label="Role"
-                      value={roleId}
-                      selectedLabel={roleLabel}
-                      disabled={submitting}
-                      allowEmpty={false}
-                      autoSelectFirst
-                      onChange={(role) => {
-                        setRoleId(role?.id ?? "");
-                        setRoleLabel(role?.name);
-                      }}
-                    />
+                    <Field label="Role">
+                      {(control) => (
+                        <ServerSearchSelect
+                          {...control}
+                          searchLabel="Role"
+                          catalog={roleCatalog}
+                          value={roleId}
+                          selectedLabel={roleLabel}
+                          disabled={submitting}
+                          allowEmpty={false}
+                          autoSelectFirst
+                          onChange={(role) => {
+                            setRoleId(role?.id ?? "");
+                            setRoleLabel(role?.name);
+                          }}
+                        />
+                      )}
+                    </Field>
                     <fieldset class="pk-fieldset pk-field">
                       <legend class="pk-field__label">Target</legend>
                       <TargetPicker value={target} onChange={setTarget} disabled={submitting} />

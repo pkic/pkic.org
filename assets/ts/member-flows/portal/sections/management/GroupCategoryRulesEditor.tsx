@@ -12,6 +12,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { ApiClientError, getJson, putJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { DataTable } from "../../../../ui/DataTable";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import "../../../../ui/Content.css";
@@ -131,16 +132,17 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
               {
                 id: "join",
                 header: "Join",
+                // The name is real label text, hidden because the row and
+                // column headers already carry it visually, so a reader moving
+                // through the grid still hears which category a box belongs to.
                 cell: (category) => (
-                  <input
-                    class="pk-table__checkbox"
-                    type="checkbox"
-                    aria-label={`${category.label} may join`}
+                  <Checkbox
                     checked={rulesByCategory.get(category.code)?.permitsJoin ?? false}
                     disabled={saving}
                     onChange={(event) =>
                       updateRule(category.code, "permitsJoin", (event.target as HTMLInputElement).checked)
                     }
+                    label={<span class="pk-sr-only">{`${category.label} may join`}</span>}
                   />
                 ),
               },
@@ -148,15 +150,13 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
                 id: "automatic",
                 header: "Automatic enrollment",
                 cell: (category) => (
-                  <input
-                    class="pk-table__checkbox"
-                    type="checkbox"
-                    aria-label={`${category.label} automatic enrollment`}
+                  <Checkbox
                     checked={rulesByCategory.get(category.code)?.automaticEnrollment ?? false}
                     disabled={saving}
                     onChange={(event) =>
                       updateRule(category.code, "automaticEnrollment", (event.target as HTMLInputElement).checked)
                     }
+                    label={<span class="pk-sr-only">{`${category.label} automatic enrollment`}</span>}
                   />
                 ),
               },

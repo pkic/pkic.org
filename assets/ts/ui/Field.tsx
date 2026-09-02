@@ -32,6 +32,15 @@ export interface FieldProps {
   state?: FieldState;
   /** The message for `state`. Required whenever a state is set. */
   message?: string;
+  /**
+   * A message slot for a DOM-driven validator (`applyFieldErrors`,
+   * `setFieldMessage`): the `data-field-error` key it writes into. The slot
+   * is empty and hidden until the validator fills it, and the control names
+   * it from the first paint so the message is announced when it lands.
+   */
+  errorSlot?: string;
+  /** A caller-supplied control id, for a form whose markup others address by id. */
+  id?: string;
   /** Receives the ids and ARIA the control must carry. */
   children: (control: FieldControlProps) => ComponentChildren;
 }
@@ -52,14 +61,23 @@ export function StateIcon({ state, class: className }: { state: FieldState; clas
   );
 }
 
-export function Field({ label, required = false, help, state, message, children }: FieldProps) {
-  const id = useId();
-  const controlId = `${id}-control`;
+export function Field({ label, required = false, help, state, message, errorSlot, id: givenId, children }: FieldProps) {
+  const generated = useId();
+  const id = givenId ?? generated;
+  const controlId = givenId ?? `${id}-control`;
   const messageId = `${id}-message`;
   const helpId = `${id}-help`;
 
   const showMessage = Boolean(state && message);
-  const describedBy = showMessage ? messageId : help ? helpId : undefined;
+  // With a slot, the control names the help and the slot together, so a
+  // message a validator writes later is announced with the field it is about.
+  const describedBy = showMessage
+    ? messageId
+    : errorSlot
+      ? [help ? helpId : null, messageId].filter(Boolean).join(" ")
+      : help
+        ? helpId
+        : undefined;
 
   return (
     <div class={["pk-field", state ? `pk-field--${state}` : null].filter(Boolean).join(" ")}>
@@ -101,6 +119,10 @@ export function Field({ label, required = false, help, state, message, children 
         <p class="pk-field__help" id={helpId}>
           {help}
         </p>
+      )}
+
+      {!showMessage && errorSlot && (
+        <p class="pk-field__message" id={messageId} data-field-error={errorSlot} aria-live="polite" hidden />
       )}
     </div>
   );

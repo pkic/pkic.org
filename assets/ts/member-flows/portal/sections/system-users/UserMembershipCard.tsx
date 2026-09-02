@@ -14,6 +14,7 @@ import { fmtDate, toast } from "../../ui";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
@@ -222,21 +223,17 @@ export function UserMembershipCard({
           )}
 
           {membership.organizationId && (
-            <label class="pk-check">
-              <input
-                class="pk-check__input"
-                type="checkbox"
-                checked={membership.showOnOrgProfile}
-                disabled={busy || !canManage}
-                onChange={(event) =>
-                  void patchIdentity(
-                    { profile: { showOnOrganizationProfile: event.currentTarget.checked } },
-                    "Identity visibility updated",
-                  )
-                }
-              />
-              <span class="pk-check__label">Show this person on {organizationLabel}&apos;s public profile</span>
-            </label>
+            <Checkbox
+              checked={membership.showOnOrgProfile}
+              disabled={busy || !canManage}
+              onChange={(event) =>
+                void patchIdentity(
+                  { profile: { showOnOrganizationProfile: event.currentTarget.checked } },
+                  "Identity visibility updated",
+                )
+              }
+              label={<>Show this person on {organizationLabel}&apos;s public profile</>}
+            />
           )}
 
           {editingProfile && membership.organizationId && (

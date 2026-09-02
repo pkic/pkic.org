@@ -28,10 +28,10 @@ import {
   memberJoinVerifyResponseSchema,
   memberJoinVerifySchema,
 } from "../../shared/schemas/member-join";
+import { ButtonLink } from "../ui/Button";
 // This module writes design-system class names into markup it builds itself,
 // so it has to pull in the stylesheets that define them: component CSS ships
 // in the chunk of whoever imports it, not in the entry sheet.
-import "../ui/Button.css";
 import "../ui/Content.css";
 import "../ui/Field.css";
 
@@ -301,9 +301,9 @@ function showSuccessPanel(
         status at any time.
       </p>
       <p>
-        <a href={statusUrl} class="pk-btn pk-btn--secondary pk-btn--sm">
+        <ButtonLink href={statusUrl} size="sm">
           Check application status →
-        </a>
+        </ButtonLink>
       </p>
     </SuccessPanel>,
   );

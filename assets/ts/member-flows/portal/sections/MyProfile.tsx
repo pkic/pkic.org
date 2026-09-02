@@ -12,6 +12,7 @@ import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { Alert } from "../../../ui/Alert";
 import { Badge } from "../../../ui/Badge";
 import { Button } from "../../../ui/Button";
+import { Checkbox } from "../../../ui/Checkbox";
 import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -240,19 +241,17 @@ export function MyProfile() {
           {current.organizationId && (
             <Panel>
               <PanelBody>
-                <label class="pk-check">
-                  <input
-                    class="pk-check__input"
-                    type="checkbox"
-                    role="switch"
-                    checked={current.showOnOrgProfile}
-                    disabled={visibilitySaving}
-                    onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
-                  />
-                  <span class="pk-check__label">
-                    Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
-                  </span>
-                </label>
+                <Checkbox
+                  role="switch"
+                  checked={current.showOnOrgProfile}
+                  disabled={visibilitySaving}
+                  onChange={(e) => void handleVisibilityToggle((e.target as HTMLInputElement).checked)}
+                  label={
+                    <>
+                      Show my name, job title, and bio on {current.organizationName ?? "my organization"}'s public page
+                    </>
+                  }
+                />
               </PanelBody>
             </Panel>
           )}

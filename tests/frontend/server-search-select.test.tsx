@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { paginatedResponseSchema } from "../../assets/shared/schemas/pagination";
 import { ServerSearchSelect } from "../../assets/ts/components/ServerSearchSelect";
+import { Field } from "../../assets/ts/ui/Field";
 import type { CollectionLoader } from "../../assets/ts/hooks/useServerCollection";
 import type { ServerCatalog } from "../../assets/ts/shared/server-catalog";
 import { chooseComboboxOption, controlFor, openCombobox } from "./helpers/labelled-control";
@@ -119,7 +120,17 @@ describe("ServerSearchSelect", () => {
     const requests = stubFetch((url) => json(pagedItems(url, 201)));
     const onChange = vi.fn();
     const container = mount(
-      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={onChange} />,
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={onChange}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 
@@ -164,7 +175,18 @@ describe("ServerSearchSelect", () => {
       });
     const page = { limit: 25, offset: 0, total: 1, hasMore: false };
     const container = mount(
-      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={() => {}} load={load} />,
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={() => {}}
+            load={load}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
     pending.shift()!.resolve({ items: [{ id: "first", name: "First" }], page });
@@ -198,7 +220,17 @@ describe("ServerSearchSelect", () => {
     stubFetch((url) => json(pagedItems(url, 2)));
     const onChange = vi.fn();
     const container = mount(
-      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={onChange} />,
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={onChange}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 
@@ -235,12 +267,17 @@ describe("ServerSearchSelect", () => {
     function Harness() {
       const [value, setValue] = useState<string | null>(null);
       return (
-        <ServerSearchSelect
-          catalog={catalog}
-          label="Working group"
-          value={value}
-          onChange={(item) => setValue(item ? item.id : null)}
-        />
+        <Field label="Working group">
+          {(control) => (
+            <ServerSearchSelect
+              {...control}
+              searchLabel="Working group"
+              catalog={catalog}
+              value={value}
+              onChange={(item) => setValue(item ? item.id : null)}
+            />
+          )}
+        </Field>
       );
     }
     const container = mount(<Harness />);
@@ -257,18 +294,30 @@ describe("ServerSearchSelect", () => {
     expect(selected?.getAttribute("data-key")).toBe("item-1");
   });
 
-  it("names the combobox through its label and the listbox through aria-controls", async () => {
+  it("names the combobox through its Field's label and the listbox through aria-controls", async () => {
     vi.useFakeTimers();
     stubFetch((url) => json(pagedItems(url, 1)));
     const container = mount(
-      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={() => {}} />,
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={() => {}}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 
-    // Resolving the control through the label itself fails exactly when the
+    // The control renders no label of its own: the Field around it names it,
+    // and resolving the control through that label fails exactly when the
     // `for`/`id` pair is broken.
     const input = controlFor(container, "Working group");
     expect(input.getAttribute("role")).toBe("combobox");
+    expect(container.querySelectorAll("label")).toHaveLength(1);
     expect(input.getAttribute("aria-haspopup")).toBe("listbox");
     expect(input.getAttribute("aria-autocomplete")).toBe("list");
 
@@ -288,7 +337,17 @@ describe("ServerSearchSelect", () => {
       ),
     );
     const container = mount(
-      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={() => {}} />,
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={() => {}}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 
@@ -304,13 +363,18 @@ describe("ServerSearchSelect", () => {
     vi.useFakeTimers();
     stubFetch((url) => json(pagedItems(url, 201)));
     const container = mount(
-      <ServerSearchSelect
-        catalog={catalog}
-        label="Event"
-        value="item-200"
-        selectedLabel="Current event"
-        onChange={() => {}}
-      />,
+      <Field label="Event">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            searchLabel="Event"
+            catalog={catalog}
+            value="item-200"
+            selectedLabel="Current event"
+            onChange={() => {}}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 
@@ -329,7 +393,17 @@ describe("ServerSearchSelect", () => {
           <button data-toggle onClick={() => setActive("false")}>
             Toggle
           </button>
-          <ServerSearchSelect catalog={nextCatalog} label="Working group" value={null} onChange={() => {}} />
+          <Field label="Working group">
+            {(control) => (
+              <ServerSearchSelect
+                {...control}
+                catalog={nextCatalog}
+                searchLabel="Working group"
+                value={null}
+                onChange={() => {}}
+              />
+            )}
+          </Field>
         </>
       );
     }
@@ -359,14 +433,19 @@ describe("ServerSearchSelect", () => {
     stubFetch((url) => json(pagedItems(url, 3)));
     const onChange = vi.fn();
     mount(
-      <ServerSearchSelect
-        catalog={catalog}
-        label="Role"
-        value={null}
-        allowEmpty={false}
-        autoSelectFirst
-        onChange={onChange}
-      />,
+      <Field label="Role">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            searchLabel="Role"
+            catalog={catalog}
+            value={null}
+            allowEmpty={false}
+            autoSelectFirst
+            onChange={onChange}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 
@@ -377,7 +456,17 @@ describe("ServerSearchSelect", () => {
     vi.useFakeTimers();
     stubFetch(() => json({ error: "nope" }, 503));
     const container = mount(
-      <ServerSearchSelect catalog={catalog} label="Working group" value={null} onChange={() => {}} />,
+      <Field label="Working group">
+        {(control) => (
+          <ServerSearchSelect
+            {...control}
+            catalog={catalog}
+            searchLabel="Working group"
+            value={null}
+            onChange={() => {}}
+          />
+        )}
+      </Field>,
     );
     await elapse(0);
 

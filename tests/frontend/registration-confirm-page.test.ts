@@ -6,8 +6,9 @@
  * markup, stubs the network, then imports it. What is asserted is mostly what
  * the surface exposes rather than how it is painted: the `for`/`id` pair that
  * names the recovery control, `aria-invalid` and `aria-describedby` when the
- * address is missing, the live regions that carry the outcome, and the fact
- * that the resend button's name does not move between states.
+ * resend contract refuses the address, the live regions that carry the
+ * outcome, and the fact that the resend button's name does not move between
+ * states.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
@@ -150,7 +151,7 @@ describe("registration confirmation shell", () => {
     expect(root.querySelector<HTMLElement>("[data-confirm-content]")?.hidden).toBe(false);
   });
 
-  it("names the recovery control through a label, and marks it invalid when it is empty", async () => {
+  it("names the recovery control through a label, and marks it invalid when the contract refuses it", async () => {
     window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=stale-token");
     const root = mountShell();
     const requests = installApi({ [CONFIRM_INFO]: () => json(confirmInfo({ expired: true })) });
@@ -165,18 +166,71 @@ describe("registration confirmation shell", () => {
     expect(control.getAttribute("aria-invalid")).toBe(null);
 
     await act(async () => {
-      root.querySelector("form:not([novalidate])")?.dispatchEvent(new Event("submit", { bubbles: true }));
+      control.closest("form")?.dispatchEvent(new Event("submit", { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
+    // An empty address is refused by the shared resend contract, in its own
+    // words, on the control the reader is standing in.
+    expect(control.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(control.getAttribute("aria-invalid")).toBe("true");
     const messageId = control.getAttribute("aria-describedby");
     expect(messageId).toBeTruthy();
     const message = root.querySelector(`#${messageId ?? ""}`);
     expect(message?.getAttribute("role")).toBe("alert");
-    expect(message?.textContent).toContain("Enter the email address you used for registration.");
-    // A refusal the surface can decide on its own must not cost a request.
+    expect(message?.textContent).toContain("valid email address");
+    expect(document.activeElement).toBe(control);
+    // A refusal the contract can decide on its own must not cost a request.
     expect(requests.some((request) => request.path === RESEND)).toBe(false);
+
+    // Refused as typed, too, and cleared once the address is one.
+    control.value = "not an address";
+    await act(async () => {
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(control.getAttribute("aria-invalid")).toBe("true");
+    control.value = "ada@example.com";
+    await act(async () => {
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(control.closest(".pk-field")?.classList.contains("pk-field--ok")).toBe(true);
+    expect(control.getAttribute("aria-invalid")).toBe(null);
+  });
+
+  it("marks the address when the server refuses the field it names", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc-2026/register/confirm/?token=stale-token");
+    const root = mountShell();
+    installApi({
+      [CONFIRM_INFO]: () => json(confirmInfo({ expired: true })),
+      [RESEND]: () =>
+        json(
+          {
+            error: {
+              code: "VALIDATION",
+              message: "Invalid request",
+              details: { fieldErrors: { email: ["No pending registration uses that address."] } },
+            },
+          },
+          400,
+        ),
+    });
+
+    await boot();
+
+    const control = controlFor(root, "Email address");
+    control.value = "someone-else@example.com";
+    await act(async () => {
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click(buttonNamed(root, "Send me a new link"));
+
+    expect(control.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
+    expect(control.getAttribute("aria-invalid")).toBe("true");
+    const message = root.querySelector(`#${control.getAttribute("aria-describedby") ?? ""}`);
+    expect(message?.getAttribute("role")).toBe("alert");
+    expect(message?.textContent).toContain("No pending registration uses that address.");
+    // The address the reader typed stays for correction.
+    expect(control.value).toBe("someone-else@example.com");
   });
 
   it("sends a resend request the shared contract accepts, and confirms it in a live region", async () => {
@@ -231,6 +285,8 @@ describe("registration confirmation shell", () => {
       el.textContent?.includes("Too many requests"),
     );
     expect(alert).toBeTruthy();
+    // The refusal names no field, so the address is not marked as wrong.
+    expect(control.getAttribute("aria-invalid")).toBe(null);
     // The failure lives beside the control, not in the page-level banner at
     // the foot of the flow.
     expect(root.querySelector<HTMLElement>("[data-flow-status]")?.hidden).toBe(true);

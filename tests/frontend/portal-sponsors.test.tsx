@@ -159,7 +159,7 @@ describe("portal sponsor management", () => {
     const active = container.querySelector<HTMLLabelElement>("label.pk-check");
     expect(active?.querySelector("input.pk-check__input")).not.toBeNull();
     expect(active?.querySelector("span.pk-check__label")?.textContent).toBe("Leader active");
-    expect(active?.querySelector("span.pk-check__label")?.className).toContain("pk-sr-only");
+    expect(active?.querySelector("span.pk-check__label .pk-sr-only")?.textContent).toBe("Leader active");
     // The actions column is named for assistive technology even though its
     // header is not drawn.
     expect([...container.querySelectorAll("th")].map((th) => th.textContent)).toContain("Actions");

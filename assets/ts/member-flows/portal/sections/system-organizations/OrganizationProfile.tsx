@@ -15,7 +15,7 @@ import {
   type OrganizationDetail,
 } from "../../../../../shared/schemas/organization-management";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
-import type { LiveField } from "../../../../hooks/useLiveFields";
+import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -34,14 +34,14 @@ export interface OrganizationCardProps {
   onDraft?: (next: Partial<OrganizationDraft>) => void;
   busy?: boolean;
   /** Each field's live validation state, by field name. */
-  fields?: (name: string) => LiveField;
+  fields?: (name: string) => FieldPresentation;
 }
 
 interface EditorProps {
   draft: OrganizationDraft;
   onDraft: (next: Partial<OrganizationDraft>) => void;
   busy?: boolean;
-  fields: (name: string) => LiveField;
+  fields: (name: string) => FieldPresentation;
 }
 
 function editor(props: OrganizationCardProps): EditorProps | null {

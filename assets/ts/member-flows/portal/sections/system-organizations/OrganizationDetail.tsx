@@ -14,18 +14,18 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import {
   organizationDetailResponseSchema,
+  organizationManagementUpdateSchema,
   type OrganizationDetail as OrganizationDetailModel,
 } from "../../../../../shared/schemas/organization-management";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert, friendlyErrorMessage } from "../../../../components/ErrorAlert";
-import { useLiveFields } from "../../../../hooks/useLiveFields";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { getJson, patchJson } from "../../../../shared/api-client";
-import { normalizeValidation } from "../../../../shared/form/validation-map";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { toast } from "../../ui";
-import { draftFromOrganization, validateDraft, type OrganizationDraft } from "./OrganizationDraft";
+import { draftFromOrganization, payloadFromDraft, type OrganizationDraft } from "./OrganizationDraft";
 import {
   OrganizationAbout,
   OrganizationContacts,
@@ -63,16 +63,12 @@ export function OrganizationDetail({
   const [draft, setDraft] = useState<OrganizationDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  // The fields are checked live as they are typed in, the way the join form
-  // checks its own; a refused save marks its fields through the same state.
-  const live = useLiveFields();
-  // After a refused save the first refused field takes focus — once the
-  // marks are on the page, and only then; retyping must not move the caret.
-  const [refusedAt, setRefusedAt] = useState(0);
-  useEffect(() => {
-    if (refusedAt === 0) return;
-    document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
-  }, [refusedAt]);
+  // One basis for validation: the shared update contract the server parses
+  // decides what each field shows, live, and what Save may send.
+  const form = useContractForm(
+    organizationManagementUpdateSchema,
+    draft && organization ? payloadFromDraft(draft, organization.updatedAt) : {},
+  );
 
   const load = useCallback(async () => {
     if (!canRead) return;
@@ -108,19 +104,16 @@ export function OrganizationDetail({
     setDraft((current) => (current ? { ...current, ...next } : current));
   const stopEditing = () => {
     setDraft(null);
-    live.reset();
+    form.reset();
     setSaveError("");
   };
 
   async function save() {
     if (!draft || !organization) return;
-    // The shared update contract decides, here as on the server: a refused
-    // field is marked in place and nothing is sent until it is right.
-    const checked = validateDraft(draft, organization.updatedAt);
-    if (checked.fields) {
-      live.report(checked.fields);
+    // Nothing leaves the page until the contract accepts the whole draft.
+    const checked = form.submit();
+    if (!checked.data) {
       setSaveError(checked.message);
-      setRefusedAt(Date.now());
       return;
     }
     setSaving(true);
@@ -128,7 +121,7 @@ export function OrganizationDetail({
     try {
       await patchJson(
         `/api/v1/organizations/${encodeURIComponent(organization.id)}`,
-        checked.payload,
+        checked.data,
         organizationDetailResponseSchema,
       );
       toast("Organization updated", "success");
@@ -136,13 +129,9 @@ export function OrganizationDetail({
       await load();
     } catch (caught) {
       // A server refusal names its fields the same way the contract does.
-      const refusal = normalizeValidation(caught);
-      if (Object.keys(refusal.fields).length > 0) {
-        live.report(refusal.fields);
-        setRefusedAt(Date.now());
-      }
-      setSaveError(refusal.globalMessage);
-      toast(refusal.globalMessage, "error");
+      const message = form.refuse(caught);
+      setSaveError(message);
+      toast(message, "error");
     } finally {
       setSaving(false);
     }
@@ -153,10 +142,10 @@ export function OrganizationDetail({
     draft: draft ?? undefined,
     onDraft: editing ? onDraft : undefined,
     busy: saving,
-    fields: live.of,
+    fields: form.of,
   };
-  // Every field on the page reports through the one checker while editing.
-  const liveHandlers = editing ? { onInput: live.check, onChange: live.check, onFocusOut: live.check } : {};
+  // Every field on the page reports through the one contract while editing.
+  const liveHandlers = editing ? form.handlers : {};
 
   return (
     <section class="pk pk-stack" aria-label={organization.name}>

@@ -13,6 +13,7 @@ import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { ApiClientError, patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
+import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
@@ -258,46 +259,32 @@ export function GroupSettingsForm({
             </div>
 
             <div class="pk-stack pk-stack--snug">
-              <label class="pk-check">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  checked={draft.allowAutomaticOptOut}
-                  disabled={optOutUnavailable}
-                  onChange={(event) => setField("allowAutomaticOptOut", (event.target as HTMLInputElement).checked)}
-                />
-                <span class="pk-check__label">
-                  Allow people to opt out of automatic enrollment
-                  {/* The control is dimmed when it does not apply; the reason
-                      is stated in words so the state is not carried by the
-                      dimming alone. */}
-                  {optOutUnavailable && (
-                    <span class="pk-check__hint">
-                      Available once automatic enrollment is set to something other than “None”.
-                    </span>
-                  )}
-                </span>
-              </label>
+              {/* The control is dimmed when it does not apply; the reason is
+                  stated in words so the state is not carried by the dimming
+                  alone. */}
+              <Checkbox
+                checked={draft.allowAutomaticOptOut}
+                disabled={optOutUnavailable}
+                onChange={(event) => setField("allowAutomaticOptOut", (event.target as HTMLInputElement).checked)}
+                label="Allow people to opt out of automatic enrollment"
+                hint={
+                  optOutUnavailable
+                    ? "Available once automatic enrollment is set to something other than “None”."
+                    : undefined
+                }
+              />
 
-              <label class="pk-check">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  checked={draft.publicLeadership}
-                  onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
-                />
-                <span class="pk-check__label">Publish leadership</span>
-              </label>
+              <Checkbox
+                checked={draft.publicLeadership}
+                onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
+                label="Publish leadership"
+              />
 
-              <label class="pk-check">
-                <input
-                  class="pk-check__input"
-                  type="checkbox"
-                  checked={draft.active}
-                  onChange={(event) => setField("active", (event.target as HTMLInputElement).checked)}
-                />
-                <span class="pk-check__label">Active</span>
-              </label>
+              <Checkbox
+                checked={draft.active}
+                onChange={(event) => setField("active", (event.target as HTMLInputElement).checked)}
+                label="Active"
+              />
             </div>
           </fieldset>
 

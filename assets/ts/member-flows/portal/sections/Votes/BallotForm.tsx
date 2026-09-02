@@ -10,6 +10,7 @@
 import { useState } from "preact/hooks";
 import { postJson, ApiClientError } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
+import { Radio } from "../../../../ui/Checkbox";
 // The check block's three classes are written here rather than reached
 // through `ui/Field`, so this module pulls the stylesheet into its own chunk.
 import "../../../../ui/Field.css";
@@ -57,19 +58,14 @@ export function BallotForm({
         <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={submitting}>
           <legend class="pk-strong">Candidates</legend>
           {standing.map((c) => (
-            <label key={c.id} class="pk-check">
-              <input
-                type="radio"
-                class="pk-check__input"
-                name={`ballot-${vote.id}-${memberId ?? "person"}`}
-                checked={choice === c.id}
-                onChange={() => setChoice(c.id)}
-              />
-              <span class="pk-check__label">
-                {c.candidateName}
-                {c.candidateBio && <span class="pk-check__hint">{c.candidateBio}</span>}
-              </span>
-            </label>
+            <Radio
+              key={c.id}
+              name={`ballot-${vote.id}-${memberId ?? "person"}`}
+              checked={choice === c.id}
+              onChange={() => setChoice(c.id)}
+              label={c.candidateName}
+              hint={c.candidateBio}
+            />
           ))}
         </fieldset>
         <div class="pk-cluster">

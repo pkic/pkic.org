@@ -323,17 +323,15 @@ describe("the event form picker", () => {
     );
     await settle();
 
-    // A bare `<div>` cannot carry a name, so the pair is a named group and the
-    // sentence is its description rather than text floating below a control.
-    const group = page.querySelector('[role="group"]')!;
-    expect(group.getAttribute("aria-label")).toBe("Registration form");
-    const describedBy = group.getAttribute("aria-describedby");
+    // The picker is a design-system Field: the combobox is reached through
+    // the label that names it, and the sentence is the field's help, which
+    // the control describes itself by rather than text floating below it.
+    const picker = controlFor(page, "Registration form");
+    expect(picker.getAttribute("role")).toBe("combobox");
+    const describedBy = picker.getAttribute("aria-describedby");
     expect(page.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
       "Choose the form this event should use for registrations.",
     );
-
-    // The combobox inside it is still reached through its own label.
-    expect(controlFor(page, "Registration form").getAttribute("role")).toBe("combobox");
   });
 
   it("surfaces a catalog that could not be loaded", async () => {

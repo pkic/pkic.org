@@ -1,44 +1,19 @@
-import { useState } from "preact/hooks";
+import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
+import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Select, TextInput, Textarea } from "../../ui/TextControl";
-import type { FormFieldDefinition, FormFieldOptionSource } from "../../../shared/schemas/forms";
+import { formFieldRulesSchema, formFieldRulesTextSchema } from "../../../shared/schemas/form-field-rules";
+import {
+  caps,
+  visualRules,
+  draftToRawJson,
+  rulesToDraftPatch,
+  type FieldDraft,
+  type VisualizationConfig,
+} from "./form-field-draft";
+export { buildFieldValidation, type FieldDraft, type FieldType, type VisualizationConfig } from "./form-field-draft";
 import "../../ui/Content.css";
-
-export type FieldType = FormFieldDefinition["fieldType"];
-export type VisualizationConfig = "auto" | "bar" | "pie" | "wordcloud" | "list";
-
-export interface FieldDraft {
-  key: string;
-  label: string;
-  fieldType: FieldType;
-  required: boolean;
-  sortOrder: number;
-  optionsText: string;
-  /** Server-owned option catalog, preserved when editing the field. */
-  optionSource?: FormFieldOptionSource;
-  adminVisualization: VisualizationConfig;
-  placeholder: string;
-  helpText: string;
-  uiWidget: string;
-  format: string;
-  pattern: string;
-  patternMessage: string;
-  minLength: string;
-  maxLength: string;
-  min: string;
-  max: string;
-  step: string;
-  minItems: string;
-  maxItems: string;
-  allowCustom: boolean;
-  allowedDomainsText: string;
-  advancedValidationText: string;
-  /** When true the editor shows raw JSON instead of the visual form. */
-  rawMode: boolean;
-  /** Full validation JSON used when rawMode is true. */
-  rawValidationText: string;
-}
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -53,191 +28,6 @@ const VIZ_OPTIONS: Array<{ value: VisualizationConfig; label: string }> = [
 const UI_WIDGETS = ["", "tags", "checkboxes", "rating_stars", "nps"];
 const FIELD_FORMATS = ["", "iso_country", "phone", "professional_profile", "date_range"];
 
-const KNOWN_KEYS = new Set([
-  "adminVisualization",
-  "visualization",
-  "placeholder",
-  "helpText",
-  "uiWidget",
-  "format",
-  "pattern",
-  "patternMessage",
-  "minLength",
-  "maxLength",
-  "min",
-  "max",
-  "step",
-  "minItems",
-  "maxItems",
-  "allowCustom",
-  "allowedDomains",
-]);
-
-// ── capabilities per field type ───────────────────────────────────────────────
-
-interface Caps {
-  options: boolean;
-  placeholder: boolean;
-  lengthLimits: boolean;
-  numericRange: boolean;
-  step: boolean;
-  selectionLimits: boolean;
-  allowCustom: boolean;
-  pattern: boolean;
-  allowedDomains: boolean;
-  format: boolean;
-}
-
-function caps(ft: FieldType): Caps {
-  const isTextLike = ft === "text" || ft === "email" || ft === "url";
-  const isLong = ft === "textarea";
-  const isChoice = ft === "select" || ft === "multi_select";
-  return {
-    options: isChoice,
-    placeholder: !isChoice && ft !== "boolean",
-    lengthLimits: isTextLike || isLong,
-    numericRange: ft === "number" || ft === "date",
-    step: ft === "number",
-    selectionLimits: ft === "multi_select",
-    allowCustom: isChoice,
-    pattern: ft === "text",
-    allowedDomains: ft === "email",
-    format: isTextLike || isLong || isChoice,
-  };
-}
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function isRec(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function sv(obj: Record<string, unknown>, key: string): string {
-  const v = obj[key];
-  return typeof v === "string" ? v : "";
-}
-
-function nv(obj: Record<string, unknown>, key: string): string {
-  const v = obj[key];
-  return typeof v === "number" ? String(v) : "";
-}
-
-function strAdd(o: Record<string, unknown>, key: string, v: string) {
-  const t = v.trim();
-  if (t) o[key] = t;
-}
-
-function numAdd(o: Record<string, unknown>, key: string, v: string) {
-  const t = v.trim();
-  if (!t) return;
-  const n = Number(t);
-  if (Number.isFinite(n)) o[key] = n;
-}
-
-// ── payload builder (exported for use in Forms.tsx) ───────────────────────────
-
-export function buildFieldValidation(field: FieldDraft): Record<string, unknown> | undefined {
-  if (field.rawMode) {
-    const t = field.rawValidationText.trim();
-    if (!t || t === "{}") return undefined;
-    const parsed = JSON.parse(t) as unknown;
-    if (!isRec(parsed)) throw new Error(`${field.label || field.key}: validation must be a JSON object`);
-    return Object.keys(parsed).length ? parsed : undefined;
-  }
-
-  const result: Record<string, unknown> = {};
-
-  // Merge extra keys from the advanced overflow textarea
-  const adv = field.advancedValidationText.trim();
-  if (adv && adv !== "{}") {
-    const parsed = JSON.parse(adv) as unknown;
-    if (isRec(parsed)) Object.assign(result, parsed);
-  }
-
-  const c = caps(field.fieldType);
-  if (field.adminVisualization !== "auto") result.adminVisualization = field.adminVisualization;
-  if (c.placeholder) strAdd(result, "placeholder", field.placeholder);
-  strAdd(result, "helpText", field.helpText);
-  strAdd(result, "uiWidget", field.uiWidget);
-  if (c.format) strAdd(result, "format", field.format);
-  if (c.lengthLimits) {
-    numAdd(result, "minLength", field.minLength);
-    numAdd(result, "maxLength", field.maxLength);
-  }
-  if (c.numericRange) {
-    numAdd(result, "min", field.min);
-    numAdd(result, "max", field.max);
-  }
-  if (c.step) numAdd(result, "step", field.step);
-  if (c.selectionLimits) {
-    numAdd(result, "minItems", field.minItems);
-    numAdd(result, "maxItems", field.maxItems);
-  }
-  if (c.allowCustom && field.allowCustom) result.allowCustom = true;
-  if (c.pattern) {
-    const pat = field.pattern.trim();
-    if (pat) {
-      result.pattern = pat;
-      strAdd(result, "patternMessage", field.patternMessage);
-    }
-  }
-  if (c.allowedDomains) {
-    const domains = field.allowedDomainsText
-      .split(/\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (domains.length) result.allowedDomains = domains;
-  }
-
-  return Object.keys(result).length ? result : undefined;
-}
-
-// ── visual ↔ raw conversion ───────────────────────────────────────────────────
-
-function draftToRawJson(field: FieldDraft): string {
-  try {
-    const v = buildFieldValidation({ ...field, rawMode: false }) ?? {};
-    return Object.keys(v).length ? JSON.stringify(v, null, 2) : "{}";
-  } catch {
-    return "{}";
-  }
-}
-
-function rawJsonToDraftPatch(
-  json: string,
-  ft: FieldType,
-): Partial<FieldDraft> & { rawMode: false; advancedValidationText: string } {
-  const t = json.trim();
-  const obj: Record<string, unknown> = t && t !== "{}" ? (JSON.parse(t) as Record<string, unknown>) : {};
-  const c = caps(ft);
-  const viz = obj.adminVisualization ?? obj.visualization;
-  const advanced = Object.fromEntries(Object.entries(obj).filter(([k]) => !KNOWN_KEYS.has(k)));
-
-  return {
-    rawMode: false,
-    adminVisualization: viz === "bar" || viz === "pie" || viz === "wordcloud" || viz === "list" ? viz : "auto",
-    placeholder: c.placeholder ? sv(obj, "placeholder") : "",
-    helpText: sv(obj, "helpText"),
-    uiWidget: sv(obj, "uiWidget"),
-    format: c.format ? sv(obj, "format") : "",
-    pattern: c.pattern ? sv(obj, "pattern") : "",
-    patternMessage: c.pattern ? sv(obj, "patternMessage") : "",
-    minLength: c.lengthLimits ? nv(obj, "minLength") : "",
-    maxLength: c.lengthLimits ? nv(obj, "maxLength") : "",
-    min: c.numericRange ? nv(obj, "min") : "",
-    max: c.numericRange ? nv(obj, "max") : "",
-    step: c.step ? nv(obj, "step") : "",
-    minItems: c.selectionLimits ? nv(obj, "minItems") : "",
-    maxItems: c.selectionLimits ? nv(obj, "maxItems") : "",
-    allowCustom: c.allowCustom ? obj.allowCustom === true : false,
-    allowedDomainsText:
-      c.allowedDomains && Array.isArray(obj.allowedDomains)
-        ? (obj.allowedDomains as unknown[]).filter((s): s is string => typeof s === "string").join("\n")
-        : "",
-    advancedValidationText: Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : "{}",
-  };
-}
-
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function FieldConfigEditor({
@@ -249,21 +39,27 @@ export function FieldConfigEditor({
   index: number;
   updateField: (index: number, patch: Partial<FieldDraft>) => void;
 }) {
-  const [rawError, setRawError] = useState("");
   const c = caps(field.fieldType);
+  // One contract, two representations: the visual controls are checked as
+  // the rules they describe, the JSON editor as the text that has to parse
+  // into those same rules. Either way the field rules contract the route
+  // parses is what refuses a value, live, on the control it is about.
+  const visual = useContractForm(formFieldRulesSchema, visualRules(field));
+  const raw = useContractForm(formFieldRulesTextSchema, { validation: field.rawValidationText });
 
   function toggleMode() {
     if (!field.rawMode) {
       updateField(index, { rawMode: true, rawValidationText: draftToRawJson(field) });
-      setRawError("");
-    } else {
-      try {
-        updateField(index, rawJsonToDraftPatch(field.rawValidationText, field.fieldType));
-        setRawError("");
-      } catch (err) {
-        setRawError((err as Error).message);
-      }
+      raw.reset();
+      return;
     }
+    // The JSON has to be rules the contract accepts before it can be spread
+    // over the visual controls; otherwise the editor stays where the operator
+    // is, with the refusal on the text.
+    const checked = raw.submit();
+    if (!checked.data) return;
+    updateField(index, rulesToDraftPatch(checked.data.validation, field.fieldType));
+    visual.reset();
   }
 
   /*
@@ -303,23 +99,23 @@ export function FieldConfigEditor({
   // ── Raw JSON mode ────────────────────────────────────────────────────────────
   if (field.rawMode) {
     return (
-      <div class="pk pk-stack pk-stack--snug">
+      <div class="pk pk-stack pk-stack--snug" {...raw.handlers}>
         {modeSwitch}
         {/*
-         * The parse failure belongs on the control that caused it, so it arrives
-         * as the Field's invalid state — `aria-invalid` plus a `role="alert"`
+         * A refusal belongs on the control that caused it, so it arrives as
+         * the Field's invalid state — `aria-invalid` plus a `role="alert"`
          * message the textarea is described by — rather than as a detached
          * banner above it.
          */}
         <Field
           label="Validation JSON"
           help="The full validation and display config. Switch to Visual to parse these settings back into structured fields."
-          state={rawError ? "invalid" : undefined}
-          message={rawError || undefined}
+          {...raw.of("validation")}
         >
           {(control) => (
             <Textarea
               {...control}
+              name="validation"
               class="pk-mono"
               rows={7}
               value={field.rawValidationText}
@@ -334,7 +130,7 @@ export function FieldConfigEditor({
 
   // ── Visual mode ──────────────────────────────────────────────────────────────
   return (
-    <div class="pk pk-stack pk-stack--snug">
+    <div class="pk pk-stack pk-stack--snug" {...visual.handlers}>
       {modeSwitch}
 
       {/* Options textarea — choice fields only */}
@@ -356,10 +152,11 @@ export function FieldConfigEditor({
       <div class="pk-grid pk-grid--tight">
         {/* Placeholder — not for choice / boolean */}
         {c.placeholder && (
-          <Field label="Placeholder">
+          <Field label="Placeholder" {...visual.of("placeholder")}>
             {(control) => (
               <TextInput
                 {...control}
+                name="placeholder"
                 value={field.placeholder}
                 onInput={(e) => updateField(index, { placeholder: (e.target as HTMLInputElement).value })}
               />
@@ -368,10 +165,11 @@ export function FieldConfigEditor({
         )}
 
         {/* Help text — always visible */}
-        <Field label="Help text">
+        <Field label="Help text" {...visual.of("helpText")}>
           {(control) => (
             <TextInput
               {...control}
+              name="helpText"
               value={field.helpText}
               onInput={(e) => updateField(index, { helpText: (e.target as HTMLInputElement).value })}
             />
@@ -379,10 +177,11 @@ export function FieldConfigEditor({
         </Field>
 
         {/* Stats view — always visible */}
-        <Field label="Stats view">
+        <Field label="Stats view" {...visual.of("adminVisualization")}>
           {(control) => (
             <Select
               {...control}
+              name="adminVisualization"
               value={field.adminVisualization}
               onChange={(e) =>
                 updateField(index, {
@@ -402,10 +201,11 @@ export function FieldConfigEditor({
         {/* Length limits — text / textarea / email / url */}
         {c.lengthLimits && (
           <>
-            <Field label="Min length">
+            <Field label="Min length" {...visual.of("minLength")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="minLength"
                   type="number"
                   min="0"
                   value={field.minLength}
@@ -413,10 +213,11 @@ export function FieldConfigEditor({
                 />
               )}
             </Field>
-            <Field label="Max length">
+            <Field label="Max length" {...visual.of("maxLength")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="maxLength"
                   type="number"
                   min="0"
                   value={field.maxLength}
@@ -430,20 +231,22 @@ export function FieldConfigEditor({
         {/* Numeric range — number / date */}
         {c.numericRange && (
           <>
-            <Field label="Min">
+            <Field label="Min" {...visual.of("min")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="min"
                   type="number"
                   value={field.min}
                   onInput={(e) => updateField(index, { min: (e.target as HTMLInputElement).value })}
                 />
               )}
             </Field>
-            <Field label="Max">
+            <Field label="Max" {...visual.of("max")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="max"
                   type="number"
                   value={field.max}
                   onInput={(e) => updateField(index, { max: (e.target as HTMLInputElement).value })}
@@ -455,10 +258,11 @@ export function FieldConfigEditor({
 
         {/* Step — number only */}
         {c.step && (
-          <Field label="Step">
+          <Field label="Step" {...visual.of("step")}>
             {(control) => (
               <TextInput
                 {...control}
+                name="step"
                 type="number"
                 value={field.step}
                 onInput={(e) => updateField(index, { step: (e.target as HTMLInputElement).value })}
@@ -470,10 +274,11 @@ export function FieldConfigEditor({
         {/* Selection range — multi_select only */}
         {c.selectionLimits && (
           <>
-            <Field label="Min selections">
+            <Field label="Min selections" {...visual.of("minItems")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="minItems"
                   type="number"
                   min="0"
                   value={field.minItems}
@@ -481,10 +286,11 @@ export function FieldConfigEditor({
                 />
               )}
             </Field>
-            <Field label="Max selections">
+            <Field label="Max selections" {...visual.of("maxItems")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="maxItems"
                   type="number"
                   min="0"
                   value={field.maxItems}
@@ -498,20 +304,22 @@ export function FieldConfigEditor({
         {/* Regex pattern + error message — text only */}
         {c.pattern && (
           <>
-            <Field label="Pattern" help="A regular expression.">
+            <Field label="Pattern" help="A regular expression." {...visual.of("pattern")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="pattern"
                   class="pk-mono"
                   value={field.pattern}
                   onInput={(e) => updateField(index, { pattern: (e.target as HTMLInputElement).value })}
                 />
               )}
             </Field>
-            <Field label="Pattern error message">
+            <Field label="Pattern error message" {...visual.of("patternMessage")}>
               {(control) => (
                 <TextInput
                   {...control}
+                  name="patternMessage"
                   value={field.patternMessage}
                   onInput={(e) => updateField(index, { patternMessage: (e.target as HTMLInputElement).value })}
                 />
@@ -521,10 +329,11 @@ export function FieldConfigEditor({
         )}
 
         {/* Widget */}
-        <Field label="Widget">
+        <Field label="Widget" {...visual.of("uiWidget")}>
           {(control) => (
             <Select
               {...control}
+              name="uiWidget"
               value={field.uiWidget}
               onChange={(e) => updateField(index, { uiWidget: (e.target as HTMLSelectElement).value })}
             >
@@ -539,10 +348,11 @@ export function FieldConfigEditor({
 
         {/* Format — text-like / choice fields */}
         {c.format && (
-          <Field label="Format">
+          <Field label="Format" {...visual.of("format")}>
             {(control) => (
               <Select
                 {...control}
+                name="format"
                 value={field.format}
                 onChange={(e) => updateField(index, { format: (e.target as HTMLSelectElement).value })}
               >
@@ -557,27 +367,25 @@ export function FieldConfigEditor({
         )}
       </div>
 
-      {/* Allow custom answers — select / multi_select. The label wraps the input,
-          so the association survives without an id the surrounding list has to
-          keep unique per field. */}
+      {/* Allow custom answers — select / multi_select. The design system's
+          checkbox wraps its own label, so the association survives without an
+          id the surrounding list has to keep unique per field. */}
       {c.allowCustom && (
-        <label class="pk-check">
-          <input
-            class="pk-check__input"
-            type="checkbox"
-            checked={field.allowCustom}
-            onChange={(e) => updateField(index, { allowCustom: (e.target as HTMLInputElement).checked })}
-          />
-          <span class="pk-check__label">Allow custom answers</span>
-        </label>
+        <Checkbox
+          label="Allow custom answers"
+          name="allowCustom"
+          checked={field.allowCustom}
+          onChange={(e) => updateField(index, { allowCustom: (e.target as HTMLInputElement).checked })}
+        />
       )}
 
       {/* Allowed email domains — email only */}
       {c.allowedDomains && (
-        <Field label="Allowed domains" help="One per line.">
+        <Field label="Allowed domains" help="One per line." {...visual.of("allowedDomains")}>
           {(control) => (
             <Textarea
               {...control}
+              name="allowedDomains"
               class="pk-mono"
               rows={2}
               value={field.allowedDomainsText}

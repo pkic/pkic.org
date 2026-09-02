@@ -31,6 +31,8 @@ export function TargetPicker({
   onChange: (target: PickedTarget) => void;
   disabled?: boolean;
 }) {
+  // Read once, so the narrowing survives into the Field's render callback.
+  const targetType = value.targetType;
   return (
     // A grid rather than a flex row: the two selectors sit side by side where
     // there is room and stack on a phone, without a breakpoint class each.
@@ -39,11 +41,11 @@ export function TargetPicker({
         {(control) => (
           <Select
             {...control}
-            value={value.targetType ?? ""}
+            value={targetType ?? ""}
             disabled={disabled}
             onChange={(e) => {
-              const targetType = (e.target as HTMLSelectElement).value as "" | TargetType;
-              onChange({ targetType: targetType || null, targetId: null });
+              const nextType = (e.target as HTMLSelectElement).value as "" | TargetType;
+              onChange({ targetType: nextType || null, targetId: null });
             }}
           >
             <option value="">Global (no target)</option>
@@ -55,18 +57,23 @@ export function TargetPicker({
           </Select>
         )}
       </Field>
-      {value.targetType && (
-        <ServerSearchSelect
-          // Remounts when the kind changes, so the previous kind's search text
-          // and page do not carry over into a different catalog.
-          key={value.targetType}
-          catalog={permissionTargetCatalog(value.targetType)}
-          label={TARGET_LABELS[value.targetType]}
-          value={value.targetId}
-          disabled={disabled}
-          placeholder={`Select ${TARGET_LABELS[value.targetType].toLowerCase()}…`}
-          onChange={(target) => onChange({ ...value, targetId: target?.id ?? null })}
-        />
+      {targetType && (
+        <Field label={TARGET_LABELS[targetType]}>
+          {(control) => (
+            <ServerSearchSelect
+              {...control}
+              searchLabel={TARGET_LABELS[targetType]}
+              // Remounts when the kind changes, so the previous kind's search text
+              // and page do not carry over into a different catalog.
+              key={targetType}
+              catalog={permissionTargetCatalog(targetType)}
+              value={value.targetId}
+              disabled={disabled}
+              placeholder={`Select ${TARGET_LABELS[targetType].toLowerCase()}…`}
+              onChange={(target) => onChange({ ...value, targetId: target?.id ?? null })}
+            />
+          )}
+        </Field>
       )}
     </div>
   );

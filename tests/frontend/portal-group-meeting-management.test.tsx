@@ -133,17 +133,11 @@ describe("portal group meeting management", () => {
     const onChanged = vi.fn(async () => {});
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={onChanged} />);
     expect(container.textContent).toContain("recurring schedule is locked");
-    // The recurrence editor and the time-zone input own their ids, which the
-    // series fields still hand them. Every other control is inside a `Field`,
-    // which pairs label and control by generated id, so it is resolved
-    // through that pair — the lookup then fails exactly when the labelling
-    // contract is broken rather than when an id is renamed.
-    for (const suffix of ["recurrence", "timezone"]) {
-      expect(
-        container.querySelector<HTMLInputElement>(`#meeting-series-settings-${series.id}-${suffix}`)?.disabled,
-      ).toBe(true);
-    }
-    for (const label of ["First occurrence", "Duration (minutes)"]) {
+    // Every control is inside a `Field`, which pairs label and control by
+    // generated id, so each is resolved through that pair — the lookup then
+    // fails exactly when the labelling contract is broken rather than when an
+    // id is renamed.
+    for (const label of ["Repeats", "Time zone", "First occurrence", "Duration (minutes)"]) {
       expect(controlFor(container, label).disabled).toBe(true);
     }
     await typeInto(controlFor(container, "Meeting name"), "Updated materialized call");
@@ -204,14 +198,12 @@ describe("portal group meeting management", () => {
         onChanged={onChanged}
       />,
     );
-    const locationInput = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-location`,
-    )!;
+    const locationInput = controlFor(container, "Location override");
     expect(locationInput.value).toBe("");
-    expect(container.querySelector(`#meeting-occurrence-settings-${occurrence.id}-provider-action`)).toBeNull();
-    const provider = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-provider-url`,
-    )!;
+    // No provider is configured, so the reader is asked for a URL rather than
+    // what to do with one that does not exist.
+    expect(controlFor(container, "Meeting-provider URL").tagName).toBe("INPUT");
+    const provider = controlFor(container, "Meeting-provider URL");
     provider.value = "https://meet.example.test/new-room";
     void act(() => {
       provider.dispatchEvent(new Event("input", { bubbles: true }));
@@ -260,13 +252,9 @@ describe("portal group meeting management", () => {
         onChanged={() => {}}
       />,
     );
-    const provider = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-provider-url`,
-    )!;
+    const provider = controlFor(container, "Meeting-provider URL");
     expect(provider.required).toBe(false);
-    const locationInput = container.querySelector<HTMLInputElement>(
-      `#meeting-occurrence-settings-${occurrence.id}-location`,
-    )!;
+    const locationInput = controlFor(container, "Location override");
     locationInput.value = "Room 2";
     void act(() => {
       locationInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -429,7 +417,7 @@ describe("portal group meeting management", () => {
     // the text. Only the first renders an operating-system default control.
     const scope = controlFor(container, "Eligible for every occurrence in this series");
     expect(scope.classList.contains("pk-check__input")).toBe(true);
-    const scopeLabel = container.querySelector<HTMLLabelElement>(`label[for="${scope.id}"]`)!;
+    const scopeLabel = scope.closest("label")!;
     expect(scopeLabel.classList.contains("pk-check")).toBe(true);
     expect(scopeLabel.querySelector(".pk-check__label")?.textContent).toBe(
       "Eligible for every occurrence in this series",

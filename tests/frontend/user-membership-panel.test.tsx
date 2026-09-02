@@ -7,7 +7,12 @@ import { UserMembershipCard } from "../../assets/ts/member-flows/portal/sections
 import type { UserDetail, UserMembership } from "../../assets/ts/member-flows/portal/sections/system-users/model";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { identityCreateSchema, identityUpdateSchema } from "../../assets/shared/schemas/identity";
-import { memberCapacityUpdateSchema } from "../../assets/shared/schemas/membership-management";
+import {
+  individualMembershipGrantSchema,
+  memberCapacityUpdateSchema,
+} from "../../assets/shared/schemas/membership-management";
+import { organizationIdentityCreateRequestSchema } from "../../assets/shared/schemas/route-contracts-identities";
+import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
 import {
   organizationDetailResponseSchema,
   organizationsListResponseSchema,
@@ -113,6 +118,17 @@ function jsonResponse(body: unknown, status = 200): Response {
 /** The Worker's error envelope, so `ApiClientError` carries the real reason. */
 function errorResponse(message: string, status: number): Response {
   return jsonResponse({ error: { code: "CONFLICT", message } }, status);
+}
+
+/** A validation refusal that names its fields, as the Worker sends one. */
+function fieldRefusal(fieldErrors: Record<string, string[]>): Response {
+  return jsonResponse({ error: { code: "VALIDATION", message: "Invalid request", details: { fieldErrors } } }, 400);
+}
+
+function fieldOf(control: HTMLElement): HTMLElement {
+  const field = control.closest<HTMLElement>(".pk-field");
+  if (!field) throw new Error("control is not inside a Field");
+  return field;
 }
 
 interface CapturedRequest {
@@ -391,7 +407,7 @@ describe("UserMembershipPanel", () => {
     return organization;
   }
 
-  it("marks the organization field invalid and points the control at the message", async () => {
+  it("refuses an unpicked organization at the field, in the contract's words, and sends nothing", async () => {
     const requests = stubFetch(() => jsonResponse({ success: true }));
     const container = openGrantForm();
 
@@ -399,10 +415,83 @@ describe("UserMembershipPanel", () => {
 
     expect(requests).toHaveLength(0);
     const organization = controlFor<HTMLSelectElement>(container, "Organization");
+    expect(fieldOf(organization).classList.contains("pk-field--invalid")).toBe(true);
     expect(organization.getAttribute("aria-invalid")).toBe("true");
     const message = document.querySelector(`[id="${organization.getAttribute("aria-describedby") ?? ""}"]`);
     expect(message?.getAttribute("role")).toBe("alert");
-    expect(message?.textContent).toContain("Pick an organization.");
+    // The field says what the create contract — path and body together —
+    // says about an organization that is not there.
+    const contract = organizationIdentityCreateRequestSchema.safeParse({
+      organizationId: "",
+      userReference: "existing_user",
+      userId: USER_ID,
+      showOnOrganizationProfile: true,
+      activation: { mode: "invitation" },
+    });
+    expect(contract.success).toBe(false);
+    expect(message?.textContent).toContain(normalizeValidation(contract.error).fields.organizationId);
+    expect(document.activeElement).toBe(organization);
+  });
+
+  it("grants an individual capacity through the member capacities contract, refusing a blank reason first", async () => {
+    const requests = stubFetch(() =>
+      jsonResponse({
+        member: {
+          id: MEMBER_ID,
+          userId: USER_ID,
+          organizationId: null,
+          membershipCategory: "H5",
+          status: "active",
+          showOnOrgProfile: false,
+        },
+      }),
+    );
+    const container = openGrantForm();
+
+    await chooseOption(controlFor<HTMLSelectElement>(container, "Category"), "H5");
+    // Whitespace clears the browser's own `required` check, so the grant
+    // contract is what refuses the blank reason — on its field, sending nothing.
+    const reason = controlFor(container, "Activation reason");
+    await typeInto(reason, "   ");
+    await press(container, "Grant");
+
+    expect(fieldOf(reason).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(reason).querySelector('[role="alert"]')?.textContent).toContain(
+      "Document why this identity is being activated immediately.",
+    );
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+
+    await typeInto(reason, "  Individual member since the 2026 AGM  ");
+    await press(container, "Grant");
+
+    const post = requests.find((request) => request.method === "POST");
+    expect(post?.pathname).toBe("/api/v1/members/capacities");
+    // Parsed through the route's own contract rather than compared to a
+    // literal copy of what the form sent.
+    expect(individualMembershipGrantSchema.parse(post?.body)).toEqual({
+      userId: USER_ID,
+      membershipCategory: "H5",
+      activationReason: "Individual member since the 2026 AGM",
+    });
+  });
+
+  it("marks the field a server refusal names, and keeps the form open", async () => {
+    stubFetch((url) => {
+      if (url.pathname === "/api/v1/organizations") return jsonResponse(organizationList);
+      if (url.pathname === `/api/v1/organizations/${PICKED_ORGANIZATION_ID}`) return jsonResponse(organizationDetail);
+      return fieldRefusal({ organizationId: ["That organization cannot take identities."] });
+    });
+    const container = openGrantForm();
+
+    const organization = await pickOrganizationOne(container);
+    await press(container, "Grant");
+
+    expect(fieldOf(organization).classList.contains("pk-field--invalid")).toBe(true);
+    expect(fieldOf(organization).querySelector('[role="alert"]')?.textContent).toContain(
+      "That organization cannot take identities.",
+    );
+    expect(document.activeElement).toBe(organization);
+    expect(buttonNamed(container, "Grant")).toBeDefined();
   });
 
   it("requires a documented reason before activating an identity immediately", async () => {
@@ -427,6 +516,7 @@ describe("UserMembershipPanel", () => {
     await typeInto(reason, "   ");
     await press(container, "Grant");
 
+    expect(fieldOf(reason).classList.contains("pk-field--invalid")).toBe(true);
     expect(reason.getAttribute("aria-invalid")).toBe("true");
     expect(describedByText(reason)).toContain("Document why this identity is being activated immediately.");
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);

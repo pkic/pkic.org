@@ -6,6 +6,7 @@ import {
 } from "../../../../../shared/schemas/group-statistics";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
@@ -23,23 +24,20 @@ interface DateWindow {
   to: string;
 }
 
-/**
- * A rejected window, attributed to the boundary that caused it.
- *
- * The shared schema reports its own path — `to` for a window that ends before
- * it starts — so the message can land on that control as a `Field` state
- * rather than as a detached banner. That is what puts `aria-invalid` and
- * `aria-describedby` on the input the reader actually has to fix.
- */
-interface WindowError {
-  boundary: "from" | "to" | null;
-  message: string;
-}
-
 const DEFAULT_WINDOW: DateWindow = { scope: "current", from: "", to: "" };
 
 function toUtcBoundary(value: string): string | undefined {
   return value ? `${value}T00:00:00.000Z` : undefined;
+}
+
+/**
+ * The query the window draft would put on the wire, as the shared contract
+ * reads it. The same contract decides what each boundary field shows — a
+ * window that ends before it starts is reported on `to` — and what Apply may
+ * send; nothing here second-guesses it.
+ */
+function windowQuery(draft: DateWindow) {
+  return { scope: draft.scope, timezone: "UTC", from: toUtcBoundary(draft.from), to: toUtcBoundary(draft.to) };
 }
 
 function formatWindowBoundary(value: string | null): string {
@@ -55,17 +53,13 @@ function queryString(query: GroupStatsQuery): string {
   return params.toString();
 }
 
-/** The message a boundary field shows, or undefined when the error is elsewhere. */
-function messageFor(error: WindowError | null, boundary: "from" | "to"): string | undefined {
-  return error?.boundary === boundary ? error.message : undefined;
-}
-
 export function GroupStatistics({ groupId }: { groupId: string }) {
   const [draft, setDraft] = useState<DateWindow>(DEFAULT_WINDOW);
   const [query, setQuery] = useState<GroupStatsQuery>(() =>
     groupStatsQuerySchema.parse({ scope: "current", timezone: "UTC" }),
   );
-  const [queryError, setQueryError] = useState<WindowError | null>(null);
+  const [windowError, setWindowError] = useState("");
+  const form = useContractForm(groupStatsQuerySchema, windowQuery(draft));
   const stats = useData(
     () =>
       getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/stats?${queryString(query)}`, groupStatsResponseSchema),
@@ -78,29 +72,19 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
 
   function applyWindow(event: Event): void {
     event.preventDefault();
-    const parsed = groupStatsQuerySchema.safeParse({
-      scope: draft.scope,
-      timezone: "UTC",
-      from: toUtcBoundary(draft.from),
-      to: toUtcBoundary(draft.to),
-    });
-    if (!parsed.success) {
-      const issue = parsed.error.issues[0];
-      const path = issue?.path[0];
-      setQueryError({
-        boundary: path === "from" || path === "to" ? path : null,
-        message: issue?.message ?? "Choose a valid UTC window.",
-      });
+    // A rejected window never reaches the server: the contract marks the
+    // boundary it refuses and the form states the rest.
+    const checked = form.submit();
+    if (!checked.data) {
+      setWindowError(checked.message);
       return;
     }
-    setQueryError(null);
-    setQuery(parsed.data);
+    setWindowError("");
+    setQuery(checked.data);
   }
 
   if (!stats.data && stats.loading) return <Spinner label="Loading group statistics…" />;
 
-  const fromMessage = messageFor(queryError, "from");
-  const toMessage = messageFor(queryError, "to");
   const noActivity =
     stats.data?.activity.people.actionCount === 0 &&
     stats.data.activity.capacities.joinedCount === 0 &&
@@ -113,12 +97,13 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       <Panel aria-label="Reporting window">
         <PanelHeader title="Reporting window" />
         <PanelBody class="pk-stack">
-          <form class="pk-stack" aria-label="Statistics window" onSubmit={applyWindow}>
+          <form noValidate class="pk-stack" aria-label="Statistics window" onSubmit={applyWindow} {...form.handlers}>
             <div class="pk-grid pk-grid--tight">
-              <Field label="Count people who">
+              <Field label="Count people who" {...form.of("scope")}>
                 {(control) => (
                   <Select
                     {...control}
+                    name="scope"
                     value={draft.scope}
                     onChange={(event) => updateDraft("scope", event.currentTarget.value)}
                   >
@@ -130,12 +115,12 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
               <Field
                 label="From"
                 help="A UTC day. Leave blank to start at the beginning of available history."
-                state={fromMessage ? "invalid" : undefined}
-                message={fromMessage}
+                {...form.of("from")}
               >
                 {(control) => (
                   <TextInput
                     {...control}
+                    name="from"
                     type="date"
                     value={draft.from}
                     onInput={(event) => updateDraft("from", event.currentTarget.value)}
@@ -145,12 +130,12 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
               <Field
                 label="To"
                 help="Up to, but not including, this UTC day. Leave blank to run up to now."
-                state={toMessage ? "invalid" : undefined}
-                message={toMessage}
+                {...form.of("to")}
               >
                 {(control) => (
                   <TextInput
                     {...control}
+                    name="to"
                     type="date"
                     value={draft.to}
                     onInput={(event) => updateDraft("to", event.currentTarget.value)}
@@ -158,9 +143,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                 )}
               </Field>
             </div>
-            {/* A rejection the schema did not attribute to either boundary has
-                no control to sit beside, so it is stated on its own. */}
-            {queryError?.boundary === null && <Alert tone="danger">{queryError.message}</Alert>}
+            {windowError && <Alert tone="danger">{windowError}</Alert>}
             <div class="pk-cluster">
               <Button type="submit" loading={stats.loading}>
                 Apply window

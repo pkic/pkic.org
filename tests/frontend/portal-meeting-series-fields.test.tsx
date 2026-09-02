@@ -21,8 +21,6 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesFields";
 import { chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 
-const ID_PREFIX = "meeting-series-test";
-
 function draft(overrides: Partial<MeetingSeriesDraft> = {}): MeetingSeriesDraft {
   return {
     name: "Architecture call",
@@ -50,7 +48,7 @@ function mount(node: ComponentChild): HTMLElement {
 }
 
 function mountFields(props: Partial<Parameters<typeof MeetingSeriesFields>[0]> = {}): HTMLElement {
-  return mount(<MeetingSeriesFields idPrefix={ID_PREFIX} draft={draft()} onChange={vi.fn()} {...props} />);
+  return mount(<MeetingSeriesFields draft={draft()} onChange={vi.fn()} {...props} />);
 }
 
 /** The labels this component owns, without the ones its children bring. */
@@ -115,7 +113,7 @@ describe("meeting series fields", () => {
   it("reports an edit through the callback rather than mutating the draft it was given", async () => {
     const onChange = vi.fn();
     const given = draft();
-    const page = mount(<MeetingSeriesFields idPrefix={ID_PREFIX} draft={given} onChange={onChange} />);
+    const page = mount(<MeetingSeriesFields draft={given} onChange={onChange} />);
 
     await typeInto(controlFor(page, "Meeting name"), "Renamed call");
 
@@ -166,7 +164,7 @@ describe("meeting series fields", () => {
       expect(controlFor(page, label).matches(":disabled")).toBe(true);
     }
     expect(controlFor(page, "Time zone").matches(":disabled")).toBe(true);
-    expect(page.querySelector<HTMLInputElement>(`#${ID_PREFIX}-recurrence`)?.disabled).toBe(true);
+    expect(controlFor(page, "Repeats").matches(":disabled")).toBe(true);
 
     // Everything else stays editable: a locked schedule is not a locked
     // series.
