@@ -2,6 +2,13 @@ import { z } from "zod";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresPermissions } from "./route-contract";
 
+/**
+ * Actor types whose `actor_id` is a `users.id`. Read models resolve these to
+ * the user's display name; `system` and `public` actors carry no user id.
+ */
+export const USER_BACKED_AUDIT_ACTOR_TYPES = ["admin", "member", "user"] as const;
+export type UserBackedAuditActorType = (typeof USER_BACKED_AUDIT_ACTOR_TYPES)[number];
+
 export const SCOPED_AUDIT_LOG_SORT_COLUMNS = ["createdAt", "action", "actor"] as const;
 
 /**
