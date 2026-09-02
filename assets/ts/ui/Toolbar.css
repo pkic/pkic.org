@@ -80,7 +80,9 @@
 
     .pk-toolbar__controls {
       width: 100%;
-      justify-content: flex-end;
+      /* Under a full-width search box the commands read as a row from the
+         left; pushed to the right, a wrapped last button sat alone. */
+      justify-content: flex-start;
     }
   }
 }

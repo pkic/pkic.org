@@ -25,7 +25,8 @@ export interface PageHeaderProps {
   /** The trail. Omit at a section root, where the sidebar already says it. */
   trail?: ReadonlyArray<BreadcrumbItem>;
   /** The page's subject — a record's name, or the section's, never both. */
-  title: string;
+  /** The subject's name; a node when the page edits the name in place. */
+  title: ComponentChildren;
   /** The subject's standing: Badges, a count, a status. */
   context?: ComponentChildren;
   /** What can be done from here: Buttons, right-aligned. */

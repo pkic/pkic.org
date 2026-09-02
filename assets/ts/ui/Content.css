@@ -66,9 +66,19 @@
      * own left edge. Floored at zero the track can be as narrow as the space
      * allows, and the value wraps inside it instead.
      */
-    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    grid-template-columns: var(--pk-datalist-term, minmax(0, max-content)) minmax(0, 1fr);
     gap: var(--pk-1) var(--pk-3);
     margin: 0;
+  }
+
+  /*
+   * Several lists on one surface share one term column: each list sizes its
+   * own track otherwise, and three lists stacked in a panel put their values
+   * on three different left edges. A surface sets the width once, on the
+   * container, and every list under it lines up.
+   */
+  .pk-datalist-aligned {
+    --pk-datalist-term: minmax(0, 9rem);
   }
 
   .pk-datalist > dt {
@@ -127,6 +137,40 @@
     line-height: 1.18;
     letter-spacing: -0.01em;
     color: var(--pk-ink);
+  }
+
+  /* A block of authored prose on a record: keeps its line breaks and a reading measure. */
+  .pk-prose-block {
+    margin: 0;
+    max-width: 72ch;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* A short row of related links, separated by a middle dot rather than boxed as buttons. */
+  .pk-inline-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1) 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--pk-text-sm);
+  }
+  .pk-inline-links--center {
+    justify-content: center;
+  }
+  /* Prose with its one command at the end of the first line. */
+  .pk-record-lead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--pk-3);
+  }
+  .pk-inline-links > li + li::before {
+    content: "·";
+    margin-inline: var(--pk-2);
+    color: var(--pk-ink-faint);
   }
 
   /* The record's name with its badges beside it, wrapping under it when narrow. */

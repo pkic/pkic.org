@@ -16,14 +16,27 @@ import {
   organizationDetailResponseSchema,
   type OrganizationDetail as OrganizationDetailModel,
 } from "../../../../../shared/schemas/organization-management";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
-import { getJson } from "../../../../shared/api-client";
+import { ErrorAlert, friendlyErrorMessage } from "../../../../components/ErrorAlert";
+import { useLiveFields } from "../../../../hooks/useLiveFields";
+import { getJson, patchJson } from "../../../../shared/api-client";
+import { normalizeValidation } from "../../../../shared/form/validation-map";
+import { Alert } from "../../../../ui/Alert";
+import { Button } from "../../../../ui/Button";
+import { Panel, PanelBody } from "../../../../ui/Panel";
+import { toast } from "../../ui";
+import { draftFromOrganization, validateDraft, type OrganizationDraft } from "./OrganizationDraft";
+import {
+  OrganizationAbout,
+  OrganizationContacts,
+  OrganizationLinks,
+  OrganizationMembershipCard,
+} from "./OrganizationProfile";
 import { Badge } from "../../../../ui/Badge";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { OrganizationLogo } from "./OrganizationLogo";
-import { OrganizationContacts, OrganizationProfile } from "./OrganizationProfile";
-import { OrganizationSponsorships } from "./OrganizationSponsorships";
+import { OrganizationActivity } from "./OrganizationActivity";
+import { OrganizationSponsorshipStanding } from "./OrganizationSponsorshipStanding";
 import { IdentityRoster } from "./IdentityRoster";
 // `pk-mono` on the category code comes from Content.css, which ships in a lazy
 // chunk rather than the entry stylesheet, so this module pulls it in itself.
@@ -45,6 +58,21 @@ export function OrganizationDetail({
   const [organization, setOrganization] = useState<OrganizationDetailModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Editing is the page's mode, not a card's: one draft, one Save, and every
+  // card keeps its layout while its values become inputs.
+  const [draft, setDraft] = useState<OrganizationDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  // The fields are checked live as they are typed in, the way the join form
+  // checks its own; a refused save marks its fields through the same state.
+  const live = useLiveFields();
+  // After a refused save the first refused field takes focus — once the
+  // marks are on the page, and only then; retyping must not move the caret.
+  const [refusedAt, setRefusedAt] = useState(0);
+  useEffect(() => {
+    if (refusedAt === 0) return;
+    document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [refusedAt]);
 
   const load = useCallback(async () => {
     if (!canRead) return;
@@ -75,6 +103,60 @@ export function OrganizationDetail({
   if (!organization) return null;
 
   const count = organization.activeIdentityCount;
+  const editing = draft !== null;
+  const onDraft = (next: Partial<OrganizationDraft>) =>
+    setDraft((current) => (current ? { ...current, ...next } : current));
+  const stopEditing = () => {
+    setDraft(null);
+    live.reset();
+    setSaveError("");
+  };
+
+  async function save() {
+    if (!draft || !organization) return;
+    // The shared update contract decides, here as on the server: a refused
+    // field is marked in place and nothing is sent until it is right.
+    const checked = validateDraft(draft, organization.updatedAt);
+    if (checked.fields) {
+      live.report(checked.fields);
+      setSaveError(checked.message);
+      setRefusedAt(Date.now());
+      return;
+    }
+    setSaving(true);
+    setSaveError("");
+    try {
+      await patchJson(
+        `/api/v1/organizations/${encodeURIComponent(organization.id)}`,
+        checked.payload,
+        organizationDetailResponseSchema,
+      );
+      toast("Organization updated", "success");
+      stopEditing();
+      await load();
+    } catch (caught) {
+      // A server refusal names its fields the same way the contract does.
+      const refusal = normalizeValidation(caught);
+      if (Object.keys(refusal.fields).length > 0) {
+        live.report(refusal.fields);
+        setRefusedAt(Date.now());
+      }
+      setSaveError(refusal.globalMessage);
+      toast(refusal.globalMessage, "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const cardProps = {
+    organization,
+    draft: draft ?? undefined,
+    onDraft: editing ? onDraft : undefined,
+    busy: saving,
+    fields: live.of,
+  };
+  // Every field on the page reports through the one checker while editing.
+  const liveHandlers = editing ? { onInput: live.check, onChange: live.check, onFocusOut: live.check } : {};
 
   return (
     <section class="pk pk-stack" aria-label={organization.name}>
@@ -83,7 +165,8 @@ export function OrganizationDetail({
           { label: "Organizations", href: usePortalHashLocation.hrefs("/organizations") },
           { label: organization.name },
         ]}
-        title={organization.name}
+        // While editing, the title follows the Name field as it is typed.
+        title={draft?.name.trim() ? draft.name : organization.name}
         context={
           <>
             {organization.membershipCategory && (
@@ -97,17 +180,58 @@ export function OrganizationDetail({
             </Badge>
           </>
         }
+        actions={
+          canWrite ? (
+            editing ? (
+              <>
+                <Button
+                  variant="primary"
+                  loading={saving}
+                  onClick={() => {
+                    void save();
+                  }}
+                >
+                  Save
+                </Button>
+                <Button disabled={saving} onClick={stopEditing}>
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setDraft(draftFromOrganization(organization))}>Edit</Button>
+            )
+          ) : undefined
+        }
       />
+      {saveError && <Alert tone="danger">{friendlyErrorMessage(saveError)}</Alert>}
 
-      <div class="pk-record">
+      {/* The account: what the organization says about itself and who
+          represents it take the width; its mark and its standing — as a
+          member, as a sponsor — and its contacts keep the column beside them.
+          The side column's lists share one term measure, so their values sit
+          on one edge. In edit mode the same cards carry inputs in place. */}
+      <div class="pk-record" {...liveHandlers}>
         <div class="pk-stack">
-          <OrganizationProfile organization={organization} canWrite={canWrite} onSaved={load} />
+          <OrganizationAbout {...cardProps} />
           <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />
-          {canReadSponsorships && <OrganizationSponsorships organizationId={organization.id} />}
+          {/* What the account has done across the consortium, one bounded
+              query per tab, aggregated over its representatives. */}
+          <OrganizationActivity organizationId={organization.id} canReadSponsorships={canReadSponsorships} />
         </div>
-        <div class="pk-stack">
-          <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
-          <OrganizationContacts organization={organization} canEdit={canWrite} onSaved={load} />
+        <div class="pk-stack pk-datalist-aligned">
+          {/* The identity card: the mark with the organization's links under
+              it — one card, so the mark is not a lone box above the rest. */}
+          <Panel aria-label="Identity">
+            <PanelBody class="pk-stack pk-stack--snug">
+              <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
+              <OrganizationLinks {...cardProps} />
+            </PanelBody>
+          </Panel>
+          <OrganizationMembershipCard {...cardProps} />
+          {canReadSponsorships && (
+            <OrganizationSponsorshipStanding organizationId={organization.id} canWrite={canWrite} />
+          )}
+          <OrganizationContacts {...cardProps} />
         </div>
       </div>
     </section>

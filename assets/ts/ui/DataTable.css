@@ -274,6 +274,13 @@
    * of twelve columns does not open with twelve dots along its head; the
    * commands are there for whoever reaches for them.
    */
+  /* A form opened from the list's toolbar sits inside the panel, under the head. */
+  .pk-table-list__inset {
+    padding: var(--pk-3) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line-soft);
+    background: var(--pk-surface-sunk);
+  }
+
   .pk-table__head-tools {
     display: inline-flex;
     align-items: center;
