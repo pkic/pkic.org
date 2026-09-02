@@ -720,10 +720,13 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(detail.getByText("Slogan", { exact: true })).toBeVisible();
     await expect(detail.getByText(newSlogan)).toBeVisible();
 
-    // Rejecting without a note is blocked client-side — confirms the
-    // required-note guard without spending this org's one pending review.
+    // Rejecting without a note is refused by the shared reject contract at
+    // the field, in the contract's own words, without spending this org's
+    // one pending review and without a request.
     await detail.getByRole("button", { name: "Reject" }).click();
-    await expect(page.locator(".my-toast", { hasText: "A reviewer note is required to reject" })).toBeVisible();
+    const reviewerNote = detail.getByLabel("Reviewer note");
+    await expect(reviewerNote).toHaveAttribute("aria-invalid", "true");
+    await expect(detail.getByRole("alert").filter({ hasText: "Write the reason for the rejection" })).toBeVisible();
 
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();

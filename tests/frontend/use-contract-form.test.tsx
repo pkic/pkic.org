@@ -105,7 +105,7 @@ describe("useContractForm", () => {
     await typeInto(website, "rss please");
     expect(fieldOf(website).classList.contains("pk-field--invalid")).toBe(true);
     expect(website.getAttribute("aria-invalid")).toBe("true");
-    expect(fieldOf(website).querySelector('[role="alert"]')?.textContent).toContain("URL");
+    expect(fieldOf(website).querySelector('[role="alert"]')?.textContent).toContain("web address");
     // The other field is still untouched and still says nothing.
     expect(fieldOf(controlFor(root, "Name")).className).toBe("pk-field");
 
