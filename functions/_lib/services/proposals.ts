@@ -767,14 +767,6 @@ export async function finalizeProposalDecision(
     minReviewsRequired: number;
   },
 ): Promise<{ reviewCount: number }> {
-  const existingDecision = await first<{ id: string }>(db, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [
-    payload.proposalId,
-  ]);
-
-  if (existingDecision) {
-    throw new AppError(409, "PROPOSAL_ALREADY_FINALIZED", "Proposal already has a final decision");
-  }
-
   const reviewCountRow = await first<{ total: number }>(
     db,
     "SELECT COUNT(*) AS total FROM proposal_reviews WHERE proposal_id = ?",
@@ -805,7 +797,14 @@ export async function finalizeProposalDecision(
     `INSERT INTO proposal_decisions (
       id, proposal_id, decided_by_user_id, final_status,
       decision_note, min_reviews_required, review_count, decided_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(proposal_id) DO UPDATE SET
+      decided_by_user_id = excluded.decided_by_user_id,
+      final_status = excluded.final_status,
+      decision_note = excluded.decision_note,
+      min_reviews_required = excluded.min_reviews_required,
+      review_count = excluded.review_count,
+      decided_at = excluded.decided_at`,
     [
       uuid(),
       payload.proposalId,
