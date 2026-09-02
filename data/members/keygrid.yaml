@@ -1,0 +1,60 @@
+id: keygrid
+name: KeyGrid ApS
+slogan:
+website: https://www.keygrid.io
+# Business domains for email
+organizationDomains:
+  - keygrid.io
+# Short description, longer content can be placed in `content/members/`
+description: Eight enrollment and validation protocols, any HSM, multi-tenant by design, and FIPS 204 post-quantum issuance - from three containers. ACME, SCEP, EST, CMP, TSA, OCSP, SSH and SPIFFE. SaaS, on-premises or air-gapped. Built in Copenhagen.
+
+# membership
+memberSince: 2026-09-02
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/keygridpki
+  facebook: 
+  instagram: 
+  linkedin: https://linkedin.com/company/keygrid
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jimmy Tønners
+    role: CEO
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/jimmytoenners
+    description: Jimmy is the CEO at KeyGrid ApS and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
