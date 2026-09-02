@@ -97,7 +97,7 @@ function companyState(overrides: Partial<CompanyState> = {}): CompanyState {
 }
 
 function panel(overrides: Partial<CompanyState> = {}) {
-  return <CompanyDetailPanel selectedCompany={COMPANY} company={companyState(overrides)} canWrite />;
+  return <CompanyDetailPanel selectedCompany={COMPANY} company={companyState(overrides)} />;
 }
 
 describe("one company's sponsorship list", () => {
@@ -105,33 +105,26 @@ describe("one company's sponsorship list", () => {
     const container = mount(panel());
 
     expect(container.querySelector("caption")?.textContent).toBe("Analytical Engines sponsorships");
-    // The row's control says what it opens, not "View".
-    const rowLink = container.querySelector("tbody button");
-    expect(rowLink?.textContent).toBe("Show Gold — Summit 2026");
+    // The row's control says what it opens, not "View", and it is a link to
+    // the sponsorship's own page — a record with facets is routed, not
+    // expanded beside the table.
+    const rowLink = container.querySelector<HTMLAnchorElement>("tbody a");
+    expect(rowLink?.textContent).toBe("Open Gold — Summit 2026");
+    expect(rowLink?.getAttribute("href")).toBe("#/sponsors/00000000-0000-4000-8000-000000000101");
   });
 
-  it("activates a row through a real button rather than a handler on the tr", () => {
-    const setSelectedId = vi.fn();
-    const container = mount(panel({ setSelectedId }));
+  it("activates a row through a real link rather than a handler on the tr", () => {
+    const container = mount(panel());
 
     const row = container.querySelector("tbody tr")!;
     // A <tr> is not focusable and takes no Enter key, so the handler must not
-    // live on it — the control inside the first cell is what activates.
+    // live on it — the control inside the first cell is what activates, and
+    // a link can be opened in a new tab.
     expect(row.getAttribute("onclick")).toBeNull();
-    const rowLink = container.querySelector<HTMLButtonElement>("tbody button")!;
-    expect(rowLink.tagName).toBe("BUTTON");
-    void act(() => rowLink.click());
-    expect(setSelectedId).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000101");
-  });
-
-  it("says which row is open in words, not only by a filled background", () => {
-    const open = mount(panel({ selectedId: "00000000-0000-4000-8000-000000000101" }));
-    expect(open.querySelector("tbody")?.textContent).toContain("Showing");
-    expect(open.textContent).toContain("Detail for 00000000-0000-4000-8000-000000000101");
-
-    const closed = mount(panel());
-    expect(closed.querySelector("tbody")?.textContent).not.toContain("Showing");
-    expect(closed.querySelector('[data-testid="sponsorship-detail"]')).toBeNull();
+    expect(container.querySelector("tbody a")?.tagName).toBe("A");
+    // Nothing expands in place any more: no "Showing" marker, no side panel.
+    expect(container.querySelector("tbody")?.textContent).not.toContain("Showing");
+    expect(container.querySelector('[data-testid="sponsorship-detail"]')).toBeNull();
   });
 
   it("says why the list is empty rather than showing an unexplained blank", () => {
@@ -168,15 +161,13 @@ describe("one company's sponsorship list", () => {
     expect([...done.querySelectorAll("button")].some((candidate) => candidate.textContent === "Load more")).toBe(false);
   });
 
-  it("returns to the company list through a named control", () => {
-    const backToCompanies = vi.fn();
-    const container = mount(panel({ backToCompanies }));
+  it("returns to the company list through the trail, a real link to the sponsors route", () => {
+    const container = mount(panel());
 
-    const back = [...container.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent === "← Back to companies",
-    )!;
-    expect(back.getAttribute("type")).toBe("button");
-    void act(() => back.click());
-    expect(backToCompanies).toHaveBeenCalledTimes(1);
+    // No back button: the page's trail names where it sits, and "Sponsors" is
+    // a link the route reads to leave this company.
+    expect([...container.querySelectorAll("button")].some((b) => b.textContent?.includes("Back"))).toBe(false);
+    const crumb = [...container.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent === "Sponsors");
+    expect(crumb?.getAttribute("href")).toBe("#/sponsors");
   });
 });

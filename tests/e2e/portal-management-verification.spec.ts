@@ -369,11 +369,11 @@ test.describe("Portal management browser-verification pass", () => {
     // name, so it groups under its contact name. Drill into that company,
     // then pick its (only) sponsorship from the resulting list.
     await page.locator("tr").filter({ hasText: contactName }).click();
-    // The company's sponsorships are a table now, and each row activates
-    // through a control named after what it opens — located by that name
-    // rather than by the list class the markup happens to carry.
+    // The company's sponsorships are a table, and each row is a link to the
+    // sponsorship's own page, named after what it opens — located by that
+    // name rather than by the list class the markup happens to carry.
     await page
-      .getByRole("button", { name: /^Show / })
+      .getByRole("link", { name: /^Open / })
       .first()
       .click();
     // The detail panel names itself after the sponsor, so it is located by
@@ -386,12 +386,15 @@ test.describe("Portal management browser-verification pass", () => {
     // also present in the DOM but hidden.
     await expect(detail.locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
 
+    // Forms are closed until asked for; the record shows its facts first.
+    await detail.getByRole("button", { name: "Edit", exact: true }).click();
     await detail.getByLabel("Notes").fill("E2E verification note");
     await detail.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
 
+    await detail.getByRole("button", { name: "Advance stage" }).click();
     await detail.getByLabel("Advance to stage").selectOption("contacted");
-    await detail.getByRole("button", { name: "Advance" }).click();
+    await detail.getByRole("button", { name: "Advance", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
     await expect(detail.locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
     await expect(detail.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
@@ -639,7 +642,10 @@ test.describe("Portal management browser-verification pass", () => {
     await detail.getByRole("button", { name: "Approve" }).click();
     await expect(page.locator(".my-toast", { hasText: "Approved and applied" })).toBeVisible();
 
-    await page.getByLabel("Review status").selectOption("approved");
+    // The status filter is the Status column's own menu; the approved
+    // submission is found by narrowing the column to it.
+    await page.getByRole("button", { name: "Status column options" }).click();
+    await page.getByRole("menuitemradio", { name: "Approved", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: orgName })).toBeVisible();
     expect(canonicalRequests).toContain("GET /api/v1/organizations/content-reviews");
     expect(
@@ -741,10 +747,10 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveClass(/active/);
     // The shared table sends search/filter/pagination to the backend. The
-    // stage filter is sufficient here because every earlier fixture has
-    // already moved out of ec_review.
-    const stageFilter = page.locator("select").filter({ has: page.locator('option[value="ec_review"]') });
-    await stageFilter.selectOption("ec_review");
+    // stage filter — the Stage column's own menu — is sufficient here because
+    // every earlier fixture has already moved out of ec_review.
+    await page.getByRole("button", { name: "Stage column options" }).click();
+    await page.getByRole("menuitemradio", { name: "EC review", exact: true }).click();
     const row = page.locator("tr").filter({ hasText: email });
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.click();

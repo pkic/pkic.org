@@ -44,20 +44,16 @@ export interface LogoManagerProps {
  *
  * Callers own their API client, their endpoint, and their notifier.
  */
-export function LogoManager(props: LogoManagerProps) {
+/**
+ * The commands a logo surface shares, whatever it looks like: upload with a
+ * toast either way, remove behind a confirmation, and a mount key that resets
+ * the file control after every attempt.
+ */
+export function useLogoCommands(
+  props: Pick<LogoManagerProps, "onUpload" | "onRemove" | "onChanged" | "toast" | "removeConfirmation" | "removeLabel">,
+) {
   const [busy, setBusy] = useState(false);
-  /*
-   * Bumped after every upload attempt, to remount the file control.
-   *
-   * The chosen file lives in the native input and in `FileInput`'s own name
-   * label, neither of which this component holds a handle on. A refused upload
-   * that leaves the file sitting in the control reads as though it took, and a
-   * successful one leaves the old file's name beside the new picture.
-   * Remounting is how an uncontrolled control is reset without reaching past
-   * its API into its DOM.
-   */
   const [attempt, setAttempt] = useState(0);
-  const uploadLabel = props.uploadLabel ?? (props.imageUrl ? "Replace logo" : "Upload logo");
 
   async function upload(file: File) {
     setBusy(true);
@@ -91,6 +87,13 @@ export function LogoManager(props: LogoManagerProps) {
       setBusy(false);
     }
   }
+
+  return { busy, attempt, upload, remove };
+}
+
+export function LogoManager(props: LogoManagerProps) {
+  const { busy, attempt, upload, remove } = useLogoCommands(props);
+  const uploadLabel = props.uploadLabel ?? (props.imageUrl ? "Replace logo" : "Upload logo");
 
   const preview = (
     // A cluster rather than a row of bare children: the removal control wraps

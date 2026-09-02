@@ -212,8 +212,8 @@ export function IdentityRoster({
     // The name is on the section itself rather than on an id-linked span: a
     // `<section>` is only a named region when it carries one, and `PanelHeader`
     // owns the heading element.
-    <Panel class="pk" aria-label="Identities">
-      <PanelHeader title="Identities">
+    <Panel class="pk" aria-label="Representatives">
+      <PanelHeader title="Representatives">
         {canManageIdentities && (
           <>
             <Button
@@ -259,11 +259,11 @@ export function IdentityRoster({
            */
           empty={
             <EmptyState
-              title="No identities yet"
+              title="No representatives yet"
               body={
                 canManageIdentities
-                  ? 'An identity is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
-                  : "An identity is a person who acts for this organization. Nobody does yet."
+                  ? 'A representative is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
+                  : "A representative is a person who acts for this organization. Nobody does yet."
               }
             />
           }

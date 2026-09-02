@@ -219,7 +219,7 @@ describe("portal sponsorship pipeline filters", () => {
     );
   }
 
-  it("names both pipeline filters in the list toolbar through aria-label", async () => {
+  it("keeps both pipeline filters in their columns' menus, not in the toolbar", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => companiesPage([])),
@@ -228,15 +228,12 @@ describe("portal sponsorship pipeline filters", () => {
     const container = mount(<Sponsorships canWrite={false} />);
     await settle();
 
-    // The filters ride the list's own toolbar now, named the way every
-    // FilterSelect beside a search field is named — one accessible name,
-    // carried by `aria-label` through the shared control.
-    const type = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by sponsor type"]');
-    const stage = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by pipeline stage"]');
-    expect(type?.tagName).toBe("SELECT");
-    expect(stage?.tagName).toBe("SELECT");
-    // The toolbar that owns them is the list's named controls region.
-    expect(type?.closest('[role="toolbar"]')).not.toBeNull();
+    // No selects in the toolbar: the stage filter is the Stages column's own
+    // menu and the type filter the Sponsorships column's, each named after
+    // the column it narrows.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    expect(container.querySelector('button[aria-label="Stages column options"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Sponsorships column options"]')).not.toBeNull();
   });
 
   it("sends the chosen stage to the companies query", async () => {
@@ -252,11 +249,18 @@ describe("portal sponsorship pipeline filters", () => {
     const container = mount(<Sponsorships canWrite={false} />);
     await settle();
 
-    const stage = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by pipeline stage"]');
-    if (!stage) throw new Error("the pipeline stage filter is not rendered");
-    stage.value = "contacted";
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stages column options"]');
+    if (!trigger) throw new Error("the stages column menu is not rendered");
     await act(async () => {
-      stage.dispatchEvent(new Event("change", { bubbles: true }));
+      trigger.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const contacted = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
+      item.textContent?.includes("Contacted"),
+    );
+    if (!contacted) throw new Error("the stage choices are not rendered");
+    await act(async () => {
+      contacted.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 

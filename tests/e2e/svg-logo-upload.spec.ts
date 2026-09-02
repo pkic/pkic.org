@@ -52,6 +52,8 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
   const organizationId = decodeURIComponent(page.url().split("/organizations/")[1].split(/[/?#]/)[0]);
 
+  // The upload control waits behind the Logo panel's button until asked for.
+  await page.getByRole("region", { name: "Logo" }).getByRole("button", { name: "Upload" }).click();
   await page.locator('input[type="file"][accept="image/svg+xml"]').setInputFiles({
     name: "logo.svg",
     mimeType: "image/svg+xml",

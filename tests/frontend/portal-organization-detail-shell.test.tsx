@@ -44,19 +44,6 @@ async function waitFor(condition: () => boolean): Promise<void> {
   throw new Error("Expected condition was not met.");
 }
 
-/** Selects one of the record's facets the way a reader does: by its tab. */
-async function openTab(container: HTMLElement, name: string): Promise<void> {
-  await waitFor(() =>
-    [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].some(
-      (candidate) => candidate.textContent === name,
-    ),
-  );
-  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
-    (candidate) => candidate.textContent === name,
-  );
-  await act(async () => tab?.click());
-}
-
 function detail() {
   return organizationDetailResponseSchema.parse({
     organization: {
@@ -167,14 +154,14 @@ describe("organization detail shell", () => {
 
     // The identity count reads as a sentence rather than a bare number, and
     // the singular is not "1 identities".
-    expect(container.textContent).toContain("1 active identity");
+    expect(container.textContent).toContain("1 active representative");
 
     // The heading's supporting facts are badges beside the name rather than a
     // line of small text above everything. The membership category is stated
     // here, and only here, so the record's own list does not repeat it.
     const header = container.querySelector("header");
     const badges = [...(header?.querySelectorAll(".pk-badge") ?? [])].map((badge) => badge.textContent);
-    expect(badges).toEqual(["Category F", "1 active identity"]);
+    expect(badges).toEqual(["Category F", "1 active representative"]);
 
     // The way back is a trail, so a reader sees where this record sits rather
     // than only that there is a button pointing away from it.
@@ -182,12 +169,13 @@ describe("organization detail shell", () => {
     expect(trail?.querySelector("a")?.getAttribute("href")).toBe("#/organizations");
     expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("Example Organization");
 
-    // The record's facets are tabs under the header, not one long scroll.
-    const tablist = container.querySelector('[role="tablist"]');
-    expect(tablist).not.toBeNull();
+    // An account page: the people who represent the organization are on the
+    // page itself, under the profile, not behind a tab.
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    expect(container.querySelector('section[aria-label="Representatives"]')).not.toBeNull();
   });
 
-  it("fetches each facet only when its tab is selected", async () => {
+  it("loads the account in bounded queries: the record, its representatives, its sponsorships", async () => {
     const requests: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -204,7 +192,7 @@ describe("organization detail shell", () => {
       }),
     );
 
-    const container = mount(
+    mount(
       <OrganizationDetail
         organizationId={organizationId}
         canRead
@@ -215,23 +203,17 @@ describe("organization detail shell", () => {
     );
     await settle();
     await settle();
-
-    // First paint loads the record itself, and nothing else: a tab is the
-    // license not to fetch a facet nobody is looking at.
-    expect(requests).toEqual([`/api/v1/organizations/${organizationId}`]);
-
-    await openTab(container, "Identities");
-    await waitFor(() => requests.some((request) => request.includes(`/organizations/${organizationId}/identities`)));
-    expect(requests.some((request) => request.startsWith("/api/v1/sponsors"))).toBe(false);
-
-    await openTab(container, "Sponsorships");
     await waitFor(() => requests.some((request) => request.startsWith("/api/v1/sponsors")));
+
+    expect(requests[0]).toBe(`/api/v1/organizations/${organizationId}`);
+    expect(requests.some((request) => request.includes(`/organizations/${organizationId}/identities`))).toBe(true);
     const sponsorRequest = requests.find((request) => request.startsWith("/api/v1/sponsors"));
     expect(sponsorRequest).toContain("visibility=all");
     expect(sponsorRequest).toContain(`organizationId=${organizationId}`);
   });
 
-  it("offers no sponsorships tab without sponsorships:read", async () => {
+  it("shows no sponsorships without sponsorships:read, and asks for none", async () => {
+    const requests: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -239,6 +221,7 @@ describe("organization detail shell", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
+        requests.push(url.pathname);
         return json(url.pathname.endsWith("/identities") ? identityPage() : detail());
       }),
     );
@@ -255,8 +238,11 @@ describe("organization detail shell", () => {
     await settle();
     await settle();
 
-    const tabNames = [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-    expect(tabNames).toEqual(["Overview", "Identities"]);
+    expect(requests.some((request) => request.startsWith("/api/v1/sponsors"))).toBe(false);
+    expect([...container.querySelectorAll("caption")].map((caption) => caption.textContent)).not.toContain(
+      "Sponsorships",
+    );
+    expect(container.querySelector('section[aria-label="Representatives"]')).not.toBeNull();
   });
 
   it("announces a failed load as an alert instead of an empty record", async () => {

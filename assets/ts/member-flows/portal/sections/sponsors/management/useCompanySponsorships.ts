@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import { getJson } from "../../../../../shared/api-client";
 import type { SponsorshipCompany } from "../../../../../../shared/schemas/sponsorship-management";
 import {
@@ -18,7 +18,7 @@ import { buildCompanySponsorshipsUrl, mergeCompanySponsorshipsPage } from "./com
  * time, with an explicit "Load more" rather than a single capped fetch
  * rendered as complete (PR #1 review, Phase 7.2).
  */
-export function useCompanySponsorships(filters: { type: string; stage: string }) {
+export function useCompanySponsorships() {
   const [selectedCompany, setSelectedCompany] = useState<SponsorshipCompany | null>(null);
   const [companySponsorships, setCompanySponsorships] = useState<SponsorshipsListResponse["sponsorships"]>([]);
   const [companyPage, setCompanyPage] = useState<PageInfo | null>(null);
@@ -39,44 +39,41 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
   // spinner stuck on.
   const requestIdRef = useRef(0);
 
-  const loadCompanySponsorships = useCallback(
-    async (company: SponsorshipCompany, offset = 0) => {
-      const requestId = ++requestIdRef.current;
-      if (offset === 0) {
-        setCompanyLoading(true);
-        setCompanyError(null);
-      } else {
-        setCompanyLoadingMore(true);
-      }
-      try {
-        if (company.key.startsWith("sponsorship:")) {
-          const id = company.key.slice("sponsorship:".length);
-          const data = await getJson(`/api/v1/sponsors/${encodeURIComponent(id)}`, sponsorshipResponseSchema);
-          if (requestId !== requestIdRef.current) return;
-          setCompanySponsorships([data.sponsorship]);
-          setCompanyPage(null);
-          setSelectedId(data.sponsorship.id);
-          return;
-        }
-        const url = buildCompanySponsorshipsUrl(company.key, filters, offset);
-        const data = await getJson(url, sponsorshipsListResponseSchema);
+  const loadCompanySponsorships = useCallback(async (company: SponsorshipCompany, offset = 0) => {
+    const requestId = ++requestIdRef.current;
+    if (offset === 0) {
+      setCompanyLoading(true);
+      setCompanyError(null);
+    } else {
+      setCompanyLoadingMore(true);
+    }
+    try {
+      if (company.key.startsWith("sponsorship:")) {
+        const id = company.key.slice("sponsorship:".length);
+        const data = await getJson(`/api/v1/sponsors/${encodeURIComponent(id)}`, sponsorshipResponseSchema);
         if (requestId !== requestIdRef.current) return;
-        setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships);
-        setCompanyPage(data.page);
-        setSelectedId((prev) => {
-          if (prev && data.sponsorships.some((s) => s.id === prev)) return prev;
-          if (offset === 0) return data.page.total === 1 ? (data.sponsorships[0]?.id ?? null) : null;
-          return prev;
-        });
-      } catch (e) {
-        if (requestId === requestIdRef.current) setCompanyError((e as Error).message);
-      } finally {
-        if (offset === 0) setCompanyLoading(false);
-        else setCompanyLoadingMore(false);
+        setCompanySponsorships([data.sponsorship]);
+        setCompanyPage(null);
+        setSelectedId(data.sponsorship.id);
+        return;
       }
-    },
-    [filters.type, filters.stage],
-  );
+      const url = buildCompanySponsorshipsUrl(company.key, offset);
+      const data = await getJson(url, sponsorshipsListResponseSchema);
+      if (requestId !== requestIdRef.current) return;
+      setCompanySponsorships((prev) => mergeCompanySponsorshipsPage(prev, offset, data).sponsorships);
+      setCompanyPage(data.page);
+      setSelectedId((prev) => {
+        if (prev && data.sponsorships.some((s) => s.id === prev)) return prev;
+        if (offset === 0) return data.page.total === 1 ? (data.sponsorships[0]?.id ?? null) : null;
+        return prev;
+      });
+    } catch (e) {
+      if (requestId === requestIdRef.current) setCompanyError((e as Error).message);
+    } finally {
+      if (offset === 0) setCompanyLoading(false);
+      else setCompanyLoadingMore(false);
+    }
+  }, []);
 
   function selectCompany(company: SponsorshipCompany) {
     setSelectedCompany(company);
@@ -103,9 +100,6 @@ export function useCompanySponsorships(filters: { type: string; stage: string })
   // Deliberately keyed on [type, stage] only, not selectedCompany — this
   // should refetch when filters change, not every time a new company is
   // selected (selectCompany already triggers that fetch itself).
-  useEffect(() => {
-    if (selectedCompany) void loadCompanySponsorships(selectedCompany);
-  }, [filters.type, filters.stage]);
 
   return {
     selectedCompany,

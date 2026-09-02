@@ -282,11 +282,13 @@ describe("portal organization profile", () => {
     // The membership category is not among them: it qualifies the record's
     // subject, so the page states it once, as a badge beside the organization's
     // name. `portal-organization-detail-shell` holds that end of the contract.
-    expect(terms).toEqual(["Website", "Slogan", "Description", "Blog", "Press", "Careers", "Member since", "Created"]);
+    // What the organization says about itself, then where to find it, then
+    // its standing — the reader's order, not the schema's.
+    expect(terms).toEqual(["Slogan", "Description", "Website", "Blog", "Press", "Careers", "Member since", "Created"]);
     expect(container.querySelectorAll("dd")).toHaveLength(terms.length);
     // An absent value is a dash rather than an empty cell, and the list — not
     // this surface — decides what one looks like. The fixture has no slogan.
-    const slogan = container.querySelectorAll("dd")[1];
+    const slogan = container.querySelectorAll("dd")[0];
     expect(slogan?.textContent).toBe("—");
     // A stored URL is the link it is, so the record is navigable rather than
     // eight lines of text to copy out by hand.

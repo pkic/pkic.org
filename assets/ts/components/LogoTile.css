@@ -1,0 +1,97 @@
+/*
+ * LogoTile — a record's mark, and for editors the control that changes it.
+ *
+ * The veil naming the command is drawn over the picture only while the tile
+ * is hovered or focused, so at rest the tile reads as the logo and nothing
+ * else. Remove sits beside it in the quiet destructive tone and appears with
+ * the veil; a keyboard reaches it whether or not it is drawn.
+ */
+@layer components {
+  .pk-logo-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-logo-tile__control,
+  .pk-logo-tile[role="img"] {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 14rem;
+    aspect-ratio: 16 / 9;
+    padding: var(--pk-3);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    overflow: hidden;
+  }
+
+  .pk-logo-tile__control {
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .pk-logo-tile__control:disabled {
+    cursor: progress;
+  }
+
+  .pk-logo-tile__img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .pk-logo-tile__initials {
+    font-size: var(--pk-text-2xl);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-logo-tile__veil {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--pk-ink) 72%, transparent);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-logo-tile__control:hover .pk-logo-tile__veil,
+  .pk-logo-tile__control:focus-visible .pk-logo-tile__veil,
+  .pk-logo-tile__control:disabled .pk-logo-tile__veil {
+    opacity: 1;
+  }
+
+  .pk-logo-tile__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .pk-logo-tile__hint {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+    text-align: center;
+  }
+
+  .pk-logo-tile__actions {
+    opacity: 0;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-logo-tile:hover .pk-logo-tile__actions,
+  .pk-logo-tile:focus-within .pk-logo-tile__actions {
+    opacity: 1;
+  }
+}
