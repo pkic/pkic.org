@@ -82,23 +82,17 @@ test("permitted staff manage the public leadership roster through the System por
  * its own region, plus the "Edit position" path neither roster previously
  * reached (only add and remove were covered).
  *
- * Left as `test.fixme`: with both rosters mounted on the page (as they
- * always are — there is no tab that unmounts one), searching and clicking a
- * result in the Executive Council card's own `UserPicker` never registers a
- * pick — the "Matching users" popup and its result button stay rendered
- * indefinitely and "Add" never becomes enabled, timing out at 120s. The
- * identical sequence (search, wait for the result button, click it) works
- * for the Board of Directors card just above, for the "Link existing user"
- * picker in portal-system-organizations.spec.ts, and for the Grants picker
- * in portal-system-access-control.spec.ts — all single-picker pages. This
- * looks like a real interaction defect specific to having two `UserPicker`
- * instances mounted on one page at once, not a selector problem, but I could
- * not isolate the exact cause (tried: waiting for the result to be visible
- * before clicking, waiting for "Add" to become enabled before clicking —
- * both leave the popup exactly as before). Needs a maintainer with browser
- * devtools access to inspect what the second picker's click actually hits.
+ * It is also the regression test for the defect that kept it skipped: the
+ * Executive Council card sits below the fold, so reaching its picker scrolls
+ * the field to the bottom edge of the viewport, and `UserPicker` used to pin
+ * its matches to `anchor.bottom + 4` with no flip and no clamp. The popup
+ * rendered under the viewport — visible to `toBeVisible()`, outside the
+ * viewport for a click, and `position: fixed`, so nothing could scroll it
+ * back in. It reads like a two-instance defect only because the second card
+ * is the lower one; `assets/ts/ui/popup-placement.ts` now owns the placement
+ * for every popup in the portal.
  */
-test.fixme("permitted staff add and edit an Executive Council position through the System portal", async ({ page }) => {
+test("permitted staff add and edit an Executive Council position through the System portal", async ({ page }) => {
   const staffEmail = e2eAdminEmail("portal-leadership");
   await signInToPortal(page, staffEmail);
   await page.goto("/portal/#/system/leadership");

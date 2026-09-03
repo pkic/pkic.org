@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { z } from "zod";
 import { paginatedResponseSchema } from "../../shared/schemas/pagination";
 import { userCatalogItemSchema } from "../../shared/schemas/user-catalog";
@@ -6,6 +6,7 @@ import { buildServerCollectionUrl, createLatestRequestGate } from "../hooks/useS
 import { getJson } from "../shared/api-client";
 import { Alert } from "../ui/Alert";
 import { TextInput } from "../ui/TextControl";
+import { usePopupPlacement } from "../ui/popup-placement";
 // The results float over whatever follows the picker, so they borrow the
 // design system's popup surface rather than growing a second one. Nothing
 // renders a `Menu` here, so the stylesheet has to be imported by name:
@@ -59,32 +60,20 @@ export function UserPicker({
   /*
    * The popup is `position: fixed` (see `ui/Menu.css`) so an ancestor with
    * `overflow: auto` — every scrollable table wrapper in the portal — cannot
-   * clip it. Fixed means viewport coordinates, which no stylesheet can
-   * express and which the repository forbids writing as a `style` attribute,
-   * so the placement is applied imperatively here and refreshed as the page
-   * moves underneath it. Re-placing rather than closing is deliberate: a
-   * dropdown that closes on scroll is eaten by any trackpad twitch.
+   * clip it, and it is placed by the same shared policy the menus and the
+   * type-ahead selector use: below the field, flipped above it when there is
+   * no room below, and clamped into the viewport either way.
+   *
+   * That policy is the whole reason this is shared rather than written here.
+   * The version this replaced pinned the popup to `anchor.bottom + 4` with no
+   * flip and no clamp, which is invisible while the field is near the top of
+   * the page and fatal below the fold: the Executive Council picker on the
+   * Leadership page — the second of two on that page, and the lower one —
+   * rendered its matches under the bottom edge of the viewport, where they
+   * could be read but never clicked. Nothing about it was specific to being
+   * the second instance; it was specific to being the lower one.
    */
-  useLayoutEffect(() => {
-    const anchor = anchorRef.current;
-    const popup = popupRef.current;
-    if (!showResults || !anchor || !popup) return;
-
-    const place = (): void => {
-      const rect = anchor.getBoundingClientRect();
-      popup.style.setProperty("top", `${rect.bottom + 4}px`);
-      popup.style.setProperty("left", `${rect.left}px`);
-      popup.style.setProperty("min-width", `${rect.width}px`);
-    };
-
-    place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [showResults, results]);
+  usePopupPlacement({ open: showResults, anchorRef, popupRef, revision: results.length });
 
   function cancelPendingSearch(): void {
     if (timerRef.current !== null) {

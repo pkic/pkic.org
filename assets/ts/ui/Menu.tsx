@@ -31,7 +31,7 @@
 import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 
-import { applyPopupPosition, measurePopupPosition, type PopupPosition } from "./popup-placement";
+import { usePopupPlacement } from "./popup-placement";
 import "./Menu.css";
 
 export interface MenuItem {
@@ -77,7 +77,6 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [position, setPosition] = useState<PopupPosition | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -105,22 +104,6 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
     [setOpen, setActiveIndex],
   );
 
-  /**
-   * Resolves the popup's viewport position from the trigger's rect and the
-   * popup's own measured size. Called on open and again whenever the page
-   * moves underneath it.
-   *
-   * Returns null before the popup exists, which is the first render after
-   * opening: the effect below runs once the popup is in the document and
-   * fills the position in then.
-   */
-  const measure = useCallback((): PopupPosition | null => {
-    const trigger = triggerRef.current;
-    const popup = popupRef.current;
-    if (!trigger || !popup) return null;
-    return measurePopupPosition(trigger.getBoundingClientRect(), popup.getBoundingClientRect(), align);
-  }, [align]);
-
   const openAt = useCallback(
     (index: number) => {
       setOpen(true);
@@ -129,22 +112,8 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
     [setOpen, setActiveIndex],
   );
 
-  // Why imperative rather than a style attribute: see popup-placement.ts.
-  useLayoutEffect(() => {
-    const popup = popupRef.current;
-    if (!popup || !position) return;
-    applyPopupPosition(popup, position);
-  }, [position]);
-
-  // Measure once the popup is in the document, and again if the item list
-  // changes size underneath it.
-  useLayoutEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return;
-    }
-    setPosition(measure());
-  }, [open, measure, items.length, heading]);
+  /** One placement policy, and one lifetime for it — see `popup-placement.ts`. */
+  usePopupPlacement({ open, anchorRef: triggerRef, popupRef, align, revision: `${items.length}:${heading ?? ""}` });
 
   // Focus follows the active index rather than being set at each call site, so
   // there is one place where focus can go wrong.
@@ -161,20 +130,9 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
       if (popupRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       close(false);
     };
-    // A fixed popup does not move with its trigger, so it is re-placed as the
-    // page moves. It used to close instead, which meant any scroll momentum —
-    // unavoidable on a touch screen — dismissed the menu on the way to it.
-    const onReflow = () => setPosition(measure());
-
     document.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("resize", onReflow);
-    window.addEventListener("scroll", onReflow, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("resize", onReflow);
-      window.removeEventListener("scroll", onReflow, true);
-    };
-  }, [open, close, measure]);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open, close]);
 
   function onTriggerKeyDown(event: KeyboardEvent) {
     if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
