@@ -55,6 +55,7 @@ function group(id: string, name: string) {
     automaticEnrollmentMode: "none",
     allowAutomaticOptOut: false,
     publicLeadership: false,
+    publicRoster: false,
     minEndorsersForBallot: 2,
     active: true,
     revision: 0,

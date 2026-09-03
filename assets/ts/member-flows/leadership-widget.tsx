@@ -1,49 +1,36 @@
 /**
- * Board of Directors / Executive Council / consortium chair display.
- * Replaces the static content/about/board.md, executive-council.md
- * person-card lists and _index.md's hardcoded "Chair and Vice Chair"
- * section — all three are now managed in the portal's System → Leadership section and
- * fetched client-side, the same pattern wg-chairs-widget.tsx already
- * established for working-group chairs (see that file's header comment
- * for the full rationale).
+ * Public governance display for any group: the Board of Directors and
+ * Executive Council rosters on their About pages, and the consortium chair and
+ * vice chair (the All Members group's leadership) on the About overview.
  *
- * Two data shapes, chosen via the mount's `data-source` attribute:
- *   - "roster" — GET /api/v1/leadership/:body (board | executive_council).
- *     Renders a `.consortium-leaders` grid of current members plus a
- *     `.consortium-past-timeline` for past positions, mirroring
- *     consortium-leadership.html's static rendering exactly (same CSS
- *     classes) but sourced from D1 instead of page front-matter.
- *   - "consortium" — GET /api/v1/leadership/consortium-chairs. Renders the
- *     published chair/vice-chair pair for the All Members group. Past-position
- *     history is not tracked for this role assignment.
+ * Everything comes from the public GET /api/v1/groups/:slug/directory, the
+ * same endpoint the working-group sidebar uses for its chairs, so a group's
+ * own "publish leadership" and "publish roster" switches decide what appears
+ * here. Two views, chosen by the mount's `data-view` attribute:
+ *   - "roster" (default) — current seats as a `.consortium-leaders` grid,
+ *     leaders first with their leadership title, then a "Past positions"
+ *     timeline of closed seats and closed leadership terms.
+ *   - "leadership" — current leaders only, then the past-terms timeline.
+ * The markup and classes are those of consortium-leadership.html and
+ * person-card.html, so the pages look exactly as the static lists did.
  */
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
-  consortiumChairsPublicResponseSchema,
-  leadershipPublicResponseSchema,
-  type ConsortiumChairsPublicResponse,
-  type LeadershipPublicResponse,
-} from "../../shared/schemas/leadership";
+  groupDirectoryResponseSchema,
+  type GroupDirectoryResponse,
+  type PublicGroupRosterEntry,
+} from "../../shared/schemas/group-directory";
 import { getJson } from "../shared/api-client";
 import { formatMonthYear } from "../shared/ui";
 import { initialsFor, PublicPersonCard, PublicPersonOrgLink, type PublicPerson } from "./components/public-person-card";
 
 const API_BASE_FALLBACK = "/api/v1";
 
-function TimelineItem({
-  person,
-  role,
-  color,
-  from,
-  till,
-}: {
-  person: PublicPerson;
-  role: string;
-  color: string;
-  from: string;
-  till: string;
-}) {
+type View = "roster" | "leadership";
+
+function TimelineItem({ entry, color }: { entry: PublicGroupRosterEntry; color: string }) {
+  const person: PublicPerson = entry.person;
   return (
     <div class="person-tl-item">
       <div class="person-tl-avatar-wrap">
@@ -57,9 +44,10 @@ function TimelineItem({
       </div>
       <div class="person-tl-info">
         <span class="person-tl-name">{person.name}</span>
-        <span class="person-tl-role">{role}</span>
+        <span class="person-tl-role">{entry.title}</span>
         <span class="person-tl-dates">
-          {formatMonthYear(from)} – {formatMonthYear(till)}
+          {formatMonthYear(entry.startsAt)}
+          {entry.endsAt && ` – ${formatMonthYear(entry.endsAt)}`}
         </span>
         {person.organizationName && (
           <span class="person-tl-org">
@@ -73,46 +61,77 @@ function TimelineItem({
   );
 }
 
-export function RosterWidget({ apiBase, body, color }: { apiBase: string; body: string; color: string }) {
-  const [data, setData] = useState<LeadershipPublicResponse | null>(null);
+/** Closed seats and closed terms as one timeline, most recently ended first. */
+function pastPositions(directory: GroupDirectoryResponse, view: View): PublicGroupRosterEntry[] {
+  const terms: PublicGroupRosterEntry[] = directory.pastLeadership.map((assignment) => ({
+    person: assignment.person,
+    title: assignment.title,
+    startsAt: assignment.startsAt,
+    endsAt: assignment.endsAt,
+  }));
+  const seats = view === "roster" ? (directory.roster?.past ?? []) : [];
+  return [...terms, ...seats].sort((a, b) => (b.endsAt ?? "").localeCompare(a.endsAt ?? ""));
+}
+
+function currentPositions(directory: GroupDirectoryResponse, view: View): PublicGroupRosterEntry[] {
+  if (view === "roster" && directory.roster) return directory.roster.current;
+  return directory.leadership.map((assignment) => ({
+    person: assignment.person,
+    title: assignment.title,
+    startsAt: assignment.startsAt,
+    endsAt: assignment.endsAt,
+  }));
+}
+
+export function GroupGovernanceWidget({
+  apiBase,
+  slug,
+  view,
+  color,
+}: {
+  apiBase: string;
+  slug: string;
+  view: View;
+  color: string;
+}) {
+  const [directory, setDirectory] = useState<GroupDirectoryResponse | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getJson(`${apiBase}/leadership/${encodeURIComponent(body)}`, leadershipPublicResponseSchema)
-      .then((response) => setData(response))
+    getJson(`${apiBase}/groups/${encodeURIComponent(slug)}/directory`, groupDirectoryResponseSchema)
+      .then((response) => setDirectory(response))
       .catch(() => setFailed(true));
-  }, [apiBase, body]);
+  }, [apiBase, slug]);
 
-  if (failed || !data || (data.current.length === 0 && data.past.length === 0)) return null;
+  if (failed || !directory) return null;
+  const current = currentPositions(directory, view);
+  const past = pastPositions(directory, view);
+  if (current.length === 0 && past.length === 0) return null;
 
   return (
     <>
-      {data.current.length > 0 && (
+      {current.length > 0 && (
         <div class="consortium-leaders">
-          {data.current.map((p) => (
+          {current.map((entry) => (
             <PublicPersonCard
-              key={`${p.name}-${p.title}`}
-              person={p}
-              role={p.title}
+              key={`${entry.person.name}:${entry.title}:${entry.startsAt}`}
+              person={entry.person}
+              role={entry.title}
               color={color}
-              from={p.startsAt}
-              till={p.endsAt}
+              from={entry.startsAt}
             />
           ))}
         </div>
       )}
-      {data.past.length > 0 && (
+      {past.length > 0 && (
         <div class="consortium-past-leadership">
           <h4 class="consortium-past-heading">Past positions</h4>
           <div class="consortium-past-timeline">
-            {data.past.map((p) => (
+            {past.map((entry) => (
               <TimelineItem
-                key={`${p.name}-${p.title}-${p.endsAt}`}
-                person={p}
-                role={p.title}
+                key={`${entry.person.name}:${entry.title}:${entry.startsAt}:${entry.endsAt ?? ""}`}
+                entry={entry}
                 color={color}
-                from={p.startsAt}
-                till={p.endsAt!}
               />
             ))}
           </div>
@@ -122,43 +141,14 @@ export function RosterWidget({ apiBase, body, color }: { apiBase: string; body: 
   );
 }
 
-export function ConsortiumWidget({ apiBase, color }: { apiBase: string; color: string }) {
-  const [data, setData] = useState<ConsortiumChairsPublicResponse | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    getJson(`${apiBase}/leadership/consortium-chairs`, consortiumChairsPublicResponseSchema)
-      .then((response) => setData(response))
-      .catch(() => setFailed(true));
-  }, [apiBase]);
-
-  const hasData = !failed && !!data && (!!data.chair || !!data.viceChair);
-  if (!hasData) return null;
-
-  return (
-    <div class="consortium-leaders">
-      {data!.chair && <PublicPersonCard person={data!.chair} role="Chair" color={color} from={data!.chair.startsAt} />}
-      {data!.viceChair && (
-        <PublicPersonCard person={data!.viceChair} role="Vice Chair" color={color} from={data!.viceChair.startsAt} />
-      )}
-    </div>
-  );
-}
-
 function main(): void {
   document.querySelectorAll<HTMLElement>("[data-leadership]").forEach((root) => {
     const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
-    const source = root.dataset.source ?? "roster";
+    const slug = root.dataset.group ?? "";
+    const view: View = root.dataset.view === "leadership" ? "leadership" : "roster";
     const color = root.dataset.color ?? "green";
-
-    if (source === "consortium") {
-      render(<ConsortiumWidget apiBase={apiBase} color={color} />, root);
-      return;
-    }
-
-    const body = root.dataset.body ?? "";
-    if (!body) return;
-    render(<RosterWidget apiBase={apiBase} body={body} color={color} />, root);
+    if (!slug) return;
+    render(<GroupGovernanceWidget apiBase={apiBase} slug={slug} view={view} color={color} />, root);
   });
 }
 

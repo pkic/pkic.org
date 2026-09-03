@@ -124,6 +124,53 @@ describe("GET /api/v1/audit-log", () => {
     expect(body.entries[0].actor_type).toBe("system");
   });
 
+  it("resolves member and user actors to display names alongside admin actors", async () => {
+    const memberId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Mira', 'Okafor', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(memberId, `mira-${memberId}@example.test`, `mira-${memberId}@example.test`),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Solo', NULL, 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(userId, `solo-${userId}@example.test`, `solo-${userId}@example.test`),
+    ]);
+    await insertAuditLogRow({
+      actorType: "admin",
+      actorId: adminUserId,
+      action: "a1",
+      entityType: "event",
+      secondsAgo: 30,
+    });
+    await insertAuditLogRow({
+      actorType: "member",
+      actorId: memberId,
+      action: "a2",
+      entityType: "group",
+      secondsAgo: 20,
+    });
+    await insertAuditLogRow({
+      actorType: "user",
+      actorId: userId,
+      action: "a3",
+      entityType: "proposal",
+      secondsAgo: 10,
+    });
+    await insertAuditLogRow({ actorType: "system", action: "a4", entityType: "event", secondsAgo: 5 });
+
+    const response = await callAppGet("/api/v1/audit-log?sort=created_at", adminToken);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as AuditLogListResponse;
+    expect(body.entries.map((entry) => [entry.actor_type, entry.actor_display])).toEqual([
+      ["admin", "admin@pkic.org"],
+      ["member", "Mira Okafor"],
+      ["user", "Solo"],
+      ["system", null],
+    ]);
+  });
+
   it("filters by exact action", async () => {
     await insertAuditLogRow({
       actorType: "system",

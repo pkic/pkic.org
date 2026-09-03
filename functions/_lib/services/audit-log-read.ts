@@ -1,6 +1,7 @@
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import {
   AUDIT_LOG_SORT_COLUMNS,
+  USER_BACKED_AUDIT_ACTOR_TYPES,
   type AuditLogListQuery,
   type ScopedAuditLogListQuery,
 } from "../../../assets/shared/schemas/audit-log";
@@ -33,6 +34,13 @@ interface AuditLogSortPolicy {
   expressions: Readonly<Record<string, string>>;
   fallback: string;
 }
+
+/**
+ * Fixed internal literal list; every actor type that stores a `users.id`
+ * resolves to the user's display name at read time instead of leaking a
+ * bare id to the audit tables.
+ */
+const USER_BACKED_ACTOR_TYPES_SQL = USER_BACKED_AUDIT_ACTOR_TYPES.map((actorType) => `'${actorType}'`).join(", ");
 
 const SCOPED_AUDIT_SORT_POLICY: AuditLogSortPolicy = {
   expressions: {
@@ -109,7 +117,7 @@ export function buildAuditLogPageQuery(
         al.details_json,
         al.created_at`,
       fromSql: `FROM audit_log al
-    LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id
+    LEFT JOIN users u ON al.actor_type IN (${USER_BACKED_ACTOR_TYPES_SQL}) AND u.id = al.actor_id
     ${restriction.joins ?? ""}
     ${where}`,
       bindings,

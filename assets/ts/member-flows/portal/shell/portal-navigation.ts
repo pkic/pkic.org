@@ -55,12 +55,6 @@ const SYSTEM_NAV_ITEMS: readonly SystemNavItem[] = [
     label: "Access Control",
     permissions: ["access:grant", "access:revoke"],
   },
-  {
-    path: "/system/leadership",
-    section: "system",
-    label: "Leadership",
-    permissions: ["access:grant", "access:revoke"],
-  },
 ] as const;
 
 /** Mirrors the backend's global-permission semantics for navigation only. */

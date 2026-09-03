@@ -404,9 +404,10 @@
 }
 
 // ── Past positions timeline ───────────────────────────────────────────────────
-// The "Past positions" list under the Board and Executive Council rosters,
-// rendered by person-card.html in `mode: "timeline"` and by the leadership
-// widget's TimelineItem. Both have named these classes since the cards were
+// The "Past positions" list under a published roster — closed seats and
+// closed leadership terms, most recently ended first — rendered by
+// person-card.html in `mode: "timeline"` and by the leadership widget's
+// TimelineItem. Both have named these classes since the cards were
 // introduced and no rule ever answered to them: the row was an uncapped
 // headshot the full width of the column, with the name, role, dates and
 // organisation run together as one line of text underneath it.

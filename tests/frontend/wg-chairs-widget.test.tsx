@@ -42,6 +42,7 @@ function directory(leadership: unknown[]) {
       automaticEnrollmentMode: "none",
       allowAutomaticOptOut: false,
       publicLeadership: true,
+      publicRoster: false,
       minEndorsersForBallot: 0,
       active: true,
       revision: 1,
@@ -53,12 +54,17 @@ function directory(leadership: unknown[]) {
     },
     mailingListEmail: null,
     leadership,
+    pastLeadership: [],
+    roster: null,
   };
 }
 
 function assignment(roleId: "role-group_lead" | "role-group_deputy_lead", name: string, inherited: boolean) {
   return {
     roleId,
+    title: roleId === "role-group_lead" ? "Chair" : "Vice Chair",
+    startsAt: "2026-01-01T00:00:00.000Z",
+    endsAt: null,
     person: {
       name,
       jobTitle: "Principal Cryptographer",
@@ -93,7 +99,7 @@ afterEach(() => {
 });
 
 describe("WgChairsWidget", () => {
-  it("loads the generic group directory and renders local and inherited assignments", async () => {
+  it("loads the generic group directory and renders local and inherited assignments under their own titles", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method).toBe("GET");
       return json(

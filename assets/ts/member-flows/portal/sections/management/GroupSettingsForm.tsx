@@ -28,6 +28,7 @@ interface GroupSettingsDraft {
   automaticEnrollmentMode: GroupSettingsDetail["automaticEnrollmentMode"];
   allowAutomaticOptOut: boolean;
   publicLeadership: boolean;
+  publicRoster: boolean;
   minEndorsersForBallot: number;
   active: boolean;
 }
@@ -43,6 +44,7 @@ function draftFromGroup(group: GroupSettingsDetail): GroupSettingsDraft {
     automaticEnrollmentMode: group.automaticEnrollmentMode,
     allowAutomaticOptOut: group.allowAutomaticOptOut,
     publicLeadership: group.publicLeadership,
+    publicRoster: group.publicRoster,
     minEndorsersForBallot: group.minEndorsersForBallot,
     active: group.active,
   };
@@ -95,6 +97,7 @@ export function GroupSettingsForm({
         automaticEnrollmentMode: draft.automaticEnrollmentMode,
         allowAutomaticOptOut: draft.allowAutomaticOptOut,
         publicLeadership: draft.publicLeadership,
+        publicRoster: draft.publicRoster,
         minEndorsersForBallot: draft.minEndorsersForBallot,
         active: draft.active,
       });
@@ -277,7 +280,13 @@ export function GroupSettingsForm({
               <Checkbox
                 checked={draft.publicLeadership}
                 onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
-                label="Publish leadership"
+                label="Publish leadership on the public site"
+              />
+
+              <Checkbox
+                checked={draft.publicRoster}
+                onChange={(event) => setField("publicRoster", (event.target as HTMLInputElement).checked)}
+                label="Publish the member roster and its history on the public site"
               />
 
               <Checkbox

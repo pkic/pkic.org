@@ -1,6 +1,6 @@
 # Group Platform Implementation Tracker
 
-Updated: 2026-08-27
+Updated: 2026-09-02
 
 Branch: agent/group-centered-portal-architecture-20260824
 
@@ -1371,19 +1371,31 @@ Status: Complete
       backend, migration, concurrency, permission, frontend, and browser tests
       cover the canonical routes, revoke-only inspection, role management,
       route removal, and absence of legacy API requests.
-      Global Board and Executive Council leadership is the seventh
-      permission-derived System destination. The dated roster editor and route
-      handlers moved rather than being copied to
-      `/api/v1/leadership/positions`; the former System route mount and handler
-      sources are removed, and the old bookmark returns 404. One
-      neutral schema and service remain the source of truth for
-      the System editor and public leadership projection. User-backed staff
-      holding either the live global `access:grant` or `access:revoke`
-      permission may inspect the bounded, searchable, sortable, and paginated
-      roster and affiliation catalogs. Create and update require `access:grant`,
-      while delete requires `access:revoke`; API-key identities fail closed.
-      The editor reuses the bounded `/api/v1/permissions/subjects` read model
-      rather than introducing another user lookup. Mounted backend, OpenAPI,
+      Board of Directors and Executive Council rosters are now ordinary
+      groups rather than a System destination. The dedicated
+      `leadership_positions` table, `/api/v1/leadership/*` routes, System
+      Leadership page, and their schema, service, seed script, and tests are
+      removed; a Board of Directors group is seeded beside the Executive
+      Council and both publish their leadership and roster. A seat is a group
+      membership whose service interval (`joined_at`, `left_at`) and optional
+      roster title managers set through `POST /groups/:id/memberships/:userId`
+      (backdated, or recorded already closed through a former capacity) and the
+      new `PATCH /groups/:id/memberships/:membershipId`. A chair is the existing
+      capacity-bound lead or deputy-lead assignment, which now carries the
+      title it was made with and a tenure start; `PATCH
+      /groups/:id/leadership/:userRoleId` edits title and term, an end in the
+      future schedules expiry, an end in the past closes the term, and a term
+      recorded already closed grants nothing. Group types configure their two
+      leadership titles (Chair and Vice Chair, or Lead and Deputy Lead for the
+      new task_force type) so a working group, board, or task force reads
+      naturally without type-specific code. The public directory serves
+      current leadership with titles and tenures, closed leadership terms, and,
+      for roster-publishing groups, the dated seat list and its history; the
+      About, Board, and Executive Council pages mount one group-driven widget
+      and the working-group chairs widget shows configured titles. The portal's
+      Members tab lists current or former seats with titles and dates and edits
+      them in place; the Leadership tab lists titled terms, inherited rows, and
+      past leadership. Mounted backend, OpenAPI,
       permission, frontend, public-roster, and real Worker/D1 browser tests
       cover exact capability separation, route removal, public projection,
       and absence of legacy API requests.

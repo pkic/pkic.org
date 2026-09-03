@@ -3,6 +3,7 @@ import type {
   GroupLeaveInput,
   GroupMembershipMutationResponse,
   GroupMembershipSource,
+  GroupMembershipUpdateInput,
 } from "../../../../assets/shared/schemas/groups";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
@@ -11,7 +12,12 @@ import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { isAuditChangeGuardFailure, prepareAuditLogWhen, prepareScopedAuditLogAfterExpectedChanges } from "../audit";
+import {
+  isAuditChangeGuardFailure,
+  prepareAuditLogWhen,
+  prepareScopedAuditLogAfterExpectedChanges,
+  prepareScopedAuditLogAfterOneChange,
+} from "../audit";
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { prepareGroupJoinEligibilityGuard, selectGroupCapacities } from "./capacities";
 import { prepareGroupManagementAuthorizationGuard } from "./governance";
@@ -44,7 +50,14 @@ async function mutationResponse(
   };
 }
 
-interface JoinGroupBaseOptions {
+/** A seat's roster title and service interval, all optional on a live join. */
+export interface GroupSeatDetails {
+  title?: string | null;
+  /** Backdates the seat; defaults to the command instant. */
+  joinedAt?: string;
+}
+
+interface JoinGroupBaseOptions extends GroupSeatDetails {
   actorUserId: string;
   actorDatabaseUserId?: string | null;
   targetUserId: string;
@@ -61,7 +74,7 @@ export type JoinGroupOptions = JoinGroupBaseOptions &
       }
   );
 
-export interface BuildGroupCapacityJoinOptions {
+export interface BuildGroupCapacityJoinOptions extends GroupSeatDetails {
   groupId: string;
   targetUserId: string;
   memberIds: readonly string[];
@@ -94,8 +107,8 @@ export function buildGroupCapacityJoinStatements(
         .prepare(
           `INSERT OR IGNORE INTO group_memberships
              (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
-              joined_at, left_at, created_at, updated_at)
-           SELECT ?, ?, ?, capacity.identity_id, ?, ?, ?, ?, NULL, ?, ?
+              title, joined_at, left_at, created_at, updated_at)
+           SELECT ?, ?, ?, capacity.identity_id, ?, ?, ?, ?, ?, NULL, ?, ?
              FROM identity_member_capacities capacity
              JOIN identities identity ON identity.id = capacity.identity_id
              JOIN users user ON user.id = capacity.user_id AND user.active = 1
@@ -113,7 +126,8 @@ export function buildGroupCapacityJoinStatements(
           memberId,
           options.source,
           options.actorDatabaseUserId === undefined ? options.actorUserId : options.actorDatabaseUserId,
-          options.at,
+          options.title ?? null,
+          options.joinedAt ?? options.at,
           options.at,
           options.at,
           options.targetUserId,
@@ -176,6 +190,8 @@ export async function joinGroup(
       actorUserId: options.actorUserId,
       actorDatabaseUserId: options.actorDatabaseUserId,
       allowManaged: options.allowManaged,
+      title: options.title,
+      joinedAt: options.joinedAt,
       at,
     }),
     prepareReconcileMailingListSubscriptionsStatement(db, options.targetUserId, at),
@@ -307,4 +323,209 @@ export async function endGroupMembership(
     actorType: "admin",
     managementActor: actor,
   });
+}
+
+export interface RecordFormerGroupMembershipOptions extends GroupSeatDetails {
+  targetUserId: string;
+  selection: GroupCapacitySelection;
+  joinedAt: string;
+  leftAt: string;
+}
+
+/**
+ * Records a seat that already ended: a former Board member, a chair from
+ * before the portal existed. The row is written closed, so it never grants
+ * access and needs no live eligibility, only the capacity the person once
+ * held. Any identity the person had for the Member qualifies, ended or not,
+ * because the seat itself is history.
+ */
+export async function recordFormerGroupMembership(
+  db: DatabaseLike,
+  idOrSlug: string,
+  actor: AuthAdmin,
+  options: RecordFormerGroupMembershipOptions,
+): Promise<GroupMembershipMutationResponse> {
+  const group = await requireGroupIdentity(db, idOrSlug);
+  const requested = options.selection.mode === "selected" ? [...new Set(options.selection.memberIds)] : null;
+  const capacities = await all<{ identity_id: string; member_id: string }>(
+    db,
+    `SELECT capacity.identity_id, capacity.member_id
+       FROM identity_member_capacities capacity
+       JOIN identities identity ON identity.id = capacity.identity_id
+       JOIN users user ON user.id = capacity.user_id
+      WHERE capacity.user_id = ?
+        AND identity.started_at IS NOT NULL
+        ${requested ? "AND capacity.member_id IN (SELECT value FROM json_each(?))" : ""}
+      ORDER BY capacity.member_id, identity.ended_at IS NULL DESC, identity.started_at DESC`,
+    requested ? [options.targetUserId, JSON.stringify(requested)] : [options.targetUserId],
+  );
+  // One seat per Member: the most recent identity for each represents it.
+  const seats = [...new Map(capacities.map((capacity) => [capacity.member_id, capacity])).values()];
+  if (seats.length === 0 || (requested && seats.length !== requested.length)) {
+    throw new AppError(
+      403,
+      "GROUP_CAPACITY_REQUIRED",
+      "The person has no Member capacity, current or former, to record this seat through",
+    );
+  }
+  const at = nowIso();
+  const membershipIds = seats.map(() => uuid());
+  try {
+    await db.batch([
+      prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
+      ...seats.map((seat, index) =>
+        db
+          .prepare(
+            `INSERT INTO group_memberships
+               (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
+                title, joined_at, left_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'staff', ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            membershipIds[index],
+            group.id,
+            options.targetUserId,
+            seat.identity_id,
+            seat.member_id,
+            actor.identityType === "user" ? actor.id : null,
+            options.title ?? null,
+            options.joinedAt,
+            options.leftAt,
+            at,
+            at,
+          ),
+      ),
+      prepareScopedAuditLogAfterExpectedChanges(
+        db,
+        seats.length,
+        { type: "group", id: group.id },
+        "admin",
+        actor.id,
+        "group_former_membership_recorded",
+        "group",
+        group.id,
+        {
+          targetUserId: options.targetUserId,
+          membershipIds,
+          memberIds: seats.map((seat) => seat.member_id),
+          title: options.title ?? null,
+          joinedAt: options.joinedAt,
+          leftAt: options.leftAt,
+        },
+      ),
+    ]);
+  } catch (error) {
+    translateSeatWriteError(error);
+  }
+  return mutationResponse(db, group.id, options.targetUserId, []);
+}
+
+function translateSeatWriteError(error: unknown): never {
+  if (isAuthorizationGuardFailure(error)) {
+    throw new AppError(
+      409,
+      "GROUP_MANAGEMENT_AUTHORIZATION_CHANGED",
+      "Group-management authority changed while the seat was being saved",
+    );
+  }
+  if (isAuditChangeGuardFailure(error)) {
+    throw new AppError(
+      409,
+      "GROUP_MEMBERSHIP_CHANGED",
+      "The seat cannot be saved as requested; the capacity may no longer be active or the seat may already be open",
+    );
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("left_at IS NULL OR left_at >= joined_at")) {
+    throw new AppError(400, "GROUP_MEMBERSHIP_INTERVAL_INVALID", "A seat cannot end before it starts");
+  }
+  if (message.includes("uq_group_memberships_active_capacity")) {
+    throw new AppError(409, "GROUP_MEMBERSHIP_EXISTS", "This capacity already holds an open seat in the group");
+  }
+  if (message.includes("active identity required")) {
+    throw new AppError(
+      409,
+      "GROUP_CAPACITY_REQUIRED",
+      "An open seat needs an active Member capacity; the person's representation has ended",
+    );
+  }
+  if (message.includes("active parent group membership required")) {
+    throw new AppError(409, "GROUP_PARENT_MEMBERSHIP_REQUIRED", "Active parent group membership is required");
+  }
+  throw error;
+}
+
+/**
+ * Edits one seat's title or service interval. Ending a seat revokes the
+ * leadership held through it, as any leave does; reopening one requires the
+ * exact capacity to still be active and no other open seat for it, which the
+ * guarded UPDATE checks in the same D1 batch as the audit record.
+ */
+export async function updateGroupMembership(
+  db: DatabaseLike,
+  groupIdOrSlug: string,
+  membershipId: string,
+  actor: AuthAdmin,
+  patch: GroupMembershipUpdateInput,
+): Promise<GroupMembershipMutationResponse> {
+  const group = await requireGroupIdentity(db, groupIdOrSlug);
+  const seat = await first<{ user_id: string; joined_at: string; left_at: string | null }>(
+    db,
+    "SELECT user_id, joined_at, left_at FROM group_memberships WHERE id = ? AND group_id = ?",
+    [membershipId, group.id],
+  );
+  if (!seat) throw new AppError(404, "GROUP_MEMBERSHIP_NOT_FOUND", "Group membership capacity not found");
+  const joinedAt = patch.joinedAt ?? seat.joined_at;
+  const leftAt = patch.leftAt === undefined ? seat.left_at : patch.leftAt;
+  if (leftAt && leftAt < joinedAt) {
+    throw new AppError(400, "GROUP_MEMBERSHIP_INTERVAL_INVALID", "A seat cannot end before it starts");
+  }
+  const reopening = seat.left_at !== null && leftAt === null;
+  const at = nowIso();
+  const setters = ["joined_at = ?", "left_at = ?", "updated_at = ?"];
+  const bindings: unknown[] = [joinedAt, leftAt, at];
+  if (patch.title !== undefined) {
+    setters.push("title = ?");
+    bindings.push(patch.title);
+  }
+  try {
+    await db.batch([
+      prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
+      db
+        .prepare(
+          `UPDATE group_memberships SET ${setters.join(", ")}
+            WHERE id = ? AND group_id = ?
+              ${
+                reopening
+                  ? `AND EXISTS (
+                       SELECT 1 FROM identity_member_capacities capacity
+                       JOIN identities identity ON identity.id = capacity.identity_id
+                       JOIN users user ON user.id = capacity.user_id AND user.active = 1
+                      WHERE capacity.identity_id = group_memberships.identity_id
+                        AND capacity.member_id = group_memberships.member_id
+                        AND capacity.member_status = 'active'
+                        AND identity.started_at IS NOT NULL
+                        AND identity.ended_at IS NULL
+                        AND identity.blocked_at IS NULL
+                     )`
+                  : ""
+              }`,
+        )
+        .bind(...bindings, membershipId, group.id),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: group.id },
+        "admin",
+        actor.id,
+        "group_membership_updated",
+        "group_membership",
+        membershipId,
+        { ...patch, joinedAt, leftAt },
+      ),
+      prepareReconcileMailingListSubscriptionsStatement(db, seat.user_id, at),
+    ]);
+  } catch (error) {
+    translateSeatWriteError(error);
+  }
+  return mutationResponse(db, group.id, seat.user_id, leftAt && seat.left_at === null ? [membershipId] : []);
 }

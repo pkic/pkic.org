@@ -51,6 +51,19 @@ export function formatCalendarDate(value: string | null | undefined): string {
 }
 
 /**
+ * An instant that stands for a calendar day — a seat's start, a leadership
+ * term's end. A manager picks "1 June 2022" and it is stored as that day's
+ * midnight UTC, so the UTC calendar is the value's meaning; rendering it in
+ * the viewer's zone would shift it a day west of Greenwich.
+ */
+export function formatServiceDate(value: string | null | undefined): string {
+  if (!value) return EMPTY;
+  const date = toDate(DATE_ONLY.test(value) ? `${value}T00:00:00Z` : value);
+  if (!date) return EMPTY;
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeZone: "UTC" });
+}
+
+/**
  * A month-precise rendering in the viewer's locale — used where only the
  * month matters (leadership terms, membership tenure). Date-only input stays
  * on the UTC calendar so the month cannot shift with the viewer's zone.

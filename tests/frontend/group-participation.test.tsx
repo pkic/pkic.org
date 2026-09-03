@@ -32,6 +32,7 @@ function group(overrides: Partial<SelfGroup> = {}): SelfGroup {
     automaticEnrollmentMode: "none",
     allowAutomaticOptOut: false,
     publicLeadership: false,
+    publicRoster: false,
     minEndorsersForBallot: 0,
     active: true,
     revision: 0,

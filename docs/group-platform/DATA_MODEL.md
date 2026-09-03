@@ -33,13 +33,21 @@ Configurable labels and defaults for groups.
     default_automatic_enrollment_mode
     default_allow_automatic_opt_out
     default_visibility
+    lead_title
+    deputy_lead_title
     active
     created_at
     updated_at
 
-The key is stable reference data. Initial records are working_group, board,
-committee, chapter, and community. Code does not branch on those values to
-create separate domain implementations.
+The key is stable reference data. Initial records are working_group,
+task_force, board, committee, chapter, and community. Code does not branch on
+those values to create separate domain implementations.
+
+The two title columns name the holders of the two leadership roles for that
+type: a working group or board has a Chair and Vice Chair, a task force or
+chapter a Lead and Deputy Lead. They are display vocabulary only; the roles
+carry the authority. Each assignment snapshots the title it was made with, so
+renaming a type never rewrites history.
 
 ### groups
 
@@ -57,10 +65,20 @@ Replaces the unreleased working_groups table.
     eligibility_mode
     automatic_enrollment_mode
     allow_automatic_opt_out
+    public_leadership
+    public_roster
     min_endorsers_for_ballot
     active
     created_at
     updated_at
+
+The two publication switches decide what the public directory serves.
+public_leadership publishes current leaders and closed leadership terms, which
+is what a working group's sidebar and the consortium chair display read.
+public_roster additionally publishes the dated seat list and its history,
+which is how the Board of Directors and Executive Council pages render. Both
+bodies are seeded as ordinary groups of type board with both switches on;
+there is no separate positions table or body vocabulary.
 
 Required indexes:
 
@@ -85,12 +103,22 @@ Replaces the unreleased working_group_members table.
     member_id -> members.id, required
     source
     created_by_user_id -> users.id, nullable
+    title, nullable
     joined_at
     left_at
 
 One active row means that one user participates through one exact acting
 identity for one canonical Member. A user acting for multiple organizations
 has multiple rows in this same table.
+
+A row is also a seat on the roster. joined_at and left_at are its service
+interval: a manager may backdate joined_at, set left_at to close the seat, or
+record a former member in one step by writing both instants in the past
+through the capacity the person once held, without any live eligibility. The
+optional title names a seat beyond "Member" (a treasurer, an ex officio
+consortium chair). Leadership titles do not live here; they live on the role
+assignment. Closed seats are never deleted, so a governing body's history is
+the same table as its current roster.
 
 Required constraints and indexes:
 
@@ -154,6 +182,21 @@ remain canonical. Group-scoped assignments use context_type group and
 context_id groups.id. A group lead or deputy assignment additionally records
 member_id and is valid only while the same user actively participates in that
 group through that exact Member. Other role kinds leave member_id null.
+
+A group leadership assignment is also a term on the public roster. Two
+additive user_roles columns carry that:
+
+    title, nullable: the title the assignment was made with ("Chair",
+      "Co-Chair", "Lead"); defaults to the group type's title for the role
+    starts_at, nullable: the displayed tenure start; defaults to created_at
+
+Both are display facts. Authority is still created_at to revoked_at or
+expires_at, and no active-role predicate reads starts_at. An end requested by
+a manager maps to those columns: an end in the future is expires_at, an end at
+or before now is revoked_at, and a term recorded with an end already past is
+written revoked so it grants nothing and needs only the capacity the person
+once held. A Board chair's public tenure, the portal's leadership tab, and the
+permission check therefore read one row and cannot disagree.
 
 Working-group-specific context literals and role names migrate to generic group
 vocabulary with compatibility parsing only during the code transition.

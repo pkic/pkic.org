@@ -1,7 +1,13 @@
+/**
+ * The Leadership tab: who leads this group now, under which title and since
+ * when, and the closed terms that came before. Inherited rows are shown but
+ * edited at their source group; local rows carry their commands.
+ */
 import { useState } from "preact/hooks";
 import {
   groupLeadershipListResponseSchema,
   type GroupLeadershipAssignment,
+  type GroupLeadershipListResponse,
 } from "../../../../../shared/schemas/groups";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -14,9 +20,13 @@ import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
 import { useData } from "../../../../hooks/useData";
 import { ApiClientError, deleteJson, getJson } from "../../../../shared/api-client";
-import { fmt } from "../../ui";
 import { GroupLeadershipAssignmentForm } from "./GroupLeadershipAssignmentForm";
-import { GROUP_LEADERSHIP_ROLE_LABELS } from "./group-leadership";
+import { GroupLeadershipTermForm } from "./GroupLeadershipTermForm";
+import { capacityLabel, formatTerm } from "./group-leadership";
+
+function roleAuthority(roleId: GroupLeadershipAssignment["roleId"]): string {
+  return roleId === "role-group_lead" ? "Lead role" : "Deputy role";
+}
 
 /**
  * Where an assignment comes from, in words.
@@ -32,8 +42,9 @@ function sourceLabel(assignment: GroupLeadershipAssignment): string {
 }
 
 function leadershipColumns(
-  revokingId: string | null,
-  onRevoke: (assignment: GroupLeadershipAssignment) => void,
+  busyId: string | null,
+  onEdit: (assignment: GroupLeadershipAssignment) => void,
+  onEnd?: (assignment: GroupLeadershipAssignment) => void,
 ): ReadonlyArray<DataTableColumn<GroupLeadershipAssignment>> {
   return [
     {
@@ -44,34 +55,51 @@ function leadershipColumns(
       width: "primary",
       cell: (assignment) => <PersonCell name={assignment.userName} email={assignment.email} size="sm" />,
     },
-    { id: "role", header: "Role", cell: (assignment) => GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId] },
-    { id: "source", header: "Source", cell: sourceLabel },
     {
-      // A date has a bounded length; the column hugs it instead of wearing
-      // `pk-nowrap` while still claiming slack.
-      id: "expires",
-      header: "Expires",
-      width: "fit",
-      cell: (assignment) => (assignment.expiresAt ? fmt(assignment.expiresAt) : "—"),
+      // The title is what this person is called here; the role underneath is
+      // the authority it carries, which is what the group type configures.
+      id: "title",
+      header: "Title",
+      cell: (assignment) => (
+        <>
+          <div class="pk-strong">{assignment.title}</div>
+          <div class="pk-small pk-muted">{roleAuthority(assignment.roleId)}</div>
+        </>
+      ),
     },
+    { id: "represents", header: "Represents", cell: capacityLabel },
+    {
+      // A term has a bounded length; the column hugs it instead of wearing
+      // `pk-nowrap` while still claiming slack.
+      id: "term",
+      header: "Term",
+      width: "fit",
+      cell: (assignment) => formatTerm(assignment.startsAt, assignment.endsAt),
+    },
+    { id: "source", header: "Source", cell: sourceLabel },
     {
       id: "actions",
       header: "Actions",
       headerHidden: true,
       align: "end",
-      // Inherited leadership has no local assignment to remove, so its row
+      // Inherited leadership has no local term to edit or end, so its row
       // carries no menu at all rather than a menu that refuses.
       cell: (assignment) =>
         assignment.inherited ? null : (
           <RowActions
             subject={assignment.userName}
             actions={[
-              {
-                id: "remove",
-                label: revokingId === assignment.userRoleId ? "Removing…" : "Remove",
-                onSelect: () => onRevoke(assignment),
-                disabled: revokingId !== null,
-              },
+              { id: "edit", label: "Edit term", onSelect: () => onEdit(assignment), disabled: busyId !== null },
+              ...(onEnd
+                ? [
+                    {
+                      id: "end",
+                      label: busyId === assignment.userRoleId ? "Ending…" : "End term now",
+                      onSelect: () => onEnd(assignment),
+                      disabled: busyId !== null,
+                    },
+                  ]
+                : []),
             ]}
           />
         ),
@@ -84,23 +112,22 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`, groupLeadershipListResponseSchema),
     [groupId],
   );
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editing, setEditing] = useState<GroupLeadershipAssignment | null>(null);
 
-  async function revoke(assignment: GroupLeadershipAssignment): Promise<void> {
-    if (assignment.inherited) return;
-    const roleLabel = GROUP_LEADERSHIP_ROLE_LABELS[assignment.roleId].toLowerCase();
+  async function endTerm(assignment: GroupLeadershipAssignment): Promise<void> {
     if (
       !(await confirmAction({
-        title: `Remove ${assignment.userName} as ${roleLabel}?`,
-        body: "This removes only this local assignment; leadership inherited from a parent group is not affected.",
-        consequences: [`${assignment.userName} immediately loses ${roleLabel} authority in this group`],
-        confirmLabel: "Remove from role",
+        title: `End ${assignment.userName}'s term as ${assignment.title}?`,
+        body: "The term closes today and stays in this group's history.",
+        consequences: [`${assignment.userName} immediately loses ${assignment.title.toLowerCase()} authority here`],
+        confirmLabel: "End term",
       }))
     )
       return;
-    setRevokingId(assignment.userRoleId);
+    setBusyId(assignment.userRoleId);
     setMutationError(null);
     try {
       await deleteJson(
@@ -109,67 +136,117 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
       );
       await leadership.reload();
     } catch (cause) {
-      setMutationError(
-        cause instanceof ApiClientError ? cause.message : "Could not remove this leadership assignment.",
-      );
+      setMutationError(cause instanceof ApiClientError ? cause.message : "Could not end this leadership term.");
     } finally {
-      setRevokingId(null);
+      setBusyId(null);
     }
   }
 
   if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
+  const data: GroupLeadershipListResponse | null = leadership.data;
+  const titles = data?.titles ?? { lead: "Chair", deputyLead: "Vice Chair" };
 
   return (
-    // The panel names itself: a group workspace stacks several of these, and
-    // an unnamed <section> is announced as nothing at all.
-    <Panel class="pk" aria-label="Effective leadership">
-      <PanelHeader title="Effective leadership">
-        {leadership.data && (
-          <span class="pk-small">
-            {leadership.data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherited by default"}
-          </span>
-        )}
-        <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
-          Add leader
-        </Button>
-      </PanelHeader>
-      <PanelBody class="pk-stack">
-        <p class="pk-muted pk-small">
-          Leadership inherited from a parent group applies here automatically; inherited rows are changed at their
-          source group.
-        </p>
-        {mutationError && <ErrorAlert error={mutationError} />}
-        {/* A failed load replaces the table rather than sitting above an empty
-            one: "No effective leadership" is a claim about the group, and the
-            surface does not know that when the request did not arrive. */}
-        {leadership.error ? (
-          <ErrorAlert error={leadership.error} />
-        ) : (
-          <DataTable
-            caption="Effective leadership of this group"
-            columns={leadershipColumns(revokingId, (assignment) => void revoke(assignment))}
-            rows={leadership.data?.assignments ?? []}
-            rowKey={(assignment) => assignment.userRoleId}
-            loading={leadership.loading}
-            empty={
-              <EmptyState
-                title="No effective leadership."
-                body="Nobody leads this group yet, and no parent group's leadership reaches it."
-              />
-            }
-          />
-        )}
-        {showAddForm && (
-          <GroupLeadershipAssignmentForm
-            groupId={groupId}
-            onAssigned={async () => {
-              await leadership.reload();
-              setShowAddForm(false);
+    <div class="pk pk-stack">
+      {/* The panel names itself: a group workspace stacks several of these,
+          and an unnamed <section> is announced as nothing at all. */}
+      <Panel aria-label="Leadership">
+        <PanelHeader title="Leadership">
+          {data && (
+            <span class="pk-small pk-muted">
+              {data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherits parent leadership"}
+            </span>
+          )}
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => {
+              setEditing(null);
+              setShowAddForm(true);
             }}
-            onCancel={() => setShowAddForm(false)}
-          />
-        )}
-      </PanelBody>
-    </Panel>
+          >
+            Add leadership
+          </Button>
+        </PanelHeader>
+        <PanelBody class="pk-stack">
+          <p class="pk-muted pk-small">
+            A {titles.lead.toLowerCase()} holds the lead role and a {titles.deputyLead.toLowerCase()} the deputy role;
+            both manage the group. Titles are set per assignment, so co-chairs and secretaries fit without new roles.
+            Inherited leadership is changed at its source group.
+          </p>
+          {mutationError && <ErrorAlert error={mutationError} />}
+          {showAddForm && data && (
+            <GroupLeadershipAssignmentForm
+              groupId={groupId}
+              titles={data.titles}
+              onAssigned={async () => {
+                await leadership.reload();
+                setShowAddForm(false);
+              }}
+              onCancel={() => setShowAddForm(false)}
+            />
+          )}
+          {editing && (
+            <GroupLeadershipTermForm
+              groupId={groupId}
+              assignment={editing}
+              titles={titles}
+              onSaved={async () => {
+                await leadership.reload();
+                setEditing(null);
+              }}
+              onCancel={() => setEditing(null)}
+            />
+          )}
+          {/* A failed load replaces the table rather than sitting above an
+              empty one: "No leadership yet" is a claim about the group, and
+              the surface does not know that when the request did not arrive. */}
+          {leadership.error ? (
+            <ErrorAlert error={leadership.error} />
+          ) : (
+            <DataTable
+              caption="Current leadership of this group"
+              columns={leadershipColumns(
+                busyId,
+                (assignment) => {
+                  setShowAddForm(false);
+                  setEditing(assignment);
+                },
+                (assignment) => void endTerm(assignment),
+              )}
+              rows={data?.assignments ?? []}
+              rowKey={(assignment) => assignment.userRoleId}
+              loading={leadership.loading}
+              empty={
+                <EmptyState
+                  title="No leadership yet"
+                  body={`Give this group a ${titles.lead.toLowerCase()} from among the people who participate in it.`}
+                >
+                  <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
+                    Add leadership
+                  </Button>
+                </EmptyState>
+              }
+            />
+          )}
+        </PanelBody>
+      </Panel>
+      {data && data.past.length > 0 && (
+        <Panel aria-label="Past leadership">
+          <PanelHeader title="Past leadership" />
+          <PanelBody>
+            <DataTable
+              caption="Closed leadership terms of this group"
+              columns={leadershipColumns(busyId, (assignment) => {
+                setShowAddForm(false);
+                setEditing(assignment);
+              })}
+              rows={data.past}
+              rowKey={(assignment) => assignment.userRoleId}
+            />
+          </PanelBody>
+        </Panel>
+      )}
+    </div>
   );
 }

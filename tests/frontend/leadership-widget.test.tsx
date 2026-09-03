@@ -1,194 +1,163 @@
 // @vitest-environment jsdom
-/**
- * The public leadership rosters and the person card they render.
- *
- * What a visual review of these cannot check: whether each control has a name
- * that tells it apart from the nine identical ones beside it, whether the
- * photo repeats the name a screen reader is about to read anyway, and what
- * the widget does when the endpoint behind it does not answer.
- *
- * Fixtures are parsed through the shared response schemas on the way out,
- * because that is what `getJson` parses on the way in.
- */
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  consortiumChairsPublicResponseSchema,
-  leadershipPublicResponseSchema,
-} from "../../assets/shared/schemas/leadership";
-import { publicOrganizationPersonSchema } from "../../assets/shared/schemas/public-person";
-import { ConsortiumWidget, RosterWidget } from "../../assets/ts/member-flows/leadership-widget";
-import { PublicPersonCard } from "../../assets/ts/member-flows/components/public-person-card";
+import { GroupGovernanceWidget } from "../../assets/ts/member-flows/leadership-widget";
 
-const mounted: HTMLElement[] = [];
+function json(value: unknown): Response {
+  return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
+}
 
-type PersonPayload = Record<string, unknown>;
-
-function person(overrides: PersonPayload = {}): PersonPayload {
+function person(name: string, organizationName: string | null = "Example Member") {
   return {
-    name: "Ada Lovelace",
-    jobTitle: "Chief Cryptographer",
-    organizationName: "Analytical Engines Ltd",
+    name,
+    jobTitle: null,
+    organizationName,
     organizationLogoUrl: null,
-    organizationWebsite: "https://engines.example/",
-    photoUrl: "https://cdn.example/ada.jpg",
-    featuredLink: "https://www.linkedin.com/in/ada/",
+    organizationWebsite: organizationName ? "https://example.test" : null,
+    photoUrl: null,
+    featuredLink: null,
+  };
+}
+
+const group = {
+  id: "20000000-0000-4000-8000-000000000009",
+  slug: "board",
+  name: "Board of Directors",
+  type: { key: "board", singularLabel: "Board", pluralLabel: "Boards" },
+};
+
+function directory(overrides: Record<string, unknown>) {
+  return {
+    group,
+    mailingListEmail: null,
+    leadership: [
+      {
+        roleId: "role-group_lead",
+        title: "Chair",
+        startsAt: "2025-03-01T00:00:00.000Z",
+        endsAt: null,
+        person: person("Chris Bailey"),
+        sourceGroup: group,
+        inherited: false,
+      },
+    ],
+    pastLeadership: [
+      {
+        roleId: "role-group_lead",
+        title: "Chair",
+        startsAt: "2022-06-01T00:00:00.000Z",
+        endsAt: "2025-02-01T00:00:00.000Z",
+        person: person("Kirk Hall", "Entrust"),
+        sourceGroup: group,
+        inherited: false,
+      },
+    ],
+    roster: {
+      current: [
+        { person: person("Chris Bailey"), title: "Chair", startsAt: "2025-03-01T00:00:00.000Z", endsAt: null },
+        {
+          person: person("Mads Henriksveen", "Buypass"),
+          title: "Member",
+          startsAt: "2022-06-01T00:00:00.000Z",
+          endsAt: null,
+        },
+      ],
+      past: [
+        {
+          person: person("Former Member", "Harica"),
+          title: "Member",
+          startsAt: "2022-06-01T00:00:00.000Z",
+          endsAt: "2026-07-01T00:00:00.000Z",
+        },
+      ],
+    },
     ...overrides,
   };
 }
 
-function position(overrides: PersonPayload = {}): PersonPayload {
-  return { ...person(), title: "Chair", startsAt: "2025-01-01", endsAt: null, ...overrides };
-}
-
-/** The card takes a parsed record, so the fixture goes through the contract. */
-function personRecord(overrides: PersonPayload = {}) {
-  return publicOrganizationPersonSchema.parse(person(overrides));
-}
-
-function stubJson(body: unknown): ReturnType<typeof vi.fn> {
-  const fetchMock = vi.fn(
-    async () => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }),
-  );
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-function attach(): HTMLElement {
-  const container = document.createElement("div");
-  document.body.append(container);
-  mounted.push(container);
-  return container;
-}
-
-async function mount(node: Parameters<typeof render>[0]): Promise<HTMLElement> {
-  const container = attach();
-  await act(() => render(node, container));
+async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  return container;
+}
+
+let container: HTMLDivElement;
+
+async function mountWidget(view: "roster" | "leadership"): Promise<void> {
+  container = document.createElement("div");
+  document.body.append(container);
+  await act(async () => {
+    render(<GroupGovernanceWidget apiBase="/api/v1" slug="board" view={view} color="green" />, container);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await settle();
 }
 
 afterEach(() => {
-  for (const container of mounted.splice(0)) {
-    void act(() => render(null, container));
-    container.remove();
-  }
+  void act(() => render(null, container));
+  container.remove();
   vi.unstubAllGlobals();
-  vi.restoreAllMocks();
 });
 
-describe("public person card", () => {
-  it("names the featured link after the person rather than after the site", async () => {
-    const container = await mount(
-      <PublicPersonCard person={personRecord()} role="Chair" color="green" from="2025-01-01" />,
-    );
+describe("GroupGovernanceWidget", () => {
+  it("renders the published roster with leaders first and a merged past-positions timeline", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(input).toBe("/api/v1/groups/board/directory");
+      return json(directory({}));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await mountWidget("roster");
 
-    const link = container.querySelector<HTMLAnchorElement>("a.person-card-featured-link");
-    // Ten cards on a page would otherwise offer ten links all carrying the
-    // same site label, which is nothing to choose between out of context.
-    expect(link?.getAttribute("aria-label")).toBe("Ada Lovelace on LinkedIn");
-    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const cards = [...container.querySelectorAll(".consortium-leaders .person-card")];
+    expect(cards.map((card) => card.querySelector(".person-card-name")?.textContent)).toEqual([
+      "Chris Bailey",
+      "Mads Henriksveen",
+    ]);
+    expect(cards[0]?.textContent).toContain("Chair");
+    expect(cards[0]?.textContent).toContain("In role sinceMar 2025");
+    expect(cards[1]?.textContent).toContain("Member");
+    const timeline = [...container.querySelectorAll(".consortium-past-timeline .person-tl-item")];
+    // Most recently ended first: the former member (2026) before the former chair (2025).
+    expect(timeline.map((item) => item.querySelector(".person-tl-name")?.textContent)).toEqual([
+      "Former Member",
+      "Kirk Hall",
+    ]);
+    expect(timeline[1]?.textContent).toContain("Jun 2022 – Feb 2025");
   });
 
-  it("features whatever profile the owner put first, not a hardcoded platform", async () => {
-    const container = await mount(
-      <PublicPersonCard
-        person={personRecord({ featuredLink: "https://github.com/ada" })}
-        role="Chair"
-        color="green"
-        from="2025-01-01"
-      />,
-    );
-
-    const link = container.querySelector<HTMLAnchorElement>("a.person-card-featured-link");
-    expect(link?.getAttribute("href")).toBe("https://github.com/ada");
-    expect(link?.textContent).toBe("GitHub");
-    expect(link?.getAttribute("aria-label")).toBe("Ada Lovelace on GitHub");
-  });
-
-  it("does not make the photo repeat the name printed beside it", async () => {
-    const container = await mount(
-      <PublicPersonCard person={personRecord()} role="Chair" color="green" from="2025-01-01" />,
-    );
-
-    expect(container.querySelector<HTMLImageElement>("img.person-card-avatar")?.alt).toBe("");
-    expect(container.querySelector(".person-card-name")?.textContent).toBe("Ada Lovelace");
-  });
-
-  it("renders initials, and no profile link at all, for a person with neither photo nor links", async () => {
-    const container = await mount(
-      <PublicPersonCard
-        person={personRecord({ photoUrl: null, featuredLink: null })}
-        role="Chair"
-        color="green"
-        from="2025-01-01"
-      />,
-    );
-
-    expect(container.querySelector(".person-card-avatar--initials")?.textContent).toBe("AL");
-    // A control that does nothing when activated is worse than no control.
-    expect(container.querySelector("a.person-card-featured-link")).toBeNull();
-  });
-});
-
-describe("public leadership widgets", () => {
-  it("renders the current roster and the past timeline from one bounded request", async () => {
-    const fetchMock = stubJson(
-      leadershipPublicResponseSchema.parse({
-        current: [position()],
-        past: [position({ name: "Grace Hopper", title: "Vice Chair", startsAt: "2020-01-01", endsAt: "2024-12-31" })],
-      }),
-    );
-
-    const container = await mount(<RosterWidget apiBase="/api/v1" body="board" color="green" />);
-
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/v1/leadership/board");
-    expect(container.querySelector(".consortium-past-heading")?.textContent).toBe("Past positions");
-    expect(container.querySelector(".person-tl-name")?.textContent).toBe("Grace Hopper");
-    // The timeline photo does not repeat the name that follows it either.
-    expect(container.querySelector<HTMLImageElement>("img.person-tl-avatar")?.alt).toBe("");
-  });
-
-  it("renders nothing rather than an empty frame when the roster request fails", async () => {
+  it("renders only leadership when asked, so the About page shows the chair and vice chair", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("nope", { status: 500 })),
+      vi.fn(async () => json(directory({}))),
     );
+    await mountWidget("leadership");
 
-    const container = await mount(<RosterWidget apiBase="/api/v1" body="board" color="green" />);
-
-    // A marketing page keeps its shape when the endpoint behind a widget is
-    // unavailable: the widget withdraws instead of leaving a broken region.
-    expect(container.innerHTML).toBe("");
+    const names = [...container.querySelectorAll(".consortium-leaders .person-card-name")].map(
+      (name) => name.textContent,
+    );
+    expect(names).toEqual(["Chris Bailey"]);
+    expect(container.textContent).not.toContain("Mads Henriksveen");
+    expect(container.textContent).not.toContain("Former Member");
+    expect(container.textContent).toContain("Kirk Hall");
   });
 
-  it("renders nothing when the consortium has neither chair nor vice chair published", async () => {
-    stubJson(consortiumChairsPublicResponseSchema.parse({ chair: null, viceChair: null }));
-
-    const container = await mount(<ConsortiumWidget apiBase="/api/v1" color="green" />);
-
-    expect(container.innerHTML).toBe("");
+  it("renders nothing when the group publishes neither a roster nor leadership", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(directory({ leadership: [], pastLeadership: [], roster: null }))),
+    );
+    await mountWidget("roster");
+    expect(container.textContent).toBe("");
   });
 
-  it("names both consortium chairs by their role", async () => {
-    stubJson(
-      consortiumChairsPublicResponseSchema.parse({
-        chair: { ...person(), startsAt: "2025-01-01" },
-        viceChair: { ...person({ name: "Grace Hopper" }), startsAt: "2025-01-01" },
-      }),
+  it("fails closed when the directory request fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Promise.reject(new Error("directory unavailable"))),
     );
-
-    const container = await mount(<ConsortiumWidget apiBase="/api/v1" color="green" />);
-
-    expect([...container.querySelectorAll(".person-card-role-arc")].map((role) => role.textContent)).toEqual([
-      "Chair",
-      "Vice Chair",
-    ]);
-    expect(
-      [...container.querySelectorAll("a.person-card-featured-link")].map((link) => link.getAttribute("aria-label")),
-    ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn"]);
+    await mountWidget("roster");
+    expect(container.textContent).toBe("");
   });
 });

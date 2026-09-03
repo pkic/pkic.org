@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
-import { groupMemberAddSchema } from "../../assets/shared/schemas/groups";
+import { groupMemberAddBodySchema } from "../../assets/shared/schemas/groups";
 import {
   buttonNamed,
   buttonNames,
@@ -310,6 +310,7 @@ describe("portal group management resources", () => {
                   membershipCategory: "A",
                   source: "staff",
                   createdByUserId: null,
+                  title: null,
                   joinedAt: "2026-08-01T00:00:00.000Z",
                   leftAt: null,
                 },
@@ -350,7 +351,7 @@ describe("portal group management resources", () => {
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("q")).toBe("member@example.test");
 
-    await runRowAction(container, "Member Person", "Remove");
+    await runRowAction(container, "Member Person", "End participation");
     await act(async () => confirmDialogButton("End participation").click());
     await settle();
     expect(
@@ -402,8 +403,10 @@ describe("portal group management resources", () => {
     // The picker names its own search box, so the heading beside it is the
     // `<legend>` of the group it belongs to rather than a `<label>` pointing
     // at nothing — and that group is what goes inert while the add is running.
-    expect(groupNames(container)).toContain("User");
-    expect(namedGroup(container, "User").querySelector('input[placeholder="Search by email or name…"]')).not.toBeNull();
+    expect(groupNames(container)).toContain("Person");
+    expect(
+      namedGroup(container, "Person").querySelector('input[placeholder="Search by email or name…"]'),
+    ).not.toBeNull();
 
     await pickUser(container, "selected@example.test");
     await act(async () => buttonNamed(container, "Add to group").click());
@@ -413,9 +416,10 @@ describe("portal group management resources", () => {
     const addRequest = requests.find(
       ({ url, method }) => method === "POST" && url.pathname === `/api/v1/groups/${GROUP_ID}/memberships/${userId}`,
     );
-    expect(groupMemberAddSchema.omit({ userId: true }).parse(addRequest?.body)).toEqual({
+    expect(groupMemberAddBodySchema.parse(addRequest?.body)).toMatchObject({
       capacitySelection: { mode: "all_eligible", confirmed: true },
     });
+    expect(groupMemberAddBodySchema.parse(addRequest?.body)).not.toHaveProperty("leftAt");
     expect(onChanged).toHaveBeenCalledOnce();
     expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
   });

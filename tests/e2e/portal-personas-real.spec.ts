@@ -1,6 +1,13 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { extractEmailUrl, capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
+import {
+  arrayProperty,
+  createMember,
+  jsonResponse,
+  recordProperty,
+  stringProperty,
+  type JsonRecord,
+} from "./helpers/member-provisioning";
 import { signInToPortal } from "./helpers/portal-auth";
 
 /**
@@ -17,120 +24,6 @@ test.describe.configure({ mode: "serial" });
 const PARENT_NAME = "E2E Persona Parent";
 const INHERITED_CHILD_NAME = "E2E Persona Inherited Child";
 const LOCAL_ONLY_CHILD_NAME = "E2E Persona Local Child";
-
-type JsonRecord = Record<string, unknown>;
-
-function stringProperty(payload: JsonRecord, key: string): string {
-  const value = payload[key];
-  expect(typeof value, `Expected ${key} to be a string in ${JSON.stringify(payload)}`).toBe("string");
-  return value as string;
-}
-
-function recordProperty(payload: JsonRecord, key: string): JsonRecord {
-  const value = payload[key];
-  expect(value, `Expected ${key} in ${JSON.stringify(payload)}`).toBeTruthy();
-  return value as JsonRecord;
-}
-
-function arrayProperty(payload: JsonRecord, key: string): unknown[] {
-  const value = payload[key];
-  expect(Array.isArray(value), `Expected ${key} to be an array in ${JSON.stringify(payload)}`).toBe(true);
-  return value as unknown[];
-}
-
-async function jsonResponse(
-  request: APIRequestContext,
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<JsonRecord> {
-  const response = await request.fetch(path, {
-    method,
-    ...(body === undefined ? {} : { data: body }),
-    headers: body === undefined ? undefined : { "content-type": "application/json" },
-  });
-  const payload = (await response.json()) as JsonRecord;
-  expect(response.status(), `${method} ${path}: ${JSON.stringify(payload)}`).toBeLessThan(300);
-  return payload;
-}
-
-async function createMember(
-  page: Page,
-): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
-  const identity = crypto.randomUUID();
-  const email = `e2e-persona-${identity}@persona-${identity}.example.test`;
-  const startSince = await capturedEmailCount();
-  const start = await jsonResponse(page.request, "POST", "/api/v1/members/join/start", {
-    email,
-    unaffiliatedAttestation: false,
-  });
-  expect(stringProperty(start, "status")).toBe("verification_sent");
-
-  const verificationEmail = await waitForCapturedEmail(email, "verify your email address", { since: startSince });
-  const verificationUrl = extractEmailUrl(verificationEmail, "/join/");
-  const verificationToken = new URL(verificationUrl).hash.replace(/^#verify=/, "");
-  expect(verificationToken.length).toBeGreaterThan(32);
-  const verified = await jsonResponse(page.request, "POST", "/api/v1/members/join/verify", {
-    token: verificationToken,
-  });
-  expect(stringProperty(verified, "status")).toBe("application_ready");
-
-  const application = await jsonResponse(page.request, "POST", "/api/v1/members/applications", {
-    applicantEmail: email,
-    applicantName: "E2E Persona Member",
-    membershipCategory: "A",
-    organizationName: `Persona Test Organization ${identity}`,
-    joinToken: stringProperty(verified, "joinToken"),
-    answers: {
-      reason: "Real Worker/D1 portal persona coverage",
-      agrees_bylaws: true,
-      agrees_code_of_conduct: true,
-      agrees_ipr_policy: true,
-      warranted_authority: true,
-    },
-  });
-  expect(stringProperty(application, "stage")).toBe("pending");
-
-  await jsonResponse(
-    page.request,
-    "PATCH",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
-    {
-      toStage: "in_review",
-    },
-  );
-  await jsonResponse(
-    page.request,
-    "PATCH",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
-    {
-      toStage: "in_consultation",
-    },
-  );
-  await jsonResponse(
-    page.request,
-    "PATCH",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
-    {
-      toStage: "ec_review",
-    },
-  );
-  const approved = await jsonResponse(
-    page.request,
-    "POST",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/approve`,
-  );
-  const userId = stringProperty(approved, "userId");
-  const userDetail = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${userId}`), "user");
-  const identities = arrayProperty(userDetail, "identities");
-  expect(identities).toHaveLength(1);
-  return {
-    email,
-    userId,
-    memberId: stringProperty(approved, "memberId"),
-    identityId: stringProperty(identities[0] as JsonRecord, "identityId"),
-  };
-}
 
 async function createGroup(
   request: APIRequestContext,

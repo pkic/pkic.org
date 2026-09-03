@@ -1313,6 +1313,14 @@ CREATE TABLE group_types (
   default_automatic_enrollment_mode TEXT NOT NULL DEFAULT 'none',
   default_allow_automatic_opt_out INTEGER NOT NULL DEFAULT 1 CHECK (default_allow_automatic_opt_out IN (0, 1)),
   default_visibility TEXT NOT NULL DEFAULT 'participants',
+  -- Display titles for the two capacity-bound leadership roles. The roles
+  -- (role-group_lead / role-group_deputy_lead) define authority; the type
+  -- says what the consortium calls the people holding them, so a working
+  -- group has a Chair and Vice Chair while a task force has a Lead and
+  -- Deputy Lead without a type-specific code path. An assignment stores the
+  -- exact title it was made with, so renaming a type never rewrites history.
+  lead_title       TEXT NOT NULL DEFAULT 'Chair',
+  deputy_lead_title TEXT NOT NULL DEFAULT 'Vice Chair',
   active           INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   sort_order       INTEGER NOT NULL DEFAULT 0,
   created_at       TEXT NOT NULL,
@@ -1323,13 +1331,15 @@ INSERT INTO group_types
   (key, singular_label, plural_label, description,
    default_governance_inheritance_mode, default_eligibility_mode,
    default_automatic_enrollment_mode, default_allow_automatic_opt_out, default_visibility,
+   lead_title, deputy_lead_title,
    active, sort_order, created_at, updated_at)
 VALUES
-  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 'public', 1, 10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 'participants', 1, 20, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 'participants', 1, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 40, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 'authenticated', 1, 50, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+  ('working_group', 'Working Group', 'Working Groups', 'A topic-focused collaboration group.', 'inherited', 'open', 'none', 1, 'public', 'Chair', 'Vice Chair', 1, 10, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('task_force', 'Task Force', 'Task Forces', 'A time-boxed group with one deliverable.', 'inherited', 'managed', 'none', 0, 'participants', 'Lead', 'Deputy Lead', 1, 15, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('board', 'Board', 'Boards', 'A governing board.', 'inherited', 'managed', 'none', 0, 'participants', 'Chair', 'Vice Chair', 1, 20, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 'participants', 'Chair', 'Vice Chair', 1, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 'authenticated', 'Lead', 'Deputy Lead', 1, 40, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 'authenticated', 'Chair', 'Vice Chair', 1, 50, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 CREATE TABLE groups (
   id                          TEXT NOT NULL PRIMARY KEY,
@@ -1345,6 +1355,11 @@ CREATE TABLE groups (
   automatic_enrollment_mode   TEXT NOT NULL DEFAULT 'none',
   allow_automatic_opt_out     INTEGER NOT NULL DEFAULT 1 CHECK (allow_automatic_opt_out IN (0, 1)),
   public_leadership           INTEGER NOT NULL DEFAULT 0 CHECK (public_leadership IN (0, 1)),
+  -- Publishes the dated member roster (current and former members) in the
+  -- public directory, which is how the Board of Directors and Executive
+  -- Council pages render. Leadership publication is a separate switch because
+  -- a working group publishes its chairs but never its member list.
+  public_roster               INTEGER NOT NULL DEFAULT 0 CHECK (public_roster IN (0, 1)),
   min_endorsers_for_ballot    INTEGER NOT NULL DEFAULT 0,
   active                      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
   revision                    INTEGER NOT NULL DEFAULT 0,
@@ -1362,34 +1377,10 @@ CREATE INDEX idx_groups_type_active
 CREATE INDEX idx_groups_visibility_active
   ON groups(visibility, active, name, id);
 
--- Public Board and Executive Council rosters are historical position records,
--- not authorization assignments. Keep their free-text title, explicit Member
--- affiliation, and service dates separate from group lead/deputy permissions.
--- The body vocabulary is validated by the shared API schema and tests so it
--- can evolve without rebuilding this D1 table.
-CREATE TABLE leadership_positions (
-  id         TEXT NOT NULL PRIMARY KEY,
-  body       TEXT NOT NULL,
-  user_id    TEXT NOT NULL,
-  identity_id TEXT,
-  title      TEXT NOT NULL,
-  starts_at  TEXT NOT NULL,
-  ends_at    TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id),
-  FOREIGN KEY(identity_id) REFERENCES identities(id)
-);
-
--- Public roster lookups by represented Member, and Member deletes.
-CREATE INDEX idx_leadership_positions_identity
-  ON leadership_positions(identity_id)
-  WHERE identity_id IS NOT NULL;
-
-CREATE INDEX idx_leadership_positions_body_dates
-  ON leadership_positions(body, ends_at, starts_at DESC, id);
-CREATE INDEX idx_leadership_positions_user
-  ON leadership_positions(user_id, body, starts_at DESC, id);
+-- Board of Directors and Executive Council rosters are ordinary groups: a
+-- seat is a dated group membership and a chair is a capacity-bound leadership
+-- assignment. There is no separate positions table, so the public About pages
+-- and the portal read one roster and one history.
 
 -- D1 cannot defer recursive hierarchy validation to application code because
 -- other writers may exist. Reject direct and indirect cycles at the database
@@ -1485,6 +1476,12 @@ CREATE TABLE group_memberships (
   member_id          TEXT NOT NULL,
   source             TEXT NOT NULL DEFAULT 'self_service',
   created_by_user_id TEXT,
+  -- Optional roster title for this seat, such as a treasurer or an ex officio
+  -- member. Leadership titles live on the role assignment, not here.
+  title              TEXT,
+  -- Service interval. A manager may backdate joined_at or record a former
+  -- member with both instants in the past, which is how a governing body
+  -- keeps its history in the same table as its current roster.
   joined_at          TEXT NOT NULL,
   left_at            TEXT,
   created_at         TEXT NOT NULL,
@@ -1623,32 +1620,35 @@ CREATE INDEX idx_group_auto_opt_outs_user
 INSERT OR IGNORE INTO groups
   (id, type_key, parent_group_id, name, slug, description, visibility,
    governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
-   allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot, active, created_at, updated_at)
+   allow_automatic_opt_out, public_leadership, public_roster, min_endorsers_for_ballot, active, created_at, updated_at)
 VALUES
   ('20000000-0000-4000-8000-000000000001', 'community', NULL, 'All Members', 'all-members',
    'The default communication and coordination group for active consortium members.',
-   'authenticated', 'inherited', 'category', 'category', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'authenticated', 'inherited', 'category', 'category', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000002', 'board', NULL, 'Executive Council', 'executive-council',
-   'The consortium governing group.',
-   'participants', 'inherited', 'managed', 'none', 0, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'The representative body that governs the consortium on behalf of the membership.',
+   'participants', 'inherited', 'managed', 'none', 0, 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('20000000-0000-4000-8000-000000000009', 'board', NULL, 'Board of Directors', 'board',
+   'The board that provides strategic leadership and governance for the consortium.',
+   'participants', 'inherited', 'managed', 'none', 0, 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000003', 'working_group', NULL, 'Post-Quantum Cryptography Working Group', 'pqc',
    'Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000004', 'working_group', NULL, 'Cryptographic Module Working Group', 'cm',
    'A central forum for addressing cryptographic module (CM) and hardware security module (HSM) related topics within the PKI ecosystem.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000005', 'working_group', NULL, 'PKI Maturity Model Working Group', 'pkimm',
    'Building a globally recognized PKI maturity model for evaluating, planning, and comparing PKI implementations.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000006', 'working_group', NULL, 'Training and Certification Working Group', 'tcwg',
    'Advancing PKI knowledge and skills through structured training paths, certification programs, and accessible educational resources.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000007', 'working_group', NULL, 'CA Working Group', 'ca',
    'A working group for discussions and information sharing among publicly trusted Certificate Authorities.',
-   'public', 'inherited', 'category', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+   'public', 'inherited', 'category', 'none', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('20000000-0000-4000-8000-000000000008', 'working_group', NULL, 'CBOM Profiles Working Group', 'cbom',
    'Developing a neutral, open methodology for defining Cryptographic Bill of Materials (CBOM) profiles that map onto industry BOM standards such as SPDX and CycloneDX.',
-   'public', 'inherited', 'open', 'none', 1, 1, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+   'public', 'inherited', 'open', 'none', 1, 1, 0, 0, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 INSERT OR IGNORE INTO group_membership_category_rules
   (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
@@ -2412,9 +2412,17 @@ BEGIN
     WHERE capacity.identity_id = NEW.identity_id
       AND capacity.member_id = NEW.member_id
       AND capacity.user_id = NEW.user_id
-      AND capacity.member_status = 'active'
       AND identity.started_at IS NOT NULL
-      AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+      -- A seat written already closed is roster history: it grants nothing
+      -- and needs only the capacity the person once held. An open seat needs
+      -- a live one.
+      AND (
+        NEW.left_at IS NOT NULL
+        OR (
+          capacity.member_status = 'active'
+          AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+        )
+      )
   ) THEN RAISE(ABORT, 'active identity required') END;
 END;
 
@@ -2525,6 +2533,13 @@ CREATE TABLE user_roles (
   -- Required for group leadership and forbidden for unrelated role types.
   -- It records the one Member capacity on whose behalf the role is held.
   member_id          TEXT,
+  -- Group leadership only: the title the assignment was made with ("Chair",
+  -- "Co-Chair", "Lead") and the tenure start shown on public rosters. The
+  -- title is a snapshot so a later group-type rename never rewrites history;
+  -- starts_at is display-only and never widens or narrows authority, which
+  -- remains created_at → revoked_at/expires_at.
+  title              TEXT,
+  starts_at          TEXT,
   granted_by_user_id TEXT,
   expires_at         TEXT,
   revoked_at         TEXT,

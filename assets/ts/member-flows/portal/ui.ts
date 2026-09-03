@@ -1,10 +1,13 @@
 import {
+  formatServiceDate,
   formatDate,
   formatDateRange,
   formatDateTime,
   formatEventWhen,
   formatRelativeDays,
+  fromCalendarDateInput,
   showToast,
+  toCalendarDateInput,
   type ToastType,
 } from "../../shared/ui";
 export type { ToastType } from "../../shared/ui";
@@ -23,4 +26,9 @@ export function fmtDate(value: string | null | undefined): string {
   return formatDate(value);
 }
 
-export { formatDateRange, formatEventWhen, formatRelativeDays };
+/** A stored service date (a seat's start, a term's end) as the calendar day it stands for. */
+export function fmtCalendarDate(value: string | null | undefined): string {
+  return formatServiceDate(value);
+}
+
+export { formatDateRange, formatEventWhen, formatRelativeDays, fromCalendarDateInput, toCalendarDateInput };

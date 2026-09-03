@@ -5,6 +5,7 @@ export * from "./audit-log";
 export * from "./automatic-enrollment";
 export * from "./automatic-enrollment-group";
 export * from "./governance";
+export * from "./leadership";
 export * from "./management";
 export * from "./membership";
 export * from "./detail";
