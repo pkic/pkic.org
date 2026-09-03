@@ -1,0 +1,61 @@
+id: usherbrooke
+name: Université de Sherbrooke
+slogan:
+website: https://www.usherbrooke.ca
+# Business domains for email
+organizationDomains:
+  - usherbrooke.ca
+# Short description, longer content can be placed in `content/members/`
+description: L'Université de Sherbrooke offre plus de 400 programmes. Elle se distingue par des méthodes d'apprentissage pratiques, des thèmes porteurs propulsant ses unités de recherche, une stratégie forte d'innovation, de partenariat et d'entrepreneuriat, des campus verts et une qualité de vie incomparable.
+
+# membership
+memberSince: 2026-09-02
+memberType: H4
+workingGroups:
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: https://www.facebook.com/USherbrooke
+  instagram: https://www.instagram.com/usherbrooke/
+  linkedin: 
+  youtube: https://www.youtube.com/USherbrookeTV
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Pierre-Martin Tardif
+    role: Professor
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/tardifpm
+    description: Pierre-Martin is the Professor at Université de Sherbrooke and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
