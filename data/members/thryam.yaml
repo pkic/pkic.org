@@ -6,7 +6,7 @@ website: https://thryam.com
 organizationDomains:
   - thryam.com
 # Short description, longer content can be placed in `content/members/`
-description: Explore enterprise machine identity automation with Thryam.  Replacing operational burden with complete automation.
+description: Explore enterprise machine identity automation with Thryam. Replacing operational burden with complete automation.
 
 # membership
 memberSince: 2026-08-26
@@ -23,26 +23,26 @@ sponsor:
 # Blog posts
 blog:
   url: https://thryam.com/blog/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/thryaminc
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/thryam/
   youtube: https://youtube.com/@thryaminc?si=bn-QloWgpvqdeT5o
 
