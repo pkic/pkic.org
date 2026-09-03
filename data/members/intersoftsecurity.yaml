@@ -6,7 +6,7 @@ website: https://www.intersoftsecurity.com/
 organizationDomains:
   - intersoftsecurity.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Intersoft Security is an information security consultancy.
 
 # membership
 memberSince: 2026-08-18
@@ -20,29 +20,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: https://www.linkedin.com/in/gcimmino/
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,7 +54,7 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/gcimmino/
-    description: Giuseppe is the Founder at intersoft security and represents the organization at the PKI Consortium.
+    description: Giuseppe has 20 years of experience spanning industry and government. Part of the team that stood up MCI's Entrust PKI in the 1990s. Technical Architect for the US Federal PKI (Federal Common Policy and Federal Bridge CAs) 2008-2017. ICAM Architect led the deployment of the US Department of Homeland Security Enterprise Non-Person Entity PKI 2020-2025. Founded Intersoft Security in 2025. Clients include US Department of State, US Department of Homeland Security, and US Department of Defense.
 
 # Long-form content (markdown)
 content: |
