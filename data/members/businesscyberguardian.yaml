@@ -1,0 +1,62 @@
+id: businesscyberguardian
+name: Business Cyber Guardian
+slogan:
+website: https://businesscyberguardian.com/
+# Business domains for email
+organizationDomains:
+  - businesscyberguardian.com
+# Short description, longer content can be placed in `content/members/`
+description:  We Manage and Verify Cyber Trust Across Cyberspace PTI
+
+# membership
+memberSince: 2026-07-30
+memberType: H3
+workingGroups:
+  - CBOM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Dick Brooks
+    role: Co-Foudner and LEad Software Engineer
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/richard-dick-brooks-8078241/
+    description: Dick is the Co-Foudner and LEad Software Engineer at Business Cyber Guardian and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |

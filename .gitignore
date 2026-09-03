@@ -40,3 +40,9 @@ node_modules/
 
 # jscpd duplication report (regenerate with `pnpm run lint:duplication`)
 .jscpd-report/
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+types/

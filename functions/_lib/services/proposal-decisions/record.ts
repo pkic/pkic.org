@@ -107,7 +107,7 @@ export async function recordProposalDecision(
                ),
                decided_at = ?, decision_sequence = ?
            WHERE id = ? AND proposal_id = ? AND review_round = ?
-             AND final_status = 'needs-work' AND decision_sequence = ?
+             AND decision_sequence = ?
              AND EXISTS (
                SELECT 1 FROM session_proposals sp
                WHERE sp.id = proposal_decisions.proposal_id AND sp.deleted_at IS NULL

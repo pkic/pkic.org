@@ -1,0 +1,60 @@
+id: natbnkca
+name: National Bank of Canada
+slogan:
+website: https://www.nbc.ca/
+# Business domains for email
+organizationDomains:
+  - bnc.ca
+# Short description, longer content can be placed in `content/members/`
+description: Simplify your finances with our services including bank accounts, mortgages, credit cards, savings, and loans. Access your accounts with 24/7 online banking.
+
+# membership
+memberSince: 2026-07-30
+memberType: H2
+workingGroups:
+  - CBOM
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.nbc.ca/about-us/news-media/press-release.html
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/nationalbank/
+  facebook: https://www.facebook.com/nationalbanknetworks
+  instagram: https://www.instagram.com/nationalbankofcanada/
+  linkedin: https://www.linkedin.com/company/national-bank-of-canada/
+  youtube: https://www.youtube.com/c/nationalbankofcanada
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Thibaud Ecarot
+    role: Cryptography Specialist
+    social:
+      x:
+      linkedin: https://ca.linkedin.com/in/thibaud-ecarot-b43aa019
+    description: Thibaud is the Cryptography Specialist at National Bank of Canada and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |

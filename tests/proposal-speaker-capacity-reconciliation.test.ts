@@ -426,7 +426,7 @@ describe("proposal speaker capacity reconciliation", () => {
     ).resolves.toHaveLength(0);
   });
 
-  it("keeps accepted capacity state when forbidden terminal-decision replacements are rejected", async () => {
+  it("releases a speaker's capacity exemption when an accepted decision is corrected to a rejection", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await finalizeProposalDecision(env.DB, {
@@ -435,23 +435,26 @@ describe("proposal speaker capacity reconciliation", () => {
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
-
-    for (const finalStatus of ["needs-work", "rejected"] as const) {
-      await expect(
-        finalizeProposalDecision(env.DB, {
-          proposalId,
-          actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
-          finalStatus,
-          decisionNote: finalStatus === "needs-work" ? "This transition is intentionally forbidden." : undefined,
-          minReviewsRequired: 0,
-        }),
-      ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_ALREADY_FINALIZED" });
-    }
     await expect(
       queryAll(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
         registrationId,
       ]),
     ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:speaker" }]);
+
+    // Correcting the decision has to carry the seat with it: a speaker on a
+    // rejected proposal keeps no speaker's exemption from the day's capacity.
+    await finalizeProposalDecision(env.DB, {
+      proposalId,
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      finalStatus: "rejected",
+      minReviewsRequired: 0,
+    });
+
+    await expect(
+      queryAll(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
+        registrationId,
+      ]),
+    ).resolves.toEqual([{ capacity_exempt_in_person: 0, capacity_exempt_reason: null }]);
   });
 
   it("re-arbitrates stale capacity when an unanswered needs-work proposal is rejected", async () => {

@@ -264,10 +264,8 @@ describe("proposal decision review rounds", () => {
       userId: needsWorkProposal.proposer_user_id,
       appBaseUrl: "https://app.test",
     });
-    const accepted = await finalize(seeded.proposalId, seeded.adminToken, "accepted");
-    expect(accepted.status).toBe(409);
-    await expect(accepted.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_ALREADY_FINALIZED" } });
-
+    // A decision can be corrected, so accepting here would stand; this round
+    // ends in a rejection instead, which is what the proposer is told.
     const rejected = await finalize(seeded.proposalId, seeded.adminToken, "rejected");
     expect(rejected.status).toBe(200);
 
