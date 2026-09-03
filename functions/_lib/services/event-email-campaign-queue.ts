@@ -1,4 +1,5 @@
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
+import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import type { DatabaseLike } from "../types";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
@@ -17,7 +18,9 @@ export async function queueEventEmailCampaign(
   campaign: PreparedEventEmailCampaign,
 ): Promise<{ queuedRecipients: number; queuedBatches: number }> {
   const { template, messageType, recipients } = campaign;
-  const templateKey = input.bodyContent ? input.templateKey || "__direct__" : (input.templateKey as string);
+  const templateKey = input.bodyContent
+    ? input.templateKey || DIRECT_EMAIL_TEMPLATE_KEY
+    : (input.templateKey as string);
   const routeVars =
     input.filter.audience === "attendees"
       ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "event_email" }) }
@@ -59,7 +62,7 @@ export async function queueEventEmailCampaign(
           ...buildPersonalCampaignTemplateData(recipient, { ...sharedEventVars, ...routeVars }),
           ...(manageUrl ? { manageUrl } : {}),
           __eventCampaignCustomText: input.customText ?? null,
-          __eventCampaignBodyContent: input.bodyContent ?? null,
+          ...directEmailBodyPayload(input.bodyContent),
           __campaignAudience: input.filter.audience,
         },
       });
@@ -82,7 +85,7 @@ export async function queueEventEmailCampaign(
           lastName: "",
           ...routeVars,
           __eventCampaignCustomText: input.customText ?? null,
-          __eventCampaignBodyContent: input.bodyContent ?? null,
+          ...directEmailBodyPayload(input.bodyContent),
           __campaignAudience: input.filter.audience,
           __bccRecipients: chunk.slice(1).map((recipient) => recipient.email),
         },
