@@ -1,0 +1,63 @@
+id: syeda-fahim
+name: Syeda Fahim
+slogan:
+website: https://www.syedamaham.dev
+# Business domains for email
+organizationDomains:
+  - atmosfair.de
+# Short description, longer content can be placed in `content/members/`
+description: Syeda Maham is the Software Engineer at and participates at the PKI Consortium.
+
+# membership
+memberSince: 2026-09-02
+memberType: H7
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.syedamaham.dev/articles
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Syeda Maham Fahim
+    role: Software Engineer
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/syedamahamfahim/
+    description: |
+        I am currently pursuing my Master’s degree at BHT Berlin in Information and Communications Engineering, with a growing focus on cryptography and Post-Quantum Cryptography (PQC). I have around four years of professional experience as a software engineer, mainly working in full-stack development.
+
+        Alongside my professional work, I have around one year of research experience, mainly focused on Post-Quantum Cryptography and its application to networking. I have already published one research paper in this area, and another paper is currently under review. My current research also continues to focus on PQC networking and the practical challenges of integrating post-quantum cryptography into modern communication systems.
+
+# Long-form content (markdown)
+content: |
