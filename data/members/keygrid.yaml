@@ -6,7 +6,7 @@ website: https://www.keygrid.io
 organizationDomains:
   - keygrid.io
 # Short description, longer content can be placed in `content/members/`
-description: Eight enrollment and validation protocols, any HSM, multi-tenant by design, and FIPS 204 post-quantum issuance - from three containers. ACME, SCEP, EST, CMP, TSA, OCSP, SSH and SPIFFE. SaaS, on-premises or air-gapped. Built in Copenhagen.
+description:  KeyGrid ApS provides PKI solutions for cloud and air-gapped installations in cross industries (Health, Insurance, Defence, Production etc.). Our focus is Private installation and only integrate with public CAs.
 
 # membership
 memberSince: 2026-09-02
@@ -20,29 +20,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://twitter.com/keygridpki
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://linkedin.com/company/keygrid
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
