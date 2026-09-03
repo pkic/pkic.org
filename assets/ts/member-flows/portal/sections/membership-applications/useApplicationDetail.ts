@@ -3,6 +3,7 @@ import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { toast } from "../../ui";
 import type {
+  ApplicationCommunicationCreate,
   EcDecisionRecordInput,
   MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
@@ -61,11 +62,18 @@ export function useApplicationDetail(applicationId: string) {
     }
   }
 
-  async function sendCommunication(params: { subject: string; body: string }) {
+  /**
+   * `params` is already the canonical request body the card checked against
+   * applicationCommunicationCreateSchema, so it is sent as it stands rather
+   * than re-copied field by field. It carries no `templateKey`: the card
+   * offers no template to choose, and under that contract the typed subject
+   * and body are what the applicant receives.
+   */
+  async function sendCommunication(params: ApplicationCommunicationCreate) {
     try {
       await postJson(
         `/api/v1/members/applications/${applicationId}/communications`,
-        { subject: params.subject, body: params.body },
+        params,
         applicationCommunicationCreateResponseSchema,
       );
       toast("Communication sent", "success");

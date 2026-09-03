@@ -2,7 +2,8 @@
  * me-endpoints.test.ts
  *
  * member self-service: profile get/update, organization
- * visibility, application history, votes history, and authentication.
+ * visibility, headshot upload/removal, application history, votes history,
+ * and authentication.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
@@ -22,6 +23,11 @@ import {
 } from "../functions/_lib/auth/member";
 import { updateMyProfile } from "../functions/_lib/services/member-self-service";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
+import {
+  getUserHeadshotRecord,
+  removeUserHeadshotForRequest,
+  userHeadshotTargetGuard,
+} from "../functions/_lib/services/user-headshot";
 
 function requestWithAuth(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -358,5 +364,167 @@ describe("Current-user and application self-service", () => {
     expect((await call("invalid", "/api/v1/me/groups")).status).toBe(404);
     expect((await call("invalid", "/api/v1/me/notification-preferences")).status).toBe(404);
     expect((await call("invalid", "/api/v1/me/applications")).status).toBe(404);
+  });
+});
+
+/**
+ * A headshot the member uploaded is theirs to take down again. The removal is
+ * two durable effects behind one request — the D1 pointer that makes the image
+ * reachable, and the stored object itself — so what is asserted here is that
+ * the pointer goes first and the object follows, and that a caller who is not
+ * the owner (or whose record moved underneath them) changes neither.
+ */
+class FakeUploadsBucket {
+  private readonly objects = new Map<string, ArrayBuffer>();
+
+  async put(key: string, value: ArrayBuffer): Promise<void> {
+    this.objects.set(key, value);
+  }
+
+  async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer>; size: number } | null> {
+    const stored = this.objects.get(key);
+    if (!stored) return null;
+    return { size: stored.byteLength, arrayBuffer: async () => stored };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()].sort();
+  }
+}
+
+async function seedMemberWithHeadshot(
+  email: string,
+  token: string,
+): Promise<{ userId: string; sessionToken: string; bucket: FakeUploadsBucket; key: string }> {
+  const userId = await insertActiveMember(email, "F");
+  const sessionToken = await createMemberSession(env.DB, userId, token);
+  const bucket = new FakeUploadsBucket();
+  const key = `headshots/${userId}/stored.jpg`;
+  await bucket.put(key, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer);
+  await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(key, userId).run();
+  return { userId, sessionToken, bucket, key };
+}
+
+async function storedHeadshotKey(userId: string): Promise<string | null> {
+  const [row] = await queryAll<{ headshot_r2_key: string | null }>(
+    env.DB,
+    "SELECT headshot_r2_key FROM users WHERE id = ?",
+    userId,
+  );
+  return row.headshot_r2_key;
+}
+
+describe("Current-user headshot removal", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it("clears the caller's own pointer, audits the member as the actor, and deletes the stored object", async () => {
+    const { userId, sessionToken, bucket, key } = await seedMemberWithHeadshot(
+      "headshot-remove@example.test",
+      "headshot-remove-token",
+    );
+    const background: Promise<unknown>[] = [];
+
+    const response = await app.fetch(
+      requestWithAuth(sessionToken, "/api/v1/users/current/headshot", { method: "DELETE" }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: (promise: Promise<unknown>) => background.push(promise),
+      } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true });
+    // The pointer is gone before the object is, so the image stops being
+    // reachable even if the storage deletion is still queued.
+    expect(await storedHeadshotKey(userId)).toBeNull();
+    expect(
+      await queryAll<{ actor_type: string; actor_id: string }>(
+        env.DB,
+        "SELECT actor_type, actor_id FROM audit_log WHERE entity_id = ? AND action = 'headshot_removed'",
+        userId,
+      ),
+    ).toEqual([{ actor_type: "member", actor_id: userId }]);
+
+    await Promise.all(background);
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM storage_deletion_outbox WHERE object_key = ?",
+        key,
+      ),
+    ).toEqual([{ status: "deleted" }]);
+  });
+
+  it("succeeds without a stored object for a member who has no headshot on file", async () => {
+    const userId = await insertActiveMember("headshot-remove-empty@example.test", "F");
+    const sessionToken = await createMemberSession(env.DB, userId, "headshot-remove-empty-token");
+
+    const response = await app.fetch(
+      requestWithAuth(sessionToken, "/api/v1/users/current/headshot", { method: "DELETE" }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: new FakeUploadsBucket() },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await storedHeadshotKey(userId)).toBeNull();
+    expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([]);
+  });
+
+  it("refuses an anonymous caller and leaves the headshot in place", async () => {
+    const { userId, bucket, key } = await seedMemberWithHeadshot(
+      "headshot-remove-anon@example.test",
+      "headshot-remove-anon-token",
+    );
+
+    const response = await app.fetch(
+      new Request("https://app.test/api/v1/users/current/headshot", { method: "DELETE" }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await storedHeadshotKey(userId)).toBe(key);
+    expect(bucket.keys()).toEqual([key]);
+  });
+
+  it("refuses to clear a pointer that moved between the route's read and its commit", async () => {
+    const { userId, sessionToken, bucket, key } = await seedMemberWithHeadshot(
+      "headshot-remove-race@example.test",
+      "headshot-remove-race-token",
+    );
+    const request = requestWithAuth(sessionToken, "/api/v1/users/current/headshot", { method: "DELETE" });
+    const user = await getUserHeadshotRecord(env.DB, userId);
+    const replacementKey = `headshots/${userId}/replacement.jpg`;
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE users SET headshot_r2_key = ?, updated_at = ? WHERE id = ?")
+        .bind(replacementKey, "2099-01-01T00:00:00.000Z", userId)
+        .run(),
+    );
+
+    await expect(
+      removeUserHeadshotForRequest(racingDb, env as any, request, () => {}, {
+        userId,
+        previousKey: user.headshot_r2_key,
+        audit: { actorType: "member", actorId: userId, action: "headshot_removed" },
+        commitGuard: userHeadshotTargetGuard(user),
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "HEADSHOT_CHANGED" });
+
+    // The winning replacement stands, and nothing was queued for deletion on
+    // behalf of the request that lost.
+    expect(await storedHeadshotKey(userId)).toBe(replacementKey);
+    expect(bucket.keys()).toEqual([key]);
+    expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_id = ? AND action = 'headshot_removed'", userId),
+    ).toEqual([]);
   });
 });

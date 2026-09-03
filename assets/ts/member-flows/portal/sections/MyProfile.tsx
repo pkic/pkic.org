@@ -5,7 +5,7 @@
  * visibility toggle live in the same tab nav table.
  */
 import { useRef, useState } from "preact/hooks";
-import { getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
+import { deleteJson, getJson, patchJson, postJson, putJson, ApiClientError } from "../../../shared/api-client";
 import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotManager";
 import { replaceFile } from "../../../shared/file-upload";
 import { friendlyErrorMessage } from "../../../components/ErrorAlert";
@@ -24,7 +24,11 @@ import { toast } from "../ui";
 import { formatCalendarDate } from "../../../shared/ui";
 import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
-import { myProfileSchema, myHeadshotUploadResponseSchema } from "../../../../shared/schemas/me";
+import {
+  myHeadshotDeleteResponseSchema,
+  myHeadshotUploadResponseSchema,
+  myProfileSchema,
+} from "../../../../shared/schemas/me";
 import { identityMutationResponseSchema } from "../../../../shared/schemas/identity";
 import type { ApiTableActions } from "../../../components/ApiDataTable";
 import { ActingIdentityDirectory } from "./OrganizationIdentityDirectory";
@@ -234,6 +238,25 @@ export function MyProfile() {
                   await refreshProfile();
                   return { headshotUrl: profileSignal.value?.headshotUrl };
                 }}
+                deleteHeadshot={async () => {
+                  try {
+                    await deleteJson(`${CURRENT_USER_API}/headshot`, myHeadshotDeleteResponseSchema);
+                  } catch (err) {
+                    // The shared controller writes whatever this throws into
+                    // its own live region, so a bare "HTTP 500" is translated
+                    // here rather than only where the toast is raised.
+                    throw new Error(
+                      err instanceof ApiClientError
+                        ? friendlyErrorMessage(err.message)
+                        : "Could not remove your headshot. Please try again.",
+                      { cause: err },
+                    );
+                  }
+                  await refreshProfile();
+                }}
+                confirmDeleteMessage="Remove your headshot?"
+                onDeleted={() => toast("Headshot removed", "success")}
+                onError={(message) => toast(message, "error")}
               />
             </PanelBody>
           </Panel>

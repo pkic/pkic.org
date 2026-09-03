@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../../_lib/db/context";
 import { CurrentUserGet, CurrentUserPatch } from "./index";
-import { CurrentUserHeadshotPut } from "./headshot";
+import { CurrentUserHeadshotDelete, CurrentUserHeadshotPut } from "./headshot";
 import {
   CurrentUserNotificationPreferencesGet,
   CurrentUserNotificationPreferencesPatch,
@@ -24,6 +24,7 @@ export const openapi = fromHono(app);
 openapi.get("/", CurrentUserGet);
 openapi.patch("/", CurrentUserPatch);
 openapi.put("/headshot", CurrentUserHeadshotPut);
+openapi.delete("/headshot", CurrentUserHeadshotDelete);
 openapi.get("/notifications/preferences", CurrentUserNotificationPreferencesGet);
 openapi.patch("/notifications/preferences", CurrentUserNotificationPreferencesPatch);
 openapi.get("/votes", CurrentUserVotesGet);
