@@ -1,0 +1,60 @@
+id: quantumgenie
+name: QuantumGenie, Inc.
+slogan:
+website: https://quantumgenie.ai
+# Business domains for email
+organizationDomains:
+  - quantumgenie.ai
+# Short description, longer content can be placed in `content/members/`
+description: QuantumGenie helps enterprises find and fix weak encryption before attackers or future quantum computers can exploit it — discovery, attribution, remediation, and continuous monitoring on one AI security world model.
+
+# membership
+memberSince: 2026-08-21
+memberType: F
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://quantumgenie.ai/blog
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://quantumgenie.ai/careers.html
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/quantumgenie/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Srijan Dhare
+    role: Founder
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/sdhare/
+    description: Srijan is the Founder at QuantumGenie, Inc. and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
