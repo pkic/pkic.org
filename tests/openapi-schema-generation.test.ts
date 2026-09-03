@@ -281,6 +281,7 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/users/current/notifications/preferences"].get).toBeDefined();
     expect(spec.paths["/api/v1/users/current/notifications/preferences"].patch).toBeDefined();
     expect(spec.paths["/api/v1/users/current/headshot"].put).toBeDefined();
+    expect(spec.paths["/api/v1/users/current/headshot"].delete).toBeDefined();
     expect(spec.paths["/api/v1/users/current/groups"].get).toBeDefined();
     expect(spec.paths["/api/v1/users/current/applications"].get).toBeDefined();
     expect(spec.paths["/api/v1/users/current/applications/{id}"].get).toBeDefined();

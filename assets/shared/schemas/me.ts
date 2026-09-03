@@ -201,6 +201,23 @@ export const myHeadshotUploadRouteSchema = {
     "415": { description: "Unsupported file type." },
   },
 };
+
+export const myHeadshotDeleteResponseSchema = successResponseSchema;
+
+export const myHeadshotDeleteRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Remove the current user's headshot",
+  description:
+    "Clears the caller's own headshot reference and queues the stored object for durable deletion. Idempotent: a caller with no headshot on file still succeeds.",
+  responses: {
+    "200": {
+      description: "Removed.",
+      content: { "application/json": { schema: myHeadshotDeleteResponseSchema } },
+    },
+    "409": { description: "The headshot or the acting session changed while this request was being processed." },
+  },
+};
 // ── Notification preferences (Account Settings) ─────────
 
 export const myNotificationPreferencesSchema = z.object({
