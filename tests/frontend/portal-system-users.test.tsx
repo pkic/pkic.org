@@ -71,6 +71,7 @@ const user: UserDetail = {
   updated_at: "2026-01-01T00:00:00.000Z",
   pii_redacted_at: null,
   identities: [],
+  formerIdentities: [],
 };
 
 function mount(canGrantAccess: boolean): HTMLElement {
@@ -274,6 +275,7 @@ describe("portal System Users anonymize confirmation", () => {
       updated_at: "2026-01-01T00:00:00.000Z",
       pii_redacted_at: null,
       identities: [],
+      formerIdentities: [],
     };
 
     apiClient.getJson.mockReset();
@@ -319,7 +321,15 @@ describe("portal System Users anonymize confirmation", () => {
       return button;
     }
 
-    await act(() => dialogButton("Anonymize user").click());
+    // The record's destructive command lives in its actions menu now, so the
+    // menu is opened first. The confirmation contract below is unchanged.
+    await act(() => dialogButton("⋯").click());
+    await act(() => dialogButton("Anonymize user…").click());
+    // Selecting from a menu adds an async hop before the dialog mounts, which
+    // a direct button click did not have.
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(container.textContent).toContain(`Anonymize ${email}?`);
 
     const confirmButton = dialogButton("Anonymize user");
@@ -337,7 +347,12 @@ describe("portal System Users anonymize confirmation", () => {
     expect(apiClient.postJson).not.toHaveBeenCalled();
 
     // Confirm with the exact typed email: the anonymize request is sent.
-    await act(() => dialogButton("Anonymize user").click());
+    // Re-opening goes back through the menu, as it did the first time.
+    await act(() => dialogButton("⋯").click());
+    await act(() => dialogButton("Anonymize user…").click());
+    await act(async () => {
+      await Promise.resolve();
+    });
     const retyped = typedConfirmationInput(container)!;
     await act(() => {
       retyped.value = email;
@@ -387,13 +402,20 @@ describe("portal System Users detail record", () => {
     });
   }
 
-  async function mountDetail(permissions: UserPermissions): Promise<HTMLElement> {
+  async function mountDetail(permissions: UserPermissions, viewerUserId?: string): Promise<HTMLElement> {
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
-    await act(() => render(<UserDetailView userId={user.id} permissions={permissions} />, container));
+    await act(() =>
+      render(<UserDetailView userId={user.id} permissions={permissions} viewerUserId={viewerUserId} />, container),
+    );
     await settle();
     return container;
+  }
+
+  /** A card by the name it carries as a region, not by where it sits. */
+  function cardNamed(container: HTMLElement, name: string): Element | null {
+    return container.querySelector(`.pk-panel[aria-label="${name}"]`);
   }
 
   function terms(list: Element): string[] {
@@ -410,13 +432,83 @@ describe("portal System Users detail record", () => {
 
     // One record's fields are a term/value list, not an unnamed `<table>`
     // announced alongside the other tables further down the page.
-    const list = container.querySelector("dl.pk-datalist");
+    //
+    // Scoped to the Account panel rather than taking the first list on the
+    // page: the record is now laid out as main column plus aside, and several
+    // panels carry their own description list. Targeting by position would
+    // pass or fail on panel order rather than on the pairing this asserts.
+    const panelTitled = (title: string) =>
+      [...container.querySelectorAll(".pk-panel")].find(
+        (panel) => panel.querySelector(".pk-panel__title")?.textContent === title,
+      );
+
+    const accountPanel = panelTitled("Account");
+    expect(accountPanel, "the record has an Account panel").toBeTruthy();
+    const list = accountPanel!.querySelector("dl.pk-datalist");
     expect(list).not.toBeNull();
-    expect(terms(list!)).toEqual(["Email", "First name", "Last name", "Preferred name", "Role", "Active", "Created"]);
-    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(7);
-    expect(list!.textContent).toContain("member@example.test");
+    // The address is not here: it answers "how do I reach this person", which
+    // is the Contact panel's question, and a fact stated in two panels on one
+    // page is a fact the reader has to check for agreement.
+    expect(terms(list!)).toEqual(["First name", "Last name", "Preferred name", "Role", "Active", "Created"]);
+    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(6);
     // An absent value is still a value, so the pairing never goes out of step.
-    expect([...list!.querySelectorAll(":scope > dd")][3]?.textContent).toBe("—");
+    expect([...list!.querySelectorAll(":scope > dd")][2]?.textContent).toBe("—");
+
+    // Stated once, and paired with a term rather than loose in the panel.
+    const contactPanel = panelTitled("Contact");
+    expect(contactPanel, "the record has a Contact panel").toBeTruthy();
+    const contactList = contactPanel!.querySelector("dl.pk-datalist");
+    expect(terms(contactList!)).toEqual(["Email"]);
+    expect(contactList!.textContent).toContain("member@example.test");
+  });
+
+  it("keeps the visibility settings from a reader who cannot change them", async () => {
+    stubDetail({
+      ...user,
+      identities: [
+        {
+          identityId: "identity-1",
+          memberId: "member-1",
+          membershipCategory: "A",
+          status: "active",
+          showOnOrgProfile: true,
+          organizationId: "organization-1",
+          organizationName: "Organization A",
+          emailId: null,
+          email: "ada@organization-a.example",
+          jobTitle: "Standards lead",
+          biography: null,
+          links: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          groups: [],
+        },
+      ],
+    });
+
+    // Visibility states no fact about the person — only how the record is
+    // configured. To a reader who cannot change it, it is a list of switches
+    // they are not holding, and it advertises which parts are withheld.
+    const reader = await mountDetail(READ_ONLY);
+    expect(cardNamed(reader, "Visibility")).toBeNull();
+
+    const writer = await mountDetail({ ...READ_ONLY, canWrite: true });
+    expect(cardNamed(writer, "Visibility")).not.toBeNull();
+    expect(cardNamed(writer, "Visibility")?.textContent).toContain("Organization A");
+  });
+
+  it("offers nothing on your own record that only makes sense aimed at someone else", async () => {
+    stubDetail(user);
+
+    const other = await mountDetail(READ_ONLY, "somebody-else");
+    expect(other.querySelector('button[aria-label="Message — not available yet"]')).not.toBeNull();
+    expect(other.querySelector('button[aria-label="Follow — not available yet"]')).not.toBeNull();
+
+    // Nobody messages or follows themselves. The actions menu stays, because
+    // the record is still one the reader may act on.
+    const own = await mountDetail(READ_ONLY, user.id);
+    expect(own.querySelector('button[aria-label="Message — not available yet"]')).toBeNull();
+    expect(own.querySelector('button[aria-label="Follow — not available yet"]')).toBeNull();
+    expect(own.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
   });
 
   it("returns to the list through the header's trail rather than a back button", async () => {

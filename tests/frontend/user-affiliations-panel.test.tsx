@@ -2,8 +2,8 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UserMembershipPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserMembershipPanel";
-import { UserMembershipCard } from "../../assets/ts/member-flows/portal/sections/system-users/UserMembershipCard";
+import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";
+import { UserAffiliationRow } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationRow";
 import type { UserDetail, UserMembership } from "../../assets/ts/member-flows/portal/sections/system-users/model";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { identityCreateSchema, identityUpdateSchema } from "../../assets/shared/schemas/identity";
@@ -18,6 +18,7 @@ import {
   organizationsListResponseSchema,
 } from "../../assets/shared/schemas/organization-management";
 import { buttonNamed, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
+import { menuItemNamed } from "./helpers/row-actions";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000002";
@@ -70,6 +71,7 @@ function userWith(identities: UserMembership[]): UserDetail {
     updated_at: "2026-08-01T00:00:00.000Z",
     pii_redacted_at: null,
     identities,
+    formerIdentities: [],
   };
 }
 
@@ -196,6 +198,7 @@ const organizationDetail = organizationDetailResponseSchema.parse({
     primaryContactUserId: null,
     secondaryContactUserId: null,
     identities: [],
+    formerIdentities: [],
   },
 });
 
@@ -208,8 +211,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("UserMembershipCard", () => {
-  it("renders each organization capacity with only its own groups", () => {
+/** A menu trigger, which names itself through `aria-label` rather than text. */
+function menuTrigger(container: HTMLElement, label: string): HTMLButtonElement {
+  const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  if (!trigger) throw new Error(`no menu is named "${label}"`);
+  return trigger;
+}
+
+/** Opens one affiliation's menu and runs the item reading exactly `label`. */
+function runRowMenuAction(container: HTMLElement, organization: string, label: string) {
+  void act(() => menuTrigger(container, `Actions for ${organization}`).click());
+  const item = menuItemNamed(container, label);
+  if (!item) throw new Error(`the row for "${organization}" offers no "${label}"`);
+  void act(() => item.click());
+}
+
+describe("UserAffiliationRow", () => {
+  it("renders every organization capacity with the terms of its own tie", () => {
     const user = userWith([
       membership(),
       membership({
@@ -230,43 +248,41 @@ describe("UserMembershipCard", () => {
     ]);
     const container = mount();
 
-    void act(() => render(<UserMembershipPanel user={user} onChanged={vi.fn()} canManage canActivate />, container));
+    void act(() => render(<UserAffiliationsPanel user={user} onChanged={vi.fn()} canManage canActivate />, container));
 
     expect(container.textContent).toContain("Organization A");
-    expect(container.textContent).toContain("PQC Working Group");
     expect(container.textContent).toContain("Organization B");
-    expect(container.textContent).toContain("Cryptographic Module Working Group");
-    expect(container.textContent).toContain("Add identity");
+    // Each tie carries its own address, which is what distinguishes two
+    // affiliations held by one person. Their groups are not here: the record
+    // states those once, in the participation table.
+    expect(container.textContent).toContain("role@organization-a.example");
+    expect(container.textContent).not.toContain("PQC Working Group");
+    // The panel's own action is in its menu, not a button competing with the
+    // ties the panel is about.
+    expect(menuTrigger(container, "Affiliation settings")).toBeDefined();
     // An organization-tied capacity takes its category and status from the
     // organization, so neither is editable here.
     expect(container.querySelectorAll("select")).toHaveLength(0);
-    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
   });
 
-  it("names the visibility checkbox and every value it lists", () => {
+  it("states the terms of the tie and names the change its visibility action makes", () => {
     const container = mount();
     void act(() =>
-      render(<UserMembershipCard membership={membership()} onChanged={async () => {}} canManage />, container),
+      render(<UserAffiliationRow membership={membership()} onChanged={async () => {}} canManage />, container),
     );
 
-    // All three parts of the choice control, so it is not an operating-system
-    // default box with no accessible name.
-    const checkbox = container.querySelector("label.pk-check");
-    expect(checkbox?.querySelector("input.pk-check__input")).not.toBeNull();
-    expect(checkbox?.querySelector(".pk-check__label")?.textContent).toContain("Organization A");
+    // The terms of the tie read as a list rather than a run-on sentence, so
+    // the separators between them stay presentational and are never announced.
+    // The groups are not among them: the record states those once, in the
+    // participation table, with the seat and the attendance beside them.
+    const terms = [...container.querySelectorAll("ul.pk-affiliation__terms > li")].map((term) => term.textContent);
+    expect(terms).toEqual(["since Aug 1, 2026", "role@organization-a.example"]);
+    expect(container.textContent).not.toContain("PQC Working Group");
 
-    // The facts read as a term/value list, so each value is announced with the
-    // term that names it rather than sitting in an unnamed table.
-    const terms = [...container.querySelectorAll("dl.pk-datalist > dt")].map((term) => term.textContent);
-    expect(terms).toEqual([
-      "Organization",
-      "Identity email",
-      "Job title",
-      "Category",
-      "Status",
-      "Groups",
-      "Member since",
-    ]);
+    // The visibility control is a menu item now, so it names the change it
+    // will make; the marker beside the name is what states where things stand.
+    void act(() => menuTrigger(container, "Actions for Organization A").click());
+    expect(menuItemNamed(container, "Hide from Organization A's public profile")).not.toBeNull();
   });
 
   it("updates a capacity through the canonical capacity route", async () => {
@@ -290,7 +306,7 @@ describe("UserMembershipCard", () => {
     });
     const container = mount();
     void act(() =>
-      render(<UserMembershipCard membership={individual} onChanged={async () => {}} canManage />, container),
+      render(<UserAffiliationRow membership={individual} onChanged={async () => {}} canManage />, container),
     );
 
     await chooseOption(controlFor<HTMLSelectElement>(container, "Category"), "H6");
@@ -308,14 +324,14 @@ describe("UserMembershipCard", () => {
       links: ["https://organization-a.example/profile"],
     });
     const container = mount();
-    void act(() => render(<UserMembershipCard membership={org} onChanged={async () => {}} canManage />, container));
+    void act(() => render(<UserAffiliationRow membership={org} onChanged={async () => {}} canManage />, container));
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("role@organization-a.example");
     expect(container.textContent).toContain("Standards lead");
     expect(container.textContent).toContain("Represents Organization A.");
 
-    void act(() => buttonNamed(container, "Edit identity profile").click());
+    runRowMenuAction(container, "Organization A", "Edit identity profile…");
     await typeInto(controlFor(container, "Job title for Organization A"), "Updated standards lead");
     await press(container, "Save identity profile");
 
@@ -328,8 +344,9 @@ describe("UserMembershipCard", () => {
         links: ["https://organization-a.example/profile"],
       },
     });
-    // The editor closed only because the save succeeded.
-    expect(container.textContent).toContain("Edit identity profile");
+    // The editor closed only because the save succeeded: its Save control is
+    // gone, and the menu offers to open it again.
+    expect(container.textContent).not.toContain("Save identity profile");
   });
 
   it("keeps the identity editor open and reports the reason when the save fails", async () => {
@@ -337,15 +354,14 @@ describe("UserMembershipCard", () => {
     stubFetch(() => errorResponse("Job title is too long", 400));
     const container = mount();
     void act(() =>
-      render(<UserMembershipCard membership={membership()} onChanged={async () => {}} canManage />, container),
+      render(<UserAffiliationRow membership={membership()} onChanged={async () => {}} canManage />, container),
     );
 
-    void act(() => buttonNamed(container, "Edit identity profile").click());
+    runRowMenuAction(container, "Organization A", "Edit identity profile…");
     await press(container, "Save identity profile");
 
     expect(area.textContent).toContain("Job title is too long");
     // Still editing: a failure must not throw away the unsaved values.
-    expect(container.textContent).toContain("Close identity editor");
     expect(container.textContent).toContain("Save identity profile");
   });
 
@@ -356,19 +372,19 @@ describe("UserMembershipCard", () => {
       render(
         <>
           <ConfirmDialogHost />
-          <UserMembershipCard membership={membership()} onChanged={async () => {}} canManage />
+          <UserAffiliationRow membership={membership()} onChanged={async () => {}} canManage />
         </>,
         container,
       ),
     );
 
-    void act(() => buttonNamed(container, "End identity").click());
+    runRowMenuAction(container, "Organization A", "End identity…");
     expect(container.textContent).toContain("End the identity for Organization A?");
     void act(() => buttonNamed(container, "Cancel").click());
     await settle();
     expect(requests).toHaveLength(0);
 
-    void act(() => buttonNamed(container, "End identity").click());
+    runRowMenuAction(container, "Organization A", "End identity…");
     await press(container, "End identity");
     expect(requests[0]).toMatchObject({
       method: "PATCH",
@@ -380,11 +396,11 @@ describe("UserMembershipCard", () => {
   });
 });
 
-describe("UserMembershipPanel", () => {
+describe("UserAffiliationsPanel", () => {
   it("exposes the empty membership list as a live status region", () => {
     const container = mount();
     void act(() =>
-      render(<UserMembershipPanel user={userWith([])} onChanged={vi.fn()} canManage canActivate />, container),
+      render(<UserAffiliationsPanel user={userWith([])} onChanged={vi.fn()} canManage canActivate />, container),
     );
 
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No active identities.");
@@ -393,9 +409,12 @@ describe("UserMembershipPanel", () => {
   function openGrantForm(): HTMLElement {
     const container = mount();
     void act(() =>
-      render(<UserMembershipPanel user={userWith([])} onChanged={async () => {}} canManage canActivate />, container),
+      render(<UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage canActivate />, container),
     );
-    void act(() => buttonNamed(container, "Add identity").click());
+    void act(() => menuTrigger(container, "Affiliation settings").click());
+    const add = menuItemNamed(container, "Add identity…");
+    if (!add) throw new Error('the panel offers no "Add identity…"');
+    void act(() => add.click());
     return container;
   }
 

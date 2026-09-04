@@ -286,6 +286,7 @@ export function PortalShell() {
                   <SectionWrapper>
                     <Users
                       userId={params.userId}
+                      viewerUserId={session?.identity.id}
                       permissions={{
                         canRead: portalHasGlobalPermission(session, "users:read"),
                         canWrite: portalHasGlobalPermission(session, "users:write"),

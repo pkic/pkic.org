@@ -1,3 +1,15 @@
+/**
+ * Granting a person a new acting capacity.
+ *
+ * Two routes, two contracts: an individual capacity is granted on the member
+ * capacities collection, an organization-tied one is an identity created on
+ * the organization. The category picker decides which is in play, and each
+ * draft is checked by the contract the route it goes to actually parses.
+ *
+ * Its own module because it is a form, not a statement: the panel it opens
+ * from states ties, and keeping the two apart is what stops that panel being
+ * both a record and a form in one file.
+ */
 import { useState } from "preact/hooks";
 import {
   MEMBERSHIP_CATEGORIES,
@@ -18,16 +30,13 @@ import { toast } from "../../ui";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
-import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import type { UserDetail } from "./model";
-import { UserMembershipCard } from "./UserMembershipCard";
 
 const GRANT_MODE_ORG_TIED = "__org_tied__";
 
-function GrantMembershipForm({
+export function UserIdentityGrantForm({
   user,
   canActivate,
   onGranted,
@@ -255,65 +264,5 @@ function GrantMembershipForm({
         </Button>
       </div>
     </form>
-  );
-}
-
-export function UserMembershipPanel({
-  user,
-  onChanged,
-  canManage,
-  canActivate,
-}: {
-  user: UserDetail;
-  onChanged: () => Promise<void> | void;
-  canManage: boolean;
-  canActivate: boolean;
-}) {
-  const [showGrantForm, setShowGrantForm] = useState(false);
-  const hasIndividualMembership = user.identities.some((identity) => identity.organizationId === null);
-
-  return (
-    <div class="pk">
-      <Panel>
-        <PanelHeader title="Membership" />
-        <PanelBody class="pk-stack pk-stack--snug">
-          {user.identities.length === 0 && !showGrantForm && (
-            <EmptyState
-              title="No active identities."
-              body="This user can sign in but acts in no membership capacity yet."
-            />
-          )}
-          {user.identities.length > 0 && (
-            <div class="pk-stack pk-stack--snug">
-              {user.identities.map((membership) => (
-                <UserMembershipCard
-                  key={membership.identityId}
-                  membership={membership}
-                  onChanged={onChanged}
-                  canManage={canManage}
-                />
-              ))}
-            </div>
-          )}
-          {canManage && showGrantForm ? (
-            <GrantMembershipForm
-              user={user}
-              canActivate={canActivate}
-              onGranted={() => {
-                setShowGrantForm(false);
-                void onChanged();
-              }}
-              onCancel={() => setShowGrantForm(false)}
-            />
-          ) : canManage && !hasIndividualMembership ? (
-            <div class="pk-cluster">
-              <Button size="sm" onClick={() => setShowGrantForm(true)}>
-                Add identity
-              </Button>
-            </div>
-          ) : null}
-        </PanelBody>
-      </Panel>
-    </div>
   );
 }

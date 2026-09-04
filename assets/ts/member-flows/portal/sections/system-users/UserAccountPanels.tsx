@@ -1,8 +1,10 @@
 import { useId, useRef, useState } from "preact/hooks";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
   userEmailAddResponseSchema,
+  userEmailAddSchema,
   userEmailsListResponseSchema,
   type UserEmailRecord,
 } from "../../../../../shared/schemas/user-emails";
@@ -30,22 +32,27 @@ export function UserEmailAddressesPanel({
   const [newEmail, setNewEmail] = useState("");
   const [adding, setAdding] = useState(false);
 
+  /*
+   * One basis for validation: the contract the route parses. `if (!trimmed)
+   * return` silently did nothing, and a malformed address was refused by the
+   * server as a toast rather than marked on the field that caused it.
+   */
+  const form = useContractForm(userEmailAddSchema, { email: newEmail.trim() });
+
   async function handleAdd(event: Event) {
     event.preventDefault();
-    const trimmed = newEmail.trim();
-    if (!trimmed) return;
+    const checked = form.submit();
+    if (!checked.data) return;
     setAdding(true);
     try {
-      await postJson(
-        `/api/v1/users/${encodeURIComponent(userId)}/emails`,
-        { email: trimmed },
-        userEmailAddResponseSchema,
-      );
+      await postJson(`/api/v1/users/${encodeURIComponent(userId)}/emails`, checked.data, userEmailAddResponseSchema);
       toast("Email added", "success");
       setNewEmail("");
+      form.reset();
       await tableRef.current?.reload();
     } catch (error) {
-      toast((error as Error).message, "error");
+      // A server refusal names its fields the way the contract does.
+      toast(form.refuse(error), "error");
     } finally {
       setAdding(false);
     }
@@ -85,15 +92,16 @@ export function UserEmailAddressesPanel({
           <dd>{primaryEmail}</dd>
         </dl>
         {canWrite && (
-          <form class="pk-stack pk-stack--snug" onSubmit={handleAdd}>
+          <form noValidate class="pk-stack pk-stack--snug" {...form.handlers} onSubmit={handleAdd}>
             {/* The input had a placeholder and no label, so it was announced
                 as an unnamed edit field. The label names it; the placeholder
                 is now only an example of the format. */}
-            <Field label="Add a secondary email">
+            <Field label="Add a secondary email" {...form.of("email")}>
               {(control) => (
                 <TextInput
                   {...control}
                   type="email"
+                  name="email"
                   placeholder="another@example.com"
                   value={newEmail}
                   onInput={(event) => setNewEmail((event.target as HTMLInputElement).value)}
