@@ -6051,3 +6051,169 @@ CREATE INDEX idx_google_groups_observed_suppressed
 CREATE INDEX idx_google_groups_observed_unsubscribed
   ON google_groups_observed_membership(unsubscribed_at, user_id)
   WHERE unsubscribed_at IS NOT NULL;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Member profile: skills a person is vouched for, what they are open to, and
+-- the standing they have earned.
+--
+-- Two deliberate shapes:
+--
+--   * No CHECK freezes a vocabulary. Skill names, the reasons points are
+--     awarded, recognition keys and availability visibility are all product
+--     policy that will change; they are enforced by the shared Zod domain
+--     schemas on every write path, which can evolve without a table rebuild.
+--   * Points are a ledger, not a counter on `users`. A total that is only ever
+--     incremented cannot be audited, corrected, or explained to the person it
+--     describes; a ledger can be summed, and a wrong award is reversed by
+--     another row rather than by editing history.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ── Skills ────────────────────────────────────────────────────────────────────
+
+-- The consortium's shared skill vocabulary. Curated rather than free text, so
+-- "eIDAS", "eIDAS " and "EIDAS" are one skill that can be counted and searched.
+CREATE TABLE skills (
+  id         TEXT NOT NULL PRIMARY KEY,
+  slug       TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  active     INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX idx_skills_active ON skills(active, name);
+
+-- A skill a person claims. The claim is theirs; the weight behind it comes
+-- from the vouches below, which is why a claim carries no count of its own.
+CREATE TABLE user_skills (
+  id         TEXT NOT NULL PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id),
+  skill_id   TEXT NOT NULL REFERENCES skills(id),
+  -- The order the person arranged their own skills in.
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, skill_id)
+);
+
+CREATE INDEX idx_user_skills_user ON user_skills(user_id, sort_order, id);
+
+-- One member vouching for one claimed skill.
+--
+-- The UNIQUE constraint is the whole anti-inflation rule that can be expressed
+-- structurally: one person, one vouch, no repeats. The other two rules cannot
+-- be — a row cannot see whether the voucher is the claimant, nor whether they
+-- share a group — so they are enforced on the write path with test coverage.
+CREATE TABLE user_skill_vouches (
+  id              TEXT NOT NULL PRIMARY KEY,
+  user_skill_id   TEXT NOT NULL REFERENCES user_skills(id),
+  voucher_user_id TEXT NOT NULL REFERENCES users(id),
+  created_at      TEXT NOT NULL,
+  UNIQUE(user_skill_id, voucher_user_id)
+);
+
+CREATE INDEX idx_user_skill_vouches_skill ON user_skill_vouches(user_skill_id);
+CREATE INDEX idx_user_skill_vouches_voucher ON user_skill_vouches(voucher_user_id);
+
+-- ── Availability ──────────────────────────────────────────────────────────────
+
+-- What a member is open to. One row per person, absent when they have said
+-- nothing — an absent row is "not looking", which is the safe default for
+-- something this public.
+--
+-- `available_from` is a calendar date, not an instant: "available from Q1
+-- 2027" is a date in the person's own reckoning and must not drift by a
+-- timezone.
+CREATE TABLE user_availability (
+  user_id            TEXT NOT NULL PRIMARY KEY REFERENCES users(id),
+  open_to_employment INTEGER NOT NULL DEFAULT 0 CHECK (open_to_employment IN (0, 1)),
+  open_to_contract   INTEGER NOT NULL DEFAULT 0 CHECK (open_to_contract IN (0, 1)),
+  -- What is on offer, as the member wrote it, kept apart because the two
+  -- states are answered differently: someone open to employment names the
+  -- roles they want, someone open to contract work names the services they
+  -- sell. One column for both made a member who is open to only one of them
+  -- read as if the other's terms applied too.
+  roles_sought       TEXT,
+  services_offered   TEXT,
+  note               TEXT,
+  available_from     TEXT,
+  -- Who may see this. Evolvable policy, enforced in the shared schema.
+  visibility         TEXT NOT NULL DEFAULT 'members',
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
+);
+
+-- ── Standing ──────────────────────────────────────────────────────────────────
+
+-- Points awarded, one row per award, never mutated.
+--
+-- `reason_key` says what earned it and `source_type`/`source_ref` point at the
+-- thing that did — a meeting attended, a document reviewed — so an award can
+-- be traced back and a duplicate can be detected. Points may be negative: a
+-- correction is another row, not an edit.
+CREATE TABLE user_standing_awards (
+  id          TEXT NOT NULL PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id),
+  reason_key  TEXT NOT NULL,
+  points      INTEGER NOT NULL,
+  source_type TEXT,
+  source_ref  TEXT,
+  awarded_at  TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+
+CREATE INDEX idx_user_standing_awards_user ON user_standing_awards(user_id, awarded_at, id);
+
+-- The same award must never be recorded twice for the same cause. Partial so
+-- that an award with no traceable source (a manual grant) is still allowed.
+CREATE UNIQUE INDEX idx_user_standing_awards_source
+  ON user_standing_awards(user_id, reason_key, source_type, source_ref)
+  WHERE source_type IS NOT NULL AND source_ref IS NOT NULL;
+
+-- Standings that are held rather than accumulated: "Chair", "Founding
+-- delegate", "3-year streak". Distinct from points because they are stated,
+-- not summed, and because one can be withdrawn without recomputing a total.
+CREATE TABLE user_recognitions (
+  id               TEXT NOT NULL PRIMARY KEY,
+  user_id          TEXT NOT NULL REFERENCES users(id),
+  recognition_key  TEXT NOT NULL,
+  label            TEXT NOT NULL,
+  awarded_at       TEXT NOT NULL,
+  withdrawn_at     TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  UNIQUE(user_id, recognition_key),
+  CHECK (withdrawn_at IS NULL OR withdrawn_at >= awarded_at)
+);
+
+CREATE INDEX idx_user_recognitions_user ON user_recognitions(user_id, awarded_at, id);
+
+-- ── Standing levels ──────────────────────────────────────────────────────────
+
+-- The bands a points total places into.
+--
+-- A reference table rather than constants in the application: what counts as a
+-- Contributor is the consortium's decision and will be argued about, and a
+-- threshold compiled into a deployment cannot be changed by the people who own
+-- it. `from_points` is the floor of the band; the highest band has no ceiling.
+CREATE TABLE standing_levels (
+  id          TEXT NOT NULL PRIMARY KEY,
+  level       INTEGER NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  from_points INTEGER NOT NULL UNIQUE,
+  active      INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE INDEX idx_standing_levels_active ON standing_levels(active, from_points);
+
+-- Opening positions, taken from the profile design. Provisional: change these
+-- rows, not any code, when the consortium settles the ladder.
+INSERT INTO standing_levels (id, level, name, from_points, active, created_at, updated_at) VALUES
+  ('level-1', 1, 'Participant',  0,    1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('level-2', 2, 'Contributor',  250,  1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('level-3', 3, 'Contributor',  900,  1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('level-4', 4, 'Contributor',  1800, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('level-5', 5, 'Steward',      3000, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
