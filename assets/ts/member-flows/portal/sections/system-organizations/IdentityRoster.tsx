@@ -7,8 +7,8 @@ import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
 import { postValidated } from "../../../../shared/api-client";
-import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
+import { Menu } from "../../../../ui/Menu";
 import { TextInput } from "../../../../ui/TextControl";
 import { ActingIdentityDirectory } from "../OrganizationIdentityDirectory";
 import { toast } from "../../ui";
@@ -207,25 +207,27 @@ export function IdentityRoster({
     await directoryRef.current?.reload();
   };
 
-  // One compact list, not a panel around a panel: the two ways of adding a
-  // representative are commands in the list's own toolbar beside search and
-  // refresh, and the form either opens inside the panel under that head.
+  /*
+   * One compact list, not a panel around a panel: the two ways of adding a
+   * representative are commands in the list's own toolbar beside search and
+   * refresh, and the form opens inside the panel under that head.
+   *
+   * A menu rather than two buttons. Adding a representative is the rarest
+   * thing done on this page and it was the loudest — two filled controls above
+   * a roster whose job is to be read.
+   */
   const toolbar = canManageIdentities ? (
-    <>
-      <Button
-        aria-expanded={addMode === "link"}
-        onClick={() => setAddMode((current) => (current === "link" ? "closed" : "link"))}
-      >
-        {addMode === "link" ? "Cancel" : "Link existing user"}
-      </Button>
-      <Button
-        variant="primary"
-        aria-expanded={addMode === "email"}
-        onClick={() => setAddMode((current) => (current === "email" ? "closed" : "email"))}
-      >
-        {addMode === "email" ? "Cancel" : "Add new person"}
-      </Button>
-    </>
+    <Menu
+      label="Representative settings"
+      align="end"
+      /* Commands, not alternatives: each opens a form that carries its own
+         Cancel. Marking them `checked` would announce them as radio items in
+         a group where one is always in force, which is not what they are. */
+      items={[
+        { id: "link", label: "Link an existing user…", onSelect: () => setAddMode("link") },
+        { id: "email", label: "Add a new person…", onSelect: () => setAddMode("email") },
+      ]}
+    />
   ) : undefined;
   const inset =
     addMode === "link" && canManageIdentities ? (
@@ -249,7 +251,7 @@ export function IdentityRoster({
           title="No representatives yet"
           body={
             canManageIdentities
-              ? 'A representative is a person who acts for this organization. Use "Link existing user" or "Add new person" above to invite the first one.'
+              ? "A representative is a person who acts for this organization. The list's own menu invites the first one."
               : "A representative is a person who acts for this organization. Nobody does yet."
           }
         />

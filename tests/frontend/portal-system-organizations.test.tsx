@@ -362,11 +362,12 @@ describe("portal System Organizations", () => {
     );
     await settle();
     await settle();
-    expect(readOnly.textContent).not.toContain("Edit");
+    // The commands live in menus now, and a reader who may not use them is
+    // offered no menu at all — not a menu of disabled items.
+    expect(readOnly.querySelector('button[aria-label="Record actions"]')).toBeNull();
     expect(readOnly.textContent).not.toContain("Remove");
     await settle();
-    expect(readOnly.textContent).not.toContain("Add new person");
-    expect(readOnly.textContent).not.toContain("Link existing user");
+    expect(readOnly.querySelector('button[aria-label="Representative settings"]')).toBeNull();
 
     const writer = mount(
       <OrganizationDetail
@@ -378,14 +379,13 @@ describe("portal System Organizations", () => {
       />,
     );
     await settle();
-    expect(writer.textContent).toContain("Edit");
+    expect(writer.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
     expect(writer.textContent).toContain("Contacts");
     // Reading another facet is a tab away, and its bounded query runs then.
     const menuTrigger = await waitForElement(() =>
       writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    expect(writer.textContent).toContain("Add new person");
-    expect(writer.textContent).toContain("Link existing user");
+    expect(writer.querySelector('button[aria-label="Representative settings"]')).not.toBeNull();
     expect(writer.textContent).toContain("Active");
 
     await act(async () => menuTrigger.click());
@@ -431,11 +431,14 @@ describe("portal System Organizations", () => {
       />,
     );
     await settle();
-    const addButton = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Add new person",
+    const rosterMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Representative settings"]');
+    expect(rosterMenu).toBeTruthy();
+    await act(async () => rosterMenu?.click());
+    const addCommand = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "Add a new person…",
     );
-    expect(addButton).toBeTruthy();
-    await act(async () => addButton?.click());
+    expect(addCommand).toBeTruthy();
+    await act(async () => addCommand?.click());
 
     // The add form's controls are reached through the `<legend>` naming the
     // group and the `for`/`id` pair on each label, so the lookup fails exactly

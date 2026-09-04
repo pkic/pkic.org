@@ -23,8 +23,9 @@ import { useContractForm } from "../../../../hooks/useContractForm";
 import { getJson, patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
-import { Panel, PanelBody } from "../../../../ui/Panel";
-import { toast } from "../../ui";
+import { Menu } from "../../../../ui/Menu";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { fmtDate, toast } from "../../ui";
 import { draftFromOrganization, payloadFromDraft, type OrganizationDraft } from "./OrganizationDraft";
 import {
   OrganizationAbout,
@@ -32,8 +33,8 @@ import {
   OrganizationLinks,
   OrganizationMembershipCard,
 } from "./OrganizationProfile";
-import { Badge } from "../../../../ui/Badge";
-import { PageHeader } from "../../../../ui/PageHeader";
+import { Breadcrumb } from "../../../../ui/Breadcrumb";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { OrganizationLogo } from "./OrganizationLogo";
 import { OrganizationActivity } from "./OrganizationActivity";
 import { OrganizationSponsorshipStanding } from "./OrganizationSponsorshipStanding";
@@ -100,6 +101,9 @@ export function OrganizationDetail({
 
   const count = organization.activeIdentityCount;
   const editing = draft !== null;
+  const hasLinks =
+    organization.links.length > 0 ||
+    Boolean(organization.website ?? organization.blogUrl ?? organization.pressUrl ?? organization.careersUrl);
   const onDraft = (next: Partial<OrganizationDraft>) =>
     setDraft((current) => (current ? { ...current, ...next } : current));
   const stopEditing = () => {
@@ -149,32 +153,44 @@ export function OrganizationDetail({
 
   return (
     <section class="pk pk-stack" aria-label={organization.name}>
-      <PageHeader
-        trail={[
+      {/*
+        The same two controls the contact record opens with: a trail, which is
+        navigation, and then the subject itself. `PageHeader` names a place in
+        the portal; an organization record is about an organization, so it gets
+        the subject header — the mark leads, and what identifies the account
+        sits under the name rather than as badges beside a page title.
+      */}
+      <Breadcrumb
+        items={[
           { label: "Organizations", href: usePortalHashLocation.hrefs("/organizations") },
           { label: organization.name },
         ]}
+      />
+      <ProfileHeader
+        media={<OrganizationLogo size="mark" organization={organization} canWrite={canWrite} onChanged={load} />}
         // While editing, the title follows the Name field as it is typed.
         title={draft?.name.trim() ? draft.name : organization.name}
-        context={
-          <>
-            {organization.membershipCategory && (
-              <Badge tone="neutral" dot={false}>
-                Category <span class="pk-mono">{organization.membershipCategory}</span>
-              </Badge>
-            )}
-            {/* Reads as a sentence rather than as a bare number. */}
-            <Badge tone={count > 0 ? "ok" : "warn"}>
-              {count} active {count === 1 ? "representative" : "representatives"}
-            </Badge>
-          </>
-        }
+        lede={draft?.slogan.trim() ? draft.slogan : (organization.slogan ?? undefined)}
+        facts={[
+          organization.membershipCategory ? (
+            <>
+              Category <span class="pk-mono">{organization.membershipCategory}</span>
+            </>
+          ) : null,
+          organization.memberSince ? `Member since ${fmtDate(organization.memberSince)}` : null,
+          /* Reads as a sentence rather than as a bare number. */
+          `${String(count)} active ${count === 1 ? "representative" : "representatives"}`,
+        ].filter((fact) => fact !== null)}
         actions={
           canWrite ? (
             editing ? (
+              /* Save and Cancel stay buttons: they are a form's own controls,
+                 and burying "Save" in a menu would hide the only way out of
+                 edit mode behind a click. */
               <>
                 <Button
                   variant="primary"
+                  size="sm"
                   loading={saving}
                   onClick={() => {
                     void save();
@@ -182,12 +198,22 @@ export function OrganizationDetail({
                 >
                   Save
                 </Button>
-                <Button disabled={saving} onClick={stopEditing}>
+                <Button size="sm" disabled={saving} onClick={stopEditing}>
                   Cancel
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setDraft(draftFromOrganization(organization))}>Edit</Button>
+              <Menu
+                label="Record actions"
+                align="end"
+                items={[
+                  {
+                    id: "edit",
+                    label: "Edit organization…",
+                    onSelect: () => setDraft(draftFromOrganization(organization)),
+                  },
+                ]}
+              />
             )
           ) : undefined
         }
@@ -208,19 +234,27 @@ export function OrganizationDetail({
           <OrganizationActivity organizationId={organization.id} canReadSponsorships={canReadSponsorships} />
         </div>
         <div class="pk-stack pk-datalist-aligned">
-          {/* The identity card: the mark with the organization's links under
-              it — one card, so the mark is not a lone box above the rest. */}
-          <Panel aria-label="Identity">
-            <PanelBody class="pk-stack pk-stack--snug">
-              <OrganizationLogo organization={organization} canWrite={canWrite} onChanged={load} />
-              <OrganizationLinks {...cardProps} />
-            </PanelBody>
-          </Panel>
           <OrganizationMembershipCard {...cardProps} />
           {canReadSponsorships && (
             <OrganizationSponsorshipStanding organizationId={organization.id} canWrite={canWrite} />
           )}
           <OrganizationContacts {...cardProps} />
+          {/* The mark moved into the header, where the subject is; what is
+              left here is where to find the organization.
+
+              Absent rather than empty when the organization has stated no
+              links and nobody is editing: a titled panel with nothing in it
+              claims a fact the record does not have. */}
+          {(editing || hasLinks) && (
+            /* Named, so the panel is a region a reader can jump to — a bare
+               `<section>` carries no role at all without one. */
+            <Panel aria-label="Links">
+              <PanelHeader title="Links" />
+              <PanelBody>
+                <OrganizationLinks {...cardProps} />
+              </PanelBody>
+            </Panel>
+          )}
         </div>
       </div>
     </section>

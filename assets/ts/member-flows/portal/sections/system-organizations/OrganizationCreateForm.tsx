@@ -2,9 +2,11 @@ import { useState } from "preact/hooks";
 import {
   orgTiedMembershipCategorySchema,
   organizationCreateResponseSchema,
+  organizationCreateSchema,
 } from "../../../../../shared/schemas/organization-management";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { friendlyErrorMessage } from "../../../../components/ErrorAlert";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { postJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
@@ -57,34 +59,44 @@ export function OrganizationCreateForm({
     setPeople((current) => current.map((person, position) => (position === index ? { ...person, ...patch } : person)));
   }
 
+  /*
+   * One basis for validation: the contract the route parses. The body used to
+   * be assembled at submit time and sent unchecked, so a bad address on the
+   * fourth person came back as one unattributed "Invalid request" for the
+   * whole form.
+   */
+  const form = useContractForm(organizationCreateSchema, {
+    name: name.trim(),
+    ...(website.trim() ? { website: website.trim() } : {}),
+    ...(description.trim() ? { description: description.trim() } : {}),
+    ...(links.length > 0 ? { links } : {}),
+    membershipCategory,
+    memberSince,
+    identities: people.map((person) => ({
+      name: person.name.trim(),
+      email: person.email.trim(),
+      ...(person.jobTitle.trim() ? { jobTitle: person.jobTitle.trim() } : {}),
+    })),
+    workingGroupSlugs: [],
+    ...(people.length > 0 ? { activationReason: activationReason.trim() } : {}),
+  });
+
   async function submit(event: Event) {
     event.preventDefault();
-    setBusy(true);
     setError("");
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
+    setBusy(true);
     try {
-      const created = await postJson(
-        "/api/v1/organizations",
-        {
-          name: name.trim(),
-          ...(website.trim() ? { website: website.trim() } : {}),
-          ...(description.trim() ? { description: description.trim() } : {}),
-          ...(links.length > 0 ? { links } : {}),
-          membershipCategory,
-          memberSince,
-          identities: people.map((person) => ({
-            name: person.name.trim(),
-            email: person.email.trim(),
-            ...(person.jobTitle.trim() ? { jobTitle: person.jobTitle.trim() } : {}),
-          })),
-          workingGroupSlugs: [],
-          ...(people.length > 0 ? { activationReason: activationReason.trim() } : {}),
-        },
-        organizationCreateResponseSchema,
-      );
+      const created = await postJson("/api/v1/organizations", checked.data, organizationCreateResponseSchema);
       toast("Organization created", "success");
       onCreated(created.organization.id);
     } catch (caught) {
-      const message = (caught as Error).message;
+      // A server refusal names its fields the way the contract does.
+      const message = form.refuse(caught);
       setError(message);
       toast(message, "error");
     } finally {
@@ -104,14 +116,14 @@ export function OrganizationCreateForm({
       <Panel aria-label="Add organization">
         <PanelHeader title="Add organization" headingLevel={2} />
         <PanelBody>
-          <form class="pk-form" onSubmit={submit}>
+          <form noValidate class="pk-form" {...form.handlers} onSubmit={submit}>
             <fieldset class="pk-fieldset pk-field" disabled={busy}>
               {/* "Details", because the page has already said "organization"
                   twice by this line — the title and the field label carry
                   the word; the legend only groups. */}
               <legend class="pk-field__label">Details</legend>
               <div class="pk-stack pk-stack--snug">
-                <Field label="Organization name" required>
+                <Field label="Organization name" required {...form.of("name")}>
                   {(control) => (
                     <TextInput
                       {...control}
@@ -120,7 +132,11 @@ export function OrganizationCreateForm({
                     />
                   )}
                 </Field>
-                <Field label="Membership category" help="Applied to every identity created for the organization.">
+                <Field
+                  label="Membership category"
+                  help="Applied to every identity created for the organization."
+                  {...form.of("membershipCategory")}
+                >
                   {(control) => (
                     <Select
                       {...control}
@@ -135,7 +151,7 @@ export function OrganizationCreateForm({
                     </Select>
                   )}
                 </Field>
-                <Field label="Member since" required>
+                <Field label="Member since" required {...form.of("memberSince")}>
                   {(control) => (
                     <TextInput
                       {...control}
@@ -145,7 +161,7 @@ export function OrganizationCreateForm({
                     />
                   )}
                 </Field>
-                <Field label="Description">
+                <Field label="Description" {...form.of("description")}>
                   {(control) => (
                     <TextInput
                       {...control}
@@ -162,7 +178,7 @@ export function OrganizationCreateForm({
             <fieldset class="pk-fieldset pk-field" disabled={busy}>
               <legend class="pk-field__label">Web presence</legend>
               <div class="pk-stack pk-stack--snug">
-                <Field label="Website">
+                <Field label="Website" {...form.of("website")}>
                   {(control) => (
                     <TextInput
                       {...control}

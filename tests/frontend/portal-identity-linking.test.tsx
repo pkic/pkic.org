@@ -50,6 +50,25 @@ function clickButton(label: string): void {
   void act(() => button.click());
 }
 
+/**
+ * Runs one of the roster's add commands.
+ *
+ * They live in the list's own menu rather than as two filled buttons above it:
+ * adding a representative is the rarest thing done on the page and was the
+ * loudest. A menu names itself through `aria-label`, so the trigger is found
+ * that way and the item by its text.
+ */
+function runRosterCommand(label: string): void {
+  const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Representative settings"]');
+  if (!trigger) throw new Error("the roster offers no settings menu");
+  void act(() => trigger.click());
+  const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent === label,
+  );
+  if (!item) throw new Error(`the roster offers no "${label}"`);
+  void act(() => item.click());
+}
+
 describe("linking existing users as acting identities", () => {
   it("invites a picked existing user through the canonical identity command", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
@@ -97,7 +116,7 @@ describe("linking existing users as acting identities", () => {
 
     mount();
     await settle();
-    clickButton("Link existing user");
+    runRosterCommand("Link an existing user…");
     await settle();
 
     // The picker's own field, not the list's search box beside the commands that opened it.
@@ -172,7 +191,7 @@ describe("linking existing users as acting identities", () => {
 
     mount();
     await settle();
-    clickButton("Link existing user");
+    runRosterCommand("Link an existing user…");
     await settle();
     // The picker's own field, not the list's search box beside the commands that opened it.
     const search = container.querySelector<HTMLInputElement>('input[aria-label="Search for a user"]')!;
@@ -220,7 +239,7 @@ describe("linking existing users as acting identities", () => {
 
     // The picker's group is named by a `<legend>`, because `UserPicker` owns
     // the id of the control inside it and no outside label can point at it.
-    buttonNamed(container, "Link existing user").click();
+    runRosterCommand("Link an existing user…");
     await settle();
     expect(groupNames(container)).toContain("Existing user");
     // Nothing is picked yet, so the affirmative action is blocked rather than
@@ -229,7 +248,7 @@ describe("linking existing users as acting identities", () => {
 
     buttonNamed(container, "Cancel").click();
     await settle();
-    buttonNamed(container, "Add new person").click();
+    runRosterCommand("Add a new person…");
     await settle();
 
     expect(groupNames(container)).toEqual(expect.arrayContaining(["New person", "Profile links"]));
