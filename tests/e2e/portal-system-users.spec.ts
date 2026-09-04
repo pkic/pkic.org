@@ -32,6 +32,11 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   // real heading now, and a role locator survives the next restyle too.
   await expect(page.getByRole("heading", { name: staffEmail, level: 2 })).toBeVisible();
 
+  // Editing the account is administration, not part of what the record says
+  // about the person, so it is disclosed rather than stacked under the record.
+  await page.getByRole("button", { name: "Account administration", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show account administration" }).click();
+
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   const preferredName = page.getByLabel("Preferred name");
   const saveResponse = page.waitForResponse(

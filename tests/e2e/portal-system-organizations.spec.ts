@@ -1,9 +1,27 @@
 import { runRowAction } from "./helpers/data-table";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { definitionFor } from "./helpers/definition-list";
+
+/**
+ * Enters the organization record's edit mode.
+ *
+ * Editing is a command on the record, so it lives in the header's `⋯` menu
+ * rather than as a button beside the name — the same place the contact record
+ * keeps its own.
+ */
+async function openOrganizationEditMode(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Record actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit organization…" }).click();
+}
+
+/** Runs one of the Representatives list's add commands from its own menu. */
+async function runRepresentativeCommand(page: Page, label: string): Promise<void> {
+  await page.getByRole("button", { name: "Representative settings", exact: true }).click();
+  await page.getByRole("menuitem", { name: label }).click();
+}
 
 test("permitted staff manage organizations through the canonical domain API", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -79,7 +97,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(page.getByRole("region", { name: "Representatives" })).toBeVisible();
   await expect(page.getByText(primaryEmail, { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Add new person", exact: true }).click();
+  await runRepresentativeCommand(page, "Add a new person…");
   // Located by the group's accessible name and each control's label rather
   // than by ids the surface used to hand out, so this keeps working the next
   // time the markup moves.
@@ -127,7 +145,7 @@ test("permitted staff manage organizations through the canonical domain API", as
   // The System Users view must read the canonical representation capacity,
   // not the legacy user-wide organization/job-title columns.
   await page.context().clearCookies();
-  await signInToPortal(page, e2eAdminEmail("portal-organizations"));
+  await signInToPortal(page, e2eAdminEmail("portal-organizations-users-view"));
   await page.goto("/portal/#/users");
   const userSearch = page.getByPlaceholder("email or name");
   await userSearch.fill(secondaryEmail);
@@ -140,12 +158,21 @@ test("permitted staff manage organizations through the canonical domain API", as
   // Located by role rather than by the class the record used to carry: the
   // user's name is a real heading now.
   await expect(page.getByRole("heading", { name: "Secondary Representative", level: 2 })).toBeVisible();
-  // The acting identity is a description list, not a bordered card, so each
-  // value is asserted under the label it answers rather than as text somewhere
-  // inside `.border.rounded.p-3` — Bootstrap class names that are now gone.
-  await expect(definitionFor(page, "Organization")).toHaveText(organizationName);
-  await expect(definitionFor(page, "Identity email")).toHaveText(secondaryEmail);
-  await expect(definitionFor(page, "Job title")).toHaveText("Program Manager");
+  // The affiliation is stated once, as a tie: the organization's name leads to
+  // its own record, and the terms of the tie — the role, when it began, the
+  // address it runs through — read as one line under it. It used to be stated
+  // twice, here as a description list and again as a management card below.
+  // By role, not by class: an affiliation is an `<article>`, and a class
+  // selector breaks silently the moment the component restyles.
+  const affiliation = page.getByRole("article").filter({ hasText: organizationName });
+  await expect(affiliation.getByRole("link", { name: organizationName })).toBeVisible();
+  await expect(affiliation).toContainText(secondaryEmail);
+  await expect(affiliation).toContainText("Program Manager");
+
+  // Editing the account is administration, not part of what the record says
+  // about the person, so it is disclosed rather than stacked under the record.
+  await page.getByRole("button", { name: "Account administration", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show account administration" }).click();
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   await expect(page.locator("#user-organizationName")).toHaveCount(0);
   await expect(page.locator("#user-jobTitle")).toHaveCount(0);
@@ -201,7 +228,7 @@ test("permitted staff manage organizations through the canonical domain API", as
 test("permitted staff link an existing user as a representative through the UserPicker search", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
   const organizationName = `E2E Link Existing User Org ${suffix}`;
-  const staffEmail = e2eAdminEmail("portal-organizations");
+  const staffEmail = e2eAdminEmail("portal-organizations-representatives");
 
   await signInToPortal(page, staffEmail);
   await page.goto("/portal/#/organizations");
@@ -223,10 +250,10 @@ test("permitted staff link an existing user as a representative through the User
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
 
   // Reached by role/name alone rather than by climbing from a panel header:
-  // the Representatives list is compact, with "Link existing user" living in
+  // the Representatives list is compact, with "Link an existing user…" living in
   // the list's own toolbar next to search/Refresh, and its form opening
   // inside the list panel rather than a fixed spot under a heading.
-  await page.getByRole("button", { name: "Link existing user", exact: true }).click();
+  await runRepresentativeCommand(page, "Link an existing user…");
 
   const search = page.getByLabel("Search for a user");
   await expect(search).toBeVisible();
@@ -288,7 +315,8 @@ async function createBareOrganization(page: import("@playwright/test").Page, org
 }
 
 /**
- * Editing is page-level now: one "Edit" in the `PageHeader` puts every card
+ * Editing is page-level: one "Edit organization…" in the record header's menu
+ * puts every card
  * into edit mode at once (each keeps its layout, its values becoming inputs
  * named by `aria-label`), and one "Save" sends one PATCH carrying every
  * field. There is no per-card Edit button and no separate editor form —
@@ -304,7 +332,7 @@ test("permitted staff edit the organization through the page-level Edit/Save", a
   const organizationName = `E2E Profile Edit Org ${suffix}`;
   const patchRequests: string[] = [];
 
-  await signInToPortal(page, e2eAdminEmail("portal-organizations"));
+  await signInToPortal(page, e2eAdminEmail("portal-organizations-profile"));
   page.on("request", (request) => {
     const url = new URL(request.url());
     if (/^\/api\/v1\/organizations\/[^/]+$/.test(url.pathname) && request.method() === "PATCH") {
@@ -313,8 +341,8 @@ test("permitted staff edit the organization through the page-level Edit/Save", a
   });
   await createBareOrganization(page, organizationName);
 
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+  await openOrganizationEditMode(page);
+  await expect(page.getByRole("button", { name: "Record actions", exact: true })).toHaveCount(0);
 
   // About card.
   await page.getByLabel("Slogan").fill("Security, standardized.");
@@ -337,22 +365,29 @@ test("permitted staff edit the organization through the page-level Edit/Save", a
   await expect(page.getByText("Organization updated", { exact: true })).toBeVisible();
 
   // Editing closed and every field from every card landed in the one PATCH.
-  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Record actions", exact: true })).toBeVisible();
   expect(patchRequests).toHaveLength(1);
 
-  await expect(
-    page.getByRole("region", { name: "About", exact: true }).getByText("Security, standardized."),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Identity", exact: true }).getByRole("link", { name: "Website", exact: true }),
-  ).toHaveAttribute("href", "https://e2e-profile-edit.example.invalid");
+  // The slogan is the record's lede, under the name in the header — About
+  // states the description, and stating the slogan there too printed the same
+  // line twice on one screen.
+  await expect(page.locator(".pk-profile-header__lede")).toHaveText("Security, standardized.");
+  // The mark moved into the header with the subject, so what is left beside
+  // the record is where to find the organization: each address paired with the
+  // term that names it.
+  const links = page.getByRole("region", { name: "Links", exact: true });
+  await expect(definitionFor(links, "Website")).toHaveText("e2e-profile-edit.example.invalid");
+  await expect(links.getByRole("link", { name: "e2e-profile-edit.example.invalid" })).toHaveAttribute(
+    "href",
+    "https://e2e-profile-edit.example.invalid",
+  );
   const membership = page.getByRole("region", { name: "Membership", exact: true });
   await expect(definitionFor(membership, "Category")).toHaveText("A");
 
   // The formatted "Member since" display is locale-dependent; re-opening
   // edit round-trips it back into the date input, whose value is always the
   // normalized ISO form regardless of display locale.
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await openOrganizationEditMode(page);
   await expect(page.getByLabel("Member since")).toHaveValue("2025-06-01");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 });
@@ -361,7 +396,7 @@ test("permitted staff remove an organization's logo", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
   const organizationName = `E2E Logo Remove Org ${suffix}`;
 
-  await signInToPortal(page, e2eAdminEmail("portal-organizations"));
+  await signInToPortal(page, e2eAdminEmail("portal-organizations-logo"));
   await createBareOrganization(page, organizationName);
 
   // Upload, then remove — the tile only offers Remove once a logo exists.
