@@ -89,4 +89,35 @@
   .pk-stat-card__link:focus-visible {
     outline: none;
   }
+
+  /*
+   * The glance density: figure first, label under it, centred.
+   *
+   * `column-reverse` rather than reordering the markup — the tile is
+   * announced label-then-value at both densities, so a screen reader hears
+   * "groups, 4" here exactly as it does on a dashboard card, while the eye
+   * gets the number first.
+   */
+  .pk-stat-card--compact {
+    flex-direction: column-reverse;
+    justify-content: flex-end;
+    text-align: center;
+  }
+
+  .pk-stat-card--compact .pk-stat-card__value {
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 0;
+  }
+
+  .pk-stat-card--compact .pk-stat-card__label {
+    /* Sentence case, not the dashboard's tracked-out caps: at this size the
+       letter-spacing is what makes three tiles look like a busy row. */
+    margin-bottom: 0;
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+  }
 }

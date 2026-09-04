@@ -13,6 +13,16 @@
     overflow: hidden;
   }
 
+  /*
+   * The brand rule, drawn inside the panel's own rounded corner rather than as
+   * a border on it: a border would need the radius restated on three sides to
+   * avoid a square corner over a rounded one.
+   */
+  .pk-panel__stripe {
+    height: 3px;
+    background: var(--pk-grad-brand);
+  }
+
   .pk-panel__header {
     display: flex;
     /* Actions drop under the title on a phone rather than pushing past the
@@ -43,6 +53,23 @@
 
   .pk-panel__body {
     padding: var(--pk-4);
+  }
+
+  /*
+   * A tinted body. The tint is the softest step of each tone, so body text
+   * keeps its contrast against it and only the surface changes — these panels
+   * sit next to untinted ones in the same column.
+   */
+  .pk-panel__body--accent {
+    background: var(--pk-accent-soft);
+  }
+
+  .pk-panel__body--ok {
+    background: var(--pk-ok-soft);
+  }
+
+  .pk-panel__body--info {
+    background: var(--pk-info-soft);
   }
 
   @media (max-width: 48rem) {

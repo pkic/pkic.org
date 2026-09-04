@@ -2,12 +2,29 @@ import type { JSX } from "preact";
 
 import "./Avatar.css";
 
-export type AvatarSize = "sm" | "md" | "lg";
+export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
 export interface AvatarProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement>, "size"> {
   name: string;
   src?: string;
   size?: AvatarSize;
+  /**
+   * A standing the person holds, drawn as a ring around the portrait and a
+   * label across its foot — "Board member", "Chair".
+   *
+   * `neutral` is the past tense of `accent`: the ring loses the brand gradient
+   * and the portrait is desaturated, so a former chair reads as former without
+   * the label having to say "(past)". The label is real text, not a title
+   * attribute, because the ring alone states nothing to a reader who cannot
+   * see it.
+   */
+  status?: AvatarStatus;
+}
+
+export interface AvatarStatus {
+  label: string;
+  /** `accent` for a standing held now, `neutral` for one held before. */
+  tone?: "accent" | "neutral";
 }
 
 /**
@@ -36,10 +53,10 @@ export function initialsFrom(name: string): string {
   return first + last;
 }
 
-export function Avatar({ name, src, size = "md", ...rest }: AvatarProps) {
+export function Avatar({ name, src, size = "md", status, ...rest }: AvatarProps) {
   const classes = ["pk-avatar", size === "md" ? null : `pk-avatar--${size}`].filter(Boolean).join(" ");
 
-  return (
+  const portrait = (
     <div class={classes} aria-hidden="true">
       {src ? (
         <img {...rest} src={src} alt="" loading="lazy" class="pk-avatar__img" />
@@ -47,5 +64,14 @@ export function Avatar({ name, src, size = "md", ...rest }: AvatarProps) {
         <span class="pk-avatar__initials">{initialsFrom(name)}</span>
       )}
     </div>
+  );
+
+  if (!status) return portrait;
+
+  return (
+    <span class="pk-avatar-standing" data-tone={status.tone ?? "accent"}>
+      <span class="pk-avatar-standing__ring">{portrait}</span>
+      <span class="pk-avatar-standing__label">{status.label}</span>
+    </span>
   );
 }

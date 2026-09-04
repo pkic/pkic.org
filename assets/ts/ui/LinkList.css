@@ -1,0 +1,52 @@
+/*
+ * A subject's links, marked and stacked.
+ *
+ * The mark is a fixed-size tile so the labels line up whatever the marks are;
+ * without it a one-character mark and a two-character one put consecutive
+ * addresses at different starts and the column stops reading as a list.
+ */
+@layer components {
+  .pk-link-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-link-list__link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    text-decoration: none;
+  }
+
+  .pk-link-list__link:hover .pk-link-list__label,
+  .pk-link-list__link:focus-visible .pk-link-list__label {
+    text-decoration: underline;
+  }
+
+  .pk-link-list__mark {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-sm);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    line-height: 1;
+    color: var(--pk-ink-muted);
+  }
+
+  /* A long address wraps inside the column rather than widening the aside. */
+  .pk-link-list__label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

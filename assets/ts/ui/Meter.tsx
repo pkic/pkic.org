@@ -19,7 +19,16 @@ export interface MeterProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "ro
   label: string;
   tone?: MeterTone;
   showValue?: boolean;
+  /**
+   * `sm` puts the value beside the bar instead of under it and fixes the
+   * track's width, so a meter fits a table cell without the column growing to
+   * the width of a full-bleed bar. The attendance column on a roster is the
+   * case this exists for.
+   */
+  size?: MeterSize;
 }
+
+export type MeterSize = "sm" | "md";
 
 export function Meter({
   value,
@@ -27,6 +36,7 @@ export function Meter({
   label,
   tone = "accent",
   showValue = false,
+  size = "md",
   class: className,
   ...rest
 }: MeterProps) {
@@ -38,7 +48,9 @@ export function Meter({
   const percentage = (clampedValue / maxSafe) * 100;
   const roundedPercentage = Math.round(percentage / 5) * 5;
 
-  const classes = ["pk-meter", `pk-meter--${tone}`, className].filter(Boolean).join(" ");
+  const classes = ["pk-meter", `pk-meter--${tone}`, size === "sm" ? "pk-meter--sm" : null, className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
