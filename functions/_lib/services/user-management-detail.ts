@@ -35,6 +35,15 @@ interface MembershipRow {
   created_at: string;
 }
 
+interface FormerIdentityRow {
+  id: string;
+  organization_id: string | null;
+  organization_name: string | null;
+  job_title: string | null;
+  started_at: string | null;
+  ended_at: string;
+}
+
 interface MembershipGroupRow {
   identity_id: string;
   id: string;
@@ -47,7 +56,7 @@ interface MembershipGroupRow {
 
 /** Fetches the complete user projection in one D1 batch. */
 export async function getUserDetail(db: DatabaseLike, userId: string) {
-  const [userResult, membershipResult, groupsResult] = await db.batch([
+  const [userResult, membershipResult, formerResult, groupsResult] = await db.batch([
     db
       .prepare(
         `SELECT id, email, first_name, last_name, preferred_name,
@@ -81,6 +90,23 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
            AND identity.ended_at IS NULL
            AND identity.blocked_at IS NULL
          ORDER BY sort_key ASC`,
+      )
+      .bind(userId),
+    db
+      .prepare(
+        /*
+         * Affiliations that have ended. The active-identity query above filters
+         * these out on purpose — an ended identity confers nothing — so a
+         * record that wants to show a history has to ask for them separately.
+         * Most recently ended first: a history reads backwards from now.
+         */
+        `SELECT identity.id, identity.organization_id, o.name AS organization_name,
+                identity.job_title, identity.started_at, identity.ended_at
+           FROM identities identity
+           LEFT JOIN organizations o ON o.id = identity.organization_id
+          WHERE identity.user_id = ?
+            AND identity.ended_at IS NOT NULL
+          ORDER BY identity.ended_at DESC, identity.id`,
       )
       .bind(userId),
     db
@@ -135,11 +161,21 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
       }`
     : null;
   const { headshot_r2_key: _headshotR2Key, headshot_updated_at: _headshotUpdatedAt, ...publicUser } = user;
+  const formerIdentities = batchRows<FormerIdentityRow>(formerResult).map((identity) => ({
+    identityId: identity.id,
+    organizationId: identity.organization_id,
+    organizationName: identity.organization_name,
+    jobTitle: identity.job_title,
+    startedAt: identity.started_at,
+    endedAt: identity.ended_at,
+  }));
+
   return {
     ...publicUser,
     active: Boolean(user.active),
     isEcMember: Boolean(user.is_ec_member),
     headshotUrl,
     identities,
+    formerIdentities,
   };
 }
