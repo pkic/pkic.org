@@ -1,0 +1,92 @@
+/*
+ * The two narrowing bands above a list's rows.
+ *
+ * Both are direct children of `pk-table-list`, which is a flex column with a
+ * zero gap whose regions separate with rules — so each band draws its own
+ * padding and closing rule the way the toolbar and the bulk bar do, rather
+ * than relying on a gap that is not there.
+ */
+@layer components {
+  .pk-applied-filters,
+  .pk-column-filter {
+    padding: var(--pk-2) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-applied-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-applied-filters__lede {
+    /* The band reads as a sentence — "Showing Role: Observer, Joined hidden" —
+       so the lede sits on the baseline of the chips rather than above them. */
+    flex: 0 0 auto;
+  }
+
+  .pk-applied-filters__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /*
+   * One control, not a label plus a close button. The whole chip clears the
+   * narrowing it names, so the target is the full pill rather than a glyph.
+   */
+  .pk-applied-filters__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+    padding: var(--pk-1) var(--pk-2);
+    font: inherit;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink);
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-pill);
+    cursor: pointer;
+  }
+
+  .pk-applied-filters__chip:hover {
+    border-color: var(--pk-line-strong);
+  }
+
+  .pk-applied-filters__chip:focus-visible {
+    outline: var(--pk-focus);
+    outline-offset: 2px;
+  }
+
+  .pk-applied-filters__dismiss {
+    color: var(--pk-ink-faint);
+    font-size: var(--pk-text-lg);
+    line-height: 1;
+  }
+
+  .pk-applied-filters__chip:hover .pk-applied-filters__dismiss {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-column-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--pk-2);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-column-filter__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+    /* Wide enough to read a typed organization name, but it yields on a phone
+       rather than pushing the Done button onto its own line at every width. */
+    flex: 1 1 18rem;
+    min-width: 0;
+  }
+}
