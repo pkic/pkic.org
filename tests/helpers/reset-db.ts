@@ -22,6 +22,12 @@ let baselinesInitialized = false;
 // scheduled jobs, the system settings endpoint) expects this row to always
 // exist; wiping it on every resetDb() would require every such test to
 // re-seed it itself.
+// `standing_levels` (consolidated migration 0035) is the same class of system
+// reference data: the five bands a points total resolves through are seeded
+// once by the migration and are configuration the consortium owns, not
+// per-test business data. Wiping them leaves an empty ladder, which
+// `standingFor` deliberately resolves to an unranked position — so every
+// standing read would quietly report level 0 instead of failing loudly.
 // `mailing_lists` (consolidated migration 0035) is the same class of system
 // reference data — its 9 rows are seeded once by the migration, and
 // membership-onboarding.ts's approveApplication now reads the all_members/
@@ -61,6 +67,7 @@ const EXCLUDED_TABLES = new Set([
   "mailing_lists",
   "membership_categories",
   "group_types",
+  "standing_levels",
   "groups",
   "group_membership_category_rules",
   "event_profiles",
