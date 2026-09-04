@@ -9,6 +9,7 @@ import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
 import { Select, TextInput } from "../../../../ui/TextControl";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { deleteJson, postJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { fmt, fmtDate, toast } from "../../ui";
@@ -18,6 +19,7 @@ import { TargetPicker, type PickedTarget } from "./TargetPicker";
 import type { AccessGrant } from "../../../../../shared/schemas/access-control";
 import {
   accessGrantCreateResponseSchema,
+  accessGrantCreateSchema,
   accessGrantsListResponseSchema,
 } from "../../../../../shared/schemas/access-control";
 // A permission name and a context reference are identifiers, so their cells
@@ -64,38 +66,50 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
     setFormError(null);
   }
 
+  /*
+   * One basis for validation: `accessGrantCreateSchema`, the contract the
+   * route parses. It carries the same "a context type and a context id arrive
+   * together" rule this form used to restate in its own words.
+   */
+  const form = useContractForm(accessGrantCreateSchema, {
+    userId: user?.id,
+    permission,
+    contextType: target.targetType,
+    contextId: target.targetId,
+    expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+  });
+
   async function handleAdd(e: Event) {
     e.preventDefault();
     setFormError(null);
+    /*
+     * The picker is not a contract-wired control, so a refusal naming `userId`
+     * would show "correct the highlighted fields" with nothing highlighted.
+     * Named here, in the words of the thing that is missing; everything the
+     * request carries is still checked by the contract below.
+     */
     if (!user) {
       setFormError("Pick a user first.");
       return;
     }
-    if (target.targetType && !target.targetId) {
-      setFormError("Pick a specific event, group, or organization, or clear the context.");
+    const checked = form.submit();
+    if (!checked.data) {
+      setFormError(checked.message);
       return;
     }
     setSubmitting(true);
     try {
-      await postJson(
-        "/api/v1/permissions/grants",
-        {
-          userId: user.id,
-          permission,
-          contextType: target.targetType,
-          contextId: target.targetId,
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-        },
-        accessGrantCreateResponseSchema,
-      );
+      await postJson("/api/v1/permissions/grants", checked.data, accessGrantCreateResponseSchema);
       toast("Permission granted", "success");
       setUser(null);
       setTarget({ targetType: null, targetId: null });
       setExpiresAt("");
+      form.reset();
       closeForm();
       await tableRef.current?.reload();
     } catch (error) {
-      setFormError((error as Error).message);
+      // A server refusal names its fields the way the contract does.
+      setFormError(form.refuse(error));
     } finally {
       setSubmitting(false);
     }
@@ -107,7 +121,13 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
         <Panel>
           <PanelHeader title="Grant a permission" />
           <PanelBody>
-            <form class="pk-stack" aria-label="Grant a permission" onSubmit={(e) => void handleAdd(e)}>
+            <form
+              noValidate
+              class="pk-stack"
+              aria-label="Grant a permission"
+              {...form.handlers}
+              onSubmit={(e) => void handleAdd(e)}
+            >
               {/* One `disabled` takes the whole form out of play while the
                   request is in flight, including the pickers this surface
                   cannot reach a prop into. */}
@@ -124,7 +144,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
                     disabled={submitting}
                   />
                 </fieldset>
-                <Field label="Permission">
+                <Field label="Permission" {...form.of("permission")}>
                   {(control) => (
                     <Select
                       {...control}
@@ -144,7 +164,11 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
                   <legend class="pk-field__label">Target</legend>
                   <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
                 </fieldset>
-                <Field label="Expires (optional)" help="Leave empty for a grant that never expires.">
+                <Field
+                  label="Expires (optional)"
+                  help="Leave empty for a grant that never expires."
+                  {...form.of("expiresAt")}
+                >
                   {(control) => (
                     <TextInput
                       {...control}

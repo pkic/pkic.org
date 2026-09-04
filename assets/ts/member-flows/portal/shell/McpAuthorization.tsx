@@ -19,15 +19,16 @@ import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
+  mcpOauthAuthorizeActionSchema,
   mcpOauthContextSchema,
   mcpOauthMagicLinkResponseSchema,
   mcpOauthRedirectResponseSchema,
 } from "../../../../shared/schemas/mcp-oauth";
 import { userAuthEstablishedResponseSchema } from "../../../../shared/schemas/user-auth";
 import { VerifyingOverlay } from "../../../components/VerifyingOverlay";
+import { useContractForm } from "../../../hooks/useContractForm";
 import { requestJson } from "../../../shared/api-client";
 import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
-import { emailFromSubmitEvent } from "../../../shared/form/helpers";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
@@ -40,6 +41,7 @@ import "../../../ui/Content.css";
 const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 
 type McpOauthContext = z.infer<typeof mcpOauthContextSchema>;
+type McpOauthAuthorizeAction = z.infer<typeof mcpOauthAuthorizeActionSchema>;
 
 function authorizationParameters(hash: string): URLSearchParams {
   const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
@@ -53,12 +55,12 @@ async function fetchOauthContext(returnTo: string): Promise<McpOauthContext> {
   });
 }
 
-async function requestOauthMagicLink(email: string, returnTo: string): Promise<void> {
+async function requestOauthMagicLink(body: McpOauthAuthorizeAction): Promise<void> {
   await requestJson(OAUTH_AUTHORIZE_PATH, mcpOauthMagicLinkResponseSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ action: "request-link", email, return_to: returnTo }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -91,6 +93,7 @@ export function McpAuthorization() {
   const initialToken = initial.get("token") ?? "";
   const [returnTo, setReturnTo] = useState(initialReturnTo);
   const [context, setContext] = useState<McpOauthContext | null>(null);
+  const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(Boolean(initialReturnTo));
   const [verifying, setVerifying] = useState(Boolean(initialToken));
@@ -149,16 +152,33 @@ export function McpAuthorization() {
     }
   }
 
+  /*
+   * One basis for validation: the contract the authorize route parses. The
+   * address used to be read back out of the DOM and checked with `if (!email)
+   * return`, which silently did nothing — a malformed address left the button
+   * looking broken rather than marking the field.
+   */
+  const form = useContractForm(mcpOauthAuthorizeActionSchema, {
+    action: "request-link",
+    email: email.trim(),
+    return_to: returnTo,
+  });
+
   async function handleSubmit(event: Event): Promise<void> {
-    const email = emailFromSubmitEvent(event);
-    if (!email || !returnTo) return;
+    event.preventDefault();
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSubmitting(true);
     try {
-      await requestOauthMagicLink(email, returnTo);
+      await requestOauthMagicLink(checked.data);
       setSent(true);
       setError(null);
     } catch (err) {
-      setError((err as Error).message);
+      // A server refusal names its fields the way the contract does.
+      setError(form.refuse(err));
     } finally {
       setSubmitting(false);
     }
@@ -223,13 +243,24 @@ export function McpAuthorization() {
                   </>
                 )}
                 <form
+                  noValidate
                   class="pk-stack"
+                  {...form.handlers}
                   onSubmit={(event) => {
                     void handleSubmit(event);
                   }}
                 >
-                  <Field label="Portal email" required>
-                    {(control) => <TextInput {...control} type="email" name="email" autocomplete="email" />}
+                  <Field label="Portal email" required {...form.of("email")}>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        type="email"
+                        name="email"
+                        autocomplete="email"
+                        value={email}
+                        onInput={(event) => setEmail(event.currentTarget.value)}
+                      />
+                    )}
                   </Field>
                   <Button type="submit" variant="primary" block loading={submitting} disabled={submitting || !returnTo}>
                     {submitting ? "Sending…" : "Send sign-in link"}

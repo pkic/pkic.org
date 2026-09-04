@@ -8,16 +8,13 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
 import { TextInput } from "../../../../ui/TextControl";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
-import { UserPicker, type PickedUser } from "../../../../components/UserPicker";
-import { deleteJson, postJson } from "../../../../shared/api-client";
+import { UserPicker } from "../../../../components/UserPicker";
+import { deleteJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
-import {
-  userRoleResponseEnvelopeSchema,
-  userRolesListResponseSchema,
-  type UserRoleAssignment,
-} from "../../../../../shared/schemas/access-control";
+import { userRolesListResponseSchema, type UserRoleAssignment } from "../../../../../shared/schemas/access-control";
 import { fmt, fmtDate, toast } from "../../ui";
-import { TargetPicker, type PickedTarget } from "./TargetPicker";
+import { TargetPicker } from "./TargetPicker";
+import { useRoleAssignment } from "./use-role-assignment";
 import { roleCatalog } from "./catalogs";
 // A role name, a context reference, and a grant date are identifiers, so their
 // columns are set in `pk-mono`. That class lives in the content stylesheet and
@@ -27,54 +24,23 @@ import "../../../../ui/Content.css";
 
 /** People with assigned roles: permissioned users (often community members, not staff). */
 export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
-  const [user, setUser] = useState<PickedUser | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
   const [roleId, setRoleId] = useState("");
   const [roleLabel, setRoleLabel] = useState<string>();
-  const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
-  const [expiresAt, setExpiresAt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   /*
-   * What went wrong stays beside the form rather than in a toast that has
-   * already faded by the time the reader reaches the control it is about.
-   * `Alert`'s danger tone carries role="alert", so it is announced as it
-   * appears without moving focus out of the form.
+   * The whole assignment — the draft, the contract, the request and what a
+   * refusal says — is one command, shared with the role-first surface. What
+   * stays here is the person this page is about and what happens once the
+   * assignment lands.
    */
-  const [formError, setFormError] = useState<string | null>(null);
-
-  async function handleAssign(e: Event) {
-    e.preventDefault();
-    setFormError(null);
-    if (!user || !roleId) {
-      setFormError("Pick a user and a role first.");
-      return;
-    }
-    if (target.targetType && !target.targetId) {
-      setFormError("Pick a specific event or working group, or clear the context.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await postJson(
-        `/api/v1/users/${user.id}/roles`,
-        {
-          roleId,
-          contextType: target.targetType,
-          contextId: target.targetId,
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-        },
-        userRoleResponseEnvelopeSchema,
-      );
-      toast("Role assigned", "success");
-      setTarget({ targetType: null, targetId: null });
-      setExpiresAt("");
-      await tableRef.current?.reload();
-    } catch (err) {
-      setFormError((err as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const { form, submitting, formError, user, setUser, target, setTarget, expiresAt, setExpiresAt, handleAssign } =
+    useRoleAssignment({
+      roleId,
+      onAssigned: async () => {
+        toast("Role assigned", "success");
+        await tableRef.current?.reload();
+      },
+    });
 
   async function handleRevoke(assignment: UserRoleAssignment) {
     if (!user) return;
@@ -112,15 +78,17 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
             <>
               {canGrant && (
                 <form
+                  noValidate
                   class="pk-stack"
                   aria-label={`Assign a role to ${user.email}`}
+                  {...form.handlers}
                   onSubmit={(e) => void handleAssign(e)}
                 >
                   {/* One `disabled` takes the whole form out of play while the
                       request is in flight, including the pickers this surface
                       cannot reach a prop into. */}
                   <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={submitting}>
-                    <Field label="Role">
+                    <Field label="Role" {...form.of("roleId")}>
                       {(control) => (
                         <ServerSearchSelect
                           {...control}

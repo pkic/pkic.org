@@ -1,14 +1,15 @@
 import { useEffect, useId, useMemo, useState } from "preact/hooks";
 import {
+  groupCategoryRulesReplaceSchema,
   groupCategoryRulesResponseSchema,
   groupResponseSchema,
   type GroupCategoryRule,
-  type GroupCategoryRulesReplaceInput,
   type GroupCategoryRulesResponse,
 } from "../../../../../shared/schemas/groups";
 import { memberApplicationFormResponseSchema } from "../../../../../shared/schemas/member-applications";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { ApiClientError, getJson, putJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
@@ -78,23 +79,35 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
     });
   }
 
+  /*
+   * One basis for validation: the contract the route parses. The body was
+   * typed but never parsed, so a rule the schema refuses reached the server
+   * and came back as one message for the whole editor.
+   */
+  const form = useContractForm(groupCategoryRulesReplaceSchema, { expectedRevision: revision, rules });
+
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
-    setSaving(true);
     setSaved(false);
     setError(null);
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
+    setSaving(true);
     try {
-      const input: GroupCategoryRulesReplaceInput = { expectedRevision: revision, rules };
       const response = await putJson(
         `/api/v1/groups/${encodeURIComponent(groupId)}/category-rules`,
-        input,
+        checked.data,
         groupResponseSchema,
       );
       setRevision(response.group.revision);
       await onUpdated();
       setSaved(true);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : "Could not update category rules.");
+      // A server refusal names its fields the way the contract does.
+      setError(cause instanceof ApiClientError ? form.refuse(cause) : "Could not update category rules.");
     } finally {
       setSaving(false);
     }
@@ -102,7 +115,7 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
 
   if (loading) return <Spinner />;
   return (
-    <form class="pk" onSubmit={submit}>
+    <form noValidate class="pk" {...form.handlers} onSubmit={submit}>
       <Panel aria-labelledby={headingId}>
         <PanelHeader id={headingId} title="Membership category eligibility" />
         <PanelBody class="pk-stack">

@@ -10,26 +10,28 @@ import { AdminHeadshotManager } from "../../../shared/headshot/AdminHeadshotMana
 import { replaceFile } from "../../../shared/file-upload";
 import { friendlyErrorMessage } from "../../../components/ErrorAlert";
 import { Alert } from "../../../ui/Alert";
+import { Avatar } from "../../../ui/Avatar";
 import { Badge } from "../../../ui/Badge";
 import { Button } from "../../../ui/Button";
 import { Checkbox } from "../../../ui/Checkbox";
 import { Field } from "../../../ui/Field";
-import { PageHeader } from "../../../ui/PageHeader";
+import { ProfileHeader } from "../../../ui/ProfileHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
-import { PersonCell } from "../../../ui/PersonCell";
 import { Spinner } from "../../../ui/Spinner";
 import { Select, Textarea, TextInput } from "../../../ui/TextControl";
+import { useContractForm } from "../../../hooks/useContractForm";
 import { profile as profileSignal, saveProfile } from "../state";
 import { toast } from "../ui";
 import { formatCalendarDate } from "../../../shared/ui";
-import type { MyProfile as MyProfileType, MyProfileUpdateInput } from "../types";
+import type { MyProfile as MyProfileType } from "../types";
 import { linksToText, textToLinks } from "../../../shared/links-text";
 import {
   myHeadshotDeleteResponseSchema,
   myHeadshotUploadResponseSchema,
   myProfileSchema,
+  myProfileUpdateSchema,
 } from "../../../../shared/schemas/me";
-import { identityMutationResponseSchema } from "../../../../shared/schemas/identity";
+import { identityCreateSchema, identityMutationResponseSchema } from "../../../../shared/schemas/identity";
 import type { ApiTableActions } from "../../../components/ApiDataTable";
 import { ActingIdentityDirectory } from "./OrganizationIdentityDirectory";
 import { useMembershipCategoryLabels } from "../../../hooks/useMembershipCategoryLabels";
@@ -61,6 +63,25 @@ export function MyProfile() {
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * One basis for validation: the draft is checked, live and on submit, by the
+   * same `myProfileUpdateSchema` the route parses. It used to be hand-built at
+   * submit time and sent unchecked, so a name over 120 characters or a
+   * malformed link was refused by the server as an unexplained failure rather
+   * than marked on the field that caused it.
+   *
+   * A job title and an organization email belong to an organization-tied
+   * identity; an individual member has neither, and the route rejects them.
+   */
+  const contractBody = {
+    firstName: form.firstName.trim() || undefined,
+    lastName: form.lastName.trim() || undefined,
+    preferredName: form.preferredName.trim(),
+    biography: form.biography.trim(),
+    links: textToLinks(form.linksText),
+    ...(current?.organizationId ? { emailId: form.emailId || null, jobTitle: form.jobTitle.trim() } : {}),
+  };
+  const profileForm = useContractForm(myProfileUpdateSchema, contractBody);
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const categories = useMembershipCategoryLabels();
 
@@ -69,24 +90,21 @@ export function MyProfile() {
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
     setError(null);
+    // Nothing leaves the page until the contract accepts the whole draft; a
+    // refusal it can attribute to a field is shown on that field.
+    const checked = profileForm.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSaving(true);
     try {
-      const input: MyProfileUpdateInput = {
-        firstName: form.firstName.trim() || undefined,
-        lastName: form.lastName.trim() || undefined,
-        preferredName: form.preferredName.trim(),
-        biography: form.biography.trim(),
-        links: textToLinks(form.linksText),
-      };
-      if (current!.organizationId) {
-        input.emailId = form.emailId || null;
-        input.jobTitle = form.jobTitle.trim();
-      }
-      const updated = await patchJson(CURRENT_USER_API, input, myProfileSchema);
+      const updated = await patchJson(CURRENT_USER_API, checked.data, myProfileSchema);
       saveProfile(updated);
       toast("Profile updated", "success");
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not update your profile. Please try again.");
+      // A server refusal names its fields the way the contract does.
+      setError(profileForm.refuse(err));
     } finally {
       setSaving(false);
     }
@@ -111,7 +129,23 @@ export function MyProfile() {
 
   return (
     <div class="pk pk-stack">
-      <PageHeader title="My Profile" />
+      {/*
+        The member's own record opens with the member, the way the staff view
+        of the same person does — `ProfileHeader` names a subject, `PageHeader`
+        named a place, and "My Profile" told a reader nothing the sidebar had
+        not already said. The identifying facts move here from the Membership
+        card, so the page states them once.
+      */}
+      <ProfileHeader
+        media={<Avatar name={displayName(current)} src={current.headshotUrl ?? undefined} size="xl" />}
+        title={displayName(current)}
+        lede={[current.jobTitle, current.organizationName].filter(Boolean).join(" at ") || undefined}
+        facts={[
+          current.email,
+          categories.label(current.membershipCategory),
+          current.memberSince ? `Member since ${formatCalendarDate(current.memberSince)}` : null,
+        ].filter((fact): fact is string => Boolean(fact))}
+      />
       {/* The form is the page's work and leads; the headshot, visibility
           toggle, membership summary and identity switcher keep it company as
           an aside. The identities roster spans the full width below the grid —
@@ -121,14 +155,18 @@ export function MyProfile() {
         <div class="pk-stack">
           <Panel>
             <PanelBody>
+              {/* `noValidate`, so the browser's own bubble never speaks ahead
+                  of the contract. */}
               <form
+                noValidate
                 class="pk-stack"
+                {...profileForm.handlers}
                 onSubmit={(e) => {
                   void handleSubmit(e);
                 }}
               >
                 <div class="pk-grid pk-grid--tight">
-                  <Field label="First name" required>
+                  <Field label="First name" required {...profileForm.of("firstName")}>
                     {(control) => (
                       <TextInput
                         {...control}
@@ -141,6 +179,7 @@ export function MyProfile() {
                     <Field
                       label="Email for this organization"
                       help="Used for your profile and actions in this organization capacity."
+                      {...profileForm.of("emailId")}
                     >
                       {(control) => (
                         <Select
@@ -158,7 +197,7 @@ export function MyProfile() {
                       )}
                     </Field>
                   )}
-                  <Field label="Last name" required>
+                  <Field label="Last name" required {...profileForm.of("lastName")}>
                     {(control) => (
                       <TextInput
                         {...control}
@@ -167,7 +206,7 @@ export function MyProfile() {
                       />
                     )}
                   </Field>
-                  <Field label="Preferred name">
+                  <Field label="Preferred name" {...profileForm.of("preferredName")}>
                     {(control) => (
                       <TextInput
                         {...control}
@@ -178,7 +217,7 @@ export function MyProfile() {
                     )}
                   </Field>
                   {current.organizationId && (
-                    <Field label="Job title for this organization">
+                    <Field label="Job title for this organization" {...profileForm.of("jobTitle")}>
                       {(control) => (
                         <TextInput
                           {...control}
@@ -190,7 +229,7 @@ export function MyProfile() {
                   )}
                 </div>
 
-                <Field label="Biography">
+                <Field label="Biography" {...profileForm.of("biography")}>
                   {(control) => (
                     <Textarea
                       {...control}
@@ -201,7 +240,7 @@ export function MyProfile() {
                   )}
                 </Field>
 
-                <Field label="Social / profile links">
+                <Field label="Social / profile links" {...profileForm.of("links")}>
                   {(control) => (
                     <Textarea
                       {...control}
@@ -278,21 +317,6 @@ export function MyProfile() {
               </PanelBody>
             </Panel>
           )}
-
-          <Panel>
-            <PanelHeader title="Membership" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              <PersonCell name={displayName(current)} avatarSrc={current.headshotUrl ?? undefined} />
-              <dl class="pk-datalist pk-small">
-                <dt>Email in this capacity</dt>
-                <dd>{current.email}</dd>
-                <dt>Membership category</dt>
-                <dd>{categories.label(current.membershipCategory)}</dd>
-                <dt>Member since</dt>
-                <dd>{formatCalendarDate(current.memberSince)}</dd>
-              </dl>
-            </PanelBody>
-          </Panel>
 
           {current.activeIdentities.length > 1 && <ActiveIdentitySwitcher current={current} />}
         </div>
@@ -430,32 +454,44 @@ function AddCoworkerForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  /*
+   * The same contract the route parses. The draft used to be read back out of
+   * the DOM with `form.elements.namedItem` and checked with `if (!name ||
+   * !email) return` — a hand-written rule that silently did nothing, so a
+   * reader who left a field blank got no field marked and no message.
+   */
+  const [draft, setDraft] = useState({ name: "", email: "" });
+  const form = useContractForm(identityCreateSchema, {
+    userReference: "email",
+    name: draft.name.trim(),
+    email: draft.email.trim(),
+    activation: { mode: "invitation" },
+    showOnOrganizationProfile: true,
+  });
+
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
-    const form = e.currentTarget as HTMLFormElement;
-    const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim();
-    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
-    if (!name || !email) return;
     setError(null);
     setSuccess(null);
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSubmitting(true);
     try {
       await postJson(
         `/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`,
-        {
-          userReference: "email",
-          name,
-          email,
-          activation: { mode: "invitation" },
-          showOnOrganizationProfile: true,
-        },
+        checked.data,
         identityMutationResponseSchema,
       );
-      setSuccess(`${name} (${email}) was invited to accept an identity for your organization.`);
-      form.reset();
+      setSuccess(
+        `${draft.name.trim()} (${draft.email.trim()}) was invited to accept an identity for your organization.`,
+      );
+      setDraft({ name: "", email: "" });
       await onAdded();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not add this coworker. Please try again.");
+      setError(form.refuse(err));
     } finally {
       setSubmitting(false);
     }
@@ -470,17 +506,35 @@ function AddCoworkerForm({
         </Button>
       </div>
       <form
+        noValidate
         class="pk-stack pk-stack--snug"
+        {...form.handlers}
         onSubmit={(e) => {
           void handleSubmit(e);
         }}
       >
         <div class="pk-grid pk-grid--tight">
-          <Field label="Name" required>
-            {(control) => <TextInput {...control} type="text" name="name" />}
+          <Field label="Name" required {...form.of("name")}>
+            {(control) => (
+              <TextInput
+                {...control}
+                type="text"
+                name="name"
+                value={draft.name}
+                onInput={(event) => setDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+              />
+            )}
           </Field>
-          <Field label="Email" required>
-            {(control) => <TextInput {...control} type="email" name="email" />}
+          <Field label="Email" required {...form.of("email")}>
+            {(control) => (
+              <TextInput
+                {...control}
+                type="email"
+                name="email"
+                value={draft.email}
+                onInput={(event) => setDraft((current) => ({ ...current, email: event.currentTarget.value }))}
+              />
+            )}
           </Field>
         </div>
         <div class="pk-cluster">

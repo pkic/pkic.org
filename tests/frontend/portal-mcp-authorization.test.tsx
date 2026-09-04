@@ -103,7 +103,13 @@ describe("portal MCP authorization", () => {
     const email = controlLabeled("Portal email")!;
     expect(email.type).toBe("email");
     expect(email.required).toBe(true);
-    email.value = "staff@example.test";
+    // The control is on the shared contract now, so its value lives in state
+    // rather than being read back out of the DOM at submit time: typing has to
+    // be modelled as an input event, the way a person produces one.
+    await act(() => {
+      email.value = "staff@example.test";
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(() => {
       container.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit"));
     });
