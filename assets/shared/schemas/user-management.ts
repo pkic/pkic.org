@@ -86,6 +86,8 @@ export const userIdentityDetailSchema = z.object({
   membershipCategory: membershipCategorySchema,
   status: memberStatusSchema,
   showOnOrgProfile: z.boolean(),
+  /** The identity this person's record speaks from when it has to choose one. */
+  isDefault: z.boolean(),
   organizationId: z.string().nullable(),
   organizationName: z.string().nullable(),
   emailId: z.string().nullable(),

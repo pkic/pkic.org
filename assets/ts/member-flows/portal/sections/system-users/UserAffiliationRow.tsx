@@ -39,10 +39,19 @@ export function UserAffiliationRow({
   membership,
   onChanged,
   canManage,
+  summarized = false,
 }: {
   membership: UserMembership;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
+  /**
+   * This tie's description is already the record's About.
+   *
+   * There is one biography per identity and the record leads with the default
+   * one, so repeating it on the row that supplied it printed the same
+   * paragraph twice. Every other affiliation still states its own.
+   */
+  summarized?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -327,7 +336,7 @@ export function UserAffiliationRow({
         </>
       }
     >
-      {membership.biography ?? undefined}
+      {summarized ? undefined : (membership.biography ?? undefined)}
     </AffiliationRow>
   );
 }

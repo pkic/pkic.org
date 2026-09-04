@@ -25,6 +25,7 @@ interface MembershipRow {
   category_code: string;
   status: string;
   show_on_org_profile: number;
+  is_default: number;
   organization_id: string | null;
   organization_name: string | null;
   email_id: string | null;
@@ -69,6 +70,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
       .prepare(
         `SELECT identity.id, m.id AS capacity_member_id, mca.category_code, m.status,
                 identity.show_on_organization_profile AS show_on_org_profile,
+                identity.is_default,
                 m.organization_id, o.name AS organization_name,
                 identity.email_id, COALESCE(selected_email.email, u.email) AS capacity_email,
                 CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
@@ -136,6 +138,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     membershipCategory: identity.category_code,
     status: identity.status,
     showOnOrgProfile: identity.show_on_org_profile === 1,
+    isDefault: identity.is_default === 1,
     organizationId: identity.organization_id,
     organizationName: identity.organization_name,
     emailId: identity.email_id,

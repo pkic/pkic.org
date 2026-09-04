@@ -32,11 +32,14 @@ export function UserAffiliationsPanel({
   onChanged,
   canManage,
   canActivate,
+  summarizedIdentityId,
 }: {
   user: UserDetail;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
   canActivate: boolean;
+  /** The identity whose biography the record already states as its About. */
+  summarizedIdentityId?: string;
 }) {
   const [showGrantForm, setShowGrantForm] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -89,6 +92,7 @@ export function UserAffiliationsPanel({
             membership={membership}
             onChanged={onChanged}
             canManage={canManage}
+            summarized={membership.identityId === summarizedIdentityId}
           />
         ))}
 
