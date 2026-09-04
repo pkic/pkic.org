@@ -1,5 +1,5 @@
 import { render } from "preact";
-import { mountModalTemplate } from "../modal-template";
+import { dismissModalDialog, mountModalTemplate, openModalDialog } from "../modal-template";
 
 const HEADSHOT_DISCLAIMER_TEXT = [
   "This is a photograph of myself.",
@@ -54,28 +54,29 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
   const { title = "Before you upload a photo", texts = HEADSHOT_DISCLAIMER_TEXT, confirmText = "Upload photo" } = opts;
 
   return new Promise((resolve) => {
-    const modal = mountModalTemplate(
+    const dialog = mountModalTemplate(
       "headshot-disclaimer-template",
       "headshot-disclaimer-modal",
       "Headshot disclaimer",
     );
-    if (!modal) {
+    if (!dialog) {
       resolve(false);
       return;
     }
 
     // Update content
-    const titleEl = modal.querySelector<HTMLElement>(".hsd-title");
-    const listEl = modal.querySelector<HTMLUListElement>(".hsd-list");
-    const confirmBtn = modal.querySelector<HTMLButtonElement>(".hsd-confirm");
-    const checkbox = modal.querySelector<HTMLInputElement>(".hsd-agree");
-    const cancelBtn = modal.querySelector<HTMLButtonElement>(".hsd-cancel");
-    const overlay = modal.querySelector<HTMLElement>(".hsd-overlay");
-    const form = modal.querySelector<HTMLFormElement>(".hsd-form");
+    const titleEl = dialog.querySelector<HTMLElement>(".hsd-title");
+    const listEl = dialog.querySelector<HTMLUListElement>(".hsd-list");
+    const confirmBtn = dialog.querySelector<HTMLButtonElement>(".hsd-confirm");
+    const checkbox = dialog.querySelector<HTMLInputElement>(".hsd-agree");
+    const cancelBtn = dialog.querySelector<HTMLButtonElement>(".hsd-cancel");
+    const form = dialog.querySelector<HTMLFormElement>(".hsd-form");
 
-    if (!titleEl || !listEl || !confirmBtn || !checkbox || !cancelBtn || !overlay || !form) {
+    if (!titleEl || !listEl || !confirmBtn || !checkbox || !cancelBtn || !form) {
       console.error("Headshot disclaimer template is incomplete");
-      modal.remove();
+      // Taken back down rather than left half-built in the page: a dialog with
+      // a missing control cannot be agreed to or backed out of.
+      dialog.remove();
       resolve(false);
       return;
     }
@@ -93,11 +94,13 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
     checkbox.checked = false;
     confirmBtn.disabled = true;
 
-    // Show modal
-    modal.classList.add("hsd-active");
+    openModalDialog(dialog);
 
-    const cleanup = () => {
-      modal.remove();
+    /** Every way out of the dialog goes through here, so focus is returned and
+     *  the caller is answered exactly once whichever one the reader took. */
+    const settle = (agreed: boolean) => {
+      dismissModalDialog(dialog);
+      resolve(agreed);
     };
 
     checkbox.addEventListener("change", () => {
@@ -106,22 +109,20 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      if (checkbox.checked) {
-        cleanup();
-        resolve(true);
-      }
+      // The button is disabled until the box is ticked, but a form can also be
+      // submitted from the keyboard, so the agreement is re-checked here.
+      if (checkbox.checked) settle(true);
     });
 
-    cancelBtn.addEventListener("click", () => {
-      cleanup();
-      resolve(false);
-    });
+    cancelBtn.addEventListener("click", () => settle(false));
 
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        cleanup();
-        resolve(false);
-      }
+    // Escape and the platform's close request both arrive as `cancel`. It is
+    // prevented so the dialog comes down through `settle` — which returns
+    // focus and answers the caller — rather than through the platform's own
+    // close, which would do neither.
+    dialog.addEventListener("cancel", (e) => {
+      e.preventDefault();
+      settle(false);
     });
   });
 }

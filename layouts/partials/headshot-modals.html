@@ -2,54 +2,67 @@
   headshot-modals.html — the two dialogs the headshot flow mounts from a
   <template>: the upload disclaimer and the crop tool.
 
-  The `pk` root goes on each dialog card rather than on the modal root: the
-  root is a full-viewport `position: fixed` layer whose only job is to hold the
-  dimmed overlay, and giving it the base layer's ground would paint over the
-  page behind that overlay. The card is the surface, so it takes the root, its
-  ground and its ink.
+  Both roots are native <dialog> elements, opened with showModal() by
+  assets/ts/shared/modal-template.ts. That is the same choice, for the same
+  reasons, as the design system's own dialog (assets/ts/ui/Dialog.tsx): the
+  platform supplies the top layer, the focus trap, an inert page behind, a
+  styleable ::backdrop, and Escape. These two cannot use that Preact component
+  — they are markup Hugo renders and vanilla TypeScript drives — so they reuse
+  its approach rather than its implementation.
+
+  What this replaced was an overlay <div role="dialog"> carrying a static
+  `aria-hidden="true"` that the show path never cleared. None of the above was
+  re-implemented, and the attribute took the whole subtree out of the
+  accessibility tree while it sat in plain view. A native <dialog> carries the
+  dialog role and, once opened modally, the modal semantics, so neither `role`
+  nor `aria-modal` is restated here; restating them is how the stale
+  `aria-hidden` survived review in the first place.
+
+  The `pk` root goes on each dialog: the dialog is now the card itself rather
+  than a full-viewport layer wrapping one, so it is the surface that wants the
+  base layer's font and ink.
 
   The class names the scripts locate — `hsd-*` and `crop-headshot-*` — are
   unchanged; see assets/ts/shared/headshot/upload.tsx and crop.ts.
 */}}
 <template id="headshot-disclaimer-template">
-  <div id="headshot-disclaimer-modal" class="hsd-modal" aria-hidden="true">
-    <div class="hsd-overlay">
-      <div class="pk hsd-card" role="dialog" aria-modal="true" aria-labelledby="headshot-disclaimer-title">
-        <h2 id="headshot-disclaimer-title" class="hsd-title">Before you upload a photo</h2>
-        <ul class="hsd-list"></ul>
-        <form class="hsd-form">
-          <div class="pk-check">
-            <input class="pk-check__input hsd-agree" type="checkbox" id="headshot-disclaimer-agree">
-            <label class="pk-check__label" for="headshot-disclaimer-agree">I confirm all of the above.</label>
-          </div>
-          <div class="hsd-actions">
-            <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm hsd-confirm" disabled>Upload photo</button>
-            <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm hsd-cancel">Cancel</button>
-          </div>
-        </form>
+  <dialog id="headshot-disclaimer-modal" class="pk hsd-dialog" aria-labelledby="headshot-disclaimer-title">
+    <h2 id="headshot-disclaimer-title" class="hsd-title">Before you upload a photo</h2>
+    <ul class="hsd-list"></ul>
+    <form class="hsd-form">
+      {{/*
+        The agreement control is written the way ui/Checkbox renders one: the
+        input inside its own label, so the whole row is the hit target and no
+        `for`/`id` pair has to stay in step. The classes are the design
+        system's, which ships Field.css in the entry stylesheet, so this markup
+        is styled on a server-rendered page too.
+      */}}
+      <label class="pk-check hsd-agree-row">
+        <input class="pk-check__input hsd-agree" type="checkbox">
+        <span class="pk-check__label">I confirm all of the above.</span>
+      </label>
+      <div class="hsd-actions">
+        <button type="submit" class="pk-btn pk-btn--primary pk-btn--sm hsd-confirm" disabled>Upload photo</button>
+        <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm hsd-cancel">Cancel</button>
       </div>
-    </div>
-  </div>
+    </form>
+  </dialog>
 </template>
 
 <template id="crop-headshot-template">
-  <div id="crop-headshot-modal" class="crop-headshot-modal" aria-hidden="true">
-    <div class="crop-headshot-overlay">
-      <div class="pk crop-headshot-card" role="dialog" aria-modal="true" aria-labelledby="crop-headshot-title">
-        <h2 id="crop-headshot-title" class="crop-headshot-title">Crop headshot</h2>
-        <div class="crop-headshot-viewport">
-          <img alt="Headshot crop preview" draggable="false">
-        </div>
-        <div class="crop-headshot-zoom">
-          <span class="pk-small" aria-hidden="true">&minus;</span>
-          <input type="range" min="0" max="100" class="crop-headshot-slider" aria-label="Zoom image">
-          <span class="pk-small" aria-hidden="true">+</span>
-        </div>
-        <div class="crop-headshot-actions">
-          <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm crop-headshot-cancel">Cancel</button>
-          <button type="button" class="pk-btn pk-btn--primary pk-btn--sm crop-headshot-confirm">Crop &amp; Upload</button>
-        </div>
-      </div>
+  <dialog id="crop-headshot-modal" class="pk crop-headshot-dialog" aria-labelledby="crop-headshot-title">
+    <h2 id="crop-headshot-title" class="crop-headshot-title">Crop headshot</h2>
+    <div class="crop-headshot-viewport">
+      <img alt="Headshot crop preview" draggable="false">
     </div>
-  </div>
+    <div class="crop-headshot-zoom">
+      <span class="pk-small" aria-hidden="true">&minus;</span>
+      <input type="range" min="0" max="100" class="crop-headshot-slider" aria-label="Zoom image">
+      <span class="pk-small" aria-hidden="true">+</span>
+    </div>
+    <div class="crop-headshot-actions">
+      <button type="button" class="pk-btn pk-btn--secondary pk-btn--sm crop-headshot-cancel">Cancel</button>
+      <button type="button" class="pk-btn pk-btn--primary pk-btn--sm crop-headshot-confirm">Crop &amp; Upload</button>
+    </div>
+  </dialog>
 </template>
