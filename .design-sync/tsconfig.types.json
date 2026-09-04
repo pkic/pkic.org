@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.sync.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": false,
+    "noUnusedLocals": false,
+    "skipLibCheck": true,
+    "rootDir": "../assets",
+    "outDir": "../types",
+    "typeRoots": ["../.ds-sync/node_modules/@types"],
+    "baseUrl": ".",
+    "paths": {
+      "preact": ["./shim/preact.ts"],
+      "preact/hooks": ["./shim/preact-hooks.ts"],
+      "react": ["../.ds-sync/node_modules/@types/react"],
+      "react/jsx-runtime": ["../.ds-sync/node_modules/@types/react/jsx-runtime"]
+    }
+  },
+  "include": ["../assets/ts/ui/**/*.ts", "../assets/ts/ui/**/*.tsx"]
+}

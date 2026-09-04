@@ -1,0 +1,45 @@
+{
+  "pkg": "pkic-org-events-backend",
+  "globalName": "PKIC",
+  "shape": "package",
+  "srcDir": "assets/ts/ui",
+  "tsconfig": ".design-sync/tsconfig.sync.json",
+  "tokensGlob": "assets/design/*.css",
+  "tokensPkg": "pkic-org-events-backend",
+  "componentSrcMap": {
+    "PreviewShell": null
+  },
+  "extraFonts": [
+    ".design-sync/fonts.css"
+  ],
+  "runtimeFontPrefixes": [
+    "Roboto Mono"
+  ],
+  "dtsPropsFor": {
+    "Checkbox": "  /** The line the control is read as. */\n  label: React.ReactNode;\n  /** A second, quieter line under the label. */\n  hint?: React.ReactNode;\n  checked?: boolean;\n  defaultChecked?: boolean;\n  disabled?: boolean;\n  name?: string;\n  value?: string;\n  required?: boolean;\n  onChange?: React.ChangeEventHandler<HTMLInputElement>;\n  className?: string;",
+    "Radio": "  /** The line the control is read as. */\n  label: React.ReactNode;\n  /** A second, quieter line under the label. */\n  hint?: React.ReactNode;\n  checked?: boolean;\n  defaultChecked?: boolean;\n  disabled?: boolean;\n  name?: string;\n  value?: string;\n  required?: boolean;\n  onChange?: React.ChangeEventHandler<HTMLInputElement>;\n  className?: string;",
+    "StateIcon": "  /** Which state marker to draw. */\n  state: \"ok\" | \"advisory\" | \"invalid\";\n  className?: string;"
+  },
+  "buildCmd": "node .design-sync/emit-types.mjs",
+  "projectId": "ae00516e-0adb-4a18-aed6-b5bda3906d02",
+  "guidelinesGlob": [
+    "docs/design-system/*.md"
+  ],
+  "overrides": {
+    "Dialog": {
+      "cardMode": "single",
+      "primaryStory": "DestructiveWithConsequences"
+    },
+    "Menu": {
+      "cardMode": "single",
+      "primaryStory": "RowMenu"
+    },
+    "Breadcrumb": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
