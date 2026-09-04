@@ -17,6 +17,15 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-leadership",
   "portal-mailing-lists",
   "portal-organizations",
+  // One address per test, not per file. The email limiter allows three
+  // requests a minute for an address, so a file whose tests all sign in as
+  // `portal-organizations` failed its fourth test on a rule the application
+  // is right to enforce. `check-e2e-signin-budget.mjs` keeps it that way.
+  "portal-organizations-representatives",
+  "portal-organizations-users-view",
+  "portal-organizations-profile",
+  "portal-organizations-logo",
+  "portal-user-record-self",
   "portal-users",
   "portal-system-operations",
   "portal-membership-settings",
@@ -53,6 +62,21 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "sponsor-workspace",
   "votes",
 ]);
+
+/**
+ * How many Playwright worker slots the pool covers.
+ *
+ * One canonical number: `playwright.config.ts` runs this many workers and the
+ * seeder creates identities for exactly that many. It used to size the pool by
+ * `cpus().length` while the config ran a single worker, so on a ten-core
+ * machine it wrote 580 accounts for a suite that could only ever reach 58 —
+ * and that surplus is what pushed the seed past D1's statement ceiling.
+ *
+ * The suite is serial because the specs share one seeded database and one
+ * SendGrid outbox; raising this means proving that isolation first, and then
+ * both halves move together because they read the same constant.
+ */
+export const E2E_WORKER_COUNT = 1;
 
 export function formatE2eAdminEmail(scope, workerIndex) {
   if (!E2E_ADMIN_SCOPES.includes(scope)) {

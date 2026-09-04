@@ -82,8 +82,17 @@ test("an organization contact adds a colleague and can take the access away agai
       /\/api\/v1\/users\/current\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "PATCH",
   );
+  /*
+   * Accepting reloads the portal so the session is rebuilt with the new
+   * capacity (see AccountSettings). The wait is armed before the click, not
+   * after: registered afterwards it resolves against the page that is already
+   * loaded, and the reload then lands in the middle of the evaluate below —
+   * "Execution context was destroyed".
+   */
+  const reloaded = page.waitForEvent("load");
   await page.getByRole("button", { name: "Accept identity" }).click();
   expect((await accepted).status()).toBe(200);
+  await reloaded;
 
   // The accepted identity now grants organization-derived membership.
   const colleagueMemberships = await readActiveIdentities(page);
