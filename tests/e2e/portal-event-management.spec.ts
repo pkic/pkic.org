@@ -1,3 +1,6 @@
+/**
+ * @covers event.3.1
+ */
 import { expect, test } from "@playwright/test";
 import {
   groupEventDaysResponseSchema,

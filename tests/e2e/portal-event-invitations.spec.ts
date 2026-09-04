@@ -1,3 +1,6 @@
+/**
+ * @covers event.3.4
+ */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";

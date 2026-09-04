@@ -23,6 +23,8 @@
  * env's EMAIL_RATE_LIMITER allows only 3 magic-link requests per 60s per
  * address (wrangler.jsonc), and 8 independent sign-ins for the same
  * admin@pkic.org within that window reliably tripped it.
+ *
+ * @covers sponsor.2.3
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";

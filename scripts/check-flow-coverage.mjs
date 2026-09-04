@@ -71,13 +71,39 @@ for (const [id, { step }] of defined) {
 const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, 0]));
 for (const [, { step }] of defined) counts[step.status] += 1;
 
-console.log("Flow coverage");
+/** Wraps a note so a long one stays readable when the report is pasted. */
+function wrap(text, indent) {
+  const lines = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if (line.length + word.length + 1 > 96 - indent.length) {
+      lines.push(indent + line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(indent + line);
+  return lines.join("\n");
+}
+
+const MARKS = { covered: "[x]", unit: "[~]", gap: "[ ]", absent: "[-]" };
+
+console.log("FLOW COVERAGE");
+console.log("  [x] walked end to end   [~] tested below the browser   [ ] untested   [-] not built");
 for (const flow of FLOWS) {
-  console.log(`\n  ${flow.title}`);
+  console.log(`\n${"=".repeat(98)}`);
+  console.log(flow.title);
+  console.log(wrap(flow.purpose, "  "));
+  console.log(`  Personas: ${flow.personas.join(", ")}\n`);
   for (const step of flow.steps) {
-    const mark = step.status === "covered" ? "✓" : step.status === "unit" ? "~" : step.status === "absent" ? "·" : "✗";
-    console.log(`    ${mark} ${step.id.padEnd(6)} ${step.title}`);
-    if (step.status !== "covered") console.log(`      ${step.status}: ${step.note ?? "no note"}`);
+    console.log(`  ${MARKS[step.status]} ${step.id.padEnd(6)} ${step.title}`);
+    const claimedBy = claims.get(`${flow.id}.${step.id}`);
+    if (claimedBy) {
+      console.log(`          walked by: ${claimedBy.map((file) => file.replace("tests/e2e/", "")).join(", ")}`);
+    }
+    if (step.note) console.log(wrap(step.note, "          "));
+    console.log("");
   }
 }
 console.log(

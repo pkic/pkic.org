@@ -7,6 +7,8 @@
  * APIs against the seeded `pqc-conference-amsterdam-nl` event, exactly like
  * votes-and-sponsor.spec.ts's approach. Sponsor access is exercised through
  * the same /portal/ application and /auth session used by staff and members.
+ *
+ * @covers sponsor.2.4
  */
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
