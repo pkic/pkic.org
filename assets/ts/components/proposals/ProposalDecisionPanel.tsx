@@ -86,12 +86,15 @@ export function ProposalDecisionPanel({
     isProposalDecisionTransitionAllowed(proposal.status, proposal.decision_status, status),
   );
   const canRecordDecision = availableDecisionStatuses.length > 0;
+  const [changing, setChanging] = useState(false);
+  const decisionForm = canRecordDecision && (!proposal.decision_status || changing);
   const selectedPreview =
     preview?.messages.find((message) => message.id === selectedPreviewId) ?? preview?.messages[0] ?? null;
 
   useEffect(() => {
     setDecisionStatus("");
     setDecisionNote("");
+    setChanging(false);
     form.reset();
   }, [proposal]);
 
@@ -172,13 +175,20 @@ export function ProposalDecisionPanel({
                 {proposal.decision_decided_at && (
                   <div class="pk-small">Recorded {formatDate(proposal.decision_decided_at)}</div>
                 )}
+                {canRecordDecision && !changing && (
+                  <div class="pk-cluster">
+                    <Button size="sm" onClick={() => setChanging(true)}>
+                      Change decision
+                    </Button>
+                  </div>
+                )}
               </div>
             </Alert>
           )}
           {!canRecordDecision && !proposal.decision_status && (
             <Alert tone="warn">This proposal is not in a state that can receive a decision.</Alert>
           )}
-          {canRecordDecision && (
+          {decisionForm && (
             <>
               {!quorumMet && !loading && (
                 <Alert tone="warn">

@@ -440,7 +440,8 @@ describe("admin event management endpoints", () => {
 
   it("joins the owning group's name into the events management list, with a muted null for ownerless events", async () => {
     await setupAdmin();
-    const groupId = "20000000-0000-4000-8000-000000000009";
+    // A fresh id: the 2000...0009 slot now belongs to the seeded Board of Directors group.
+    const groupId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO groups
          (id, type_key, parent_group_id, name, slug, description, visibility,

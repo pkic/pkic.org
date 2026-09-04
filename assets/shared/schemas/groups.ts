@@ -27,6 +27,20 @@ export const groupAutomaticEnrollmentModeSchema = z.enum(GROUP_AUTOMATIC_ENROLLM
 export const GROUP_VISIBILITIES = ["public", "authenticated", "participants", "managed"] as const;
 export const groupVisibilitySchema = z.enum(GROUP_VISIBILITIES);
 
+/** A leadership display title: "Chair", "Co-Chair", "Lead", "Vice Chair". */
+export const groupLeadershipTitleSchema = trimmedString(1, 80);
+
+/**
+ * The titles a group type gives its two leadership roles. The roles carry the
+ * authority; the titles are what the consortium calls the people holding
+ * them, and every assignment snapshots the title it was made with.
+ */
+export const groupLeadershipTitlesSchema = z.object({
+  lead: groupLeadershipTitleSchema,
+  deputyLead: groupLeadershipTitleSchema,
+});
+export type GroupLeadershipTitles = z.infer<typeof groupLeadershipTitlesSchema>;
+
 export const groupTypeSchema = z.object({
   key: groupTypeKeySchema,
   singularLabel: trimmedString(1, 80),
@@ -37,6 +51,7 @@ export const groupTypeSchema = z.object({
   defaultAutomaticEnrollmentMode: groupAutomaticEnrollmentModeSchema,
   defaultAllowAutomaticOptOut: z.boolean(),
   defaultVisibility: groupVisibilitySchema,
+  leadershipTitles: groupLeadershipTitlesSchema,
   active: z.boolean(),
   sortOrder: z.number().int(),
 });
@@ -72,6 +87,7 @@ export const groupSchema = z.object({
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema,
   allowAutomaticOptOut: z.boolean(),
   publicLeadership: z.boolean(),
+  publicRoster: z.boolean(),
   minEndorsersForBallot: z.number().int().min(0),
   active: z.boolean(),
   revision: groupRevisionSchema,
@@ -93,6 +109,7 @@ export const publicGroupSchema = z.object({
   links: linksSchema,
   visibility: groupVisibilitySchema,
   publicLeadership: z.boolean(),
+  publicRoster: z.boolean(),
 });
 export type PublicGroup = z.infer<typeof publicGroupSchema>;
 
@@ -142,6 +159,7 @@ const groupPolicyInputShape = {
   automaticEnrollmentMode: groupAutomaticEnrollmentModeSchema.optional(),
   allowAutomaticOptOut: z.boolean().optional(),
   publicLeadership: z.boolean().optional(),
+  publicRoster: z.boolean().optional(),
   minEndorsersForBallot: z.number().int().min(0).max(1000).optional(),
 };
 
@@ -213,10 +231,15 @@ export const groupMembershipSchema = z.object({
   membershipCategory: membershipCategorySchema.nullable(),
   source: groupMembershipSourceSchema,
   createdByUserId: databaseIdSchema.nullable(),
+  /** Optional roster title for this seat ("Treasurer", "PKI Consortium Chair"); null renders as a plain member. */
+  title: z.string().nullable(),
   joinedAt: z.string(),
   leftAt: z.string().nullable(),
 });
 export type GroupMembership = z.infer<typeof groupMembershipSchema>;
+
+/** A membership's optional roster title, trimmed; null clears it. */
+export const groupMembershipTitleSchema = trimmedString(1, 80).nullable();
 
 /**
  * Privacy-reduced roster row for a caller with only the `participate`
@@ -239,7 +262,46 @@ export const groupCapacitySelectionSchema = z.discriminatedUnion("mode", [
 export type GroupCapacitySelection = z.infer<typeof groupCapacitySelectionSchema>;
 
 export const groupJoinSchema = z.object({ capacitySelection: groupCapacitySelectionSchema });
-export const groupMemberAddSchema = groupJoinSchema.extend({ userId: databaseIdSchema });
+
+/**
+ * A manager adds a person with an optional roster title and service interval.
+ * `joinedAt` backdates the seat; a `leftAt` at or before now records a former
+ * member in one step, which is how a governing body keeps its history in the
+ * same roster as its current seats.
+ */
+const groupMemberAddShape = {
+  capacitySelection: groupCapacitySelectionSchema,
+  title: groupMembershipTitleSchema.optional(),
+  joinedAt: utcInstantSchema.optional(),
+  leftAt: utcInstantSchema.nullable().optional(),
+};
+
+function requireOrderedServiceInterval(
+  value: { joinedAt?: string; leftAt?: string | null },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.leftAt && value.joinedAt && value.leftAt < value.joinedAt) {
+    ctx.addIssue({ code: "custom", message: "leftAt cannot be before joinedAt", path: ["leftAt"] });
+  }
+}
+
+/** The request body of the staff add route; the user is addressed by the path. */
+export const groupMemberAddBodySchema = z.object(groupMemberAddShape).superRefine(requireOrderedServiceInterval);
+export type GroupMemberAddBody = z.infer<typeof groupMemberAddBodySchema>;
+export const groupMemberAddSchema = z
+  .object({ ...groupMemberAddShape, userId: databaseIdSchema })
+  .superRefine(requireOrderedServiceInterval);
+export type GroupMemberAddInput = z.infer<typeof groupMemberAddSchema>;
+
+/** Edits one seat's title or service interval; `leftAt: null` reopens an ended seat. */
+export const groupMembershipUpdateSchema = z
+  .object({
+    title: groupMembershipTitleSchema.optional(),
+    joinedAt: utcInstantSchema.optional(),
+    leftAt: utcInstantSchema.nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: "No fields to update" });
+export type GroupMembershipUpdateInput = z.infer<typeof groupMembershipUpdateSchema>;
 export const groupLeaveSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("all") }),
   z.object({ mode: z.literal("selected"), memberIds: z.array(databaseIdSchema).min(1).max(50) }),
@@ -260,6 +322,28 @@ export const groupAutomaticEnrollmentPreferenceResponseSchema = z.object({
 
 export const GROUP_LEADERSHIP_ROLE_IDS = ["role-group_lead", "role-group_deputy_lead"] as const;
 export const groupLeadershipRoleIdSchema = z.enum(GROUP_LEADERSHIP_ROLE_IDS);
+export type GroupLeadershipRoleId = z.infer<typeof groupLeadershipRoleIdSchema>;
+
+/**
+ * Titles a manager can pick for each role beside the group type's own
+ * default. Any other title is still accepted: the vocabulary is a shortcut,
+ * not a constraint, so a type can be renamed without a code change.
+ */
+export const GROUP_LEADERSHIP_TITLE_SUGGESTIONS: Record<GroupLeadershipRoleId, readonly string[]> = {
+  "role-group_lead": ["Chair", "Co-Chair", "Lead", "Co-Lead", "President"],
+  "role-group_deputy_lead": ["Vice Chair", "Deputy Lead", "Deputy Chair", "Vice President", "Secretary"],
+};
+
+/** The type's default title for one leadership role. */
+export function defaultGroupLeadershipTitle(titles: GroupLeadershipTitles, roleId: GroupLeadershipRoleId): string {
+  return roleId === "role-group_lead" ? titles.lead : titles.deputyLead;
+}
+
+/**
+ * One leadership tenure. `startsAt` and `endsAt` are the displayed term;
+ * authority itself is active while `active` is true. An `endsAt` in the past
+ * is a closed term, one in the future is a scheduled hand-over.
+ */
 export const groupLeadershipAssignmentSchema = z.object({
   userRoleId: databaseIdSchema,
   userId: databaseIdSchema,
@@ -270,24 +354,64 @@ export const groupLeadershipAssignmentSchema = z.object({
   userName: z.string(),
   email: z.email(),
   jobTitle: z.string().nullable(),
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   roleId: groupLeadershipRoleIdSchema,
+  title: groupLeadershipTitleSchema,
   sourceGroup: groupLabelSchema,
   inherited: z.boolean(),
-  expiresAt: z.string().nullable(),
+  active: z.boolean(),
+  startsAt: z.string(),
+  endsAt: z.string().nullable(),
   createdAt: z.string(),
 });
 export type GroupLeadershipAssignment = z.infer<typeof groupLeadershipAssignmentSchema>;
-export const groupLeadershipAssignSchema = z.object({
-  userId: databaseIdSchema,
-  identityId: databaseIdSchema,
-  roleId: groupLeadershipRoleIdSchema,
-  expiresAt: utcInstantSchema.nullable().optional(),
-});
+
+function requireOrderedLeadershipTerm(
+  value: { startsAt?: string; endsAt?: string | null },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.endsAt && value.startsAt && value.endsAt < value.startsAt) {
+    ctx.addIssue({ code: "custom", message: "endsAt cannot be before startsAt", path: ["endsAt"] });
+  }
+}
+
+/**
+ * Assigns leadership through one active participation capacity. The title
+ * defaults to the group type's title for the role; `startsAt` defaults to now
+ * and may be backdated; an `endsAt` at or before now records a past term.
+ */
+export const groupLeadershipAssignSchema = z
+  .object({
+    userId: databaseIdSchema,
+    identityId: databaseIdSchema,
+    roleId: groupLeadershipRoleIdSchema,
+    title: groupLeadershipTitleSchema.optional(),
+    startsAt: utcInstantSchema.optional(),
+    endsAt: utcInstantSchema.nullable().optional(),
+  })
+  .superRefine(requireOrderedLeadershipTerm);
 export type GroupLeadershipAssignInput = z.infer<typeof groupLeadershipAssignSchema>;
+
+/** Edits a local assignment's title or term; `endsAt: null` makes it open-ended again. */
+export const groupLeadershipUpdateSchema = z
+  .object({
+    title: groupLeadershipTitleSchema.optional(),
+    startsAt: utcInstantSchema.optional(),
+    endsAt: utcInstantSchema.nullable().optional(),
+  })
+  .superRefine(requireOrderedLeadershipTerm)
+  .refine((value) => Object.keys(value).length > 0, { message: "No fields to update" });
+export type GroupLeadershipUpdateInput = z.infer<typeof groupLeadershipUpdateSchema>;
+
 export const groupLeadershipListResponseSchema = z.object({
   group: groupLabelSchema,
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema,
+  /** The group type's default titles, used to label roles and pre-fill new assignments. */
+  titles: groupLeadershipTitlesSchema,
+  /** Effective leadership right now: local assignments plus those inherited from ancestors. */
   assignments: z.array(groupLeadershipAssignmentSchema),
+  /** Closed local terms, most recently ended first. */
+  past: z.array(groupLeadershipAssignmentSchema),
 });
 export type GroupLeadershipListResponse = z.infer<typeof groupLeadershipListResponseSchema>;
 
@@ -313,6 +437,7 @@ export const GROUP_MEMBERSHIP_SORT_COLUMNS = [
   "organization_name",
   "membership_category",
   "joined_at",
+  "left_at",
 ] as const;
 /** The subset of {@link GROUP_MEMBERSHIP_SORT_COLUMNS} the reduced participant roster may sort by. */
 export const GROUP_PARTICIPANT_SORT_COLUMNS = ["user_name", "organization_name"] as const;

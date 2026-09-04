@@ -16,13 +16,17 @@ export function OrganizationLogo({
   organization,
   canWrite,
   onChanged,
+  size,
 }: {
   organization: OrganizationDetail;
   canWrite: boolean;
   onChanged: () => Promise<void>;
+  /** `mark` for the record header, where the tile sits beside the name. */
+  size?: "default" | "mark";
 }) {
   return (
     <LogoTile
+      size={size}
       name={organization.name}
       imageUrl={organization.logoUrl}
       alt={`${organization.name} logo`}

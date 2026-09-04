@@ -96,6 +96,23 @@ export const userIdentityDetailSchema = z.object({
   createdAt: z.string(),
   groups: z.array(groupLabelSchema),
 });
+/**
+ * An affiliation the person no longer holds.
+ *
+ * Kept apart from `identities` rather than widening it: an ended identity
+ * grants nothing, and callers that ask "does this user hold any capacity?"
+ * read `identities` and would silently start counting history as standing.
+ * This carries only what a record needs to state a finished tie.
+ */
+export const userFormerIdentitySchema = z.object({
+  identityId: z.string(),
+  organizationId: z.string().nullable(),
+  organizationName: z.string().nullable(),
+  jobTitle: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string(),
+});
+
 export const userDetailSchema = userResponseBaseSchema.extend({
   preferred_name: z.string().nullable(),
   active: z.boolean(),
@@ -103,6 +120,7 @@ export const userDetailSchema = userResponseBaseSchema.extend({
   updated_at: z.string(),
   pii_redacted_at: z.string().nullable(),
   identities: z.array(userIdentityDetailSchema),
+  formerIdentities: z.array(userFormerIdentitySchema),
 });
 export const userDetailResponseSchema = z.object({ user: userDetailSchema });
 

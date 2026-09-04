@@ -1,0 +1,87 @@
+id: netrascale
+name: NetraScale
+slogan: Quantum-ready cryptographic risk intelligence — CBOM, PQC readiness scoring, and verifiable certification.
+website: https://www.netrascale.com/
+organizationDomains:
+  - netrascale.com
+description: NetraScale builds cryptographic risk intelligence platforms for regulated sectors. We serve financial market infrastructure, critical infrastructure operators, and regulated technology providers across North America, the UK, and Europe.
+
+memberSince: 2026-07-30
+memberType: H3
+workingGroups:
+  - CBOM
+  - PQC
+sponsor:
+  level:
+blog:
+  url: https://www.netrascale.com/resources/blog
+  feed:
+  language: en_US
+press:
+  url:
+  feed:
+  language: en_US
+careers:
+  url: https://www.netrascale.com/enterprise/careers
+  feed:
+  language: en_US
+social:
+  x:
+  facebook: https://www.facebook.com/profile.php?id=61573909137715
+  instagram:
+  linkedin: https://www.linkedin.com/company/netrascale
+  youtube: https://www.youtube.com/watch?v=GK2v8cm5n6g
+representatives:
+  - name: Denis Nwanshi
+    role: CEO & Principal Architect
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/denis-nwanshi/
+    description: |
+      Denis Nwanshi is CEO and Principal Architect at NetraScale, with over
+      20 years of delivery experience in cryptographic security at critical
+      financial market infrastructure, including the Bank of England RTGS 2.0 pilot,
+      Payments Canada LYNX and RTR, Euroclear CCI, and multiple tier 1 banks and insurance
+      firms across Europe and North America. He leads NetraScale's participation in the
+      PKI Consortium's Post-Quantum Cryptography and CBOM Profiles working groups, and is
+      a contributor to the Cloud Security Alliance (CSA) Zero Trust working group, and
+      Canada's Digital Governance Council (DGC) Technical Committee on Digital Sovereignty.
+content: |
+  ## About NetraScale
+
+  NetraScale develops cyber resilience and cryptographic risk intelligence platforms
+  that help regulated organisations quantify their exposure to the quantum threat and
+  build defensible PQC migration programmes.
+
+  ### Products
+
+  **QDayRisk** assesses an organisation's cryptographic posture across
+  algorithm vulnerability, Harvest-Now-Decrypt-Later (HNDL) exposure,
+  migration feasibility, and regulatory compliance — producing a structured
+  CBOM aligned to OWASP CycloneDX 1.6 and mapped against 71 regulatory
+  frameworks across 22 jurisdictions.
+
+  **PQReady** issues verifiable PQC readiness certifications using a
+  Two-Clocks methodology that scores Confidentiality (ML-KEM / FIPS 203
+  readiness) and Trust/Authentication (ML-DSA / FIPS 204; SLH-DSA / FIPS 205
+  readiness) as independently gated dimensions — reflecting the practitioner
+  insight that these are genuinely different risk timelines requiring separate
+  organisational responses.
+
+  ### Standards Alignment
+
+  - NIST FIPS 203 (ML-KEM), FIPS 204 (ML-DSA), FIPS 205 (SLH-DSA)
+  - NSA CNSA 2.0 migration deadlines (2030–2033)
+  - OWASP CycloneDX 1.6 CBOM
+  - CCCS ITSM.40.001 (Canada, 2031 mandatory deadline)
+  - EU CRA 2024/2847, EU DORA, NIS2
+  - OSFI B-13, NCSC CAF v4.0, ISO/SAE 21434
+  - OMB M-23-02 §2(c) SBOM/CBOM mandates
+
+  ### Working Group Participation
+
+  NetraScale participates in the **Post-Quantum Cryptography** and **CBOM
+  Profiles** working groups, contributing practitioner experience from
+  financial market infrastructure and critical infrastructure deployments
+  to standards discussions on real-world PQC migration and cryptographic
+  asset inventory practices.

@@ -259,6 +259,10 @@ export function ActingIdentityDirectory({
   return (
     <ApiDataTable
       caption={caption}
+      /* A list on a record page says what it is a list of. Hidden, the roster
+         opened with a search box and a table whose first column heading was
+         the only clue. */
+      showCaption
       toolbar={toolbar ? () => toolbar : undefined}
       inset={inset}
       endpoint={`/api/v1/organizations/${encodeURIComponent(organizationId)}/identities`}

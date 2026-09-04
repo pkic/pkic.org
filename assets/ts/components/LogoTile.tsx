@@ -22,6 +22,16 @@ export interface LogoTileProps extends Omit<LogoManagerProps, "hint" | "uploadLa
   canChange: boolean;
   /** What the file rule is, announced with the control. */
   hint?: string;
+  /**
+   * `mark` is the record-header size: a fixed square that holds its width in a
+   * layout that sizes its columns to their contents.
+   *
+   * The default tile is `width: 100%` up to a cap, which is right in a panel
+   * that gives it a column and wrong in a subject header, where the media
+   * track is `auto` — with no intrinsic width the tile collapsed to its
+   * padding and the logo disappeared.
+   */
+  size?: "default" | "mark";
 }
 
 export function LogoTile(props: LogoTileProps) {
@@ -38,16 +48,22 @@ export function LogoTile(props: LogoTileProps) {
     </span>
   );
 
+  const sizing = props.size === "mark" ? " pk-logo-tile--mark" : "";
+
   if (!props.canChange) {
     return (
-      <div class="pk pk-logo-tile" role="img" aria-label={props.imageUrl ? props.alt : `${props.name} has no logo`}>
+      <div
+        class={`pk pk-logo-tile${sizing}`}
+        role="img"
+        aria-label={props.imageUrl ? props.alt : `${props.name} has no logo`}
+      >
         {picture}
       </div>
     );
   }
 
   return (
-    <div class="pk pk-logo-tile pk-logo-tile--editable">
+    <div class={`pk pk-logo-tile pk-logo-tile--editable${sizing}`}>
       <button
         type="button"
         class="pk-logo-tile__control"

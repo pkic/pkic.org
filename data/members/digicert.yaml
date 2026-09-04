@@ -23,7 +23,8 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: Silver
+  # Upgraded to Platinum on 20260828
+  level: Platinum
   sponsoring:
     "Post-Quantum Cryptography Conference Austin 2025":
       level: Innovator

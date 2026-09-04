@@ -1,23 +1,22 @@
 {{/*
-  leadership shortcode — mounts the client-fetched, admin-managed
-  Board of Directors / Executive Council / consortium chair display
-  (see layouts/partials/leadership/app.html and
-  assets/ts/member-flows/leadership-widget.tsx). Replaces the old
-  leadership-grid + person-card static markdown lists on
-  content/about/board.md, executive-council.md and _index.md.
+  leadership shortcode — mounts the client-fetched, portal-managed governance
+  display of one group (see layouts/partials/leadership/app.html and
+  assets/ts/member-flows/leadership-widget.tsx). The Board of Directors,
+  Executive Council, and consortium chair pages all use it; the group's own
+  publication switches in the portal decide what appears.
 
   Usage:
-    {{< leadership source="roster" body="board" >}}
-    {{< leadership source="roster" body="executive_council" >}}
-    {{< leadership source="consortium" >}}
+    {{< leadership group="board" >}}
+    {{< leadership group="executive-council" >}}
+    {{< leadership group="all-members" view="leadership" >}}
 
   Parameters:
-    source ("roster" default | "consortium")
-    body   ("board" | "executive_council" — required when source is "roster")
+    group  group slug (required)
+    view   "roster" (default) | "leadership"
     color  accent color slug (optional, default "green")
 */}}
 {{- partial "leadership/app.html" (dict
-    "source" (.Get "source")
-    "body"   (.Get "body")
-    "color"  (.Get "color")
+    "group" (.Get "group")
+    "view"  (.Get "view")
+    "color" (.Get "color")
 ) -}}

@@ -43,6 +43,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-colleague-self-service",
   "portal-group-self-service",
   "portal-sign-in-return-path",
+  "portal-passkeys",
   "portal-personas-provisioning",
   "portal-persona-interested",
   "portal-persona-voting",

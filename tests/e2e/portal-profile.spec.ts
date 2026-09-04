@@ -146,15 +146,12 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   await expect(page.getByRole("img", { name: email })).toBeVisible({ timeout: 15_000 });
 });
 
-// A member who uploads a headshot has no way to remove it again: MyProfile
-// never passes `deleteHeadshot` to `AdminHeadshotManager` (unlike the staff
-// user-management panel, which does), so the "Remove headshot" button never
-// unhides — and even if it were wired, `functions/api/v1/users/current/headshot.ts`
-// exports only `CurrentUserHeadshotPut`; there is no DELETE handler or route
-// registration to call. Fixing this needs a backend change outside
-// `assets/ts/member-flows/portal/sections/`, which is outside this task's
-// edit scope, so this is recorded as `fixme` rather than silently skipped.
-test.fixme("a member can remove their own headshot", async ({ page }) => {
+// The other half of the upload flow above: a photo a member put up is theirs
+// to take down again. The "Remove headshot" control stays hidden until there
+// is something to remove, so this uploads first and then removes, and checks
+// the placeholder survives a fresh mount — proving the removal reached the
+// server rather than only the component it was clicked in.
+test("a member can remove their own headshot", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `profile-headshot-remove-${suffix}@profile-headshot-remove-${suffix}.test`;
 
@@ -181,11 +178,22 @@ test.fixme("a member can remove their own headshot", async ({ page }) => {
   await page.locator("#crop-headshot-modal .crop-headshot-confirm").click();
   await expect(page.getByRole("img", { name: email })).toBeVisible({ timeout: 15_000 });
 
+  // The shared headshot controller still confirms through the native dialog
+  // (see its TODO(confirm-dialog) note: it is also mounted on public token
+  // pages that never render <ConfirmDialogHost/>), and Playwright dismisses
+  // dialogs unless something accepts them.
+  page.on("dialog", (dialog) => void dialog.accept());
+
   const remove = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current/headshot") && response.request().method() === "DELETE",
   );
   await page.getByRole("button", { name: "Remove headshot" }).click();
   expect((await remove).status()).toBe(200);
   // MyProfile overrides the placeholder's default copy with `emptyLabel="You"`.
-  await expect(page.getByText("You", { exact: true })).toBeVisible();
+  await expect(page.getByText("You", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("img", { name: email })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByText("You", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("img", { name: email })).toHaveCount(0);
 });

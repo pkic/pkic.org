@@ -40,6 +40,7 @@ function group(revision = 0) {
     automaticEnrollmentMode: "none",
     allowAutomaticOptOut: false,
     publicLeadership: false,
+    publicRoster: false,
     minEndorsersForBallot: 2,
     active: true,
     revision,

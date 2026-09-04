@@ -8,6 +8,7 @@ import {
   joinGroup,
   listGroupMemberships,
   listGroupParticipants,
+  recordFormerGroupMembership,
   requireGroupManagement,
 } from "../../../../../_lib/services/groups";
 import {
@@ -53,18 +54,37 @@ export const GroupMembershipsList = openApiRoute(groupMembershipsListRouteSchema
   throw new AppError(403, "GROUP_PARTICIPATION_REQUIRED", "An active membership capacity is required");
 });
 
+/**
+ * A seat that already ended is history rather than a join: it is recorded
+ * closed through the capacity the person once held. Everything else is a
+ * live join with an optional title and backdated start.
+ */
 export const GroupMemberAdd = openApiRoute(groupMemberAddRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const group = await getGroup(db, data.params.groupId);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, admin, group.id);
+  const { capacitySelection, title, joinedAt, leftAt } = data.body;
+  if (leftAt) {
+    return json(
+      await recordFormerGroupMembership(db, group.id, admin, {
+        targetUserId: data.params.userId,
+        selection: capacitySelection,
+        title,
+        joinedAt: joinedAt ?? leftAt,
+        leftAt,
+      }),
+    );
+  }
   return json(
     await joinGroup(db, group.id, {
       actorUserId: admin.id,
       actorDatabaseUserId: admin.identityType === "user" ? admin.id : null,
       targetUserId: data.params.userId,
-      selection: data.body.capacitySelection,
+      selection: capacitySelection,
+      title,
+      joinedAt,
       source: "staff",
       allowManaged: true,
       managementActor: admin,

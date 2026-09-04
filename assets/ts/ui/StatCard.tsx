@@ -18,10 +18,35 @@ export interface StatCardProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 
    * card in an anchor would announce.
    */
   href?: string;
+  /**
+   * `compact` is the glance version: the figure leads, the label sits under it
+   * in sentence case, and the whole tile centres — three of them across a
+   * sidebar panel rather than one across a dashboard.
+   *
+   * The DOM order stays label-then-value at both densities so the tile is
+   * announced the same way however it is drawn; only the visual order flips.
+   */
+  density?: "default" | "compact";
 }
 
-export function StatCard({ label, value, note, trend, href, class: className, ...rest }: StatCardProps) {
-  const classes = ["pk-stat-card", href ? "pk-stat-card--link" : null, className].filter(Boolean).join(" ");
+export function StatCard({
+  label,
+  value,
+  note,
+  trend,
+  href,
+  density = "default",
+  class: className,
+  ...rest
+}: StatCardProps) {
+  const classes = [
+    "pk-stat-card",
+    href ? "pk-stat-card--link" : null,
+    density === "compact" ? "pk-stat-card--compact" : null,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const TREND_LABEL: Record<StatCardTrend, string> = {
     up: "trending up",

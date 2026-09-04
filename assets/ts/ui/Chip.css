@@ -62,4 +62,47 @@
   .pk-chip--pressed .pk-chip__remove:hover {
     background: color-mix(in oklab, var(--pk-accent) 18%, var(--pk-surface));
   }
+
+  /*
+   * The figure a chip carries, set apart from its label by the monospace face
+   * so a shelf of chips lines its numbers up rather than letting a wide label
+   * push each one to a different place.
+   */
+  .pk-chip__count {
+    align-self: center;
+    padding-inline-end: 0.7rem;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  /*
+   * Weight, in five steps.
+   *
+   * Colour alone does not carry this — the count beside the label is the
+   * accessible statement of the same fact, and the tint is the glance version
+   * of it. Steps rather than a continuous ramp so no chip needs an inline
+   * style; see `strength` in Chip.tsx.
+   */
+  .pk-chip[data-strength="1"] {
+    background: color-mix(in oklab, var(--pk-accent-soft) 20%, var(--pk-surface));
+  }
+
+  .pk-chip[data-strength="2"] {
+    background: color-mix(in oklab, var(--pk-accent-soft) 40%, var(--pk-surface));
+  }
+
+  .pk-chip[data-strength="3"] {
+    background: color-mix(in oklab, var(--pk-accent-soft) 60%, var(--pk-surface));
+  }
+
+  .pk-chip[data-strength="4"] {
+    background: color-mix(in oklab, var(--pk-accent-soft) 80%, var(--pk-surface));
+    border-color: var(--pk-accent);
+  }
+
+  .pk-chip[data-strength="5"] {
+    background: var(--pk-accent-soft);
+    border-color: var(--pk-accent);
+  }
 }

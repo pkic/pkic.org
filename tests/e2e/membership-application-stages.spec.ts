@@ -162,21 +162,13 @@ test("staff email the applicant and record an internal note through the Communic
   await expect(card.getByRole("cell", { name: "Emailed" })).toBeVisible();
   await expect(card.getByText(subject, { exact: true })).toBeVisible();
 
-  // The communication is a real email, not just a timeline row.
-  //
-  // Known product bug (reported, not fixed — outside this task's edit scope:
-  // it lives in functions/_lib/services/membership/applications/communications.ts,
-  // not a frontend surface this task may touch): sendApplicationCommunication
-  // defaults `templateKey` to "application-hold-information" whenever the
-  // caller omits one, and the frontend form never sends one. The queued
-  // email is rendered from that on-hold-request template, whose own canned
-  // subject ("We need more information about your PKI Consortium
-  // application") silently replaces the free-text `subject` typed here — the
-  // outgoing email's subject line does not match what staff typed or what
-  // the timeline row shows. This asserts the delivery that does happen
-  // (message reaches the applicant) without asserting the subject line,
-  // since that part is the confirmed-broken behavior.
-  await waitForCapturedEmail(email, "PKI Consortium", { since, timeoutMs: 20_000 });
+  // The communication is a real email, not just a timeline row — and it is the
+  // email staff wrote. This form chooses no template, and under
+  // applicationCommunicationCreateSchema that means the typed subject and body
+  // are delivered verbatim, so the subject line the applicant receives is the
+  // one the timeline row above shows.
+  const delivered = await waitForCapturedEmail(email, subject, { since, timeoutMs: 20_000 });
+  expect(delivered.subject).toBe(subject);
 
   // The note form is a distinct control with its own native `required` guard,
   // and it never emails anyone.

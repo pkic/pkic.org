@@ -1,22 +1,16 @@
 id: consultingexperts
-
 name: ConsultingExperts B.V.
-
 slogan: QUANTUM SAFE, PQC AND A CRYPTO-AGILE STRATEGY
-
 website: https://www.consultingexperts.nl
-
 # Business domains for email
 organizationDomains:
   - consultingexperts.nl
-
 # Short description
 description: ConsultingExperts B.V. is a Dutch ICT consultancy that connects highly skilled IT professionals with public and private organizations and provides consultancy, managed expertise, and Quantum Safe advisory services.
 
 # membership
 memberSince: 2026-07-14
 memberType: H2
-
 workingGroups:
   - PKIMM
   - PQC

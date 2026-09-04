@@ -10,6 +10,7 @@ import { renderEmail, renderSubject } from "./render";
 import { loadEmailRenderResources } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
+import { readDirectEmailBody } from "./direct-body";
 import { parseQueuedEmailAttachments } from "./attachments";
 import { materializeQueuedCapabilityLinks } from "../auth/capability-links";
 import type { DatabaseLike, Env } from "../types";
@@ -268,17 +269,16 @@ async function processOutboxRow(
     const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
     const dataWithPartials = { ...payload, _partials: partials };
-    const bodyOverride =
-      typeof payload.__eventCampaignBodyContent === "string" && payload.__eventCampaignBodyContent
-        ? payload.__eventCampaignBodyContent
-        : null;
+    const bodyOverride = readDirectEmailBody(payload);
 
     let subject: string;
     let contentWithCustom: string;
     let resolvedContentType: EmailContentType;
 
     if (bodyOverride) {
-      // Direct body still supports subject placeholders like {{eventName}}.
+      // The row's own subject is the subject: a direct body resolves no
+      // template, so no canned subject line can replace what was written.
+      // Placeholders like {{eventName}} are still expanded in it.
       subject = renderSubject(row.subject, row.subject ?? "PKI Consortium Update", dataWithPartials);
       contentWithCustom = bodyOverride;
       resolvedContentType = "markdown";

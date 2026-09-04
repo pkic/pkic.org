@@ -288,12 +288,34 @@ describe("portal organization profile", () => {
 
   it("names each stored URL for what it is, under the mark", () => {
     const container = mount(<OrganizationLinks organization={detail().organization} />);
-    // A stored URL is the link it is, named for what it is rather than shown
-    // as eight lines of text to copy out by hand; absent ones are not listed.
-    const links = [...container.querySelectorAll<HTMLAnchorElement>('[aria-label="Links"] a')];
-    expect(links.map((link) => link.textContent)).toEqual(["Website"]);
+    // A stored URL is paired with the term that names it, rather than shown as
+    // eight lines of text to copy out by hand; absent ones are not listed.
+    const terms = [...container.querySelectorAll("dl.pk-datalist > dt")].map((term) => term.textContent);
+    expect(terms).toEqual(["Website"]);
+    const links = [...container.querySelectorAll<HTMLAnchorElement>("dl.pk-datalist a")];
     expect(links[0]?.href).toBe("https://example.test/");
+    // The scheme is not read out: it is the same on every row and the address
+    // is what a reader is scanning for.
+    expect(links[0]?.textContent).toBe("example.test");
   });
+
+  /**
+   * Enters the record's edit mode.
+   *
+   * Editing is a command on the record, so it lives in the header's menu
+   * rather than as a button beside the name — the same place the contact
+   * record keeps its own.
+   */
+  async function openEditMode(container: HTMLElement): Promise<void> {
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Record actions"]');
+    if (!trigger) throw new Error("the record offers no actions menu");
+    await act(async () => trigger.click());
+    const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (candidate) => candidate.textContent === "Edit organization…",
+    );
+    if (!item) throw new Error('the record offers no "Edit organization…"');
+    await act(async () => item.click());
+  }
 
   function stubAccount(onPatch: (body: unknown) => Response) {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
@@ -335,7 +357,7 @@ describe("portal organization profile", () => {
       />,
     );
     await settle();
-    await act(async () => buttonNamed(container, "Edit").click());
+    await openEditMode(container);
     return container;
   }
 

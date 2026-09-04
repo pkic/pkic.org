@@ -18,6 +18,7 @@ import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
+import { LinkList } from "../../../../ui/LinkList";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 import { fmt, fmtDate } from "../../ui";
@@ -138,13 +139,17 @@ export function OrganizationAbout(props: OrganizationCardProps) {
       </Panel>
     );
   }
-  const hasAbout = Boolean(organization.slogan || organization.description);
+  // The slogan is the record's lede, under the name in the header — stating it
+  // again here printed the same line twice on one screen.
   return (
     <Panel aria-label="About">
+      <PanelHeader title="About" />
       <PanelBody class="pk-stack pk-stack--snug">
-        {organization.slogan && <p class="pk-strong">{organization.slogan}</p>}
-        {organization.description && <p class="pk-prose-block">{organization.description}</p>}
-        {!hasAbout && <p class="pk-muted">Nothing written about this organization yet.</p>}
+        {organization.description ? (
+          <p class="pk-prose-block">{organization.description}</p>
+        ) : (
+          <p class="pk-muted">Nothing written about this organization yet.</p>
+        )}
       </PanelBody>
     </Panel>
   );
@@ -185,24 +190,30 @@ export function OrganizationLinks(props: OrganizationCardProps) {
       </div>
     );
   }
-  // Feeds are for machines; the row shows the pages a person would open.
-  const links: Array<[string, string]> = [];
+  // Feeds are for machines; the list shows the pages a person would open.
+  const pages: DescriptionListItem[] = [];
   for (const [label, field] of LINK_FIELDS) {
     if (field.endsWith("FeedUrl")) continue;
     const url = organization[field];
-    if (url) links.push([label, url]);
+    if (!url) continue;
+    pages.push({
+      term: label,
+      value: (
+        <a class="pk-break" href={url} target="_blank" rel="noopener noreferrer">
+          {url.replace(/^https?:\/\//, "")}
+        </a>
+      ),
+    });
   }
-  if (links.length === 0) return null;
+  // The flexible profile links were editable and never shown: they are stored
+  // as bare URLs, so they get the same marked list a contact record uses
+  // rather than a label this record cannot know.
+  if (pages.length === 0 && organization.links.length === 0) return null;
   return (
-    <ul class="pk-inline-links pk-inline-links--center" aria-label="Links">
-      {links.map(([label, url]) => (
-        <li key={label}>
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            {label}
-          </a>
-        </li>
-      ))}
-    </ul>
+    <div class="pk-stack pk-stack--snug">
+      {pages.length > 0 && <DescriptionList density="compact" items={pages} />}
+      <LinkList links={organization.links} />
+    </div>
   );
 }
 

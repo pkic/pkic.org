@@ -131,6 +131,23 @@
   }
 
   /*
+   * A row of small figures that stays a row.
+   *
+   * `pk-grid` sizes tracks from a minimum and folds to one column when the
+   * container is narrower than that. Right for cards; wrong for the three
+   * figures in a glance panel, which in an 18rem aside fell below even
+   * `--pk-col-min: 11rem` and stacked into a column three tiles tall. These
+   * tracks are equal fractions of whatever width there is: the figures are
+   * short enough to survive the squeeze, and reading them side by side is the
+   * whole point of a glance.
+   */
+  .pk-figure-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /*
    * A record page: the record itself takes the width, a supporting column
    * — logo, contacts, a stage — keeps a reading measure beside it. `auto-fill`
    * is wrong here: it packs both into the left corner of a wide screen and
@@ -183,6 +200,45 @@
   .pk-section {
     box-sizing: border-box;
     padding-block: var(--pk-7);
+  }
+
+  /*
+   * A run of short statements on one line, separated by middots.
+   *
+   * A list, because that is what it is — roles someone will take, services
+   * they sell — so it is announced as a list of that many items rather than
+   * one sentence with punctuation in it. The separator is generated, so it is
+   * never read out and never selected when the text is copied.
+   *
+   * `AffiliationRow` draws the terms of a tie exactly this way; this is the
+   * same treatment made available to anything else that needs it.
+   */
+  .pk-inline-list {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-inline-list > li + li::before {
+    content: "·";
+    margin-inline: 0.4rem;
+    color: var(--pk-ink-faint);
+  }
+
+  /*
+   * A closing note, set off from what it explains by a hairline.
+   *
+   * Not `pk-section`: that is the page's rhythm between whole sections and
+   * pads by `--pk-7`, which inside a panel opens a hole under the content and
+   * pushes the note away from the thing it is a note about. This is the small
+   * separation a footnote wants — the caption under a chip shelf, the sentence
+   * under a set of figures.
+   */
+  .pk-footnote {
+    padding-block-start: var(--pk-3);
+    border-block-start: 1px solid var(--pk-line-soft);
   }
 
   /*
@@ -342,6 +398,20 @@
     color: var(--pk-warn-ink);
   }
 
+  /*
+   * The affirmative and informational counterparts, for a statement a panel
+   * leads with — "Open to employment", "Available for contract work". The
+   * words carry the meaning; the ink only tells the two states apart at a
+   * glance, so a reader who cannot see the difference loses nothing.
+   */
+  .pk-ok-note {
+    color: var(--pk-ok-ink);
+  }
+
+  .pk-info-note {
+    color: var(--pk-info-ink);
+  }
+
   /* Long unbroken strings — a token, a URL — that would otherwise widen their
      container past the viewport. */
   .pk-break {
@@ -362,4 +432,18 @@
      40px indent, which would push the values out of line with their term. */
   /* Preformatted text that must still wrap: a long free-text answer has no
      line breaks of its own and would otherwise scroll sideways forever. */
+
+  /*
+   * A list that is a list to assistive technology and not to the eye.
+   *
+   * Links in a sidebar, facts under a name: the markup should stay a `ul` so
+   * it is announced as "list, 3 items", but the marker and the browser's
+   * indent are wrong wherever the list is the layout. Pair it with `pk-stack`
+   * or `pk-cluster` for the arrangement.
+   */
+  .pk-plain-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
 }

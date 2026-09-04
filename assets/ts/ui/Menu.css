@@ -116,16 +116,30 @@
   }
 
   /*
-   * A choice item reserves the check's column whether or not it is the one
-   * in force, so the labels in a group line up and the check does not push
-   * one of them sideways.
+   * The check marks the chosen item at the END of its row.
+   *
+   * It used to sit in a reserved gutter at the start, which lined up the
+   * labels of a group of choice items with each other — but a column menu
+   * mixes them with plain commands ("Filter this column…", "Hide column"),
+   * and those have no gutter. Every label in one menu then started at one of
+   * two different x positions, and the reserved column read as a stray indent
+   * on the half of the menu that had it. Marking at the end lets every label
+   * in a menu start on the same line whether or not it is a choice.
    */
   .pk-menu__check {
     display: inline-block;
-    width: 1em;
-    flex: 0 0 1em;
-    text-align: center;
     color: var(--pk-accent-ink);
+  }
+
+  .pk-menu__item--choice {
+    gap: 1.25rem;
+  }
+
+  .pk-menu__item--choice > .pk-menu__check {
+    order: 2;
+    margin-inline-start: auto;
+    width: auto;
+    text-align: end;
   }
 
   .pk-menu__item--separated {

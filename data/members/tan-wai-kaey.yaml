@@ -1,0 +1,67 @@
+id: tan-wai-kaey
+name: Tan Wai Kaey
+slogan:
+website:
+# Business domains for email
+organizationDomains:
+  - kpmg.com.my
+# Short description, longer content can be placed in `content/members/`
+description: Tan is the OT Cybersecurity Consultant
+
+# membership
+memberSince: 2026-07-30
+memberType: H6
+workingGroups:
+  - CBOM
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/in/casey-tan-profile/
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tan Wai Kaey
+    role: OT Cybersecurity Consultant
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/casey-tan-profile/
+    description: |
+      I work as an OT Cybersecurity Consultant in Malaysia, where my focus spans industrial control systems security and, increasingly, post-quantum cryptography advisory. My PQC interest goes back to my Final Year Project on lightweight quantum-resistant algorithms for IoT devices, published in IC-ITECH (Vol. 5, No. 1, 2024), which gave me early hands-on exposure to lattice-based and hash-based signature schemes under the constraints of resource-limited embedded hardware.
+      On the consulting side, I'm currently building a service line and methodology for cryptographic risk assessments for Malaysian financial institutions, covering cryptographic bill of materials (CBOM) discovery using tools like SSLyze, IBM CBOMkit, and the CipherIQ/Keyfactor platform, mapped against NIST IR 8547 migration guidance and CycloneDX/ECMA-424 schemas, with harvest-now-decrypt-later exposure analysis tied to BNM RMiT and SC GTRM regulatory expectations. In parallel, my OT/ICS work has sharpened my focus on a part of the PQC conversation that gets less attention than data confidentiality: long-lived hardware keys, firmware integrity, and certificate trust chains in industrial environments where assets stay in service for twenty-plus years and vendor lock-in often gets baked in at procurement, long before anyone is thinking about cryptographic agility. That angle is also what I'll be speaking on for my PKI Consortium session on PQC firmware over-the-air signing for IoT.
+      My earlier background is in offensive security (CEH-certified, red team exercises, WiFi exploitation tooling, BadUSB/HAVOC C2 workshops), which gives me a builder-and-breaker's perspective on PKI: I tend to evaluate certificate and key management architectures by thinking through how an attacker would actually try to subvert trust at each link in the chain, not just whether a control exists on paper.
+
+# Long-form content (markdown)
+content: |

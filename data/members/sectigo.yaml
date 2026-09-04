@@ -17,7 +17,8 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: Silver
+  # Upgrade from Silver to Gold 20250818
+  level: Gold
 
 # Blog posts
 blog:

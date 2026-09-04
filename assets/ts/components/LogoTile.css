@@ -30,6 +30,19 @@
     overflow: hidden;
   }
 
+  /*
+   * The record-header size. Square rather than 16/9: it sits beside a name the
+   * way a portrait does on a person's record, and the two headers should not
+   * start at different heights.
+   */
+  .pk-logo-tile--mark .pk-logo-tile__control,
+  .pk-logo-tile--mark[role="img"] {
+    width: 92px;
+    max-width: none;
+    aspect-ratio: 1;
+    padding: var(--pk-2);
+  }
+
   .pk-logo-tile__control {
     cursor: pointer;
     font: inherit;

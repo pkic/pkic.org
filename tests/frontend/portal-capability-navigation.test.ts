@@ -427,17 +427,8 @@ describe("portal capability-derived navigation", () => {
       expect.objectContaining({ path: "/system/access-control" }),
     );
     expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/home");
-    expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
-      path: "/system/leadership",
-      section: "system",
-      label: "Leadership",
-    });
-    expect(portalSystemNavigationItems(revokeOnly)).toContainEqual({
-      path: "/system/leadership",
-      section: "system",
-      label: "Leadership",
-    });
-    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
+    // Governance rosters live on their groups; there is no System leadership page.
+    expect(portalSystemNavigationItems(grantOnly)).not.toContainEqual(
       expect.objectContaining({ path: "/system/leadership" }),
     );
   });

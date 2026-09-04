@@ -96,6 +96,81 @@ describe("group-scoped audit log", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("resolves every user-backed actor type to a display name, not a bare user id", async () => {
+    const admin = await userActor("group-audit-actor-admin", "admin");
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: `Audit actors ${crypto.randomUUID()}`,
+    });
+    const leader = await seedPersona(env.DB, "groupLead", { groupId: group.id });
+    // A non-staff participant with a full name, as a real member would have.
+    const participant = await seedPersona(env.DB, "groupParticipant", { groupId: group.id });
+    await env.DB.prepare("UPDATE users SET first_name = 'Mira', last_name = 'Okafor' WHERE id = ?")
+      .bind(participant.userId)
+      .run();
+    // A user-typed actor without a last name falls back to the first name.
+    const proposerId = await insertUser(env.DB, `proposer-${crypto.randomUUID()}@example.test`);
+    await env.DB.prepare("UPDATE users SET first_name = 'Solo', last_name = NULL WHERE id = ?").bind(proposerId).run();
+    // A user without any name falls back to the email.
+    const emailOnlyId = await insertUser(env.DB, `email-only-${crypto.randomUUID()}@example.test`);
+    await env.DB.prepare("UPDATE users SET first_name = NULL, last_name = NULL WHERE id = ?").bind(emailOnlyId).run();
+    const emailOnly = (await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(emailOnlyId).first<{
+      email: string;
+    }>())!.email;
+
+    const scope = { type: "group", id: group.id };
+    await writeAuditLog(
+      env.DB,
+      "member",
+      participant.userId,
+      "group_form_response_submitted",
+      "form_submission",
+      "s1",
+      {},
+      scope,
+    );
+    await writeAuditLog(env.DB, "user", proposerId, "group_join_requested", "group_membership", "m1", {}, scope);
+    await writeAuditLog(env.DB, "member", emailOnlyId, "group_left", "group_membership", "m2", {}, scope);
+    await writeAuditLog(env.DB, "system", null, "group_membership_expired", "group_membership", "m3", {}, scope);
+
+    const response = await authenticatedRequest(
+      leader.token!,
+      `/api/v1/groups/${group.id}/audit-log?sort=actor&limit=20`,
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      auditLog: Array<{ action: string; actor_type: string; actor_id: string | null; actor_display: string | null }>;
+    };
+    // Group creation and the persona joins wrote their own scoped entries;
+    // none of them may reach the table's bare-id fallback either.
+    for (const entry of body.auditLog) {
+      if (entry.actor_id) expect(entry.actor_display, `${entry.action} by ${entry.actor_type}`).toBeTruthy();
+    }
+    const seededActions = new Set([
+      "group_form_response_submitted",
+      "group_join_requested",
+      "group_left",
+      "group_membership_expired",
+    ]);
+    expect(
+      body.auditLog
+        .filter((entry) => seededActions.has(entry.action))
+        .map(({ actor_type, actor_id, actor_display }) => ({ actor_type, actor_id, actor_display })),
+    ).toEqual([
+      { actor_type: "system", actor_id: null, actor_display: null },
+      { actor_type: "member", actor_id: emailOnlyId, actor_display: emailOnly },
+      { actor_type: "member", actor_id: participant.userId, actor_display: "Mira Okafor" },
+      { actor_type: "user", actor_id: proposerId, actor_display: "Solo" },
+    ]);
+
+    // The actor name is searchable for non-staff actors as well.
+    const searched = await authenticatedRequest(leader.token!, `/api/v1/groups/${group.id}/audit-log?q=okafor`);
+    expect(await searched.json()).toMatchObject({
+      auditLog: [{ actor_id: participant.userId, actor_display: "Mira Okafor" }],
+      page: { total: 1 },
+    });
+  });
+
   it("uses the exact-scope index and respects local-only governance", async () => {
     const admin = await userActor("group-audit-plan-admin", "admin");
     const parent = await createGroup(env.DB, admin, {

@@ -3,11 +3,20 @@ import { PageHeader } from "../../../../ui/PageHeader";
 import { UserDetail, type UserPermissions } from "./UserDetail";
 import { UsersList } from "./UsersList";
 
-export function Users({ userId, permissions }: { userId?: string; permissions: UserPermissions }) {
+export function Users({
+  userId,
+  permissions,
+  viewerUserId,
+}: {
+  userId?: string;
+  permissions: UserPermissions;
+  /** Who is reading. A record about the reader offers different things. */
+  viewerUserId?: string;
+}) {
   const [, navigate] = usePortalHashLocation();
 
   if (userId) {
-    return <UserDetail userId={userId} permissions={permissions} />;
+    return <UserDetail userId={userId} permissions={permissions} viewerUserId={viewerUserId} />;
   }
 
   if (!permissions.canRead) {

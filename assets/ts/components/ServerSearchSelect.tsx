@@ -10,7 +10,7 @@ import type { ServerCatalog } from "../shared/server-catalog";
 import { Alert } from "../ui/Alert";
 import type { FieldControlProps } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { applyPopupPosition, measurePopupPosition, type PopupPosition } from "../ui/popup-placement";
+import { usePopupPlacement } from "../ui/popup-placement";
 // The matches float over whatever follows the field, so they borrow the
 // design system's popup surface rather than growing a second one. Nothing
 // renders a `Menu` here, so the stylesheet has to be imported by name:
@@ -92,7 +92,6 @@ export function ServerSearchSelect<Item, Response>({
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [position, setPosition] = useState<PopupPosition | null>(null);
   const listboxId = useId();
   const valueRef = useRef(value);
   valueRef.current = value;
@@ -161,28 +160,8 @@ export function ServerSearchSelect<Item, Response>({
     setActiveIndex((current) => (current >= optionCount ? optionCount - 1 : current));
   }, [optionCount]);
 
-  /** One placement policy for every popup — see `ui/popup-placement.ts`. */
-  const measure = useCallback((): PopupPosition | null => {
-    const anchor = anchorRef.current;
-    const popup = popupRef.current;
-    if (!anchor || !popup) return null;
-    return measurePopupPosition(anchor.getBoundingClientRect(), popup.getBoundingClientRect());
-  }, []);
-
-  // Why imperative rather than a style attribute: see popup-placement.ts.
-  useLayoutEffect(() => {
-    const popup = popupRef.current;
-    if (!popup || !position) return;
-    applyPopupPosition(popup, position);
-  }, [position]);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return;
-    }
-    setPosition(measure());
-  }, [open, measure, optionCount, collection.loading]);
+  /** One placement policy, and one lifetime for it — see `ui/popup-placement.ts`. */
+  usePopupPlacement({ open, anchorRef, popupRef, revision: `${optionCount}:${collection.loading}` });
 
   // The highlight can sit past the listbox's scroll window; focus never
   // leaves the input, so the option is brought into view directly.
@@ -205,20 +184,10 @@ export function ServerSearchSelect<Item, Response>({
       if (popupRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
       close();
     };
-    // A fixed popup does not move with its anchor, so it is re-placed as the
-    // page moves. Closing instead would mean any scroll momentum eats the
-    // list the moment it opens.
-    const onReflow = () => setPosition(measure());
 
     document.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("resize", onReflow);
-    window.addEventListener("scroll", onReflow, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("resize", onReflow);
-      window.removeEventListener("scroll", onReflow, true);
-    };
-  }, [open, close, measure]);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [open, close]);
 
   function choose(index: number): void {
     const item = itemAt(index);

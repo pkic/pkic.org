@@ -37,6 +37,7 @@ interface GroupCreateDraft {
   automaticEnrollmentMode: Group["automaticEnrollmentMode"];
   allowAutomaticOptOut: boolean;
   publicLeadership: boolean;
+  publicRoster: boolean;
   minEndorsersForBallot: number;
 }
 
@@ -66,6 +67,7 @@ function draftFromType(type: GroupType | null): GroupCreateDraft {
     automaticEnrollmentMode: type?.defaultAutomaticEnrollmentMode ?? "none",
     allowAutomaticOptOut: type?.defaultAllowAutomaticOptOut ?? false,
     publicLeadership: false,
+    publicRoster: false,
     minEndorsersForBallot: 0,
   };
 }
@@ -97,6 +99,7 @@ export function GroupCreateForm({
       links: current.links,
       parentGroupId: current.parentGroupId,
       publicLeadership: current.publicLeadership,
+      publicRoster: current.publicRoster,
       minEndorsersForBallot: current.minEndorsersForBallot,
     }));
   }, [typeSelected]);
@@ -127,6 +130,7 @@ export function GroupCreateForm({
         automaticEnrollmentMode: draft.automaticEnrollmentMode,
         allowAutomaticOptOut: draft.allowAutomaticOptOut,
         publicLeadership: draft.publicLeadership,
+        publicRoster: draft.publicRoster,
         minEndorsersForBallot: draft.minEndorsersForBallot,
       }) satisfies GroupCreateInput;
       const response = await postJson("/api/v1/groups", input, groupResponseSchema);
@@ -280,6 +284,11 @@ export function GroupCreateForm({
                   checked={draft.publicLeadership}
                   onChange={(event) => setField("publicLeadership", event.currentTarget.checked)}
                   label="Publish leadership"
+                />
+                <Checkbox
+                  checked={draft.publicRoster}
+                  onChange={(event) => setField("publicRoster", event.currentTarget.checked)}
+                  label="Publish member roster"
                 />
               </div>
             </fieldset>

@@ -170,17 +170,33 @@ export const applicationStageTransitionRouteSchema = {
   },
 };
 
+/**
+ * Sending one staff-written communication to an applicant.
+ *
+ * The absence of `templateKey` is the contract, not a gap in it: a
+ * communication with no template chosen *is* the message, and the `subject`
+ * and `body` typed here are delivered exactly as written. Naming a
+ * `templateKey` opts into a stored template instead, and that template's own
+ * subject line and content then apply. There is no implicit default — an
+ * omitted key never silently borrows the template of some other workflow,
+ * which would deliver a canned subject while the application's timeline
+ * showed the one staff typed.
+ */
 export const applicationCommunicationCreateSchema = z.object({
   subject: z.string().trim().min(1, "Enter a subject for the email.").max(200),
   body: z.string().trim().min(1, "Enter the message to send.").max(20000),
-  templateKey: z.string().trim().max(80).optional(),
+  templateKey: z.string().trim().min(1).max(80).optional(),
 });
+export type ApplicationCommunicationCreate = z.infer<typeof applicationCommunicationCreateSchema>;
 
 export const applicationCommunicationCreateRouteSchema = {
   ...requiresPermissions("membership:write"),
   tags: ["Membership"],
   summary: "Send a communication to an applicant",
-  description: "Queues an email via the existing email_outbox and records it on the application's staff-only timeline.",
+  description:
+    "Queues an email via the existing email_outbox and records it on the application's staff-only timeline. " +
+    "With no templateKey the typed subject and body are delivered verbatim; a templateKey renders that stored " +
+    "template and takes its subject line from it.",
   request: {
     params: z.object({ id: z.string() }),
     body: { content: { "application/json": { schema: applicationCommunicationCreateSchema } }, required: true },

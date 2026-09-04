@@ -57,18 +57,25 @@ export function isProposalDecidableStatus(value: string): value is z.infer<typeo
 /**
  * Canonical admin-decision transition policy.
  *
- * A needs-work decision leaves the proposal open for a proposer revision. If
- * no revision arrives, an administrator may close that same review round with
- * a rejection. That is a superseding administrative decision, not a proposer
- * withdrawal and not a new review round.
+ * A decidable proposal can be decided. A decision can also be changed: an
+ * administrator who accepted the wrong proposal, or who rejected one that
+ * should have been given another round, corrects it in place rather than
+ * living with it. The correction supersedes the decision it replaces within
+ * the same review round — the superseded decision keeps its place in the
+ * proposal's decision history — and it is not a proposer withdrawal and not
+ * a new review round.
+ *
+ * A moderated proposal (withdrawn, canceled) is not decidable at all, and no
+ * decision reopens it.
  */
 export function isProposalDecisionTransitionAllowed(
   proposalStatus: string,
   currentDecisionStatus: string | null | undefined,
-  nextDecisionStatus: ProposalDecisionStatus,
+  _nextDecisionStatus: ProposalDecisionStatus,
 ): boolean {
   if (isProposalDecidableStatus(proposalStatus)) return currentDecisionStatus == null;
-  return proposalStatus === "needs-work" && currentDecisionStatus === "needs-work" && nextDecisionStatus === "rejected";
+  // A proposal whose status is the decision it carries can be decided again.
+  return currentDecisionStatus != null && proposalStatus === currentDecisionStatus;
 }
 
 export function isProposalSelfServiceEditableStatus(

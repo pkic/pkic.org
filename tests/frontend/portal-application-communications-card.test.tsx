@@ -10,6 +10,13 @@
  * quietly doing nothing, that a rejected request is announced instead of
  * discarded, and that what the surface sends satisfies the canonical request
  * contract rather than a literal copy of itself.
+ *
+ * One of those contract facts is invisible on screen and decides what the
+ * applicant actually receives: this form chooses no template, and under
+ * applicationCommunicationCreateSchema that is what makes the typed subject
+ * and body the delivered message. A `templateKey` slipping into the request
+ * would hand the subject line to a stored template instead, so its absence is
+ * asserted here rather than assumed.
  */
 import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
@@ -18,6 +25,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applicationCommunicationCreateSchema,
   applicationNoteCreateSchema,
+  type ApplicationCommunicationCreate,
   type MembershipApplicationCommunication,
   type MembershipApplicationDetail,
 } from "../../assets/shared/schemas/membership-application-management";
@@ -175,6 +183,9 @@ describe("membership application communications card", () => {
     expect(controlFor(page, "Subject").value).toBe("");
     expect(controlFor<HTMLTextAreaElement>(page, "Message").tagName).toBe("TEXTAREA");
     expect(controlFor<HTMLTextAreaElement>(page, "Internal note").tagName).toBe("TEXTAREA");
+    // The help text is the promise the contract keeps: what is typed is what
+    // is sent.
+    expect(page.textContent).toContain("Emailed to the applicant exactly as written, and recorded on this timeline.");
     expect(page.textContent).toContain("Never emailed. Visible to staff only.");
   });
 
@@ -206,7 +217,7 @@ describe("membership application communications card", () => {
   it("sends a communication the canonical contract accepts, then clears the form", async () => {
     const sent: unknown[] = [];
     const page = mountCard({
-      onSendCommunication: vi.fn(async (params: { subject: string; body: string }) => {
+      onSendCommunication: vi.fn(async (params: ApplicationCommunicationCreate) => {
         sent.push(params);
       }),
     });
@@ -220,6 +231,13 @@ describe("membership application communications card", () => {
     // the component just sent.
     const parsed = applicationCommunicationCreateSchema.parse(sent[0]);
     expect(parsed).toEqual({ subject: "Decision on your application", body: "The EC has reviewed it." });
+
+    // No template is chosen here, and the contract reads that absence as
+    // "deliver this verbatim". The request must therefore carry no
+    // `templateKey` at all — an empty or placeholder one the contract would
+    // have to interpret is exactly what put a canned subject on these emails.
+    expect(parsed.templateKey).toBeUndefined();
+    expect(Object.keys(sent[0] as object)).toEqual(["subject", "body"]);
 
     expect(controlFor(page, "Subject").value).toBe("");
     expect(controlFor<HTMLTextAreaElement>(page, "Message").value).toBe("");

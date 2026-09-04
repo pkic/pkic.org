@@ -41,6 +41,7 @@ function group(id: string, name: string): Record<string, unknown> {
     automaticEnrollmentMode: "none",
     allowAutomaticOptOut: true,
     publicLeadership: false,
+    publicRoster: false,
     minEndorsersForBallot: 0,
     active: true,
     revision: 0,

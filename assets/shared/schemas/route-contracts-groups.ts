@@ -11,10 +11,12 @@ import {
   groupJoinSchema,
   groupLeadershipAssignSchema,
   groupLeadershipListResponseSchema,
+  groupLeadershipUpdateSchema,
   groupLeaveSchema,
-  groupMemberAddSchema,
+  groupMemberAddBodySchema,
   groupMembershipMutationResponseSchema,
   groupMembershipParamsSchema,
+  groupMembershipUpdateSchema,
   groupMembershipsListQuerySchema,
   groupMembershipsListResponseSchema,
   groupDetailResponseSchema,
@@ -192,9 +194,12 @@ export const groupMemberAddRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
   summary: "Add group membership capacities for another user",
+  description:
+    "An optional roster title and service interval describe the seat. A leftAt at or before now records a " +
+    "former member in one step, so a governing body can keep its history in the same roster.",
   request: {
     params: groupMemberManageParamsSchema,
-    body: { required: true, content: { "application/json": { schema: groupMemberAddSchema.omit({ userId: true }) } } },
+    body: { required: true, content: { "application/json": { schema: groupMemberAddBodySchema } } },
   },
   responses: {
     "200": {
@@ -203,6 +208,27 @@ export const groupMemberAddRouteSchema = {
     },
     "403": jsonErrorResponse("The caller may not manage this group or the target is ineligible."),
     "409": jsonErrorResponse("Group eligibility or capacity changed before commit."),
+  },
+};
+
+export const groupMembershipUpdateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Edit one seat's roster title or service interval",
+  description:
+    "Backdates joinedAt, closes or reopens the seat through leftAt, or sets the roster title. Ending a seat " +
+    "revokes leadership held through it; reopening one requires the capacity to still be active.",
+  request: {
+    params: groupMembershipParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupMembershipUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "The seat after the edit, with the user's active capacities.",
+      content: { "application/json": { schema: groupMembershipMutationResponseSchema } },
+    },
+    "404": jsonErrorResponse("Membership capacity not found."),
+    "409": jsonErrorResponse("Group membership changed before the command committed, or the seat cannot be reopened."),
   },
 };
 
@@ -221,14 +247,21 @@ export const groupMembershipEndRouteSchema = {
   },
 };
 
+export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.extend({
+  userRoleId: databaseIdSchema,
+});
+
 export const groupLeadershipListRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
-  summary: "List effective local and inherited group leadership",
+  summary: "List effective group leadership and closed local terms",
+  description:
+    "Current assignments include leadership inherited from ancestors; past terms are local only. Titles come " +
+    "from each assignment, with the group type's defaults returned for new ones.",
   request: { params: groupReferenceParamsSchema },
   responses: {
     "200": {
-      description: "Effective leadership.",
+      description: "Effective leadership, closed terms, and the group type's default titles.",
       content: { "application/json": { schema: groupLeadershipListResponseSchema } },
     },
   },
@@ -238,13 +271,41 @@ export const groupLeadershipAssignRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
   summary: "Assign local group leadership",
+  description:
+    "The person must actively participate through the selected Member capacity. The title defaults to the group " +
+    "type's title for the role; startsAt may be backdated and an endsAt at or before now records a closed term.",
   request: {
     params: groupReferenceParamsSchema,
     body: { required: true, content: { "application/json": { schema: groupLeadershipAssignSchema } } },
   },
   responses: {
-    "201": { description: "Leadership assigned." },
+    "201": {
+      description: "Leadership assigned.",
+      content: { "application/json": { schema: groupLeadershipListResponseSchema } },
+    },
     "403": jsonErrorResponse("Assignment is not authorized."),
+    "409": jsonErrorResponse("The same active assignment already exists."),
+  },
+};
+
+export const groupLeadershipUpdateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Edit a local leadership assignment's title or term",
+  description:
+    "An endsAt at or before now closes the term immediately; one in the future schedules the hand-over; null " +
+    "makes the term open-ended again, which requires the capacity to still be active.",
+  request: {
+    params: groupLeadershipAssignmentParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupLeadershipUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Leadership after the edit.",
+      content: { "application/json": { schema: groupLeadershipListResponseSchema } },
+    },
+    "404": jsonErrorResponse("Local leadership assignment not found."),
+    "409": jsonErrorResponse("Local-only governance requires local leadership, or the term cannot be reopened."),
   },
 };
 
@@ -282,16 +343,16 @@ export const groupCategoryRulesGetRouteSchema = {
   },
 };
 
-export const groupLeadershipAssignmentParamsSchema = groupReferenceParamsSchema.extend({
-  userRoleId: databaseIdSchema,
-});
 export const groupLeadershipRevokeRouteSchema = {
   ...requiresSession(),
   tags: ["Groups"],
-  summary: "Revoke a local leadership assignment",
+  summary: "End a local leadership assignment now",
   request: { params: groupLeadershipAssignmentParamsSchema },
   responses: {
-    "200": { description: "Leadership revoked." },
+    "200": {
+      description: "Leadership after the term closed.",
+      content: { "application/json": { schema: groupLeadershipListResponseSchema } },
+    },
     "409": jsonErrorResponse("Local-only governance requires local leadership."),
   },
 };

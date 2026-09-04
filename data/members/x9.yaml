@@ -1,0 +1,61 @@
+id: x9
+name: Accredited Standards Committee X9 Financial Services
+slogan:
+website: https://X9.org
+# Business domains for email
+organizationDomains:
+  - x9.org
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-08-12
+memberType: E
+workingGroups:
+  - CBOM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: https://x9.org/feed/
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/ASCX9Inc
+  facebook: http://www.facebook.com/pages/Accredited-Standards-Committee-X9-Inc-Financial-Industry-Standards/110761672914
+  instagram: 
+  linkedin: https://www.linkedin.com/company/370298/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ralph Poore
+    role: X9 PKI Industry Forum Chair
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/ralphspencerpoore
+    description: Ralph is the X9 PKI Industry Forum Chair at Accredited Standards Committee X9 Financial Services and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |

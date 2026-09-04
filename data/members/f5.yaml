@@ -1,0 +1,62 @@
+id: f5
+name: F5
+slogan:
+website: https://www.f5.com/solutions/post-quantum-cryptography-readiness
+# Business domains for email
+organizationDomains:
+  - f5.com
+# Short description, longer content can be placed in `content/members/`
+description: Prepare for the quantum era with F5. Secure apps, APIs, and data with post-quantum cryptography across hybrid multicloud environments.
+
+# membership
+memberSince: 2026-08-12
+memberType: F
+workingGroups:
+  - CBOM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.f5.com/resources/articles
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.f5.com/company/news/press-releases
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.f5.com/company/careers
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/F5
+  facebook: https://www.facebook.com/f5incorporated
+  instagram: https://www.instagram.com/f5.global/
+  linkedin: https://www.linkedin.com/company/f5/
+  youtube: https://www.youtube.com/user/f5networksinc
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kevin Stewart
+    role: Principal Product Manager for F5 Cryptographic Solutions
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/kevingstewart/
+    description: Kevin is the Principal Product Manager for F5 Cryptographic Solutions at F5 and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |

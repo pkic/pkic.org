@@ -80,6 +80,7 @@ describe("portal group creation and category policy", () => {
       automaticEnrollmentMode: "none",
       allowAutomaticOptOut: false,
       publicLeadership: true,
+      publicRoster: false,
       minEndorsersForBallot: 2,
       active: true,
       revision: 0,
@@ -113,6 +114,7 @@ describe("portal group creation and category policy", () => {
                 defaultAutomaticEnrollmentMode: "none",
                 defaultAllowAutomaticOptOut: false,
                 defaultVisibility: "participants",
+                leadershipTitles: { lead: "Chair", deputyLead: "Vice Chair" },
                 active: true,
                 sortOrder: 1,
               },
@@ -144,7 +146,7 @@ describe("portal group creation and category policy", () => {
       expect.arrayContaining(["Group type", "Parent group (optional)", "Name", "Slug (optional)", "Description"]),
     );
     const switches = [...container.querySelectorAll("label.pk-check")];
-    expect(switches).toHaveLength(2);
+    expect(switches).toHaveLength(3);
     for (const control of switches) {
       expect(control.querySelector("input.pk-check__input")).not.toBeNull();
       expect(control.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
@@ -196,6 +198,7 @@ describe("portal group creation and category policy", () => {
                 defaultAutomaticEnrollmentMode: "none",
                 defaultAllowAutomaticOptOut: false,
                 defaultVisibility: "participants",
+                leadershipTitles: { lead: "Chair", deputyLead: "Vice Chair" },
                 active: true,
                 sortOrder: 1,
               },
@@ -311,6 +314,7 @@ describe("portal group creation and category policy", () => {
               automaticEnrollmentMode: "none",
               allowAutomaticOptOut: false,
               publicLeadership: false,
+              publicRoster: false,
               minEndorsersForBallot: 0,
               active: true,
               revision: 8,

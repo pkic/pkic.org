@@ -3,6 +3,7 @@ import { fmt } from "../../ui";
 import {
   applicationCommunicationCreateSchema,
   applicationNoteCreateSchema,
+  type ApplicationCommunicationCreate,
   type MembershipApplicationCommunication,
   type MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
@@ -38,6 +39,12 @@ const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
  * checked by the request contract its route parses, an empty required value
  * is reported on the control it belongs to, and a failed request is announced
  * instead of discarded.
+ *
+ * There is no template to choose here, and under
+ * applicationCommunicationCreateSchema that is what makes the message the
+ * message: the subject and body typed into this form are the subject and body
+ * the applicant receives. So the form sends no `templateKey`, and the help
+ * text under the message promises exactly the delivery the contract gives.
  */
 export function ApplicationCommunicationsCard({
   detail,
@@ -47,7 +54,7 @@ export function ApplicationCommunicationsCard({
 }: {
   detail: MembershipApplicationDetail;
   canWrite: boolean;
-  onSendCommunication: (params: { subject: string; body: string }) => Promise<void>;
+  onSendCommunication: (params: ApplicationCommunicationCreate) => Promise<void>;
   onAddNote: (body: string) => Promise<void>;
 }) {
   const [commSubject, setCommSubject] = useState("");
@@ -175,7 +182,7 @@ export function ApplicationCommunicationsCard({
                   <Field
                     label="Message"
                     required
-                    help="Emailed to the applicant and recorded on this timeline."
+                    help="Emailed to the applicant exactly as written, and recorded on this timeline."
                     {...communication.of("body")}
                   >
                     {(control) => (

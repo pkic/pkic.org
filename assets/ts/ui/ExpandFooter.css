@@ -1,0 +1,40 @@
+/*
+ * The foot of a panel, not a button sitting in one: full width, square
+ * shoulders at the top so it meets the rule above it, and the panel's own
+ * radius at the bottom so it finishes the card.
+ */
+@layer components {
+  .pk-expand-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: var(--pk-2);
+    border: 0;
+    border-block-start: 1px solid var(--pk-line-soft);
+    border-end-start-radius: var(--pk-radius);
+    border-end-end-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink-faint);
+    font: inherit;
+    font-size: var(--pk-text-2xs);
+    cursor: pointer;
+  }
+
+  .pk-expand-footer:hover {
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+  }
+
+  .pk-expand-footer:focus-visible {
+    outline: var(--pk-focus);
+    outline-offset: -2px;
+  }
+
+  /* Inherits the footer's own --pk-text-2xs; the caret should never be sized
+     independently of the label it sits beside. */
+  .pk-expand-footer__caret {
+    line-height: 1;
+  }
+}

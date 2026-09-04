@@ -147,23 +147,36 @@ afterEach(() => {
 });
 
 describe("proposal decision panel", () => {
-  it("offers only administrative rejection after a needs-work decision", () => {
+  it("reads a recorded decision as a decision, with correcting it a deliberate act", () => {
     const root = mount(proposal);
 
     expect(root.textContent).toContain("Decision recorded:");
     expect(root.textContent).toContain("Please clarify the implementation plan.");
+    // The form is not standing open under the decision it would replace.
+    expect(root.querySelector("form")).toBeNull();
+    expect(buttonNamed(root, "Change decision")).not.toBeNull();
+  });
+
+  it("reopens the form on request, offering every decision the shared policy allows", () => {
+    const root = mount(proposal);
+    void act(() => buttonNamed(root, "Change decision").click());
+
     expect([...root.querySelectorAll("select option")].map((option) => option.getAttribute("value"))).toEqual([
       "",
+      "accepted",
       "rejected",
+      "needs-work",
     ]);
     expect(root.querySelector('button[type="submit"]')?.textContent).toContain("Record Decision");
   });
 
-  it("keeps an accepted proposal decision read-only", () => {
+  it("lets an accepted decision be corrected too, and shows it as recorded until then", () => {
     const root = mount({ ...proposal, status: "accepted", decision_status: "accepted" });
 
     expect(root.textContent).toContain("Decision recorded:");
     expect(root.querySelector("form")).toBeNull();
+    void act(() => buttonNamed(root, "Change decision").click());
+    expect(root.querySelector("form")).not.toBeNull();
   });
 
   it("previews before confirming, then records a decision the shared contract accepts", async () => {

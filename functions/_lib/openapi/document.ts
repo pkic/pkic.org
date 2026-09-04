@@ -78,7 +78,6 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Membership", description: "Membership applications, categories, and workflow settings." },
   { name: "Organizations", description: "Member organizations and their representatives." },
   { name: "Organization content reviews", description: "Review of organization-submitted content." },
-  { name: "Leadership", description: "Board and Executive Council positions." },
   { name: "Users", description: "User records and their administration." },
 
   { name: "Sponsors", description: "Sponsors and sponsorship." },
@@ -136,7 +135,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
   },
   {
     name: "Membership",
-    tags: ["Members", "Membership", "Organizations", "Organization content reviews", "Leadership", "Users"],
+    tags: ["Members", "Membership", "Organizations", "Organization content reviews", "Users"],
   },
   {
     name: "Sponsorship and donations",

@@ -2,7 +2,7 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { UserPicker } from "../../assets/ts/components/UserPicker";
+import { UserPicker, type PickedUser } from "../../assets/ts/components/UserPicker";
 import { getJson } from "../../assets/ts/shared/api-client";
 import type { UserCatalogItem } from "../../assets/shared/schemas/user-catalog";
 
@@ -38,36 +38,50 @@ function user(id: string, email: string): UserCatalogItem {
   };
 }
 
-describe("UserPicker request ordering", () => {
-  const mounted: HTMLElement[] = [];
+/*
+ * One mount/teardown/search scaffold for the whole file. Each describe used to
+ * carry its own copy, which is how a third arrived with the geometry tests.
+ */
+const mounted: HTMLElement[] = [];
 
-  afterEach(() => {
-    for (const container of mounted.splice(0)) {
-      void act(() => render(null, container));
-      container.remove();
-    }
-    vi.clearAllMocks();
-    vi.useRealTimers();
+afterEach(() => {
+  for (const container of mounted.splice(0)) {
+    void act(() => render(null, container));
+    container.remove();
+  }
+  vi.clearAllMocks();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+/** Mounted into the document, because some of these assertions are about geometry. */
+async function mountPicker({
+  endpoint,
+  onChange = vi.fn(),
+}: { endpoint?: string; onChange?: (picked: PickedUser | null) => void } = {}) {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  await act(() => render(h(UserPicker, { value: null, onChange, endpoint }), container));
+  return { container, input: container.querySelector("input") as HTMLInputElement };
+}
+
+/** Types a term and lets the picker's debounce elapse. Requires fake timers. */
+async function search(input: HTMLInputElement, value: string) {
+  input.value = value;
+  await act(() => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250);
+  });
+}
 
-  async function mountPicker(endpoint?: string) {
-    const container = document.createElement("div");
-    mounted.push(container);
-    await act(() => render(h(UserPicker, { value: null, onChange: vi.fn(), endpoint }), container));
-    const input = container.querySelector("input") as HTMLInputElement;
-    return { container, input };
-  }
+function popupOf(container: HTMLElement): HTMLElement | null {
+  return container.querySelector(".pk-menu__popup");
+}
 
-  async function search(input: HTMLInputElement, value: string) {
-    input.value = value;
-    await act(() => {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250);
-    });
-  }
-
+describe("UserPicker request ordering", () => {
   it("ignores an older successful response after a newer search result", async () => {
     vi.useFakeTimers();
     const oldRequest = deferred<{ users: UserCatalogItem[] }>();
@@ -97,7 +111,7 @@ describe("UserPicker request ordering", () => {
   it("uses an explicit scoped catalog while retaining the canonical user source as the default", async () => {
     vi.useFakeTimers();
     vi.mocked(getJson).mockResolvedValue({ users: [] });
-    const scoped = await mountPicker("/api/v1/groups/group%2Fone/users");
+    const scoped = await mountPicker({ endpoint: "/api/v1/groups/group%2Fone/users" });
     expect(scoped.input.autocomplete).toBe("off");
     await search(scoped.input, "Ada Lovelace");
     const scopedUrl = new URL(String(vi.mocked(getJson).mock.calls[0][0]), "https://app.test");
@@ -206,31 +220,11 @@ describe("UserPicker request ordering", () => {
 });
 
 describe("UserPicker response contract", () => {
-  const mounted: HTMLElement[] = [];
-
-  afterEach(() => {
-    for (const container of mounted.splice(0)) {
-      void act(() => render(null, container));
-      container.remove();
-    }
-    vi.clearAllMocks();
-    vi.useRealTimers();
-  });
-
   it("accepts the staff users list, which carries no organization name, as well as the catalog", async () => {
     vi.useFakeTimers();
     vi.mocked(getJson).mockResolvedValue({ users: [], page: { limit: 8, offset: 0, total: 0, hasMore: false } });
-    const container = document.createElement("div");
-    mounted.push(container);
-    await act(() => render(h(UserPicker, { value: null, onChange: vi.fn() }), container));
-    const input = container.querySelector("input") as HTMLInputElement;
-    input.value = "admin@";
-    await act(() => {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250);
-    });
+    const { input } = await mountPicker();
+    await search(input, "admin@");
 
     // The default endpoint is the staff users list, and the schema the picker
     // hands to the client must accept what that list answers with: id, email
@@ -250,5 +244,92 @@ describe("UserPicker response contract", () => {
       page: usersListReply.page,
     };
     expect(schema.safeParse(catalogReply).success).toBe(true);
+  });
+});
+
+/**
+ * Two pickers on one page.
+ *
+ * The Leadership page mounts one roster per body — Board of Directors and
+ * Executive Council — and each roster's add form carries its own picker, so
+ * two are always live at once. Picking in the lower one used to be
+ * impossible: not because the instances shared anything, but because the
+ * popup was pinned to `anchor.bottom + 4` with no flip and no clamp, so a
+ * field below the fold hung its matches under the bottom edge of the
+ * viewport, where they render and can never be clicked.
+ */
+describe("UserPicker instances on one page", () => {
+  it("keeps a lower picker's matches inside the viewport instead of below it", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockResolvedValue({ users: [user("ada-id", "ada@example.test")] });
+
+    // jsdom reports a zero-sized layout, so the geometry that decides the
+    // placement is supplied here: a field near the bottom of a 768px viewport
+    // — where the second of two rosters sits once the page is scrolled to it
+    // — and a popup too tall to fit beneath it.
+    const popupHeight = 200;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const popup = this.classList.contains("pk-menu__popup");
+      const box = popup
+        ? { top: 0, left: 0, width: 300, height: popupHeight }
+        : { top: 700, left: 100, width: 300, height: 36 };
+      return { ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top } as DOMRect;
+    });
+
+    const { container, input } = await mountPicker();
+    await search(input, "ada");
+    await act(async () => {
+      await flush();
+    });
+
+    const popup = popupOf(container);
+    expect(popup).not.toBeNull();
+    const top = Number.parseFloat(popup!.style.top);
+    // The whole popup is reachable: it flipped above the field rather than
+    // hanging off the bottom, and it never starts above the viewport either.
+    expect(top).toBeGreaterThanOrEqual(0);
+    expect(top + popupHeight).toBeLessThanOrEqual(window.innerHeight);
+    // It is still anchored to this field, not to some other instance's.
+    expect(popup!.style.minWidth).toBe("300px");
+  });
+
+  it("searches and picks in the second picker without disturbing the first", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getJson).mockImplementation((url) => {
+      const term = new URL(String(url), "https://app.test").searchParams.get("q");
+      return Promise.resolve({
+        users:
+          term === "board" ? [user("board-id", "board@example.test")] : [user("council-id", "council@example.test")],
+      });
+    });
+
+    const onFirstChange = vi.fn();
+    const onSecondChange = vi.fn();
+    const first = await mountPicker({ onChange: onFirstChange });
+    const second = await mountPicker({ onChange: onSecondChange });
+
+    await search(first.input, "board");
+    await search(second.input, "council");
+    await act(async () => {
+      await flush();
+    });
+
+    // Each instance holds its own matches; neither took the other's results.
+    expect(popupOf(first.container)?.textContent).toContain("board@example.test");
+    expect(popupOf(second.container)?.textContent).toContain("council@example.test");
+
+    const match = popupOf(second.container)?.querySelector("button") as HTMLButtonElement;
+    await act(() => {
+      match.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSecondChange).toHaveBeenCalledWith({ id: "council-id", email: "council@example.test" });
+    // The pick closed the second picker's popup and filled its own input …
+    expect(popupOf(second.container)).toBeNull();
+    expect(second.input.value).toBe("council@example.test");
+    // … and left the first picker exactly as it was.
+    expect(onFirstChange).not.toHaveBeenCalled();
+    expect(popupOf(first.container)?.textContent).toContain("board@example.test");
+    expect(first.input.value).toBe("board");
   });
 });

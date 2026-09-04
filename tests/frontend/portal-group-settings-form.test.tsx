@@ -32,6 +32,7 @@ const record = {
   automaticEnrollmentMode: "none",
   allowAutomaticOptOut: false,
   publicLeadership: false,
+  publicRoster: false,
   minEndorsersForBallot: 2,
   active: true,
   revision: 4,
@@ -144,7 +145,7 @@ describe("group settings form", () => {
     // A `pk-check` label with no `pk-check__input` inside renders the
     // operating system's own control, which no gate can see.
     const checks = [...container.querySelectorAll("label.pk-check")];
-    expect(checks).toHaveLength(3);
+    expect(checks).toHaveLength(4);
     for (const check of checks) {
       expect(check.querySelector("input.pk-check__input")).not.toBeNull();
       expect(check.querySelector(".pk-check__label")).not.toBeNull();

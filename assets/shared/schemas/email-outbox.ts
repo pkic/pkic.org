@@ -15,6 +15,15 @@ export const emailOutboxStatusSchema = z.enum([
   "cancelled",
 ]);
 
+/**
+ * The template key recorded for an outbox row that carries its own message.
+ *
+ * A row keyed this way resolves no stored template: its own subject and the
+ * direct body queued with it are delivered exactly as written. `usesDirectBody`
+ * on an outbox row reports the same thing to a reader of the queue.
+ */
+export const DIRECT_EMAIL_TEMPLATE_KEY = "__direct__";
+
 export const EMAIL_OUTBOX_SORT_COLUMNS = ["recipient", "template", "status", "sendAfter", "createdAt"] as const;
 
 export const emailOutboxQuerySchema = listQuerySchema(EMAIL_OUTBOX_SORT_COLUMNS).extend({

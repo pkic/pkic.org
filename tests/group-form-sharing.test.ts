@@ -349,6 +349,17 @@ describe("group form sharing", () => {
         [submissionId],
       ),
     ).toEqual([{ scope_id: fixture.grantee.id, actor_id: fixture.memberId }]);
+    // The chair reads the group's audit trail; a non-staff submitter must
+    // show up by name, never as a bare user id.
+    const auditTrail = await authenticatedRequest(
+      fixture.leaderToken,
+      `/api/v1/groups/${fixture.grantee.id}/audit-log?action=group_form_response_submitted&entityId=${submissionId}`,
+    );
+    expect(auditTrail.status, await auditTrail.clone().text()).toBe(200);
+    expect(await auditTrail.json()).toMatchObject({
+      auditLog: [{ actor_type: "member", actor_id: fixture.memberId, actor_display: "Test" }],
+      page: { total: 1 },
+    });
 
     await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
       granteeGroupId: fixture.grantee.id,

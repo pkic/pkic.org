@@ -136,11 +136,13 @@ describe("organization detail shell", () => {
     await settle();
     await settle();
 
-    // The record opens with a PageHeader: the name is the page's `<h2>`, and
-    // the section carries it as its accessible name.
+    // The record opens with the subject, not with a page title: `ProfileHeader`
+    // shows the organization as itself — its mark, its name as the `<h2>`, and
+    // what identifies the account under the name. The section carries the name
+    // as its accessible name.
     const section = container.querySelector("section");
     expect(section?.getAttribute("aria-label")).toBe("Example Organization");
-    const heading = container.querySelector(".pk-page-header h2");
+    const heading = container.querySelector(".pk-profile-header h2");
     expect(heading?.textContent).toBe("Example Organization");
 
     // One name, once: no kicker restating what the trail already says, and no
@@ -156,12 +158,16 @@ describe("organization detail shell", () => {
     // the singular is not "1 identities".
     expect(container.textContent).toContain("1 active representative");
 
-    // The heading's supporting facts are badges beside the name rather than a
-    // line of small text above everything. The membership category is stated
-    // here, and only here, so the record's own list does not repeat it.
-    const header = container.querySelector("header");
-    const badges = [...(header?.querySelectorAll(".pk-badge") ?? [])].map((badge) => badge.textContent);
-    expect(badges).toEqual(["Category F", "1 active representative"]);
+    // The supporting facts sit under the name as one quiet line, the way they
+    // do on a contact record — separate entries, so the middots between them
+    // are generated and never announced as content.
+    const header = container.querySelector(".pk-profile-header");
+    const facts = [...(header?.querySelectorAll(".pk-profile-header__facts > li") ?? [])].map(
+      (fact) => fact.textContent,
+    );
+    // Category, when it joined, and how many people act for it — the three
+    // facts that identify a member organization, each said once.
+    expect(facts).toEqual(["Category F", "Member since Jan 1, 2026", "1 active representative"]);
 
     // The way back is a trail, so a reader sees where this record sits rather
     // than only that there is a button pointing away from it.

@@ -185,7 +185,7 @@ describe("proposal finalize workflows", () => {
     expect(proposalRow.status).toBe("needs-work");
   });
 
-  it("double-finalize returns PROPOSAL_ALREADY_FINALIZED", async () => {
+  it("a decision can be corrected, superseding the one it replaces in the same round", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
@@ -196,14 +196,30 @@ describe("proposal finalize workflows", () => {
       minReviewsRequired: 0,
     });
 
-    await expect(
-      finalizeProposalDecision(env.DB, {
-        proposalId,
-        actor: decisionActor(adminUserId),
-        finalStatus: "accepted",
-        minReviewsRequired: 0,
-      }),
-    ).rejects.toMatchObject({ code: "PROPOSAL_ALREADY_FINALIZED" });
+    await finalizeProposalDecision(env.DB, {
+      proposalId,
+      actor: decisionActor(adminUserId),
+      finalStatus: "accepted",
+      minReviewsRequired: 0,
+    });
+
+    // The correction stands, and it stands as the next decision of the same
+    // review round rather than as a second, competing row.
+    const decisions = await queryAll<{ final_status: string; decision_sequence: number; review_round: number }>(
+      env.DB,
+      "SELECT final_status, decision_sequence, review_round FROM proposal_decisions WHERE proposal_id = ?",
+      [proposalId],
+    );
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].final_status).toBe("accepted");
+    expect(decisions[0].decision_sequence).toBe(2);
+
+    const [proposalRow] = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM session_proposals WHERE id = ?",
+      [proposalId],
+    );
+    expect(proposalRow.status).toBe("accepted");
   });
 
   it("finalize HTTP handler: records decision and queues emails via outbox", async () => {
@@ -496,7 +512,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     await resetDb();
   });
 
-  it("finalize: double-finalize returns JSON 409 with PROPOSAL_ALREADY_FINALIZED", async () => {
+  it("finalize: double-finalize updates the recorded decision", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
     const adminToken = await createAdminSession(env.DB, adminUserId, "double-finalize-token");
@@ -512,9 +528,15 @@ describe("proposal HTTP error responses (full router stack)", () => {
     const second = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "accepted",
     });
-    expect(second.status).toBe(409);
-    const body = (await second.json()) as { error?: { code?: string } };
-    expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
+    expect(second.status).toBe(200);
+
+    const decisions = await queryAll<{ final_status: string }>(
+      env.DB,
+      "SELECT final_status FROM proposal_decisions WHERE proposal_id = ?",
+      [proposalId],
+    );
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0].final_status).toBe("accepted");
   });
 
   it("finalize: review threshold not met returns JSON 409", async () => {
