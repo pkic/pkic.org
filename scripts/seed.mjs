@@ -138,6 +138,13 @@ function seedTemplates(cfg) {
   ]);
 }
 
+/* Takes the environment by name — like seed-governance-rosters.mjs — because
+   it resolves people by email and needs to know which database that is, not
+   just whether the call is local or remote. */
+function seedMemberProfiles(cfg) {
+  run("node", [script("seed-member-profiles.mjs"), `--${cfg.wranglerEnv}`]);
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const { env, only, skipMigrations } = parseArgs(process.argv.slice(2));
@@ -151,5 +158,6 @@ if (!skipMigrations) applyMigrations(cfg);
 if (runAll || only.has("admin")) seedAdmin(cfg);
 if (runAll || only.has("event")) seedEvent(cfg);
 if (runAll || only.has("templates")) seedTemplates(cfg);
+if (runAll || only.has("profiles")) seedMemberProfiles(cfg);
 
 console.log(`\n✓ Done seeding ${cfg.label}.`);

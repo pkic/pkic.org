@@ -161,7 +161,18 @@ function main() {
   try {
     execFileSync(
       "pnpm",
-      ["exec", "wrangler", "d1", "execute", cfg.database, "--env", cfg.wranglerEnv, cfg.wranglerFlag, "--file", tmpPath],
+      [
+        "exec",
+        "wrangler",
+        "d1",
+        "execute",
+        cfg.database,
+        "--env",
+        cfg.wranglerEnv,
+        cfg.wranglerFlag,
+        "--file",
+        tmpPath,
+      ],
       { cwd: ROOT, stdio: "inherit" },
     );
   } finally {
