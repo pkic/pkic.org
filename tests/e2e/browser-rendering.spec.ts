@@ -1,3 +1,9 @@
+/**
+@covers event.3.2
+ * @covers event.3.2.a
+ * @covers event.3.6
+ * @covers event.3.8
+ */
 import { mkdirSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";

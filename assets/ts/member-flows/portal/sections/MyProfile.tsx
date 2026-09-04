@@ -170,6 +170,7 @@ export function MyProfile() {
                     {(control) => (
                       <TextInput
                         {...control}
+                        name="firstName"
                         value={form.firstName}
                         onInput={(e) => setForm((f) => ({ ...f, firstName: (e.target as HTMLInputElement).value }))}
                       />
@@ -184,6 +185,7 @@ export function MyProfile() {
                       {(control) => (
                         <Select
                           {...control}
+                          name="emailId"
                           value={form.emailId}
                           onChange={(e) => setForm((f) => ({ ...f, emailId: (e.target as HTMLSelectElement).value }))}
                         >
@@ -201,6 +203,7 @@ export function MyProfile() {
                     {(control) => (
                       <TextInput
                         {...control}
+                        name="lastName"
                         value={form.lastName}
                         onInput={(e) => setForm((f) => ({ ...f, lastName: (e.target as HTMLInputElement).value }))}
                       />
@@ -210,6 +213,7 @@ export function MyProfile() {
                     {(control) => (
                       <TextInput
                         {...control}
+                        name="preferredName"
                         value={form.preferredName}
                         onInput={(e) => setForm((f) => ({ ...f, preferredName: (e.target as HTMLInputElement).value }))}
                         placeholder="Shown instead of first/last name if set"
@@ -221,6 +225,7 @@ export function MyProfile() {
                       {(control) => (
                         <TextInput
                           {...control}
+                          name="jobTitle"
                           value={form.jobTitle}
                           onInput={(e) => setForm((f) => ({ ...f, jobTitle: (e.target as HTMLInputElement).value }))}
                         />
@@ -234,6 +239,7 @@ export function MyProfile() {
                     <Textarea
                       {...control}
                       rows={5}
+                      name="biography"
                       value={form.biography}
                       onInput={(e) => setForm((f) => ({ ...f, biography: (e.target as HTMLTextAreaElement).value }))}
                     />
@@ -246,6 +252,7 @@ export function MyProfile() {
                       {...control}
                       rows={3}
                       placeholder="One URL per line"
+                      name="links"
                       value={form.linksText}
                       onInput={(e) => setForm((f) => ({ ...f, linksText: (e.target as HTMLTextAreaElement).value }))}
                     />

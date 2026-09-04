@@ -15,9 +15,17 @@
  * deleted or renamed takes its claim with it, and the step goes back to being
  * a gap in the open rather than a line nobody rechecked.
  *
+ * Given a Playwright JSON report it also cross-checks the claims against what
+ * actually ran. Source tags prove a spec says it walks a step; only the report
+ * proves the spec exists as tests, ran, and passed. Building this inventory by
+ * reading source alone missed every test nested inside a `test.describe` —
+ * about a hundred of them — and produced confident gap claims for flows that
+ * were covered all along.
+ *
  * Usage:
  *   node scripts/check-flow-coverage.mjs
- *   node scripts/check-flow-coverage.mjs --report   # inventory, without failing
+ *   node scripts/check-flow-coverage.mjs --report          # do not fail
+ *   node scripts/check-flow-coverage.mjs --results <path>  # cross-check a run
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -27,6 +35,30 @@ import { FLOWS } from "../tests/e2e/flow-inventory.mjs";
 const root = process.cwd();
 const specDir = resolve(root, "tests", "e2e");
 const reportOnly = process.argv.includes("--report");
+const resultsIndex = process.argv.indexOf("--results");
+const resultsPath = resultsIndex >= 0 ? process.argv[resultsIndex + 1] : null;
+
+/**
+ * Every spec file a Playwright run actually executed, and whether all of its
+ * tests passed. Read from the run rather than the tree: a spec that is skipped,
+ * renamed or failing is not evidence for anything it claims.
+ */
+function runSpecs(path) {
+  const report = JSON.parse(readFileSync(path, "utf8"));
+  const specs = new Map();
+  const visit = (suite, file) => {
+    const own = suite.file ?? file;
+    for (const spec of suite.specs ?? []) {
+      const current = specs.get(own) ?? { tests: 0, ok: 0 };
+      current.tests += 1;
+      if (spec.ok) current.ok += 1;
+      specs.set(own, current);
+    }
+    for (const child of suite.suites ?? []) visit(child, own);
+  };
+  for (const suite of report.suites ?? []) visit(suite, suite.file);
+  return specs;
+}
 
 const STATUS_ORDER = ["covered", "unit", "gap", "absent"];
 
@@ -65,6 +97,23 @@ for (const [id, files] of claims) {
 for (const [id, { step }] of defined) {
   if (step.status === "covered" && !claims.has(id)) {
     failures.push(`  ${id} — "${step.title}" is marked covered, and no spec claims it`);
+  }
+}
+
+if (resultsPath) {
+  const executed = runSpecs(resultsPath);
+  for (const [id, files] of claims) {
+    for (const file of files) {
+      const name = file.replace("tests/e2e/", "");
+      const ran = executed.get(name);
+      if (!ran) {
+        failures.push(`  ${id} — claimed by ${name}, which the run did not execute`);
+      } else if (ran.ok < ran.tests) {
+        failures.push(
+          `  ${id} — claimed by ${name}, where ${String(ran.tests - ran.ok)} of ${String(ran.tests)} tests failed`,
+        );
+      }
+    }
   }
 }
 

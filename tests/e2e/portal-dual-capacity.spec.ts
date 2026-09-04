@@ -109,7 +109,9 @@ test("a person representing two organizations can switch between both contexts",
   expect(target, "a second distinct context must exist to switch to").toBeTruthy();
 
   await page.goto("/portal/#/profile");
-  await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible();
+  // The record opens with the member, not a page title: ProfileHeader names
+  // the subject, and the sidebar had already said where we are.
+  await expect(page.locator(".pk-profile-header h2")).toBeVisible();
   await page
     .getByRole("textbox", { name: "Job title for this organization", exact: true })
     .fill("Security lead in the first capacity");
