@@ -1,6 +1,9 @@
 /**
  * Membership joining across category kinds and domain outcomes.
  *
+ * @covers join.1.1
+ * @covers join.1.1.c
+ *
  * The existing join journeys cover one organization application in category F
  * and one individual policy exception. The category vocabulary has fifteen
  * codes across two structurally different kinds, and the join decision has
