@@ -43,8 +43,11 @@ test("staff manage the Board of Directors roster from its group workspace", asyn
   await members.getByPlaceholder("Search by email or name…").fill(director.email);
   await members.getByRole("button", { name: new RegExp(director.email, "i") }).click();
   const title = `Browser-test Treasurer ${Date.now()}`;
-  await members.locator("#managed-group-member-title").fill(title);
-  await members.locator("#managed-group-member-joined").fill("2026-08-28");
+  // By label, not by a hand-written id: the seat fields moved onto the design
+  // system's Field, which generates its own ids, so #managed-group-member-title
+  // has matched nothing since — and an id selector fails silently when it goes.
+  await members.getByLabel("Seat title").fill(title);
+  await members.getByLabel("Member since", { exact: false }).fill("2026-08-28");
 
   const createResponse = page.waitForResponse(
     (response) =>
