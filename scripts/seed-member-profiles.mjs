@@ -221,7 +221,66 @@ const RECOGNITIONS = [
 const DEMO_MEMBER = "paul.vanbrouwershaven@pkic.org";
 const DEMO_PEER = "admin@pkic.org";
 const DEMO_ORG = "Digitorus";
-const DEMO_GROUPS = ["cbom", "pqc", "executive-council"];
+/*
+ * The groups the demo member sits in, created by this seed.
+ *
+ * The seed used to hang its seats, meetings and occurrences off the shipped
+ * groups migration 0035 creates. That is how it came to write dozens of event
+ * occurrences into the PQC group, which seven specs address by id and whose
+ * event list portal-event-management asserts the contents of. Moving to a
+ * different shipped group only moves the collision to whichever spec claims
+ * that group next.
+ *
+ * So the seed owns its groups outright: it creates them, and everything it
+ * writes hangs off one of them. A demo fixture adds no rows to a group it did
+ * not create. Held and attended live beside the seat they belong to, so the
+ * two can no longer be edited apart.
+ */
+const DEMO_GROUPS = [
+  {
+    slug: "demo-cbom",
+    name: "CBOM Profiles Working Group (demo)",
+    type: "working_group",
+    title: "Chair",
+    held: 18,
+    attended: 18,
+  },
+  {
+    slug: "demo-cm",
+    name: "Cryptographic Module Working Group (demo)",
+    type: "working_group",
+    title: "Delegate",
+    held: 12,
+    attended: 9,
+  },
+  {
+    slug: "demo-council",
+    name: "Executive Council (demo)",
+    type: "board",
+    title: null,
+    held: 11,
+    attended: 6,
+  },
+];
+
+/**
+ * The demo groups themselves.
+ *
+ * Neither roster nor leadership is public, so a fixture group never reaches a
+ * public page; `participants` visibility keeps it to the people seated in it.
+ */
+function demoGroupSql(group) {
+  return `INSERT INTO groups
+  (id, type_key, parent_group_id, name, slug, description, visibility,
+   governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
+   allow_automatic_opt_out, public_leadership, public_roster,
+   min_endorsers_for_ballot, active, created_at, updated_at)
+VALUES (${sqlString(stableId(`group-${group.slug}`))}, ${sqlString(group.type)}, NULL,
+        ${sqlString(group.name)}, ${sqlString(group.slug)},
+        'Demo fixture group, seeded for the member record surface.',
+        'participants', 'inherited', 'managed', 'none', 0, 0, 0, 0, 1, ${NOW}, ${NOW})
+    ON CONFLICT(id) DO NOTHING;`;
+}
 
 /** Stable ids so every statement can reference the same rows idempotently. */
 const ORG_ID = stableId("org-digitorus");
@@ -477,23 +536,20 @@ SELECT ${ID}, u.id, ${sqlString(entry.key)}, ${sqlString(entry.label)}, ${NOW}, 
 function buildSql() {
   const statements = [...SKILLS.map(skillSql), ...demoOrganizationSql()];
 
-  /* Seats first: vouching and attendance both depend on them existing. The
-     demo member chairs CBOM, which is what the record's lede reflects. */
-  const titles = { cbom: "Chair", pqc: "Delegate", "executive-council": null };
-  for (const slug of DEMO_GROUPS) {
-    statements.push(seatSql(DEMO_MEMBER, IDENTITY_ID, MEMBER_ID, slug, titles[slug]));
-    statements.push(seatSql(DEMO_PEER, PEER_IDENTITY_ID, PEER_MEMBER_ID, slug, null));
+  /* The groups this seed owns, before anything that hangs off them. */
+  statements.push(...DEMO_GROUPS.map(demoGroupSql));
+
+  /* Seats: vouching and attendance both depend on them existing. The demo
+     member chairs the CBOM demo group, which the record's lede reflects. */
+  for (const group of DEMO_GROUPS) {
+    statements.push(seatSql(DEMO_MEMBER, IDENTITY_ID, MEMBER_ID, group.slug, group.title));
+    statements.push(seatSql(DEMO_PEER, PEER_IDENTITY_ID, PEER_MEMBER_ID, group.slug, null));
   }
 
   /* Attendance: held vs attended per group, so the record shows three
      different rates rather than one flat number. */
-  const attendance = [
-    ["cbom", 18, 18],
-    ["pqc", 12, 9],
-    ["executive-council", 11, 6],
-  ];
-  attendance.forEach(([slug, held, attended], index) => {
-    statements.push(...meetingsSql(slug, index, held, attended));
+  DEMO_GROUPS.forEach((group, index) => {
+    statements.push(...meetingsSql(group.slug, index, group.held, group.attended));
   });
 
   for (const person of CLAIMS) {
