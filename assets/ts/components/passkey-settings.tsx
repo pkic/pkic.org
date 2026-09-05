@@ -1,17 +1,12 @@
-import { browserSupportsWebAuthn, startRegistration } from "@simplewebauthn/browser";
-import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
+import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "preact/hooks";
-import {
-  passkeyBeginResponseSchema,
-  passkeysListResponseSchema,
-  passkeySummarySchema,
-  type PasskeySummary,
-} from "../../shared/schemas/passkeys";
+import { passkeysListResponseSchema, type PasskeySummary } from "../../shared/schemas/passkeys";
 import { successResponseSchema } from "../../shared/schemas/api-common";
-import { deleteJson, getJson, postJson } from "../shared/api-client";
+import { deleteJson, getJson } from "../shared/api-client";
 import { formatDateTime, showToast } from "../shared/ui";
 import { confirmAction } from "./ConfirmDialog";
 import { ErrorAlert } from "./ErrorAlert";
+import { usePasskeyEnrollment } from "./passkey-enrollment";
 import { DataTable } from "./Table";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
@@ -37,7 +32,7 @@ export function PasskeySettings({
   const [passkeys, setPasskeys] = useState<PasskeySummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState("");
-  const [enrolling, setEnrolling] = useState(false);
+  const { enroll, enrolling } = usePasskeyEnrollment();
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
 
   const load = useCallback(async () => {
@@ -55,29 +50,14 @@ export function PasskeySettings({
 
   async function handleEnroll(event: Event) {
     event.preventDefault();
-    setEnrolling(true);
-    try {
-      const begin = await postJson("/api/v1/auth/passkeys/register/begin", undefined, passkeyBeginResponseSchema);
-      const credential = await startRegistration({
-        optionsJSON: begin.options as unknown as PublicKeyCredentialCreationOptionsJSON,
-      });
-      await postJson(
-        "/api/v1/auth/passkeys/register/complete",
-        {
-          challengeToken: begin.challengeToken,
-          response: credential,
-          deviceName: deviceName.trim() || undefined,
-        },
-        passkeySummarySchema,
-      );
-      showToast(toastTargetId, "Passkey added", "success");
-      setDeviceName("");
-      await load();
-    } catch (reason) {
-      showToast(toastTargetId, (reason as Error).message, "error");
-    } finally {
-      setEnrolling(false);
+    const failure = await enroll(deviceName);
+    if (failure) {
+      showToast(toastTargetId, failure, "error");
+      return;
     }
+    showToast(toastTargetId, "Passkey added", "success");
+    setDeviceName("");
+    await load();
   }
 
   async function handleRemove(passkey: PasskeySummary) {

@@ -10,6 +10,7 @@ import {
 } from "../../assets/shared/schemas/form-management";
 import { FormManagementCreate, FormManagementDetail } from "../../assets/ts/components/forms/management/FormManagement";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { fillQuestion, nameForm } from "./helpers/form-editor";
 
 const mounted: HTMLElement[] = [];
 
@@ -143,41 +144,10 @@ describe("portal form creation and lifecycle", () => {
     const container = mount(<FormManagementCreate onCreated={onCreated} onCancel={vi.fn()} />);
     await settle();
 
-    function fieldFor(labelText: string): HTMLInputElement {
-      const label = Array.from(container.querySelectorAll("label")).find((el) => el.textContent === labelText)!;
-      return container.querySelector(`#${label.getAttribute("for")}`) as HTMLInputElement;
-    }
-
-    // These are controlled inputs backed by useState, read from that state
-    // (not the DOM) on submit — each edit must flush through `act` so the
-    // form's submit handler closes over the updated draft before it's used.
-    void act(() => {
-      const keyInput = fieldFor("Key");
-      keyInput.value = "new-member-form";
-      keyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    void act(() => {
-      const titleInput = fieldFor("Title");
-      titleInput.value = "New member form";
-      titleInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    // The editor always renders one field row and requires it to be filled
-    // in (its "remove" control is disabled at the last row), so a valid
-    // submission needs this field's key/label too, matching how
-    // tests/e2e/portal-forms.spec.ts drives the same editor.
-    void act(() => {
-      const fieldKeyInput = container.querySelector(
-        'input[aria-label="Field key (lowercase, letters, digits, underscores)"]',
-      ) as HTMLInputElement;
-      fieldKeyInput.value = "feedback";
-      fieldKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    void act(() => {
-      const fieldLabelInput = container.querySelector('input[aria-label="Field label"]') as HTMLInputElement;
-      fieldLabelInput.value = "Feedback";
-      fieldLabelInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    // Driven the way an author drives it: the title names the form and the
+    // key follows it, and the question's key sits behind its own disclosure.
+    await nameForm(container, "New member form", "new-member-form");
+    await fillQuestion(container, "Feedback", "feedback");
 
     await act(async () => {
       (container.querySelector('button[type="submit"]') as HTMLButtonElement).click();

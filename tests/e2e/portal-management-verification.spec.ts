@@ -23,6 +23,8 @@
  * env's EMAIL_RATE_LIMITER allows only 3 magic-link requests per 60s per
  * address (wrangler.jsonc), and 8 independent sign-ins for the same
  * admin@pkic.org within that window reliably tripped it.
+ *
+ * @covers sponsor.2.3
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -359,6 +361,16 @@ test.describe("Portal management browser-verification pass", () => {
     // depends on the label-then-input sibling structure it used to walk.
     const form = page.getByRole("form", { name: "Create sponsorship" });
     await form.getByLabel("Type").selectOption("event");
+    // The event is no longer a raw id input: it is the shared type-ahead
+    // picker. Typing part of the seeded event's name queries the server, and
+    // the match is chosen under the name a reader knows rather than a UUID.
+    const eventPicker = form.getByRole("combobox", { name: "Event" });
+    await eventPicker.fill("Post-Quantum");
+    await form
+      .getByRole("option", { name: /Post-Quantum Cryptography Conference/ })
+      .first()
+      .click();
+    await expect(eventPicker).toHaveValue(/Post-Quantum Cryptography Conference/);
     await form.getByLabel("Contact name").fill(contactName);
     await form.getByLabel("Contact email").fill(`e2e-sponsor-${Date.now()}@example.test`);
     await form.getByRole("button", { name: "Create", exact: true }).click();
@@ -380,6 +392,9 @@ test.describe("Portal management browser-verification pass", () => {
     // that name rather than by the container class it happens to carry.
     const detail = page.getByRole("region", { name: contactName });
     await expect(detail).toBeVisible();
+    // The picked event survived the round trip: the detail names it rather
+    // than showing a dangling or absent event reference.
+    await expect(detail.getByText(/Post-Quantum Cryptography Conference/)).toBeVisible();
     // New sponsorships default to pipeline_stage='new_inquiry' (migration
     // 0034) — assert via the stage badge specifically, since "Advance to
     // stage" is a <select> whose <option>s (incl. "payment pending") are
@@ -779,6 +794,11 @@ test.describe("Portal management browser-verification pass", () => {
     // breadcrumb's current-page crumb (the trail ends at the record), so the
     // assertion names the heading it means.
     await expect(page.getByRole("heading", { name: `Primary User ${stamp}` })).toBeVisible({ timeout: 10_000 });
+
+    // The addresses an account answers to are administration, not something
+    // the record says about the person, so they are disclosed under it.
+    await page.getByRole("button", { name: "Account administration", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Show account administration" }).click();
 
     // Located by role and accessible name rather than by `.card`/`.card-header`:
     // the panel is a named region now, and a role does not break the next time

@@ -42,7 +42,13 @@ node_modules/
 .jscpd-report/
 .ds-sync/
 ds-bundle/
+# Google Groups roster exports feeding scripts/migrate-members. Populated they
+# hold member names and addresses, which is personal data and does not belong
+# in the repository; the scripts read whatever the operator puts here.
+csv/
+
 .design-sync/.cache/
+.design-sync/.cache-*
 .design-sync/learnings/
 .design-sync/node_modules
 types/

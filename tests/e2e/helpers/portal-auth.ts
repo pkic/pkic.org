@@ -8,6 +8,25 @@ export function clientIpForIdentity(email: string): string {
   return `2001:db8::${suffix.slice(0, 4)}:${suffix.slice(4)}`;
 }
 
+/**
+ * Opens the email sign-in form.
+ *
+ * The passkey is the screen's primary action and the email link folds behind
+ * it, so a browser that supports WebAuthn — which every browser these specs
+ * drive does — shows the disclosure rather than the form. Idempotent, so a
+ * caller that is already looking at the form can call it anyway.
+ */
+export async function openEmailSignIn(page: Page): Promise<void> {
+  // Wait for the screen itself before asking what is on it. Probing the
+  // disclosure while the portal is still mounting reports "not visible", the
+  // click is skipped, and the wait that follows is for a field still folded
+  // away — which is a ten-second timeout rather than a useful failure.
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
+  const disclosure = page.getByRole("button", { name: "Sign in with an email link", exact: true });
+  if (await disclosure.isVisible().catch(() => false)) await disclosure.click();
+  await expect(page.getByLabel("Work email")).toBeVisible({ timeout: 10_000 });
+}
+
 /** Establishes a real portal session through the same mailbox capability used by users. */
 export async function signInToPortal(page: Page, email: string): Promise<void> {
   // Model independent users arriving from independent clients. The complete
@@ -15,8 +34,8 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   // address and exhausts the production-equivalent per-IP limiter.
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
   await page.goto("/portal/");
-  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
-  await page.getByLabel("Email").fill(email);
+  await openEmailSignIn(page);
+  await page.getByLabel("Work email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
@@ -28,7 +47,7 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   await page.reload();
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
-  await expect(page.getByLabel("Email")).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
 }

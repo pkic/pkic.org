@@ -9,7 +9,7 @@
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openEmailSignIn, signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import { ensureAppOrigin, submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 
@@ -78,8 +78,8 @@ test("a sign-in request for an unknown address creates no session", async ({ pag
   const since = await capturedEmailCount();
 
   await page.goto("/portal/");
-  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
-  await page.getByLabel("Email").fill(email);
+  await openEmailSignIn(page);
+  await page.getByLabel("Work email").fill(email);
   await page.getByRole("button", { name: "Send sign-in link" }).click();
 
   // The response must not disclose whether the address is known, so the same

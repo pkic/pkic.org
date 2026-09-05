@@ -39,6 +39,9 @@ printf 'y\n' | pnpm exec wrangler d1 migrations apply pkic-db-local --env local 
 node scripts/seed-initial-admin.mjs  --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --e2e-worker-pool
 node scripts/seed-event.mjs          --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --skip-email-templates
 node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --persist-to "$STATE_DIR"
+# The member-profile demo record, so portal specs and manual review both have a
+# contact page with skills, participation and standing on it.
+node scripts/seed-member-profiles.mjs --local --persist-to "$STATE_DIR"
 pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-donations.sql
 
 # ── 3. Start servers ────────────────────────────────────────────────────────
@@ -73,11 +76,19 @@ INTERNAL_SIGNING_SECRET=e2e-test-signing-secret
 MEETING_PROVIDER_ENCRYPTION_KEY=e2e-meeting-provider-encryption-secret-000000000000000
 SENDGRID_API_BASE=${INTERCEPT_URL}
 SENDGRID_API_KEY=e2e-test-dummy-key
-APP_BASE_URL=http://127.0.0.1:${E2E_PORT}
+APP_BASE_URL=http://localhost:${E2E_PORT}
+WEBAUTHN_ORIGIN=http://localhost:${E2E_PORT}
 EMAIL_BADGE_DELAY_SECONDS=0
 DEFAULT_MIN_PROPOSAL_REVIEWS=0
 EOF
 
+# ── Why localhost rather than 127.0.0.1 ────────────────────────────────────
+# WebAuthn requires the relying-party id to be a registrable domain suffix of
+# the page's origin, and an IP address is neither registrable nor a domain: a
+# ceremony run from 127.0.0.1 against the `localhost` RP id is refused outright
+# with "127.0.0.1 is an invalid domain". The origin also has to match the port
+# this run actually uses, which the static local value cannot know.
+#
 # ── Serve a snapshot, not the live build directory ──────────────────────────
 # `public/` is rewritten by every `hugo` run. When anything rebuilds the site
 # while the suite is running — another worktree task, a developer checking a

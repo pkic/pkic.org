@@ -2,6 +2,11 @@
  * The membership review workflow, driven through the portal rather than the
  * API.
  *
+ * @covers join.1.2
+ * @covers join.1.3
+ * @covers join.1.2.a
+ * @covers join.1.5
+ *
  * The existing approval journey provisions an application straight to
  * `ec_review` with three direct PATCH calls and then clicks Approve. That
  * proves onboarding runs, but it never touches the stage-transition control

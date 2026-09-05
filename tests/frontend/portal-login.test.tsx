@@ -94,7 +94,7 @@ describe("portal login", () => {
 
     await act(() => render(<Login onSignedIn={vi.fn()} />, container));
 
-    const email = controlLabeled("Email");
+    const email = controlLabeled("Work email");
     expect(email.type).toBe("email");
     expect(email.required).toBe(true);
     expect(email.getAttribute("autocomplete")).toBe("email");
@@ -124,7 +124,7 @@ describe("portal login", () => {
     );
 
     await act(() => render(<Login onSignedIn={vi.fn()} />, container));
-    controlLabeled("Email").value = "member@example.test";
+    controlLabeled("Work email").value = "member@example.test";
     await submitForm();
     await waitFor(() => container.querySelector('[role="alert"]') !== null, "the failure was never announced");
 
@@ -167,6 +167,66 @@ describe("portal login", () => {
         (el.textContent ?? "").includes("Sign in with a passkey"),
       ),
     ).toBe(false);
-    expect(controlLabeled("Email")).toBeTruthy();
+    expect(controlLabeled("Work email")).toBeTruthy();
+  });
+
+  it("folds the email route behind the passkey, and opens it on request", async () => {
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+
+    // The phishable route is one click away rather than side by side with the
+    // one that cannot be phished.
+    expect(container.querySelector("form")).toBeNull();
+
+    await act(async () => {
+      buttonLabeled("Sign in with an email link").click();
+      await Promise.resolve();
+    });
+
+    expect(controlLabeled("Work email").type).toBe("email");
+  });
+
+  it("takes the brand panel's words and figures from the page, not from the bundle", async () => {
+    const copy = document.createElement("script");
+    copy.type = "application/json";
+    copy.id = "portal-login-copy";
+    copy.textContent = JSON.stringify({
+      kicker: "Member portal",
+      headline: "Where the work happens.",
+      blurb: "One sign-in for everything.",
+      facts: [{ value: "438", label: "member organizations" }],
+    });
+    document.body.append(copy);
+
+    try {
+      await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+
+      expect(container.textContent).toContain("Where the work happens.");
+      expect(container.textContent).toContain("One sign-in for everything.");
+      expect(container.textContent).toContain("438");
+      expect(container.textContent).toContain("member organizations");
+    } finally {
+      copy.remove();
+    }
+  });
+
+  it("states no figure the page did not give it", async () => {
+    const copy = document.createElement("script");
+    copy.type = "application/json";
+    copy.id = "portal-login-copy";
+    // Malformed on purpose: a broken block of copy must not take the sign-in
+    // screen down, and must not leave invented counts behind either.
+    copy.textContent = "{ not json";
+    document.body.append(copy);
+
+    try {
+      await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+
+      expect(container.querySelector(".pk-login__facts")).toBeNull();
+      // The screen still signs people in, which is the only thing it owes.
+      expect(buttonLabeled("Send sign-in link")).toBeTruthy();
+    } finally {
+      copy.remove();
+    }
   });
 });

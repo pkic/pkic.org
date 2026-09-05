@@ -1,3 +1,6 @@
+/**
+ * @covers sponsor.2.5
+ */
 import { expect, test } from "@playwright/test";
 
 const eventSponsorsPath = "/events/2026/pqc-conference-amsterdam-nl/sponsors/";

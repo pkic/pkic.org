@@ -2,8 +2,16 @@
  * Identity-based portal login screen — one magic link or passkey ceremony
  * establishes every currently eligible staff/member capacity.
  *
- * The screen is the whole page while nobody is signed in, so it carries its
- * own `.pk` root. Two details are load-bearing rather than cosmetic:
+ * The screen fills the space between the site's own header and footer, which
+ * Hugo renders around the portal mount. Two panels: the brand panel says where
+ * the reader has arrived, and the card signs them in.
+ *
+ * The passkey is the primary action and the email link folds away behind it.
+ * That ordering is the security position stated as a layout: a passkey cannot
+ * be phished or replayed, and a sign-in link sitting in a mailbox can be. The
+ * email route stays one click away for anyone who has not enrolled one yet.
+ *
+ * Two details are load-bearing rather than cosmetic:
  *
  *   - The email control is a `Field`, which owns the `for`/`id` pair and the
  *     required annotation. It no longer carries a hand-written `id`; the
@@ -27,8 +35,9 @@ import { portalReturnPath } from "../hash-route";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { TextInput } from "../../../ui/TextControl";
+import { LoginBackdrop } from "./LoginBackdrop";
+import "./Login.css";
 
 async function requestMagicLink(email: string): Promise<void> {
   // The route the sign-in interrupted rides along, so the link the email
@@ -45,8 +54,21 @@ async function signInWithPasskey(): Promise<void> {
 
 export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }) {
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const magicLink = useMagicLinkRequest("Something went wrong. Please try again.");
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
+
+  /*
+   * A browser with no passkey support has no primary action to fold behind,
+   * so the email form is the screen rather than a disclosure inside it.
+   *
+   * A sent link takes the form away. The design leaves it up beside the
+   * confirmation, but a form that still invites a submit after "check your
+   * inbox" contradicts it — and the third send inside a minute is refused by
+   * the rate limiter, so the invitation is to an error. The passkey button
+   * stays: giving up on the email and using a passkey is a real thing to do.
+   */
+  const emailShown = (emailOpen || !passkeysSupported) && !magicLink.sent;
 
   async function handleSubmit(e: Event): Promise<void> {
     const email = emailFromSubmitEvent(e);
@@ -68,57 +90,96 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
   }
 
   return (
-    <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
-      <Panel class="content-width-sm">
-        <PanelHeader title="PKI Consortium Portal" headingLevel={2} />
-        <PanelBody class="pk-stack">
-          {passkeysSupported && !magicLink.sent && (
-            <>
-              <Button
-                block
-                loading={passkeySubmitting}
-                disabled={passkeySubmitting}
-                onClick={() => {
-                  void handlePasskeySignIn();
-                }}
-              >
-                {passkeySubmitting ? "Waiting for passkey…" : "Sign in with a passkey"}
-              </Button>
-              <p class="pk-small pk-center">or</p>
-            </>
-          )}
+    <div class="pk pk-login">
+      <LoginBackdrop />
+      <main class="pk-login__panel">
+        <div class="pk-login__card-wrap">
+          <div class="pk-login__card">
+            <div class="pk-login__card-rule" aria-hidden="true" />
+            <div class="pk-login__card-body pk-stack">
+              <div class="pk-stack pk-stack--tight">
+                <h1 class="pk-login__title">Sign in</h1>
+                <p class="pk-small pk-muted">
+                  Your passkey is the fastest and safest way in — nothing to remember, nothing to phish.
+                </p>
+              </div>
 
-          {/* The instruction only makes sense while the field is on screen;
-              after the send it contradicted the confirmation below it. */}
-          {!magicLink.sent && <p class="pk-muted">Enter your email to receive a sign-in link.</p>}
-          {magicLink.sent ? (
-            <Alert tone="ok" title="Check your email">
-              If this address has portal access, you&apos;ll receive a sign-in link shortly.
-            </Alert>
-          ) : (
-            <form
-              class="pk-stack"
-              onSubmit={(e) => {
-                void handleSubmit(e);
-              }}
-            >
-              <Field label="Email" required>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    type="email"
-                    name="email"
-                    placeholder="you@example.com"
-                    autocomplete="email"
-                  />
-                )}
-              </Field>
-              <MagicLinkSubmitButton submitting={magicLink.submitting} />
-            </form>
-          )}
-          <SignInError error={magicLink.error} />
-        </PanelBody>
-      </Panel>
+              {magicLink.sent && (
+                <Alert tone="ok" title="Check your email">
+                  If this address has portal access, you&apos;ll receive a sign-in link shortly.
+                </Alert>
+              )}
+
+              {passkeysSupported && (
+                <div class="pk-stack pk-stack--tight">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    block
+                    loading={passkeySubmitting}
+                    disabled={passkeySubmitting}
+                    onClick={() => {
+                      void handlePasskeySignIn();
+                    }}
+                  >
+                    {passkeySubmitting ? "Waiting for passkey…" : "Sign in with a passkey"}
+                  </Button>
+                  <p class="pk-small pk-muted pk-login__note">Uses Touch ID, Windows Hello or your security key.</p>
+                </div>
+              )}
+
+              {passkeysSupported && !emailShown && (
+                <Button variant="secondary" size="lg" block onClick={() => setEmailOpen(true)}>
+                  Sign in with an email link
+                </Button>
+              )}
+
+              {emailShown && (
+                <form
+                  class="pk-stack pk-stack--tight"
+                  onSubmit={(e) => {
+                    void handleSubmit(e);
+                  }}
+                >
+                  <Field label="Work email" required>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        type="email"
+                        name="email"
+                        placeholder="you@organization.org"
+                        autocomplete="email"
+                      />
+                    )}
+                  </Field>
+                  <MagicLinkSubmitButton submitting={magicLink.submitting} />
+                  {passkeysSupported && (
+                    <Button variant="ghost" size="sm" block onClick={() => setEmailOpen(false)}>
+                      Back to passkey
+                    </Button>
+                  )}
+                </form>
+              )}
+
+              <SignInError error={magicLink.error} />
+
+              <p class="pk-small pk-muted pk-login__note">
+                Trouble signing in? <a href="/about/contact/">Ask the secretariat</a>.
+              </p>
+            </div>
+            <div class="pk-login__card-foot">
+              <p class="pk-small pk-login__note">
+                Not a member yet? <a href="/join/">Become a member</a> — participation is open to any organization
+                working on PKI.
+              </p>
+            </div>
+          </div>
+          <p class="pk-small pk-muted pk-login__terms">
+            By signing in you accept the <a href="/about/bylaws/">bylaws</a> and{" "}
+            <a href="/about/privacy-policy/">privacy policy</a>.
+          </p>
+        </div>
+      </main>
     </div>
   );
 }

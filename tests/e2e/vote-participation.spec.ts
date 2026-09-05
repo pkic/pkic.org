@@ -7,6 +7,12 @@
  * ballot for each and neither overwrites the other, that changing your mind
  * replaces your ballot rather than adding one, that both vote types work, and
  * that the window and eligibility close the ballot box when they should.
+ *
+ * @covers vote.5.1
+ * @covers vote.5.2
+ * @covers vote.5.3
+ * @covers vote.5.4
+ * @covers vote.5.5
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

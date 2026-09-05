@@ -16,6 +16,7 @@ import {
   saveProfile,
   clearMemberProfile,
   clearAuth,
+  signedInWithLink,
 } from "./state";
 import { Login } from "./shell/Login";
 import { Alert } from "../../ui/Alert";
@@ -68,6 +69,10 @@ export function App() {
       if (userToken) {
         try {
           const session = await verifyMagicLink(userToken);
+          // Recorded before the redirect below rewrites the hash: after that
+          // there is nothing left on the page saying this session began with a
+          // link rather than with a passkey.
+          signedInWithLink.value = true;
           // Session establishment may have restored a recorded return path;
           // only replace the hash when it still carries the verify token. The
           // link itself may name where to land — the route the sign-in began

@@ -1,13 +1,11 @@
-import { useState } from "preact/hooks";
-import { UserPicker, type PickedUser } from "../../../../../components/UserPicker";
-import { postJson } from "../../../../../shared/api-client";
+import { UserPicker } from "../../../../../components/UserPicker";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
 import { TextInput } from "../../../../../ui/TextControl";
 import { toast } from "../../../ui";
-import { userRoleResponseEnvelopeSchema } from "../../../../../../shared/schemas/access-control";
-import { TargetPicker, type PickedTarget } from "../TargetPicker";
+import { TargetPicker } from "../TargetPicker";
+import { useRoleAssignment } from "../use-role-assignment";
 
 /**
  * Assigns the fixed role of an open RoleDetail — the same endpoint/schema
@@ -21,49 +19,24 @@ import { TargetPicker, type PickedTarget } from "../TargetPicker";
  * names nothing — so each group is now named by a legend or by its own Field.
  */
 export function RoleAssignForm({ roleId, onAssigned }: { roleId: string; onAssigned: () => void }) {
-  const [user, setUser] = useState<PickedUser | null>(null);
-  const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
-  const [expiresAt, setExpiresAt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
-  async function handleAssign(e: Event) {
-    e.preventDefault();
-    setFormError(null);
-    if (!user) {
-      setFormError("Pick a user first.");
-      return;
-    }
-    if (target.targetType && !target.targetId) {
-      setFormError("Pick a specific event or working group, or clear the context.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await postJson(
-        `/api/v1/users/${user.id}/roles`,
-        {
-          roleId,
-          contextType: target.targetType,
-          contextId: target.targetId,
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-        },
-        userRoleResponseEnvelopeSchema,
-      );
-      toast("Role assigned", "success");
-      setUser(null);
-      setTarget({ targetType: null, targetId: null });
-      setExpiresAt("");
-      onAssigned();
-    } catch (err) {
-      setFormError((err as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  const { form, submitting, formError, user, setUser, target, setTarget, expiresAt, setExpiresAt, handleAssign } =
+    useRoleAssignment({
+      roleId,
+      onAssigned: () => {
+        toast("Role assigned", "success");
+        setUser(null);
+        onAssigned();
+      },
+    });
 
   return (
-    <form class="pk pk-stack" aria-label="Assign this role" onSubmit={(e) => void handleAssign(e)}>
+    <form
+      noValidate
+      class="pk pk-stack"
+      aria-label="Assign this role"
+      {...form.handlers}
+      onSubmit={(e) => void handleAssign(e)}
+    >
       {/* One `disabled` takes the whole form out of play while the request is
           in flight, including the pickers this surface cannot reach a prop
           into. */}
@@ -78,11 +51,16 @@ export function RoleAssignForm({ roleId, onAssigned }: { roleId: string; onAssig
           <legend class="pk-field__label">Target</legend>
           <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
         </fieldset>
-        <Field label="Expires (optional)" help="Leave empty for an assignment that never expires.">
+        <Field
+          label="Expires (optional)"
+          help="Leave empty for an assignment that never expires."
+          {...form.of("expiresAt")}
+        >
           {(control) => (
             <TextInput
               {...control}
               type="datetime-local"
+              name="expiresAt"
               value={expiresAt}
               onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)}
               disabled={submitting}

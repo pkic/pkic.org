@@ -45,6 +45,9 @@ describe("shared seed CLI parser", () => {
 describe("shared seed SQL and Wrangler helpers", () => {
   it("quotes strings and renders optional text consistently for every seeder", () => {
     expect(sqlString("O'Brien")).toBe("'O''Brien'");
+    // An absent value is a NULL column, never the literal text 'null'.
+    expect(sqlString(null)).toBe("NULL");
+    expect(sqlString(undefined)).toBe("NULL");
     expect(toSqlNullableText("  value  ")).toBe("'value'");
     expect(toSqlNullableText("   ")).toBe("NULL");
     expect(toSqlNullableText(null)).toBe("NULL");

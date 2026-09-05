@@ -9,6 +9,11 @@
  * not), and a rejected proposal closes both. Nothing exercised that, so an
  * accepted session's abstract could have drifted after the program was
  * published without anything failing.
+ *
+ * @covers proposal.4.2
+ * @covers proposal.4.3
+ * @covers proposal.4.4
+ * @covers proposal.4.5
  */
 import { expect, test } from "@playwright/test";
 

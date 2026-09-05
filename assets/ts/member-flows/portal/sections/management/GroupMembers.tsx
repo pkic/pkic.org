@@ -96,16 +96,6 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
 
   return (
     <div class="pk pk-stack">
-      {showAddForm && (
-        <GroupMemberAddForm
-          groupId={groupId}
-          onAdded={async () => {
-            await changed();
-            setShowAddForm(false);
-          }}
-          onCancel={() => setShowAddForm(false)}
-        />
-      )}
       {editing && (
         <GroupMembershipSeatForm
           groupId={groupId}
@@ -128,6 +118,25 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
         initialSort="user_name"
         actionsRef={listActions}
         searchPlaceholder="Search name, email, organization, or category…"
+        /*
+         * Inside the list's own panel, under the toolbar that opened it —
+         * which is where the form's heading level already assumed it was, and
+         * where "Add person" is. It used to render as a sibling above the
+         * panel, so the form and the button that opens it sat in different
+         * regions and neither named the other.
+         */
+        inset={
+          showAddForm ? (
+            <GroupMemberAddForm
+              groupId={groupId}
+              onAdded={async () => {
+                await changed();
+                setShowAddForm(false);
+              }}
+              onCancel={() => setShowAddForm(false)}
+            />
+          ) : undefined
+        }
         createAction={{
           label: "Add person",
           onSelect: () => {

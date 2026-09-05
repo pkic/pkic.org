@@ -1,0 +1,21 @@
+{{/*
+  The consortium's headline figures, computed once.
+
+  The home page's stats bar and the portal sign-in screen both state these, and
+  a count restated in two templates is a count that drifts in one of them. The
+  member and working-group figures are derived from the site's own content;
+  only the representative figure is an estimate the site states as such.
+
+  Returns a slice of dicts: value, label, and the page each links to.
+*/}}
+{{ $wgCount := 0 }}
+{{ range where site.Pages "Section" "wg" }}
+  {{ if and (eq .Kind "section") (eq .Parent.RelPermalink "/wg/") (not .Draft) }}
+    {{ $wgCount = add $wgCount 1 }}
+  {{ end }}
+{{ end }}
+{{ return slice
+  (dict "value" (printf "%d" (len hugo.Data.members)) "label" "Members" "href" "/members/")
+  (dict "value" "~1K" "label" "Representatives" "href" "/members/")
+  (dict "value" (printf "%d" $wgCount) "label" "Working Groups" "href" "/wg/")
+}}

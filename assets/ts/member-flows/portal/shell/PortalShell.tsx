@@ -2,11 +2,12 @@
 import { lazy, Suspense } from "preact/compat";
 import { Router, Route, Switch } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
-import { clearAuth, portalSession, profile } from "../state";
+import { clearAuth, portalSession, profile, signedInWithLink } from "../state";
 import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
 import { Spinner } from "../../../components/Spinner";
 import { PortalNavigationShell } from "./PortalNavigationShell";
 import { PortalRouteFallback, PortalRouteRedirect, ScrollResetOnNavigate, SectionWrapper } from "./PortalRouteChrome";
+import { useAutomaticPasskeyUpgrade } from "../../../components/passkey-enrollment";
 import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalDefaultPath,
@@ -75,6 +76,13 @@ function LazyEventWorkspace(props: EventWorkspaceProps) {
 
 export function PortalShell() {
   const session = portalSession.value;
+  /*
+   * A sign-in that used an emailed link is one the platform may be willing to
+   * upgrade to a passkey by itself. Gated on the same capacity that owns
+   * passkeys in account settings: an identity that may not manage them must
+   * not have one made for it.
+   */
+  useAutomaticPasskeyUpgrade(signedInWithLink.value && Boolean(session?.member || session?.staff));
   const hasGroupsAccess = portalSectionEnabled(session, "groups");
   const hasEventWorkspace = portalSectionEnabled(session, "events");
   const hasSponsorWorkspace = portalSectionEnabled(session, "sponsors");

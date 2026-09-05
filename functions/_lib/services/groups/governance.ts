@@ -1,5 +1,6 @@
 import { isUserBackedAuthAdmin } from "../../auth/admin-identity";
 import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/authorization-guard";
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
@@ -59,11 +60,19 @@ function groupAuthorizationEvidence(
         return trustedAuthorizationEvidence();
       }
       if (contextualIds.length > 0) {
+        /*
+         * One JSON binding rather than a placeholder per id: the statement
+         * already spends bindings on `requestedGroups`, and D1 allows a
+         * hundred in total. A token carrying grants for a hundred groups is
+         * unusual, not impossible, and the failure would be a denied
+         * authorization that looks like a policy decision.
+         */
+        const granted = buildD1JsonMembershipFilter("id", contextualIds);
         return {
           sql: `WITH requested_groups(id) AS (${requestedGroups.sql})
                 SELECT 1 FROM requested_groups
-                 WHERE id IN (${contextualIds.map(() => "?").join(", ")})`,
-          bindings: [...requestedGroups.bindings, ...contextualIds],
+                 WHERE ${granted.sql}`,
+          bindings: [...requestedGroups.bindings, ...granted.bindings],
         };
       }
     }

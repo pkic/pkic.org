@@ -6,6 +6,8 @@
  * branch: the selection has to survive into the stored inquiry and into both
  * rendered emails. Nothing exercised that, so a tier that failed to resolve
  * would have shown up only as an unresolved placeholder in a real message.
+ *
+ * @covers sponsor.2.2
  */
 import { expect, test } from "@playwright/test";
 import { waitForCapturedEmail } from "./helpers/sendgrid";

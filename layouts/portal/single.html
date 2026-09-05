@@ -1,4 +1,22 @@
 {{ define "main" }}
+{{/*
+  The signed-out portal screen's brand panel is page content, so its words are
+  Hugo's. Its figures are the site's own headline stats, from the same partial
+  the home page's stats bar reads, so the two can never state different counts.
+*/}}
+{{ $login := .Params.login | default dict }}
+{{ $facts := slice }}
+{{ range partial "site-stats.html" . }}
+  {{ $facts = $facts | append (dict "value" .value "label" (lower .label)) }}
+{{ end }}
+{{ with $login.facts }}{{ $facts = $facts | append . }}{{ end }}
+{{/*
+  `safeJS` because Hugo escapes template output inside a <script> as a JS
+  string literal, which would hand the reader JSON wrapped in JSON.
+*/}}
+<script type="application/json" id="portal-login-copy">
+  {{- dict "kicker" $login.kicker "headline" $login.headline "blurb" $login.blurb "facts" $facts | jsonify | safeJS -}}
+</script>
 <div id="portal-app" data-module="member-flows/portal-page">{{/* Preact mounts here */}}</div>
 <div id="portal-toast-area"></div>
 {{ partial "headshot-modals.html" . }}

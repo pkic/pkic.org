@@ -16,6 +16,16 @@ export const portalSession = signal<PortalSession | null>(null);
 export const profile = signal<MyProfile | null>(null);
 export const isAuthed = computed(() => authStatus.value === "authenticated" && Boolean(portalSession.value));
 
+/**
+ * Whether this session was established by an emailed link.
+ *
+ * The session itself does not record how it began, and it does not need to:
+ * only the tab that performed the ceremony has to know, and only for as long
+ * as it takes to offer that reader a passkey. Reloading the portal clears it,
+ * which is right — the offer belongs to the sign-in, not to the account.
+ */
+export const signedInWithLink = signal(false);
+
 export function setAuthChecking(): void {
   authStatus.value = "loading";
 }
@@ -44,6 +54,7 @@ export function finishAuthCheck(): void {
 }
 
 export function clearAuth(): void {
+  signedInWithLink.value = false;
   authStatus.value = "anonymous";
   portalSession.value = null;
   profile.value = null;

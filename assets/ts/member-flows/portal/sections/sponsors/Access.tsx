@@ -10,10 +10,12 @@
  * saying the send had worked.
  */
 import { useState } from "preact/hooks";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { postJson } from "../../../../shared/api-client";
 import { MagicLinkSubmitButton, SignInError } from "../../../../components/MagicLinkFeedback";
 import { useMagicLinkRequest } from "../../../../hooks/useMagicLinkRequest";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
+import { sponsorAccessLinkRequestSchema } from "../../../../../shared/schemas/sponsor-access";
 import { Alert } from "../../../../ui/Alert";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -29,15 +31,23 @@ export function SponsorAccess() {
   const [eventSlug, setEventSlug] = useState(prefilledEvent);
   const magicLink = useMagicLinkRequest("Something went wrong. Please try again.");
 
+  /*
+   * One basis for validation: the contract the route parses. The form used to
+   * check `if (!email.trim() || !eventSlug.trim()) return`, which silently did
+   * nothing — a reader who left a field blank got no message and no marked
+   * field, only a button that appeared not to work.
+   */
+  const form = useContractForm(sponsorAccessLinkRequestSchema, {
+    email: email.trim(),
+    eventSlug: eventSlug.trim(),
+  });
+
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
-    if (!email.trim() || !eventSlug.trim()) return;
+    const checked = form.submit();
+    if (!checked.data) return;
     await magicLink.request(async () => {
-      await postJson(
-        "/api/v1/sponsors/access-links",
-        { email: email.trim(), eventSlug: eventSlug.trim() },
-        successResponseSchema,
-      );
+      await postJson("/api/v1/sponsors/access-links", checked.data, successResponseSchema);
     });
   }
 
@@ -56,16 +66,19 @@ export function SponsorAccess() {
             </Alert>
           ) : (
             <form
+              noValidate
               class="pk-stack"
+              {...form.handlers}
               onSubmit={(e) => {
                 void handleSubmit(e);
               }}
             >
-              <Field label="Email" required>
+              <Field label="Email" required {...form.of("email")}>
                 {(control) => (
                   <TextInput
                     {...control}
                     type="email"
+                    name="email"
                     autocomplete="email"
                     placeholder="you@example.com"
                     value={email}
@@ -77,11 +90,13 @@ export function SponsorAccess() {
                 label="Event"
                 required
                 help="The event's web address slug — found in your original sponsor invitation email, or ask your PKI Consortium contact."
+                {...form.of("eventSlug")}
               >
                 {(control) => (
                   <TextInput
                     {...control}
                     type="text"
+                    name="eventSlug"
                     placeholder="e.g. pqc-conference-amsterdam-nl"
                     value={eventSlug}
                     onInput={(e) => setEventSlug((e.target as HTMLInputElement).value)}

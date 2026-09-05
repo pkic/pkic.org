@@ -27,8 +27,20 @@ const reportOnly = process.argv.includes("--report");
 const roots = ["layouts", "assets/ts"];
 
 const VOID = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input",
-  "link", "meta", "param", "source", "track", "wbr",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
 ]);
 
 /**
@@ -96,8 +108,7 @@ function inspect(file) {
       for (const { part, ancestor, onlyInside } of REQUIRED_ANCESTOR) {
         if (!part.test(className)) continue;
         if (onlyInside && !stack.some((frame) => frame.classes.includes(onlyInside))) continue;
-        const inside =
-          names.includes(ancestor) || stack.some((frame) => frame.classes.includes(ancestor));
+        const inside = names.includes(ancestor) || stack.some((frame) => frame.classes.includes(ancestor));
         // A dynamic ancestor may be the one required, and the scanner cannot
         // tell. Reporting it would train people to ignore the gate.
         if (inside || stack.some((frame) => frame.dynamic)) continue;
@@ -127,6 +138,8 @@ if (failures.length === 0) {
   process.exit(0);
 }
 
-console.error(`Field structure: ${failures.length} part${failures.length === 1 ? "" : "s"} outside the element that styles it.\n`);
+console.error(
+  `Field structure: ${failures.length} part${failures.length === 1 ? "" : "s"} outside the element that styles it.\n`,
+);
 for (const failure of failures) console.error(`  ${failure}\n`);
 process.exit(reportOnly ? 0 : 1);

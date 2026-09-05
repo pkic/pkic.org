@@ -13,6 +13,7 @@ import { publicOperation } from "./route-contract";
 
 export const VOTE_TYPES = ["election", "motion", "consultation"] as const;
 export const voteTypeSchema = z.enum(VOTE_TYPES);
+export type VoteType = z.infer<typeof voteTypeSchema>;
 
 export const VOTE_ELECTORATE_MODES = ["per_member", "per_person"] as const;
 export const voteElectorateModeSchema = z.enum(VOTE_ELECTORATE_MODES);

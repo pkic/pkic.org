@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
-  FORM_FIELD_TYPES,
   FORM_PURPOSES,
   FORM_STATUSES,
   formDefinitionCreateSchema,
@@ -13,21 +12,23 @@ import {
 } from "../../../shared/schemas/forms";
 import {
   buildFieldValidation,
-  FieldConfigEditor,
   type FieldDraft,
   type FieldType,
   type VisualizationConfig,
 } from "./FormFieldConfigEditor";
+import { ClosedQuestion, OpenQuestion } from "./FormQuestionCard";
+import { FormQuestionPalette } from "./FormQuestionPalette";
+import { FormRespondentPreview } from "./FormRespondentPreview";
 import { Alert } from "../../ui/Alert";
-import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
-import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
-import { Panel, PanelBody } from "../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../ui/TextControl";
+import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { TabList } from "../../ui/TabList";
+import { Select, TextInput } from "../../ui/TextControl";
 // `pk-mono` is a Content.css class, and component CSS ships in lazy chunks —
 // without this import the key inputs render in the body face.
 import "../../ui/Content.css";
+import "./FormBuilder.css";
 
 export interface EditableFormDetail {
   form: {
@@ -48,6 +49,28 @@ interface FormDraft {
   status: FormStatus;
   fields: FieldDraft[];
 }
+
+/**
+ * The key a title implies.
+ *
+ * A form's key is the stable name it carries in URLs and the API, and an
+ * author who has just typed a title has already said what it should be. It is
+ * derived until they change it, at which point their own value stands.
+ */
+function keyFromTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/** What each status means for a respondent, rather than its bare name. */
+const STATUS_LABELS: Record<FormStatus, string> = {
+  active: "Active — accepting responses",
+  inactive: "Inactive — not accepting responses",
+  archived: "Archived",
+};
 
 function emptyField(index: number): FieldDraft {
   return {
@@ -235,6 +258,12 @@ export function FormDefinitionEditor({
   const [draft, setDraft] = useState<FormDraft>(() => detailToDraft(detail, purposes));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // A new form opens on its first question; an existing one opens closed, so
+  // the author sees the whole form before editing any one part of it.
+  const [openIndex, setOpenIndex] = useState(mode === "create" ? 0 : -1);
+  const [tab, setTab] = useState<"build" | "preview">("build");
+  // Until an author opens the key, the title is what names the form.
+  const [keyOpen, setKeyOpen] = useState(false);
   const draftSource = `${mode}:${detail?.form.key ?? ""}`;
   const previousDraftSource = useRef(draftSource);
 
@@ -264,7 +293,28 @@ export function FormDefinitionEditor({
     });
   }
 
+  function addField(fieldType: FieldType) {
+    setDraft((current) => {
+      const fields = [...current.fields, { ...emptyField(current.fields.length), fieldType }];
+      setOpenIndex(fields.length - 1);
+      return { ...current, fields };
+    });
+  }
+
+  function duplicateField(index: number) {
+    setDraft((current) => {
+      const source = current.fields[index];
+      const fields = [...current.fields];
+      // A duplicate cannot carry the original's key: two fields sharing one key
+      // is exactly what the contract refuses.
+      fields.splice(index + 1, 0, { ...source, key: "" });
+      setOpenIndex(index + 1);
+      return { ...current, fields };
+    });
+  }
+
   function removeField(index: number) {
+    setOpenIndex(-1);
     setDraft((current) => ({ ...current, fields: current.fields.filter((_, i) => i !== index) }));
   }
 
@@ -284,196 +334,166 @@ export function FormDefinitionEditor({
     }
   }
 
+  const questions = draft.fields;
+  const preview = tab === "preview";
+
   return (
-    <form class="pk pk-stack" onSubmit={(e) => void save(e)}>
-      <div class="pk-grid pk-grid--tight">
-        <Field label="Key">
-          {(control) => (
-            <TextInput
-              {...control}
-              class="pk-mono"
-              value={draft.key}
-              disabled={mode === "edit"}
-              required
-              pattern="[a-z][a-z0-9-]*"
-              onInput={(e) => {
-                const value = e.currentTarget.value;
-                setDraft((current) => ({ ...current, key: value }));
-              }}
-            />
-          )}
-        </Field>
-        <Field label="Purpose">
-          {(control) => (
-            <Select
-              {...control}
-              value={draft.purpose}
-              disabled={mode === "edit"}
-              onChange={(e) => {
-                const value = e.currentTarget.value as FormPurpose;
-                setDraft((current) => ({ ...current, purpose: value }));
-              }}
-            >
-              {purposes.map((purpose) => (
-                <option key={purpose} value={purpose}>
-                  {purpose.replace(/_/g, " ")}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <Field label="Title">
-          {(control) => (
-            <TextInput
-              {...control}
-              value={draft.title}
-              required
-              onInput={(e) => {
-                const value = e.currentTarget.value;
-                setDraft((current) => ({ ...current, title: value }));
-              }}
-            />
-          )}
-        </Field>
-        <Field label="Status">
-          {(control) => (
-            <Select
-              {...control}
-              value={draft.status}
-              onChange={(e) => {
-                const value = e.currentTarget.value as FormStatus;
-                setDraft((current) => ({ ...current, status: value }));
-              }}
-            >
-              {FORM_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status[0].toUpperCase() + status.slice(1)}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
+    <form class="pk pk-stack" onSubmit={(e) => void save(e)} noValidate>
+      <div class="pk-tabs-rule">
+        <TabList
+          label="Form editor"
+          idPrefix="form-editor"
+          activeId={tab}
+          onSelect={(id) => setTab(id as "build" | "preview")}
+          items={[
+            { id: "build", label: "Build" },
+            { id: "preview", label: "Preview" },
+          ]}
+        />
       </div>
 
-      <Field label="Description">
-        {(control) => (
-          <Textarea
-            {...control}
-            rows={2}
-            value={draft.description}
-            onInput={(e) => {
-              const value = e.currentTarget.value;
-              setDraft((current) => ({ ...current, description: value }));
-            }}
-          />
-        )}
-      </Field>
-
-      <div class="pk-cluster pk-cluster--between">
-        <h4>Fields</h4>
-        <Button
-          size="sm"
-          onClick={() =>
-            setDraft((current) => ({ ...current, fields: [...current.fields, emptyField(current.fields.length)] }))
-          }
-        >
-          Add field
-        </Button>
-      </div>
-
-      <div class="pk-stack pk-stack--snug">
-        {draft.fields.map((field, index) => {
-          const position = String(index + 1);
-          return (
-            // Position is the only stable identity while a key is still being
-            // typed, so it names the region as well as ordering it.
-            <Panel key={index} aria-label={`Field ${position}`}>
-              <PanelBody class="pk-stack pk-stack--snug">
+      {preview ? (
+        <FormRespondentPreview title={draft.title} description={draft.description} fields={questions} />
+      ) : (
+        <div class="pk-formbuild">
+          <div class="pk-stack">
+            {/*
+             * The form's own card. Title and description are edited where they
+             * are read rather than in labelled boxes above the questions, which
+             * is what makes the column read as the form it is building.
+             */}
+            <Panel aria-label="Form details">
+              <div class="pk-formcard__rule" aria-hidden="true" />
+              <PanelBody class="pk-stack pk-stack--tight">
+                <input
+                  class="pk-formtitle pk-formtitle--name"
+                  value={draft.title}
+                  aria-label="Form title"
+                  placeholder="Untitled form"
+                  required
+                  onInput={(e) => {
+                    const value = e.currentTarget.value;
+                    setDraft((current) => ({
+                      ...current,
+                      title: value,
+                      // An untouched key follows the title; an author's own key
+                      // is never overwritten by what they type above it.
+                      key: mode === "create" && !keyOpen ? keyFromTitle(value) : current.key,
+                    }));
+                  }}
+                />
+                <textarea
+                  class="pk-formtitle pk-formtitle--desc"
+                  rows={2}
+                  value={draft.description}
+                  aria-label="Form description"
+                  placeholder="Add a short description respondents read before they start…"
+                  onInput={(e) => {
+                    const value = e.currentTarget.value;
+                    setDraft((current) => ({ ...current, description: value }));
+                  }}
+                />
                 <div class="pk-cluster">
-                  <Badge tone="neutral" dot={false}>
-                    {position}
-                  </Badge>
-                  <Checkbox
-                    checked={field.required}
-                    onChange={(e) => updateField(index, { required: (e.target as HTMLInputElement).checked })}
-                    label="Required"
-                  />
-                  <span class="pk-cluster pk-push">
-                    <Button
-                      size="sm"
-                      icon
-                      aria-label={`Move field ${position} up`}
-                      onClick={() => moveField(index, -1)}
-                      disabled={index === 0}
-                    >
-                      <span aria-hidden="true">↑</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      icon
-                      aria-label={`Move field ${position} down`}
-                      onClick={() => moveField(index, 1)}
-                      disabled={index === draft.fields.length - 1}
-                    >
-                      <span aria-hidden="true">↓</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      icon
-                      variant="danger-quiet"
-                      aria-label={`Remove field ${position}`}
-                      onClick={() => removeField(index)}
-                      disabled={draft.fields.length === 1}
-                    >
-                      <span aria-hidden="true">✕</span>
-                    </Button>
-                  </span>
+                  <span class="pk-small pk-muted">Key</span>
+                  {mode === "edit" || !keyOpen ? (
+                    <>
+                      <code class="pk-mono pk-small">{draft.key.trim() || "untitled-form"}</code>
+                      {mode === "create" && (
+                        <>
+                          <span class="pk-small pk-muted">generated from the title</span>
+                          <button type="button" class="pk-linkish pk-small" onClick={() => setKeyOpen(true)}>
+                            Change
+                          </button>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <TextInput
+                      class="pk-mono"
+                      value={draft.key}
+                      required
+                      pattern="[a-z][a-z0-9-]*"
+                      aria-label="Form key"
+                      onInput={(e) => {
+                        const value = e.currentTarget.value;
+                        setDraft((current) => ({ ...current, key: value }));
+                      }}
+                    />
+                  )}
                 </div>
-
-                {/*
-                 * The key, label and type sit in one compact row rather than
-                 * three labelled Fields: their names are carried by aria-label
-                 * so the row stays readable at a glance, and every control
-                 * still reports one.
-                 */}
-                <div class="pk-grid pk-grid--tight">
-                  <TextInput
-                    class="pk-mono"
-                    value={field.key}
-                    pattern="[a-z][a-z0-9_]*"
-                    required
-                    placeholder="field_key"
-                    aria-label="Field key (lowercase, letters, digits, underscores)"
-                    onInput={(e) => updateField(index, { key: (e.target as HTMLInputElement).value })}
-                  />
-                  <TextInput
-                    value={field.label}
-                    required
-                    placeholder="Field label"
-                    aria-label="Field label"
-                    onInput={(e) => updateField(index, { label: (e.target as HTMLInputElement).value })}
-                  />
-                  <Select
-                    value={field.fieldType}
-                    aria-label="Field type"
-                    onChange={(e) =>
-                      updateField(index, { fieldType: (e.target as HTMLSelectElement).value as FieldType })
-                    }
-                  >
-                    {FORM_FIELD_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type.replace(/_/g, " ")}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <FieldConfigEditor field={field} index={index} updateField={updateField} />
               </PanelBody>
             </Panel>
-          );
-        })}
-      </div>
+
+            {questions.map((field, index) => {
+              const position = String(index + 1);
+              return index === openIndex ? (
+                <OpenQuestion
+                  key={index}
+                  field={field}
+                  index={index}
+                  position={position}
+                  last={index === questions.length - 1}
+                  onlyField={questions.length === 1}
+                  update={(patch) => updateField(index, patch)}
+                  onClose={() => setOpenIndex(-1)}
+                  onMove={(direction) => moveField(index, direction)}
+                  onDuplicate={() => duplicateField(index)}
+                  onRemove={() => removeField(index)}
+                />
+              ) : (
+                <ClosedQuestion key={index} field={field} position={position} onOpen={() => setOpenIndex(index)} />
+              );
+            })}
+
+            <FormQuestionPalette onAdd={addField} />
+          </div>
+
+          <aside class="pk-formbuild__rail pk-stack">
+            <Panel aria-label="Form settings">
+              <PanelHeader title="Form settings" />
+              <PanelBody class="pk-stack pk-stack--tight">
+                <Field label="Purpose">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={draft.purpose}
+                      disabled={mode === "edit"}
+                      onChange={(e) => {
+                        const value = e.currentTarget.value as FormPurpose;
+                        setDraft((current) => ({ ...current, purpose: value }));
+                      }}
+                    >
+                      {purposes.map((purpose) => (
+                        <option key={purpose} value={purpose}>
+                          {purpose.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Status">
+                  {(control) => (
+                    <Select
+                      {...control}
+                      value={draft.status}
+                      onChange={(e) => {
+                        const value = e.currentTarget.value as FormStatus;
+                        setDraft((current) => ({ ...current, status: value }));
+                      }}
+                    >
+                      {FORM_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {STATUS_LABELS[status]}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              </PanelBody>
+            </Panel>
+          </aside>
+        </div>
+      )}
 
       {/* The save failure is announced where it happened rather than left as
           quiet red text beside the button. */}

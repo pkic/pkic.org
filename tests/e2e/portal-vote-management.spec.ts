@@ -79,7 +79,7 @@ test.describe("Group votes: lifecycle actions, proposal moderation, and sharing"
     // duplicating the helper's other assertions.
     await expect(page.locator("#portal-root")).toBeVisible({ timeout: 30_000 });
     await expect(page).toHaveURL(/\/portal\/#\//);
-    await expect(page.getByLabel("Email")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0);
   }
 
   test("a manager opens a scheduled vote, then closes it, through the lifecycle actions", async ({ page }) => {

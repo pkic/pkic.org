@@ -1,3 +1,6 @@
+/**
+ * @covers event.3.1
+ */
 import { expect, test } from "@playwright/test";
 import {
   groupEventDaysResponseSchema,
@@ -103,12 +106,16 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   // so the spec keeps working the next time this surface is restyled.
   const formEditor = policySection.getByRole("region", { name: "New registration form" });
   const formKey = `workshop-registration-${unique}`;
-  await formEditor.getByLabel("Key", { exact: true }).fill(formKey);
-  await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);
-  await formEditor.getByLabel("Title").fill("Workshop registration questions");
-  await expect(formEditor.getByLabel("Key", { exact: true })).toHaveValue(formKey);
-  await formEditor.getByPlaceholder("field_key").fill("participation_goal");
-  await formEditor.getByPlaceholder("Field label").fill("What do you want to learn?");
+  await formEditor.getByLabel("Form title", { exact: true }).fill("Workshop registration draft");
+  await formEditor.getByRole("button", { name: "Change", exact: true }).click();
+  await formEditor.getByLabel("Form key", { exact: true }).fill(formKey);
+  // A key the author set themselves is theirs: retitling above it must not
+  // rewrite it, which is the one thing the derivation must never do.
+  await formEditor.getByLabel("Form title", { exact: true }).fill("Workshop registration questions");
+  await expect(formEditor.getByLabel("Form key", { exact: true })).toHaveValue(formKey);
+  await formEditor.getByLabel("Question", { exact: true }).fill("What do you want to learn?");
+  await formEditor.getByRole("button", { name: /Key and reporting/ }).click();
+  await formEditor.getByLabel("Field key", { exact: true }).fill("participation_goal");
   const formCreated = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&

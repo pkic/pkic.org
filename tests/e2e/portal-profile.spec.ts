@@ -32,7 +32,9 @@ test("a member edits their name fields and toggles organization-page visibility"
   await page.context().clearCookies();
   await signInToPortal(page, email);
   await page.goto("/portal/#/profile");
-  await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible();
+  // The record opens with the member, not with a page title: `ProfileHeader`
+  // names the subject, and "My Profile" said nothing the sidebar had not.
+  await expect(page.getByRole("heading", { name: `Profile Fields ${suffix}`, level: 2 })).toBeVisible();
 
   // Required fields carry a "(required)" suffix in their accessible name
   // (see ui/Field.tsx), so an exact match on the bare label never resolves.
@@ -96,7 +98,7 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   await page.context().clearCookies();
   await signInToPortal(page, email);
   await page.goto("/portal/#/profile");
-  await expect(page.getByRole("heading", { name: "My Profile" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Profile Headshot ${suffix}`, level: 2 })).toBeVisible();
 
   // MyProfile overrides the placeholder's default copy with `emptyLabel="You"`.
   await expect(page.getByText("You", { exact: true })).toBeVisible();
@@ -108,21 +110,20 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   });
 
   // Both mounted-from-<template> dialogs (layouts/partials/headshot-modals.html)
-  // carry a static `aria-hidden="true"` on their root that the controller never
-  // clears when it adds the `hsd-active`/crop-active class — so the dialog and
-  // everything inside it is excluded from the accessibility tree even while
-  // visually on screen, and `getByRole`/`getByLabel` can never find it. That is
-  // a real, separately-reported accessibility bug (assistive tech cannot reach
-  // these dialogs at all); the classes below are what the component itself
-  // renders (see headshot-modals.html) and are the only way to drive it today.
-  const disclaimer = page.locator("#headshot-disclaimer-modal");
+  // are native <dialog> elements opened with showModal(), so each is reachable
+  // by role — which is what `getByRole("dialog")` below asserts, since the
+  // roots used to carry a static `aria-hidden="true"` that put every control
+  // inside them outside the accessibility tree. The `hsd-*`/`crop-headshot-*`
+  // classes are the contract between the partial and the scripts that drive
+  // it, and are what this spec uses to reach the individual controls.
+  const disclaimer = page.getByRole("dialog", { name: "Before uploading a photo" });
   await expect(disclaimer).toBeVisible({ timeout: 10_000 });
   // AdminHeadshotManager overrides the default disclaimer title with its own.
   await expect(disclaimer.locator(".hsd-title")).toHaveText("Before uploading a photo");
   await disclaimer.locator(".hsd-agree").check();
   await disclaimer.locator(".hsd-confirm").click();
 
-  const crop = page.locator("#crop-headshot-modal");
+  const crop = page.getByRole("dialog", { name: "Crop headshot" });
   await expect(crop).toBeVisible({ timeout: 10_000 });
   await expect(crop.locator(".crop-headshot-title")).toHaveText("Crop headshot");
   const uploaded = page.waitForResponse(
@@ -171,8 +172,8 @@ test("a member can remove their own headshot", async ({ page }) => {
     mimeType: "image/jpeg",
     buffer: TINY_JPEG,
   });
-  // See the note on the disclaimer/crop dialogs' aria-hidden bug above.
-  const disclaimer = page.locator("#headshot-disclaimer-modal");
+  // See the note on the disclaimer/crop dialogs above.
+  const disclaimer = page.getByRole("dialog", { name: "Before uploading a photo" });
   await disclaimer.locator(".hsd-agree").check();
   await disclaimer.locator(".hsd-confirm").click();
   await page.locator("#crop-headshot-modal .crop-headshot-confirm").click();

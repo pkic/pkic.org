@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.frontend.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "paths": {
+      "preact": ["./shim/preact.ts"],
+      "preact/hooks": ["./shim/preact-hooks.ts"]
+    }
+  }
+}

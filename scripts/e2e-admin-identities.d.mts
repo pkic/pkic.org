@@ -17,6 +17,11 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-leadership",
   "portal-mailing-lists",
   "portal-organizations",
+  "portal-organizations-representatives",
+  "portal-organizations-users-view",
+  "portal-organizations-profile",
+  "portal-organizations-logo",
+  "portal-user-record-self",
   "portal-users",
   "portal-system-operations",
   "portal-membership-settings",
@@ -55,6 +60,8 @@ export const E2E_ADMIN_SCOPES: readonly [
 ];
 
 export type E2eAdminScope = (typeof E2E_ADMIN_SCOPES)[number];
+
+export const E2E_WORKER_COUNT: number;
 
 export function formatE2eAdminEmail(scope: E2eAdminScope, workerIndex: number): string;
 export function e2eAdminEmailsForWorkerCount(workerCount: number): string[];

@@ -6,6 +6,7 @@ export const PRESENTATION_VERSION_SORT_COLUMNS = ["versionNumber", "fileName", "
 export const presentationVersionsListQuerySchema = listQuerySchema(PRESENTATION_VERSION_SORT_COLUMNS, { limit: 25 });
 
 export const presentationReviewStatusSchema = z.enum(["approved", "rejected", "needs_revision"]);
+export type PresentationReviewStatus = z.infer<typeof presentationReviewStatusSchema>;
 
 export const presentationVersionReviewSchema = z.object({
   id: databaseIdSchema,

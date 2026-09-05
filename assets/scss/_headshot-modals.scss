@@ -1,51 +1,69 @@
+/* The two headshot dialogs — the upload disclaimer and the crop tool.
+
+   Both roots are native `<dialog>` elements opened with `showModal()`, so the
+   top layer, the focus trap, the inert page behind and Escape all come from
+   the platform. There is no overlay element left to style: the dimming is
+   `::backdrop`, which only the native element offers, and which is the reason
+   assets/ts/ui/Dialog.css gives for not hand-rolling one either.
+
+   These rules deliberately mirror that stylesheet. The design system's
+   `ui/Dialog` cannot dress these two — its CSS ships in that component's lazy
+   chunk, and these dialogs are server-rendered markup on pages that never
+   reach it — but looking like a different product would be the visible cost of
+   that, so the surface is reproduced here from the same tokens.
+
+   This file is compiled into `@layer legacy`, which loses to the design
+   system's `components` layer. That is the right way round: `pk-btn` and
+   `pk-check` inside these dialogs keep their own styling and only the shell
+   is described here. */
+
+/* The dialog is the card, so it takes `.pk` — and, unlike a plain element, it
+   needs its ground stated: the base layer sets ink and type but deliberately
+   leaves the background to whatever asks for it by name. */
 #headshot-disclaimer-modal,
 #crop-headshot-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1090;
-  display: none;
-}
-
-#headshot-disclaimer-modal.hsd-active,
-#crop-headshot-modal.active {
-  display: block;
-}
-
-#headshot-disclaimer-modal .hsd-overlay,
-#crop-headshot-modal .crop-headshot-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  overflow: auto;
-  background: rgba(0, 0, 0, 0.55);
-}
-
-/* Both cards carry `.pk`, so the base layer sets their ground and their ink
-   from the design system's tokens — which is also what took the last two
-   Bootstrap custom properties out of this file. */
-#headshot-disclaimer-modal .hsd-card,
-#crop-headshot-modal .crop-headshot-card {
-  width: 100%;
-  max-width: 520px;
+  /* `width` + `max-width` rather than `min(32rem, calc(...))`: this file is
+     compiled by libsass, which reads `min()` as its own numeric function and
+     fails on a `calc()` argument. The pair is equivalent here and needs no
+     interpolation escape. */
+  width: 32rem;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 4rem);
+  margin: auto;
+  padding: var(--pk-4);
+  overflow-y: auto;
+  background: var(--pk-surface-raise);
+  color: var(--pk-ink);
+  border: 1px solid var(--pk-line);
   border-radius: var(--pk-radius-lg);
-  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.32);
-  padding: 1.5rem;
+  box-shadow: var(--pk-shadow-3);
+}
+
+/* The layout is applied only while the dialog is open. An author rule beats
+   the user agent's `dialog:not([open]) { display: none }` however unspecific
+   it is, so a bare `display: flex` here would leave a closed dialog sitting in
+   the page flow. */
+#headshot-disclaimer-modal[open],
+#crop-headshot-modal[open] {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--pk-4);
 }
 
-#crop-headshot-modal .crop-headshot-card {
-  max-width: 480px;
+#headshot-disclaimer-modal::backdrop,
+#crop-headshot-modal::backdrop {
+  background: var(--pk-overlay);
+}
+
+#crop-headshot-modal[open] {
   align-items: center;
 }
 
 #headshot-disclaimer-modal .hsd-title,
 #crop-headshot-modal .crop-headshot-title {
+  margin: 0;
   align-self: flex-start;
+  font-size: var(--pk-text-lg);
 }
 
 #headshot-disclaimer-modal .hsd-list {
@@ -53,24 +71,25 @@
   padding-left: 1.25rem;
   display: grid;
   gap: 0.35rem;
-  font-size: 0.875rem;
+  font-size: var(--pk-text-sm);
+  color: var(--pk-ink-muted);
 }
 
 #headshot-disclaimer-modal .hsd-form {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--pk-4);
 }
 
-/* The agreement control is a `pk-check` now: the block class carries the row
-   layout and the element class carries the box's alignment, so neither needs
+/* The agreement control is a `pk-check`, whose block class carries the row
+   layout and whose element class carries the box's alignment, so neither needs
    restating here. */
 
 #headshot-disclaimer-modal .hsd-actions,
 #crop-headshot-modal .crop-headshot-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--pk-2);
   flex-wrap: wrap;
 }
 
@@ -110,10 +129,24 @@
 #crop-headshot-modal .crop-headshot-zoom {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--pk-2);
   width: 100%;
 }
 
 #crop-headshot-modal .crop-headshot-slider {
   flex: 1;
+}
+
+/* On a phone a centred card wastes the reachable area, so the dialog becomes a
+   sheet anchored to the bottom where the thumb already is — the same treatment
+   `ui/Dialog` gives at the same breakpoint. */
+@media (max-width: 30rem) {
+  #headshot-disclaimer-modal,
+  #crop-headshot-modal {
+    width: 100vw;
+    max-width: 100vw;
+    margin: auto 0 0;
+    border-radius: var(--pk-radius-lg) var(--pk-radius-lg) 0 0;
+    border-bottom: 0;
+  }
 }

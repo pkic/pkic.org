@@ -7,6 +7,7 @@ import { membershipCategoryUpdateSchema } from "../../assets/shared/schemas/memb
 import { membershipSettingsUpdateSchema } from "../../assets/shared/schemas/membership-settings";
 import { MembershipConfiguration } from "../../assets/ts/member-flows/portal/sections/MembershipConfiguration";
 import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
+import { openQuestion } from "./helpers/form-editor";
 
 const NOW = "2026-08-27T12:00:00.000Z";
 const settings = {
@@ -213,6 +214,7 @@ describe("portal membership configuration", () => {
     const page = mount(true);
     await settle();
     await settle();
+    openQuestion(page, "Reason for joining");
     const label = [...page.querySelectorAll("input")].find(
       (field) => (field as HTMLInputElement).value === "Reason for joining",
     ) as HTMLInputElement;

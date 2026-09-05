@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { clientIpForIdentity } from "./helpers/portal-auth";
+import { clientIpForIdentity, openEmailSignIn } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
 /**
@@ -14,8 +14,8 @@ test("a sign-in started on a working group page returns there from the emailed l
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(email) });
 
   await page.goto("/portal/#/groups/pqc");
-  await expect(page.getByLabel("Email")).toBeVisible({ timeout: 10_000 });
-  await page.getByLabel("Email").fill(email);
+  await openEmailSignIn(page);
+  await page.getByLabel("Work email").fill(email);
   const since = await capturedEmailCount();
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();

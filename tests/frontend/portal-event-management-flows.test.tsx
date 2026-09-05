@@ -7,6 +7,7 @@ import { groupEventCreateSchema, groupEventSettingsUpdateSchema } from "../../as
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { nameForm } from "./helpers/form-editor";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -350,8 +351,7 @@ describe("portal event management flows", () => {
     const editor = Array.from(container.querySelectorAll<HTMLElement>("section.pk-panel")).find(
       (panel) => panel.querySelector(".pk-panel__title")?.textContent === "New registration form",
     )!;
-    await typeInto(controlFor(editor, "Key"), "workshop-registration");
-    await typeInto(controlFor(editor, "Title"), "Workshop registration");
+    await nameForm(editor, "Workshop registration", "workshop-registration");
     await settle();
     await act(async () => {
       editor.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

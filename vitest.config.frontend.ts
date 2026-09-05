@@ -13,6 +13,7 @@ export default defineConfig({
     include: ["tests/frontend/**/*.test.{ts,tsx}"],
     exclude: ["**/._*"],
     environment: "jsdom",
+    setupFiles: ["./tests/frontend/jsdom-layout.ts"],
     // Each jsdom worker carries a full DOM and transformed frontend graph.
     // Bound concurrency like the Workers suite so high-core CI and developer
     // machines do not exhaust memory while running the repository-wide gate.

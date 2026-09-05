@@ -87,6 +87,11 @@ function mountEditor(initial: FieldDraft): { root: HTMLElement; patches: Array<P
   return { root: mount(<Harness initial={initial} patches={patches} />), patches };
 }
 
+/** A group's own name, which a fieldset carries as its legend. */
+function legend(root: HTMLElement, text: string): HTMLLegendElement | null {
+  return [...root.querySelectorAll("legend")].find((entry) => (entry.textContent ?? "").trim() === text) ?? null;
+}
+
 function labelled(root: HTMLElement, text: string): HTMLLabelElement | null {
   return [...root.querySelectorAll("label")].find((label) => (label.textContent ?? "").trim() === text) ?? null;
 }
@@ -100,6 +105,22 @@ function controlFor(root: HTMLElement, text: string): HTMLElement {
   const control = label.htmlFor ? document.getElementById(label.htmlFor) : null;
   if (!control) throw new Error(`label "${text}" names no control`);
   return control;
+}
+
+/**
+ * Opens a disclosure by its title.
+ *
+ * The rule and reporting settings are folded away until an author asks for
+ * them, so a test that wants one has to open its fold first — the same step a
+ * person takes.
+ */
+function openFold(root: HTMLElement, title: string): void {
+  const summary = [...root.querySelectorAll<HTMLButtonElement>("button.pk-fold__summary")].find((candidate) =>
+    (candidate.textContent ?? "").includes(title),
+  );
+  if (!summary) throw new Error(`no fold reads "${title}"`);
+  if (summary.getAttribute("aria-expanded") === "true") return;
+  click(summary);
 }
 
 function button(root: HTMLElement, text: string): HTMLButtonElement {
@@ -142,8 +163,19 @@ afterEach(() => {
 describe("form field config editor", () => {
   it("names every control it shows, through a label/control pair", () => {
     const { root } = mountEditor(draft({ fieldType: "text" }));
+    openFold(root, "Accepted values");
+    openFold(root, "Key and reporting");
 
-    for (const name of ["Placeholder", "Help text", "Stats view", "Min length", "Max length", "Widget", "Format"]) {
+    for (const name of [
+      "Placeholder",
+      "Description",
+      "In the results summary",
+      "Min length",
+      "Max length",
+      "Widget",
+      "Format",
+      "Field key",
+    ]) {
       const control = controlFor(root, name);
       expect(control.id, `${name} control id`).not.toBe("");
       expect(labelled(root, name)?.htmlFor).toBe(control.id);
@@ -156,24 +188,29 @@ describe("form field config editor", () => {
   });
 
   it("attaches guidance to the control it describes rather than to loose text", () => {
-    const { root } = mountEditor(draft({ fieldType: "multi_select" }));
+    const { root } = mountEditor(draft({ fieldType: "email" }));
+    openFold(root, "Accepted values");
 
-    expect(describedBy(controlFor(root, "Options"))).toBe("One per line.");
-    expect(controlFor(root, "Options").getAttribute("aria-invalid")).toBeNull();
+    expect(describedBy(controlFor(root, "Allowed domains"))).toBe("One per line.");
+    expect(controlFor(root, "Allowed domains").getAttribute("aria-invalid")).toBeNull();
+    expect(describedBy(controlFor(root, "Description"))).toBe("Respondents read this directly under the question.");
   });
 
   it("shows only the settings the field type supports", () => {
     const { root: text } = mountEditor(draft({ fieldType: "text" }));
+    openFold(text, "Accepted values");
     expect(labelled(text, "Pattern")).not.toBeNull();
-    expect(labelled(text, "Options")).toBeNull();
+    expect(legend(text, "Choices")).toBeNull();
     expect(labelled(text, "Allowed domains")).toBeNull();
 
     const { root: email } = mountEditor(draft({ fieldType: "email" }));
+    openFold(email, "Accepted values");
     expect(labelled(email, "Allowed domains")).not.toBeNull();
     expect(labelled(email, "Pattern")).toBeNull();
 
     const { root: choice } = mountEditor(draft({ fieldType: "multi_select" }));
-    expect(labelled(choice, "Options")).not.toBeNull();
+    openFold(choice, "Accepted values");
+    expect(legend(choice, "Choices")).not.toBeNull();
     expect(labelled(choice, "Min selections")).not.toBeNull();
     expect(labelled(choice, "Placeholder")).toBeNull();
   });
@@ -181,7 +218,8 @@ describe("form field config editor", () => {
   it("reports edits as patches on the field it was given", () => {
     const { root, patches } = mountEditor(draft({ fieldType: "text" }));
 
-    setValue(controlFor(root, "Help text") as HTMLInputElement, "Pick one");
+    setValue(controlFor(root, "Description") as HTMLInputElement, "Pick one");
+    openFold(root, "Accepted values");
     setValue(controlFor(root, "Max length") as HTMLInputElement, "40");
 
     expect(patches).toEqual([{ helpText: "Pick one" }, { maxLength: "40" }]);
@@ -194,10 +232,11 @@ describe("form field config editor", () => {
     // unstyled native control that passes every other gate in the repository,
     // which is exactly the regression this guards.
     const wrapper = [...root.querySelectorAll("label.pk-check")].at(0);
-    expect(wrapper?.textContent).toContain("Allow custom answers");
+    const other = "Offer an “Other…” option with a free-text box";
+    expect(wrapper?.textContent).toContain(other);
     const input = wrapper?.querySelector("input");
     expect(input?.className).toContain("pk-check__input");
-    expect(wrapper?.querySelector(".pk-check__label")?.textContent).toBe("Allow custom answers");
+    expect(wrapper?.querySelector(".pk-check__label")?.textContent).toBe(other);
 
     void act(() => {
       input!.checked = true;
@@ -208,6 +247,7 @@ describe("form field config editor", () => {
 
   it("says which editor is showing, and switches between them", () => {
     const { root, patches } = mountEditor(draft({ fieldType: "text", helpText: "Pick one" }));
+    openFold(root, "Key and reporting");
 
     expect(button(root, "Visual").getAttribute("aria-pressed")).toBe("true");
     expect(button(root, "JSON").getAttribute("aria-pressed")).toBe("false");
@@ -233,6 +273,7 @@ describe("form field config editor", () => {
     click(button(root, "Visual"));
 
     expect((controlFor(root, "Placeholder") as HTMLInputElement).value).toBe("e.g. blue");
+    openFold(root, "Accepted values");
     expect((controlFor(root, "Max length") as HTMLInputElement).value).toBe("40");
     expect(patches.at(-1)).toMatchObject({ rawMode: false, advancedValidationText: '{\n  "requireTrue": true\n}' });
   });
@@ -255,6 +296,7 @@ describe("form field config editor", () => {
 
   it("checks the visual controls through the rules contract as they are typed", () => {
     const { root } = mountEditor(draft({ fieldType: "text" }));
+    openFold(root, "Accepted values");
 
     // A pattern outside the safe subset is refused on the pattern control.
     const pattern = controlFor(root, "Pattern") as HTMLInputElement;
@@ -263,7 +305,7 @@ describe("form field config editor", () => {
     expect(pattern.getAttribute("aria-invalid")).toBe("true");
     expect(describedBy(pattern)).toContain("safe, bounded regular-expression subset");
     // The neighbouring control is untouched and says nothing.
-    expect(controlFor(root, "Pattern error message").getAttribute("aria-invalid")).toBeNull();
+    expect(controlFor(root, "Message when it does not match").getAttribute("aria-invalid")).toBeNull();
 
     setValue(pattern, "^[a-z]{2,4}$");
     expect(pattern.closest(".pk-field")?.classList.contains("pk-field--ok")).toBe(true);
@@ -310,7 +352,7 @@ describe("form field config editor", () => {
     setValue(controlFor(root, "Validation JSON") as HTMLTextAreaElement, '{"helpText":"Fixed"}');
     click(button(root, "Visual"));
 
-    expect((controlFor(root, "Help text") as HTMLInputElement).value).toBe("Fixed");
+    expect((controlFor(root, "Description") as HTMLInputElement).value).toBe("Fixed");
   });
 });
 

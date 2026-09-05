@@ -7,8 +7,29 @@ import { FormDefinitionEditor } from "../../assets/ts/components/forms/FormDefin
 import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
 
 /** The per-field row names its controls with aria-label, not a visible label. */
-const FIELD_KEY_INPUT = 'input[aria-label="Field key (lowercase, letters, digits, underscores)"]';
-const FIELD_LABEL_INPUT = 'input[aria-label="Field label"]';
+const FIELD_LABEL_INPUT = 'input[placeholder="What are you asking?"]';
+const FORM_TITLE_INPUT = 'input[aria-label="Form title"]';
+
+/**
+ * Opens a question's "Key and reporting" fold and returns its key input.
+ *
+ * The key is no longer a column in a compact row; it sits behind the fold that
+ * groups it with the reporting settings, so reaching it takes the same step a
+ * person takes.
+ */
+function fieldKeyInput(root: HTMLElement): HTMLInputElement {
+  const summary = [...root.querySelectorAll<HTMLButtonElement>("button.pk-fold__summary")].find((candidate) =>
+    (candidate.textContent ?? "").includes("Key and reporting"),
+  );
+  if (!summary) throw new Error("no key and reporting fold");
+  if (summary.getAttribute("aria-expanded") !== "true") {
+    void act(() => summary.click());
+  }
+  const label = [...root.querySelectorAll("label")].find((entry) => entry.textContent?.trim() === "Field key");
+  const input = label?.htmlFor ? document.getElementById(label.htmlFor) : null;
+  if (!(input instanceof HTMLInputElement)) throw new Error("no field key control");
+  return input;
+}
 
 const mounted: HTMLElement[] = [];
 
@@ -30,10 +51,10 @@ function iconButtonNamed(root: ParentNode, label: string): HTMLButtonElement {
 }
 
 async function fillMinimalDraft(container: HTMLElement): Promise<void> {
-  await typeInto(controlFor(container, "Key"), "member-survey");
-  await typeInto(controlFor(container, "Title"), "Member survey");
-  await typeInto(container.querySelector<HTMLElement>(FIELD_KEY_INPUT)!, "priority");
+  // The title is what names the form; the key follows from it.
+  await typeInto(container.querySelector<HTMLElement>(FORM_TITLE_INPUT)!, "Member survey");
   await typeInto(container.querySelector<HTMLElement>(FIELD_LABEL_INPUT)!, "Priority");
+  await typeInto(fieldKeyInput(container), "priority");
 }
 
 afterEach(() => {
@@ -103,26 +124,33 @@ describe("form definition editor", () => {
       />,
     );
 
-    // Each labelled control is reachable through a real `for`/`id` pair.
-    for (const label of ["Key", "Purpose", "Title", "Status", "Description"]) {
+    // The settings rail keeps real `for`/`id` pairs.
+    for (const label of ["Purpose", "Status"]) {
       const control = controlFor(container, label);
       expect(control.id).not.toBe("");
       expect(container.querySelector(`label[for="${control.id}"]`)?.textContent).toBe(label);
     }
 
-    // The compact per-field row has no visible labels, so each control there
-    // has to carry its own accessible name.
-    expect(container.querySelector(FIELD_KEY_INPUT)).not.toBeNull();
-    expect(container.querySelector(FIELD_LABEL_INPUT)).not.toBeNull();
-    expect(container.querySelector('select[aria-label="Field type"]')).not.toBeNull();
+    /*
+     * The title and description are edited in place, so they carry no visible
+     * label — the value is its own heading. That makes an accessible name the
+     * only thing naming them, which is why it is asserted here.
+     */
+    expect(container.querySelector(FORM_TITLE_INPUT)).not.toBeNull();
+    expect(container.querySelector('textarea[aria-label="Form description"]')).not.toBeNull();
 
-    // The field row is a named region, and its reorder/remove controls are
+    // The question's own controls are labelled.
+    expect(controlFor(container, "Question")).not.toBeNull();
+    expect(controlFor(container, "Answer type")).not.toBeNull();
+    expect(fieldKeyInput(container)).not.toBeNull();
+
+    // The open question is a named region, and its reorder controls are
     // buttons with names rather than bare glyphs.
-    const region = container.querySelector<HTMLElement>('section[aria-label="Field 1"]');
+    const region = container.querySelector<HTMLElement>('section[aria-label="Question 1"]');
     expect(region).not.toBeNull();
-    expect(iconButtonNamed(region!, "Move field 1 up").disabled).toBe(true);
-    expect(iconButtonNamed(region!, "Move field 1 down").disabled).toBe(true);
-    expect(iconButtonNamed(region!, "Remove field 1").disabled).toBe(true);
+    expect(iconButtonNamed(region!, "Move question 1 up").disabled).toBe(true);
+    expect(iconButtonNamed(region!, "Move question 1 down").disabled).toBe(true);
+    expect(buttonNamed(region!, "Delete").disabled).toBe(true);
 
     // A checkbox needs all three parts, or it renders as an operating-system
     // default control.
@@ -142,13 +170,22 @@ describe("form definition editor", () => {
       />,
     );
 
-    await typeInto(container.querySelector<HTMLElement>(FIELD_KEY_INPUT)!, "first");
-    await act(async () => buttonNamed(container, "Add field").click());
+    await typeInto(container.querySelector<HTMLElement>(FIELD_LABEL_INPUT)!, "First");
+    // A question is added by choosing its answer type, which is also what
+    // opens the new card.
+    await act(async () => iconButtonNamed(container, "Paragraph").click());
 
-    const keys = () => [...container.querySelectorAll<HTMLInputElement>(FIELD_KEY_INPUT)].map((input) => input.value);
-    expect(keys()).toEqual(["first", ""]);
+    // Only the open card shows its editors, so the closed one is read from the
+    // summary row the author scans.
+    const labels = () => [
+      ...container.querySelectorAll<HTMLElement>(
+        ".pk-formq .pk-strong, .pk-formq-open input[placeholder='What are you asking?']",
+      ),
+    ];
+    expect(labels()).toHaveLength(2);
 
-    await act(async () => iconButtonNamed(container, "Move field 2 up").click());
-    expect(keys()).toEqual(["", "first"]);
+    await act(async () => iconButtonNamed(container, "Move question 2 up").click());
+    const first = container.querySelector<HTMLElement>(".pk-formq .pk-strong");
+    expect(first?.textContent).toBe("Untitled question");
   });
 });

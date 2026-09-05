@@ -1,3 +1,7 @@
+/**
+ * @covers proposal.4.1
+ * @covers proposal.4.6
+ */
 import { expect, test } from "@playwright/test";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";

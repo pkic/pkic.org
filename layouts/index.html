@@ -85,19 +85,13 @@
 </section>
 
 {{/* ─── Stats bar ───────────────────────────────────────────────────── */}}
-{{ $memberCount := len hugo.Data.members }}
-{{ $wgCount := 0 }}
-{{ range where site.Pages "Section" "wg" }}
-  {{ if and (eq .Kind "section") (eq .Parent.RelPermalink "/wg/") (not .Draft) }}
-    {{ $wgCount = add $wgCount 1 }}
-  {{ end }}
-{{ end }}
+{{ $stats := partial "site-stats.html" . }}
 <div class="pk pkic-stats-bar">
   <div class="pk-container pk-container--wide">
     <div class="pkic-stats-bar__row">
-      <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">{{ $memberCount }}</span><span class="pkic-stat-label">Members</span></a>
-      <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">~1K</span><span class="pkic-stat-label">Representatives</span></a>
-      <a href="/wg/" class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></a>
+      {{ range $stats }}
+      <a href="{{ .href }}" class="pkic-stat"><span class="pkic-stat-num">{{ .value }}</span><span class="pkic-stat-label">{{ .label }}</span></a>
+      {{ end }}
       <a href="/join/" class="pkic-stat pkic-stat--wide-only"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></a>
     </div>
   </div>

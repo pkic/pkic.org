@@ -34,6 +34,7 @@ import {
 } from "../ui/DataTable";
 import { Menu, type MenuItem } from "../ui/Menu";
 import type { FilterOption } from "./FilterSelect";
+import { AppliedFilterChips, ColumnTextFilterRow, type AppliedFilterChip } from "./table-filter-strip";
 import "../ui/Content.css";
 
 export type HeadCell = string | { label: string; className?: string };
@@ -79,7 +80,26 @@ export interface Column<T> {
 
 export interface ColumnFilter {
   param: string;
-  options: readonly FilterOption[];
+  /**
+   * The closed vocabulary the column accepts, offered in its menu. The first
+   * option is the open state — "All stages" — and carries the empty value.
+   */
+  options?: readonly FilterOption[];
+  /**
+   * The open-vocabulary alternative, declared instead of `options` when the
+   * value set is a name or an organization rather than a short known list.
+   * The menu then offers "Filter this column…", which opens a typed control
+   * above the rows; the server does the matching, as it does for `options`.
+   */
+  text?: ColumnTextFilter;
+}
+
+export interface ColumnTextFilter {
+  placeholder?: string;
+  /** Said under the control, e.g. where the match runs. */
+  hint?: string;
+  /** Values the server offers for this column, as type-ahead suggestions. */
+  suggestions?: readonly string[];
 }
 
 /**
@@ -212,6 +232,10 @@ export function DataTable<T>({
   // Hidden columns are the reader's choice for this visit; they are keyed by
   // header so the choice survives a re-render that rebuilds the column list.
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  // Which column's typed filter is open, by query parameter. One at a time:
+  // the row appears above the rows it narrows, and two of them would push the
+  // table further from the control acting on it.
+  const [filterOpen, setFilterOpen] = useState<string | null>(null);
   // Row identity is by index when the caller has no key, so `rowKey` here is
   // an index lookup rather than a value the design system interprets.
   const indexOf = new Map<T, number>();
@@ -263,7 +287,7 @@ export function DataTable<T>({
     const columnFilter = column.filter;
     if (columnFilter && onFilterChange) {
       const current = filters[columnFilter.param] ?? "";
-      columnFilter.options.forEach((option, position) => {
+      columnFilter.options?.forEach((option, position) => {
         items.push({
           id: `${id}-filter-${option.value || "all"}`,
           label: option.label,
@@ -272,6 +296,27 @@ export function DataTable<T>({
           onSelect: () => onFilterChange(columnFilter.param, option.value),
         });
       });
+      if (columnFilter.text) {
+        // An open vocabulary cannot be listed, so the menu offers the control
+        // that can take one. "Edit" rather than "Filter" once something is in
+        // force, so the item says whether the column is already narrowed.
+        items.push({
+          id: `${id}-filter-text`,
+          label: current ? "Edit filter…" : "Filter this column…",
+          separatorBefore: items.length > 0,
+          onSelect: () => setFilterOpen(columnFilter.param),
+        });
+        if (current) {
+          items.push({
+            id: `${id}-filter-clear`,
+            label: "Clear filter",
+            onSelect: () => {
+              onFilterChange(columnFilter.param, "");
+              setFilterOpen((open) => (open === columnFilter.param ? null : open));
+            },
+          });
+        }
+      }
     }
     if (canHide(column, index)) {
       items.push({
@@ -288,7 +333,9 @@ export function DataTable<T>({
     if (!column.filter) return undefined;
     const current = filters[column.filter.param];
     if (!current) return undefined;
-    return column.filter.options.find((option) => option.value === current)?.label ?? current;
+    // A typed value is its own summary; an enum value reads by its label, so
+    // "role=observer" is stated as the word the reader chose.
+    return column.filter.options?.find((option) => option.value === current)?.label ?? current;
   }
 
   const visible = columns
@@ -356,27 +403,84 @@ export function DataTable<T>({
     onSort(next);
   }
 
+  // Every narrowing in force, in one sentence above the rows. A column menu
+  // states its own filter at the column; this states the whole query, so a
+  // reader looking at eleven rows learns why without opening four menus.
+  const chips: AppliedFilterChip[] = [];
+  if (onFilterChange) {
+    for (const { column } of visible) {
+      const columnFilter = column.filter;
+      const summary = columnFilter ? filterSummaryFor(column) : undefined;
+      if (!columnFilter || summary === undefined) continue;
+      const label = headLabel(column.header);
+      chips.push({
+        id: `filter-${columnFilter.param}`,
+        label: `${label}: ${summary}`,
+        clearLabel: `Clear the ${label} filter`,
+        onClear: () => {
+          onFilterChange(columnFilter.param, "");
+          setFilterOpen((open) => (open === columnFilter.param ? null : open));
+        },
+      });
+    }
+  }
+  for (const label of hidden) {
+    chips.push({
+      id: `hidden-${label}`,
+      label: `${label} hidden`,
+      clearLabel: `Show the ${label} column`,
+      onClear: () =>
+        setHidden((current) => {
+          const next = new Set(current);
+          next.delete(label);
+          return next;
+        }),
+    });
+  }
+
+  const openColumn = filterOpen ? columns.find((column) => column.filter?.param === filterOpen) : undefined;
+  const openTextFilter = openColumn?.filter?.text;
+
+  // A fragment, deliberately: `pk-table-list` is a flex column whose regions
+  // separate with rules and a zero gap, so these bands have to be siblings of
+  // the table. A wrapper would collapse them into one region.
   return (
-    <SystemDataTable
-      caption={caption}
-      showCaption={showCaption}
-      columns={systemColumns}
-      rows={data}
-      rowKey={keyFor}
-      sort={sort}
-      onSort={onSort ? handleSort : undefined}
-      rowAction={rowAction ? (row) => rowAction(row, indexOf.get(row) ?? 0) : undefined}
-      detailRow={detailRow ? (row) => detailRow(row, indexOf.get(row) ?? 0) : undefined}
-      loading={loading}
-      empty={empty}
-      selection={selection}
-      headerEnd={
-        columnsMenu.length > 0 ? (
-          <Menu label="Choose columns" heading="Columns" items={columnsMenu} align="end">
-            <span class="pk-table__head-glyph pk-table__head-glyph--columns" aria-hidden="true" />
-          </Menu>
-        ) : undefined
-      }
-    />
+    <>
+      <AppliedFilterChips chips={chips} />
+      {openColumn && openTextFilter && onFilterChange && (
+        <ColumnTextFilterRow
+          columnLabel={headLabel(openColumn.header)}
+          value={filters[filterOpen ?? ""] ?? ""}
+          suggestions={openTextFilter.suggestions}
+          placeholder={openTextFilter.placeholder}
+          hint={openTextFilter.hint}
+          onInput={(value) => {
+            onFilterChange(filterOpen ?? "", value);
+          }}
+          onClose={() => setFilterOpen(null)}
+        />
+      )}
+      <SystemDataTable
+        caption={caption}
+        showCaption={showCaption}
+        columns={systemColumns}
+        rows={data}
+        rowKey={keyFor}
+        sort={sort}
+        onSort={onSort ? handleSort : undefined}
+        rowAction={rowAction ? (row) => rowAction(row, indexOf.get(row) ?? 0) : undefined}
+        detailRow={detailRow ? (row) => detailRow(row, indexOf.get(row) ?? 0) : undefined}
+        loading={loading}
+        empty={empty}
+        selection={selection}
+        headerEnd={
+          columnsMenu.length > 0 ? (
+            <Menu label="Choose columns" heading="Columns" items={columnsMenu} align="end">
+              <span class="pk-table__head-glyph pk-table__head-glyph--columns" aria-hidden="true" />
+            </Menu>
+          ) : undefined
+        }
+      />
+    </>
   );
 }

@@ -1,3 +1,6 @@
+/**
+ * @covers event.3.5
+ */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";

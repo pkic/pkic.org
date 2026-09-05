@@ -4,8 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupFormDetail } from "../../assets/ts/member-flows/portal/sections/management/GroupFormDetail";
 import { GroupFormEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormEditor";
-import { controlFor, typeInto } from "./helpers/labelled-control";
 import { isCurrentTab, tabs } from "./helpers/tabs";
+import { fillQuestion, nameForm } from "./helpers/form-editor";
 
 const navigate = vi.fn();
 
@@ -47,14 +47,7 @@ async function settle(): Promise<void> {
   });
 }
 
-function setValue(element: HTMLInputElement, value: string): void {
-  element.value = value;
-  element.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
 /** The per-field row names its controls with aria-label, not a visible label. */
-const FIELD_KEY_INPUT = 'input[aria-label="Field key (lowercase, letters, digits, underscores)"]';
-const FIELD_LABEL_INPUT = 'input[aria-label="Field label"]';
 
 function detail(ownerGroupId: string, capabilities: string[]) {
   return {
@@ -129,13 +122,9 @@ describe("group form management", () => {
       <GroupFormEditor groupId={GROUP_ID} detail={null} onSaved={() => undefined} onCancel={() => undefined} />,
     );
     await settle();
-    await typeInto(controlFor(container, "Key"), "member-survey");
+    await nameForm(container, "Member survey", "member-survey");
     await settle();
-    await typeInto(controlFor(container, "Title"), "Member survey");
-    await settle();
-    setValue(container.querySelector<HTMLInputElement>(FIELD_KEY_INPUT)!, "priority");
-    await settle();
-    setValue(container.querySelector<HTMLInputElement>(FIELD_LABEL_INPUT)!, "Priority");
+    await fillQuestion(container, "Priority", "priority");
     await settle();
     await act(async () => {
       container
@@ -162,7 +151,8 @@ describe("group form management", () => {
 
     expect(container.textContent).toContain("Save availability");
     expect(container.textContent).not.toContain("Edit form");
-    expect(container.querySelector(FIELD_KEY_INPUT)).toBeNull();
+    // No editor is mounted at all, so it asks nothing.
+    expect(container.querySelector('input[placeholder="What are you asking?"]')).toBeNull();
   });
 
   it("does not fetch statistics for the default respond tab", async () => {

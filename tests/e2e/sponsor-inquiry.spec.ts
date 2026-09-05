@@ -2,6 +2,8 @@
  * The public consortium sponsor inquiry is a real rendered flow.  The tier
  * list comes from D1 and the submission reaches the local Worker and its
  * SendGrid interceptor; only the external mail provider is intercepted.
+ *
+ * @covers sponsor.2.1
  */
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";

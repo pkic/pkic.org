@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { EventFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { buttonNamed, chooseComboboxOption, controlFor, openCombobox, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, controlFor, openCombobox } from "./helpers/labelled-control";
+import { nameForm } from "./helpers/form-editor";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -339,8 +340,7 @@ describe("portal event form placement management", () => {
       (panel) => panel.querySelector(".pk-panel__title")?.textContent === "New proposal submission form",
     );
     expect(editor).toBeDefined();
-    await typeInto(controlFor(editor!, "Key"), "proposal-form");
-    await typeInto(controlFor(editor!, "Title"), "Proposal form");
+    await nameForm(editor!, "Proposal form", "proposal-form");
     await settle();
     await act(async () => {
       editor!

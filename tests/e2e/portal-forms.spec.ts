@@ -1,3 +1,7 @@
+/**
+ * @covers form.6.1
+ * @covers form.6.2
+ */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -48,11 +52,14 @@ test("permitted staff manage global forms through the canonical Forms resource",
   await page.getByRole("button", { name: "New form", exact: true }).click();
   await expect(page).toHaveURL(/\/portal\/#\/forms\/new$/);
   const editor = page.locator("form").filter({ has: page.getByRole("button", { name: "Create form", exact: true }) });
-  await editor.getByLabel("Key", { exact: true }).fill(formKey);
+  await editor.getByLabel("Form title", { exact: true }).fill(formTitle);
   await editor.getByLabel("Purpose", { exact: true }).selectOption("survey");
-  await editor.getByLabel("Title", { exact: true }).fill(formTitle);
-  await editor.getByLabel("Field key (lowercase, letters, digits, underscores)", { exact: true }).fill("feedback");
-  await editor.getByLabel("Field label", { exact: true }).fill("Feedback");
+  // The key follows the title until an author asks to set their own.
+  await editor.getByRole("button", { name: "Change", exact: true }).click();
+  await editor.getByLabel("Form key", { exact: true }).fill(formKey);
+  await editor.getByLabel("Question", { exact: true }).fill("Feedback");
+  await editor.getByRole("button", { name: /Key and reporting/ }).click();
+  await editor.getByLabel("Field key", { exact: true }).fill("feedback");
 
   const createResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === FORMS_API && response.request().method() === "POST",
@@ -69,7 +76,7 @@ test("permitted staff manage global forms through the canonical Forms resource",
   const detailEditor = page
     .locator("form")
     .filter({ has: page.getByRole("button", { name: "Save form", exact: true }) });
-  await detailEditor.getByLabel("Title", { exact: true }).fill(updatedTitle);
+  await detailEditor.getByLabel("Form title", { exact: true }).fill(updatedTitle);
   const updateResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${FORMS_API}/${formKey}` && response.request().method() === "PATCH",
@@ -103,11 +110,14 @@ test("permitted staff filter the forms list by Purpose and Status, and archive/d
   const formTitle = `E2E filterable form ${formKey}`;
   await page.getByRole("button", { name: "New form", exact: true }).click();
   const editor = page.locator("form").filter({ has: page.getByRole("button", { name: "Create form", exact: true }) });
-  await editor.getByLabel("Key", { exact: true }).fill(formKey);
+  await editor.getByLabel("Form title", { exact: true }).fill(formTitle);
   await editor.getByLabel("Purpose", { exact: true }).selectOption("survey");
-  await editor.getByLabel("Title", { exact: true }).fill(formTitle);
-  await editor.getByLabel("Field key (lowercase, letters, digits, underscores)", { exact: true }).fill("feedback");
-  await editor.getByLabel("Field label", { exact: true }).fill("Feedback");
+  // The key follows the title until an author asks to set their own.
+  await editor.getByRole("button", { name: "Change", exact: true }).click();
+  await editor.getByLabel("Form key", { exact: true }).fill(formKey);
+  await editor.getByLabel("Question", { exact: true }).fill("Feedback");
+  await editor.getByRole("button", { name: /Key and reporting/ }).click();
+  await editor.getByLabel("Field key", { exact: true }).fill("feedback");
   await editor.getByRole("button", { name: "Create form", exact: true }).click();
   await expect(page.getByText(formTitle, { exact: true })).toBeVisible();
 

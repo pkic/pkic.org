@@ -132,7 +132,11 @@ export function AdminHeadshotManager({
           <Button size="sm" block onClick={() => fileRef.current?.click()}>
             {uploadLabel}
           </Button>
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden />
+          {/* Named even though it is hidden and driven by the button above it:
+              `hidden` keeps it out of the accessibility tree today, and an
+              unnamed control is one restyle away from being announced as
+              "edit, blank". */}
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" aria-label={uploadLabel} hidden />
           {onFetchGravatar && (
             <Button variant="secondary" size="sm" block onClick={() => void onFetchGravatar()}>
               {fetchLabel}

@@ -2207,6 +2207,14 @@ CREATE TABLE identities (
   --          staff | migration
   show_on_organization_profile  INTEGER NOT NULL DEFAULT 1
                                   CHECK (show_on_organization_profile IN (0, 1)),
+  -- The identity a record speaks from when it has to choose one: the About a
+  -- person's record leads with, and the affiliation shown beside their name.
+  -- A person holds several and only they know which represents them, so it is
+  -- marked rather than guessed from a start date or an organization's
+  -- presence. Nothing requires a default: with none marked, a record falls
+  -- back to the first active affiliation, which is what it did before.
+  is_default                    INTEGER NOT NULL DEFAULT 0
+                                  CHECK (is_default IN (0, 1)),
   invited_at                    TEXT NOT NULL,
   started_at                    TEXT,
   ended_at                      TEXT,
@@ -2242,6 +2250,11 @@ CREATE INDEX idx_identities_user_lifecycle
 CREATE INDEX idx_identities_organization_lifecycle
   ON identities(organization_id, ended_at, blocked_at, started_at, invited_at)
   WHERE organization_id IS NOT NULL;
+-- At most one default per person, enforced structurally rather than by the
+-- write path remembering to clear the previous one. A partial index says
+-- exactly that and costs nothing for the rows not marked.
+CREATE UNIQUE INDEX uq_identities_default
+  ON identities(user_id) WHERE is_default = 1;
 CREATE INDEX idx_identities_email ON identities(email_id) WHERE email_id IS NOT NULL;
 CREATE INDEX idx_identities_predecessor
   ON identities(predecessor_identity_id) WHERE predecessor_identity_id IS NOT NULL;

@@ -36,6 +36,7 @@ function membership(overrides: Partial<UserMembership> = {}): UserMembership {
     membershipCategory: "A",
     status: "active",
     showOnOrgProfile: true,
+    isDefault: false,
     organizationId: ORGANIZATION_ID,
     organizationName: "Organization A",
     emailId: null,

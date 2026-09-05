@@ -208,7 +208,10 @@ export function UserDetail({
    * account fields (role, active, created) are administrative and belong in
    * the aside.
    */
-  const identity = user.identities.find((entry) => entry.organizationId !== null) ?? user.identities[0];
+  const identity =
+    user.identities.find((entry) => entry.isDefault) ??
+    user.identities.find((entry) => entry.organizationId !== null) ??
+    user.identities[0];
   const identityCount = user.identities.length;
 
   const lede = [identity?.jobTitle, identity?.organizationName].filter(Boolean).join(" at ") || undefined;
@@ -406,15 +409,25 @@ export function UserDetail({
       <div class="pk-record">
         <div class="pk-stack">
           {/*
-            No About panel.
-            
-            The design has one, and it is a summary of the person. The only
-            prose this system stores is `identity.biography`, which describes
-            what someone does at one organization — so an About panel could
-            only reprint whichever affiliation happened to be first, and the
-            Organizations panel below now states that same text on the tie it
-            actually belongs to. A real About needs a person-level field.
+            About speaks from the identity marked as default.
+
+            The only prose this system stores is `identity.biography`, which
+            describes what somebody does at one organization. Which of those
+            represents the person is theirs to say, so it is marked rather than
+            guessed — and the affiliation that supplied this text does not
+            repeat it below, or the same paragraph would appear twice on one
+            page. With nothing marked the record falls back to the first
+            affiliation, which is what it did before the flag existed.
           */}
+          {identity?.biography && (
+            <Panel aria-label="About">
+              <PanelHeader title="About" />
+              <PanelBody>
+                <p class="pk-affiliation__summary">{identity.biography}</p>
+              </PanelBody>
+            </Panel>
+          )}
+
           <MemberSkillsPanel userId={user.id} canRead={permissions.canRead} canVouch={!isSelf} />
 
           {participationGroups.length > 0 && (
@@ -437,6 +450,7 @@ export function UserDetail({
             onChanged={load}
             canManage={permissions.canManageMembership}
             canActivate={permissions.canActivateIdentity}
+            summarizedIdentityId={identity?.identityId}
           />
 
           <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />
