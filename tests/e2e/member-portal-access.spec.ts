@@ -6,6 +6,7 @@
  * journey takes a person all the way through join, review, and approval, then
  * signs them in for real, so the link between "approved applicant" and "member
  * who can use the portal" is exercised end to end rather than assumed.
+ * @covers account.7.6
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

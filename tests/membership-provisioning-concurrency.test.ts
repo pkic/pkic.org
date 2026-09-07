@@ -97,7 +97,13 @@ describe("provisionOrganizationMembership concurrency", () => {
       // mask.
       expect(rejected.length).toBeGreaterThanOrEqual(1);
       const reason = String((rejected[0] as PromiseRejectedResult).reason);
-      expect(reason).toMatch(/UNIQUE constraint failed: organizations\.normalized_name/);
+      // Either unique index on the row the loser tried to insert may be the
+      // one that catches it — the name it normalizes to, or the clean-URL
+      // slug derived from that same name. Which of the two SQLite reports
+      // is an index-order detail; that the losing batch is rejected whole,
+      // leaving nothing behind, is the property this test is about, and the
+      // assertions above are what prove it.
+      expect(reason).toMatch(/UNIQUE constraint failed: organizations\.(normalized_name|slug)/);
     }
   });
 });

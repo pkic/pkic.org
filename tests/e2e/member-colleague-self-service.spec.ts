@@ -7,6 +7,8 @@
  * entirely — taking that access away again. Joining and leaving a working
  * group, and choosing whether to receive its mail, are the same story: real
  * self-service, previously only exercised as staff or not at all.
+ * @covers groups.8.10
+ * @covers organization.10.4
  */
 import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";

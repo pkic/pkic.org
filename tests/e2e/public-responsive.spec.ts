@@ -9,6 +9,7 @@
  * It exists because the footer taught the lesson: a single Bootstrap row whose
  * negative margins exceeded its container made EVERY page on the site scroll
  * sideways on a phone, and nothing that reads source could see it.
+ * @covers presentation.13.7
  */
 
 import { expect, test } from "@playwright/test";

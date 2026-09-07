@@ -1,3 +1,6 @@
+/**
+ * @covers presentation.13.1
+ */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -67,7 +70,34 @@ test.describe("the dark theme", () => {
         }
       });
       await page.goto(path);
-      await expect(page.locator("body")).toHaveCSS("background-color", "rgb(18, 20, 23)");
+      /*
+       * Against the token, not a literal colour. The page's ground is the
+       * surface token deliberately — the public site is white in the light
+       * theme, and the portal shell paints the sunk canvas for itself — and a
+       * hardcoded value here simply recorded whichever token was in use the
+       * day it was written, then failed when the ground moved from canvas to
+       * surface. What matters is that the theme reaches `body` at all.
+       */
+      const ground = await page.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        const toRgb = (value: string) => {
+          const probe = document.createElement("span");
+          probe.style.color = value.trim();
+          document.body.appendChild(probe);
+          const computed = getComputedStyle(probe).color;
+          probe.remove();
+          return computed;
+        };
+        return {
+          body: getComputedStyle(document.body).backgroundColor,
+          surface: toRgb(style.getPropertyValue("--pk-surface")),
+          light: toRgb("#ffffff"),
+        };
+      });
+      expect(ground.body).toBe(ground.surface);
+      // And the dark theme actually took: a white ground means the tokens
+      // never flipped, which is the regression this file exists to catch.
+      expect(ground.body).not.toBe(ground.light);
       expect(await unreadableSurfaces(page)).toEqual([]);
     });
   }

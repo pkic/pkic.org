@@ -1,3 +1,6 @@
+/**
+ * @covers authority.9.11
+ */
 import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

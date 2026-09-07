@@ -36,7 +36,18 @@ concurrency:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+
+    # Each shard starts its own Worker and runs about a third of the suite.
+    # The Worker this harness runs has been seen to die part-way through a long
+    # run, and every test after it then fails against a dead server — so a
+    # single run reports dozens of failures whose cause is one line near the
+    # top. Sharding bounds that: a death takes one shard rather than the suite,
+    # the other two still report, and each server lives a third as long.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout
@@ -77,13 +88,13 @@ jobs:
 
       - name: Run e2e checks
         id: e2e
-        run: pnpm test:e2e
+        run: pnpm exec playwright test --shard=${{ matrix.shard }}/3
 
       - name: Upload Playwright artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-e2e-artifacts
+          name: playwright-e2e-artifacts-shard-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/

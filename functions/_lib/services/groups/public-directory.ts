@@ -9,7 +9,7 @@ import type {
   PublicGroupLeadershipAssignment,
   PublicGroupRosterEntry,
 } from "../../../../assets/shared/schemas/group-directory";
-import type { GroupLeadershipRoleId } from "../../../../assets/shared/schemas/groups";
+import type { Group, GroupLeadershipRoleId } from "../../../../assets/shared/schemas/groups";
 import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
@@ -59,9 +59,32 @@ const SOURCE_GROUP_SELECT_SQL = `
 
 const PUBLIC_ORDER_SQL = `LOWER(COALESCE(u.last_name, '')), LOWER(COALESCE(u.first_name, '')), u.id`;
 
+/**
+ * Whether a group publishes a directory at all.
+ *
+ * `visibility` answers who may browse to the group; `public_roster` and
+ * `public_leadership` answer whether its people may be named in public. They
+ * are separate questions, and a governing body is exactly where they diverge:
+ * the Board of Directors is visible to its participants, and who sits on it is
+ * a matter of public record. Reading visibility alone made those two flags
+ * unreachable — a group could be set to publish its roster and still answer
+ * 404 to the only endpoint that serves one.
+ *
+ * Everything the directory returns is gated again on the flag that authorizes
+ * it, so a group that publishes neither still has nothing to show.
+ */
+function publishesDirectory(group: Group): boolean {
+  return group.visibility === "public" || group.publicRoster || group.publicLeadership;
+}
+
 async function requirePublicGroup(db: DatabaseLike, idOrSlug: string) {
-  const group = await getVisibleGroup(db, idOrSlug, {});
-  if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not publicly visible");
+  // Fetched without the listing filter, then judged by the rule above: the
+  // filter answers a different question, and letting it answer this one is
+  // what hid the flags.
+  const group = await getVisibleGroup(db, idOrSlug, { canReadAll: true });
+  if (!group || !publishesDirectory(group)) {
+    throw new AppError(404, "GROUP_NOT_FOUND", "Group not found or not publicly visible");
+  }
   return group;
 }
 
@@ -216,14 +239,21 @@ export async function getPublicGroupDirectory(db: DatabaseLike, idOrSlug: string
   const group = await requirePublicGroup(db, idOrSlug);
   const none: never[] = [];
   const [mailingList, leadershipRows, pastLeadershipRows, currentSeats, pastSeats] = await Promise.all([
-    first<{ email: string }>(
-      db,
-      `SELECT email
+    /*
+     * The discussion address belongs to the group's public face, not to its
+     * roster. A group that publishes who sits on it has said nothing about
+     * where it talks, so only a publicly visible group offers one.
+     */
+    group.visibility === "public"
+      ? first<{ email: string }>(
+          db,
+          `SELECT email
          FROM mailing_lists
         WHERE group_id = ? AND active = 1 AND is_primary_discussion = 1
         LIMIT 1`,
-      [group.id],
-    ),
+          [group.id],
+        )
+      : Promise.resolve(null),
     group.publicLeadership ? listCurrentLeadership(db, group.id) : Promise.resolve(none),
     group.publicLeadership ? listPastLeadership(db, group.id) : Promise.resolve(none),
     group.publicRoster ? listRoster(db, group.id, true) : Promise.resolve(none),

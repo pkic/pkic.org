@@ -458,16 +458,22 @@ export function UserDetail({
           {/* Operations on the account rather than statements about the
               person, so they are disclosed under the record instead of
               reading as three more things it says. */}
-          <UserAdministrationSection>
-            {editable && (
-              <Panel>
-                <PanelHeader title="Profile" />
-                <PanelBody>
-                  <UserProfileEditor user={user} canGrantAccess={permissions.canGrantAccess} onSaved={load} />
-                </PanelBody>
-              </Panel>
-            )}
+          {/*
+            The name stays with the record rather than behind the disclosure.
+            It is the record's own title: a person whose name came across a
+            migration wrong is exactly who somebody opens this page to fix, and
+            they should not have to find "account administration" to do it.
+          */}
+          {editable && (
+            <Panel>
+              <PanelHeader title="Profile" />
+              <PanelBody>
+                <UserProfileEditor user={user} canGrantAccess={permissions.canGrantAccess} onSaved={load} />
+              </PanelBody>
+            </Panel>
+          )}
 
+          <UserAdministrationSection>
             <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
 
             <Panel>

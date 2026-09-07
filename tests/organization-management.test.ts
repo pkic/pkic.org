@@ -118,6 +118,45 @@ describe("canonical organization management", () => {
     expect(body.organization.links).toEqual(["https://www.linkedin.com/company/peopleless"]);
   });
 
+  /*
+   * The public URL a new organization gets.
+   *
+   * `organizations.slug` was written only by the YAML import, so an
+   * organization created through the portal had none and its member page fell
+   * back to `/members/profile/?id=<uuid>` — issue #15's remaining half, where
+   * imported members had clean URLs and newly created ones did not. Two
+   * organizations whose names slugify alike also have to land on different
+   * URLs, which is what the second creation below checks.
+   */
+  it("gives a newly created organization a clean-URL slug, disambiguating a collision", async () => {
+    await adminToken();
+    const writer = await grantToken("membership:write");
+
+    async function create(name: string): Promise<string | null> {
+      const response = await call("/api/v1/organizations", writer.token, {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          membershipCategory: "F",
+          memberSince: "2026-01-15",
+          identities: [],
+          workingGroupSlugs: [],
+        }),
+      });
+      expect(response.status, await response.clone().text()).toBe(201);
+      const { organization } = (await response.json()) as { organization: { id: string } };
+      const [row] = await queryAll<{ slug: string | null }>(env.DB, "SELECT slug FROM organizations WHERE id = ?", [
+        organization.id,
+      ]);
+      return row.slug;
+    }
+
+    expect(await create("Ünïcode Kéyfactor B.V.")).toBe("n-code-k-yfactor-b-v");
+    // A different name that reduces to the same segment must not collide with
+    // it: the column is uniquely indexed, so a repeat would fail the insert.
+    expect(await create("Ünïcode  Kéyfactor  B V")).toBe("n-code-k-yfactor-b-v-2");
+  });
+
   it("still demands identities:activate and an activation reason exactly when identities are provided", async () => {
     await adminToken();
     const writer = await grantToken("membership:write");

@@ -199,8 +199,14 @@ describe("public member detail content", () => {
 
     const list = container.querySelector("dl.pk-datalist");
     expect(list).not.toBeNull();
-    expect(terms(list!)).toEqual(["Member since", "Website", "Press", "Careers", "Blog", "mastodon.example"]);
-    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(6);
+    // The named pages the organization publishes stay a term list. Its own
+    // profile links do not: they are an owner-ordered, open-ended set with no
+    // term to pair against, so they render as the shared marked badges.
+    expect(terms(list!)).toEqual(["Member since", "Website", "Press", "Careers", "Blog"]);
+    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(5);
+    expect([...container.querySelectorAll(".pk-link-list__label")].map((label) => label.textContent)).toEqual([
+      "mastodon.example",
+    ]);
     // Localized at the presentation boundary rather than printed as the
     // transported instant. The month's spelling belongs to the viewer's
     // locale, so only the year is asserted.
@@ -209,9 +215,8 @@ describe("public member detail content", () => {
     expect(since).not.toContain("2024-03-01");
   });
 
-  it("features the owner's first link, labels it by its site, and names it after the owner", async () => {
-    // The first link is not a hardcoded platform: the owner ranked GitHub
-    // above LinkedIn, so GitHub is the featured link.
+  it("shows every profile link as a marked badge, labeled by site and named after its owner", async () => {
+    // No platform is special: the owner's own ordering is the order shown.
     const container = await mountView({
       links: ["https://github.com/example-corp", "https://www.linkedin.com/company/example"],
       featuredLink: "https://github.com/example-corp",
@@ -226,19 +231,23 @@ describe("public member detail content", () => {
       ],
     });
 
-    const featured = [...container.querySelectorAll("a[aria-label]")];
-    // Named after the owner, not the site: two bare site labels say nothing
-    // about whose profile either one opens.
-    expect(featured.map((link) => link.getAttribute("aria-label"))).toEqual([
-      "Example Corp on GitHub",
-      "Ada Lovelace on LinkedIn",
+    const badges = [...container.querySelectorAll("a.pk-link-list__link")];
+    // Labeled by the site rather than printing the address, and named after
+    // whose profile it is: two bare site labels say nothing about which
+    // person or organization either one opens.
+    expect([...container.querySelectorAll(".pk-link-list__label")].map((label) => label.textContent)).toEqual([
+      "GitHub",
+      "LinkedIn",
+      "LinkedIn",
     ]);
-    expect(featured[0]?.getAttribute("href")).toBe("https://github.com/example-corp");
-    expect(featured[0]?.textContent).toBe("GitHub");
+    expect(badges.map((link) => link.getAttribute("aria-label"))).toEqual([null, null, "Ada Lovelace on LinkedIn"]);
+    expect(badges[0]?.getAttribute("href")).toBe("https://github.com/example-corp");
+    // The address is still reachable, as the link's own tooltip.
+    expect(badges[0]?.getAttribute("title")).toBe("https://github.com/example-corp");
 
-    // The featured link is not repeated in the remaining-links list.
+    // No link is repeated as a term in the pages list beside them.
     const list = container.querySelector("dl.pk-datalist");
-    expect(terms(list!)).toEqual(["Member since", "Website", "LinkedIn"]);
+    expect(terms(list!)).toEqual(["Member since", "Website"]);
   });
 
   it("names the representatives region and nests each person under it", async () => {

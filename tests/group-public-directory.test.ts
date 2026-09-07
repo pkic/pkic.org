@@ -13,6 +13,7 @@ async function insertGroup(options: {
   parentGroupId?: string | null;
   visibility?: "public" | "authenticated" | "participants" | "managed";
   publicLeadership?: boolean;
+  publicRoster?: boolean;
   governanceInheritanceMode?: "inherited" | "local_only";
 }): Promise<string> {
   const id = crypto.randomUUID();
@@ -20,9 +21,9 @@ async function insertGroup(options: {
     `INSERT INTO groups
        (id, type_key, parent_group_id, name, slug, description, visibility,
         governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
-        allow_automatic_opt_out, public_leadership, min_endorsers_for_ballot,
+        allow_automatic_opt_out, public_leadership, public_roster, min_endorsers_for_ballot,
         active, revision, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'none', 1, ?, 0, 1, 0,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 'none', 1, ?, ?, 0, 1, 0,
              datetime('now'), datetime('now'))`,
   )
     .bind(
@@ -35,6 +36,7 @@ async function insertGroup(options: {
       options.visibility ?? "public",
       options.governanceInheritanceMode ?? "inherited",
       options.publicLeadership === false ? 0 : 1,
+      options.publicRoster ? 1 : 0,
     )
     .run();
   return id;
@@ -142,14 +144,42 @@ describe("public generic group directory", () => {
     expect(groupDirectoryResponseSchema.parse(await response.json()).leadership).toEqual([]);
   });
 
-  it("fails closed for a group that is not publicly visible", async () => {
+  it("fails closed for a group that is not visible and publishes nobody", async () => {
     await insertGroup({
       slug: "participant-directory",
       name: "Participant Directory",
       visibility: "participants",
+      publicLeadership: false,
     });
 
     const response = await callApi(env as any, "/api/v1/groups/participant-directory/directory");
     expect(response.status).toBe(404);
+  });
+
+  /*
+   * The Board of Directors' shape: you cannot browse to the group, and who
+   * sits on it is a matter of public record. Visibility and the publication
+   * flags answer different questions, and reading only the first made the
+   * second unreachable — the endpoint that exists to serve a roster answered
+   * 404 to every group that had been set to publish one.
+   */
+  it("serves the roster of a group that publishes one but is not itself browsable", async () => {
+    const groupId = await insertGroup({
+      slug: "governing-body",
+      name: "Governing Body",
+      visibility: "participants",
+      publicLeadership: false,
+      publicRoster: true,
+    });
+    await insertLeader(groupId, "role-group_lead", "Seated Director");
+
+    const response = await callApi(env as any, "/api/v1/groups/governing-body/directory");
+    expect(response.status).toBe(200);
+    const directory = groupDirectoryResponseSchema.parse(await response.json());
+    expect(directory.roster?.current.map((entry) => entry.person.name)).toEqual(["Seated Director"]);
+    // Only what the flags authorize: leadership is off, so it stays empty.
+    expect(directory.leadership).toEqual([]);
+    // And a group nobody may browse to does not advertise where it talks.
+    expect(directory.mailingListEmail).toBeNull();
   });
 });

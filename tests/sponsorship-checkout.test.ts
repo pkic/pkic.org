@@ -92,4 +92,37 @@ describe("POST /api/v1/sponsors/checkouts", () => {
       false,
     );
   });
+
+  /*
+   * A tier is withdrawn by clearing its `active` flag, and the row stays
+   * behind so the sponsorships already sold under it keep their price. That
+   * leaves a tier name that resolves to a row but must not resolve to a price:
+   * charging the amount on a withdrawn row, or falling back to a default, is
+   * how somebody pays a figure the consortium is no longer offering.
+   */
+  it("refuses a withdrawn tier rather than pricing it, and says what is on offer", async () => {
+    await env.DB.prepare("UPDATE sponsorship_tier_config SET active = 0 WHERE sponsor_type = 'event' AND tier = ?")
+      .bind(validBody.tier)
+      .run();
+
+    const response = await call();
+
+    expect(response.status).toBe(422);
+    const body = (await response.json()) as { error: { code: string; details?: { supportedTiers?: string[] } } };
+    expect(body.error.code).toBe("UNKNOWN_TIER");
+    // The refusal names what is still available, so a sponsor who picked a
+    // tier that has since been withdrawn is not left guessing.
+    expect(body.error.details?.supportedTiers).toEqual(expect.arrayContaining(["Ambassador", "Leader"]));
+    expect(body.error.details?.supportedTiers).not.toContain(validBody.tier);
+    // Nothing was sent to Stripe: the refusal happens before any session.
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses a tier that was never configured", async () => {
+    const response = await call({ ...validBody, tier: "Platinum" });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe("UNKNOWN_TIER");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
 });

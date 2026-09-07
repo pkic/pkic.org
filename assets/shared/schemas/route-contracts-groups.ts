@@ -10,6 +10,8 @@ import {
   groupCreateSchema,
   groupJoinSchema,
   groupLeadershipAssignSchema,
+  groupLeadershipCandidatesListQuerySchema,
+  groupLeadershipCandidatesListResponseSchema,
   groupLeadershipListResponseSchema,
   groupLeadershipUpdateSchema,
   groupLeaveSchema,
@@ -263,6 +265,22 @@ export const groupLeadershipListRouteSchema = {
     "200": {
       description: "Effective leadership, closed terms, and the group type's default titles.",
       content: { "application/json": { schema: groupLeadershipListResponseSchema } },
+    },
+  },
+};
+
+export const groupLeadershipCandidatesListRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "List the people who may be given leadership of a group",
+  description:
+    "Every Member capacity the group's eligibility rules admit, whether or not a seat has been taken through it " +
+    "yet. `participating` says which, so a caller can tell that assigning leadership will also seat the person.",
+  request: { params: groupReferenceParamsSchema, query: groupLeadershipCandidatesListQuerySchema },
+  responses: {
+    "200": {
+      description: "A page of leadership candidates.",
+      content: { "application/json": { schema: groupLeadershipCandidatesListResponseSchema } },
     },
   },
 };

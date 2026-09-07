@@ -12,6 +12,7 @@
  *
  * @covers proposal.4.2
  * @covers proposal.4.3
+ * @covers affiliation.14.7
  * @covers proposal.4.4
  * @covers proposal.4.5
  */

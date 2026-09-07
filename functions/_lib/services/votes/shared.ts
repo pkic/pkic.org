@@ -26,6 +26,7 @@ import type {
   voteResultSchema,
 } from "../../../../assets/shared/schemas/votes";
 import type { DatabaseLike } from "../../types";
+import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 
 // Derived from the canonical shared schema (assets/shared/schemas/votes.ts)
 // rather than hand-duplicated, so the DB-facing service layer and the API
@@ -110,24 +111,10 @@ export interface CandidateRow {
 export const VOTE_CANDIDATE_COLUMNS =
   "id, vote_id, user_id, candidate_name, candidate_bio, nominated_by_user_id, sort_order, eliminated_round, created_at";
 
-export function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 export async function uniqueSlug(db: DatabaseLike, title: string): Promise<string> {
-  const base = slugify(title) || "vote";
-  let candidate = base;
-  let suffix = 2;
-  // Bounded by the number of collisions actually found — no realistic vote
-  // titling scheme produces more than a handful.
-  while (await first<{ id: string }>(db, `SELECT id FROM votes WHERE slug = ?`, [candidate])) {
-    candidate = `${base}-${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
+  return firstFreeSlug(slugifyOr(title, "vote"), async (candidate) =>
+    Boolean(await first<{ id: string }>(db, `SELECT id FROM votes WHERE slug = ?`, [candidate])),
+  );
 }
 
 export function eligibleCategoriesOf(row: VoteRow): string[] | null {

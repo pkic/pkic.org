@@ -16,6 +16,17 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   /*
+   * Stop a shard once the failures stop being about the tests.
+   *
+   * A shard holds around twenty tests; ten failures in one is not twenty
+   * regressions, it is the Worker having died and every test since having hit
+   * a dead server. Retries do not help there — a retry meets the same corpse —
+   * so the useful thing is to stop, leaving a short report whose first entry
+   * is the actual cause. A genuine regression run of a handful still reports
+   * in full.
+   */
+  maxFailures: process.env.CI ? 10 : undefined,
+  /*
    * The local SendGrid interceptor and seeded D1 state are shared by the E2E
    * files, so one worker keeps a test from clearing or mutating another's
    * outbox or database while it waits on an assertion.
@@ -38,6 +49,16 @@ export default defineConfig({
     // Always start fresh so Wrangler uses the seeded state dir.
     reuseExistingServer: Boolean(process.env.REUSE_SERVER),
     timeout: 300_000,
+    /*
+     * The server's own output, kept.
+     *
+     * Playwright discards it by default. When this Worker dies mid-run — which
+     * it does — every test after it fails with ERR_CONNECTION_REFUSED and the
+     * one line saying why has already been thrown away. A run that reports
+     * fifty failures and no cause is not a run anybody can act on.
+     */
+    stdout: "pipe",
+    stderr: "pipe",
   },
   use: {
     baseURL: e2eBaseUrl,

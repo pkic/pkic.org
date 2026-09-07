@@ -17,6 +17,47 @@ type SvgProps = Omit<JSX.SVGAttributes<SVGSVGElement>, "xmlns" | "viewBox" | "fi
 
 // ── UI icons ────────────────────────────────────────────────────────────────
 
+/**
+ * The two kinds of member: an organization, and a person in their own right.
+ *
+ * Named rather than decorative at every call site so far — they stand in for
+ * a word rather than repeating one — so the caller passes
+ * `aria-hidden={undefined}` with its own `role` and `aria-label`.
+ */
+export function IconOrganization(props: SvgProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      fill="currentColor"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      {...props}
+    >
+      {/* A block with a door, not a facade of eighteen windows: at 16px the
+          detailed one read as noise rather than as a building. */}
+      <path d="M3 1.5A1.5 1.5 0 0 1 4.5 0h7A1.5 1.5 0 0 1 13 1.5V16h-4v-3.5a1 1 0 0 0-2 0V16H3zM5.5 3a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm4 0a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm-4 3a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm4 0a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm-4 3a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm4 0a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1z" />
+    </svg>
+  );
+}
+
+export function IconIndividual(props: SvgProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      fill="currentColor"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6m2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0m4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4m-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10s-3.516.68-4.168 1.332c-.678.678-.83 1.418-.832 1.664z" />
+    </svg>
+  );
+}
+
 export function IconLink(props: SvgProps) {
   return (
     <svg

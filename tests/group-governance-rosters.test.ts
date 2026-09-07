@@ -7,6 +7,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupDirectoryResponseSchema } from "../assets/shared/schemas/group-directory";
 import {
+  groupLeadershipCandidatesListResponseSchema,
   groupLeadershipListResponseSchema,
   groupMembershipMutationResponseSchema,
   groupMembershipsManagementListResponseSchema,
@@ -253,6 +254,124 @@ describe("governance rosters on groups", () => {
       [formerChair.userId, groupId],
     );
     expect(revoked).toEqual([{ revoked_at: "2025-02-01T00:00:00.000Z", expires_at: null }]);
+  });
+
+  /*
+   * Issue #26: the leadership picker read the group's own roster, so a group
+   * whose participation follows from affiliation rather than from a taken seat
+   * offered nobody and answered "no matches" for people the system knows. The
+   * All Members forum is exactly that group, which is why it is the fixture.
+   */
+  it("offers every eligible person as a leadership candidate, seated or not, and seats one on appointment", async () => {
+    const admin = await seedAdmin();
+    const [allMembers] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM groups WHERE slug = 'all-members'");
+    const chair = await seedRepresentative(["Unseated", "Candidate"], "Unseated Org");
+
+    // No seat exists anywhere in this group.
+    expect(await queryAll(env.DB, "SELECT id FROM group_memberships WHERE group_id = ?", [allMembers.id])).toHaveLength(
+      0,
+    );
+
+    const listed = groupLeadershipCandidatesListResponseSchema.parse(
+      await okJson(await call(admin.token, `/api/v1/groups/${allMembers.id}/leadership/candidates?q=Unseated`)),
+    );
+    expect(listed.candidates).toMatchObject([
+      { userId: chair.userId, identityId: chair.identityId, organizationName: "Unseated Org", participating: false },
+    ]);
+
+    const assigned = await call(admin.token, `/api/v1/groups/${allMembers.id}/leadership`, {
+      method: "POST",
+      body: JSON.stringify({
+        userId: chair.userId,
+        identityId: chair.identityId,
+        roleId: "role-group_lead",
+        startsAt: "2026-01-05T00:00:00.000Z",
+      }),
+    });
+    expect(assigned.status, await assigned.clone().text()).toBe(201);
+    expect(groupLeadershipListResponseSchema.parse(await assigned.json()).assignments).toMatchObject([
+      { userId: chair.userId, title: "Chair", active: true },
+    ]);
+
+    // The appointment seated them: a leader participates, and the seat carries
+    // the term's own start rather than the instant the button was pressed.
+    expect(
+      await queryAll<{ identity_id: string; joined_at: string; left_at: string | null; source: string }>(
+        env.DB,
+        "SELECT identity_id, joined_at, left_at, source FROM group_memberships WHERE group_id = ? AND user_id = ?",
+        [allMembers.id, chair.userId],
+      ),
+    ).toEqual([
+      { identity_id: chair.identityId, joined_at: "2026-01-05T00:00:00.000Z", left_at: null, source: "staff" },
+    ]);
+
+    // And the candidate now reads as participating rather than appearing twice.
+    const relisted = groupLeadershipCandidatesListResponseSchema.parse(
+      await okJson(await call(admin.token, `/api/v1/groups/${allMembers.id}/leadership/candidates?q=Unseated`)),
+    );
+    expect(relisted.candidates).toMatchObject([{ identityId: chair.identityId, participating: true }]);
+  });
+
+  it("records a closed historical term without seating anybody", async () => {
+    const admin = await seedAdmin();
+    const groupId = await boardGroupId();
+    const former = await seedRepresentative(["Historic", "Chair"], "Historic Org");
+
+    const recorded = await call(admin.token, `/api/v1/groups/${groupId}/leadership`, {
+      method: "POST",
+      body: JSON.stringify({
+        userId: former.userId,
+        identityId: former.identityId,
+        roleId: "role-group_lead",
+        startsAt: "2019-01-01T00:00:00.000Z",
+        endsAt: "2023-12-31T00:00:00.000Z",
+      }),
+    });
+    expect(recorded.status, await recorded.clone().text()).toBe(201);
+    expect(groupLeadershipListResponseSchema.parse(await recorded.json()).past).toMatchObject([
+      { userId: former.userId, active: false },
+    ]);
+
+    /*
+     * A closed term is a record of a role, not of participation. Writing a
+     * closed seat beside it would put the same person in "Past positions"
+     * twice — once as the chair they were, once as a plain member for the
+     * same dates.
+     */
+    expect(
+      await queryAll(env.DB, "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ?", [
+        groupId,
+        former.userId,
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("refuses to appoint somebody with no Member capacity, and writes no seat for them", async () => {
+    const admin = await seedAdmin();
+    const groupId = await boardGroupId();
+    // A bare user row: known to the system, but holding no membership of any
+    // kind. Seating on appointment must not become a way around that.
+    const outsiderId = await insertUser(env.DB, `outsider-${crypto.randomUUID()}@example.test`);
+    const [identity] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM identities WHERE user_id = ?", [
+      outsiderId,
+    ]);
+
+    const refused = await call(admin.token, `/api/v1/groups/${groupId}/leadership`, {
+      method: "POST",
+      body: JSON.stringify({
+        userId: outsiderId,
+        identityId: identity?.id ?? crypto.randomUUID(),
+        roleId: "role-group_lead",
+      }),
+    });
+    expect(refused.status, await refused.clone().text()).toBe(400);
+    expect(((await refused.json()) as { error: { code: string } }).error.code).toBe("GROUP_LEADER_CAPACITY_INVALID");
+    expect(
+      await queryAll(env.DB, "SELECT id FROM group_memberships WHERE group_id = ? AND user_id = ?", [
+        groupId,
+        outsiderId,
+      ]),
+    ).toHaveLength(0);
   });
 
   it("edits a term: a future end schedules expiry, a past end closes it, and null reopens it", async () => {

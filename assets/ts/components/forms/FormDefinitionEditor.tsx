@@ -29,6 +29,7 @@ import { Select, TextInput } from "../../ui/TextControl";
 // without this import the key inputs render in the body face.
 import "../../ui/Content.css";
 import "./FormBuilder.css";
+import { slugify } from "../../../shared/slug";
 
 export interface EditableFormDetail {
   form: {
@@ -58,11 +59,7 @@ interface FormDraft {
  * derived until they change it, at which point their own value stands.
  */
 function keyFromTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
+  return slugify(title, { maxLength: 60 });
 }
 
 /** What each status means for a respondent, rather than its bare name. */

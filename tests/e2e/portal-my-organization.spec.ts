@@ -7,6 +7,9 @@
  * member-facing `LogoUploader` here, and nothing exercised the content
  * review queue, the secondary-contact nomination, or the individual-member
  * fallback at all.
+ * @covers organization.10.1
+ * @covers organization.10.2
+ * @covers organization.10.3
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

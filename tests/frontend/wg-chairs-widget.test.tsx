@@ -132,11 +132,11 @@ describe("WgChairsWidget", () => {
     expect(container.textContent).toContain("Grace Hopper");
     expect(container.textContent).toContain("Katherine Johnson");
     expect(container.textContent).toContain("Principal Cryptographer at Example Consortium");
-    // Each featured link is named after the person, not after the site:
-    // three links all carrying the same site label are nothing to choose
-    // between when they are read out on their own.
+    // Each profile link is a marked badge in the shared list, named after the
+    // person rather than after the site: three links all carrying the same
+    // site label are nothing to choose between when read out on their own.
     expect(
-      [...container.querySelectorAll("a.person-card-featured-link")].map((link) => link.getAttribute("aria-label")),
+      [...container.querySelectorAll("a.pk-link-list__link")].map((link) => link.getAttribute("aria-label")),
     ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn", "Katherine Johnson on LinkedIn"]);
   });
 

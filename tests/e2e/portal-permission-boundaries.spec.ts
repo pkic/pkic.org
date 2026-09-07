@@ -7,6 +7,7 @@
  * worse, appears unavailable while the API still accepts it. These journeys
  * grant exactly one permission at a time and check both halves: the rendered
  * controls, and the API behind them.
+ * @covers authority.9.10
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

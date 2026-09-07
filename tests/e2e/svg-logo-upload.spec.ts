@@ -3,6 +3,7 @@
  * SVG file in the organization detail UI, the worker sanitizes and stores
  * it, and the publicly served file comes back cropped, dimensionless, and
  * with every hostile construct gone.
+ * @covers organization.10.8
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

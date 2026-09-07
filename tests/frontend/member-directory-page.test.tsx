@@ -4,7 +4,7 @@
  * each result shape, and — the part a screenshot cannot check — what the
  * search form and the empty state expose to someone not looking at it.
  *
- * Fixtures go out through `membersListResponseSchema`, the same contract
+ * Fixtures go out through `publicMembersListResponseSchema`, the same contract
  * `getJson` parses on the way in, so a payload that drifts from the shared
  * schema fails here rather than passing against a shape no endpoint sends.
  */
@@ -12,7 +12,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemberDirectory } from "../../assets/ts/member-flows/member-directory-page";
-import { membersListResponseSchema } from "../../assets/shared/schemas/members-directory";
+import { publicMembersListResponseSchema } from "../../assets/shared/schemas/members-directory";
 import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
@@ -38,7 +38,7 @@ function member(overrides: MemberPayload = {}): MemberPayload {
 /** The listing as the endpoint would send it, contract-checked on the way out. */
 function listingResponse(members: MemberPayload[]): string {
   return JSON.stringify(
-    membersListResponseSchema.parse({
+    publicMembersListResponseSchema.parse({
       members,
       page: { limit: 50, offset: 0, total: members.length, hasMore: false },
     }),

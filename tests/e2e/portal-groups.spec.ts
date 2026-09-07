@@ -13,6 +13,13 @@
  * does it: the local env's EMAIL_RATE_LIMITER allows only 3 magic-link
  * requests per 60s per address, and this file's eight tests each needing
  * their own admin bootstrap would otherwise trip it.
+ * @covers groups.8.1
+ * @covers groups.8.2
+ * @covers groups.8.3
+ * @covers groups.8.4
+ * @covers groups.8.5
+ * @covers groups.8.6
+ * @covers groups.8.7
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -305,7 +312,11 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
         /\/api\/v1\/groups\/[^/]+\/memberships\/[^/]+$/.test(new URL(response.url()).pathname) &&
         response.request().method() === "DELETE",
     );
-    await runRowAction(page, row, "Remove");
+    // "End participation", not "Remove": a seat that ends stays as the group's
+    // history rather than being deleted, and the action says so. The spec was
+    // still reaching for the old name and waited for a menu item that is no
+    // longer offered.
+    await runRowAction(page, row, "End participation");
     await expect(
       page.getByRole("alertdialog").getByText(`End group participation for ${name}`, { exact: false }),
     ).toBeVisible();

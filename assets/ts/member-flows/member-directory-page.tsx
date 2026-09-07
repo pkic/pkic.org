@@ -16,7 +16,7 @@ import { Pager } from "../components/Pager";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { membersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
+import { publicMembersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { useApiPage } from "../hooks/useApiPage";
 import { memberInitials } from "../shared/member-display";
 
@@ -171,7 +171,7 @@ export function MemberDirectory({
   const listing = useApiPage(
     `${apiBase}/members`,
     { group, sort: "name", ...(search ? { q: search } : {}) },
-    membersListResponseSchema,
+    publicMembersListResponseSchema,
     (data) => data.members,
   );
   const members = listing.data?.members;

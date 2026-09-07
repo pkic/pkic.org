@@ -77,20 +77,23 @@ function setValue(element: HTMLInputElement | HTMLSelectElement, value: string, 
   });
 }
 
-/** Picks a participation capacity the way a reader does: type, then choose. */
+/** Picks a candidate the way a reader does: type, then choose. */
 async function pickCapacity(container: HTMLElement, email: string): Promise<void> {
   const input = controlFor(container, "Participant");
   setValue(input, email, "input");
   await settle();
-  await chooseComboboxOption(container, "Participant", MEMBER_ID);
+  await chooseComboboxOption(container, "Participant", IDENTITY_ID);
 }
 
-function membershipsPage(userId: string, email: string) {
+/**
+ * The candidates the group would admit. Not its membership roster: a group
+ * whose participation follows from affiliation has an empty roster and every
+ * eligible member as a candidate, which is why the picker asks this endpoint.
+ */
+function candidatesPage(userId: string, email: string, participating = true) {
   return {
-    memberships: [
+    candidates: [
       {
-        id: MEMBER_ID,
-        groupId: GROUP_ID,
         userId,
         identityId: IDENTITY_ID,
         memberId: MEMBER_ID,
@@ -99,11 +102,7 @@ function membershipsPage(userId: string, email: string) {
         email,
         organizationName: "Example Member",
         membershipCategory: "A",
-        source: "staff",
-        createdByUserId: null,
-        title: null,
-        joinedAt: "2026-08-01T00:00:00.000Z",
-        leftAt: null,
+        participating,
       },
     ],
     page: { limit: 8, offset: 0, total: 1, hasMore: false },
@@ -249,8 +248,8 @@ describe("portal group leadership management", () => {
   it("assigns leadership with the type's default title, a backdated start, and an optional end through the group route", async () => {
     const userId = "40000000-0000-4000-8000-000000000009";
     const requests = stubFetch((url) => {
-      if (url.pathname === `/api/v1/groups/${GROUP_ID}/memberships`)
-        return json(membershipsPage(userId, "leader@example.test"));
+      if (url.pathname === `/api/v1/groups/${GROUP_ID}/leadership/candidates`)
+        return json(candidatesPage(userId, "leader@example.test", false));
       return json({ ...leadership, assignments: [], past: [] });
     });
     const container = mount(<GroupLeadership groupId={GROUP_ID} />);
@@ -259,6 +258,11 @@ describe("portal group leadership management", () => {
     expect(container.textContent).toContain("No leadership yet");
     await act(async () => button(container, "Add leadership").click());
     await pickCapacity(container, "leader@example.test");
+
+    // The candidate is not seated in this group, so the form says the
+    // appointment will seat them rather than leaving it to be discovered on
+    // the Members tab afterwards.
+    expect(container.textContent).toContain("does not participate in this group yet");
 
     const title = controlFor(container, "Title");
     expect(title.value).toBe("Chair");
@@ -280,7 +284,7 @@ describe("portal group leadership management", () => {
       startsAt: "2024-07-01T00:00:00.000Z",
       endsAt: "2026-10-01T00:00:00.000Z",
     });
-    expect(container.querySelector('input[placeholder="Search name, email, organization, or category…"]')).toBeNull();
+    expect(container.querySelector('input[placeholder="Search name, email, or organization…"]')).toBeNull();
   });
 
   it("edits a term's title and dates through the canonical update route", async () => {
@@ -290,9 +294,15 @@ describe("portal group leadership management", () => {
 
     await openRowMenu(container, "Actions for Former Chair");
     await act(async () => menuItem(container, "Edit term").click());
-    const title = controlFor(container, "Title");
+    // The title is a select of the role's own titles, not free text: a chair
+    // should be offered rather than something you have to know to type.
+    const title = controlFor<HTMLSelectElement>(container, "Title");
+    expect(title.tagName).toBe("SELECT");
+    expect([...title.options].map((option) => option.value)).toEqual(
+      expect.arrayContaining(["Chair", "Co-Chair", "Lead"]),
+    );
     expect(title.value).toBe("Chair");
-    setValue(title, "Co-Chair", "input");
+    setValue(title, "Co-Chair", "change");
     setValue(controlFor(container, "Term ends"), "2021-06-30", "input");
     await act(async () => button(container, "Save term").click());
     await settle();
@@ -311,8 +321,8 @@ describe("portal group leadership management", () => {
   it("keeps a rejected leadership assignment visible and does not report success", async () => {
     const userId = "40000000-0000-4000-8000-000000000009";
     stubFetch((url, method) => {
-      if (url.pathname === `/api/v1/groups/${GROUP_ID}/memberships`)
-        return json(membershipsPage(userId, "leader@example.test"));
+      if (url.pathname === `/api/v1/groups/${GROUP_ID}/leadership/candidates`)
+        return json(candidatesPage(userId, "leader@example.test"));
       if (method === "POST") {
         return new Response(
           JSON.stringify({ error: { code: "GROUP_AUTHORIZATION_CHANGED", message: "Management access changed." } }),

@@ -23,7 +23,13 @@ import {
 } from "../../shared/schemas/group-directory";
 import { getJson } from "../shared/api-client";
 import { formatMonthYear } from "../shared/ui";
-import { initialsFor, PublicPersonCard, PublicPersonOrgLink, type PublicPerson } from "./components/public-person-card";
+import {
+  PersonAvatar,
+  PersonLinks,
+  PublicPersonCard,
+  PublicPersonOrgLink,
+  type PublicPerson,
+} from "./components/public-person-card";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -34,13 +40,12 @@ function TimelineItem({ entry, color }: { entry: PublicGroupRosterEntry; color: 
   return (
     <div class="person-tl-item">
       <div class="person-tl-avatar-wrap">
-        {person.photoUrl ? (
-          // The name follows in `person-tl-name`, so an alt repeating it makes
-          // a screen reader say it twice.
-          <img class="person-tl-avatar" src={person.photoUrl} alt="" loading="lazy" />
-        ) : (
-          <div class={`person-tl-avatar person-tl-avatar--initials wg-${color}`}>{initialsFor(person.name)}</div>
-        )}
+        <PersonAvatar
+          person={person}
+          color={color}
+          imageClass="person-tl-avatar"
+          initialsClass="person-tl-avatar person-tl-avatar--initials"
+        />
       </div>
       <div class="person-tl-info">
         <span class="person-tl-name">{person.name}</span>
@@ -56,6 +61,10 @@ function TimelineItem({ entry, color }: { entry: PublicGroupRosterEntry; color: 
             </PublicPersonOrgLink>
           </span>
         )}
+        {/* A past chair keeps their profile link, same as a sitting one: it was
+            missing here entirely, which issue #25 reports as "the LinkedIn url
+            is not displaying for past positions". */}
+        <PersonLinks person={person} />
       </div>
     </div>
   );

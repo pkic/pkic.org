@@ -1,3 +1,8 @@
+/**
+ * @covers join.1.0
+ * @covers join.1.0.a
+ * @covers join.1.0.b
+ */
 import { expect, test } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 

@@ -798,7 +798,6 @@ test.describe("Portal management browser-verification pass", () => {
     // The addresses an account answers to are administration, not something
     // the record says about the person, so they are disclosed under it.
     await page.getByRole("button", { name: "Account administration", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Show account administration" }).click();
 
     // Located by role and accessible name rather than by `.card`/`.card-header`:
     // the panel is a named region now, and a role does not break the next time

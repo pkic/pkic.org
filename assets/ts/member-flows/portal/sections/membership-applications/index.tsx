@@ -9,13 +9,8 @@
  * useApplicationDetail and the Application*Card components in this
  * directory. This file is just the list/detail top-level composition.
  */
-import { useEffect, useState } from "preact/hooks";
 import { useLocation } from "wouter";
-import {
-  membershipCategoryCatalogResponseSchema,
-  type MembershipCategoryCatalogEntry,
-} from "../../../../../shared/schemas/membership-categories";
-import { getJson } from "../../../../shared/api-client";
+import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { ApplicationDetailView } from "./ApplicationDetailView";
 import { ApplicationsList } from "./ApplicationsList";
@@ -30,21 +25,7 @@ export function MembershipApplications({
   canApprove: boolean;
 }) {
   const [, navigate] = useLocation();
-  const [categories, setCategories] = useState<MembershipCategoryCatalogEntry[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getJson("/api/v1/membership/categories", membershipCategoryCatalogResponseSchema)
-      .then((response) => {
-        if (!cancelled) setCategories(response.categories);
-      })
-      .catch(() => {
-        if (!cancelled) setCategories([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const categories = useMembershipCategoryCatalog();
 
   if (initialApplicationId) {
     return (

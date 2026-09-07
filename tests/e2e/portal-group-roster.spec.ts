@@ -1,3 +1,6 @@
+/**
+ * @covers groups.8.8
+ */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
@@ -75,7 +78,14 @@ test("staff manage the Board of Directors roster from its group workspace", asyn
   expect((await endResponse).status()).toBe(200);
   await expect(seat).toHaveCount(0);
 
-  await members.getByRole("button", { name: "Former", exact: true }).click();
+  /*
+   * Current or former is a property of the seat, so the choice between the two
+   * rosters lives in the Seat column's own menu rather than in a pair of
+   * buttons above the table. This spec drove the old buttons and hung on one
+   * that no longer exists.
+   */
+  await members.getByRole("button", { name: "Seat column options" }).click();
+  await page.getByRole("menuitemradio", { name: "Former seats" }).click();
   await expect(members.getByRole("row").filter({ hasText: title })).toBeVisible();
 
   expect(removedRequests).toEqual([]);

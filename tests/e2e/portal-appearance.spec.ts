@@ -1,3 +1,6 @@
+/**
+ * @covers presentation.13.8
+ */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";

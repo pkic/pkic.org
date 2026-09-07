@@ -31,6 +31,7 @@ import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { queryAll } from "./helpers/context";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 const SIGNING_SECRET = "meeting-entry-signing-secret";
@@ -324,6 +325,58 @@ describe("authenticated meeting entry", () => {
         .bind(occurrence.id, userId)
         .first(),
     ).toMatchObject({ join_count: 2, attendance_verified_at: expect.any(String) });
+  });
+
+  /*
+   * What the attendance record keeps.
+   *
+   * A meeting attendance is a statement about a past moment, so it snapshots
+   * the name and affiliation the person joined under. Editing a profile
+   * afterwards improves the profile; it does not change who was in the room.
+   */
+  it("keeps the name and affiliation the attendee joined under", async () => {
+    const { userId, series, occurrence } = await fixture();
+    const token = await createMemberSession(env.DB, userId, "snapshot-session", SIGNING_SECRET);
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
+
+    const landing = (await (await memberRequest(token, path)).json()) as {
+      name: string;
+      affiliation: string | null;
+      landingRevision: string;
+    };
+    const joined = await memberRequest(token, path, {
+      method: "POST",
+      body: JSON.stringify({ landingRevision: landing.landingRevision, acceptedTerms: [], intentionalJoin: true }),
+    });
+    expect(joined.status).toBe(200);
+
+    const [atJoin] = await queryAll<{ name_snapshot: string; affiliation_snapshot: string | null }>(
+      env.DB,
+      "SELECT name_snapshot, affiliation_snapshot FROM event_occurrence_join_confirmations WHERE user_id = ?",
+      [userId],
+    );
+    expect(atJoin.name_snapshot).toBe(landing.name);
+    expect(atJoin.affiliation_snapshot).toBe(landing.affiliation);
+
+    // The person is renamed and their affiliation retitled afterwards.
+    await env.DB.prepare("UPDATE users SET first_name = 'Renamed', last_name = 'Afterwards' WHERE id = ?")
+      .bind(userId)
+      .run();
+    await env.DB.prepare("UPDATE identities SET job_title = 'Retitled Afterwards' WHERE user_id = ?")
+      .bind(userId)
+      .run();
+
+    const [after] = await queryAll<{ name_snapshot: string; affiliation_snapshot: string | null }>(
+      env.DB,
+      "SELECT name_snapshot, affiliation_snapshot FROM event_occurrence_join_confirmations WHERE user_id = ?",
+      [userId],
+    );
+    expect(after.name_snapshot, "who was in the room does not change later").toBe(atJoin.name_snapshot);
+    expect(after.affiliation_snapshot).toBe(atJoin.affiliation_snapshot);
+    expect(after.name_snapshot).not.toContain("Renamed");
+
+    // And the event it belongs to is the one that was joined.
+    expect(series.eventId).toBeTruthy();
   });
 
   it("rejects a stale landing revision when terms change", async () => {

@@ -17,6 +17,7 @@
  *   - Every table has a name, every icon-only control has a name, and every
  *     form control resolves to a label. An unnamed control is invisible to
  *     anyone who is not looking at it.
+ * @covers presentation.13.4
  */
 
 import { expect, test } from "@playwright/test";

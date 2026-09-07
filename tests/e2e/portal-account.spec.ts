@@ -6,6 +6,7 @@
  * page's own two cards: the four notification toggles, and the access summary
  * that tells a member which capacities and permissions their session actually
  * carries.
+ * @covers account.7.10
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

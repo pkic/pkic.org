@@ -23,9 +23,9 @@ import { ErrorAlert } from "../components/ErrorAlert";
 import { Markdown } from "../components/Markdown";
 import { NotFoundPanel } from "../components/NotFoundPanel";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
+import { LinkList } from "../ui/LinkList";
 import { memberInitials } from "../shared/member-display";
 import { formatMonthYear } from "../shared/ui";
-import { getLinkLabel } from "../../shared/schemas/links";
 import {
   publicMemberDetailSchema,
   type PublicMemberDetail as MemberDetail,
@@ -50,43 +50,6 @@ function slugFromPathname(pathname: string): string | null {
 
 type PublicIdentity = MemberDetail["identities"][number];
 
-/**
- * The owner's featured profile link — the first link of their canonical,
- * owner-ordered list, whatever the platform — labeled by its site.
- *
- * The accessible name carries the person's name beside the site label: this
- * page can show several of these links at once, and a bare site name twice
- * says nothing about whose profile either one opens.
- */
-function FeaturedLink({ name, url }: { name: string; url?: string | null }) {
-  if (!url) return null;
-  const label = getLinkLabel(url);
-  return (
-    <a class="pk-small" href={url} target="_blank" rel="noopener" aria-label={`${name} on ${label}`}>
-      {label}
-    </a>
-  );
-}
-
-/** Every link after the featured one already shown beside the heading. */
-function OtherLinks({ links, featuredLink }: { links: string[]; featuredLink: string | null }) {
-  const others = links.filter((url) => url !== featuredLink);
-  return (
-    <>
-      {others.map((url) => (
-        <Fragment key={url}>
-          <dt>{getLinkLabel(url)}</dt>
-          <dd class="pk-break">
-            <a href={url} target="_blank" rel="noopener">
-              {url}
-            </a>
-          </dd>
-        </Fragment>
-      ))}
-    </>
-  );
-}
-
 function IdentityCard({ identity }: { identity: PublicIdentity }) {
   return (
     <Panel>
@@ -105,11 +68,9 @@ function IdentityCard({ identity }: { identity: PublicIdentity }) {
             </div>
           )}
           <div class="pk-stack pk-stack--tight">
-            <h3 class="pk-cluster">
-              {identity.name}
-              <FeaturedLink name={identity.name} url={identity.featuredLink} />
-            </h3>
+            <h3>{identity.name}</h3>
             {identity.jobTitle && <p class="pk-muted">{identity.jobTitle}</p>}
+            <LinkList links={identity.featuredLink ? [identity.featuredLink] : []} ownerName={identity.name} />
           </div>
         </div>
         {identity.bio && <Markdown markdown={identity.bio} />}
@@ -156,10 +117,8 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
           </div>
         )}
         <Panel>
-          <PanelHeader title="Member details" headingLevel={2}>
-            <FeaturedLink name={member.name} url={member.featuredLink} />
-          </PanelHeader>
-          <PanelBody>
+          <PanelHeader title="Member details" headingLevel={2} />
+          <PanelBody class="pk-stack pk-stack--snug">
             {/* A term/value list, which is what this always was: it used to be
                 a run of `<strong>Label:</strong> value<br>` inside a `<small>`,
                 so nothing paired a term with its value for a reader who could
@@ -173,14 +132,23 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
                     <dt>{label}</dt>
                     <dd class="pk-break">
                       <a href={url} target="_blank" rel="noopener">
-                        {url}
+                        {url.replace(/^https?:\/\//, "")}
                       </a>
                     </dd>
                   </Fragment>
                 ) : null,
               )}
-              <OtherLinks links={member.links} featuredLink={member.featuredLink} />
             </dl>
+            {/*
+              The profile links, as the marked row the portal and every contact
+              record already use — not as a `<dt>LinkedIn</dt>` over a raw
+              address, which is what issue #13 reports: the portal grew the
+              shared list and this page kept printing URLs. A term list is the
+              wrong shape for them anyway. The set is owner-ordered and
+              open-ended, so the mark comes from the host rather than from a
+              label this page would have to keep a table for.
+            */}
+            <LinkList links={member.links} />
           </PanelBody>
         </Panel>
       </div>

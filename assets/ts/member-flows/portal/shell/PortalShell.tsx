@@ -59,6 +59,7 @@ const OrganizationDetail = lazy(() =>
 const MembershipApplications = lazy(() =>
   import("../sections/membership-applications").then((module) => ({ default: module.MembershipApplications })),
 );
+const Members = lazy(() => import("../sections/membership-members").then((module) => ({ default: module.Members })));
 const RepresentedOrganizations = lazy(() =>
   import("../sections/RepresentedOrganizations").then((module) => ({ default: module.RepresentedOrganizations })),
 );
@@ -96,6 +97,11 @@ export function PortalShell() {
   const canCreateOrganizations =
     portalHasGlobalPermission(session, "membership:write") && portalHasGlobalPermission(session, "identities:activate");
   const hasMembershipQueue = portalSectionEnabled(session, "membership");
+  const hasMembersRoll = portalSectionEnabled(session, "members");
+  /* A grant activates the membership at once, so it takes the same pair of
+     permissions the API demands of it. */
+  const canGrantMembership =
+    portalHasGlobalPermission(session, "membership:write") && portalHasGlobalPermission(session, "identities:activate");
   const hasUsersDirectory = portalSectionEnabled(session, "users");
   const hasDonationsAccess = portalSectionEnabled(session, "donations");
   const hasSystemManagement = portalSectionEnabled(session, "system");
@@ -271,6 +277,23 @@ export function PortalShell() {
                     </SectionWrapper>
                   )
                 }
+              />
+            )}
+            {hasMembersRoll && (
+              // One route with an optional segment, as `/users/:userId?` is:
+              // the grant has its own address, so it survives a reload and
+              // Back closes it.
+              <Route
+                path="/members/:memberSegment?"
+                component={({ params }: { params: { memberSegment?: string } }) => (
+                  <SectionWrapper>
+                    <Members
+                      canGrant={canGrantMembership}
+                      canWrite={portalHasGlobalPermission(session, "membership:write")}
+                      memberSegment={params.memberSegment}
+                    />
+                  </SectionWrapper>
+                )}
               />
             )}
             {hasMembershipQueue && (

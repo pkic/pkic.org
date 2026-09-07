@@ -1,4 +1,4 @@
-import { useId, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import {
   groupLeadershipListResponseSchema,
   groupLeadershipUpdateSchema,
@@ -12,7 +12,7 @@ import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ApiClientError, patchJson } from "../../../../shared/api-client";
 import type { FieldControlProps } from "../../../../ui/Field";
-import { TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { fromCalendarDateInput, toCalendarDateInput } from "../../ui";
 import { groupLeadershipTitleOptions } from "./group-leadership";
 
@@ -35,24 +35,35 @@ export function GroupLeadershipTitleInput({
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
-  const listId = `${useId()}-titles`;
+  /*
+   * The titles this role actually has, offered as a choice.
+   *
+   * This was a text box with a datalist behind it, which is free text wearing
+   * a suggestion list: the browser shows the options only once somebody starts
+   * typing, so a chair was something you had to know to write rather than
+   * something the form offered. The set is small and known per group type, so
+   * it is a select.
+   *
+   * A title already saved that is not among them is kept as an option, because
+   * opening the form on an assignment must never be able to change it by
+   * itself.
+   */
+  const options = groupLeadershipTitleOptions(titles, roleId);
+  const withCurrent = value && !options.includes(value) ? [value, ...options] : options;
   return (
-    <>
-      <TextInput
-        {...control}
-        list={listId}
-        maxLength={80}
-        required
-        value={value}
-        disabled={disabled}
-        onInput={(event) => onChange((event.target as HTMLInputElement).value)}
-      />
-      <datalist id={listId}>
-        {groupLeadershipTitleOptions(titles, roleId).map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
-    </>
+    <Select
+      {...control}
+      required
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange((event.target as HTMLSelectElement).value)}
+    >
+      {withCurrent.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </Select>
   );
 }
 

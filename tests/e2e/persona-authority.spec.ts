@@ -5,6 +5,8 @@
  * claims. This proves the same people reach the product that way: provisioned
  * through join, review, approval, and grants rather than by writing rows, so
  * an authority that is representable but unreachable fails here.
+ * @covers authority.9.8
+ * @covers authority.9.9
  */
 import { expect, test } from "@playwright/test";
 import { PERSONAS } from "../personas/catalog";

@@ -1,3 +1,6 @@
+/**
+ * @covers system.12.7
+ */
 import { expect, test } from "@playwright/test";
 import {
   membershipApplicationFormDefinitionResponseSchema,

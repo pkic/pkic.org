@@ -31,6 +31,7 @@ import {
   requireGroupManagement,
 } from "./governance";
 import { getGroup } from "./read-model";
+import { buildLeadershipSeatStatement, resolveEligibleLeadershipCapacity } from "./leadership-seating";
 
 const LEADERSHIP_ROLE_PREDICATE_SQL = `ur.role_id IN ('role-group_lead', 'role-group_deputy_lead')`;
 const ACTIVE_LEADERSHIP_PREDICATE_SQL = `ur.revoked_at IS NULL
@@ -271,15 +272,40 @@ export async function assignLocalGroupLeadership(
       LIMIT 1`,
     [groupId, input.userId, input.identityId],
   );
-  if (!capacity) {
-    throw new AppError(
-      400,
-      "GROUP_LEADER_CAPACITY_INVALID",
-      closedTerm
-        ? "The selected person never participated in this group through that Member capacity"
-        : "The selected person is not actively participating in this group through that Member capacity",
-    );
-  }
+  /*
+   * Nobody seated? Seat them, if the group would have them.
+   *
+   * Refusing here is what made the All Members forum's leadership picker
+   * useless (issue #26): a group whose participation follows from affiliation
+   * has no seats at all, so every appointment was refused until a manager
+   * knew to add the person on the Members tab first — a two-step workflow
+   * nobody could guess. A chair is a participant, so the appointment says so
+   * and writes the seat in the same batch as the grant. The group's own
+   * eligibility rules still decide; this does not let a manager appoint
+   * somebody the group would not accept.
+   */
+  const startsAt = input.startsAt ?? at;
+  const seat = capacity ?? (await resolveEligibleLeadershipCapacity(db, groupId, input, closedTerm));
+  /*
+   * Only a live term seats anybody.
+   *
+   * A closed term is a record of a role, not of participation, and writing a
+   * closed seat beside it puts the same person in "Past positions" twice —
+   * once as the chair they were and once as a plain member for the same
+   * dates. A former seat is its own fact, recorded on the Members tab.
+   */
+  const seatStatements =
+    capacity || closedTerm
+      ? []
+      : [
+          buildLeadershipSeatStatement(db, actor, {
+            groupId,
+            userId: input.userId,
+            seat,
+            joinedAt: startsAt,
+            at,
+          }),
+        ];
   if (
     !closedTerm &&
     (await first(
@@ -303,11 +329,11 @@ export async function assignLocalGroupLeadership(
   const title =
     input.title ??
     defaultGroupLeadershipTitle({ lead: titles.lead_title, deputyLead: titles.deputy_lead_title }, roleId);
-  const startsAt = input.startsAt ?? at;
   const userRoleId = uuid();
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [groupId]),
+      ...seatStatements,
       db
         .prepare(
           `INSERT INTO user_roles
@@ -318,8 +344,8 @@ export async function assignLocalGroupLeadership(
         .bind(
           userRoleId,
           input.userId,
-          capacity.identity_id,
-          capacity.member_id,
+          seat.identity_id,
+          seat.member_id,
           roleId,
           groupId,
           title,
@@ -339,12 +365,15 @@ export async function assignLocalGroupLeadership(
         userRoleId,
         {
           userId: input.userId,
-          identityId: capacity.identity_id,
-          memberId: capacity.member_id,
+          identityId: seat.identity_id,
+          memberId: seat.member_id,
           roleId,
           title,
           startsAt,
           endsAt: input.endsAt ?? null,
+          // The appointment seated them as well, which is a fact about the
+          // group's roster and not only about the grant.
+          seated: seatStatements.length > 0,
         },
       ),
     ]);

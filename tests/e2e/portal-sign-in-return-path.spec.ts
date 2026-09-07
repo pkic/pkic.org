@@ -1,3 +1,6 @@
+/**
+ * @covers account.7.1
+ */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { clientIpForIdentity, openEmailSignIn } from "./helpers/portal-auth";

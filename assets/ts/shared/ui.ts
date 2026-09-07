@@ -49,6 +49,7 @@ export function showToast(targetId: string, message: string, type: ToastType = "
  * point for them.
  */
 export {
+  EMPTY_DATE,
   formatCalendarDate,
   formatDate,
   formatDateRange,

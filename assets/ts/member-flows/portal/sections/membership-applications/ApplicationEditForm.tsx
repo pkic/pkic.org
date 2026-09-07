@@ -30,7 +30,7 @@ export function ApplicationEditForm({
   saving,
 }: {
   form: ApplicationEditFormValue;
-  categories: MembershipCategoryCatalogEntry[];
+  categories: readonly MembershipCategoryCatalogEntry[];
   onChange: (updater: (f: ApplicationEditFormValue) => ApplicationEditFormValue) => void;
   disabled: boolean;
   error: string;

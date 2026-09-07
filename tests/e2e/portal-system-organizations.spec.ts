@@ -1,3 +1,6 @@
+/**
+ * @covers organization.10.7
+ */
 import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -172,7 +175,6 @@ test("permitted staff manage organizations through the canonical domain API", as
   // Editing the account is administration, not part of what the record says
   // about the person, so it is disclosed rather than stacked under the record.
   await page.getByRole("button", { name: "Account administration", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Show account administration" }).click();
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   await expect(page.locator("#user-organizationName")).toHaveCount(0);
   await expect(page.locator("#user-jobTitle")).toHaveCount(0);

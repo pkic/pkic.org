@@ -1,3 +1,6 @@
+/**
+ * @covers profile.11.4
+ */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -65,11 +68,13 @@ test("a contact record offers different things on your own page than on someone 
   await expect(page.getByRole("button", { name: "Message — not available yet" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Follow — not available yet" })).toHaveCount(0);
 
-  // The record is still the reader's to administer: the actions menu is there
-  // and the account section opens, which is what "your own record" means for a
-  // staff account rather than a reduced page.
+  // The record is still the reader's to administer: the actions menu is there,
+  // the name is editable without hunting for it, and the account section opens
+  // for the things that genuinely are administration.
   await expect(page.getByRole("button", { name: "Record actions" })).toBeVisible();
-  await page.getByRole("button", { name: "Account administration", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Show account administration" }).click();
   await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeVisible();
+  const administration = page.getByRole("button", { name: "Account administration", exact: true });
+  await expect(administration).toHaveAttribute("aria-expanded", "false");
+  await administration.click();
+  await expect(administration).toHaveAttribute("aria-expanded", "true");
 });

@@ -17,7 +17,9 @@
  * not here).
  */
 
-const EMPTY = "—";
+/** What every formatter here writes when there is no date, or none it can read. */
+export const EMPTY_DATE = "—";
+const EMPTY = EMPTY_DATE;
 
 /** Anything that is not a parseable instant renders as the empty marker. */
 function toDate(value: string): Date | null {

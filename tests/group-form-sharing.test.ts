@@ -654,4 +654,124 @@ describe("group form sharing", () => {
       error: { code: "FORM_WORKFLOW_REQUIRED" },
     });
   });
+
+  /*
+   * Answering a placed form, and what the answer is attached to.
+   *
+   * A definition is edited while people are answering it — a question
+   * reworded, a choice removed — and an answer read back against the wrong
+   * revision is an answer to a question nobody was asked. The submission
+   * records the revision it was made against, and refuses when that revision
+   * has moved under it.
+   */
+  it("stores an answer, and the placement it was given through", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+
+    const submissionId = await submitGroupFormResponse(
+      env.DB,
+      { userId: fixture.memberId },
+      fixture.grantee.id,
+      fixture.placementId,
+      { answers: { topic: "The answer as given" } },
+    );
+
+    const [stored] = await queryAll<{ data_json: string; placement_id: string; submitted_by_user_id: string }>(
+      env.DB,
+      `SELECT a.data_json, s.placement_id, s.submitted_by_user_id
+         FROM form_submission_answers a JOIN form_submissions s ON s.id = a.submission_id
+        WHERE a.submission_id = ? AND a.field_key = 'topic'`,
+      [submissionId],
+    );
+    expect(JSON.parse(stored?.data_json ?? "null")).toBe("The answer as given");
+    // Which placement it came through, not merely which form: the same
+    // definition is answered in more than one place.
+    expect(stored?.placement_id).toBe(fixture.placementId);
+    expect(stored?.submitted_by_user_id).toBe(fixture.memberId);
+  });
+
+  /*
+   * The revision guard, doing the job it exists for.
+   *
+   * A respondent reads the questions, and the definition is edited before
+   * their answer lands. Accepting it would file an answer under a question
+   * nobody was asked, so the write asserts the revision it read and the
+   * trigger refuses when it has moved.
+   */
+  it("refuses an answer whose definition was edited after the respondent read it", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+    const racingDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `UPDATE forms SET updated_at = ?
+            WHERE id = (SELECT form_id FROM form_placements WHERE id = ?)`,
+      )
+        .bind("2999-01-01T00:00:00.000Z", fixture.placementId)
+        .run(),
+    );
+
+    await expect(
+      submitGroupFormResponse(racingDb, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
+        answers: { topic: "Answered against the old questions" },
+      }),
+    ).rejects.toBeTruthy();
+
+    // Nothing half-written: the answer and its submission go together or not
+    // at all.
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM form_submissions WHERE placement_id = ?",
+        [fixture.placementId],
+      ),
+    ).toEqual([{ total: 0 }]);
+  });
+
+  it("refuses an answer to a placement whose window has closed", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+    await env.DB.prepare("UPDATE form_placements SET closes_at = ? WHERE id = ?")
+      .bind("2020-01-01T00:00:00.000Z", fixture.placementId)
+      .run();
+
+    await expect(
+      submitGroupFormResponse(env.DB, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
+        answers: { topic: "Too late" },
+      }),
+    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_ACCEPTING_RESPONSES" });
+
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM form_submissions WHERE placement_id = ?",
+        [fixture.placementId],
+      ),
+    ).toEqual([{ total: 0 }]);
+  });
+
+  it("refuses an answer to a placement that has not opened yet", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+    await env.DB.prepare("UPDATE form_placements SET opens_at = ? WHERE id = ?")
+      .bind("2999-01-01T00:00:00.000Z", fixture.placementId)
+      .run();
+
+    await expect(
+      submitGroupFormResponse(env.DB, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
+        answers: { topic: "Too early" },
+      }),
+    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_ACCEPTING_RESPONSES" });
+  });
 });

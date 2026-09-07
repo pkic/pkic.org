@@ -42,6 +42,17 @@
     display: flex;
   }
 
+  /*
+   * The slot is a flex row, so a control that is not itself an `.pk-input`
+   * has to be told to fill it. A composite control — the user picker, which
+   * is a box with a results popup under it — otherwise shrank to its
+   * content and sat as a stub beside a full-width field above it.
+   */
+  .pk-field__control > * {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .pk-field__help {
     margin: 0;
     font-size: var(--pk-text-xs);

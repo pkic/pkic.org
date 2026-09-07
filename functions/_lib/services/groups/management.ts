@@ -29,6 +29,7 @@ import {
   requireGroupManagement,
 } from "./governance";
 import { getGroup } from "./read-model";
+import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 
 interface GroupTypeRow {
   key: string;
@@ -104,21 +105,10 @@ export async function listGroupTypes(
   return { groupTypes: rows.map(mapGroupType), total };
 }
 
-function slugify(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function availableSlug(db: DatabaseLike, requested: string): Promise<string> {
-  const root = slugify(requested) || "group";
-  let candidate = root;
-  for (let suffix = 2; await first(db, "SELECT id FROM groups WHERE slug = ?", [candidate]); suffix += 1) {
-    candidate = `${root}-${suffix}`;
-  }
-  return candidate;
+  return firstFreeSlug(slugifyOr(requested, "group"), async (candidate) =>
+    Boolean(await first(db, "SELECT id FROM groups WHERE slug = ?", [candidate])),
+  );
 }
 
 async function requireActiveGroupType(db: DatabaseLike, key: string): Promise<GroupTypeRow> {

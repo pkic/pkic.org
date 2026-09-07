@@ -12,6 +12,10 @@
  * Staff authentication happens once for the whole file (`beforeAll`, saved as
  * `storageState`), the same way `portal-management-verification.spec.ts` and
  * `portal-groups.spec.ts` do it, to stay under the local EMAIL_RATE_LIMITER.
+ * @covers vote.5.7
+ * @covers vote.5.8
+ * @covers vote.5.9
+ * @covers vote.5.10
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -337,7 +341,9 @@ test.describe("Group votes: lifecycle actions, proposal moderation, and sharing"
 
     const shareForm = sharing.getByRole("form", { name: "Share this vote" });
     await shareForm.getByLabel("Group").fill("Cryptographic Module");
-    await page.getByRole("option", { name: /Cryptographic Module Working Group/ }).click();
+    // Exact: an option's name carries its group type too, and a substring
+    // match will find every group whose name merely contains this one.
+    await page.getByRole("option", { name: "Cryptographic Module Working Group (Working Group)", exact: true }).click();
     await shareForm.getByLabel("Capability").selectOption("participate");
     const shared = page.waitForResponse(
       (response) =>

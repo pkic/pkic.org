@@ -15,6 +15,7 @@
  * donation flow), so the checkout-session creation call is mocked to
  * return a same-origin redirect URL, verifying the form submits the
  * right payload and follows the returned URL.
+ * @covers vote.5.11
  */
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";

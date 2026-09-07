@@ -276,7 +276,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalHasGlobalPermission(readerAndWriter, "users:write")).toBe(true);
   });
 
-  it("exposes membership applications only to a global membership reader", () => {
+  it("exposes the members roll and the applications queue only to a global membership reader", () => {
     const reader = portalSessionFixture({
       staff: true,
       staffRole: "user",
@@ -288,10 +288,17 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "membership:read", contextType: "group", contextId: "group-1" }],
     });
 
+    // Two entries, one permission: the roll of members the consortium has,
+    // and the queue of applications to become one.
+    expect(portalNavigationItems(reader)).toContainEqual({
+      path: "/members",
+      section: "members",
+      label: "Members",
+    });
     expect(portalNavigationItems(reader)).toContainEqual({
       path: "/membership/applications",
       section: "membership",
-      label: "Membership",
+      label: "Applications",
     });
     expect(portalSystemNavigationItems(reader)).toEqual([
       {
@@ -303,6 +310,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(
       expect.objectContaining({ path: "/membership/applications" }),
     );
+    expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/members" }));
     expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
   });
 

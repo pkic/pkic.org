@@ -50,6 +50,7 @@ import { insertOrgRepresentative, insertUser } from "./helpers/membership";
 import { userRecordColumns, type UserRecord } from "../functions/_lib/services/users";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
+import { queryAll } from "./helpers/context";
 
 interface Fixture {
   admin: UserBackedAuthAdmin;
@@ -1387,5 +1388,50 @@ describe("group event sharing", () => {
         .bind(fixture.memberId)
         .first<number>("total"),
     ).toBe(0);
+  });
+
+  /*
+   * An event that does not take registrations at all.
+   *
+   * The group path folds `registration_mode <> 'no_registration'` into the
+   * same atomic authorization guard as live membership and the register grant,
+   * so all three refusals arrive as EVENT_REGISTRATION_ACCESS_REQUIRED. The
+   * public path checks the mode separately and says EVENT_REGISTRATION_DISABLED.
+   *
+   * The single code is the price of re-checking everything in one statement at
+   * commit time, which is what stops a grant revoked mid-request from landing
+   * a registration. What matters here is that it is refused and nothing is
+   * written; the caller being told "access" when the truth is "this event does
+   * not register anybody" is a diagnosability cost worth knowing about.
+   */
+  it("refuses a registration for an event that does not use registration", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await env.DB.prepare("UPDATE events SET registration_mode = 'no_registration' WHERE id = ?")
+      .bind(fixture.eventId)
+      .run();
+
+    const response = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" } });
+    expect(
+      await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?", [
+        fixture.eventId,
+      ]),
+    ).toEqual([{ total: 0 }]);
   });
 });

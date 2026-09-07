@@ -10,7 +10,7 @@ import { seedOrganizationAggregate, addRepresentative as addRepresentativeRow, i
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import {
-  membersListResponseSchema,
+  publicMembersListResponseSchema,
   memberWallResponseSchema,
   publicMemberDetailSchema,
 } from "../assets/shared/schemas/members-directory";
@@ -119,7 +119,7 @@ describe("GET /api/v1/members (public directory)", () => {
     const response = await callPublicApi("https://pkic.org/api/v1/members");
 
     expect(response.status).toBe(200);
-    const body = membersListResponseSchema.parse(await response.json());
+    const body = publicMembersListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
     expect(body.members).toHaveLength(1);
     expect(body.members[0].name).toBe("Active Org");
@@ -139,7 +139,7 @@ describe("GET /api/v1/members (public directory)", () => {
     await addRepresentativeRow(env.DB, memberId, secondUserId);
 
     const response = await callPublicApi("https://pkic.org/api/v1/members");
-    const body = membersListResponseSchema.parse(await response.json());
+    const body = publicMembersListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
   });
 
@@ -176,7 +176,7 @@ describe("GET /api/v1/members (public directory)", () => {
 
     const response = await callPublicApi("https://pkic.org/api/v1/members");
     expect(response.status).toBe(200);
-    const body = membersListResponseSchema.parse(await response.json());
+    const body = publicMembersListResponseSchema.parse(await response.json());
     expect(body.members[0].website).toBeNull();
     expect(body.members[0].logoUrl).toBeNull();
   });
@@ -196,7 +196,7 @@ describe("GET /api/v1/members (public directory)", () => {
     });
 
     const response = await callPublicApi("https://pkic.org/api/v1/members?q=acme");
-    const body = membersListResponseSchema.parse(await response.json());
+    const body = publicMembersListResponseSchema.parse(await response.json());
     expect(body.page.total).toBe(1);
     expect(body.members[0].name).toBe("Acme Cryptography");
   });
@@ -211,11 +211,11 @@ describe("GET /api/v1/members (public directory)", () => {
     await seedIndividualMember({ userId: crypto.randomUUID(), status: "active", tier: "H6" });
 
     const orgOnly = await callPublicApi("https://pkic.org/api/v1/members?group=organization");
-    const orgBody = membersListResponseSchema.parse(await orgOnly.json());
+    const orgBody = publicMembersListResponseSchema.parse(await orgOnly.json());
     expect(orgBody.page.total).toBe(1);
 
     const independentOnly = await callPublicApi("https://pkic.org/api/v1/members?group=independent");
-    const independentBody = membersListResponseSchema.parse(await independentOnly.json());
+    const independentBody = publicMembersListResponseSchema.parse(await independentOnly.json());
     expect(independentBody.page.total).toBe(1);
   });
 
@@ -231,7 +231,7 @@ describe("GET /api/v1/members (public directory)", () => {
 
     const response = await callPublicApi("https://pkic.org/api/v1/members?sort=-name&limit=1&offset=1");
     expect(response.status).toBe(200);
-    const body = membersListResponseSchema.parse(await response.json());
+    const body = publicMembersListResponseSchema.parse(await response.json());
     expect(body.members.map(({ name }) => name)).toEqual(["Beta Org"]);
     expect(body.page).toEqual({ limit: 1, offset: 1, total: 3, hasMore: true });
   });

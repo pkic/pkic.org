@@ -6,6 +6,7 @@
  * the requested membership against the caller's own live eligibility, which is
  * the part worth proving in a browser: a context the caller does not hold must
  * be refused even though the request is well formed and the session is valid.
+ * @covers account.7.9
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

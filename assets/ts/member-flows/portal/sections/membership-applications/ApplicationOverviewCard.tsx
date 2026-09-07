@@ -32,7 +32,7 @@ export function ApplicationOverviewCard({
   onSave,
 }: {
   detail: MembershipApplicationDetail;
-  categories: MembershipCategoryCatalogEntry[];
+  categories: readonly MembershipCategoryCatalogEntry[];
   canWrite: boolean;
   onSave: (edits: {
     applicantName: string;

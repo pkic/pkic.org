@@ -1,8 +1,18 @@
+/**
+ * @covers system.12.1
+ */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { runRowAction } from "./helpers/data-table";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
+import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
+
+/** A one-pixel JPEG: enough to be a real image without carrying one around. */
+const TINY_JPEG = Buffer.from(
+  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
+  "base64",
+);
 
 test("permitted staff manage users through the canonical domain API", async ({ page }) => {
   const staffEmail = e2eAdminEmail("portal-users");
@@ -32,11 +42,12 @@ test("permitted staff manage users through the canonical domain API", async ({ p
   // real heading now, and a role locator survives the next restyle too.
   await expect(page.getByRole("heading", { name: staffEmail, level: 2 })).toBeVisible();
 
-  // Editing the account is administration, not part of what the record says
-  // about the person, so it is disclosed rather than stacked under the record.
-  await page.getByRole("button", { name: "Account administration", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Show account administration" }).click();
-
+  /*
+   * The name is reachable without opening anything. It is the record's own
+   * title, and a person whose name came across a migration wrong is exactly
+   * who this page is opened to fix — so it must not sit behind a disclosure
+   * somebody has to know about.
+   */
   await page.getByRole("button", { name: "Edit profile", exact: true }).click();
   const preferredName = page.getByLabel("Preferred name");
   const saveResponse = page.waitForResponse(
@@ -179,4 +190,71 @@ test("permitted staff grant and revoke the administrator role from a user list r
   expect((await revokeResponse).status()).toBe(200);
   await expect(row.getByText("Administrator", { exact: true })).toHaveCount(0);
   await expect(row.getByText("User", { exact: true })).toBeVisible();
+});
+
+/*
+ * Staff putting a photograph on somebody else's record.
+ *
+ * The member's own upload has been walked for a while; the staff one never
+ * was, and it was reported as simply not working. Both run the same controller
+ * and the same two dialogs, but through a different manager and a different
+ * endpoint, so the coverage of one said nothing about the other.
+ */
+test("staff upload a photograph onto a user record", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const email = `staff-headshot-${suffix}@staff-headshot-${suffix}.test`;
+
+  await signInToPortal(page, e2eAdminEmail("portal-user-headshot"));
+  await approveMemberThroughReview(page, {
+    email,
+    name: `Staff Headshot ${suffix}`,
+    organizationName: `Staff Headshot Org ${suffix}`,
+  });
+
+  await page.goto("/portal/#/users");
+  const search = page.getByPlaceholder("email or name");
+  await search.fill(email);
+  await search.press("Enter");
+  const row = page.locator("tr").filter({ hasText: email });
+  await expect(row).toBeVisible();
+  await row.click();
+
+  // The photograph is administration, so it sits behind the disclosure.
+  await page.getByRole("button", { name: "Account administration", exact: true }).click();
+  await page.getByRole("button", { name: "Upload headshot" }).click();
+  await page.locator('input[type="file"][accept="image/jpeg,image/png,image/webp"]').setInputFiles({
+    name: "headshot.jpg",
+    mimeType: "image/jpeg",
+    buffer: TINY_JPEG,
+  });
+
+  const disclaimer = page.getByRole("dialog", { name: "Before uploading a photo" });
+  await expect(disclaimer).toBeVisible({ timeout: 10_000 });
+  await disclaimer.locator(".hsd-agree").check();
+  await disclaimer.locator(".hsd-confirm").click();
+
+  const crop = page.getByRole("dialog", { name: "Crop headshot" });
+  await expect(crop).toBeVisible({ timeout: 10_000 });
+  const uploaded = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/users\/[^/]+\/headshot$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "PUT",
+  );
+  await crop.locator(".crop-headshot-confirm").click();
+  expect((await uploaded).status()).toBe(200);
+
+  /*
+   * And the portal shows it back, which is the half that was reported as
+   * working publicly but not here. Two projections serve the same photograph:
+   * the record's own detail builds the staff-only `/headshot` path, the users
+   * list builds the public `/headshots/{file}` one — so the assertion accepts
+   * either rather than pinning the reader to one of them.
+   */
+  const portrait = page.locator('img[src*="/headshot"]').first();
+  await expect(portrait).toBeVisible({ timeout: 15_000 });
+  // Visible is not the same as loaded: a broken image still occupies its box,
+  // and a 404 from the image endpoint is exactly the reported symptom.
+  await expect
+    .poll(async () => portrait.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
+    .toBeGreaterThan(0);
 });

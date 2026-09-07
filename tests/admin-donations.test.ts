@@ -243,6 +243,38 @@ describe("donation-management authorization", () => {
     ).resolves.toBe(1);
   });
 
+  /*
+   * Revocation lands on the session that is already open.
+   *
+   * The token is proof of identity, not a carried set of permissions: the
+   * grants behind an authorization decision are computed from D1 on every
+   * request. So taking a permission away takes it away now, on the token the
+   * holder is already using, with nothing to wait for and nothing to refresh.
+   *
+   * Worth pinning because the tempting optimization is the opposite one —
+   * putting the grants in the token to save the read — and it would buy that
+   * saving with a window in which a revoked permission still works.
+   */
+  it("refuses a revoked permission on the session token that was already working", async () => {
+    const staff = await createStaffToken("donations:sync");
+
+    expect((await call(staff.token, "/api/v1/donations/sync", { method: "POST", body: "{}" })).status).toBe(200);
+
+    await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+      .bind(staff.grantId)
+      .run();
+
+    /*
+     * Same token, same session, no re-authentication in between — and refused
+     * as unauthenticated rather than forbidden, because this grant was the
+     * whole basis of the holder's staff standing. Taking it away does not
+     * leave them a staff actor short of one permission; it leaves them no
+     * staff actor at all. A user whose standing came from elsewhere would meet
+     * a 403 here instead.
+     */
+    expect((await call(staff.token, "/api/v1/donations/sync", { method: "POST", body: "{}" })).status).toBe(401);
+  });
+
   it("removes the legacy admin donation routes", async () => {
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
     const token = await createAdminSession(env.DB, admin.id, `legacy-donation-${crypto.randomUUID()}`);

@@ -30,7 +30,7 @@ export function ApplicationDetailView({
   canApprove,
 }: {
   applicationId: string;
-  categories: MembershipCategoryCatalogEntry[];
+  categories: readonly MembershipCategoryCatalogEntry[];
   canWrite: boolean;
   canApprove: boolean;
 }) {

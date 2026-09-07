@@ -9,7 +9,14 @@
  *
  * Deliberately not icons. A glyph set would be another asset pipeline and a
  * licensing question for a set of marks that are two characters wide anyway.
+ *
+ * The words beside the mark name the site — "LinkedIn", "GitHub", or the bare
+ * host for somewhere the table has no name for — rather than printing the
+ * address. A profile link is read as "where", not as a string to transcribe,
+ * and a long one wrapped over three lines is what issue #13 objected to. The
+ * address stays reachable as the link's tooltip and in the status bar.
  */
+import { getLinkLabel } from "../../shared/schemas/links";
 import "./LinkList.css";
 
 /**
@@ -48,29 +55,39 @@ export function linkMark(url: string): string {
   return "↗";
 }
 
-/** What the reader sees: the address without the scheme it never types. */
-export function linkLabel(url: string): string {
-  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-}
-
 export interface LinkListProps {
   links: readonly string[];
+  /**
+   * Whose links these are, folded into each link's accessible name.
+   *
+   * A page showing ten people's links otherwise offers ten links all named
+   * "LinkedIn", which is nothing to choose between when they are read out on
+   * their own. Omitted where the subject is already the page.
+   */
+  ownerName?: string;
 }
 
-export function LinkList({ links }: LinkListProps) {
+export function LinkList({ links, ownerName }: LinkListProps) {
   if (links.length === 0) return null;
 
   return (
     <ul class="pk-link-list">
       {links.map((link) => (
         <li key={link}>
-          <a class="pk-link-list__link" href={link} rel="noreferrer noopener" target="_blank">
+          <a
+            class="pk-link-list__link"
+            href={link}
+            rel="noreferrer noopener"
+            target="_blank"
+            title={link}
+            aria-label={ownerName ? `${ownerName} on ${getLinkLabel(link)}` : undefined}
+          >
             {/* Decoration: the address beside it is the accessible name, and
                 "in" announced before it would only be noise. */}
             <span class="pk-link-list__mark" aria-hidden="true">
               {linkMark(link)}
             </span>
-            <span class="pk-link-list__label">{linkLabel(link)}</span>
+            <span class="pk-link-list__label">{getLinkLabel(link)}</span>
           </a>
         </li>
       ))}

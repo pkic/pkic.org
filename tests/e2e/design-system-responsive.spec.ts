@@ -10,6 +10,8 @@
  * `/design/` is the right page for it: it is framework-free — it loads no
  * Bootstrap at all — so anything wrong here is the design system's own doing
  * and not something Bootstrap was quietly propping up.
+ * @covers presentation.13.2
+ * @covers presentation.13.3
  */
 
 import { expect, test } from "@playwright/test";

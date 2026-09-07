@@ -14,11 +14,17 @@ import { memberProfileId as stableId } from "./seed-ids.mjs";
  * writes hangs off one of them. A demo fixture adds no rows to a group it did
  * not create. Held and attended live beside the seat they belong to, so the
  * two can no longer be edited apart.
+ *
+ * The names carry no shipped group's name inside them either. Naming these
+ * after the real groups they stand in for — "Cryptographic Module Working
+ * Group (demo)" — put two matches behind every group picker that searches by
+ * substring, and a spec choosing the real one by name got an ambiguous
+ * locator instead. A fixture shares the namespace; it must not crowd it.
  */
 export const DEMO_GROUPS = [
   {
     slug: "demo-cbom",
-    name: "CBOM Profiles Working Group (demo)",
+    name: "Demo Profiles Working Group",
     type: "working_group",
     title: "Chair",
     held: 18,
@@ -26,7 +32,7 @@ export const DEMO_GROUPS = [
   },
   {
     slug: "demo-cm",
-    name: "Cryptographic Module Working Group (demo)",
+    name: "Demo Modules Working Group",
     type: "working_group",
     title: "Delegate",
     held: 12,
@@ -34,7 +40,7 @@ export const DEMO_GROUPS = [
   },
   {
     slug: "demo-council",
-    name: "Executive Council (demo)",
+    name: "Demo Governing Council",
     type: "board",
     title: null,
     held: 11,

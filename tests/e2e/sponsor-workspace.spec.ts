@@ -216,9 +216,11 @@ test.describe("portal sponsor workspace", () => {
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/portal\/$/);
-    await expect(page.getByRole("heading", { name: "PKI Consortium Portal" })).toBeVisible();
+    // The sign-in screen names itself "Sign in"; the card that used to be
+    // titled after the portal is now the portal's front door proper.
+    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("heading", { name: "PKI Consortium Portal" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
 
     // ── Self-service "request a new link" flow, keyed by the event's public
     // slug rather than its internal id (a sponsor

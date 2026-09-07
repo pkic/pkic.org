@@ -110,8 +110,13 @@
     transform: scale(1.05);
   }
 
-  // Default (light)
-  background: #ffffff;
+  /*
+   * The surface token, not a literal white. These cards carry the page's own
+   * ink, which the dark theme flips to near-white — a card that keeps its
+   * white ground then holds white text on white. In the light theme the token
+   * *is* #ffffff, so nothing here changes for the site as it ships today.
+   */
+  background: var(--pk-surface);
   border: 1px solid rgba(0, 0, 0, 0.05);
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.04),
@@ -538,7 +543,9 @@ $wg-colors: (
   position: relative; // the positioned ancestor `.pk-stretched` covers
   border-radius: 1rem;
   padding: 1.25rem;
-  background: #fff;
+  // The surface token: this card inherits the page's ink, so a hardcoded
+  // white left near-white names unreadable under the dark theme.
+  background: var(--pk-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;

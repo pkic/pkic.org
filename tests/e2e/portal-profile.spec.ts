@@ -8,6 +8,9 @@
  * two controls that live beside the form rather than in it: the headshot
  * uploader (crop-and-disclaimer flow, never previously driven end to end by
  * any browser spec) and the organization-page visibility switch.
+ * @covers profile.11.1
+ * @covers profile.11.2
+ * @covers profile.11.3
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

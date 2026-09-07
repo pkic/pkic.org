@@ -5,6 +5,7 @@
  * and empty state. Nothing exercised this page before; the dashboard's
  * "Needs your voice" panel (Home) surfaces the same vote and application
  * data as an attention list, but never this full-record view.
+ * @covers profile.11.6
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

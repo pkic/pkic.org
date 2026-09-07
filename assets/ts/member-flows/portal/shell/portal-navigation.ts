@@ -110,6 +110,7 @@ export type PortalSectionKey =
   | "groups"
   | "events"
   | "organizations"
+  | "members"
   | "membership"
   | "users"
   | "donations"
@@ -171,9 +172,23 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     sidebarAccess: (session) => portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]),
   },
   {
+    // The consortium's own roll — organizations' representatives and
+    // individual members in one list. Distinct from Organizations, which is
+    // the organization records themselves, and from the applications queue
+    // below, which is the same subject before it became a membership.
+    section: "members",
+    path: "/members",
+    label: "Members",
+    sidebar: true,
+    access: (session) => portalHasGlobalPermission(session, "membership:read"),
+  },
+  {
+    // Labeled for what it holds rather than for the domain it belongs to:
+    // "Membership" beside "Members" told a reader nothing about which of the
+    // two they wanted.
     section: "membership",
     path: "/membership/applications",
-    label: "Membership",
+    label: "Applications",
     sidebar: true,
     access: (session) => portalHasGlobalPermission(session, "membership:read"),
   },

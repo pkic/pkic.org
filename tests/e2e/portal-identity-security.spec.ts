@@ -6,6 +6,10 @@
  * staff or member session — had no such coverage. A capability that could be
  * replayed, or that stayed in the URL and therefore in history, would be a
  * session-handover bug that every functional journey still passes.
+ * @covers account.7.2
+ * @covers account.7.3
+ * @covers account.7.4
+ * @covers account.7.5
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

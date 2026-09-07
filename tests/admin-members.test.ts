@@ -366,6 +366,116 @@ describe("membership provisioning and capacities", () => {
     expect(orgRows).toHaveLength(1);
   });
 
+  /*
+   * The membership itself, not one identity acting under it. An
+   * organization's representatives inherit its category and standing, so
+   * changing either through one of them is refused on the capacities route
+   * and belongs on the aggregate.
+   */
+  describe("changing a membership", () => {
+    async function createOrganizationMember(): Promise<string> {
+      const created = await call(adminToken, "/api/v1/members", {
+        method: "POST",
+        body: JSON.stringify(orgMemberBody({ workingGroupSlugs: [] })),
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      const { organizationId } = (await created.json()) as { organizationId: string };
+      const [aggregate] = await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM members WHERE organization_id = ?",
+        organizationId,
+      );
+      return aggregate.id;
+    }
+
+    it("changes the category and the standing, and records the change", async () => {
+      const memberId = await createOrganizationMember();
+
+      const response = await call(adminToken, `/api/v1/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ membershipCategory: "A", status: "inactive" }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toEqual({
+        member: { id: memberId, memberType: "organization", membershipCategory: "A", status: "inactive" },
+      });
+
+      // Ending a membership is a standing, not a deletion: the row stays.
+      expect(await queryAll<{ status: string }>(env.DB, "SELECT status FROM members WHERE id = ?", memberId)).toEqual([
+        { status: "inactive" },
+      ]);
+      expect(
+        await queryAll<{ category_code: string }>(
+          env.DB,
+          "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+          memberId,
+        ),
+      ).toEqual([{ category_code: "A" }]);
+      expect(
+        await queryAll<{ action: string }>(
+          env.DB,
+          "SELECT action FROM audit_log WHERE entity_type = 'member' AND entity_id = ? AND action = 'membership_updated'",
+          memberId,
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("refuses a category that belongs to the other kind of membership", async () => {
+      const memberId = await createOrganizationMember();
+
+      // H6 describes a person with no organization behind them, so an
+      // organization cannot hold it.
+      const response = await call(adminToken, `/api/v1/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ membershipCategory: "H6" }),
+      });
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        "MEMBERSHIP_CATEGORY_KIND_MISMATCH",
+      );
+      expect(
+        await queryAll<{ category_code: string }>(
+          env.DB,
+          "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+          memberId,
+        ),
+      ).toEqual([{ category_code: "F" }]);
+    });
+
+    it("refuses a membership that does not exist", async () => {
+      const response = await call(adminToken, `/api/v1/members/${crypto.randomUUID()}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "inactive" }),
+      });
+      expect(response.status).toBe(404);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe("MEMBER_NOT_FOUND");
+    });
+
+    it("refuses a caller without membership:write", async () => {
+      // Read, and only read: `membership:write` is what this route demands,
+      // and a reader must not be able to end anybody's membership.
+      const readerId = await insertUser(`members-reader-${crypto.randomUUID()}@example.test`);
+      await env.DB.prepare(
+        `INSERT INTO permission_grants
+           (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, 'membership:read', NULL, NULL, ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), readerId, adminId)
+        .run();
+      const readerToken = await createAdminSession(env.DB, readerId, `members-reader-${crypto.randomUUID()}`);
+      const memberId = await createOrganizationMember();
+
+      const response = await call(readerToken, `/api/v1/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "inactive" }),
+      });
+      expect(response.status).toBe(403);
+      expect(await queryAll<{ status: string }>(env.DB, "SELECT status FROM members WHERE id = ?", memberId)).toEqual([
+        { status: "active" },
+      ]);
+    });
+  });
+
   it("lists created members unfiltered by status", async () => {
     await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
 

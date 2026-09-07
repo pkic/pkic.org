@@ -10,6 +10,7 @@
  * This needs the suite's origin to be `localhost`. WebAuthn rejects an IP
  * literal as a relying-party id, so a run served from 127.0.0.1 fails in the
  * browser before the application is reached — see scripts/e2e-start.sh.
+ * @covers account.7.7
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

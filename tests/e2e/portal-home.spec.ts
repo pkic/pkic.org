@@ -4,6 +4,7 @@
  * identity holds. Every panel reads its own bounded server page; this was
  * previously exercised only through `portal-personas.spec.ts`'s intercepted
  * fixtures, never against the real API a signed-in member actually gets.
+ * @covers profile.11.5
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

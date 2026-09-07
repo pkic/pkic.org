@@ -2,11 +2,11 @@ import { useState } from "preact/hooks";
 import {
   defaultGroupLeadershipTitle,
   groupLeadershipAssignSchema,
+  groupLeadershipCandidatesListResponseSchema,
   groupLeadershipListResponseSchema,
-  groupMembershipsManagementListResponseSchema,
+  type GroupLeadershipCandidate,
   type GroupLeadershipRoleId,
   type GroupLeadershipTitles,
-  type GroupMembership,
 } from "../../../../../shared/schemas/groups";
 import { EnumSelect } from "../../../../components/EnumSelect";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -21,20 +21,28 @@ import { fromCalendarDateInput, toCalendarDateInput } from "../../ui";
 import { GroupLeadershipTitleInput } from "./GroupLeadershipTermForm";
 import { capacityLabel, groupLeadershipRoleOptions } from "./group-leadership";
 
-function participantLabel(membership: GroupMembership): string {
-  return `${membership.userName} — ${capacityLabel(membership)}`;
+function candidateLabel(candidate: GroupLeadershipCandidate): string {
+  return `${candidate.userName} — ${capacityLabel(candidate)}`;
 }
 
-function leadershipCapacityCatalog(groupId: string): ServerCatalog<GroupMembership, unknown> {
+/**
+ * Who may be appointed, which is not the same list as who is seated.
+ *
+ * This read the group's own membership roster, so a group whose participation
+ * follows from affiliation rather than from a taken seat — the consortium's
+ * All Members forum — offered nobody at all and answered "no matches" for
+ * people the system knows (issue #26). The candidates endpoint answers the
+ * question the form is actually asking.
+ */
+function leadershipCandidateCatalog(groupId: string): ServerCatalog<GroupLeadershipCandidate, unknown> {
   return {
-    endpoint: `/api/v1/groups/${encodeURIComponent(groupId)}/memberships`,
-    params: { active: "true" },
+    endpoint: `/api/v1/groups/${encodeURIComponent(groupId)}/leadership/candidates`,
     sort: "user_name",
-    responseSchema: groupMembershipsManagementListResponseSchema,
-    resolveItems: (response) => groupMembershipsManagementListResponseSchema.parse(response).memberships,
-    resolvePage: (response) => groupMembershipsManagementListResponseSchema.parse(response).page,
-    itemKey: (membership) => membership.id,
-    itemLabel: participantLabel,
+    responseSchema: groupLeadershipCandidatesListResponseSchema,
+    resolveItems: (response) => groupLeadershipCandidatesListResponseSchema.parse(response).candidates,
+    resolvePage: (response) => groupLeadershipCandidatesListResponseSchema.parse(response).page,
+    itemKey: (candidate) => candidate.identityId,
+    itemLabel: candidateLabel,
   };
 }
 
@@ -55,7 +63,7 @@ export function GroupLeadershipAssignmentForm({
   onAssigned: () => Promise<void>;
   onCancel: () => void;
 }) {
-  const [membership, setMembership] = useState<GroupMembership | null>(null);
+  const [candidate, setCandidate] = useState<GroupLeadershipCandidate | null>(null);
   const [roleId, setRoleId] = useState<GroupLeadershipRoleId>("role-group_lead");
   const [title, setTitle] = useState(defaultGroupLeadershipTitle(titles, "role-group_lead"));
   const [titleEdited, setTitleEdited] = useState(false);
@@ -73,13 +81,13 @@ export function GroupLeadershipAssignmentForm({
     event.preventDefault();
     // `loading` keeps the submit button focusable rather than disabled, so the
     // guard against a second submission lives here instead of in the markup.
-    if (saving || !membership) return;
+    if (saving || !candidate) return;
     setSaving(true);
     setError(null);
     try {
       const input = groupLeadershipAssignSchema.parse({
-        userId: membership.userId,
-        identityId: membership.identityId,
+        userId: candidate.userId,
+        identityId: candidate.identityId,
         roleId,
         title: title.trim(),
         startsAt: fromCalendarDateInput(startsOn) ?? undefined,
@@ -112,9 +120,17 @@ export function GroupLeadershipAssignmentForm({
       <PanelBody>
         <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submit(event)}>
           <p class="pk-muted pk-small">
-            Choose a participant and the Member they lead on behalf of. An end date in the past records a former term
-            without granting access.
+            Choose a person and the Member they lead on behalf of. An end date in the past records a former term without
+            granting access.
           </p>
+          {/* Said before the manager commits, not discovered afterwards on the
+              Members tab: a leader participates, so appointing somebody the
+              group has not seated yet also seats them. */}
+          {candidate && !candidate.participating && (
+            <p class="pk-muted pk-small">
+              {candidate.userName} does not participate in this group yet, and will be added to it by this assignment.
+            </p>
+          )}
           {error && <ErrorAlert error={error} />}
           {/* One disabled attribute takes the whole group out of play while the
               assignment is in flight, including the search select's own
@@ -125,12 +141,12 @@ export function GroupLeadershipAssignmentForm({
                 <ServerSearchSelect
                   {...control}
                   searchLabel="Participant"
-                  catalog={leadershipCapacityCatalog(groupId)}
-                  value={membership?.id ?? null}
-                  selectedLabel={membership ? participantLabel(membership) : undefined}
+                  catalog={leadershipCandidateCatalog(groupId)}
+                  value={candidate?.identityId ?? null}
+                  selectedLabel={candidate ? candidateLabel(candidate) : undefined}
                   placeholder="Select a person and Member capacity…"
-                  searchPlaceholder="Search name, email, organization, or category…"
-                  onChange={setMembership}
+                  searchPlaceholder="Search name, email, or organization…"
+                  onChange={setCandidate}
                   disabled={saving}
                 />
               )}
@@ -189,7 +205,7 @@ export function GroupLeadershipAssignmentForm({
               size="sm"
               variant="primary"
               loading={saving}
-              disabled={!membership || !title.trim() || !startsOn}
+              disabled={!candidate || !title.trim() || !startsOn}
             >
               {saving ? "Adding…" : "Assign leadership"}
             </Button>

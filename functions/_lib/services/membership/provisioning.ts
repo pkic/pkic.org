@@ -62,6 +62,7 @@ import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/schemas/membership-categories";
 import { prepareClaimDomainForOrganization, prepareTransferApplicationDomainClaim } from "./organization-domain-claims";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 
 export interface ProvisionIdentityInput {
   name: string;
@@ -303,16 +304,35 @@ async function buildResolveOrganizationStatements(
   }
 
   const organizationId = uuid();
+  /*
+   * The organization's public URL, decided here rather than left null.
+   *
+   * `organizations.slug` was introduced for the YAML import, which carried a
+   * hand-written id per member, and nothing else ever wrote it — so an
+   * organization created through the portal had no clean URL and its member
+   * page fell back to `/members/profile/?id=<uuid>`, which is what issue #15
+   * reports. The slug is decided once, at creation, and never rewritten by a
+   * later rename: a member page other sites link to must not move because
+   * somebody corrected a spelling.
+   *
+   * The read is one more pre-batch query alongside the normalized-name lookup
+   * above; the unique index remains the authority, so a slug taken between
+   * this read and the batch fails the insert rather than silently colliding.
+   */
+  const slug = await firstFreeSlug(slugifyOr(input.organizationName as string, "member"), async (candidate) =>
+    Boolean(await first<{ id: string }>(db, "SELECT id FROM organizations WHERE slug = ?", [candidate])),
+  );
   const statements: StatementLike[] = [
     db
       .prepare(
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, links_json, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+        `INSERT INTO organizations (id, name, normalized_name, slug, data_json, description, website, links_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
       )
       .bind(
         organizationId,
         input.organizationName,
         normalizedOrgName,
+        slug,
         input.description ?? null,
         input.website ?? null,
         input.links && input.links.length > 0 ? serializeLinks(input.links) : null,

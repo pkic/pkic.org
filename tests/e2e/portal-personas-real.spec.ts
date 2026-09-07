@@ -1,3 +1,6 @@
+/**
+ * @covers authority.9.1
+ */
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import {

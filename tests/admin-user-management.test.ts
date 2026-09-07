@@ -989,6 +989,74 @@ describe("admin user anonymization", () => {
     });
   });
 
+  /*
+   * What has to outlive the person.
+   *
+   * Erasure is not negotiable and the individual goes. The consortium still
+   * relies on facts that were never really about them: that a representative
+   * of this organization accepted an agreement on a date, and that a ballot
+   * was cast in that capacity. Those stay true once the person is gone, and
+   * they are what an audit — or a dispute — is answered from.
+   *
+   * The point of the assertion is the direction of travel: anonymization
+   * redacts the user row and revokes their access, and must not follow the
+   * foreign keys outward into the record of what their organization did.
+   */
+  it("keeps the organizational record of what a person did on their organization's behalf", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "ipr-signer@example.test");
+    const eventId = crypto.randomUUID();
+    const at = "2026-01-01T00:00:00.000Z";
+    await env.DB.prepare(
+      `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+       VALUES (?, ?, 'Anonymization Event', 'UTC', 'invite_or_open', 5, '{}', ?, ?)`,
+    )
+      .bind(eventId, `anonymization-${eventId.slice(0, 8)}`, at, at)
+      .run();
+    // The acceptance has to hang off something the person actually did — a
+    // trigger refuses one that names neither a registration nor a proposal —
+    // so the record is anchored rather than free-floating.
+    const registrationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO registrations
+         (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+       VALUES (?, ?, ?, 'registered', 'in_person', 'test', ?, ?, ?)`,
+    )
+      .bind(registrationId, eventId, userId, `secret-${registrationId}`, at, at)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO consent_acceptances
+         (id, registration_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
+       VALUES (?, ?, ?, ?, 'attendee', 'ipr-agreement', '1', ?)`,
+    )
+      .bind(crypto.randomUUID(), registrationId, eventId, userId, at)
+      .run();
+
+    await anonymizeUser(createContext(env, adminRequest(`/api/v1/users/${userId}/anonymize`, "POST"), { userId }));
+
+    const [acceptance] = await queryAll<{ term_key: string; term_version: string; accepted_at: string }>(
+      env.DB,
+      "SELECT term_key, term_version, accepted_at FROM consent_acceptances WHERE user_id = ?",
+      [userId],
+    );
+    expect(acceptance, "the acceptance is the organization's, and survives the person").toBeTruthy();
+    expect(acceptance.term_key).toBe("ipr-agreement");
+    // The version and the date are the whole value of the record: which terms,
+    // and when. A surviving row that lost either answers nothing.
+    expect(acceptance.term_version).toBe("1");
+    expect(acceptance.accepted_at).toBe(at);
+
+    // And the person really is gone from the row it points at.
+    const [user] = await queryAll<{ email: string; first_name: string | null; organization_name: string | null }>(
+      env.DB,
+      "SELECT email, first_name, organization_name FROM users WHERE id = ?",
+      [userId],
+    );
+    expect(user.email).not.toContain("ipr-signer");
+    expect(user.first_name).toBeNull();
+    expect(user.organization_name).toBeNull();
+  });
+
   it("does not allow an anonymized account to be repopulated or reactivated", async () => {
     await setup();
     const userId = await seedUser(env.DB, "cannot-restore@example.test");

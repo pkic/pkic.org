@@ -5,6 +5,8 @@
  * workspace. Staff with `organizations:read` see the full directory
  * (`Organizations`, covered under the staff surfaces) through the same
  * `/organizations` route; this spec is the representative's view of it.
+ * @covers organization.10.5
+ * @covers organization.10.6
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";

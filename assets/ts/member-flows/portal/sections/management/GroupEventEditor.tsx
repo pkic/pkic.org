@@ -32,6 +32,7 @@ import { isoDateTimeValue } from "./meeting-form-utils";
 // lazy chunk rather than in the entry stylesheet. A surface that writes the
 // class without importing the sheet renders it unstyled.
 import "../../../../ui/Content.css";
+import { slugify } from "../../../../../shared/slug";
 
 interface EventDraft {
   name: string;
@@ -65,15 +66,6 @@ function localDateTime(value: string | null, timeZone: string): string {
   } catch {
     return "";
   }
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 200);
 }
 
 function initialDraft(event: GroupEvent | null): EventDraft {

@@ -1,3 +1,11 @@
+/**
+ * @covers authority.9.2
+ * @covers authority.9.3
+ * @covers authority.9.4
+ * @covers authority.9.5
+ * @covers authority.9.6
+ * @covers authority.9.7
+ */
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { groupMembershipsParticipantListResponseSchema } from "../../assets/shared/schemas/groups";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";

@@ -133,7 +133,9 @@ test("invited external guest verifies the separate mailbox code before meeting e
     const portalSession = await guestPage.request.get("/api/v1/auth/session");
     expect(portalSession.status()).toBe(401);
     await guestPage.goto(`/portal/#/groups/${GROUP_ID}/overview`);
-    await expect(guestPage.getByLabel("Email")).toBeVisible();
+    // The portal's sign-in screen, named by its primary action: the email
+    // field sits behind a disclosure and is not on screen until asked for.
+    await expect(guestPage.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
   } finally {
     await guestContext.close();
   }

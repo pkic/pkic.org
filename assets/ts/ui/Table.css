@@ -67,4 +67,18 @@
        rather than floating in the middle of the tallest cell in the row. */
     vertical-align: top;
   }
+
+  /*
+   * A long label kept to one line, for a cell whose value comes from a fixed
+   * vocabulary: a configured category label is prose that would otherwise set
+   * the height of every row around it, and the reader is scanning the column
+   * rather than reading it. The full text stays in the cell's `title`, so it
+   * is a pointer away and never lost.
+   */
+  .pk-table__clamp {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

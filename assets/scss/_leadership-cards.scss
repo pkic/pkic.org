@@ -203,8 +203,11 @@
   display: flex;
   flex-direction: column; // footer spans full width below avatar+body row
   padding: 1.1rem 1.25rem 0.75rem; // footer overrides bottom padding when present via :has()
-  background: #fff;
-  border: 1px solid $gray-200;
+  // Tokens rather than a literal white: these cards sit on the About pages,
+  // which follow the reader's theme, and a white ground under near-white ink
+  // is unreadable in the dark one. The OG-card context overrides both anyway.
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line);
   border-radius: 0.85rem;
   flex: 1 1 280px;
   max-width: 440px;
@@ -244,9 +247,10 @@
   border-radius: 50%;
   // Active ring: solid green
   border: 3px solid $green;
-  // Inner white 1px gap between ring and photo
+  // Inner 1px gap between ring and photo, in the card's own ground rather
+  // than a literal white that only works in the light theme.
   padding: 2px;
-  background: #fff;
+  background: var(--pk-surface);
 
   &--past {
     border-color: $gray-300;
@@ -439,8 +443,8 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  background: #fff;
-  border: 1px solid $gray-200;
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line);
   border-radius: 0.65rem;
 }
 

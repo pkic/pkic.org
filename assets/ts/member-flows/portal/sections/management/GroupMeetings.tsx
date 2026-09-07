@@ -10,6 +10,7 @@ import { GroupMeetingSeriesList } from "./GroupMeetingSeriesList";
 import { GroupMeetingSeriesRecord } from "./GroupMeetingSeriesRecord";
 import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
 import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
+import { slugify } from "../../../../../shared/slug";
 
 /** Reserved series segment that routes to the creation page instead of a series' record. */
 const NEW_MEETING_SERIES_SEGMENT = "new";
@@ -35,15 +36,6 @@ function initialDraft(): MeetingSeriesDraft {
     memberEligibility: "owner_group",
     guestPolicy: "occurrence_invitation",
   };
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 200);
 }
 
 function CreateMeetingSeries({

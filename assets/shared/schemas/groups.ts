@@ -403,6 +403,39 @@ export const groupLeadershipUpdateSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: "No fields to update" });
 export type GroupLeadershipUpdateInput = z.infer<typeof groupLeadershipUpdateSchema>;
 
+/**
+ * Somebody who may be given a leadership term in this group.
+ *
+ * The picker used to read the group's own membership roster, which meant a
+ * group whose participation is implied rather than seated — the consortium's
+ * own All Members forum — offered nobody at all, and the manager was told
+ * "no matches" for a person the system knows perfectly well (issue #26). A
+ * candidate is therefore a Member capacity the group's eligibility rules
+ * admit, whether or not a seat has been taken through it yet; `participating`
+ * says which, so the form can be honest that assigning will also seat them.
+ */
+export const groupLeadershipCandidateSchema = z.object({
+  userId: databaseIdSchema,
+  identityId: databaseIdSchema,
+  memberId: databaseIdSchema,
+  memberType: z.enum(["individual", "organization"]),
+  userName: z.string(),
+  email: z.email(),
+  organizationName: z.string().nullable(),
+  membershipCategory: membershipCategorySchema.nullable(),
+  /** True when a live seat already exists for this exact capacity. */
+  participating: z.boolean(),
+});
+export type GroupLeadershipCandidate = z.infer<typeof groupLeadershipCandidateSchema>;
+
+export const GROUP_LEADERSHIP_CANDIDATE_SORT_COLUMNS = ["user_name", "organization_name"] as const;
+export const groupLeadershipCandidatesListQuerySchema = listQuerySchema(GROUP_LEADERSHIP_CANDIDATE_SORT_COLUMNS);
+export type GroupLeadershipCandidatesListQuery = z.infer<typeof groupLeadershipCandidatesListQuerySchema>;
+export const groupLeadershipCandidatesListResponseSchema = paginatedResponseSchema(
+  "candidates",
+  groupLeadershipCandidateSchema,
+);
+
 export const groupLeadershipListResponseSchema = z.object({
   group: groupLabelSchema,
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema,

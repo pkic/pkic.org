@@ -6,6 +6,8 @@
  * in its desktop layout, where the sidebar is always visible and none of that
  * behavior runs. These are the paths a keyboard or screen-reader user depends
  * on, and they fail silently for everyone else.
+ * @covers presentation.13.5
+ * @covers presentation.13.6
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
