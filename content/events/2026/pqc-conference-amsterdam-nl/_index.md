@@ -140,11 +140,13 @@ data:
         His first job was with the Crypto Competence Center of Philips Semiconductors (later NXP). In 2004 he joined Bundesdruckerei in Berlin, Germany, where he took over responsibility as the project lead for the digital part of the new digital passport and ID card. From 2012 to 2023 he headed D-Trust, the qualified trust service provider of the Bundesdruckerei Group, as Managing Director, and from 2018 to 2023 he also headed the Business Unit Trusted Services. In 2015 he was awarded the title of Fellow. As of 2024 he heads the Innovations department of Bundesdruckerei, focusing on digital identity, quantum technologies, cryptography, AI and data.
 
     - name: Jan Klaußner
+      id: jan-klaussner
       title: Senior Product Architect, Bundesdruckerei GmbH
       bio: |
         Jan Klaußner is Senior Product Architect at Bundesdruckerei in Berlin with more than two decades of experience in security engineering focusing on innovative solutions for digital identity and trust services. In his current work, he develops and evaluates prototypes for quantum safe public key infrastructures and hybrid post quantum cryptography deployments in real world environments. Jan is actively involved in standardization efforts in IETF, ISO and ETSI on hybrid PQC schemes for Internet PKI and smart card ecosystems. He regularly shares insights at international conferences and industry events.
 
     - name: Ricardo Agustin Toledo Mañani
+      id: ricardo-agustin-toledo-manani
       title: CTO, Quantum Chain PTE Ltd.
       bio: |
         Ricardo Toledo is CTO at Quantum Chain PTE Ltd., where he works on post-quantum blockchain infrastructure, wallet architecture, and transaction-signing migration from classical cryptography toward post-quantum schemes.
@@ -179,6 +181,7 @@ data:
         Jaime Gómez García is a recognized expert in quantum security, with an extensive professional background in the financial sector. He is known for advancing strategic awareness, industry coordination, and practical adoption of quantum-safe cryptography, helping organizations and critical infrastructures prepare for the transition to the quantum era. His influence has been recognized through multiple distinctions, including inclusion in Quantum Security 25: The Top 25 Most Influential People in Quantum Security (2026), the 2025 Quantum Leap Award from Keyfactor, and recognition as LinkedIn Top Voice (2024-2025) and Quantum Top Voices (2022-2024). Jaime serves as the Global Head of the Santander Quantum Threat Program and Chair of the Europol Quantum Safe Financial Forum.
 
     - name: Laima Jančiūtė
+      id: laima-janciute
       title: Independent Researcher
       bio: |
         Until very recently, Laima Jančiūtė was affiliated with the University of Amsterdam, where for three years she researched the governance of the quantum-safe transition. Laima holds a PhD from the University of Westminster with a thesis on the policy process of adoption of the GDPR, examining the actors and factors that shaped the formulation of this major piece of legislation. She has a background in political science and public administration. Her research interests revolve around privacy and data protection, fundamental rights, policies for ICT, the history and philosophy of technology, EU politics and governance, and international relations. She has held various research and teaching positions at different universities.
@@ -317,11 +320,13 @@ data:
         Dr. Xin Qiu is a cyber security expert specializing in public key infrastructure (PKI), embedded device security, software supply chain security, and post-quantum cryptography (PQC). She has generated a patent portfolio of over 100 assets worldwide. As Head of Aurora Networks' PKI Center and Security Solutions, she leads security product strategy, R&D, and operations, enabling large-scale, device-centric security deployments with global device manufacturers and network operators. Dr. Qiu is a frequent speaker at international cyber security and technology conferences.
 
     - name: Iván Fernández Mora
+      id: ivan-fernandez-mora
       title: Cybersecurity Architect, Airbus
       bio: |
         Iván Fernández Mora is a Security Architect and Technical Lead with over 20 years of experience bridging the gap between complex engineering, advanced data analytics, and enterprise cyber resilience. Currently leading security architecture and encryption services at Airbus Aircraft, he specializes in designing robust frameworks that safeguard critical application data and infrastructure. His career is built on a strong foundation of fundamental physics and advanced simulations, which naturally evolved into building big data platforms and machine learning applications for fraud and insider threat detection.
 
     - name: Zsolt Makádi
+      id: zsolt-makadi
       title: Senior Software Architect, Noreg
       bio: |
         Zsolt Makádi brings over 20 years of PKI expertise, specializing in certificate lifecycle management (CLM) system development and smart card infrastructure deployment.
