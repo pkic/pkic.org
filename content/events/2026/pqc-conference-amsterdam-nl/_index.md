@@ -61,18 +61,25 @@ data:
   locations:
     order: [plenary, blue_hall, room_a, room_b, room_c, room_d, room_e]
     plenary:
+      name: Red hall
       color: black
     blue_hall:
+      name: Blue hall
       color: navy
     room_a:
+      name: Room A
       color: teal
     room_b:
+      name: Room B
       color: teal
     room_c:
+      name: Room C
       color: teal
     room_d:
+      name: Room D
       color: teal
     room_e:
+      name: Room E
       color: teal
 
   # Speakers ------------------------------------------------------------------
@@ -290,7 +297,7 @@ data:
     - name: Roman Cinkais
       title: SVP Enterprise Products, OmniTrust
       bio: |
-        Roman holds a master's degree in Mathematical Methods of Information Security from Charles University in Prague. He has over 15 years of professional experience in information security across financial, retail, banking, telco, and postal industries. Roman is a co-founder of 3Key Company — now OmniTrust Security following its 2026 merger with ISS — where he serves as SVP Enterprise Products. In 2021 he founded the open-source project originally named CZERTAINLY, today known as ILM, a cloud-native trust lifecycle management platform. Roman chairs the PKI Maturity Model Working Group at the PKI Consortium, where he leads work on the PKIMM Extension Framework.
+        Roman holds a master's degree in Mathematical Methods of Information Security from Charles University in Prague. He has over 15 years of professional experience in information security across financial, retail, banking, telco, and postal industries. Roman is a co-founder of 3Key Company (now OmniTrust Security following its 2026 merger with ISS), where he serves as SVP Enterprise Products. In 2021 he founded the open-source project originally named CZERTAINLY, today known as ILM, a cloud-native trust lifecycle management platform. Roman chairs the PKI Maturity Model Working Group at the PKI Consortium, where he leads work on the PKIMM Extension Framework.
       social:
         linkedin: https://www.linkedin.com/in/roman-cinkais/
 
@@ -337,7 +344,7 @@ data:
     - name: Mark Cooper
       title: President and Founder, PKI Solutions
       bio: |
-        Mark B. Cooper, president and founder of PKI Solutions, has been known as "The PKI Guy" since his early days at Microsoft. He has deep knowledge and experience in all things Public Key Infrastructure (PKI). PKI Solutions LLC provides consulting, training — including online training — and Gartner-recognized software for PKI Posture Management at enterprises, many of them Fortune 500 companies. PKI Solutions has led hundreds of PKI training sessions, including private training sessions, across the country and around the world. Cooper is an avid proponent of the SHAKEN/STIR global standard to end robocalls, which uses authentication and PKI to verify callers' identities. Prior to founding PKI Solutions, Cooper was a senior engineer at Microsoft, where he was a PKI and identity management subject matter expert who designed, implemented, and supported Active Directory Certificate Services (ADCS) environments for Microsoft's largest customers.
+        Mark B. Cooper, president and founder of PKI Solutions, has been known as "The PKI Guy" since his early days at Microsoft. He has deep knowledge and experience in all things Public Key Infrastructure (PKI). PKI Solutions LLC provides consulting, training (including online training) and Gartner-recognized software for PKI Posture Management at enterprises, many of them Fortune 500 companies. PKI Solutions has led hundreds of PKI training sessions, including private training sessions, across the country and around the world. Cooper is an avid proponent of the SHAKEN/STIR global standard to end robocalls, which uses authentication and PKI to verify callers' identities. Prior to founding PKI Solutions, Cooper was a senior engineer at Microsoft, where he was a PKI and identity management subject matter expert who designed, implemented, and supported Active Directory Certificate Services (ADCS) environments for Microsoft's largest customers.
 
     - name: Sarah McCarthy
       title: SVP Cryptography, Citi
