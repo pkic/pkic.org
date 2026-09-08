@@ -445,12 +445,6 @@ data:
       bio: |
         Daniel Apon is the Director of Cryptography at Anduril Industries. He previously was a Lead Cryptographer at the MITRE Corporation, working on advancing the broader industry's efforts in Post-Quantum Cryptography migration. Prior to that, he was a Cryptographer on the NIST PQC team during its PQC standardization process, where he was the NIST subject matter expert in lattice-based cryptography.
 
-    - name: William Newhouse
-      title: Cybersecurity Engineer and Migration to PQC Project Lead, NIST NCCoE
-      bio: |
-        Bill Newhouse is a cybersecurity engineer at NIST's National Cybersecurity Center of Excellence (NCCoE), where he leads the Migration to Post-Quantum Cryptography (PQC) project, a collaboration with industry and government which shares insights on practices that will ease the migration to PQC algorithms that are resistant to cryptanalytically relevant quantum computer-based attacks. This project, which began in 2021, allows Mr. Newhouse to learn from the collaboration he has built and become a central figure in US government Migration to PQC discussions.
-        Mr. Newhouse has been with the U.S. federal government since 1986, focused initially on telecommunications, then information assurance, and now cybersecurity. He studied Electrical Engineering at the Georgia Institute of Technology and has a master's degree from the George Washington University.
-
     - name: Bruno Couillard
       title: CEO & Co-Founder, Crypto4A
       bio: |
@@ -1320,7 +1314,6 @@ data:
               A panel of NCCoE collaborators who have been working on implementing PQC algorithms in PKI systems (such as the US Government PIV card). Moderator to be announced.
             track: Panel discussion
             speakers:
-              - William Newhouse
               - Bruno Couillard
               - Ted Shorter
               - Evgeny Gervis
