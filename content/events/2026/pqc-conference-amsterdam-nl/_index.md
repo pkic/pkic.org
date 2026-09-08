@@ -486,9 +486,7 @@ data:
         sessions:
           - title: Opening
             description: |
-              Welcome to the 2026 PQC Conference. The chairs open the conference, set
-              the agenda for the three days ahead, and invite some attending sponsors for
-              a one-minute pitch (the only commercial message allowed at this conference).
+              Welcome to the 2026 PQC Conference. The chairs open the conference, set the agenda for the three days ahead, and invite some attending sponsors for a one-minute pitch (the only commercial message allowed at this conference).
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
@@ -517,6 +515,7 @@ data:
           - title: Post-Quantum Security of IPsec / IKEv2
             description: |
               IKEv2 is the key exchange protocol that drives IPsec, the enterprise workhorse VPN. In this talk, I will recap the standardization of extensions that allow us to use IPsec with post-quantum key exchange, and explain what features you need to turn on (or make sure to ask your suppliers for) to be secure against post-quantum adversaries, both for harvest-now decrypt-later and fully post-quantum adversaries. I will support these claims through a security analysis of IKEv2 and its extensions that we submitted to a major academic security conference.
+
               This talk is based on joint work with Benedikt Auerbach, Keitaro Hashimoto, and Shuichi Katsumata.
             speakers:
               - Thom Wiggers
@@ -528,8 +527,11 @@ data:
           - title: "Where the PQC Migration Actually Stands: A Cross-Ecosystem Census of 2.8 Million Packages"
             description: |
               The NIST 2030 deprecation deadline for quantum-vulnerable public-key algorithms is 1,386 days away as of March 2026. Every PKI operator, certificate authority, and security team needs to know how the software supply chain they depend on is responding. No cross-ecosystem measurement existed. We built one. This session presents findings from the first cross-ecosystem cryptographic census, scanning 2,809,479 packages across 11 package ecosystems including npm, PyPI, Go, Maven, crates.io, NuGet, and others. The results reveal the actual state of PQC adoption in the open-source supply chain that PKI infrastructure depends on. Of the 2.8 million packages scanned, 108,145 use cryptographic libraries. Among those, 21,332 depend on weak or deprecated algorithms such as MD5, SHA-1, DES, and RC4. Only 188 packages, or 0.17 percent of crypto-using packages, have any post-quantum cryptography dependency. PQC adoption is concentrated in 5 of 11 ecosystems, with crates.io accounting for 58 percent of all PQC-dependent packages. Six ecosystems show zero PQC adoption. Maven has the worst weak crypto rate at 51.6 percent.
+
               Beyond the headline numbers, the talk addresses the migration gap that matters most for PKI operators. Dependency-level scanning, the foundation of most software composition analysis tools, misses approximately 4 times the cryptographic surface area visible to source-level analysis. We validated this gap on 20 production projects and found that 30 percent of projects with active cryptographic code show zero dependency-level signal. For PKI operators conducting cryptographic inventories under NIST IR 8547 or OMB M-23-02, this means current tooling systematically undercounts exposure.
+
               Attendees leave with three actionable outcomes: the current state of PQC adoption in their language ecosystem with named libraries and migration paths; a reproducible census methodology they can apply to internal package registries and vendor assessments; and a clear understanding of why dependency scanning alone fails for cryptographic inventory and what to do about it.
+
               All scanning tools, the 357-library classification catalog, the full scan dataset, and a live dashboard are released open source.
             speakers:
               - Abdel Fane
@@ -539,8 +541,11 @@ data:
           - title: "Making ML-DSA Work for Machine-to-Machine mTLS: Field Notes from an End-to-End Post-Quantum PKI"
             description: |
               Most post-quantum migration programs have done the easy part - hybrid key exchange - and then hit a wall at authentication. Getting ML-DSA certificates working for real machine-to-machine identity, with a PKI that can issue, renew, and revoke them, is where timelines slip: the certificates are large, lifecycle tooling is immature, and almost no one has run mutual TLS where both sides authenticate with post-quantum credentials.
+
               This is a practitioner field report from an organization that has built and now operates exactly that - an end-to-end post-quantum machine-identity stack: an ML-DSA-65 CA hierarchy, post-quantum-only mutual TLS enforced at the edge, automated enrollment and short-lived issuance, and OCSP/CRL revocation that takes effect in real time. We share what it actually took, so teams planning the authentication phase of their own migration know what they are walking into.
+
               Attendees leave with: a realistic picture of the authentication half of PQC migration - what is production-ready today and what is still blocked on standards (IETF LAMPS composite certificates, post-quantum identity tokens); where ML-DSA certificate and signature sizes actually cause problems - handshake payloads, buffers, issuance throughput - measured against classical TLS 1.3; how to tell a genuinely post-quantum-only deployment from a post-quantum key exchange sitting in front of classical certificates, and how to verify it; a certificate-lifecycle model for machine identity - constrained enrollment, automated issuance, real-time revocation - and the operational decisions that matter; and a practical set of questions to put to your CAs, HSM vendors, and platform teams before committing to an approach.
+
               The session is for PKI, platform, and security teams responsible for the machine-identity and mTLS portion of their post-quantum migration. It assumes working knowledge of TLS 1.3 and certificate PKI; no prior post-quantum background is required.
             speakers:
               - Rumen Doynov
@@ -556,8 +561,11 @@ data:
           - title: "What Breaks Between Assessment and Implementation: Lessons from PQC Migration Programs Across Organizations"
             description: |
               Most PQC migration advice stops at the roadmap. This session picks up where the roadmap meets production, drawing on assessment and migration work across many organizations in different sectors and at different levels of maturity. The recurring lesson is that the same failure points show up again and again, and that the gap is between a clean assessment, a practical roadmap, and successful implementation.
+
               The talk follows the real arc of a program. It starts with discovery and assessment, including what cryptographic inventory consistently misses: statically linked libraries, keys embedded in firmware, proprietary protocols on operational networks, and cryptography buried inside third-party appliances. It then moves to the migration attempt and the things that broke in production. Hybrid and composite certificates issued into mutual TLS meshes triggered chain validation errors in older OpenSSL and JSSE clients. Handshake sizes grew large enough to fail through middleboxes and load balancers. Hardware security module gaps for composite key generation surfaced only under load. The session walks through the rollback decision and the redesign that held, which was a parallel PQC hierarchy rather than swapping roots in place.
+
               The second half connects engineering reality to assurance reality, because the same programs hit a second wall: producing evidence auditors accept. It maps what examiners actually request against NIS2, DORA, and the CRA, including CBOMs as Article 21 documentation, certificate lifecycle reports for ICT risk testing, module attestations, and the supplier readiness evidence chain. The practical takeaway is to structure discovery and inventory output so it doubles as audit evidence from day one, rather than rebuilding it under deadline.
+
               Attendees will leave with the failure modes that recur regardless of sector, a clear signal for when to abandon in-place hybrid roots, and a sequence that links assessment, migration, and assurance so the three are not rebuilt separately. The content is experience-led and vendor-neutral, framed entirely around what was observed in the field.
             speakers:
               - Parnashree Saha
@@ -567,9 +575,13 @@ data:
           - title: "Project Hail Merkle: Rethinking Qualified Trust Services with Merkle Tree Certificates"
             description: |
               Digital trust is entering a new phase. For decades, certificates have been the invisible backbone of secure digital interactions: reliable, proven, and essential. But the environment around them is changing fast. Trust ecosystems are becoming larger, more connected, more automated, and more demanding. The question is no longer only how we protect trust. It is how we scale it, prove it, and govern it in a world of growing complexity.
+
               This talk explores the emerging concept of Merkle Tree Certificates and asks a fundamental question: could this be the next major step in the evolution of digital trust, especially for qualified trust services? Merkle-tree-based approaches promise a new way of thinking about certificates. By embedding certificate-related information into cryptographically protected structures, they can enable more efficient proofs, greater transparency, and new models for validation at scale. What sounds like a technical refinement may in fact signal something much bigger: a shift from isolated certificate objects to more dynamic, auditable, and internet-scale trust architectures.
+
               For the world of qualified trust services, this is especially significant. Here, trust is never just a technical matter. It is also legal certainty, regulatory compliance, operational reliability, and public confidence. That is why the real opportunity, and the real challenge, lies not only in the cryptography itself, but in the question of how such new models could fit into highly regulated trust environments. Can innovation deliver more transparency and scalability without weakening assurance, accountability, or supervision?
+
               The talk connects these developments to the future of qualified electronic signatures, seals, website authentication, and emerging wallet-based ecosystems. It highlights both the promise and the unresolved questions: interoperability, standardization, liability, governance, and the broader impact on trust frameworks that were built for a different era.
+
               Ultimately, this session is not just about a new certificate concept. It is about the future architecture of trust. As digital infrastructures evolve, trust services must evolve with them. Merkle Tree Certificates may be one of the technologies that help define that next chapter, where trust becomes not only secure, but also scalable, transparent, and ready for the demands of the next digital decade.
             speakers:
               - Kim Nguyen
@@ -579,6 +591,7 @@ data:
           - title: "From Fear to Hybrid: Making PQC Less Scary"
             description: |
               European agencies such as ANSSI and BSI recommend the hybrid use of post-quantum cryptographic algorithms alongside traditional schemes, driven by concerns regarding the maturity and long-term security assurance of purely post-quantum solutions. This talk focuses on two prominent approaches to fulfilling this requirement through compound algorithms: the IETF's composite signatures and KEMs, as well as Intelligent Composed Algorithms.
+
               The original motivations behind each approach and their respective design decisions will be presented in detail, including the cryptographic construction and the security properties they aim to achieve. The advantages and drawbacks of both approaches will be examined, highlighting how they can contribute to crypto agility and how they differ from other hybridization concepts such as hybrid certificates or multiple signatures. The talk also addresses current interoperability considerations and implementation challenges. Finally, the state of standardization within the IETF and other relevant bodies will be reviewed, alongside existing support and an outlook on future work in the field of hybrid algorithms.
             speakers:
               - Jan Klaußner
@@ -588,8 +601,11 @@ data:
           - title: "From ECDSA to Post-Quantum Signatures: Practical Lessons from Migrating Wallet-Based Transaction PKI"
             description: |
               Many post-quantum migration discussions focus on TLS, certificates, and enterprise PKI. A different but increasingly important case is wallet-based transaction infrastructure, where long-lived accounts, public-key exposure, signature verification, hardware constraints, recovery flows, and user experience all interact with cryptographic migration.
+
               This session presents practical lessons from designing and implementing a migration path from ECDSA-based transaction signing toward post-quantum signatures in an EVM-like blockchain environment. It focuses on architecture and engineering trade-offs rather than product claims: key generation and storage, address derivation, signature-size impact, transaction encoding, verification cost, backward compatibility, testnet strategy, smart-account and vault-based migration models, and how to avoid creating unsafe hybrid systems that merely add complexity without reducing risk.
+
               The talk also examines the relationship between blockchain wallet infrastructure and traditional PKI concepts: identity binding, certificate-like assertions, key lifecycle management, recovery, revocation, policy enforcement, auditability, and hardware-backed key protection. Special attention is given to migration patterns that allow existing assets or accounts to gain post-quantum authorization controls without assuming an overnight replacement of legacy systems.
+
               Attendees will leave with a concrete checklist for evaluating post-quantum readiness in transaction-signing systems: where classical signatures remain a dependency, which components need cryptographic agility, what must be measured before migration, and which design decisions can create operational or security risks during the transition.
             speakers:
               - Ricardo Agustin Toledo Mañani
@@ -599,7 +615,9 @@ data:
           - title: "Workshop: Post-Quantum Trails Board Game"
             description: |
               This interactive, hands-on workshop is centred around Post-Quantum Trails, an educational board game designed to demystify the complexities of migrating to post-quantum cryptography (PQC), a joint project brought to life by Cybernetica and the OpenSSL Foundation.
+
               As quantum computing advances, the transition to quantum-safe cryptographic standards is no longer optional; it has become urgent. Yet for many developers and stakeholders, the migration process feels overwhelming and too abstract. The game brings this journey to life, guiding players through the real-world challenges of developing, standardizing, and deploying PQC solutions, and highlighting both the technical problems and the strategic trade-offs involved.
+
               Participants will learn about the PQC landscape, understand the risks of delayed migration, and engage in a collaborative simulation that reflects actual industry challenges. Earlier versions of this workshop have been run at the OpenSSL Conference and NordSec 2025, and the facilitators will introduce the game, explain the rules, and be on hand throughout to help players, answer questions, and discuss the awareness aspect of PQC migration.
             track: Workshop
             durationMinutes: 60
@@ -614,8 +632,11 @@ data:
           - title: Implementing the PKI Consortium PQC Maturity Model at Siemens Trust Centre
             description: |
               As the transition to Post-Quantum Cryptography (PQC) accelerates, organizations face a challenge that extends far beyond algorithm replacement. Success depends on understanding cryptographic dependencies, coordinating multiple stakeholders, managing supplier readiness, and establishing a sustainable model for cryptographic agility. The PKI Consortium's Post-Quantum Cryptography Maturity Model (PQCMM) provides a structured framework for assessing the quantum readiness of products and services within the supply chain. At Siemens Trust Centre, we examine how this vendor-centric model can be expanded into an enterprise-wide governance and transformation framework.
+
               This session presents Siemens' approach to adapting the PQCMM for one of the world's largest industrial and technology environments, spanning enterprise IT, public key infrastructure, product security, and operational technology. We describe how PQCMM was integrated into a broader cryptographic governance strategy, enabling consistent assessment of suppliers, internal platforms, PKI services, smart card technologies and virtual smart card solutions.
+
               The presentation shares practical lessons learned while building a cryptographic inventory, establishing quantum-readiness assessment criteria, evaluating strategic vendors, and defining measurable maturity targets across diverse technology domains. Particular emphasis is placed on translating technical PQC requirements into actionable governance mechanisms, supplier management processes, and migration roadmaps. We will present findings and obstacles from the implementation from HSMs, CAs and RAs, as well as governance mechanisms we had to redesign. Attendees will learn why cryptographic visibility and dependency management often represent greater challenges than algorithm adoption itself, and why cryptographic agility must become a core enterprise capability rather than a one-time project outcome.
+
               The session concludes with practical experiences to operationalize PQC readiness, establish common maturity metrics across technology ecosystems, and align supplier management, PKI modernization, and enterprise transformation activities under a single strategic framework.
             speakers:
               - Wilko Wenzel
@@ -625,7 +646,8 @@ data:
           - title: "PQC Transition in Production, Season 1: Network Encryption"
             description: |
               As a provider of cybersecurity solutions, Stormshield has been working on the post-quantum transition for years, for its products but also for its own IT transition. 2026 is the year when the transition starts to reach production. Focus is put on encryption, because of the store-now-decrypt-later risk, and on the network, for various reasons presented during the talk.
-              In this session we look at both technical aspects — which protocols, which tools, hints and feedback — and strategic aspects: what to do first, what to delay, and the non-technical issues. The session closes with a first feedback on what was easy, what was not, and what has not been migrated as expected during this year.
+
+              In this session we look at both technical aspects (which protocols, which tools, hints and feedback) and strategic aspects: what to do first, what to delay, and the non-technical issues. The session closes with a first feedback on what was easy, what was not, and what has not been migrated as expected during this year.
             speakers:
               - Yvan Vanhullebus
             locations:
@@ -634,7 +656,9 @@ data:
           - title: "PQC Budgeting: How to Address the Costs of PQC Readiness"
             description: |
               As governments and regulatory bodies around the world accelerate guidance and migration timelines for Post-Quantum Cryptography (PQC), mid-to-large enterprises face an increasingly urgent question: how much should we budget, and where do we begin? While the timeline for a cryptographically relevant quantum computer remains uncertain, the need to prepare is becoming a board-level risk management priority.
+
               This session presents a pragmatic approach to building a multi-year PQC budget that balances technical requirements, operational realities, and financial constraints. Attendees will explore the primary cost drivers of a successful migration, including cryptographic discovery and the creation of a Cryptographic Bill of Materials (CBOM), certificate lifecycle modernization, crypto-agility initiatives, HSM and key management upgrades, application remediation, testing, governance, and workforce enablement.
+
               The presentation also discusses how organizations can prioritize investments based on business risk, regulatory obligations, and cryptographic exposure, enabling a phased migration rather than a costly rip-and-replace approach. Participants will leave with a practical budgeting framework, recommended milestones, and executive-level strategies for securing funding and building organizational consensus. The objective is to help enterprises transform PQC readiness from an abstract future concern into a measurable, achievable cybersecurity program with clear business value.
             speakers:
               - Blair Canavan
@@ -644,10 +668,14 @@ data:
 
           - title: "Governing the PQC Transition in the US and the EU: A Comparative Analysis"
             description: |
-              Although the US has been regarded as a frontrunner in the global pursuit of quantum-readiness, distinguished by its top-down approach to the PQC transition, hosting the main institutional venue undertaking PQC standardisation, and producing a considerable amount of technical guidance through its specialist agencies, it has been facing significant domestic implementation challenges. Both executive and legislative bodies have cast a critical light, citing the slow pace of progress, the limited scope of the current US PQC migration strategy — making it mandatory only for federal government — and the lack of appropriate leadership.
+              Although the US has been regarded as a frontrunner in the global pursuit of quantum-readiness, distinguished by its top-down approach to the PQC transition, hosting the main institutional venue undertaking PQC standardisation, and producing a considerable amount of technical guidance through its specialist agencies, it has been facing significant domestic implementation challenges. Both executive and legislative bodies have cast a critical light, citing the slow pace of progress, the limited scope of the current US PQC migration strategy (making it mandatory only for federal government) and the lack of appropriate leadership.
+
               The adjustments that have been proposed include, among others, more streamlined governance, performance measurement, and better encouragement for all sectors to embrace this change. New legislative proposals addressing the PQC transition have since proliferated and executive actions have reportedly been in the pipeline. After backsliding from some elements of the previous administration's PQC transition course in June 2025, the current administration released its Cyber Strategy in March 2026, promising to accelerate PQC deployment. Meanwhile CISA, one of the key actors in facilitating this transition, has been exposed to a rather precarious situation, leading to a sizeable reduction of its workforce, which may have some disruptive impact on the governance of this process.
+
               In the EU the PQC migration has been unfolding quite differently. Here, the process has been driven for some time by strong policy entrepreneurship and expertise coming from national cybersecurity authorities in several Member States, which can be viewed as a bottom-up dynamic. The EU-level strategy formulated in 2024 appears to be more comprehensive than the US equivalent, as alongside public administrations it encompasses critical infrastructures. There is also a sound legal base in EU law, consisting of a set of regulatory instruments requiring state-of-the-art cybersecurity measures commensurate with the risks and fulfilment of the principles of privacy-by-design and security-by-design.
+
               Arguably, however, this should be strengthened by making requirements regarding PQC more explicit and by streamlining them across the various existing instruments and guidelines for consistency and legal certainty. There is also a need for the EU to enhance its funding for PQC development and deployment, based on the rationale that it represents the main solution in countering the quantum threat, especially in the near term. Recent EU legislative proposals have generally stressed the increasing urgency of enacting the PQC migration, and although the EU has tangibly contributed to the US-led PQC standardisation endeavours with its scientific excellence in the field of cryptography, these new proposals also signal that the EU might now be set to pursue its own framework.
+
               Attendees of this session will benefit from a granular view of how the PQC transition has been governed in these two jurisdictions and what future projections can be identified.
             speakers:
               - Laima Jančiūtė
@@ -657,7 +685,9 @@ data:
           - title: Retaining Cryptographic Control When Agentic AI Accelerates PQC Migration
             description: |
               As organisations use AI to accelerate PQC migration, they risk creating a new form of crypto sprawl: AI-generated code that embeds algorithms, key references, provider choices, and local policy assumptions. This session shows how policy-bound cryptographic interfaces, CI/CD guardrails, and intent-level APIs can help teams use AI without losing cryptographic control.
+
               As organisations prepare for PQC migration, agentic AI introduces a new governance risk: coding agents can generate cryptographic integrations faster than security teams can review, approve, and manage them. Without clear constraints, AI-generated applications may hard-code algorithms, key references, provider calls, fallback logic, and local policy assumptions across the software estate. The result can be greater crypto sprawl, reduced crypto agility, and new obstacles to controlled PQC migration.
+
               This session presents an architecture and API approach for using AI safely in PQC migration programmes. Instead of allowing AI-generated applications to make cryptographic decisions, applications should express cryptographic intent while policy, key association, provider routing, algorithm selection, audit, and lifecycle management remain centrally governed. The session covers CI/CD guardrails, coding standards, policy-controlled migration from classical to post-quantum algorithms, and evidence collection for CBOM and phased cutover planning. Attendees will leave with a practical model for preventing AI-generated crypto sprawl while still using AI to accelerate PQC readiness.
             speakers:
               - Tobias Bojesen
@@ -673,8 +703,11 @@ data:
           - title: Insights into a Post-Quantum Safety Transformation Journey
             description: |
               The quantum threat is no longer theoretical. Yet moving a large organization from awareness to structured action, systematically and without paralysis, remains genuinely difficult. This talk shares practical insights from two years inside a live post-quantum security transformation, built around four pillars.
+
               Planning despite uncertainty: how hypothesis-based planning keeps long-term strategy adaptable, and how transparency and accountability turn ambiguity into a manageable condition rather than a blocker. Making risk tangible: abstract threats don't move budgets, so we present our framework for prioritizing across a complex IT landscape, including a method for quantifying quantum exposure and translating it into a concrete sense of urgency for decision-makers.
+
               Building awareness that sticks: transformation stalls without broad understanding, so we share what has worked for propagating post-quantum safety awareness internally across all organizational levels, and externally through collaboration with partners and suppliers. Governing what you measure: a real insight into our operative governance model, the KPIs we track, the maturity framework we developed, early results, and an honest outlook on the road ahead.
+
               We offer no definitive answers; quantum readiness is still a work in progress for us, as it is for most. What we can offer is a transparent view into a complex, ongoing transformation and the frameworks that have helped us navigate it.
             speakers:
               - Cristof Kaufmann
@@ -695,12 +728,19 @@ data:
           - title: "The Board Factor: What Makes PQC Programs Succeed or Stall"
             description: |
               Most PQC programs are structurally set up to fail. Not for lack of standards or technology, but because the complexity of organizational systems is beyond what their programs are designed to control.
+
               Post-quantum cryptography migration is more than a technology upgrade. It is a multi-year enterprise transformation that cuts across business lines, processes, vendors, data, contracts, procurement, risk appetite, funding, operating models, and executive accountability. These are not technology variables. Yet many organizations are still treating it as a technical remediation exercise. That is a mistake.
+
               Digital trust is a critical business asset. And the cryptographic infrastructure that supports it is a highly distributed, deeply embedded, complex digital estate with dependencies that span every system, every process, and every layer of the technology stack. In this way, parallels can be made to data governance: fifteen years of CDO mandate cycles rife with failure, trying to govern something that is everywhere, essential, and owned by no one. PQC has a hard 3 to 7-year deadline. We simply cannot afford to make the same mistakes. This is not only a cryptography problem. It is a complex systems problem.
+
               PQC programs face nearly every structural condition that predicts failure: a long-time horizon, ambiguous impact timing, no single natural owner, deep technical complexity, unclear business prioritization, complex and unmapped dependencies, limited cryptographic literacy, budget uncertainty, and a strategic portfolio process that favours near-term value creation over invisible long-term risk reduction. Add to this a fundamental accountability problem: the executive leaders responsible for taking action today may not be the same as those who face the consequences tomorrow. The usual forcing functions for urgency, ownership, and escalation are weak. In the absence of authoritative action, the cryptographic estate is heading for the same governance failure mode we saw with enterprise data: granular, everywhere, essential, owned by no one, and left in the hands of IT.
+
               Ashby's Law for complex systems is clear: a system will defeat any controller that underestimates its complexity. Operational budgets, decision rights, and risk acceptance are distributed throughout the system; only the board holds authority over all three.
+
               The session opens with two questions put directly to attendees: (1) why will your PQC program succeed when so many enterprise-scale programs fail, and (2) who is accountable for its success (or failure)? Participants respond in writing. Many will struggle, exposing the real issue: not whether PQC matters, but whether organizations understand the conditions required to succeed, and who should be held accountable if they don't.
+
               Drawing on systems theory principles and over 30 years designing, delivering, and remediating large-scale transformations and operating models, this session examines why PQC migration is structurally harder than most organizations currently understand. It shows why cryptographic inventory, technical standards, vendor readiness, and migration planning are necessary but insufficient, and why board engagement is the single most determining factor in a program's success. The session closes by returning to the same two questions, this time providing concrete, practice-tested moves to establish who is ultimately accountable for PQC program success and to secure the board engagement needed to make sure yours does.
+
               The issues that will stall many PQC programs are visible and navigable. Can you engage your board effectively to overcome them?
             speakers:
               - Louise Davey
@@ -710,6 +750,7 @@ data:
           - title: Gaming the Speed-vs-Memory Tradeoff for ML-DSA and ML-KEM
             description: |
               FIPS is only a suggestion, sortof. Specifically, FIPS only requires "mathematical equivalence" to the listed algorithms, and that gives a surprisingly wide latitude for implementations to play algorithmic games in search of either fast or small implementations.
+
               This talk will explore speed-vs-memory tradeoff techniques applicable to the ML-DSA and ML-KEM algorithms and the results that they obtain within the Bouncy Castle Rust library. We start with a close look at the "default" implementation, then at what you can do to move around the High Speed <--> Low Memory spectrum. In one direction, you can pre-expand intermediate values at key-load time for faster sign, verify, encaps and decaps operations which gives performance increases in the 40% - 60% range (especially valuable if doing multiple operations against the same key). In the other direction, your in-memory private key representation can consist of only intermediate seed values and you can re-derive the active lattice values one entry at a time as they are needed; you pay a penalty for deriving the same intermediate values multiple times for a dramatic reduction in memory footprint. This technique has a particularly pronounced effect on ML-DSA where ML-DSA-87.sign() can be performed in under 30 kb of peak memory usage, which represents roughly a 7.5x decrease in memory usage in exchange for a 6x increase in runtime; which is a win on heavily-loaded servers where parallelism is gated by RAM not by CPU.
             speakers:
               - Mike Ounsworth
@@ -721,7 +762,7 @@ data:
         sessions:
           - title: Closing (Day 1)
             description: |
-              Brief closing remarks for the blue hall audience and a preview of Day 2.
+              Brief closing remarks for the red hall audience and a preview of Day 2.
             speakers:
               - Paul van Brouwershaven
             locations:
@@ -747,7 +788,7 @@ data:
         sessions:
           - title: "Welcome back — Day 2"
             description: |
-              Parallel welcome and agenda highlights for the blue hall audience.
+              Welcome and agenda highlights for the red hall audience: a quick look at what is on today and how to get the most out of it.
             durationMinutes: 5
             speakers:
               - Albert de Ruiter
@@ -767,7 +808,8 @@ data:
         sessions:
           - title: Estonian PQC Migration Roadmap
             description: |
-              This presentation outlines Estonia's roadmap for transitioning the public sector to post-quantum cryptography (PQC), officially released in April 2026. Given the significant heterogeneity in cryptographic architectures, technical capacity, and operational criticality across public sector organisations, a uniform migration approach is neither feasible nor optimal. Instead, the roadmap introduces a risk-based categorisation framework that divides public sector institutions into four priority categories — Very High, High, Medium, and Low — each associated with distinct migration timelines and tailored implementation guidelines. A particular focus is placed on low-priority organisations, whose transition steps remain underdeveloped in most existing roadmaps.
+              This presentation outlines Estonia's roadmap for transitioning the public sector to post-quantum cryptography (PQC), officially released in April 2026. Given the significant heterogeneity in cryptographic architectures, technical capacity, and operational criticality across public sector organisations, a uniform migration approach is neither feasible nor optimal. Instead, the roadmap introduces a risk-based categorisation framework that divides public sector institutions into four priority categories (Very High, High, Medium, and Low), each associated with distinct migration timelines and tailored implementation guidelines. A particular focus is placed on low-priority organisations, whose transition steps remain underdeveloped in most existing roadmaps.
+
               The talk first presents the developed organisation categorisation approach and the underlying risk-assessment criteria. It then details the migration framework, outlining preparation, cryptographic inventory, implementation, and monitoring steps tailored in their specifics to each priority level. Finally, in a landscape where multiple national and international PQC migration strategies are converging, the session presents a comparison with some of the existing roadmaps, along with lessons learned through the process of constructing Estonia's PQC migration roadmap.
             speakers:
               - Jelizaveta Vakarjuk
@@ -791,6 +833,7 @@ data:
           - title: An Evaluation of PQC Algorithms in DNSSEC Using Real-World Data
             description: |
               Over the last years, we have conducted a series of experiments to establish which PQC algorithms would be best suitable for replacing RSA and ECDSA in DNSSEC, the security extension of DNS. As a core internet protocol, it is important that DNS remains working securely when powerful quantum computers exist. DNS contains data that fits in a single small UDP packet, which is fast and reliable, or switches to a slower TCP connection for bigger packets, which uses more resources on the server side. Small signatures and public keys are therefore preferred.
+
               We present insights from our experiments after implementing PQC in the toolchain of DNSSEC, and testing PQC algorithms using real-world data from a top-level-domain operator and a large DNS resolver operator. Using real-world data allows us to measure the real impact of PQC algorithms on both client and server performance.
             speakers:
               - Elmer Lastdrager
@@ -805,8 +848,10 @@ data:
         sessions:
           - title: "Your Suppliers Aren't Ready: PQC Supply Chain Readiness"
             description: |
-              You have mapped your internal cryptographic assets, you have a migration plan, and you know which algorithms you are moving to. Then you open a ticket with your HSM vendor, your cloud key management provider, your identity platform, your network appliance manufacturer — and the answers range from vague to contradictory to silent. Your suppliers are the gap between your migration plan and your migration reality.
-              The challenge is not limited to hardware security modules. Every product and service that uses cryptography — software libraries, CAs, signing services, authentication platforms, enterprise SaaS, embedded firmware — is a dependency in your PQC migration. And most of them are somewhere between Level 0 (nothing implemented) and Level 2 (production-ready but no inventory, no agility, no roadmap transparency). This session opens with a ten-minute introduction to how the PKI Consortium's PQC Maturity Model (PQCMM) works in practice, then the panel takes over: what does it actually look like to mandate PQC supplier requirements at a large institution, what do assessors find when they start evaluating products against a structured framework, and what would accelerate adoption of a common standard across the supplier ecosystem.
+              You have mapped your internal cryptographic assets, you have a migration plan, and you know which algorithms you are moving to. Then you open a ticket with your HSM vendor, your cloud key management provider, your identity platform, your network appliance manufacturer, and the answers range from vague to contradictory to silent. Your suppliers are the gap between your migration plan and your migration reality.
+
+              The challenge is not limited to hardware security modules. Every product and service that uses cryptography (software libraries, CAs, signing services, authentication platforms, enterprise SaaS, embedded firmware) is a dependency in your PQC migration. And most of them are somewhere between Level 0 (nothing implemented) and Level 2 (production-ready but no inventory, no agility, no roadmap transparency). This session opens with a ten-minute introduction to how the PKI Consortium's PQC Maturity Model (PQCMM) works in practice, then the panel takes over: what does it actually look like to mandate PQC supplier requirements at a large institution, what do assessors find when they start evaluating products against a structured framework, and what would accelerate adoption of a common standard across the supplier ecosystem.
+
               Attendees leave with a practical starting point: how to introduce the PQCMM into procurement for high-priority suppliers today, what to put in contracts, and how to handle the inevitable exceptions.
             track: Panel discussion
             durationMinutes: 60
@@ -821,9 +866,13 @@ data:
           - title: Stop Hiring PQC Experts !!!
             description: |
               It is time organisations stopped making the mistake of assuming they need to hire a PQC expert. The real challenge has nothing to do with solving cryptography or researching new algorithms. PQC is not a cryptographic research problem anymore. It is a PKI, enterprise and operations problem.
+
               Let's be blunt: hiring PQC experts without fixing PKI operations is like hiring quantum physicists to fix a broken plumbing system. The mathematics is not the problem, the infrastructure is. Most organisations still struggle with the basics: expired certificates, unknown trust relationships, weak crypto visibility, manual certificate processes and poor lifecycle governance.
+
               This session challenges the growing narrative that organisations need dedicated PQC specialists before they can begin preparing for the quantum era. Instead, it argues that PQC migration is fundamentally a PKI operational challenge. Replacing cryptographic algorithms is only one part of the problem; the real challenge is operationalising cryptography at enterprise scale across complex environments, legacy systems, hybrid infrastructures, certificate lifecycles, trust chains and governance models.
-              This is where the real insight emerges. The people who can actually solve this are not those who understand the deepest mathematics of PQC, but those who understand how trust is built, managed, and sustained across an enterprise. PKI experts — the teams already responsible for certificates, key lifecycles, and trust infrastructure — are the ones who must be empowered.
+
+              This is where the real insight emerges. The people who can actually solve this are not those who understand the deepest mathematics of PQC, but those who understand how trust is built, managed, and sustained across an enterprise. PKI experts (the teams already responsible for certificates, key lifecycles, and trust infrastructure) are the ones who must be empowered.
+
               PQC is not about inventing cryptography anymore. It is about surviving its transformation. The organisations that succeed in the PQC transition will not be the ones with the most theoretical quantum knowledge. They will be the ones with mature PKI foundations, automated certificate management, strong governance and operational discipline. Provocative by design, this talk reframes PQC migration from a research problem into a real-world enterprise execution challenge, and explains why fixing PKI maturity today is the most important step toward becoming quantum ready tomorrow.
             track: Lightning talk
             speakers:
@@ -837,7 +886,9 @@ data:
           - title: Tackling PQC and 47-Day Certificates in Parallel
             description: |
               In the next few years every enterprise will have to deal with two seismic shifts in digital trust that will redefine all security strategies: the phased reduction of SSL/TLS certificate lifespans to just 47 days by 2029, and the need to adopt quantum-resistant cryptography by 2030. Either mandate on its own is a major challenge. Together they represent an unprecedented technology lift for IT and security teams.
+
               The good news is that the foundational work for each of these initiatives helps the other. Achieving crypto agility starts with certificate agility. Organizations must gain complete visibility and control over their certificate landscape to ensure widespread use of PQC algorithms for data in transit. The coming step-down of maximum TLS server certificate lifespans to monthly renewals over the next three years will necessitate exactly the same thing. Wise enterprises will combine these two initiatives to eliminate redundant technology development and expense, avoid collisions between projects, and ensure overall quality.
+
               This presentation shares original research on enterprise readiness for these trends and describes the opportunity for enterprises to improve the outcomes of both initiatives by working on them together. Attendees will learn how a unified, automated approach to certificate automation and management can eliminate redundant efforts, reduce risk, and build agility for both mandates.
             track: Lightning talk
             speakers:
@@ -851,6 +902,7 @@ data:
           - title: How to Actually Start Your PQC Transition
             description: |
               In discussions around the PQC transition, the technical migration challenge often receives the most attention. In practice, however, organizations face significant barriers before any cryptographic transition can begin: establishing governance, securing funding, aligning stakeholders, and setting up effective program management structures.
+
               This talk builds on a whitepaper currently being developed through hands-on experience from members of two Belgian communities, Quantum Circle and the Belgian Cybersecurity Coalition. It provides practical guidance for the early stages of PQC adoption, focusing on why these initial steps are complex, how organizations can structure the necessary PQC migration engine, and how to justify the scale and urgency of such a transformation. In addition, the talk challenges commonly repeated advice on initial migration preparation and prioritization, offering a more pragmatic alternative approach.
             track: Lightning talk
             speakers:
@@ -872,7 +924,9 @@ data:
           - title: Role of CBOM in a Telco's PQC Journey
             description: |
               This presentation on behalf of the GSMA PQTN task force will examine the role of a "Cryptographic Bill of Materials" in the telecommunication sector. The session will explore CBOM and its relationship to the Software Bill of Materials (SBOM), review the current standards landscape, identify telecommunications-specific use cases, and outline the regulatory drivers shaping adoption.
+
               The need for industry alignment on CBOM use, format, and content as a means to simplify the management and communication of cryptography between parties will be highlighted. This "CBOM profile" will provide telco operators with a structured way to express cryptographic requirements, plan the migration to post-quantum cryptography, and manage cryptographic assets across their lifecycle, while giving vendors the mechanisms to communicate the cryptographic assets and future roadmap commitments associated with their products and services to operators and other stakeholders. The session concludes with actionable recommendations for telco network operators, vendors, and other relevant stakeholders engaged in the transition to post-quantum cryptography.
+
               The presentation will be of interest to network operators, the entire telecommunications supply chain, and government regulators. It complements other standardization and industry adoption efforts.
             speakers:
               - Luke Ibbetson
@@ -883,8 +937,10 @@ data:
           - title: Lessons Learned from Deploying LMS at Scale
             description: |
               Stateful hash-based signatures such as LMS are standardised and well understood, but translating them into deployable products involves challenges that are often absent from standards and academic literature.
+
               This talk discusses the practical realities of deploying a stateful hash-based scheme in long-lived hardware-rooted systems. Drawing on experience securing firmware update mechanisms in commercial PCs and printers, it explores how standards guidance, hardware lifecycles, resilience requirements, certification considerations and business constraints influenced key design decisions.
-              It covers lessons from adopting the LMS standard into security features deployed at scale, including the challenges of balancing security, resilience, certification and operational requirements, and reflects on how later developments in standards, certification programmes and industry guidance reinforced, challenged or reshaped those decisions — and what this means for future quantum-resistant migrations.
+
+              It covers lessons from adopting the LMS standard into security features deployed at scale, including the challenges of balancing security, resilience, certification and operational requirements, and reflects on how later developments in standards, certification programmes and industry guidance reinforced, challenged or reshaped those decisions, and what this means for future quantum-resistant migrations.
             speakers:
               - Thalia Laing
             locations:
@@ -898,8 +954,11 @@ data:
           - title: "PQC Starts at the Root of Trust: The Role of TPMs in Protecting Next-Generation Device Identities"
             description: |
               As organizations prepare for the transition to post-quantum cryptography, much of the conversation focuses on algorithms, certificates, and PKI infrastructure. Yet the success of any migration ultimately depends on where cryptographic keys are generated, stored, and protected. For billions of enterprise and IoT devices, that foundation is the Trusted Platform Module (TPM).
+
               This session explores the role of TPMs as the hardware root of trust enabling post-quantum migration for device identities and machine credentials. From certificate enrollment and key attestation to secure storage and cryptographic agility, TPMs provide the security foundation that allows PKI ecosystems to evolve without compromising trust.
-              We will examine the practical challenges PKI teams face when introducing post-quantum algorithms into existing deployments — including the hardware refresh cycle — and describe how TPM capabilities can support the transition while maintaining compatibility with existing enterprise and IoT infrastructures.
+
+              We will examine the practical challenges PKI teams face when introducing post-quantum algorithms into existing deployments (including the hardware refresh cycle) and describe how TPM capabilities can support the transition while maintaining compatibility with existing enterprise and IoT infrastructures.
+
               Attendees will gain a clearer understanding of how hardware-backed key protection intersects with PQC deployment, why device identity should be part of every migration roadmap, and what steps organizations can take today to prepare for a quantum-resilient future.
             speakers:
               - Antonio Javier Cabrera Gutierrez
@@ -909,7 +968,9 @@ data:
           - title: The PQC Ready German ID Card
             description: |
               Post-quantum cryptography (PQC) adoption is mandated for critical EU infrastructure by 2030, yet integration into existing identity document ecosystems presents significant cryptographic and performance constraints. National ID cards with 10-year validity require quantum-resistant protection from issuance, necessitating a pragmatic transition strategy that balances algorithmic security guarantees with hardware resource limitations.
+
               This talk points out high-risk spots in the ID card ecosystem and the key requirements for its operation. Subsequently an approach for a step-by-step PQC migration is presented, including possible scenarios for the underlying Public Key Infrastructure. The solutions employ different NIST-standardized PQC algorithms alongside traditional cryptography using hybrid schemes.
+
               The feasibility of this approach is demonstrated by the realization of a functional demonstrator implementing hybrid cryptographic schemes on a resource-constrained, ISO 7816-compliant smart card, addressing the critical challenges of signature generation and verification time and memory footprint during authentication operations. Finally, the results of the demonstrator are presented along with the identified challenges ahead.
             speakers:
               - Jan Klaußner
@@ -927,7 +988,9 @@ data:
           - title: Scaling of Memory and Bandwidth Requirements of Post-Quantum Signatures with Message Size
             description: |
               In this work we analyse the qualitative memory and bandwidth efficiency properties of the currently standardised post-quantum signatures as such, and of their protocol integrations mainly in the X.509 context. The term qualitative in this respect refers to how memory and bandwidth requirements scale with the size of the signed message.
+
               Specifically, we address the question of how far the algorithms support online computations, also known as streaming, with respect to the signed message in the signing and verification operations. Further, we review the possibilities for the pre-computation of a short message representative outside the cryptographic module responsible for the signing or verification operation of the different signature schemes. We also give a preview of the corresponding cryptographic API of the PKCS#11 standard, which introduces numerous PQC signature algorithms in the upcoming version 3.2.
+
               We demonstrate that for specific realistic use cases, the qualitative memory and bandwidth efficiency of the PQC signature schemes in protocol use varies widely and tends to be substantially degraded compared to the traditional signature schemes based on RSA and elliptic curves, which always allow for the pre-computation of a short message representative in the form of a hash value. Our results are relevant to PQC migrations of existing applications using traditional RSA or elliptic curve schemes.
             speakers:
               - Falko Strenzke
@@ -937,8 +1000,11 @@ data:
           - title: "Measuring PQC Readiness for PKI: Introducing the PKI Maturity Model Extension Framework and Its First Extension"
             description: |
               Most organisations approaching post-quantum migration share the same blind spot: they have a roadmap, but no honest way to measure where their PKI actually stands. This session introduces two published outputs of the PKI Consortium's PKIMM Working Group: the PKI Maturity Model Extension Framework, and the PQC Readiness Extension for PKI built on top of it.
-              The PKI Maturity Model already helps organisations benchmark their PKI programmes against an industry reference structured around four modules and fifteen capability categories. The Extension Framework defines a standardised way to overlay targeted, fast-moving maturity criteria — PQC, automation, cryptographic agility — onto the existing categories, with consistent scoring, weighting, and reporting rules. The PQC Readiness Extension, authored by Kennedy Nwup, is the first published extension, giving PKI owners a defensible answer to questions their CISOs, regulators and auditors are starting to ask.
+
+              The PKI Maturity Model already helps organisations benchmark their PKI programmes against an industry reference structured around four modules and fifteen capability categories. The Extension Framework defines a standardised way to overlay targeted, fast-moving maturity criteria (PQC, automation, cryptographic agility) onto the existing categories, with consistent scoring, weighting, and reporting rules. The PQC Readiness Extension, authored by Kennedy Nwup, is the first published extension, giving PKI owners a defensible answer to questions their CISOs, regulators and auditors are starting to ask.
+
               In this joint session, Roman Cinkais (Chair, PKIMM WG) and Kennedy Nwup (Vice Chair, PKIMM WG, and author of the extension) walk through the design of the Extension Framework, present the PQC Readiness Extension in detail, show how it is intended to be used in practice, and reflect on turning a working group draft into a published, community-endorsed specification.
+
               Attendees will leave with a published framework and a PQC Readiness Extension they can apply to their PKI programme straight away.
             speakers:
               - Roman Cinkais
@@ -949,9 +1015,13 @@ data:
           - title: "HAPKIDO Handbook: Navigating the Transition to Quantum-Safe PKI"
             description: |
               PKIs operate on the assumption that trusted credentials remain unforgeable over their lifetime. Advances in quantum computing challenge this premise: credentials trusted today may become forgeable in the future, introducing a "trust now, forge later" risk that directly impacts the integrity of digital identities and trust anchors.
+
               For PKI-dependent ecosystems, migration is not just a cryptographic upgrade problem. Long-lived certificates, complex trust hierarchies, and cross-sector dependencies mean that failures can propagate systemically, affecting entire digital trust ecosystems. Yet progress toward quantum-safe PKI remains fragmented, slowed by uncertainty around standards, timelines, and ownership. The HAPKIDO societal impact assessment shows that compromised PKIs could trigger cascading failures across sectors, from disruption of public services to economic instability in banking systems.
+
               This talk presents the HAPKIDO Handbook, which provides a consolidated, research-based framework to guide organisations and policymakers through the transition to quantum-safe PKI. It combines technical insights, governance perspectives, and societal risk analysis into a unified approach, with two main goals: raising awareness and providing actionable insights to support decision-making.
+
               The handbook presents two key contributions: a societal risk assessment method that translates abstract quantum threats into concrete organisational and societal risks, enabling prioritisation of critical assets and services; and a five-stage growth model guiding organisations from awareness to full ecosystem adaptation, emphasising the need for coordinated action across organisational and sectoral levels. Together, these frameworks position the transition not as a technical upgrade, but as a multi-actor transformation requiring alignment across ecosystems.
+
               The handbook highlights that early action is possible and necessary, including cryptographic inventory and adoption of cryptographic agility practices, as well as jointly testing hybrid solutions. Success depends on coordinated efforts across organisations and policymakers acting within a specific sector to avoid fragmentation and ensure interoperability. Stakeholders should begin risk-based assessment, invest in early experimentation, and actively participate in sector-specific collaboration and standardisation efforts.
             speakers:
               - Dayana Spagnuelo
@@ -964,9 +1034,13 @@ data:
           - title: "Trust Now, Forge Later: A Live Exposure Demonstration"
             description: |
               Current post-quantum planning is dominated by one clock, harvest-now-decrypt-later (HNDL), but for signature infrastructure the binding exposure is trust-now-forge-later (TNFL). Once a cryptographically relevant quantum computer arrives, long-validity signing anchors become forgeable, leading to loss of trust. Using the global passport and national identity infrastructure as an empirical model for TNFL exposure analysis and remediation prioritisation, this session shows in a live demonstration exactly how trust could collapse if urgent, globally coordinated action is not put in place.
+
               The dataset is the ICAO Master List: the self-signed country signing certificate authority (CSCA) roots that anchor verification of ICAO 9303 compliant machine-readable travel documents (MRTDs) worldwide, published as a Cryptographic Message Syntax (CMS) structure and cross-checkable against the German Federal Office for Information Security (BSI) list. Both are public and neither requires Public Key Directory (PKD) participation at the CSCA layer.
-              The demonstration walks through the pipeline end to end, using open tooling only so that anyone can reproduce it: hash and record provenance of the source file; unwrap the CMS encapsulated content and split the CscaMasterList into per-certificate DER with a standard-library walker; extract algorithm, key size and validity fields; then derive three outputs — installed base by algorithm and key-strength band, the share of anchors whose notAfter extends past a set of CRQC scenario years, and a fingerprint-level reconciliation between the two source lists. Every figure regenerates from the script; none is asserted by hand. Findings are reported in aggregate, without singling out individual issuers.
+
+              The demonstration walks through the pipeline end to end, using open tooling only so that anyone can reproduce it: hash and record provenance of the source file; unwrap the CMS encapsulated content and split the CscaMasterList into per-certificate DER with a standard-library walker; extract algorithm, key size and validity fields; then derive three outputs: installed base by algorithm and key-strength band, the share of anchors whose notAfter extends past a set of CRQC scenario years, and a fingerprint-level reconciliation between the two source lists. Every figure regenerates from the script; none is asserted by hand. Findings are reported in aggregate, without singling out individual issuers.
+
               The reusable corollary for your own cryptographic estate is to treat the certificate as the asset-register entry, treat its notAfter field as a stated useful life, and then ask which anchors you are relying on past the point their signatures can be forged. The confidentiality wave of quantum cryptographic exposure, which dominates current attention, concentrates at scannable perimeters. The integrity wave, in contrast, is distributed across every component carrying a verifiable signature, so it surfaces only through inventory, not perimeter scanning.
+
               Attendees leave with a runnable method and an understanding of how to apply this to their own PKI estates.
             track: Demo
             speakers:
@@ -983,8 +1057,11 @@ data:
           - title: "Bootstrapping PQC on Existing Hardware: A Three-Stage Migration Framework"
             description: |
               The transition to post-quantum cryptography requires more than replacing algorithms. Public-key cryptography is deeply embedded in device identity, secure boot, code signing, certificate issuance, software delivery, and credential lifecycle management. For long-lived connected and industrial devices, immediate hardware replacement is often neither financially nor operationally practical.
+
               This presentation presents a three-stage migration framework for introducing PQC into existing device platforms while preserving current hardware roots of trust. In the first stage, symmetric cryptography and existing protected key storage are used to maintain secure boot and establish a trusted execution environment. In the second stage, that environment is used to generate, provision, and protect PQC credentials on the device. In the third stage, PQC credentials and the established boot chain are used to authenticate and deploy quantum-safe applications and software updates.
+
               The session will examine how this staged approach applies to constrained embedded devices and large, mixed-generation fleets. It will also address the operational challenges that determine whether such a migration can scale, including cryptographic agility, key protection, credential lifecycle management, rollback, code-signing evolution, and coexistence between classical and PQC-capable devices.
+
               The framework is based on practical experience designing PKI, secure boot, code-signing, and device-identity infrastructures for large populations of connected devices. It is intended for organizations that must begin PQC adoption before PQC-optimized hardware is broadly deployed. Attendees will leave with a concrete migration model for using existing hardware security capabilities to bootstrap PQC, introducing PQC credentials without replacing the entire installed base, and evolving PKI, secure boot, and software-signing infrastructures toward fully quantum-ready platforms.
             speakers:
               - Xin Qiu
@@ -994,7 +1071,9 @@ data:
           - title: Leveraging Agentic AI for Automated CBOM Inventory and Crypto-Agility
             description: |
               Extracting Cryptographic Bill of Materials (CBOMs) from source code is a foundational pillar of the Post-Quantum Cryptography (PQC) transition. However, traditional security scanning methods fall short.
+
               The limitations of SAST and vulnerability tools include limited support for legacy or proprietary languages where old cryptography often hides; the high friction and overhead of deep Abstract Syntax Tree analysis, which is computationally heavy and slows down CI/CD pipelines; scaling bottlenecks from heavy reliance on DevSecOps teams for onboarding and configuration; and a static, reactive posture that identifies risks but does not facilitate active crypto-agility.
+
               Integrating agentic AI into CI/CD pipelines via the Model Context Protocol introduces a scalable and code-agnostic approach to CBOM management. Beyond inventory, agentic AI enables true crypto-agility in pipelines, verifying pull requests and even fixing obsolete cryptography.
             speakers:
               - Iván Fernández Mora
@@ -1004,8 +1083,11 @@ data:
           - title: "Bridging the Gap: A Hybrid TPM Strategy for Post-Quantum Virtual Smart Cards"
             description: |
               Though NIST finalized ML-KEM and ML-DSA some time ago, the industry is still facing a dilemma: how to secure hardware against future threats without waiting for silicon updates. While the Trusted Computing Group (TCG) released the TPM 2.0 Library Specification v185 in March 2026 with native PQC support, the reality of enterprise deployment is that most existing hardware remains on pre-PQC TPMs.
+
               This session moves beyond theoretical migration paths to dissect a real-world, production-grade implementation of a hybrid Virtual Smart Card architecture. We detail our transition from Microsoft's Virtual Smart Card ecosystem to a custom, standard TPM-based solution. The core of the discussion focuses on a stop-gap but robust hybrid model: leveraging software-based post-quantum algorithms (ML-KEM and ML-DSA) for cryptographic operations while utilizing the existing TPM for the secure storage of PQC private keys.
-              We look at why hardware-based key protection is significantly more secure than software-based storage, comparing pure software key storage against TPM-sealed keys and the attack surface each presents — lateral movement, memory scraping, offline extraction — along with honest caveats about where the hybrid model still has gaps compared to fully native TPM computation. We then turn to key lifecycle management across mixed algorithm sets: generation, backup, rotation, and revocation, and what worked smoothly versus where the hybrid model introduces genuine complexity.
+
+              We look at why hardware-based key protection is significantly more secure than software-based storage, comparing pure software key storage against TPM-sealed keys and the attack surface each presents (lateral movement, memory scraping, offline extraction), along with honest caveats about where the hybrid model still has gaps compared to fully native TPM computation. We then turn to key lifecycle management across mixed algorithm sets: generation, backup, rotation, and revocation, and what worked smoothly versus where the hybrid model introduces genuine complexity.
+
               The session concludes with a frank assessment of when to wait for native TCG v185 hardware, what it actually brings to the table, and what pitfalls to avoid during the transition. Attendees will leave with a concrete blueprint for implementing crypto-agility in constrained environments and criteria for deciding when to migrate from software-hybrid models to native TPM 2.0 v185 hardware based on threat modeling and resource availability.
             speakers:
               - Zsolt Makádi
@@ -1015,8 +1097,11 @@ data:
           - title: "A Pragmatic Strategy Behind PQC: 7 Decisions Every Enterprise Must Make Before Migration"
             description: |
               Organizations are rushing to inventory certificates, evaluate tooling, and launch discovery projects in preparation for post-quantum cryptography (PQC). But these activities often begin before the organization has answered the architectural and governance questions that determine what should actually change. The biggest obstacle to PQC readiness is no longer the cryptography; it is making the right organizational decisions before technology choices lock in years of unnecessary cost and complexity.
+
               This session presents a practical decision framework built around the seven strategic choices every enterprise should make before investing in PQC tooling or migration efforts. Rather than another discussion of algorithms or migration mechanics, attendees will learn how to establish a clear, executable roadmap using existing PKI investments, governance processes, and technical teams. The result is a strategy that reduces unnecessary spending, avoids premature implementation decisions, and creates a foundation for true cryptographic agility.
+
               Drawing from real-world enterprise PKI modernization engagements, this session demonstrates how organizations can prioritize business risk, define crypto agility objectives, align policy and architecture, and determine where inventories, assessments, and tooling actually fit within an overall PQC strategy. It covers why certificate inventory does not equal PQC readiness and where most programs go wrong, how to align business risk, governance, crypto agility, and PKI architecture before selecting technologies, and how to determine when tooling adds value and when it simply creates additional cost and complexity.
+
               Attendees will leave with a vendor-neutral framework they can immediately apply to reduce unnecessary spending, avoid premature implementation decisions, and build a foundation for long-term cryptographic agility.
             speakers:
               - Tim Lozier
@@ -1032,7 +1117,9 @@ data:
           - title: Comparing Cryptographic Inventory Requirements Across Industries
             description: |
               This panel explores the differences in the requirements on cryptographic inventory, and how they impact remediation efforts and migration priorities across industry verticals. Chaired by an expert in cryptographic posture management, the panel brings together representatives from finance, telecoms, energy, healthcare and transportation to determine what each sector actually needs.
+
               The panel explores whether a universal inventory model is realistic across such fundamentally different environments, or whether sector-specific approaches to PQC discovery, cryptography information exchange and prioritisation will ultimately emerge. It covers the challenges of on-boarding external inventory tools, mapping cryptographic dependencies, and how to evaluate different tools against the individual needs of each industry.
+
               The topic becomes particularly interesting cross-sector because financial institutions may have mature PKI governance and strong visibility into certificates and identity infrastructure yet still struggle to map cryptographic dependencies within internally developed applications and third-party SaaS ecosystems; OT-heavy sectors such as energy, manufacturing, and transportation may know their physical assets in extraordinary detail while lacking visibility into embedded cryptography within industrial control systems, field devices, firmware, and operational protocols; and telecoms providers face challenges associated with highly distributed network infrastructure, vendor equipment, and complex trust relationships across operational environments.
             track: Panel discussion
             speakers:
@@ -1047,8 +1134,11 @@ data:
           - title: "CLM 2.0: What's Deployed, What's Broken, What's Next"
             description: |
               A year ago at the PQC Conference in Kuala Lumpur, this panel mapped the roadblocks on the path to post-quantum resilience. Twelve months on, the questions have shifted. Certificate lifetimes are collapsing toward 47 days. Post-quantum cryptography has moved from roadmap slide to operational planning under regulator and customer pressure. AI-driven workloads are beginning to demand identity at a scale traditional certificate lifecycle management was never built to support. Conversations inside CISO offices and architecture reviews have moved from strategy to deployment.
-              This session reconvenes the original panel for an implementation-grounded follow-up. The aim is to move past the vision and into the field: what is actually running in enterprise production today, where the new operational load is causing real failures, and what is getting torn out and rebuilt. Discussion will surface specifics — observed automation maturity across enterprise estates, failure modes under accelerated renewal cadence, and the trade-offs that emerge when crypto agility, hybrid PQC, and machine identity converge inside the same stack.
-              Most sessions on CLM and PQC remain at the level of strategy, principle, or capability inventory. This panel stays inside the operational reality — what works at scale, what fails first, and what the next architecture looks like once we accept that CLM is no longer an operations function but a control plane for trust. That reframe carries practical consequences: where policy lives, who owns PQC migration, how AI agent identities are issued and revoked at workload speed, and what resilience metrics should replace the older uptime-and-renewal dashboards.
+
+              This session reconvenes the original panel for an implementation-grounded follow-up. The aim is to move past the vision and into the field: what is actually running in enterprise production today, where the new operational load is causing real failures, and what is getting torn out and rebuilt. Discussion will surface specifics: observed automation maturity across enterprise estates, failure modes under accelerated renewal cadence, and the trade-offs that emerge when crypto agility, hybrid PQC, and machine identity converge inside the same stack.
+
+              Most sessions on CLM and PQC remain at the level of strategy, principle, or capability inventory. This panel stays inside the operational reality: what works at scale, what fails first, and what the next architecture looks like once we accept that CLM is no longer an operations function but a control plane for trust. That reframe carries practical consequences: where policy lives, who owns PQC migration, how AI agent identities are issued and revoked at workload speed, and what resilience metrics should replace the older uptime-and-renewal dashboards.
+
               The conversation is structured around four working areas: the breaking point of current approaches in a 47-day world; PQC and crypto agility as an operational discipline rather than a research topic; the architecture of a trust control plane, including how AI and autonomous workloads fit; and the business and risk reframe needed to fund and govern the shift. Attendees will leave with a clearer sense of where peer organizations actually stand on automation, PQC readiness, and machine identity scale, a working definition of what CLM 2.0 demands in practice, and a sharper view of the most expensive blind spots hiding inside today's deployments.
             track: Panel discussion
             speakers:
@@ -1065,8 +1155,11 @@ data:
           - title: "120,000 Tasks: The Cryptography Was the Easy Part"
             description: |
               The integrated master schedule for one large enterprise's post-quantum migration grew past 120,000 discrete tasks. It was not a count of devices, certificates, or applications to upgrade. If it were, 120,000 would be small. The direct remediation work, the actual cutovers across every device and application, accounted for fewer than 30,000 tasks (a million-plus devices, systems, and apps grouped into upgrade batches).
+
               The remaining 90,000 or so tasks are the enablement system: inventory as a living capability, governance and reporting cadence, vendor lifecycle enforcement, testing and assurance, workforce change, ecosystem and partner alignment, and ongoing operations during the long hybrid period.
+
               Drawing on that 120,000-task plan (illustrative of complexity, not a universal count) and on three decades running high-stakes delivery programs such as national payments systems and federal health-records platforms, the talk turns to what actually governs whether such a program finishes. It is rarely the cryptography. It is the density of interdependencies: vendors waiting on internal teams, shared infrastructure that must be ready before application waves can move, regulatory deadlines colliding with finite engineering capacity. It is ownership, because cryptography is everyone's problem and therefore no one's, so the program needs a single accountable lead with authority across security, IT, engineering, procurement, and OT. It is workforce capacity, since the trained people a program needs at its peak in years four to eight cannot be conjured on demand. And it is funding that has to survive several budget cycles and more than one CISO. PKI realities sit inside this frame: certificate migration planned as waves rather than a single flag day, and PKI and HSM procurement and certification lead times treated as hard scheduling constraints.
+
               Attendees leave able to right-size and sequence their own program, separate a credible plan from a wishful timeline, argue for a single accountable owner and the governance to back one, build the board case for multi-year funding, and prioritize by risk so the program delivers measurable security gains in years one to three while the longer effort runs on.
             speakers:
               - Marin Ivezic
@@ -1076,6 +1169,7 @@ data:
           - title: "Adding PQ Capabilities to SSH Protocol: The Fedora Approach"
             description: |
               OpenSSH and libssh are 2 mostly widespread implementations of SSH protocol. Real-world requirements for PQ crypto causes writing significant patches to OpenSSH because of difference of the upstream and downstream requirements. libssh upstream is more binded to Fedora maintainers and lands the changes upstream.
+
               The talk covers key downstream changes in OpenSSH: using OpenSSL code, providing extra algorithms support, FIPS compatibility quirks, in OpenSSH, and corresponding changes in libssh.
             speakers:
               - Dmitry Belyavskiy
@@ -1087,7 +1181,7 @@ data:
         sessions:
           - title: Closing (Day 2)
             description: |
-              Brief closing remarks for the blue hall audience and a preview of Day 3.
+              Brief closing remarks for the red hall audience and a preview of Day 3.
             speakers:
               - Sven Rajala
             locations:
@@ -1116,7 +1210,7 @@ data:
         sessions:
           - title: "Welcome back — Day 3"
             description: |
-              Parallel welcome and agenda highlights for the blue hall audience.
+              Final day framing for the red hall audience: what is ahead, and how to make the most of the last day before heading back into the real world.
             durationMinutes: 5
             speakers:
               - Paul van Brouwershaven
@@ -1137,8 +1231,10 @@ data:
           - title: "Towards Coordinated Quantum Security in the Financial Sector: Risks, Priorities, and a Framework for Market Action"
             description: |
               The transition to quantum security in the financial sector is not only a technological undertaking, but also a coordination challenge for a highly interconnected global ecosystem. Misaligned transition efforts may create operational risks, including interoperability tensions across markets, infrastructures, and jurisdictions, prolonged reliance on quantum-vulnerable cryptography, inefficient duplication of effort, and ecosystem fragmentation.
+
               To address these risks, the Europol Quantum Safe Financial Forum, in collaboration with FS-ISAC and CFDIR, has proposed an operational framework for coordinated action. The framework focuses on identifying and prioritising critical use cases, structuring the transition through shared implementation waves, and defining three use-case-specific milestones to align sequencing and execution.
-              This session examines that prioritisation framework and provides an update on the state of quantum security in the financial sector — relevant not only to financial sector professionals, but to the wider community as an early example of ecosystem-wide coordination and its associated challenges.
+
+              This session examines that prioritisation framework and provides an update on the state of quantum security in the financial sector, relevant not only to financial sector professionals, but to the wider community as an early example of ecosystem-wide coordination and its associated challenges.
             speakers:
               - Jaime Gómez García
             locations:
@@ -1155,6 +1251,7 @@ data:
           - title: "The European Roadmap on Post-Quantum Cryptography: Looking Back and Moving Forward"
             description: |
               In April 2024, the European Commission issued a Recommendation on Post-Quantum Cryptography (PQC), calling on Member States to adopt a coordinated and harmonized approach to the transition towards quantum-resistant cryptographic systems. This led to the establishment of a dedicated PQC workstream within the NIS Cooperation Group, co-chaired by France, Germany, and the Netherlands. Bringing together representatives from nearly all EU Member States, the workstream developed the European roadmap for the coordinated migration to PQC, published in June 2025.
+
               The workstream continues to support Member States by fostering collaboration, exchanging experiences, and addressing common challenges related to the transition to PQC. In this talk, we will review the progress made since the publication of the roadmap, discuss key developments and lessons learned, and provide an outlook on the remaining priorities and future activities of the workstream.
             speakers:
               - Stephan Ehlen
@@ -1163,9 +1260,11 @@ data:
 
           - title: Hybrid is a Redistribution of Risk, Not a Removal of It
             description: |
-              The post-quantum migration debate routinely flattens "hybrid versus pure PQC" into a security question — one algorithm or two? — when it is really an operational architecture question about which class of failure your organisation is structured to handle.
+              The post-quantum migration debate routinely flattens "hybrid versus pure PQC" into a security question (one algorithm or two?) when it is really an operational architecture question about which class of failure your organisation is structured to handle.
+
               This talk reframes the choice. Hybrid for key exchange is largely settled: deploy it now. Hybrid for authentication is harder, and the costs depend on construction. Composite signatures buy atomicity by binding two algorithms into one credential, but the same atomicity removes component-wise recovery and undoes two decades of hash-agility infrastructure. Parallel approaches deliver dual-algorithm assurance without the binding, fitting how PKI has handled every previous algorithm migration.
-              Drawing on a failure-mode analysis across twenty-five operational and cryptographic scenarios, the talk argues that for most enterprise authentication deployments, parallel is the better-fitting hybrid — and the conscious choice rarely defaults to it.
+
+              Drawing on a failure-mode analysis across twenty-five operational and cryptographic scenarios, the talk argues that for most enterprise authentication deployments, parallel is the better-fitting hybrid, and the conscious choice rarely defaults to it.
             speakers:
               - Michael Osborne
             locations:
@@ -1179,7 +1278,9 @@ data:
           - title: "Scaling Quantum Safe: How HSBC Transitions from Early Momentum to Enterprise Execution"
             description: |
               Quantum Safe transformation is emerging as a critical strategic priority for financial institutions, though most organisations are still in relatively early stages of structured execution. This session shares HSBC's experience in evolving its Quantum Safe journey from a collection of early initiatives into a structured enterprise programme designed for long-term migration.
-              As a global financial institution operating across complex technology landscapes, HSBC recognised that successful cryptographic transformation requires more than identifying vulnerable algorithms or testing new technologies — it requires alignment across business priorities, technology domains, governance structures, third-party ecosystems, operational processes, and future investment decisions. The session explores how HSBC approached this transition by consolidating existing insights, validating readiness, strengthening alignment across stakeholders, and creating the foundations for the next stage of execution: moving from awareness and experimentation into an enterprise transformation mindset, strengthening board-level visibility, and building the governance, ownership, and execution model needed for a multi-year journey.
+
+              As a global financial institution operating across complex technology landscapes, HSBC recognised that successful cryptographic transformation requires more than identifying vulnerable algorithms or testing new technologies. It requires alignment across business priorities, technology domains, governance structures, third-party ecosystems, operational processes, and future investment decisions. The session explores how HSBC approached this transition by consolidating existing insights, validating readiness, strengthening alignment across stakeholders, and creating the foundations for the next stage of execution: moving from awareness and experimentation into an enterprise transformation mindset, strengthening board-level visibility, and building the governance, ownership, and execution model needed for a multi-year journey.
+
               Rather than focusing only on technology change, this session highlights the organisational and strategic lessons behind scaling Quantum Safe adoption in a large financial institution.
             durationMinutes: 60
             speakers:
@@ -1198,7 +1299,9 @@ data:
           - title: Prioritising Financial Sector Use-Cases for Migration
             description: |
               The intricate web of interbank communications, transaction protocols, and shared infrastructure means no single financial institution can effectively navigate a successful Post-Quantum Cryptography (PQC) migration alone. The Quantum Safe Financial Forum (QSFF) was launched by Europol in 2024 and quickly established itself as the go-to authority for financial institutions grappling with the complexities of quantum-safe migration. The forum comprises experts from leading commercial banks, central banks, regulators and other financial entities.
+
               A dedicated Working Group within QSFF is actively developing an aligned roadmap: precisely defining the scope of each "use-case" for PQC implementation, establishing criteria for evaluating and prioritizing those use-cases, linking business contexts to the CIA triad, identifying concrete milestones, and balancing dependencies to ensure a synchronized rollout.
+
               This talk provides an overview of the Working Group's structure, its deliverables to date, planned next steps, and practical ways in which the audience can contribute to this vital initiative.
             speakers:
               - Sarah McCarthy
@@ -1209,7 +1312,9 @@ data:
           - title: "PQC PKI: The Good, the Broken, and the Hybrid"
             description: |
               2025 was a year full of preparations for deploying PQC in practice. Standards, software libraries, HSMs, a lot of everything was updated to support PQC algorithms.
+
               PQC 2026 started with a lot of PQC capable components and a statement like, "It's OK to have not acted YET. 2026 will be the last time this can be said". At the end of 2025 and the beginning of 2026 was also the time for great confusion. As organizations started to ponder on the next practical steps, they had to make decisions on what algorithms to use, hybrid solutions or not, and in the case of hybrids what type of hybrid PKI. Have companies deployed PQC in production by now? The answer is yes, production deployment have started. Decisions have been made and some earlier thoughts had to be dismissed. This presentation will highlight PQC PKI choices and hierarchies based on some real world decisions.
+
               Architecture, algorithms, and combinations. What has been chosen and why. And maybe even more interesting, what didn't work and why? The presenters do not claim to have seen all PQC PKI deployments of 2026, but we have seen a few, and this is real world experience from those.
             speakers:
               - Tomas Gustavsson
@@ -1225,7 +1330,9 @@ data:
           - title: "Beyond the Handshake: Enhancing PKI with Out-of-Band Key Agreement"
             description: |
               Post-quantum cryptography (PQC) migration is accelerating, but it also exposes a deeper reality: cryptography can no longer be treated as a one-time design choice embedded in protocols. As standards evolve, organizations must prepare for a future where multiple cryptographic assumptions coexist and continuously change, while advances in automation and AI shrink the window to respond to emerging cryptographic risks.
+
               This talk introduces Out-of-Band (OOB) Key Agreement as a practical way to enhance PKI, establishing an independent cryptographic control layer that complements existing protocols such as TLS and IPsec. Rather than replacing in-band key exchange, OOB mechanisms derive additional authenticated symmetric keys through a separate, policy-governed channel rooted in PKI identity, enabling organizations to introduce new cryptographic methods, rotate algorithms, and respond to emerging threats without requiring changes to application or transport layers.
+
               In this model, PKI evolves from a foundational trust anchor into a central orchestrator of cryptographic policy and lifecycle management across multiple key establishment channels, enabling both resilience through diversity and operational simplicity in a post-quantum world.
             speakers:
               - Michele Mosca
@@ -1241,6 +1348,7 @@ data:
           - title: PQC Regulation and Guidance Globally
             description: |
               PQC guidance varies by country and by industry. Some countries publish short policy papers, others provide detailed cryptographic recommendations, and even PQC migration handbooks. We are also seeing the development of sovereign PQC algorithms and standards. This tutorial gives an overview of the PQC and cryptographic guidance that is currently available, highlights common themes, and identifies significant differences.
+
               Designed for managers and technical architects planning for PQC migration, especially those working in multinational organizations. It is also suitable for policy makers and regulators to help them understand the changing global landscape, and developers of cryptographic products and services will also benefit.
             track: Tutorial
             durationMinutes: 60
@@ -1252,6 +1360,7 @@ data:
           - title: Quantum-Ready for BFSI in the ASEAN Region
             description: |
               This session shares real experience working with MODA and FSC in Taiwan, and DICT and BSP in the Philippines, to understand their guidelines and roadmaps for supporting the Taiwanese and Philippine BFSI sectors in migrating to PQC, starting from helping them become quantum-ready.
+
               It shares real use cases covering how large national banks plan to build a golden inventory, what should be considered when preparing them to start PQC inventory and assessment, and which approach and methodology they adopt to start the assessment and the journey of PQC migration. For example, most of the banks would only adopt an agentless tool for cryptographic asset scanning; the session looks at which areas they usually start with and how they manage the data afterwards, as well as the role of the national cybersecurity authority and the central bank in driving this.
             speakers:
               - Vivian Ma
@@ -1260,8 +1369,10 @@ data:
 
           - title: PQC Migration for European Public Institutions
             description: |
-              Cryptanalytically Relevant Quantum Computing (CRQC) is approaching increasingly fast, as the latest developments in hardware, software, and the application of decrypting algorithms show. But where would adversaries with a CRQC find their first targets? The public sector, involving many different institutions with huge amounts of confidential information — from monetary and financial, through organizational and strategic, to health and security data — is home to high-value targets with data retention periods that make harvest-now-decrypt-later worth the effort.
+              Cryptanalytically Relevant Quantum Computing (CRQC) is approaching increasingly fast, as the latest developments in hardware, software, and the application of decrypting algorithms show. But where would adversaries with a CRQC find their first targets? The public sector, involving many different institutions with huge amounts of confidential information (from monetary and financial, through organizational and strategic, to health and security data) is home to high-value targets with data retention periods that make harvest-now-decrypt-later worth the effort.
+
               The complexity of IT systems, already heterogeneous between the different institutions and even more so between European countries, and the need for reliability and trustworthiness of this backbone of our societies, make migration a highly difficult undertaking. This is a challenge Q-PrEP is here to help tackle, in and with its community of cybersecurity agencies, public sector organizations, their private sector providers, and cybersecurity researchers on PQC and related aspects. A clear strategy, not unguided disruption of safety and secrecy, is needed and advanced by and within Q-PrEP.
+
               To give the audience an impression of the project and its community, the presentation by the Q-PrEP project team covers an introduction to the approach and measures taken by Q-PrEP; the Q-PrEP Community as the centerpiece of the project; integration of Q-PrEP into the European PQC ecosystem; key aspects of the PQC migration in European public organizations and services and how their representatives engage in Q-PrEP; and the direction of Q-PrEP's PQC roadmap for the public sector, Europe-wide.
             speakers:
               - Mathias Schumacher
@@ -1288,6 +1399,7 @@ data:
           - title: Securing the Internet of Things for the Quantum Era
             description: |
               The rapid growth of the IoT has transformed critical sectors such as healthcare, transportation, manufacturing, energy, and smart cities. However, IoT security is deeply dependent on public key infrastructures (PKI) for device identity, authentication, certificate management, secure onboarding, key establishment, and firmware validation. The emergence of quantum computing threatens many of the public-key algorithms underpinning today's PKI, creating a long-term security risk for IoT deployments with constrained resources and long operational lifetimes.
+
               This talk focuses on the transition of IoT PKI towards PQC. It examines the implications of PQC for certificates, certificate chains, device provisioning, authentication protocols, secure updates, and lifecycle management at scale. Particular attention is given to the practical challenges of deploying larger post-quantum keys and signatures on constrained IoT devices and bandwidth-limited networks. The talk also covers hybrid certificates, crypto-agile PKI architectures, migration strategies, and interoperability with existing IoT security standards.
             speakers:
               - Shahid Raza
@@ -1315,7 +1427,8 @@ data:
         sessions:
           - title: Collaborative Efforts to Support Migration to PQC
             description: |
-              A panel discussion that shares examples of how over 55 different organizations have collaborated within the NCCoE Migration to PQC project — using cryptographic visibility to support risk management decisions for migration actions, and performing demonstrations using PQC for interoperability and benchmarking to inform PKI system owners on starting to use PQC algorithms.
+              A panel discussion that shares examples of how over 55 different organizations have collaborated within the NCCoE Migration to PQC project, using cryptographic visibility to support risk management decisions for migration actions, and performing demonstrations using PQC for interoperability and benchmarking to inform PKI system owners on starting to use PQC algorithms.
+
               A panel of NCCoE collaborators who have been working on implementing PQC algorithms in PKI systems (such as the US Government PIV card). Moderator to be announced.
             track: Panel discussion
             speakers:
@@ -1328,7 +1441,9 @@ data:
           - title: Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period
             description: |
               The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
+
               In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
+
               We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
             speakers:
               - Akane Suzuki
@@ -1340,8 +1455,7 @@ data:
         sessions:
           - title: Conference closing
             description: |
-              The chairs bring the conference to a close with key takeaways, a call to
-              action, and what comes next for the PKI Consortium's PQC work.
+              The chairs bring the conference to a close with key takeaways, a call to action, and what comes next for the PKI Consortium's PQC work.
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
