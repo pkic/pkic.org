@@ -529,6 +529,12 @@ data:
             locations:
               - blue_hall
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            durationMinutes: 105
+            locations:
+              - room_a
       - time: "11:45"
         sessions:
           - title: "Where the PQC Migration Actually Stands: A Cross-Ecosystem Census of 2.8 Million Packages"
@@ -634,6 +640,17 @@ data:
             locations:
               - room_c
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
       - time: "14:30"
         sessions:
           - title: Implementing the PKI Consortium PQC Maturity Model at Siemens Trust Centre
@@ -702,6 +719,11 @@ data:
             locations:
               - room_d
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
       - time: "15:00"
         title: Break
 
@@ -887,6 +909,12 @@ data:
             locations:
               - blue_hall
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            durationMinutes: 105
+            locations:
+              - room_a
       - time: "11:00"
         noTransition: true
         sessions:
@@ -1036,6 +1064,11 @@ data:
             locations:
               - room_d
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
       - time: "14:30"
         sessions:
           - title: "Trust Now, Forge Later: A Live Exposure Demonstration"
@@ -1116,6 +1149,11 @@ data:
             locations:
               - room_d
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
       - time: "15:00"
         title: Break
 
@@ -1301,6 +1339,12 @@ data:
             locations:
               - blue_hall
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            durationMinutes: 105
+            locations:
+              - room_a
       - time: "11:45"
         sessions:
           - title: Prioritising Financial Sector Use-Cases for Migration
@@ -1387,6 +1431,17 @@ data:
             locations:
               - room_c
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
       - time: "14:30"
         sessions:
           - title: Post-Quantum Migration at Anduril
@@ -1413,6 +1468,23 @@ data:
             locations:
               - room_b
 
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_c
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
       - time: "15:00"
         title: Break
 
