@@ -251,7 +251,7 @@ data:
       bio: |
         Lory Thorpe is an executive technology leader and board advisor with more than 20 years of experience shaping the strategy, commercialization, and adoption of emerging technologies across global industries. Her expertise spans advanced connectivity and communication, quantum readiness, cybersecurity, and deep tech. As a Senior Strategy Advisor within IBM, Lory leads the Quantum Safe agenda for industries, helping organizations prepare for the risks and opportunities of the quantum era. She is the Chair of the GSMA Post Quantum Telco Network Task Force, the first global telecom industry forum dedicated to post-quantum cryptography adoption.
 
-    - name: Rieck Manfred
+    - name: Manfred Rieck
       title: Head of Quantum Tech / Co-Founder, Deutsche Bahn / Federal Quantum Alliance
       bio: |
         Manfred Rieck is Co-founder of the German Federal Quantum Alliance, a partnership of government-owned organizations and federal authorities including Deutsche Bahn/DB Systel, Bundesdruckerei, the Federal Office for Information Security (BSI), the German Federal Intelligence Service (BND), the Federal Employment Agency (BA), the German pension insurance, and BWI, the IT service provider for the German Armed Forces. The group focuses on the progress of quantum computing, quantum sensing, and quantum cybersecurity (PQC, QKD), acting as a think tank for the German government and supporting the structured introduction of PQC in government and industry. Manfred has worked in IT departments for more than 20 years in senior management positions at Deutsche Bahn, IBM, and BASF.
