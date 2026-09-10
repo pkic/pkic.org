@@ -12,8 +12,10 @@ vi.mock("wouter", () => ({
   ),
 }));
 
+/** Which page the sidebar is being read from; the section it belongs to opens. */
+const currentLocation = { value: "/groups" };
 vi.mock("wouter/use-hash-location", () => ({
-  useHashLocation: () => ["/groups", vi.fn()],
+  useHashLocation: () => [currentLocation.value, vi.fn()],
 }));
 
 let container: HTMLDivElement;
@@ -54,6 +56,7 @@ function group(id: string, name: string): Record<string, unknown> {
 }
 
 beforeEach(() => {
+  currentLocation.value = "/groups";
   window.location.hash = "#/groups";
   container = document.createElement("div");
   document.body.append(container);
@@ -188,6 +191,71 @@ describe("portal navigation shell", () => {
     expect(entries).toEqual(["Architecture", "Coordination"]);
     // The menu navigates; role and permission details belong to the account view.
     expect(groupsList.querySelector(".portal-sidebar-group-role")).toBeNull();
+  });
+
+  it("opens a section's own pages under it and folds them away when the reader leaves", async () => {
+    /*
+     * A section's pages belong under the section, the way a group's pages
+     * have always appeared under Groups — and they fold away again when the
+     * reader moves elsewhere, or the sidebar would be the length of the
+     * application. Analytics is one of those pages now rather than a tab
+     * inside Settings (#39).
+     */
+    currentLocation.value = "/events/analytics";
+    window.location.hash = "#/events/analytics";
+    mountNavigation(
+      portalSessionFixture({
+        staff: true,
+        member: true,
+        grants: [
+          { permission: "events:read", contextType: null, contextId: null },
+          { permission: "analytics:read", contextType: null, contextId: null },
+        ],
+      }),
+    );
+    await settle();
+
+    const eventPages = container.querySelector('ul[aria-label="Events pages"]');
+    expect(eventPages?.textContent).toContain("Analytics");
+    // A sub page has an address of its own — not the section's address with a
+    // tab named on it, which is what a menu item opening a tab would mean.
+    expect(eventPages?.querySelector("a")?.getAttribute("href")).toBe("#/events/analytics");
+    // The groups the reader is not looking at are not listed underneath.
+    expect(container.querySelector('ul[aria-label="Your groups"]')).toBeNull();
+  });
+
+  it("lists the donations pages under Donations, and only while it is open (#43)", async () => {
+    const donationsReader = portalSessionFixture({
+      staff: true,
+      member: true,
+      staffRole: "user",
+      grants: [
+        { permission: "donations:read", contextType: null, contextId: null },
+        { permission: "analytics:read", contextType: null, contextId: null },
+      ],
+    });
+
+    currentLocation.value = "/donations/promoters";
+    window.location.hash = "#/donations/promoters";
+    mountNavigation(donationsReader);
+    await settle();
+
+    const pages = container.querySelector('ul[aria-label="Donations pages"]')!;
+    const entries = [...pages.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(entries).toEqual([
+      ["Share links", "#/donations/promoters"],
+      ["Analytics", "#/donations/analytics"],
+    ]);
+    // The page being read is the one marked, so the sidebar says where you are.
+    expect(pages.querySelector("a.active")?.textContent).toBe("Share links");
+
+    // Reading another section folds them away again.
+    void act(() => render(null, container));
+    currentLocation.value = "/groups";
+    window.location.hash = "#/groups";
+    mountNavigation(donationsReader);
+    await settle();
+    expect(container.querySelector('ul[aria-label="Donations pages"]')).toBeNull();
   });
 
   it("keeps account settings in the user menu, not the sidebar items", async () => {

@@ -449,10 +449,25 @@
      above the stretched control, or the row swallows every click meant for it.
      Only what a reader can actually operate is lifted, though: raising every
      element child put a `<span>` that merely styles half a cell's text over the
-     row's own link, so clicking that half of the text did nothing at all. */
+     row's own link, so clicking that half of the text did nothing at all.
+
+     What is lifted is the TRIGGER, never the popup it opens. This rule used to
+     name `[role="menu"]`, which is the popup itself, and at four compound
+     selectors it outranked `.pk-menu__popup { position: fixed }` — so inside a
+     clickable-row table the popup became `position: relative` and the viewport
+     coordinates the placement writes were read as offsets from where the popup
+     happens to sit in the row. The menu opened hundreds of pixels from the `…`
+     that opened it, which is issue #36, and only in tables whose rows activate
+     something, which is why it was "not fixed in all tables". The popup is
+     excluded by name as well, so a menu that grows different markup cannot
+     fall into this again. */
   .pk-table__row--action
     td
-    :is(a, button, input, select, textarea, label, summary, [role="menu"], [tabindex]):not(.pk-table__row-link) {
+    :is(a, button, input, select, textarea, label, summary, [tabindex]):not(
+      .pk-table__row-link,
+      .pk-menu__popup,
+      .pk-menu__popup *
+    ) {
     position: relative;
     z-index: 1;
   }

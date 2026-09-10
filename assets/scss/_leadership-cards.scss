@@ -45,54 +45,6 @@
   flex: 1;
 }
 
-.wg-leader-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(0, 0, 0, 0.08);
-  margin-bottom: 0.15rem;
-
-  &--large {
-    width: 110px;
-    height: 110px;
-    margin-bottom: 0;
-    flex-shrink: 0;
-    border-width: 2px;
-  }
-}
-
-.wg-leader-initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.3rem;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -0.02em;
-  // Use page accent first, fall back to wg-color, then default green
-  background: var(--page-accent, var(--wg-color, #{$green}));
-
-  &.wg-leader-avatar--large {
-    font-size: 2rem;
-  }
-}
-
-.wg-leader-name {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #111;
-  line-height: 1.3;
-}
-
-.wg-leader-role {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: $gray-500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .wg-leader-jobtitle {
   font-size: 0.78rem;
   color: $gray-600;
@@ -161,32 +113,9 @@
   }
 }
 
-.wg-leader-linkedin {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #0077b5;
-  text-decoration: none;
-  margin-top: 0.2rem;
-  transition: opacity 0.15s;
-
-  &:hover {
-    opacity: 0.8;
-  }
-
-  // Icon-only variant used in the name row of large cards
-  &--icon {
-    margin-top: 0;
-    font-size: 1rem;
-    color: #0077b5;
-  }
-}
-
 // ── Consortium leadership grid wrapper ────────────────────────────────────────
 // Used by the {{< consortium-leadership >}} shortcode on About / Board / EC pages.
-// Individual cards are rendered by the person-card.html partial (.person-card).
+// Individual cards are rendered by PublicPersonCard (.person-card).
 
 .consortium-leaders {
   display: flex;
@@ -197,7 +126,8 @@
 
 // ── Person card ───────────────────────────────────────────────────────────────
 // Generic, reusable card used for consortium leadership, speakers, authors, etc.
-// Rendered by layouts/partials/person-card.html.
+// Rendered by PublicPersonCard, behind the leadership, chair and
+// member-person-card mounts.
 
 .person-card {
   display: flex;
@@ -267,7 +197,7 @@
   }
 }
 
-.person-card-avatar {
+.person-card-avatar-frame > .person-card-avatar {
   display: block;
   width: 100%;
   height: 100%;
@@ -282,7 +212,9 @@
   border-radius: 50%;
   width: 100%;
   height: 100%;
-  font-size: clamp(1rem, calc(var(--avatar-px, 80px) * 0.3), 2rem);
+  // The letters track the ring's own size, at the 40% every initials avatar
+  // keeps; the clamp only guards the extremes (#44).
+  font-size: clamp(1rem, calc(var(--avatar-px, 80px) * 0.4), 2.5rem);
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
@@ -329,15 +261,6 @@
   min-width: 0;
 }
 
-.person-card-name-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex-wrap: nowrap;
-  // Push dates to the bottom of the card body
-  // (The body uses flex-column, so we add flex: 0 0 auto to rows and flex: 1 to spacer)
-}
-
 .person-card-name {
   font-size: 1rem;
   font-weight: 700;
@@ -350,18 +273,6 @@
 
   &:hover {
     color: $green;
-  }
-}
-
-.person-card-linkedin {
-  display: inline-flex;
-  align-items: center;
-  color: #0077b5;
-  text-decoration: none;
-  flex-shrink: 0;
-  transition: opacity 0.15s;
-  &:hover {
-    opacity: 0.75;
   }
 }
 
@@ -407,17 +318,18 @@
   }
 }
 
-// ── Past positions timeline ───────────────────────────────────────────────────
-// The "Past positions" list under a published roster — closed seats and
-// closed leadership terms, most recently ended first — rendered by
-// person-card.html in `mode: "timeline"` and by the leadership widget's
-// TimelineItem. Both have named these classes since the cards were
-// introduced and no rule ever answered to them: the row was an uncapped
-// headshot the full width of the column, with the name, role, dates and
-// organisation run together as one line of text underneath it.
+// ── Past positions ────────────────────────────────────────────────────────────
+// Closed seats and closed leadership terms under a published roster, most
+// recently ended first. They are drawn by `PublicPersonCard` in the same
+// `.consortium-leaders` grid the sitting members use, so everything below the
+// heading is already styled — a past position is the same fact with an end
+// date on it, and the grey ring and the closed term say so.
 //
-// A past position is a fact, not a card. It gets one line: a small avatar, the
-// name, and the rest of the row in the quiet greys the past role arc uses.
+// This block used to carry a parallel `.person-tl-*` vocabulary: a small
+// avatar, a role pill and a line of run-together text. Keeping two card
+// languages meant every fix to the real card had to be made twice, and the
+// portrait, the profile badge and the tile shape issue #25 asked for were the
+// ones that were not.
 
 .consortium-past-leadership {
   margin: 2rem 0;
@@ -430,91 +342,4 @@
   letter-spacing: 0.07em;
   color: $gray-500;
   margin: 0 0 0.75rem;
-}
-
-.consortium-past-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.person-tl-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--pk-surface);
-  border: 1px solid var(--pk-line);
-  border-radius: 0.65rem;
-}
-
-.person-tl-avatar-wrap {
-  flex-shrink: 0;
-}
-
-.person-tl-avatar {
-  display: block;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  // Grey ring, the same differentiator the past role arc uses on a full card.
-  border: 2px solid $gray-300;
-
-  &--initials {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 800;
-    color: #fff;
-    letter-spacing: -0.02em;
-    border: none;
-    background: var(--page-accent, var(--wg-color, #{$green}));
-  }
-}
-
-// One row that wraps to a second line on a phone rather than truncating a name.
-.person-tl-info {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.15rem 0.6rem;
-  min-width: 0;
-}
-
-.person-tl-name {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: #111;
-}
-
-.person-tl-role {
-  font-size: 0.58rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: #fff;
-  background: $gray-400;
-  border-radius: 99px;
-  padding: 0.1em 0.5em;
-  line-height: 1.5;
-}
-
-.person-tl-dates {
-  font-size: 0.72rem;
-  color: $gray-500;
-}
-
-.person-tl-org {
-  font-size: 0.72rem;
-  color: $gray-500;
-}
-
-.person-tl-org-link {
-  color: inherit;
-  text-decoration: none;
-  &:hover {
-    color: $green;
-  }
 }

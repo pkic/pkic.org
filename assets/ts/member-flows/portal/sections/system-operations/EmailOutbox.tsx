@@ -14,6 +14,7 @@ import { Badge, statusLabel } from "../../../../components/Badge";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { BulkBar } from "../../../../ui/BulkBar";
 import { Button } from "../../../../ui/Button";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { getJson, postJson } from "../../../../shared/api-client";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { fmt, toast } from "../../ui";
@@ -179,7 +180,11 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
   }
 
   return (
+    // Its own page under Settings now. It was a tab inside "Operations", a
+    // bucket that held the outbox, the due queue and the job registry at
+    // once and named none of them (#40).
     <div class="pk pk-stack pk-stack--snug">
+      <PageHeader title="Email outbox" />
       {!canManage && (
         <div class="pk-cluster pk-cluster--end">
           <ToneBadge tone="neutral">Read only</ToneBadge>

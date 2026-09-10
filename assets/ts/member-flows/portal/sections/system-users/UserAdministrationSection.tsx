@@ -2,11 +2,15 @@
  * The administrative surfaces of a person's record, out of the way of it.
  *
  * A contact record is about the person: what they do, who they represent, what
- * they have earned. Managing the addresses their account answers to and
- * replacing their photograph are none of those things — they are operations on
- * the account, done rarely, by someone who came to do them. They used to sit
- * at the foot of the record as more panels, which put an upload control in the
- * same reading order as the person's standing.
+ * they have earned. Managing the addresses their account answers to is none of
+ * those things — it is an operation on the account, done rarely, by someone
+ * who came to do it. They used to sit at the foot of the record as more
+ * panels, which put an upload control in the same reading order as the
+ * person's standing.
+ *
+ * The photograph is no longer among them. A portrait is not administration:
+ * it is the picture at the top of the record, and it is changed by clicking
+ * it (#28).
  *
  * So they are disclosed rather than removed. The whole header opens them,
  * because the first version put that behind an unlabelled ⋯ and the result was
@@ -39,7 +43,7 @@ export function UserAdministrationSection({ children }: { children: ComponentChi
       >
         <span class="pk-strong">Account administration</span>
         <span class="pk-cluster">
-          <span class="pk-small pk-muted">Email addresses and photo</span>
+          <span class="pk-small pk-muted">Email addresses</span>
           <span class="pk-small pk-muted" aria-hidden="true">
             {open ? "⌃" : "⌄"}
           </span>

@@ -22,6 +22,8 @@ mkdir -p "$(dirname "$INTERCEPT_URL_FILE")"
 rm -f "$INTERCEPT_URL_FILE"
 rm -f test-results/portal-management-verification-auth.json
 rm -f test-results/portal-mobile-navigation-auth.json
+rm -f test-results/portal-groups-auth.json
+rm -f test-results/portal-vote-management-auth.json
 
 # ── 0. Clean stale build artifacts ───────────────────────────────────────────
 # A previous `pnpm build` or `deploy:preview` may have left dist/ and
@@ -43,6 +45,7 @@ node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --p
 # contact page with skills, participation and standing on it.
 node scripts/seed-member-profiles.mjs --local --persist-to "$STATE_DIR"
 pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-donations.sql
+pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-settings.sql
 
 # ── 3. Start servers ────────────────────────────────────────────────────────
 node scripts/e2e-interceptor.mjs 0 "$INTERCEPT_URL_FILE" &

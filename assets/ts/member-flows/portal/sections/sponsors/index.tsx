@@ -19,12 +19,22 @@ export function SponsorWorkspace({
   canRead,
   canWrite,
   detailId,
+  /**
+   * Where the management view sends the reader. It writes the sponsors hash
+   * directly, which is how this workspace already addresses its company view
+   * — the router listens to `hashchange` either way, and keeping the location
+   * hook out of a component several tests mount bare costs nothing here.
+   */
+  onNavigate = (segment?: string) => {
+    window.location.hash = segment ? `#/sponsors/${encodeURIComponent(segment)}` : "#/sponsors";
+  },
   onSessionExpired,
 }: {
   sponsors: SponsorCapacity[];
   canRead: boolean;
   canWrite: boolean;
   detailId?: string;
+  onNavigate?: (segment?: string) => void;
   onSessionExpired: () => void;
 }) {
   const canManage = canRead || canWrite;
@@ -84,7 +94,7 @@ export function SponsorWorkspace({
         class="pk-stack"
       >
         {activeView === "management" ? (
-          <SponsorManagement canRead={canRead} canWrite={canWrite} detailId={detailId} />
+          <SponsorManagement canRead={canRead} canWrite={canWrite} detailId={detailId} onNavigate={onNavigate} />
         ) : activeView === "settings" ? (
           <SponsorshipTierConfig canWrite={canWrite} />
         ) : selectedSponsor ? (

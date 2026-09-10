@@ -25,6 +25,8 @@
  * admin@pkic.org within that window reliably tripped it.
  *
  * @covers sponsor.2.3
+ * @covers sponsor.2.3.a
+ * @covers sponsor.2.3.b
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -216,7 +218,10 @@ test.describe("Portal management browser-verification pass", () => {
 
     // The way back leaves without creating anything, and so does the browser's
     // Back button, because the create page has an address of its own.
-    await page.getByRole("button", { name: "← All votes", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Group navigation" })
+      .getByRole("link", { name: "Votes", exact: true })
+      .click();
     await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes$`));
     await page.getByRole("button", { name: "Create vote" }).click();
     await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/new$`));
@@ -334,9 +339,12 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(reject).toBeDisabled();
     await detail.getByRole("button", { name: "Approve and create vote" }).click();
     await acceptConfirmDialog(page, "Approve and create vote");
-    await expect(proposalRow).toContainText(/converted to vote/i);
-
-    await tab(page, "All votes").click();
+    await expect(page).toHaveURL(new RegExp(`/portal/#/groups/${groupId}/votes/[0-9a-fA-F-]{36}$`));
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "Group navigation" })
+      .getByRole("link", { name: "Votes", exact: true })
+      .click();
     await expectCurrentTab(page, "All votes");
     await expect(page.getByRole("row").filter({ hasText: title })).toBeVisible();
   });
@@ -393,26 +401,47 @@ test.describe("Portal management browser-verification pass", () => {
     const detail = page.getByRole("region", { name: contactName });
     await expect(detail).toBeVisible();
     // The picked event survived the round trip: the detail names it rather
-    // than showing a dangling or absent event reference.
-    await expect(detail.getByText(/Post-Quantum Cryptography Conference/)).toBeVisible();
+    // than showing a dangling or absent event reference. Asserted on the cell,
+    // because every row of a table with a row action also carries that
+    // action's accessible name, which repeats the row's own text.
+    await expect(detail.getByRole("cell", { name: "Post-Quantum Cryptography Conference", exact: true })).toBeVisible();
     // New sponsorships default to pipeline_stage='new_inquiry' (migration
-    // 0034) — assert via the stage badge specifically, since "Advance to
-    // stage" is a <select> whose <option>s (incl. "payment pending") are
-    // also present in the DOM but hidden.
+    // 0034) — assert via the stage badge specifically, since "Move to stage"
+    // is a <select> whose <option>s (incl. "payment pending") are also
+    // present in the DOM but hidden.
     await expect(detail.locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
 
-    // Forms are closed until asked for; the record shows its facts first.
+    /*
+     * Forms are closed until asked for; the record shows its facts first.
+     *
+     * Correcting the tier and the point of contact is issue #30: an inquiry
+     * arrives with whatever the sender typed, and until now only the fields
+     * the pipeline's own automation needed could be fixed afterwards. The
+     * tier is a select over the catalog, not a box to spell a tier into.
+     */
+    const correctedContact = `Corrected ${contactName}`;
     await detail.getByRole("button", { name: "Edit", exact: true }).click();
+    await detail.getByLabel("Contact name").fill(correctedContact);
+    await detail.getByLabel("Contact email").fill("verified-contact@sponsor.test");
     await detail.getByLabel("Notes").fill("E2E verification note");
     await detail.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
 
-    await detail.getByRole("button", { name: "Advance stage" }).click();
-    await detail.getByLabel("Advance to stage").selectOption("contacted");
-    await detail.getByRole("button", { name: "Advance", exact: true }).click();
-    await expect(page.locator(".my-toast", { hasText: "Stage advanced to contacted" })).toBeVisible();
-    await expect(detail.locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
-    await expect(detail.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
+    // This sponsorship carries no organization and no sponsor name of its
+    // own, so its contact is what names it — correcting the contact renames
+    // the record, and the page is located again under the corrected name.
+    const corrected = page.getByRole("region", { name: correctedContact });
+    await expect(corrected.getByText("verified-contact@sponsor.test")).toBeVisible();
+
+    await corrected.getByRole("button", { name: "Move stage" }).click();
+    // The vocabulary now has a word for a company that decides against it,
+    // which staff previously had to record as a lapse or leave in limbo.
+    await expect(corrected.getByLabel("Move to stage").locator("option", { hasText: "Not proceeding" })).toHaveCount(1);
+    await corrected.getByLabel("Move to stage").selectOption("contacted");
+    await corrected.getByRole("button", { name: "Move", exact: true }).click();
+    await expect(page.locator(".my-toast", { hasText: "Stage moved to contacted" })).toBeVisible();
+    await expect(corrected.locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
+    await expect(corrected.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
     expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsors/companies"]));
     expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsors"))).toBe(true);
     expect(canonicalRequests.some((request) => request.startsWith("PATCH /api/v1/sponsors/"))).toBe(true);
@@ -423,29 +452,36 @@ test.describe("Portal management browser-verification pass", () => {
     const tierName = `E2E Verify Tier ${Date.now()}`;
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/sponsor-tiers`);
-    await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
-
-    // Located by role and accessible name rather than by class. Each tier is
-    // a `<fieldset>` named by its `<legend>`, so the row is a group and the
-    // two controls inside it are reached by the names a reader hears — which
-    // will not break the next time the surface is restyled.
+    await expect(page.getByText("Choose which sponsor tiers can access attendee data for this event.")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Tier name" })).toHaveCount(0);
+    async function editTiers() {
+      await page.getByRole("button", { name: "Sponsor tier actions" }).click();
+      await page.getByRole("menuitem", { name: "Edit settings" }).click();
+    }
+    await editTiers();
     const tierRows = page.getByRole("group", { name: /^Tier \d+$/ });
+    const originalCount = await tierRows.count();
+    await page.getByRole("button", { name: "+ Add tier" }).click();
+    await page.getByRole("button", { name: "Save sponsor tiers", exact: true }).click();
+    await expect(tierRows.last().getByRole("alert")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await editTiers();
+    await expect(tierRows).toHaveCount(originalCount);
     await page.getByRole("button", { name: "+ Add tier" }).click();
     const newRow = tierRows.last();
-    await newRow.getByRole("textbox", { name: "Tier name" }).fill(tierName);
+    const name = newRow.getByRole("textbox", { name: "Tier name" });
+    await name.pressSequentially(tierName);
+    await expect(name).toBeFocused();
+    await expect(name).toHaveValue(tierName);
     await newRow.getByRole("checkbox", { name: "Attendee data access" }).check();
-
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText("✓ Saved")).toBeVisible();
-
+    await page.getByRole("button", { name: "Save sponsor tiers", exact: true }).click();
+    await expect(page.getByText("Sponsor tiers updated.")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Tier name" })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText(/attendee-data access in the portal/)).toBeVisible({ timeout: 15_000 });
-    // `hasText`/getByText can't see an <input>'s value (it isn't a text
-    // node), and Playwright has no getByDisplayValue — find the matching
-    // tier-name input by its live .value via evaluateAll, then take the row
-    // at the same position to check its checkbox.
+    const savedTier = page.locator(".pk-datalist").filter({ has: page.getByText(tierName, { exact: true }) });
+    await expect(savedTier).toContainText("Attendee data access enabled");
+    await editTiers();
     const tierInputs = page.getByRole("textbox", { name: "Tier name" });
-    await expect(tierInputs.first()).toBeVisible({ timeout: 15_000 });
     const index = await tierInputs.evaluateAll(
       (els, name) => els.findIndex((el) => (el as HTMLInputElement).value === name),
       tierName,
@@ -460,7 +496,9 @@ test.describe("Portal management browser-verification pass", () => {
     const contactName = `E2E Sponsor Filter Contact ${Date.now()}`;
 
     await page.context().clearCookies();
-    await signInToPortal(page, ADMIN_EMAIL);
+    // Its own address: the limiter allows three link requests a minute for
+    // one, and this file runs its tests back to back.
+    await signInToPortal(page, e2eAdminEmail("portal-sponsor-filters"));
     await page.goto("/portal/#/sponsors");
     await page.getByRole("button", { name: "Create sponsorship" }).click();
     const form = page.getByRole("form", { name: "Create sponsorship" });
@@ -503,7 +541,7 @@ test.describe("Portal management browser-verification pass", () => {
     page,
   }) => {
     await page.context().clearCookies();
-    await signInToPortal(page, ADMIN_EMAIL);
+    await signInToPortal(page, e2eAdminEmail("portal-sponsor-tier-pricing"));
     await page.goto("/portal/#/sponsors");
     // The Settings tab is in-page tab state (`Tabs`/`useState`), not its own
     // URL — reached by activating the tab, not by navigating to it.
@@ -511,15 +549,26 @@ test.describe("Portal management browser-verification pass", () => {
 
     const pricing = page.getByRole("region", { name: "Sponsorship tier pricing" });
     await expect(pricing).toBeVisible({ timeout: 15_000 });
-    // Each row's amount/currency/active controls sit in one `<td>` apiece,
-    // associated with the row's own `<form>` by the HTML `form` attribute
-    // rather than by DOM nesting under a shared row element — so "first
-    // amount field" and "first Save button" are addressed as two
-    // same-position locators instead of scoping one through the other.
+    await expect(pricing.getByRole("spinbutton")).toHaveCount(0);
+    const editFirst = async () => {
+      await pricing
+        .getByRole("button", { name: /pricing actions$/ })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: "Edit pricing" }).click();
+    };
+    await editFirst();
     const firstAmountField = pricing.getByRole("spinbutton", { name: /amount in cents$/ }).first();
     const firstSave = pricing.getByRole("button", { name: "Save", exact: true }).first();
     await expect(firstAmountField).toBeVisible();
 
+    const originalAmount = await firstAmountField.inputValue();
+    await firstAmountField.fill("-1");
+    await firstSave.click();
+    await expect(firstAmountField).toHaveAttribute("aria-invalid", "true");
+    await pricing.getByRole("button", { name: "Cancel", exact: true }).click();
+    await editFirst();
+    await expect(firstAmountField).toHaveValue(originalAmount);
     const updatedAmount = "123456";
     await firstAmountField.fill(updatedAmount);
 
@@ -537,6 +586,8 @@ test.describe("Portal management browser-verification pass", () => {
     await page.reload();
     await page.getByRole("tab", { name: "Settings" }).click();
     await expect(pricing).toBeVisible({ timeout: 15_000 });
+    await expect(pricing.getByRole("spinbutton")).toHaveCount(0);
+    await editFirst();
     await expect(pricing.getByRole("spinbutton", { name: /amount in cents$/ }).first()).toHaveValue(updatedAmount);
   });
 
@@ -553,6 +604,9 @@ test.describe("Portal management browser-verification pass", () => {
     await page.goto(`/portal/#/events/${EVENT_SLUG}/settings/team`);
     await expect(page.getByRole("button", { name: "Add team member" })).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Add team member" }).click();
+    // Adding is a page of its own: the list it adds to is not underneath it.
+    await expect(page).toHaveURL(new RegExp(`#/events/${EVENT_SLUG}/settings/team/new$`));
+    await expect(page.getByRole("table", { name: "Event team members" })).toHaveCount(0);
 
     const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Add", exact: true }) });
     await form.getByLabel("Email").fill(email);
@@ -564,6 +618,8 @@ test.describe("Portal management browser-verification pass", () => {
     );
     await form.getByRole("button", { name: "Add", exact: true }).click();
     expect((await assigned).status()).toBe(201);
+    // And it returns to the list it added to.
+    await expect(page).toHaveURL(new RegExp(`#/events/${EVENT_SLUG}/settings/team$`));
 
     const row = page.getByRole("row").filter({ hasText: email });
     await expect(row).toContainText("Program Committee");
@@ -724,9 +780,9 @@ test.describe("Portal management browser-verification pass", () => {
     await page.context().addCookies(staffCookies);
     await page.reload();
     await expectStaffSessionLanding(page);
-    await page.goto("/portal/#/system/organization-content-reviews");
-    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Content Reviews" })).toHaveAttribute("aria-current", "page");
+    await page.goto("/portal/#/settings/organization-content-reviews");
+    await expect(page.getByRole("heading", { name: "Content reviews" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Content reviews" })).toHaveAttribute("aria-current", "page");
     // The queue's rows carry a stretched row action, so the row itself is the
     // target and the open submission is a named region rather than a `.card`.
     await page.getByRole("row").filter({ hasText: orgName }).click();
@@ -759,9 +815,9 @@ test.describe("Portal management browser-verification pass", () => {
     ).toBe(true);
     expect(legacyRequests).toEqual([]);
 
-    await page.goto("/portal/#/system/organization-content-reviews");
-    await expect(page).toHaveURL(/\/portal\/#\/system\/organization-content-reviews$/);
-    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await page.goto("/portal/#/settings/organization-content-reviews");
+    await expect(page).toHaveURL(/\/portal\/#\/settings\/organization-content-reviews$/);
+    await expect(page.getByRole("heading", { name: "Content reviews" })).toBeVisible();
     expect(legacyRequests).toEqual([]);
   });
 
@@ -853,7 +909,9 @@ test.describe("Portal management browser-verification pass", () => {
 
     await page.goto("/portal/#/membership/applications");
     await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Membership", exact: true })).toHaveClass(/active/);
+    // The sidebar entry is named for what it holds: "Membership" beside
+    // "Members" said nothing about which of the two a reader wanted.
+    await expect(page.getByRole("link", { name: "Applications", exact: true })).toHaveClass(/active/);
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter — the Stage column's own menu — is sufficient here because
     // every earlier fixture has already moved out of ec_review.

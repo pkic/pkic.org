@@ -30,6 +30,13 @@ export const organizationSummarySchema = z
   .object({
     id: databaseIdSchema,
     name: z.string(),
+    /**
+     * The organization's public member page — `/members/<slug>/` once it has
+     * a slug, the id-keyed shell while it does not. Server-computed through
+     * the shared rule so the portal shows the address a visitor would see
+     * rather than guessing at one (#15).
+     */
+    publicProfileHref: z.string(),
     membershipCategory: z.string().nullable(),
     memberSince: z.string(),
     activeIdentityCount: z.number(),
@@ -119,14 +126,30 @@ export const organizationIdentityProvisionSchema = z.object({
  * path, and only that path, must carry an activation reason for the audit
  * log (and demands the `identities:activate` permission on the server).
  */
+/**
+ * Creating an organization is not the same act as admitting a member.
+ *
+ * An organization is a record the consortium keeps: an attendee's employer, a
+ * sponsor, a company somebody is talking to. Membership is granted separately
+ * — a member signs up through the application flow, or staff grant it
+ * explicitly — so a category and a "member since" date only exist once that
+ * has happened. Requiring them here made every organization a member the
+ * moment it was written down.
+ *
+ * Membership is therefore all-or-nothing on this request: the category and
+ * the date arrive together or not at all. Representatives and working-group
+ * seats are membership's own, so they are refused without it — a non-member
+ * organization has nobody acting for it in the consortium, which is what
+ * being a non-member means.
+ */
 export const organizationCreateSchema = z
   .object({
     name: trimmedString(1, 200),
     website: httpUrlSchema.optional(),
     description: trimmedString(0, 2000).optional(),
     links: linksSchema.optional(),
-    membershipCategory: orgTiedMembershipCategorySchema,
-    memberSince: z.iso.date(),
+    membershipCategory: orgTiedMembershipCategorySchema.optional(),
+    memberSince: z.iso.date().optional(),
     identities: z.array(organizationIdentityProvisionSchema).max(10).default([]),
     workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
     activationReason: trimmedString(1, 500).optional(),
@@ -134,6 +157,19 @@ export const organizationCreateSchema = z
   .refine((input) => input.identities.length === 0 || input.activationReason !== undefined, {
     message: "Explain why these people are being activated without an invitation.",
     path: ["activationReason"],
+  })
+  .refine((input) => Boolean(input.membershipCategory) === Boolean(input.memberSince), {
+    message: "A membership needs both a category and the date it began.",
+    path: ["memberSince"],
+  })
+  .refine((input) => input.membershipCategory !== undefined || input.identities.length === 0, {
+    message:
+      "Representatives act for a member. Give this organization a membership, or add its people once it has one.",
+    path: ["identities"],
+  })
+  .refine((input) => input.membershipCategory !== undefined || input.workingGroupSlugs.length === 0, {
+    message: "Working-group seats belong to a member.",
+    path: ["workingGroupSlugs"],
   });
 
 export const organizationCreateResponseSchema = organizationDetailResponseSchema;

@@ -8,11 +8,13 @@ import { Badge } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
+import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
 import { requestJson } from "../../shared/api-client";
 import { formatDateTime, type ToastType } from "../../shared/ui";
 import { Badge as ToneBadge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
+import { LinkList } from "../../ui/LinkList";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../ui/TextControl";
 import { ProposalSpeakerHeadshotManager } from "./ProposalSpeakerHeadshotManager";
@@ -267,15 +269,10 @@ export function ProposalSpeakerCard({
             </div>
           </div>
           {!editing && speaker.biography && <p class="pk-small pk-answer-pre">{speaker.biography}</p>}
-          {!editing && profileLinks.length > 0 && (
-            <div class="pk-stack pk-stack--tight pk-small">
-              {profileLinks.map((url) => (
-                <a key={url} href={url} target="_blank" rel="noreferrer">
-                  {url}
-                </a>
-              ))}
-            </div>
-          )}
+          {/* The speaker's own profile links, in the one marked vocabulary
+              every other record uses. This was a stack of raw addresses —
+              issue #13's defect, on a surface the issue never named. */}
+          {!editing && <LinkList links={profileLinks} ownerName={name} />}
           {editing && (
             <form onSubmit={(event) => void handleSave(event)} class="pk-stack">
               <div class="pk-grid pk-grid--tight">
@@ -323,16 +320,18 @@ export function ProposalSpeakerCard({
                     value={role}
                     onChange={(event) => setRole(speakerRoleSchema.parse((event.target as HTMLSelectElement).value))}
                   >
-                    {isCurrentProposer ? (
-                      <option value="proposer">Proposer</option>
-                    ) : (
-                      <>
-                        <option value="speaker">Speaker</option>
-                        <option value="co_speaker">Co-speaker</option>
-                        <option value="moderator">Moderator</option>
-                        <option value="panelist">Panelist</option>
-                      </>
-                    )}
+                    {/* The proposer keeps the proposal, so their own card
+                        offers only "proposer": the role moves by promoting
+                        another speaker, never by relabelling this one. Every
+                        other card offers the rest of the vocabulary for the
+                        same reason. */}
+                    {SPEAKER_ROLE_OPTIONS.filter((option) =>
+                      isCurrentProposer ? option.value === "proposer" : option.value !== "proposer",
+                    ).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>

@@ -21,7 +21,6 @@ import {
   userHeadshotResponse,
   getUserHeadshotRecord,
   removeUserHeadshotForRequest,
-  requireUserHeadshotBucket,
   uploadUserHeadshotForRequest,
   userHeadshotTargetGuard,
 } from "../../../../_lib/services/user-headshot";
@@ -33,7 +32,7 @@ import { requireUserStaffPermission } from "../authorization";
 async function onGet(c: AdminContext, data: ValidatedData<typeof userHeadshotGetRouteSchema>): Promise<Response> {
   const { db } = await requireUserStaffPermission(c, "users:read");
 
-  return userHeadshotResponse(db, requireUserHeadshotBucket(c.env), data.params.userId);
+  return userHeadshotResponse(db, c.env, data.params.userId);
 }
 
 // ── PUT — upload / replace headshot ─────────────────────────────────────────

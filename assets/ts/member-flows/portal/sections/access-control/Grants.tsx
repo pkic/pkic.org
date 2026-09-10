@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
@@ -28,10 +28,35 @@ import {
 // imports the sheet itself.
 import "../../../../ui/Content.css";
 
-/** Access Control section: grant/revoke permissions per user, with context and expiry pickers. */
-export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boolean; canRevoke?: boolean } = {}) {
+/** Reserved grants segment that routes to the create page instead of the list. */
+const NEW_GRANT_SEGMENT = "new";
+
+/** Redirects back to the list from an effect, not render — see its call site below. */
+function GrantsRedirect({ onNavigate }: { onNavigate: (segment?: string) => void }) {
+  useEffect(() => onNavigate(), [onNavigate]);
+  return null;
+}
+
+/**
+ * Access Control section: grant/revoke permissions per user, with context and
+ * expiry pickers — and, under the reserved `new` segment, the create page,
+ * which is a place with its own address rather than a panel that unfolds
+ * above the table.
+ */
+export function Grants({
+  canGrant = true,
+  canRevoke = true,
+  grantSegment,
+  onNavigate,
+}: {
+  canGrant?: boolean;
+  canRevoke?: boolean;
+  /** `undefined` for the list, `"new"` for the create page. */
+  grantSegment?: string;
+  onNavigate: (segment?: string) => void;
+}) {
   const tableRef = useRef<ApiTableActions | null>(null);
-  const [creating, setCreating] = useState(false);
+  const creating = grantSegment === NEW_GRANT_SEGMENT;
   const [user, setUser] = useState<PickedUser | null>(null);
   const [permission, setPermission] = useState<string>(PERMISSIONS[0]);
   const [target, setTarget] = useState<PickedTarget>({ targetType: null, targetId: null });
@@ -62,8 +87,8 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
   }
 
   function closeForm() {
-    setCreating(false);
     setFormError(null);
+    onNavigate();
   }
 
   /*
@@ -115,11 +140,16 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
     }
   }
 
-  return (
-    <div class="pk pk-stack">
-      {canGrant && creating && (
-        <Panel>
-          <PanelHeader title="Grant a permission" />
+  if (creating) {
+    // Navigating away belongs in an effect, not in render.
+    if (!canGrant) return <GrantsRedirect onNavigate={onNavigate} />;
+    return (
+      <div class="pk pk-stack">
+        {/* The page's way back: granting has its own address, so leaving it
+            is navigation rather than the disappearance of a layer. */}
+
+        <Panel aria-label="Grant a permission">
+          <PanelHeader title="Grant a permission" headingLevel={2} breadcrumb />
           <PanelBody>
             <form
               noValidate
@@ -194,8 +224,12 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
             </form>
           </PanelBody>
         </Panel>
-      )}
+      </div>
+    );
+  }
 
+  return (
+    <div class="pk pk-stack">
       <ApiDataTable
         caption="Permission grants"
         urlState="grants"
@@ -205,9 +239,7 @@ export function Grants({ canGrant = true, canRevoke = true }: { canGrant?: boole
         resolvePage={(data) => data.page}
         paginate
         actionsRef={tableRef}
-        createAction={
-          canGrant ? { label: "New grant", onSelect: () => setCreating(true), disabled: creating } : undefined
-        }
+        createAction={canGrant ? { label: "New grant", onSelect: () => onNavigate(NEW_GRANT_SEGMENT) } : undefined}
         columns={[
           {
             header: "User",

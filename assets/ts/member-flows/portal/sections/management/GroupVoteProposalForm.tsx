@@ -3,6 +3,7 @@ import {
   groupVoteProposalCreateResponseSchema,
   groupVoteProposalCreateSchema,
 } from "../../../../../shared/schemas/group-vote-proposals";
+import { voteTypeSchema } from "../../../../../shared/schemas/votes";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
@@ -10,10 +11,24 @@ import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 
+/**
+ * An election cannot be proposed: it needs candidates the proposal has no way
+ * to carry, which is why `voteProposalInputShape` excludes it from the same
+ * vocabulary. Deriving the offer from that exclusion keeps the select and the
+ * contract from parting company when a fourth vote type arrives.
+ */
+const PROPOSABLE_VOTE_TYPES = voteTypeSchema.exclude(["election"]).options;
+type ProposableVoteType = (typeof PROPOSABLE_VOTE_TYPES)[number];
+
+const PROPOSABLE_VOTE_TYPE_LABELS: Record<ProposableVoteType, string> = {
+  motion: "Motion",
+  consultation: "Consultation",
+};
+
 export function GroupVoteProposalForm({ groupId, onCreated }: { groupId: string; onCreated: () => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [voteType, setVoteType] = useState<"motion" | "consultation">("motion");
+  const [voteType, setVoteType] = useState<ProposableVoteType>("motion");
   const [proposedOpensAt, setProposedOpensAt] = useState("");
   const [proposedClosesAt, setProposedClosesAt] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,7 +66,7 @@ export function GroupVoteProposalForm({ groupId, onCreated }: { groupId: string;
   return (
     <form class="pk" aria-label="Propose a vote" onSubmit={(event) => void submit(event)}>
       <Panel>
-        <PanelHeader title="Propose a vote" />
+        <PanelHeader title="Propose a vote" headingLevel={2} breadcrumb />
         <PanelBody class="pk-stack">
           <p class="pk-small">Proposals are opened for endorsement under this group&rsquo;s voting policy.</p>
           <ErrorAlert error={error} />
@@ -77,8 +92,11 @@ export function GroupVoteProposalForm({ groupId, onCreated }: { groupId: string;
                     value={voteType}
                     onChange={(event) => setVoteType(event.currentTarget.value as typeof voteType)}
                   >
-                    <option value="motion">Motion</option>
-                    <option value="consultation">Consultation</option>
+                    {PROPOSABLE_VOTE_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {PROPOSABLE_VOTE_TYPE_LABELS[type]}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>

@@ -10,7 +10,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { memberVoteSchema, submitBallotSchema } from "../../assets/shared/schemas/votes";
+import { BALLOT_CHOICES, memberVoteSchema, submitBallotSchema } from "../../assets/shared/schemas/votes";
 import type { MemberVote } from "../../assets/ts/member-flows/portal/types";
 import { BallotForm } from "../../assets/ts/member-flows/portal/sections/Votes/BallotForm";
 
@@ -258,6 +258,9 @@ describe("BallotForm — motion", () => {
       "Opposed",
       "Abstain",
     ]);
+    // The words above are the portal's; the set is the contract's, so a fourth
+    // ballot choice would have to appear here rather than go unoffered.
+    expect(root.querySelectorAll("button")).toHaveLength(BALLOT_CHOICES.length);
   });
 
   it("marks only the choice actually in flight as busy", async () => {

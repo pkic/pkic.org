@@ -68,7 +68,7 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
     jobTitle: row.job_title,
     biography: row.biography,
     links: parseLinksJson(row.links_json),
-    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
+    headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     source: row.source,
     state: identityState(row),
     showOnOrganizationProfile: row.show_on_organization_profile === 1,

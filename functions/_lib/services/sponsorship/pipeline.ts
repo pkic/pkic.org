@@ -2,7 +2,7 @@
  * Staff sponsorship sales pipeline. Split out of sponsorship.ts.
  */
 import { uuid } from "../../utils/ids";
-import { nowIso } from "../../utils/time";
+import { nowIso, calendarDateOf } from "../../utils/time";
 import { AppError } from "../../errors";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
@@ -96,6 +96,42 @@ export interface UpdateSponsorshipInput {
   assignedToUserId?: string | null;
   renewalDate?: string | null;
   notes?: string | null;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  nonMemberName?: string | null;
+  nonMemberWebsite?: string | null;
+}
+
+/** The patch fields that map straight onto a column, in one place rather than four `if`s. */
+const SPONSORSHIP_UPDATE_COLUMNS = {
+  tier: "tier",
+  assignedToUserId: "assigned_to_user_id",
+  renewalDate: "renewal_date",
+  notes: "notes",
+  contactName: "contact_name",
+  contactEmail: "contact_email",
+  nonMemberName: "non_member_name",
+  nonMemberWebsite: "non_member_website",
+} as const satisfies Record<keyof UpdateSponsorshipInput, string>;
+
+/**
+ * Refuses a patch that would give one sponsorship two names.
+ *
+ * A sponsorship names its sponsor in one of two ways and never both: a member
+ * organization's row carries the name and website, and a non-member's own
+ * name and site live on the sponsorship. Writing the non-member fields onto a
+ * member's sponsorship would create a second name that nothing reads and that
+ * drifts away from the organization's the moment either is edited.
+ */
+function requireSponsorNaming(existing: SponsorshipReadModelRow, patch: UpdateSponsorshipInput): void {
+  const namesNonMember = patch.nonMemberName !== undefined || patch.nonMemberWebsite !== undefined;
+  if (existing.organization_id && namesNonMember) {
+    throw new AppError(
+      422,
+      "MEMBER_SPONSOR_NAMED_BY_ORGANIZATION",
+      "This sponsorship belongs to a member organization; change its name and website on the organization instead",
+    );
+  }
 }
 
 function sponsorshipChangedError(): AppError {
@@ -120,23 +156,15 @@ export async function updateSponsorship(
     );
   }
 
+  requireSponsorNaming(existing, patch);
+
   const fields: string[] = [];
   const values: unknown[] = [];
-  if (patch.tier !== undefined) {
-    fields.push("tier = ?");
-    values.push(patch.tier);
-  }
-  if (patch.assignedToUserId !== undefined) {
-    fields.push("assigned_to_user_id = ?");
-    values.push(patch.assignedToUserId);
-  }
-  if (patch.renewalDate !== undefined) {
-    fields.push("renewal_date = ?");
-    values.push(patch.renewalDate);
-  }
-  if (patch.notes !== undefined) {
-    fields.push("notes = ?");
-    values.push(patch.notes);
+  for (const [key, column] of Object.entries(SPONSORSHIP_UPDATE_COLUMNS)) {
+    const value = patch[key as keyof UpdateSponsorshipInput];
+    if (value === undefined) continue;
+    fields.push(`${column} = ?`);
+    values.push(value);
   }
 
   if (
@@ -273,7 +301,13 @@ export async function advanceSponsorshipStage(
           contactNameText: escapeMarkdownText(existing.contact_name ?? existing.organization_name ?? "there"),
           organizationNameText: escapeMarkdownText(existing.organization_name ?? ""),
           tierText: escapeMarkdownText(existing.tier ?? ""),
-          startDate: existing.start_date ?? now,
+          /*
+           * A date, not the instant the row was written. This was the
+           * recorded start date or `now` — and `now` is an ISO instant, so a
+           * sponsorship activated without a start date told its sponsor the
+           * sponsorship began "as of 2026-09-07T13:34:41.870Z" (#32).
+           */
+          startDate: calendarDateOf(existing.start_date ?? now),
         },
       },
       now,

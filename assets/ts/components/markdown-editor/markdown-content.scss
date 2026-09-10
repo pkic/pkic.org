@@ -1,0 +1,29 @@
+@layer components {
+  .pk-markdown, .pk-markdown-editor__canvas {
+    overflow-wrap: anywhere;
+    > :first-child { margin-top: 0; }
+    > :last-child { margin-bottom: 0; }
+    img { display: block; max-width: 100%; max-height: 28rem; width: auto; height: auto; object-fit: contain; }
+    blockquote {
+      margin: var(--pk-4) 0;
+      padding: var(--pk-3) var(--pk-4);
+      border-inline-start: 3px solid var(--pk-line);
+      border-radius: 0;
+      background: var(--pk-surface-sunk);
+      color: var(--pk-ink);
+      font-size: inherit;
+      font-style: normal;
+      line-height: inherit;
+      box-shadow: none;
+      transition: none;
+      &:hover { transform: none; box-shadow: none; }
+      &::before, &::after { content: none; }
+      p { color: inherit; }
+    }
+    ul, ol { padding-inline-start: var(--pk-6); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: var(--pk-2); border: 1px solid var(--pk-line); text-align: start; vertical-align: top; }
+    th { background: var(--pk-surface-sunk); }
+  }
+  .pk-markdown__table { overflow-x: auto; }
+}

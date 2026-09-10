@@ -27,6 +27,45 @@ export async function openEmailSignIn(page: Page): Promise<void> {
   await expect(page.getByLabel("Work email")).toBeVisible({ timeout: 10_000 });
 }
 
+/**
+ * Opens the signed-in identity's own record, the way a member reaches it.
+ *
+ * "My profile" is no longer a page of its own: it navigates to
+ * `#/users/<own id>`, the same record staff open about anybody. The id is not
+ * something a spec knows, so the menu item is what these specs follow — which
+ * is also the link issue #41 was about: the separate `#/profile` page is gone,
+ * and its settings are offered on the reader's own record instead.
+ */
+export async function openMyProfile(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: "My profile" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+$/, { timeout: 15_000 });
+}
+
+/**
+ * Takes the "Edit profile" command on the record currently open.
+ *
+ * A record never arrives in edit mode, not even your own (#47): editing is an
+ * action somebody takes from the record's own actions menu, so every spec
+ * that changes a profile reaches the fields the way a reader does.
+ */
+export async function openProfileEditor(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Record actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit profile" }).click();
+}
+
+/**
+ * Opens one of the identity's represented organizations from the same menu.
+ *
+ * The representatives roster lives on the organization's own page, so this is
+ * how a member reaches their coworkers.
+ */
+export async function openMyOrganization(page: Page, organizationName: string): Promise<void> {
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: organizationName }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations\/[^/?#]+$/, { timeout: 15_000 });
+}
+
 /** Establishes a real portal session through the same mailbox capability used by users. */
 export async function signInToPortal(page: Page, email: string): Promise<void> {
   // Model independent users arriving from independent clients. The complete

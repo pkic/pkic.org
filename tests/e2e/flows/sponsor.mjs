@@ -23,6 +23,18 @@ export const SPONSOR_FLOW = {
     },
     { id: "2.5", title: "The sponsor appears on the wall, paged", status: "covered" },
     {
+      id: "2.3.a",
+      title: "Staff correct a sponsorship's tier, contact and name after it was entered",
+      status: "covered",
+      note: "An inquiry arrives with whatever the sender typed, and only the fields the pipeline's own automation needed could be corrected afterwards (#30). The tier is a select over the catalog rather than a box to spell a tier into; the record edit is walked in portal-management-verification alongside the stage move.",
+    },
+    {
+      id: "2.3.b",
+      title: "Record a company that decides against sponsoring",
+      status: "covered",
+      note: "not_proceeding is offered in the stage control and asserted in portal-management-verification; what it does — no organization sponsor projection, no renewal work scheduled, the reason kept on the record — is covered at the service in sponsorship-pipeline, because none of it is visible in a browser.",
+    },
+    {
       id: "2.6",
       title: "A withdrawn or unconfigured tier is refused rather than priced",
       status: "unit",

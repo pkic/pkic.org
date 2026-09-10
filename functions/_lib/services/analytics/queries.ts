@@ -189,3 +189,176 @@ export function buildDonationAnalyticsQueries(windows: AnalyticsWindowBoundaries
     { sql: DONATIONS_MONTHLY_SQL, values: [windows.monthly] },
   ];
 }
+
+/*
+ * ── The subject analytics: membership, organizations, accounts ──────────────
+ *
+ * One page per domain, under the domain it measures (#39). Each is a set of
+ * bounded aggregates: counts D1 computes, and one twelve-month series. None
+ * of them reads a row the page then has to add up, because that would be the
+ * frontend doing a query's job.
+ */
+
+/**
+ * A membership's live representatives, as a condition rather than a join.
+ *
+ * The same reach `staff-directory.ts` uses for its `representativeCount`: a
+ * capacity whose identity has started, has not ended, and is not blocked.
+ * Written once here as the shared fragment both counts below need.
+ */
+const LIVE_REPRESENTATIVES = `(
+  SELECT COUNT(*)
+    FROM identity_member_capacities capacity
+    JOIN identities identity ON identity.id = capacity.identity_id
+   WHERE capacity.member_id = m.id
+     AND identity.started_at IS NOT NULL
+     AND identity.ended_at IS NULL
+     AND identity.blocked_at IS NULL
+)`;
+
+export const MEMBERS_BY_STATUS_SQL = `
+  SELECT status, COUNT(*) AS count
+  FROM members
+  GROUP BY status`;
+
+/** `member_type` under the name every other status count uses, so one mapper reads them all. */
+export const MEMBERS_BY_KIND_SQL = `
+  SELECT member_type AS status, COUNT(*) AS count
+  FROM members
+  GROUP BY member_type`;
+
+/**
+ * Category with its label, joined where the label lives.
+ *
+ * A code on its own is not a fact a reader can use — "A" says nothing — which
+ * is the same complaint #53 made about the organization form's category
+ * select.
+ */
+export const MEMBERS_BY_CATEGORY_SQL = `
+  SELECT mca.category_code AS code,
+         mc.label AS label,
+         COUNT(*) AS count
+  FROM members m
+  JOIN member_category_assignments mca ON mca.member_id = m.id
+  JOIN membership_categories mc ON mc.code = mca.category_code
+  GROUP BY mca.category_code, mc.label
+  ORDER BY mca.category_code ASC`;
+
+export const MEMBERS_REPRESENTATION_SQL = `
+  SELECT SUM(CASE WHEN ${LIVE_REPRESENTATIVES} > 0 THEN 1 ELSE 0 END) AS withRepresentatives,
+         SUM(CASE WHEN ${LIVE_REPRESENTATIVES} = 0 THEN 1 ELSE 0 END) AS withoutRepresentatives
+  FROM members m`;
+
+/** When memberships began, not when their rows were written. */
+export const MEMBERS_JOINED_MONTHLY_SQL = `
+  SELECT strftime('%Y-%m', COALESCE(member_since, created_at)) AS month, COUNT(*) AS count
+  FROM members
+  WHERE COALESCE(member_since, created_at) >= ?
+  GROUP BY month
+  ORDER BY month ASC`;
+
+/**
+ * Every organization, and how many of them hold a membership.
+ *
+ * The counts are taken in one pass so they cannot disagree about the total,
+ * which two separate statements against a moving table can.
+ */
+export const ORGANIZATIONS_TOTALS_SQL = `
+  SELECT COUNT(*) AS total,
+         SUM(CASE WHEN m.id IS NOT NULL THEN 1 ELSE 0 END) AS members,
+         SUM(CASE WHEN m.id IS NULL THEN 1 ELSE 0 END) AS recordedOnly,
+         SUM(CASE WHEN o.logo_r2_key IS NOT NULL AND TRIM(o.logo_r2_key) <> '' THEN 1 ELSE 0 END) AS withLogo,
+         SUM(CASE WHEN o.website IS NOT NULL AND TRIM(o.website) <> '' THEN 1 ELSE 0 END) AS withWebsite
+  FROM organizations o
+  LEFT JOIN members m ON m.organization_id = o.id`;
+
+/** Represented means somebody currently acts for it, whether or not it is a member. */
+export const ORGANIZATIONS_REPRESENTATION_SQL = `
+  SELECT SUM(CASE WHEN live.count > 0 THEN 1 ELSE 0 END) AS withRepresentatives,
+         SUM(CASE WHEN live.count = 0 THEN 1 ELSE 0 END) AS withoutRepresentatives
+  FROM organizations o
+  JOIN (
+    SELECT o2.id AS organization_id,
+           (SELECT COUNT(*)
+              FROM identities i
+             WHERE i.organization_id = o2.id
+               AND i.started_at IS NOT NULL
+               AND i.ended_at IS NULL
+               AND i.blocked_at IS NULL) AS count
+      FROM organizations o2
+  ) live ON live.organization_id = o.id`;
+
+export const ORGANIZATIONS_CREATED_MONTHLY_SQL = `
+  SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS count
+  FROM organizations
+  WHERE created_at >= ?
+  GROUP BY month
+  ORDER BY month ASC`;
+
+export const USERS_TOTALS_SQL = `
+  SELECT COUNT(*) AS total,
+         SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) AS active,
+         SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END) AS inactive
+  FROM users`;
+
+export const USERS_BY_ROLE_SQL = `
+  SELECT role AS status, COUNT(*) AS count
+  FROM users
+  GROUP BY role`;
+
+/**
+ * Whether the account acts in any capacity at all.
+ *
+ * An account with no live identity is not broken: contacts, event attendees
+ * and people whose term ended all sign in and represent nobody. It is the
+ * number that says how much of the directory is participation and how much is
+ * address book.
+ */
+export const USERS_IDENTITY_REACH_SQL = `
+  SELECT SUM(CASE WHEN live.count > 0 THEN 1 ELSE 0 END) AS withIdentities,
+         SUM(CASE WHEN live.count = 0 THEN 1 ELSE 0 END) AS withoutIdentities
+  FROM users u
+  JOIN (
+    SELECT u2.id AS user_id,
+           (SELECT COUNT(*)
+              FROM identities i
+             WHERE i.user_id = u2.id
+               AND i.started_at IS NOT NULL
+               AND i.ended_at IS NULL
+               AND i.blocked_at IS NULL) AS count
+      FROM users u2
+  ) live ON live.user_id = u.id`;
+
+export const USERS_CREATED_MONTHLY_SQL = `
+  SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS count
+  FROM users
+  WHERE created_at >= ?
+  GROUP BY month
+  ORDER BY month ASC`;
+
+export function buildMembershipAnalyticsQueries(windows: AnalyticsWindowBoundaries): AnalyticsQuery[] {
+  return [
+    { sql: MEMBERS_BY_STATUS_SQL, values: [] },
+    { sql: MEMBERS_BY_KIND_SQL, values: [] },
+    { sql: MEMBERS_BY_CATEGORY_SQL, values: [] },
+    { sql: MEMBERS_REPRESENTATION_SQL, values: [] },
+    { sql: MEMBERS_JOINED_MONTHLY_SQL, values: [windows.monthly] },
+  ];
+}
+
+export function buildOrganizationAnalyticsQueries(windows: AnalyticsWindowBoundaries): AnalyticsQuery[] {
+  return [
+    { sql: ORGANIZATIONS_TOTALS_SQL, values: [] },
+    { sql: ORGANIZATIONS_REPRESENTATION_SQL, values: [] },
+    { sql: ORGANIZATIONS_CREATED_MONTHLY_SQL, values: [windows.monthly] },
+  ];
+}
+
+export function buildUserAnalyticsQueries(windows: AnalyticsWindowBoundaries): AnalyticsQuery[] {
+  return [
+    { sql: USERS_TOTALS_SQL, values: [] },
+    { sql: USERS_BY_ROLE_SQL, values: [] },
+    { sql: USERS_IDENTITY_REACH_SQL, values: [] },
+    { sql: USERS_CREATED_MONTHLY_SQL, values: [windows.monthly] },
+  ];
+}

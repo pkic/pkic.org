@@ -14,12 +14,13 @@
  * component indirection around three elements.
  */
 
-import { fmtMoney, recentActivityChart, statusBars } from "../../../../ui/chart";
+import { recentActivityChart, statusBars } from "../../../../ui/chart";
 import { DataTable } from "../../../../components/Table";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
 import { StatCard } from "../../../../components/StatCard";
+import { usePortalHashLocation } from "../../hash-location";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { analyticsSummaryResponseSchema } from "../../../../../shared/schemas/analytics";
@@ -34,11 +35,14 @@ export function AnalyticsOverview() {
   if (state.error) return <ErrorAlert error={state.error} />;
   if (!state.data) return null;
 
-  const { registrations, invites, email, donations } = state.data;
-  const donationCompleted = donations.byStatus.completed ?? 0;
-  const donationPending = donations.byStatus.pending ?? 0;
-  const donationFailed = donations.byStatus.failed ?? 0;
-  const donationExpired = donations.byStatus.expired ?? 0;
+  /*
+   * Registrations, invitations and the events they belong to. The donation
+   * figures this panel used to repeat live under /donations/analytics, where
+   * the rest of the donation surface is (#39); email queue health belongs to
+   * the outbox, which shows it in operational detail rather than as two
+   * numbers on a dashboard.
+   */
+  const { registrations, invites } = state.data;
 
   return (
     <div class="pk pk-stack">
@@ -49,31 +53,6 @@ export function AnalyticsOverview() {
           note={`${registrations.byStatus.registered ?? 0} confirmed`}
         />
         <StatCard label="Pending Invites" value={invites.byStatus.sent ?? 0} note={`${invites.total} total`} />
-        <StatCard label="Queued Emails" value={email.totalQueued} note="" />
-        <StatCard
-          label="Failed Emails"
-          value={email.totalFailed}
-          note={email.totalBounced > 0 ? `${email.totalBounced} bounced` : ""}
-          variant={email.totalFailed > 0 ? "danger" : undefined}
-        />
-        <StatCard
-          label="Completed Donations"
-          value={donationCompleted}
-          note={donations.totals.grossUsd > 0 ? `${fmtMoney(donations.totals.grossUsd, "usd")} gross` : "no data"}
-        />
-        <StatCard
-          label="Pending Donations"
-          value={donationPending}
-          note={
-            [
-              donationFailed > 0 ? `${donationFailed} failed` : "",
-              donationExpired > 0 ? `${donationExpired} expired` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ") || "none failed"
-          }
-          variant={donationFailed > 0 ? "danger" : undefined}
-        />
       </div>
 
       <div class="pk-grid pk-grid--roomy">
@@ -104,6 +83,12 @@ export function AnalyticsOverview() {
               data={state.data.topEvents}
               empty="No event registration activity yet"
               rowKey={(event) => event.slug}
+              // Each row names an event, so it opens that event (#45) — which
+              // is most of the point of a "top events" table.
+              rowAction={(event) => ({
+                label: `Open ${event.name}`,
+                href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`),
+              })}
             />
           </PanelBody>
         </Panel>

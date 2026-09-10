@@ -36,7 +36,10 @@ export async function submitGroupFormResponse(
   const canSubmit = await canViewerAccessGroupResource(db, viewer, groupId, "formPlacement", placementId, "submit");
   if (!canSubmit) throw new AppError(403, "FORM_SUBMIT_REQUIRED", "The submit capability is required");
 
-  const form = await getFormDefinitionByPlacement(db, placementId, { acceptingResponses: true });
+  // Resolving for submission asks only whether the form is live at all. A form
+  // outside its submission window resolves here and is refused by the shared
+  // guard below, which can name the day it opens or the day it closed.
+  const form = await getFormDefinitionByPlacement(db, placementId, { forSubmission: true });
   if (!form) throw new AppError(404, "FORM_NOT_ACCEPTING_RESPONSES", "The form is not accepting responses");
   if (form.purpose !== "survey" && form.purpose !== "feedback") {
     throw new AppError(

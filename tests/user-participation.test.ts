@@ -1,3 +1,4 @@
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 /**
  * The participation read model's counting rules.
  *
@@ -13,7 +14,13 @@ import { env } from "cloudflare:workers";
 import { userParticipationSchema } from "../assets/shared/schemas/user-participation";
 import { getUserParticipation } from "../functions/_lib/services/user-participation";
 import { resetDb } from "./helpers/reset-db";
-import { insertIndividualMember } from "./helpers/membership";
+import {
+  addRepresentative,
+  insertOrganization,
+  seedOrganizationAggregate,
+  insertIndividualMember,
+  insertOrgRepresentative,
+} from "./helpers/membership";
 
 const NOW = () => new Date().toISOString();
 const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
@@ -94,6 +101,30 @@ async function joinGroup(
 
 describe("user participation read model", () => {
   beforeEach(resetDb);
+
+  it("uses leadership titles on the user's record and counts a group once across capacities", async () => {
+    const member = await insertOrgRepresentative(env.DB, { email: "leadership-reader@example.test" });
+    const groupId = await insertGroup("User record titles", "user-record-titles");
+    await joinGroup(groupId, member, daysFromNow(-20));
+    const organizationId = await insertOrganization(env.DB, "Second capacity");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const identityId = await addRepresentative(env.DB, memberId, member.userId);
+    await joinGroup(groupId, { userId: member.userId, memberId, identityId }, daysFromNow(-10));
+    await env.DB.prepare("UPDATE group_memberships SET title = 'Legacy treasurer' WHERE user_id = ?")
+      .bind(member.userId)
+      .run();
+    expect((await getUserParticipation(env.DB, member.userId)).groups).toMatchObject([{ title: null }]);
+    const leadership = await grantGroupLeadershipCapacity(env.DB, groupId, member.userId);
+    await env.DB.prepare("UPDATE user_roles SET title = 'Chair' WHERE id = ?").bind(leadership.roleAssignmentId).run();
+    const participation = await getUserParticipation(env.DB, member.userId);
+    expect(participation.groups).toHaveLength(1);
+    expect(participation.groups[0].title).toBe("Chair");
+    expect(participation.summary.groupCount).toBe(1);
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ?")
+      .bind(NOW(), leadership.roleAssignmentId)
+      .run();
+    expect((await getUserParticipation(env.DB, member.userId)).groups[0].title).toBeNull();
+  });
 
   it("counts only meetings held since the person joined, and only those they attended", async () => {
     const member = await insertIndividualMember(env.DB, "H6", "participation@example.test");

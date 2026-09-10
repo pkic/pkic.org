@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FormPlacement } from "../../assets/shared/schemas/forms";
 import { groupFormPlacementUpdateSchema } from "../../assets/shared/schemas/group-forms";
 import { GroupFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormPlacementEditor";
+import { localDateTimeValue } from "../../assets/ts/shared/ui";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { buttonNamed, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -69,6 +71,20 @@ afterEach(() => {
 });
 
 describe("group form placement availability editor", () => {
+  it("opens as facts and restores the saved window when editing is cancelled", async () => {
+    const container = mount(
+      <GroupFormPlacementEditor groupId={GROUP_ID} placement={placement} onSaved={() => undefined} />,
+    );
+    expect(container.querySelector("input")).toBeNull();
+    expect(container.textContent).toContain("Working group members");
+    await beginRecordEdit(container, "Form availability actions");
+    await typeInto(controlFor(container, "Audience"), "Unsaved audience");
+    await act(async () => buttonNamed(container, "Cancel").click());
+    expect(container.querySelector("input")).toBeNull();
+    await beginRecordEdit(container, "Form availability actions");
+    expect(controlFor(container, "Audience").value).toBe(placement.audience);
+  });
+
   it("sends one canonical placement-policy update built from the visible controls", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     vi.stubGlobal(
@@ -89,6 +105,7 @@ describe("group form placement availability editor", () => {
 
     const saved = vi.fn();
     const container = mount(<GroupFormPlacementEditor groupId={GROUP_ID} placement={placement} onSaved={saved} />);
+    await beginRecordEdit(container, "Form availability actions");
 
     await typeInto(controlFor(container, "Audience"), "Everyone in the group");
     const accepting = controlFor(container, "Accept responses while within the availability window");
@@ -109,10 +126,11 @@ describe("group form placement availability editor", () => {
     expect(saved).toHaveBeenCalledTimes(1);
   });
 
-  it("names every control it asks for and links each label to the control it names", () => {
+  it("names every control it asks for and links each label to the control it names", async () => {
     const container = mount(
       <GroupFormPlacementEditor groupId={GROUP_ID} placement={placement} onSaved={() => undefined} />,
     );
+    await beginRecordEdit(container, "Form availability actions");
 
     expect(labelNames(container)).toEqual([
       "Audience",
@@ -143,6 +161,69 @@ describe("group form placement availability editor", () => {
     expect(controlFor(container, "Closes").type).toBe("datetime-local");
   });
 
+  it("shows the window on the reader's clock and sends it back as UTC", async () => {
+    const requests: Array<{ body?: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        requests.push({ body: typeof init.body === "string" ? JSON.parse(init.body) : undefined });
+        return json(definitionResponse());
+      }),
+    );
+
+    const container = mount(
+      <GroupFormPlacementEditor groupId={GROUP_ID} placement={placement} onSaved={() => undefined} />,
+    );
+    await beginRecordEdit(container, "Form availability actions");
+
+    // The control speaks a wall clock with no zone attached, so the stored
+    // instant arrives converted into the reader's own.
+    const opens = controlFor(container, "Opens");
+    expect(opens.value).toBe(localDateTimeValue(placement.opensAt!));
+    expect(opens.value).not.toContain("Z");
+
+    // Whatever the reader types goes back out as UTC with millisecond
+    // precision, which is the only shape the contract admits.
+    const closesLocal = localDateTimeValue("2026-12-01T15:30:00.000Z");
+    await typeInto(controlFor(container, "Closes"), closesLocal);
+    await submitForm(container);
+
+    const parsed = groupFormPlacementUpdateSchema.parse(requests.at(-1)?.body);
+    expect(parsed.closesAt).toBe("2026-12-01T15:30:00.000Z");
+  });
+
+  it("refuses a close before an open through the contract, on the closing field", async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        sent.push(init.body);
+        return json(definitionResponse());
+      }),
+    );
+
+    const container = mount(
+      <GroupFormPlacementEditor groupId={GROUP_ID} placement={placement} onSaved={() => undefined} />,
+    );
+    await beginRecordEdit(container, "Form availability actions");
+
+    // An hour before the placement opens.
+    await typeInto(controlFor(container, "Closes"), localDateTimeValue("2026-09-01T08:00:00.000Z"));
+    await submitForm(container);
+
+    // Nothing left the browser: the same schema the route parses refused it
+    // first, and said so where the reader is looking.
+    expect(sent).toHaveLength(0);
+    const closes = controlFor(container, "Closes");
+    expect(closes.getAttribute("aria-invalid")).toBe("true");
+    const describedBy = closes.getAttribute("aria-describedby") ?? "";
+    const messages = describedBy
+      .split(/\s+/)
+      .map((id) => container.querySelector(`[id="${id}"]`)?.textContent ?? "")
+      .join(" ");
+    expect(messages).toContain("Closing time must be after opening time");
+  });
+
   it("announces a refused save as an alert and leaves the form editable", async () => {
     vi.stubGlobal(
       "fetch",
@@ -153,6 +234,7 @@ describe("group form placement availability editor", () => {
 
     const saved = vi.fn();
     const container = mount(<GroupFormPlacementEditor groupId={GROUP_ID} placement={placement} onSaved={saved} />);
+    await beginRecordEdit(container, "Form availability actions");
     await submitForm(container);
 
     const alert = container.querySelector('[role="alert"]');

@@ -57,6 +57,7 @@ function organizationsPage() {
       {
         id: ORGANIZATION_ID,
         name: "Example Organization",
+        publicProfileHref: "/members/profile/?id=org-1",
         membershipCategory: "P1",
         memberSince: "2020-01-01",
         activeIdentityCount: 3,

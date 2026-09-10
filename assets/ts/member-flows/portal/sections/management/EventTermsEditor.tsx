@@ -2,10 +2,14 @@ import { useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   groupEventTermsReplaceResponseSchema,
+  groupEventTermsReplaceSchema,
   groupEventTermsResponseSchema,
   type GroupEvent,
 } from "../../../../../shared/schemas/group-events";
 import type { EventTermsReplaceInput } from "../../../../../shared/schemas/event-configuration";
+import { useContractForm, type FieldPresentation } from "../../../../hooks/useContractForm";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { Menu } from "../../../../ui/Menu";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Alert } from "../../../../ui/Alert";
@@ -56,12 +60,16 @@ function toInput(term: TermsResponse["terms"][Audience][number]): TermInput {
  */
 function TermRow({
   audienceLabel,
+  prefix,
+  field,
   ordinal,
   term,
   onChange,
   onRemove,
 }: {
   audienceLabel: string;
+  prefix: string;
+  field: (name: string) => FieldPresentation;
   ordinal: number;
   term: TermInput;
   onChange: (term: TermInput) => void;
@@ -71,10 +79,16 @@ function TermRow({
   return (
     <div class="pk-stack pk-stack--tight">
       <div class="pk-grid pk-grid--tight">
-        <Field label="Key" required help="Stored with the acceptance, such as terms-of-service.">
+        <Field
+          {...field(`${prefix}.termKey`)}
+          label="Key"
+          required
+          help="Stored with the acceptance, such as terms-of-service."
+        >
           {(control) => (
             <TextInput
               {...control}
+              name={`${prefix}.termKey`}
               class="pk-mono"
               autocomplete="off"
               value={term.termKey}
@@ -83,10 +97,16 @@ function TermRow({
             />
           )}
         </Field>
-        <Field label="Version" required help="Raise it when the wording changes, so past acceptances stay meaningful.">
+        <Field
+          {...field(`${prefix}.version`)}
+          label="Version"
+          required
+          help="Raise it when the wording changes, so past acceptances stay meaningful."
+        >
           {(control) => (
             <TextInput
               {...control}
+              name={`${prefix}.version`}
               class="pk-mono"
               autocomplete="off"
               value={term.version}
@@ -94,10 +114,15 @@ function TermRow({
             />
           )}
         </Field>
-        <Field label="Link URL" help="The full text, if it lives on a page of its own.">
+        <Field
+          {...field(`${prefix}.contentRef`)}
+          label="Link URL"
+          help="The full text, if it lives on a page of its own."
+        >
           {(control) => (
             <TextInput
               {...control}
+              name={`${prefix}.contentRef`}
               type="url"
               autocomplete="off"
               value={term.contentRef ?? ""}
@@ -109,10 +134,16 @@ function TermRow({
       </div>
 
       <div class="pk-grid pk-grid--roomy">
-        <Field label="Agreement text" required help="The sentence beside the checkbox.">
+        <Field
+          {...field(`${prefix}.displayText`)}
+          label="Agreement text"
+          required
+          help="The sentence beside the checkbox."
+        >
           {(control) => (
             <TextInput
               {...control}
+              name={`${prefix}.displayText`}
               autocomplete="off"
               value={term.displayText}
               onInput={(event) => update({ displayText: event.currentTarget.value })}
@@ -120,10 +151,11 @@ function TermRow({
             />
           )}
         </Field>
-        <Field label="Help text" help="Optional detail shown under the agreement.">
+        <Field {...field(`${prefix}.helpText`)} label="Help text" help="Optional detail shown under the agreement.">
           {(control) => (
             <TextInput
               {...control}
+              name={`${prefix}.helpText`}
               autocomplete="off"
               value={term.helpText ?? ""}
               onInput={(event) => update({ helpText: event.currentTarget.value || undefined })}
@@ -134,6 +166,7 @@ function TermRow({
 
       <div class="pk-cluster">
         <Checkbox
+          name={`${prefix}.required`}
           checked={term.required}
           onChange={(event) => update({ required: event.currentTarget.checked })}
           label="Required to complete registration"
@@ -156,11 +189,13 @@ function TermRow({
  */
 function AudienceTerms({
   audience,
+  field,
   label,
   terms,
   onChange,
 }: {
   audience: Audience;
+  field: (name: string) => FieldPresentation;
   label: string;
   terms: TermInput[];
   onChange: (terms: TermInput[]) => void;
@@ -181,8 +216,10 @@ function AudienceTerms({
         )}
         {terms.map((term, index) => (
           <TermRow
-            key={`${audience}-${term.termKey}-${index}`}
+            key={`${audience}-${index}`}
             audienceLabel={label}
+            prefix={`configuration.${audience}.${index}`}
+            field={field}
             ordinal={index + 1}
             term={term}
             onChange={(next) =>
@@ -208,6 +245,7 @@ function TermsForm({
   expectedUpdatedAt,
   onRevision,
   reload,
+  onSaved,
 }: {
   groupId: string;
   event: GroupEvent;
@@ -215,6 +253,7 @@ function TermsForm({
   expectedUpdatedAt: string;
   onRevision: (updatedAt: string) => void;
   reload: () => Promise<void>;
+  onSaved: () => Promise<void>;
 }) {
   const [terms, setTerms] = useState<EventTermsReplaceInput>({
     attendee: response.terms.attendee.map(toInput),
@@ -225,45 +264,50 @@ function TermsForm({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("");
 
+  const form = useContractForm(groupEventTermsReplaceSchema, { expectedUpdatedAt, configuration: terms });
+
   async function submit(submitEvent: Event): Promise<void> {
     submitEvent.preventDefault();
+    if (saving) return;
+    const checked = form.submit();
+    if (!checked.data) return setError(checked.message);
     setSaving(true);
     setError(null);
     setStatus("");
     try {
-      const result = await putJson(
-        path(groupId, event.id),
-        { expectedUpdatedAt, configuration: terms },
-        groupEventTermsReplaceResponseSchema,
-      );
+      const result = await putJson(path(groupId, event.id), checked.data, groupEventTermsReplaceResponseSchema);
       onRevision(result.eventUpdatedAt);
       setStatus("Terms saved.");
+      await onSaved();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save event terms.");
+      setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form class="pk pk-stack" onSubmit={(event) => void submit(event)}>
+    <form class="pk pk-stack" noValidate {...form.handlers} onSubmit={(event) => void submit(event)}>
       <ErrorAlert error={error} />
       {/* One disabled fieldset takes the whole form out of play while the save
           is in flight, rather than each control deciding for itself. */}
       <fieldset class="pk-fieldset pk-stack" disabled={saving}>
         <AudienceTerms
+          field={form.of}
           audience="attendee"
           label="Attendee"
           terms={terms.attendee}
           onChange={(attendee) => setTerms({ ...terms, attendee })}
         />
         <AudienceTerms
+          field={form.of}
           audience="speaker"
           label="Speaker"
           terms={terms.speaker}
           onChange={(speaker) => setTerms({ ...terms, speaker })}
         />
         <AudienceTerms
+          field={form.of}
           audience="presentation"
           label="Presentation upload"
           terms={terms.presentation}
@@ -296,10 +340,54 @@ export function EventTermsEditor({
   expectedUpdatedAt: string;
   onRevision: (updatedAt: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
   const resource = useData(() => getJson(path(groupId, event.id), groupEventTermsResponseSchema), [groupId, event.id]);
   if (resource.loading) return <Spinner label="Loading terms…" />;
   if (resource.error) return <ErrorAlert error={resource.error} />;
   if (!resource.data) return <></>;
+  if (!editing)
+    return (
+      <div class="pk-stack">
+        {saved && <Alert tone="ok">Terms saved.</Alert>}
+        <div class="pk-cluster pk-cluster--between">
+          <p class="pk-small">Review the agreements required from each audience.</p>
+          <Menu
+            label="Event terms actions"
+            align="end"
+            items={[
+              {
+                id: "edit",
+                label: "Edit terms",
+                onSelect: () => {
+                  setSaved(false);
+                  setEditing(true);
+                },
+              },
+            ]}
+          />
+        </div>
+        <div class="pk-stack">
+          {(["attendee", "speaker", "presentation"] as const).map((audience) => (
+            <div key={audience}>
+              <h6>
+                {audience === "attendee" ? "Attendee" : audience === "speaker" ? "Speaker" : "Presentation upload"}
+              </h6>
+              {resource.data!.terms[audience].length ? (
+                <DescriptionList
+                  items={resource.data!.terms[audience].map((term) => ({
+                    term: term.display_text || term.term_key,
+                    value: `${term.required ? "Required" : "Optional"} · Version ${term.version}`,
+                  }))}
+                />
+              ) : (
+                <p class="pk-muted pk-small">No terms configured.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   return (
     <TermsForm
       key={resource.data.eventUpdatedAt}
@@ -308,7 +396,15 @@ export function EventTermsEditor({
       response={resource.data}
       expectedUpdatedAt={expectedUpdatedAt}
       onRevision={onRevision}
-      reload={resource.reload}
+      reload={async () => {
+        setEditing(false);
+        await resource.reload();
+      }}
+      onSaved={async () => {
+        setSaved(true);
+        setEditing(false);
+        await resource.reload();
+      }}
     />
   );
 }

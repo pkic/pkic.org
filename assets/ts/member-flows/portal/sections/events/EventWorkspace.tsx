@@ -27,7 +27,7 @@ const RegistrationDetailPage = lazy(() =>
 
 type EventWorkspaceProps =
   | { view: "list" }
-  | { view: "detail"; slug: string; tab?: string; subTab?: string }
+  | { view: "detail"; slug: string; tab?: string; subTab?: string; detailSegment?: string }
   | { view: "proposal"; slug: string; resourceId: string }
   | { view: "registration"; slug: string; resourceId: string };
 
@@ -127,7 +127,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
           return `${base}/${encodeURIComponent(tab)}`;
         }}
       >
-        <EventDetailView slug={props.slug} tab={props.tab} subTab={props.subTab} />
+        <EventDetailView slug={props.slug} tab={props.tab} subTab={props.subTab} detailSegment={props.detailSegment} />
       </OwnerGroupGate>
     );
   }

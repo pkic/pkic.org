@@ -4,6 +4,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  FORM_SUBMISSION_STATUSES,
   formDetailResponseSchema,
   formSubmissionStatsResponseSchema,
   formSubmissionsResponseSchema,
@@ -414,13 +415,11 @@ describe("portal form management", () => {
 
     const statusFilter = toolbar?.querySelector("select");
     expect(statusFilter?.getAttribute("aria-label")).toBe("Submission status");
-    expect([...statusFilter!.options].map((option) => option.value)).toEqual([
-      "",
-      "submitted",
-      "accepted",
-      "rejected",
-      "withdrawn",
-    ]);
+    // Every status the column can hold, and nothing else. It used to offer
+    // "Accepted" and "Rejected" — values `form_submissions.status` cannot
+    // take, so those two filters could only ever return nothing — while never
+    // offering `draft`, which it can (issue #24's shape).
+    expect([...statusFilter!.options].map((option) => option.value)).toEqual(["", ...FORM_SUBMISSION_STATUSES]);
 
     // Attendance is a registration-only vocabulary, so it is absent here.
     expect(toolbar?.querySelectorAll("select")).toHaveLength(1);

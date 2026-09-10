@@ -1,0 +1,15 @@
+@layer components {
+  .pk-markdown-editor { min-width: 0; border: 1px solid var(--pk-line); border-radius: var(--pk-radius); background: var(--pk-surface); overflow: hidden; }
+  .pk-markdown-editor__toolbar, .pk-markdown-editor__blocks, .pk-markdown-editor__footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-1); padding: var(--pk-2); }
+  .pk-markdown-editor__toolbar { border-bottom: 1px solid var(--pk-line); }
+  .pk-markdown-editor__toolbar [aria-pressed="true"] { background: var(--pk-surface-sunk); }
+  .pk-markdown-editor__blocks { background: var(--pk-surface-sunk); border-bottom: 1px solid var(--pk-line); gap: var(--pk-2); }
+  .pk-markdown-editor__blocks button[draggable="true"] { cursor: grab; }
+  .pk-markdown-editor__canvas { min-height: 18rem; white-space: pre-wrap; padding: var(--pk-5); outline-offset: -3px; }
+  .pk-markdown-editor__canvas > * + * { margin-top: var(--pk-3); }
+  .pk-markdown-editor__video { cursor: grab; }
+  .pk-markdown-editor__canvas iframe { pointer-events: none; }
+  .pk-markdown-editor__canvas .ProseMirror-selectednode { outline: 2px solid currentColor; outline-offset: 2px; }
+  .pk-markdown-editor__media { padding: var(--pk-4); border-bottom: 1px solid var(--pk-line); }
+  .pk-markdown-editor__footer { justify-content: space-between; border-top: 1px solid var(--pk-line); }
+}

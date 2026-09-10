@@ -143,6 +143,68 @@ describe("admin user headshot upload", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(["replace", "remove", "anonymize"] as const)(
+    "reads imported portraits and cleans the assets bucket on %s",
+    async (operation) => {
+      const { targetUserId } = await setup();
+      const assets = new FakeUploadsBucket();
+      const uploads = new FakeUploadsBucket();
+      const oldKey = "member-photos/release-review/portrait.jpg";
+      await assets.put(oldKey, validJpegBytes().buffer);
+      // A collision in the other bucket must never be read or deleted.
+      await uploads.put(oldKey, new TextEncoder().encode("unrelated object").buffer);
+      await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(oldKey, targetUserId).run();
+      const environment = {
+        ...(env as any),
+        IMAGES: undefined,
+        ASSETS_BUCKET: assets,
+        SPEAKER_UPLOADS_BUCKET: uploads,
+      };
+      const pending: Promise<unknown>[] = [];
+      const execution = {
+        passThroughOnException() {},
+        waitUntil(promise: Promise<unknown>) {
+          pending.push(promise);
+        },
+      } as ExecutionContext;
+      const url = `https://app.test/api/v1/users/${targetUserId}`;
+      const headers = { authorization: `Bearer ${ADMIN_TOKEN}` };
+      const portrait = await app.fetch(new Request(`${url}/headshot`, { headers }), environment, execution);
+      expect(portrait.status).toBe(200);
+      expect(new Uint8Array(await portrait.arrayBuffer())).toEqual(validJpegBytes());
+
+      const response = await app.fetch(
+        new Request(`${url}/${operation === "anonymize" ? "anonymize" : "headshot"}`, {
+          method: operation === "replace" ? "PUT" : operation === "remove" ? "DELETE" : "POST",
+          headers: { ...headers, ...(operation === "replace" ? { "content-type": "image/png" } : {}) },
+          ...(operation === "replace" ? { body: validPngBytes() } : {}),
+        }),
+        environment,
+        execution,
+      );
+      expect(response.status).toBe(200);
+      await Promise.all(pending);
+      expect(await assets.get(oldKey)).toBeNull();
+      expect(await uploads.get(oldKey)).not.toBeNull();
+      expect(
+        await queryAll(env.DB, "SELECT bucket, status FROM storage_deletion_outbox WHERE object_key = ?", oldKey),
+      ).toEqual([{ bucket: "assets", status: "deleted" }]);
+      const [user] = await queryAll<{ headshot_r2_key: string | null }>(
+        env.DB,
+        "SELECT headshot_r2_key FROM users WHERE id = ?",
+        targetUserId,
+      );
+      if (operation === "replace") {
+        expect(user.headshot_r2_key).toMatch(new RegExp(`^headshots/${targetUserId}/`));
+        expect(await uploads.get(user.headshot_r2_key!)).not.toBeNull();
+      } else {
+        expect(user.headshot_r2_key).toBeNull();
+      }
+      const revoked = await app.fetch(new Request(`${url}/headshots/portrait.jpg`), environment, execution);
+      expect(revoked.status).toBe(404);
+    },
+  );
+
   it("imports Gravatar through the atomic headshot service and durably invalidates owned badges", async () => {
     const { targetUserId } = await setup();
     const bucket = new FakeUploadsBucket();

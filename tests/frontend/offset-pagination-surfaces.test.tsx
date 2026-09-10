@@ -207,7 +207,7 @@ describe("shared pagination across portal collections", () => {
       }),
     );
 
-    const donations = mount(<Donations subTab="promoters" />);
+    const donations = mount(<Donations pageSegment="promoters" />);
     await settle();
     void act(() => nextButton(donations).click());
     await settle();

@@ -18,6 +18,7 @@ function supportedTimeZones(): readonly string[] {
 }
 
 export interface TimeZoneSelectProps extends FieldControlProps {
+  name?: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;

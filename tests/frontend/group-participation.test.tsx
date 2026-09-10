@@ -88,8 +88,43 @@ function buttonNamed(container: HTMLElement, name: string): HTMLButtonElement {
   return button;
 }
 
+/**
+ * The affiliations offered inside the open confirmation.
+ *
+ * They used to stand open on the card, one checkbox per affiliation beside
+ * every group in the catalog (#51). The choice is asked for where the command
+ * is confirmed now, so this is where the boxes are.
+ */
+function dialogChoices(container: HTMLElement): HTMLInputElement[] {
+  const dialog = openDialog(container);
+  if (!dialog) throw new Error("no confirm dialog is open");
+  return [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+}
+
+/**
+ * Takes the card's join command and waits for the dialog it opens.
+ *
+ * Awaited, because the command asks before it acts: the dialog is opened from
+ * an async command, so it is a microtask away from the click that started it.
+ */
+async function openJoinDialog(container: HTMLElement, label = "Join group…"): Promise<void> {
+  void act(() => buttonNamed(container, label).click());
+  await settle();
+}
+
+/**
+ * The open confirmation, of either kind.
+ *
+ * `Dialog` carries `role="alertdialog"` for a destructive decision and leaves
+ * the native `<dialog>` role in place for an affirmative one — joining a group
+ * is affirmative, removing an affiliation is not, and both appear here.
+ */
+function openDialog(container: HTMLElement): Element | null {
+  return container.querySelector('[role="alertdialog"], dialog');
+}
+
 function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
-  const dialog = container.querySelector('[role="alertdialog"]');
+  const dialog = openDialog(container);
   if (!dialog) throw new Error("no confirm dialog is open");
   const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
   if (!button) throw new Error(`missing dialog button: ${label}`);
@@ -169,8 +204,9 @@ describe("generic group participation card", () => {
     expect(request?.pathname).toBe("/api/v1/users/current/groups");
     expect(request?.searchParams.get("view")).toBe("catalog");
     expect(request?.searchParams.has("typeKey")).toBe(false);
-    expect(container.textContent).toContain("Committee");
-    expect(container.textContent).toContain("Part of Parent Group");
+    // The kind and the parent share one quiet line under the group's name,
+    // so a reader scanning the column gets both without a second row.
+    expect(container.textContent).toContain("Committee · part of Parent Group");
   });
 
   it("selects every represented organization by default", async () => {
@@ -183,11 +219,16 @@ describe("generic group participation card", () => {
       }),
     );
     const container = mountCard(group());
-    const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    // Nothing is asked until the command is taken: the card is a statement of
+    // what the group is, not a form standing open (#51).
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+
+    await openJoinDialog(container);
+    const checkboxes = dialogChoices(container);
     expect(checkboxes).toHaveLength(2);
     expect(checkboxes.every((checkbox) => checkbox.checked)).toBe(true);
 
-    void act(() => buttonNamed(container, "Join selected").click());
+    void act(() => dialogButton(container, "Join group").click());
     await settle();
     expect(requests[0]?.url).toBe("/api/v1/groups/10000000-0000-4000-8000-000000000001/join");
     // Parsed through the shared request contract, so the assertion fails if
@@ -207,9 +248,10 @@ describe("generic group participation card", () => {
       }),
     );
     const container = mountCard(group());
-    const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    await openJoinDialog(container);
+    const checkboxes = dialogChoices(container);
     void act(() => checkboxes[1]!.click());
-    void act(() => buttonNamed(container, "Join selected").click());
+    void act(() => dialogButton(container, "Join group").click());
     await settle();
     expect(groupJoinSchema.parse(body)).toEqual({
       capacitySelection: {
@@ -248,7 +290,14 @@ describe("generic group participation card", () => {
       "#/groups/10000000-0000-4000-8000-000000000001/meetings",
     );
 
-    void act(() => buttonNamed(container, "Add selected").click());
+    /*
+     * One affiliation is already in, so only the other can be added — and with
+     * a single choice there is nothing to choose, so the command confirms
+     * rather than offering a list of one.
+     */
+    await openJoinDialog(container, "Join on behalf of…");
+    expect(dialogChoices(container)).toHaveLength(0);
+    void act(() => dialogButton(container, "Join group").click());
     await settle();
     expect(requests[0]?.url).toBe("/api/v1/groups/10000000-0000-4000-8000-000000000001/join");
     expect(groupJoinSchema.parse(requests[0]?.body)).toEqual({
@@ -306,16 +355,16 @@ describe("generic group participation card", () => {
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it("gives every capacity checkbox a label bound to it by id, drawn as a real control", () => {
+  it("draws every capacity choice as a real control, named as a set", async () => {
     vi.stubGlobal("fetch", vi.fn());
     const container = mountCard(group());
+    await openJoinDialog(container);
 
-    const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    const checkboxes = dialogChoices(container);
     expect(checkboxes).toHaveLength(2);
 
     for (const checkbox of checkboxes) {
       const label = checkbox.closest("label");
-      expect(checkbox.id).not.toBe("");
       expect(label).not.toBeNull();
       expect(label?.textContent?.trim()).not.toBe("");
       // All three parts of the block, or the browser draws its own control:
@@ -325,10 +374,9 @@ describe("generic group participation card", () => {
       expect(label?.querySelector(".pk-check__label")).not.toBeNull();
     }
 
-    // The set of affiliations is named, so it is not announced as a bare list.
-    const affiliations = container.querySelector('ul[aria-label="Affiliations participating in Architecture Group"]');
-    expect(affiliations).toBeNull();
-    expect(container.querySelector("legend")?.textContent).toBe("Join on behalf of");
+    // The set is named where the reader meets it, so the choices are not
+    // announced as loose boxes after the question.
+    expect(openDialog(container)?.querySelector("legend")?.textContent).toBe("Join on behalf of");
   });
 
   it("names the joined affiliations list and leaves the group card usable", () => {
@@ -352,10 +400,7 @@ describe("generic group participation card", () => {
     const affiliations = container.querySelector('ul[aria-label="Affiliations participating in Architecture Group"]');
     expect(affiliations?.textContent).toContain("Organization A");
     // "Joined" is a word, not only a colour.
-    expect([...container.querySelectorAll(".pk-badge")].map((badge) => badge.textContent)).toEqual([
-      "Working group",
-      "Joined",
-    ]);
+    expect([...container.querySelectorAll(".pk-badge")].map((badge) => badge.textContent)).toEqual(["Joined"]);
   });
 
   it("reports a rejected join as a toast and leaves the selection intact", async () => {
@@ -375,32 +420,33 @@ describe("generic group participation card", () => {
 
     const onChanged = vi.fn(async () => {});
     const container = mountCard(group(), onChanged);
-    void act(() => buttonNamed(container, "Join selected").click());
+    await openJoinDialog(container);
+    void act(() => dialogButton(container, "Join group").click());
     await settle();
 
     expect(onChanged).not.toHaveBeenCalled();
     expect(toastArea.textContent).toContain("You are not eligible for this group.");
-    // The card recovers: the control is live again rather than stuck busy.
-    const join = buttonNamed(container, "Join selected");
+    // The card recovers: the command is live again rather than stuck busy,
+    // and the dialog has closed rather than trapping the reader in a decision
+    // that already failed.
+    const join = buttonNamed(container, "Join group…");
     expect(join.disabled).toBe(false);
     expect(join.getAttribute("aria-busy")).toBeNull();
-    expect(
-      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every((box) => box.checked),
-    ).toBe(true);
+    expect(openDialog(container)).toBeNull();
 
     toastArea.remove();
   });
 
-  it("blocks the join control when nothing is selected", () => {
+  it("will not confirm a scoped decision with nothing left in scope", async () => {
     vi.stubGlobal("fetch", vi.fn());
     const container = mountCard(group());
-    const checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    await openJoinDialog(container);
+    const checkboxes = dialogChoices(container);
     void act(() => checkboxes[0]!.click());
     void act(() => checkboxes[1]!.click());
 
-    const join = buttonNamed(container, "Join selected");
-    expect(join.disabled).toBe(true);
-    expect(join.getAttribute("aria-disabled")).toBe("true");
+    // Joining on behalf of nobody is not a thing the dialog can be made to do.
+    expect(dialogButton(container, "Join group").disabled).toBe(true);
   });
 });
 

@@ -1,3 +1,4 @@
+import { usePortalHashLocation } from "../../hash-location";
 import { useId, useRef, useState } from "preact/hooks";
 import {
   groupVoteProposalApproveResponseSchema,
@@ -22,7 +23,6 @@ import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Textarea } from "../../../../ui/TextControl";
 import { fmtDate } from "../../ui";
-import { GroupVoteProposalForm } from "./GroupVoteProposalForm";
 
 function GroupVoteProposalDetail({
   groupId,
@@ -34,18 +34,20 @@ function GroupVoteProposalDetail({
   onChanged: () => Promise<void>;
 }) {
   const headingId = useId();
+  const [, navigate] = usePortalHashLocation();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/vote-proposals/${encodeURIComponent(proposal.id)}`;
   const detail = useData(() => getJson(base, groupVoteProposalDetailResponseSchema), [base]);
 
-  async function action(request: () => Promise<unknown>): Promise<void> {
+  async function action<T>(request: () => Promise<T>, onCompleted?: (result: T) => void): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      await request();
+      const result = await request();
       await onChanged();
+      onCompleted?.(result);
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error("Could not update the proposal."));
     } finally {
@@ -77,7 +79,7 @@ function GroupVoteProposalDetail({
     if (
       !(await confirmAction({
         title: `Approve "${current.title}" and create a vote?`,
-        body: "This converts the proposal into a live vote that members can cast ballots in.",
+        body: "This creates a vote using the proposal's opening and closing times.",
         consequences: [
           "A new vote is created using this proposal's settings",
           "The proposal can no longer be withdrawn or rejected",
@@ -87,7 +89,11 @@ function GroupVoteProposalDetail({
       }))
     )
       return;
-    await action(() => postJson(`${base}/approve`, {}, groupVoteProposalApproveResponseSchema));
+    await action(
+      () => postJson(`${base}/approve`, {}, groupVoteProposalApproveResponseSchema),
+      ({ convertedVote }) =>
+        navigate(`/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(convertedVote.id)}`),
+    );
   }
 
   return (
@@ -114,7 +120,13 @@ function GroupVoteProposalDetail({
               variant="primary"
               disabled={busy}
               onClick={() =>
-                void action(() => postJson(`${base}/endorsement`, {}, groupVoteProposalEndorseResponseSchema))
+                void action(
+                  () => postJson(`${base}/endorsement`, {}, groupVoteProposalEndorseResponseSchema),
+                  ({ convertedVote }) => {
+                    if (convertedVote)
+                      navigate(`/groups/${encodeURIComponent(groupId)}/votes/${encodeURIComponent(convertedVote.id)}`);
+                  },
+                )
               }
             >
               Endorse
@@ -176,10 +188,18 @@ function GroupVoteProposalDetail({
   );
 }
 
-export function GroupVoteProposals({ groupId, canParticipate }: { groupId: string; canParticipate: boolean }) {
+export function GroupVoteProposals({
+  groupId,
+  canParticipate,
+  onPropose,
+}: {
+  groupId: string;
+  canParticipate: boolean;
+  /** Proposing is a page of its own; this is where the list sends the reader. */
+  onPropose: () => void;
+}) {
   const actions = useRef<ApiTableActions | null>(null);
   const [selectedProposal, setSelectedProposal] = useState<GroupVoteProposal | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
 
   async function reload(): Promise<void> {
     setSelectedProposal(null);
@@ -188,7 +208,12 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
 
   return (
     <div class="pk pk-stack">
-      {showCreate && <GroupVoteProposalForm groupId={groupId} onCreated={reload} />}
+      {!canParticipate && (
+        <Alert tone="info">
+          You are not participating in this group, so you cannot propose a vote. Leadership can create a vote outright
+          under All votes.
+        </Alert>
+      )}
       <ApiDataTable
         caption="Vote proposals"
         actionsRef={actions}
@@ -199,15 +224,7 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
         paginate
         searchPlaceholder="Search proposals…"
         initialSort="-created_at"
-        createAction={
-          canParticipate
-            ? {
-                label: showCreate ? "Hide proposal form" : "Propose a vote",
-                onSelect: () => setShowCreate((shown) => !shown),
-                expanded: showCreate,
-              }
-            : undefined
-        }
+        createAction={canParticipate ? { label: "Propose a vote", onSelect: onPropose } : undefined}
         columns={[
           {
             header: "Proposal",
@@ -245,11 +262,24 @@ export function GroupVoteProposals({ groupId, canParticipate }: { groupId: strin
             // disclosure; a second button under that name would be one
             // command answering to two controls.
             <EmptyState
-              title="No vote proposals yet"
-              body="Use Propose a vote above to start collecting endorsements."
+              title="No proposals yet"
+              body="A proposal is a participant's request for a vote. Reaching the required endorsements creates a vote automatically; leadership can also approve a proposal directly."
             />
           ) : (
-            "No vote proposals are available through this group."
+            /*
+             * Saying why, not only that there is nothing (#52).
+             *
+             * "No vote proposals are available through this group" with no
+             * command beside it reads as a feature that does not work. A
+             * proposal comes from somebody participating in the group; a
+             * reader who manages the group without participating in it can
+             * still create a vote outright, and should be told that rather
+             * than left to conclude proposals are broken.
+             */
+            <EmptyState
+              title="No proposals yet"
+              body="A proposal is a participant's request for a vote. Reaching the required endorsements creates a vote automatically; leadership can also approve a proposal directly."
+            />
           )
         }
         rowKey={(proposal) => proposal.id}

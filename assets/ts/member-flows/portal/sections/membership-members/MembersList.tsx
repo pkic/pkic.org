@@ -1,4 +1,8 @@
 import {
+  MEMBER_GROUP_LABELS,
+  MEMBER_GROUPS,
+  MEMBER_REPRESENTATION_LABELS,
+  MEMBER_REPRESENTATION_STATES,
   memberUpdateResponseSchema,
   staffMembersListResponseSchema,
 } from "../../../../../shared/schemas/members-directory";
@@ -83,6 +87,10 @@ export function MembersList({
       caption="Members"
       urlState="members"
       endpoint="/api/v1/members"
+      // The staff projection, asked for rather than inferred from the reader's
+      // permissions — which is what made a public page's shape depend on who
+      // was looking (#11, #13, #25).
+      params={{ view: "staff" }}
       responseSchema={staffMembersListResponseSchema}
       resolve={(data) => data.members}
       resolvePage={(data) => data.page}
@@ -108,10 +116,15 @@ export function MembersList({
           width: "fit",
           filter: {
             param: "group",
+            // The kinds come from the query contract. `all` is that contract's
+            // default rather than a kind, and the table drops an empty filter
+            // instead of sending one, so it is offered as the empty value.
             options: [
-              { value: "", label: "Every kind" },
-              { value: "organization", label: "Organizations" },
-              { value: "independent", label: "Individuals" },
+              { value: "", label: MEMBER_GROUP_LABELS.all },
+              ...MEMBER_GROUPS.filter((group) => group !== "all").map((group) => ({
+                value: group,
+                label: MEMBER_GROUP_LABELS[group],
+              })),
             ],
           },
         },
@@ -142,8 +155,10 @@ export function MembersList({
             param: "representatives",
             options: [
               { value: "", label: "Any number" },
-              { value: "none", label: "Without representatives" },
-              { value: "some", label: "With representatives" },
+              ...MEMBER_REPRESENTATION_STATES.map((state) => ({
+                value: state,
+                label: MEMBER_REPRESENTATION_LABELS[state],
+              })),
             ],
           },
         },

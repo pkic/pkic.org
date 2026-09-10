@@ -17,21 +17,35 @@ test("a permitted staff identity uses the system audit log only through the port
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-system-audit-list"));
-  await page.goto("/portal/#/system/audit-log");
+  await page.goto("/portal/#/settings/audit-log");
 
-  // The Settings hub heads the page; the selected tab names the surface.
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Audit Log", exact: true })).toHaveAttribute("aria-current", "page");
+  // The page heads itself, and the sidebar entry that opened it is
+  // marked as the current page.
+  await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit log", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.locator("tbody tr").first()).toBeVisible();
   expect(auditLogRequests).toContain("GET /api/v1/audit-log");
   expect(retiredSystemRequests).toEqual([]);
   expect(legacyAuditRequests).toEqual([]);
 
-  await page.goto("/portal/#/system/audit-log");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/audit-log$/);
-  await expect(page.getByRole("link", { name: "Audit Log", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.goto("/portal/#/settings/audit-log");
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/audit-log$/);
+  await expect(page.getByRole("link", { name: "Audit log", exact: true })).toHaveAttribute("aria-current", "page");
   expect(legacyAuditRequests).toEqual([]);
+  await page.setViewportSize({ width: 1920, height: 1000 });
+  await page.goto("/portal/#/groups/20000000-0000-4000-8000-000000000003/audit");
+  const groupTable = page.getByRole("table", { name: "Group history", exact: true });
+  await expect(groupTable).toBeVisible();
+  const widths = await groupTable
+    .locator("thead th")
+    .evaluateAll((cells) =>
+      cells.map((cell) => ({ name: cell.textContent, width: cell.getBoundingClientRect().width })),
+    );
+  const detailsWidth = widths.find((cell) => cell.name?.includes("Details"))!.width;
+  const dateWidth = widths.find((cell) => cell.name?.includes("When"))!.width;
+  expect(detailsWidth).toBeGreaterThan(dateWidth * 2);
+  await page.screenshot({ path: test.info().outputPath("group-audit-table-1920.png"), fullPage: true });
 });
 
 test("renders loading, empty, and paginated audit-log states", async ({ page }) => {
@@ -51,7 +65,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
     action: "page_one_action",
     entity_type: "system_setting",
     entity_id: "setting-1",
-    details: null,
+    details: { title: "Annual workshop", seats: 24, status: "confirmed", source: "invitation", reminder: true },
     created_at: "2026-08-27T12:00:00.000Z",
   };
   const pageTwoEntry = {
@@ -94,8 +108,8 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
     });
   });
 
-  await page.goto("/portal/#/system/audit-log");
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await page.goto("/portal/#/settings/audit-log");
+  await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
   // Loading is skeleton rows under the real headers, announced by `aria-busy`
   // on the table — there is no spinner with a status role any more.
   await expect(page.locator('table[aria-busy="true"]')).toBeVisible();
@@ -117,6 +131,40 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   await expect(pager).toContainText("1–1 of 51");
   await expect(currentPage).toHaveText("1");
   await expect(nextPage).toBeEnabled();
+
+  const details = page
+    .getByRole("row")
+    .filter({ hasText: "page_one_action" })
+    .locator("dl")
+    .filter({ has: page.locator("div.pk-datalist") });
+  for (const width of [1920, 1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(details).toBeVisible();
+    const pairs = await details.locator(":scope > div").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const term = node.querySelector("dt")!.getBoundingClientRect();
+        const value = node.querySelector("dd")!.getBoundingClientRect();
+        const parent = node.getBoundingClientRect();
+        return {
+          termTop: term.top,
+          valueTop: value.top,
+          left: parent.left,
+          right: parent.right,
+          termLeft: term.left,
+          valueRight: value.right,
+        };
+      }),
+    );
+    expect(pairs).toHaveLength(5);
+    for (const pair of pairs) {
+      if (width > 480) expect(Math.abs(pair.termTop - pair.valueTop)).toBeLessThan(1);
+      expect(pair.termLeft).toBeGreaterThanOrEqual(pair.left - 1);
+      expect(pair.valueRight).toBeLessThanOrEqual(pair.right + 1);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath(`audit-table-${width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   await nextPage.click();
   await expect(page.getByText("page_two_action", { exact: true })).toBeVisible();

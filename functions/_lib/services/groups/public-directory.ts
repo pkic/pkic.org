@@ -1,3 +1,4 @@
+import { seatLeadershipJoinSql } from "./seat-leadership";
 /**
  * The public face of a group: mailing list, published leadership with titles
  * and tenures, and, for groups that publish it, the dated member roster with
@@ -145,9 +146,18 @@ function listCurrentLeadership(db: DatabaseLike, groupId: string): Promise<Publi
         AND identity.started_at IS NOT NULL
         AND identity.ended_at IS NULL
         AND identity.blocked_at IS NULL
-       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+       /*
+        * Left, like the roster's and the past terms' — these two joins exist
+        * only to supply a job-title fallback for a representative with no
+        * organization, and as inner joins they instead deleted that
+        * representative from the public leadership list while leaving them on
+        * the roster and in past positions. Issue #25 reports it from the
+        * outside: someone added to the board whose "photo and data do not
+        * render". They rendered nowhere at all.
+        */
+       LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
         AND capacity.member_id = represented_member.id
-       JOIN membership_categories category ON category.code = capacity.membership_category
+       LEFT JOIN membership_categories category ON category.code = capacity.membership_category
        LEFT JOIN organizations o ON o.id = represented_member.organization_id
       ORDER BY lineage.depth,
                CASE ur.role_id WHEN 'role-group_lead' THEN 0 ELSE 1 END,
@@ -187,7 +197,7 @@ function listPastLeadership(db: DatabaseLike, groupId: string): Promise<PublicLe
 
 /**
  * Seats: one row per membership capacity. A current leader's seat carries the
- * leadership title; every other seat carries its own title or "Member".
+ * leadership title; other current seats are "Member". Former seats retain legacy titles.
  * Current seats list leaders first; past seats list the most recently ended
  * first. A person representing two Members appears once per seat.
  */
@@ -195,7 +205,7 @@ function listRoster(db: DatabaseLike, groupId: string, current: boolean): Promis
   return all<PublicTenureRow>(
     db,
     `SELECT ${PUBLIC_PROFILE_SELECT_SQL},
-            COALESCE(leadership.title, membership.title, ?) AS title,
+            COALESCE(leadership.title, CASE WHEN membership.left_at IS NOT NULL THEN membership.title END, ?) AS title,
             membership.joined_at AS starts_at,
             membership.left_at AS ends_at
        FROM group_memberships membership
@@ -206,32 +216,13 @@ function listRoster(db: DatabaseLike, groupId: string, current: boolean): Promis
         AND capacity.member_id = represented_member.id
        LEFT JOIN membership_categories category ON category.code = capacity.membership_category
        LEFT JOIN organizations o ON o.id = represented_member.organization_id
-       LEFT JOIN (
-         SELECT ur.user_id, ur.identity_id, ur.member_id,
-                MIN(CASE ur.role_id WHEN 'role-group_lead' THEN 0 ELSE 1 END) AS role_rank,
-                COALESCE(
-                  MIN(CASE ur.role_id WHEN 'role-group_lead' THEN COALESCE(ur.title, gt.lead_title) END),
-                  MIN(COALESCE(ur.title, gt.deputy_lead_title))
-                ) AS title
-           FROM user_roles ur
-           JOIN groups g ON g.id = ur.context_id
-           JOIN group_types gt ON gt.key = g.type_key
-          WHERE ur.context_type = 'group' AND ur.context_id = ?
-            AND ur.role_id IN ('role-group_lead', 'role-group_deputy_lead')
-            AND ur.revoked_at IS NULL
-            AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-          GROUP BY ur.user_id, ur.identity_id, ur.member_id, gt.lead_title, gt.deputy_lead_title
-       ) leadership
-         ON leadership.user_id = membership.user_id
-        AND leadership.identity_id = membership.identity_id
-        AND leadership.member_id = membership.member_id
-        AND membership.left_at IS NULL
+       ${seatLeadershipJoinSql("membership")}
       WHERE membership.group_id = ?
         AND membership.left_at IS ${current ? "NULL" : "NOT NULL"}
         ${current ? "AND u.active = 1" : ""}
       ORDER BY ${current ? "COALESCE(leadership.role_rank, 2), membership.joined_at" : "membership.left_at DESC, membership.joined_at DESC"},
                ${PUBLIC_ORDER_SQL}`,
-    [DEFAULT_SEAT_TITLE, groupId, groupId],
+    [DEFAULT_SEAT_TITLE, JSON.stringify([groupId]), groupId],
   );
 }
 

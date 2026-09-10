@@ -7,6 +7,7 @@ import { SCHEDULED_JOB_DEFINITIONS } from "./_lib/services/scheduled-jobs/regist
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
+import newsRouter from "./news/router";
 import members_Router from "./members/router";
 import events_Router from "./events/router";
 import { onRequestGet as OgCardGet } from "./og/[...path]";
@@ -71,6 +72,7 @@ openapi.route("/api", api_Router);
 openapi.route("/donate", donate_Router);
 openapi.route("/r", r_Router);
 openapi.route("/members", members_Router);
+app.route("/news", newsRouter);
 app.route("/events", events_Router);
 
 // Build the MCP fetch handler after OpenAPI routes are registered.

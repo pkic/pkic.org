@@ -350,7 +350,12 @@ async function main(): Promise<void> {
     );
     eventName = forms.event.name;
     if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
-    renderSessionTypes(boot.root, forms.allowedSessionTypes ?? ["talk", "keynote", "panel"]);
+    // Whatever the event allows, and only that. The fallback that used to
+    // stand here named three session types of its own — a second copy of the
+    // backend's `DEFAULT_SESSION_TYPES`, which `resolveSessionTypes` already
+    // applies before the response is built, so the field is never empty and
+    // the copy could only ever have offered a type the event refused.
+    renderSessionTypes(boot.root, forms.allowedSessionTypes);
     if (customFieldsContainer && forms.form) {
       renderCustomFields(customFieldsContainer, forms.form.fields);
     }

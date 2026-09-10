@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 /**
  * The event-terms editor after its move onto the design system.
  *
@@ -168,6 +169,8 @@ describe("event terms editor", () => {
       <EventTermsEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Event terms actions", "Edit terms");
 
     expect(container.querySelector("form")?.classList.contains("pk")).toBe(true);
 
@@ -220,6 +223,8 @@ describe("event terms editor", () => {
       <EventTermsEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Event terms actions", "Edit terms");
 
     const empty = [...container.querySelectorAll(".pk-empty-state")];
     expect(empty).toHaveLength(3);
@@ -236,6 +241,8 @@ describe("event terms editor", () => {
       <EventTermsEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={onRevision} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Event terms actions", "Edit terms");
 
     // The label the end-to-end flow clicks; keep it exactly this wording.
     await act(() => buttonNamed(container, "Add attendee term").click());
@@ -278,6 +285,8 @@ describe("event terms editor", () => {
       <EventTermsEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={onRevision} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Event terms actions", "Edit terms");
     await submit(container);
 
     const alert = container.querySelector('[role="alert"]');

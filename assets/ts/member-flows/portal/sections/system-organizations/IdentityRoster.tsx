@@ -171,10 +171,9 @@ function AddIdentityForm({
               )}
             </Field>
           </div>
-          <fieldset class="pk-fieldset pk-field">
-            <legend class="pk-field__label">Profile links</legend>
-            <ProfileLinksInput fieldName="identity.links" value={links} onChange={setLinks} />
-          </fieldset>
+          {/* The widget names itself now, so it needs no fieldset around it to
+              borrow a label from. */}
+          <ProfileLinksInput fieldName="identity.links" label="Profile links" value={links} onChange={setLinks} />
         </div>
       </fieldset>
       <FormActions

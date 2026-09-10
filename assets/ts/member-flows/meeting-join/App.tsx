@@ -1,4 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
+import { youtubeVideoEmbed } from "../../../shared/markdown-media";
+import { meetingEntrySignInUrl } from "../../../shared/meeting-entry-navigation";
+import { BroadcastViewer } from "./BroadcastViewer";
 import {
   meetingInvitationVerificationCreateResponseSchema,
   meetingInvitationVerificationUpdateResponseSchema,
@@ -10,7 +13,7 @@ import {
 import { Spinner } from "../../components/Spinner";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Alert } from "../../ui/Alert";
-import { Button } from "../../ui/Button";
+import { Button, ButtonLink } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { TextInput } from "../../ui/TextControl";
@@ -39,6 +42,8 @@ function errorMessage(error: unknown): string {
 
 export function App({ invitation }: { invitation: MeetingGuestInvitationFragment | null }) {
   const occurrenceId = invitation?.occurrenceId ?? new URLSearchParams(window.location.search).get("occurrence") ?? "";
+  const [broadcast, setBroadcast] = useState<{ embedUrl: string; destination: string } | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [landing, setLanding] = useState<MeetingJoinLanding | null>(null);
@@ -74,7 +79,10 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
           }
         }
       } catch (caught) {
-        if (!cancelled) setError(errorMessage(caught));
+        if (!cancelled) {
+          setError(errorMessage(caught));
+          setNeedsSignIn(caught instanceof ApiClientError && caught.status === 401);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -119,7 +127,13 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
     setError(null);
     try {
       const result = await postJson(`${occurrenceEndpoint(occurrenceId)}/join`, input, meetingJoinResponseSchema);
-      window.location.assign(result.redirectUrl);
+      const embedUrl = youtubeVideoEmbed(result.redirectUrl);
+      if (embedUrl) {
+        setBroadcast({ embedUrl, destination: result.redirectUrl });
+        setSubmitting(false);
+      } else {
+        window.location.assign(result.redirectUrl);
+      }
     } catch (caught) {
       setError(errorMessage(caught));
       setSubmitting(false);
@@ -179,6 +193,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
       </div>
     );
   }
+  if (landing && broadcast) return <BroadcastViewer landing={landing} {...broadcast} />;
   if (landing) {
     return (
       <MeetingJoinForm landing={landing} submitting={submitting} error={error} onJoin={(input) => void join(input)} />
@@ -189,6 +204,13 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
       <Alert tone="warn">
         {error ?? "Sign in through the member portal or open the invitation sent to the guest email address."}
       </Alert>
+      {needsSignIn && (
+        <p>
+          <ButtonLink variant="primary" href={meetingEntrySignInUrl(occurrenceId)}>
+            Sign in to continue
+          </ButtonLink>
+        </p>
+      )}
     </div>
   );
 }

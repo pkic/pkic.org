@@ -20,6 +20,12 @@ export const EVENT_FLOW = {
       title: "A registrant who lost the manage link can have it resent",
       status: "covered",
     },
+    {
+      id: "3.2.b",
+      title: "Registering for an event joins the registrant to nothing else",
+      status: "unit",
+      note: "Issue #23. An event form asks for a name, an address and consent to a privacy policy; it does not ask whether somebody wants to represent their employer or sit in its working groups, so confirming one must not decide that — not even for an address under a domain a member organization has claimed, which is the exact signal the join flow uses to place a person inside an organization when they have asked to be there. Covered at the route in registration-workflows, because what is being asserted is the absence of identity, member, group-seat and mailing rows: a browser can only show the same absence more weakly, one screen at a time.",
+    },
     { id: "3.3", title: "A manager changes an attendee's days", status: "covered" },
     { id: "3.4", title: "A manager manages attendee and speaker invitations", status: "covered" },
     { id: "3.5", title: "An external guest verifies a mailbox code and enters a meeting", status: "covered" },
@@ -52,6 +58,12 @@ export const EVENT_FLOW = {
       title: "A published agenda keeps the affiliations its speakers had at publication",
       status: "absent",
       note: "The reason 3.9 belongs beside the affiliation flow. Freezing at publication answers the programme case completely and without touching any record: the agenda holds what was true when it was published, whatever the speakers do afterwards. It answers only the programme, though — badges, attendee exports and the speaker wall are not the agenda and would still resolve live.",
+    },
+    {
+      id: "3.10",
+      title: "A manager sends every participant their own link to a meeting",
+      status: "covered",
+      note: "Issue #6. The link is the occurrence's join page rather than a per-person secret — a secret in a mailbox is the thing that gets forwarded — so it is personal by requiring the reader's own session, which is what binds the attendance it writes to a person. The journey sends a round and then opens the delivered link signed out, where it asks who the reader is instead of admitting them. Rounds, the compare-and-set that stops two managers mailing the group twice, and the refusals live in meeting-participant-invitations.",
     },
     {
       id: "3.8",

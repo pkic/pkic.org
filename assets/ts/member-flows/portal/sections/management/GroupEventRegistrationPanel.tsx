@@ -1,3 +1,4 @@
+import { RegistrationIdentitySelect } from "../../../../components/RegistrationIdentitySelect";
 import { useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { eventFormsResponseSchema, type EventFormsResponse } from "../../../../../shared/schemas/forms";
@@ -129,6 +130,7 @@ function RegistrationPanel({ groupId, event }: { groupId: string; event: GroupEv
     try {
       const dayAttendance = readDayAttendance(form);
       const input = attendeeRegistrationParticipationSchema.parse({
+        identityId: readField(form, "identityId") || undefined,
         attendanceType: dayAttendance.length === 0 ? readField(form, "attendanceType") : undefined,
         dayAttendance: dayAttendance.length > 0 ? dayAttendance : undefined,
         customAnswers: readCustomFieldValues(form),
@@ -160,6 +162,7 @@ function RegistrationPanel({ groupId, event }: { groupId: string; event: GroupEv
           </Alert>
         )}
         <form class="pk-stack" ref={formRef} onSubmit={(submitEvent) => void submit(submitEvent)}>
+          {termsConfigured && <RegistrationIdentitySelect key={`identity-${resetKey}`} />}
           <RegistrationFields key={resetKey} config={config.data} />
           <div class="pk-cluster">
             <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!termsConfigured}>

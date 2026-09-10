@@ -24,6 +24,7 @@ import { RowActions } from "../../../../ui/RowActions";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { Textarea } from "../../../../ui/TextControl";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
@@ -317,8 +318,7 @@ export function ScheduledJobs() {
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      {/* The "Scheduled Jobs" tab already names this surface; only the
-          sentence the reader needs stays. */}
+      <PageHeader title="Scheduled jobs" />
       <p class="pk-small">
         Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
       </p>

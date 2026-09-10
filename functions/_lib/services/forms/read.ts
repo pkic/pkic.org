@@ -17,6 +17,7 @@ import {
 } from "../../../../assets/shared/schemas/form-field-rules";
 import { FORM_FIELD_OPTION_SOURCES } from "../../../../assets/shared/schemas/forms";
 import { defaultFormAudience, findActiveFormPlacement, findFormPlacement } from "./placements";
+import { formSubmissionWindowOpenSql } from "./submission-window";
 
 export type { FormFieldDefinition, FormPurpose } from "../../../../assets/shared/schemas/forms";
 
@@ -237,8 +238,7 @@ async function findPlacedEventForm(
        ${ownership === "portal_owner" ? "AND event.source_mode = 'portal'" : ""}
        ${purpose === "event_registration" || purpose === "proposal_submission" ? "AND fp.audience = ?" : ""}
        ${key ? "AND f.key = ?" : ""}
-       AND (fp.opens_at IS NULL OR unixepoch(fp.opens_at) <= unixepoch())
-       AND (fp.closes_at IS NULL OR unixepoch(fp.closes_at) > unixepoch())
+       AND ${formSubmissionWindowOpenSql("fp")}
      ORDER BY fp.created_at ASC, fp.id ASC
      LIMIT 2`,
     [
@@ -352,11 +352,21 @@ async function loadFormDefinition(
   };
 }
 
-/** Resolves one placement without inferring ownership from its reusable definition. */
+/**
+ * Resolves one placement without inferring ownership from its reusable
+ * definition.
+ *
+ * `forSubmission` narrows the resolution to a form that is live at all — an
+ * active definition on an active placement. It deliberately does not filter on
+ * the submission window: a form that is merely early or late still exists, and
+ * hiding it here would leave the caller with nothing to tell the submitter but
+ * that it was not found. The window is refused, with its dates, by
+ * `prepareFormSubmissionGuard`.
+ */
 export async function getFormDefinitionByPlacement(
   db: DatabaseLike,
   placementId: string,
-  options: { acceptingResponses?: boolean; includeArchived?: boolean } = {},
+  options: { forSubmission?: boolean; includeArchived?: boolean } = {},
 ): Promise<ActiveFormDefinition | null> {
   const row = await first<FormRow & { updated_at: string; placement_id: string }>(
     db,
@@ -367,16 +377,12 @@ export async function getFormDefinitionByPlacement(
        FROM form_placements fp
        JOIN forms f ON f.id = fp.form_id
       WHERE fp.id = ?
-        ${options.acceptingResponses ? "AND f.status = 'active' AND fp.active = 1" : ""}
-        ${options.acceptingResponses ? "AND (fp.opens_at IS NULL OR unixepoch(fp.opens_at) <= unixepoch())" : ""}
-        ${options.acceptingResponses ? "AND (fp.closes_at IS NULL OR unixepoch(fp.closes_at) > unixepoch())" : ""}
+        ${options.forSubmission ? "AND f.status = 'active' AND fp.active = 1" : ""}
       LIMIT 1`,
     [placementId],
   );
   if (!row) return null;
-  const placement = options.acceptingResponses
-    ? await findActiveFormPlacement(db, row.id, { placementId: row.placement_id })
-    : await findFormPlacement(db, row.id, { placementId: row.placement_id });
+  const placement = await findFormPlacement(db, row.id, { placementId: row.placement_id });
   return loadFormDefinition(db, placement ? { form: row, placement } : null, options);
 }
 

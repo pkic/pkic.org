@@ -1230,6 +1230,8 @@ CREATE TABLE sponsorships (
   --        | Leader | Inspirator | Innovator | Ambassador (event)
   pipeline_stage         TEXT NOT NULL DEFAULT 'new_inquiry',
   -- allowed: new_inquiry | contacted | proposal_sent | negotiating | payment_pending | active | lapsed
+  --        | not_proceeding
+  -- Vocabulary lives in assets/shared/schemas/sponsorship-management.ts; deliberately no CHECK here.
   transition_revision    INTEGER NOT NULL DEFAULT 0,
   -- Incremented by every pipeline/renewal mutation and used as the compare-and-set
   -- boundary for staff transitions and scheduled automation.
@@ -1340,6 +1342,39 @@ VALUES
   ('committee', 'Committee', 'Committees', 'A standing or temporary committee.', 'inherited', 'managed', 'none', 1, 'participants', 'Chair', 'Vice Chair', 1, 30, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('chapter', 'Chapter', 'Chapters', 'A regional or community chapter.', 'inherited', 'open', 'none', 1, 'authenticated', 'Lead', 'Deputy Lead', 1, 40, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('community', 'Community', 'Communities', 'A communication and coordination group.', 'inherited', 'open', 'none', 1, 'authenticated', 'Chair', 'Vice Chair', 1, 50, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- The vocabulary a manager chooses a leadership title from.
+--
+-- The title is per assignment so that a co-chair, a convenor or a secretary
+-- fits the two roles the authorization model has, and it used to be typed
+-- (issue #29): a free text box beside a role whose whole point is a small,
+-- known set of names. The set is reference data rather than a constant
+-- compiled into the frontend, so recording a title nobody has used yet is a
+-- row here — additive, no deploy — and every surface that offers titles
+-- offers the same ones. A group type's own configured lead_title /
+-- deputy_lead_title is always offered first whether or not it is listed here.
+CREATE TABLE group_leadership_titles (
+  role_id    TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  active     INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (role_id, title)
+);
+
+INSERT INTO group_leadership_titles (role_id, title, sort_order, active, created_at, updated_at)
+VALUES
+  ('role-group_lead', 'Chair', 10, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_lead', 'Co-Chair', 20, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_lead', 'Lead', 30, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_lead', 'Co-Lead', 40, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_lead', 'President', 50, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_deputy_lead', 'Vice Chair', 10, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_deputy_lead', 'Deputy Lead', 20, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_deputy_lead', 'Deputy Chair', 30, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_deputy_lead', 'Vice President', 40, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('role-group_deputy_lead', 'Secretary', 50, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 CREATE TABLE groups (
   id                          TEXT NOT NULL PRIMARY KEY,
@@ -2127,14 +2162,14 @@ If you have any questions, just reply to this email.',
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-brochure', 1,
-    'PKI Consortium sponsorship information',
+    'Sponsoring the PKI Consortium',
     'Hi {{contactNameText}},
 
-Thank you for your interest in sponsoring the PKI Consortium{{#if eventNameText}} — {{eventNameText}}{{/if}}. Attached is our sponsorship brochure with tier details and benefits.
+Thank you for your interest in sponsoring the PKI Consortium{{#if eventNameText}} — {{eventNameText}}{{/if}}. Our brochure sets out the tiers and what each one includes.
 
 Brochure: [{{brochureUrl}}]({{brochureUrl}})
 
-A member of our team will follow up with you shortly to discuss next steps.',
+One of us will follow up shortly to talk it through. If you would rather not wait, just reply to this email with what you have in mind.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
@@ -3425,9 +3460,9 @@ Your application has moved into our member consultation period, during which cur
     'Update on your PKI Consortium membership application',
     'Hi {{applicantName}},
 
-After review, we are unable to approve your PKI Consortium membership application at this time.{{#reason}}
+After review, we are unable to approve your PKI Consortium membership application at this time.{{#if reason}}
 
-{{reason}}{{/reason}}
+{{reason}}{{/if}}
 
 If you have questions, please reply to this email.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
@@ -3447,9 +3482,9 @@ If this was a mistake, please reply to this email.',
     'PKI Consortium member consultation — {{applicationCount}} application(s)',
     'The following prospective member application(s) are open for consultation:
 
-{{#applications}}
+{{#each applications}}
 - {{maskedEmail}} — {{organizationName}} ({{membershipCategory}})
-{{/applications}}
+{{/each}}
 
 Members with concerns may reply to this list or submit a concern via the portal.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
@@ -3459,9 +3494,9 @@ Members with concerns may reply to this list or submit a concern via the portal.
     'PKI Consortium EC review — {{applicationCount}} application(s)',
     'The following prospective member application(s) are ready for Executive Council review:
 
-{{#applications}}
+{{#each applications}}
 - {{organizationName}} ({{membershipCategory}}) — [Review]({{reviewUrl}})
-{{/applications}}
+{{/each}}
 
 If no EC member records a decision within {{ecReviewWindowDays}} days, applications are auto-approved.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
@@ -3474,9 +3509,9 @@ If no EC member records a decision within {{ecReviewWindowDays}} days, applicati
 Congratulations — your PKI Consortium membership application has been approved!
 
 [Log in to the portal]({{loginUrl}})
-{{#workingGroups}}
+{{#if workingGroups}}
 Working groups joined: {{workingGroups}}
-{{/workingGroups}}
+{{/if}}
 
 We look forward to your participation.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
@@ -3506,9 +3541,9 @@ Your PKI Consortium member account has been created. Use the link below to sign 
 
 You have been added to the following PKI Consortium mailing lists:
 
-{{#lists}}
+{{#each lists}}
 - {{.}}
-{{/lists}}',
+{{/each}}',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
@@ -3993,11 +4028,19 @@ CREATE TABLE mailing_list_subscription_preferences (
 CREATE INDEX idx_mailing_list_preferences_user
   ON mailing_list_subscription_preferences(user_id, mailing_list_id);
 
--- List configuration and subscription history are archived, not erased.
-CREATE TRIGGER trg_mailing_lists_prevent_delete
+-- A list anyone has answered for, that another group has been given, or that
+-- the provider already carries is history: it is archived, never erased. A
+-- list nothing depends on was a mistake or a trial, and removing it leaves
+-- nothing behind, so the guard names the dependencies instead of forbidding
+-- every delete. The delete use case refuses the same three cases first, with
+-- a message that says which one; this is the backstop under it.
+CREATE TRIGGER trg_mailing_lists_retain_history
 BEFORE DELETE ON mailing_lists
+WHEN EXISTS (SELECT 1 FROM mailing_list_subscription_preferences WHERE mailing_list_id = OLD.id)
+  OR EXISTS (SELECT 1 FROM mailing_list_group_grants WHERE mailing_list_id = OLD.id)
+  OR EXISTS (SELECT 1 FROM google_groups_membership_desired_state WHERE google_group_email = OLD.email)
 BEGIN
-  SELECT RAISE(ABORT, 'mailing lists must be archived, not deleted');
+  SELECT RAISE(ABORT, 'mailing lists with subscription history must be archived, not deleted');
 END;
 
 -- Stable IDs and explicit ownership make these seeds deterministic and usable
@@ -4217,18 +4260,24 @@ VALUES
   ),
   (
     lower(hex(randomblob(16))), 'sponsorship-active-confirmation', 1,
-    'Your PKI Consortium sponsorship is now active',
+    'Thank you for sponsoring the PKI Consortium',
     'Hi {{contactNameText}},
 
-Your {{tierText}} sponsorship for {{organizationNameText}} is now active{{#startDate}} as of {{startDate}}{{/startDate}}. Thank you for supporting the PKI Consortium.',
+Thank you — the {{tierText}} sponsorship for {{organizationNameText}} is now active{{#if startDate}}, as of {{startDate}}{{/if}}.
+
+Your support funds the work the consortium exists to do: the working groups, the conferences, and the guidance we publish for everyone, member or not. We are glad to have {{organizationNameText}} behind it.
+
+If anything about the sponsorship needs changing, or you would like to talk about what else you can take part in, just reply to this email.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
     lower(hex(randomblob(16))), 'sponsor-portal-access', 1,
-    'Access your sponsor workspace',
+    'Your sponsor workspace for {{eventNameText}}',
     'Hi {{contactNameText}},
 
-As a {{tierText}} sponsor of {{eventNameText}}, you can view and export basic attendee information for attendees who agreed to share their details with sponsors.
+Thank you for supporting {{eventNameText}} as a {{tierText}} sponsor.
+
+Your workspace is open: you can view and export basic attendee information for the attendees who agreed to share their details with sponsors.
 
 [Access your sponsor workspace]({{portalUrl}})
 
@@ -4309,6 +4358,26 @@ CREATE INDEX idx_event_group_grants_group
 
 ALTER TABLE registrations
   ADD COLUMN registration_group_id TEXT REFERENCES groups(id);
+
+-- An attendee may explicitly select an existing identity for event attribution.
+-- This reference never grants membership or creates an identity.
+ALTER TABLE registrations
+  ADD COLUMN registration_identity_id TEXT REFERENCES identities(id) ON DELETE SET NULL;
+ALTER TABLE registrations ADD COLUMN registration_organization_name TEXT;
+ALTER TABLE registrations ADD COLUMN registration_job_title TEXT;
+CREATE INDEX idx_registrations_identity ON registrations(registration_identity_id, event_id);
+CREATE TRIGGER trg_registration_identity_owner_insert
+BEFORE INSERT ON registrations
+WHEN NEW.registration_identity_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM identities identity
+    WHERE identity.id = NEW.registration_identity_id AND identity.user_id = NEW.user_id)
+BEGIN SELECT RAISE(ABORT, 'REGISTRATION_IDENTITY_OWNER_MISMATCH'); END;
+CREATE TRIGGER trg_registration_identity_owner_update
+BEFORE UPDATE OF registration_identity_id, user_id ON registrations
+WHEN NEW.registration_identity_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM identities identity
+    WHERE identity.id = NEW.registration_identity_id AND identity.user_id = NEW.user_id)
+BEGIN SELECT RAISE(ABORT, 'REGISTRATION_IDENTITY_OWNER_MISMATCH'); END;
 
 CREATE INDEX idx_registrations_group_event
   ON registrations(registration_group_id, event_id, status, created_at, id);
@@ -4403,6 +4472,14 @@ CREATE TABLE event_occurrences (
   -- allowed: scheduled | cancelled | completed
   location_override          TEXT,
   provider_join_url_ciphertext TEXT,
+  -- Each round of participant join links sent for this occurrence. The round
+  -- number is the outbox idempotency key's last segment, so a retried request
+  -- inside one round is deduplicated while "send them again" is a deliberate
+  -- new round; it is also the compare-and-set boundary that stops two
+  -- managers sending the same round twice.
+  invitations_round          INTEGER NOT NULL DEFAULT 0
+                               CHECK (invitations_round >= 0),
+  invitations_sent_at        TEXT,
   created_at                 TEXT NOT NULL,
   updated_at                 TEXT NOT NULL,
   UNIQUE (series_id, starts_at),
@@ -4615,6 +4692,20 @@ You have been invited to {{eventName}}, starting {{startsAt}}.
 [Open your meeting invitation]({{invitationUrl}})
 
 For your protection, opening the invitation starts a separate verification step. The meeting destination is shown only after verification and acceptance of the current meeting terms.',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+  ),
+  (
+    lower(hex(randomblob(16))), 'meeting-participant-invitation', 1,
+    '{{eventName}}: your link for {{startsAt}}',
+    'Hi {{recipientName}},
+
+{{eventName}} starts {{startsAt}}.
+
+[Join the meeting]({{joinUrl}})
+
+This link is yours. It opens in the portal, where signing in records that you
+attended and reveals the meeting destination — so it will not work for anybody
+else, and passing it on only sends them to their own sign-in.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
@@ -5465,12 +5556,12 @@ VALUES (
 
 Here is a summary of {{groupName}} membership changes over the past week:
 
-{{#joined}}
+{{#each joined}}
 + {{name}} ({{organizationName}}) joined
-{{/joined}}
-{{#left}}
+{{/each}}
+{{#each left}}
 - {{name}} ({{organizationName}}) left
-{{/left}}
+{{/each}}
 
 You are receiving this because you are a leader of this group. You can turn this off any time in your portal Account Settings under Notification preferences.',
   'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
@@ -6230,3 +6321,142 @@ INSERT INTO standing_levels (id, level, name, from_points, active, created_at, u
   ('level-3', 3, 'Contributor',  900,  1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('level-4', 4, 'Contributor',  1800, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('level-5', 5, 'Steward',      3000, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- Section: organization slug backfill
+-- Every organization gets a clean public URL, not only the ones the YAML
+-- import named and the ones created after slug minting landed.
+--
+-- `organizations.slug` was written by the import, and later by the portal's
+-- own create path. What that left behind is a middle band: organizations
+-- created through the portal before minting existed, which answer on
+-- `/members/profile/?id=<uuid>` for good. Issue #15 is that URL, and the
+-- reporter's point stands: an address nobody can read is not one a member can
+-- put on their own site.
+--
+-- The folding is staged through a scratch table rather than nested in one
+-- expression, because forty-odd `replace()` calls overflow SQLite's parser.
+-- Each step is one shallow statement, and the candidate never touches
+-- `organizations.slug` until it is known to be valid and free — the column is
+-- uniquely indexed, so a half-folded intermediate written there would collide
+-- between two members whose names differ only in punctuation.
+--
+-- It is deliberately conservative. A name that does not reduce to plain
+-- `[a-z0-9-]` — a CJK name, say — keeps a NULL slug and its `?id=` URL rather
+-- than being given a mangled address it would then keep for good: the slug is
+-- decided once and never rewritten, so a bad one is worse than none.
+DROP TABLE IF EXISTS organization_slug_backfill;
+CREATE TABLE organization_slug_backfill (id TEXT PRIMARY KEY, value TEXT NOT NULL);
+INSERT INTO organization_slug_backfill (id, value)
+SELECT id, lower(name) FROM organizations WHERE slug IS NULL;
+
+-- Latin accents, folded to the ASCII letter each stands for.
+UPDATE organization_slug_backfill SET value = replace(value, 'á', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'à', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'â', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'ä', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'ã', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'å', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'ā', 'a');
+UPDATE organization_slug_backfill SET value = replace(value, 'é', 'e');
+UPDATE organization_slug_backfill SET value = replace(value, 'è', 'e');
+UPDATE organization_slug_backfill SET value = replace(value, 'ê', 'e');
+UPDATE organization_slug_backfill SET value = replace(value, 'ë', 'e');
+UPDATE organization_slug_backfill SET value = replace(value, 'ē', 'e');
+UPDATE organization_slug_backfill SET value = replace(value, 'í', 'i');
+UPDATE organization_slug_backfill SET value = replace(value, 'ì', 'i');
+UPDATE organization_slug_backfill SET value = replace(value, 'î', 'i');
+UPDATE organization_slug_backfill SET value = replace(value, 'ï', 'i');
+UPDATE organization_slug_backfill SET value = replace(value, 'ī', 'i');
+UPDATE organization_slug_backfill SET value = replace(value, 'ó', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'ò', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'ô', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'ö', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'õ', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'ø', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'ō', 'o');
+UPDATE organization_slug_backfill SET value = replace(value, 'ú', 'u');
+UPDATE organization_slug_backfill SET value = replace(value, 'ù', 'u');
+UPDATE organization_slug_backfill SET value = replace(value, 'û', 'u');
+UPDATE organization_slug_backfill SET value = replace(value, 'ü', 'u');
+UPDATE organization_slug_backfill SET value = replace(value, 'ū', 'u');
+UPDATE organization_slug_backfill SET value = replace(value, 'ñ', 'n');
+UPDATE organization_slug_backfill SET value = replace(value, 'ç', 'c');
+UPDATE organization_slug_backfill SET value = replace(value, 'ý', 'y');
+UPDATE organization_slug_backfill SET value = replace(value, 'š', 's');
+UPDATE organization_slug_backfill SET value = replace(value, 'ž', 'z');
+UPDATE organization_slug_backfill SET value = replace(value, 'č', 'c');
+UPDATE organization_slug_backfill SET value = replace(value, 'ř', 'r');
+UPDATE organization_slug_backfill SET value = replace(value, 'æ', 'ae');
+UPDATE organization_slug_backfill SET value = replace(value, 'ß', 'ss');
+UPDATE organization_slug_backfill SET value = replace(value, 'œ', 'oe');
+UPDATE organization_slug_backfill SET value = replace(value, 'đ', 'd');
+UPDATE organization_slug_backfill SET value = replace(value, 'ł', 'l');
+
+-- Punctuation that occurs in company names, folded to word breaks.
+UPDATE organization_slug_backfill SET value = replace(value, '&', ' and ');
+UPDATE organization_slug_backfill SET value = replace(value, '+', ' plus ');
+UPDATE organization_slug_backfill SET value = replace(value, '.', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, ',', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '/', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '\', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '(', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, ')', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, ':', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, ';', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '_', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '''', '');
+UPDATE organization_slug_backfill SET value = replace(value, '"', '');
+UPDATE organization_slug_backfill SET value = replace(value, '!', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '?', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '@', ' ');
+
+-- Collapse the runs the folding just created, then trim and hyphenate.
+UPDATE organization_slug_backfill SET value = replace(value, '  ', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '  ', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '  ', ' ');
+UPDATE organization_slug_backfill SET value = replace(value, '  ', ' ');
+UPDATE organization_slug_backfill SET value = replace(trim(value), ' ', '-');
+UPDATE organization_slug_backfill SET value = replace(value, '--', '-');
+UPDATE organization_slug_backfill SET value = replace(value, '--', '-');
+
+-- Only a candidate that is wholly `[a-z0-9-]`, starts and ends alphanumeric,
+-- is a sane length, and is not already taken. Everything else keeps `?id=`.
+DELETE FROM organization_slug_backfill
+WHERE length(value) NOT BETWEEN 2 AND 80
+   OR value GLOB '*[^a-z0-9-]*'
+   OR value NOT GLOB '[a-z0-9]*[a-z0-9]'
+   OR EXISTS (SELECT 1 FROM organizations o WHERE o.slug = organization_slug_backfill.value)
+   OR EXISTS (
+     SELECT 1 FROM organization_slug_backfill other
+     WHERE other.value = organization_slug_backfill.value AND other.id < organization_slug_backfill.id
+   );
+
+UPDATE organizations
+SET slug = (SELECT value FROM organization_slug_backfill b WHERE b.id = organizations.id)
+WHERE slug IS NULL
+  AND EXISTS (SELECT 1 FROM organization_slug_backfill b WHERE b.id = organizations.id);
+
+DROP TABLE organization_slug_backfill;
+
+
+-- Cached public news is sourced from active D1 members, never build-time YAML.
+CREATE TABLE member_news_sources (
+  organization_id TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+  feed_url TEXT NOT NULL,
+  next_refresh_at TEXT NOT NULL,
+  last_success_at TEXT,
+  last_error TEXT
+);
+CREATE INDEX idx_member_news_sources_due ON member_news_sources(next_refresh_at, organization_id);
+CREATE TABLE member_news_articles (
+  organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  feed_url TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  published_at TEXT NOT NULL,
+  PRIMARY KEY (organization_id, url)
+);
+CREATE INDEX idx_member_news_articles_date ON member_news_articles(published_at DESC, organization_id, url);
+INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at)
+VALUES ('member_news_refresh', 300, strftime('%Y-%m-%dT%H:%M:%fZ','now'));

@@ -17,10 +17,13 @@ import { GroupCategoryRulesReplace } from "./[groupId]/category-rules";
 import { GroupCategoryRulesGet } from "./[groupId]/category-rules-get";
 import { GroupMailingListCreate, GroupMailingListSubscriptions } from "./[groupId]/mailing-lists/index";
 import {
-  GroupMailingListArchive,
+  GroupMailingListDelete,
+  GroupMailingListGet,
   GroupMailingListPreferenceUpdate,
   GroupMailingListUpdate,
 } from "./[groupId]/mailing-lists/[listId]";
+import { GroupMailingListSubscribersList } from "./[groupId]/mailing-lists/[listId]/subscribers";
+import { GroupMailingListTransitionPost } from "./[groupId]/mailing-lists/[listId]/transitions";
 import { GroupMailingListManagementList } from "./[groupId]/mailing-lists/management";
 import { GroupAutomaticEnrollmentPreference } from "./[groupId]/automatic-enrollment";
 import { GroupMeetingSeriesCreate, GroupMeetingSeriesList } from "./[groupId]/meetings/series/index";
@@ -37,6 +40,7 @@ import {
   GroupMeetingGuestsList,
 } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/index";
 import { GroupMeetingGuestRevoke } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/[guestId]";
+import { GroupMeetingParticipantInvitationsSend } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/invitations/index";
 import { GroupMeetingAttendanceList } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/index";
 import { GroupMeetingAttendanceVerify } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/[confirmationId]";
 import { GroupFormCreate, GroupFormsList } from "./[groupId]/forms/index";
@@ -68,6 +72,7 @@ import {
 import {
   GroupEventFormCreate,
   GroupEventFormGet,
+  GroupEventFormPlacementPatch,
   GroupEventFormPut,
   GroupEventFormsList,
 } from "./[groupId]/events/[eventId]/forms";
@@ -124,8 +129,11 @@ openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.get("/:groupId/mailing-lists/management", GroupMailingListManagementList);
 openapi.post("/:groupId/mailing-lists", GroupMailingListCreate);
 openapi.put("/:groupId/mailing-lists/:listId/subscription", GroupMailingListPreferenceUpdate);
+openapi.get("/:groupId/mailing-lists/:listId/subscribers", GroupMailingListSubscribersList);
+openapi.post("/:groupId/mailing-lists/:listId/transitions", GroupMailingListTransitionPost);
+openapi.get("/:groupId/mailing-lists/:listId", GroupMailingListGet);
 openapi.patch("/:groupId/mailing-lists/:listId", GroupMailingListUpdate);
-openapi.delete("/:groupId/mailing-lists/:listId", GroupMailingListArchive);
+openapi.delete("/:groupId/mailing-lists/:listId", GroupMailingListDelete);
 openapi.put("/:groupId/automatic-enrollment", GroupAutomaticEnrollmentPreference);
 openapi.get("/:groupId/audit-log", GroupAuditLogList);
 openapi.get("/:groupId/stats", GroupStatsGet);
@@ -165,6 +173,9 @@ openapi.put("/:groupId/events/:eventId/registration-settings", GroupEventRegistr
 openapi.get("/:groupId/events/:eventId/forms/:purpose/available", GroupEventFormsList);
 openapi.get("/:groupId/events/:eventId/forms/:purpose", GroupEventFormGet);
 openapi.put("/:groupId/events/:eventId/forms/:purpose", GroupEventFormPut);
+// The window the placed form accepts responses in — placement policy, not
+// which form is placed, which is what the PUT above replaces (#38).
+openapi.patch("/:groupId/events/:eventId/forms/:purpose", GroupEventFormPlacementPatch);
 openapi.post("/:groupId/events/:eventId/forms/:purpose", GroupEventFormCreate);
 openapi.get("/:groupId/votes", GroupVotesList);
 openapi.post("/:groupId/votes", GroupVoteCreate);
@@ -201,6 +212,10 @@ openapi.post("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/gues
 openapi.delete(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/guests/:guestId",
   GroupMeetingGuestRevoke,
+);
+openapi.post(
+  "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/invitations",
+  GroupMeetingParticipantInvitationsSend,
 );
 openapi.get("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/attendance", GroupMeetingAttendanceList);
 openapi.put(

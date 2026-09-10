@@ -30,6 +30,8 @@ import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from 
 import { portalDefaultPath } from "./shell/portal-navigation";
 import type { PortalSession } from "./types";
 import { McpAuthorization } from "./shell/McpAuthorization";
+import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation";
+import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
@@ -111,6 +113,8 @@ export function App() {
   }
 
   if (isAuthed.value) {
+    const meetingDestination = meetingEntryReturnUrl(window.location.hash);
+    if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     return (
       <>
         <PortalShell />

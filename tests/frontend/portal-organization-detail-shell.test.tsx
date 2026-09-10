@@ -49,6 +49,7 @@ function detail() {
     organization: {
       id: organizationId,
       name: "Example Organization",
+      publicProfileHref: "/members/profile/?id=org-1",
       membershipCategory: "F",
       memberSince: "2026-01-01",
       activeIdentityCount: 1,

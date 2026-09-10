@@ -2,8 +2,12 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mailingListPreferenceMutationSchema } from "../../assets/shared/schemas/mailing-lists";
+import {
+  MAILING_LIST_PREFERENCE_SELECTIONS,
+  mailingListPreferenceMutationSchema,
+} from "../../assets/shared/schemas/mailing-lists";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
+import { optionValues } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
 
@@ -184,6 +188,10 @@ describe("group mailing-list preferences", () => {
     // The purpose reads as a word rather than as the stored identifier.
     expect(region?.textContent).toContain("Group");
     expect(region?.textContent).not.toContain("group_");
+
+    // Every preference the mutation contract accepts is offered, so the member
+    // can reach each one — including `inherit`, which stores nothing.
+    expect(optionValues(select)).toEqual([...MAILING_LIST_PREFERENCE_SELECTIONS]);
   });
 
   it("takes the control out of play for a list the member is not eligible for", async () => {

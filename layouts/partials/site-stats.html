@@ -2,11 +2,18 @@
   The consortium's headline figures, computed once.
 
   The home page's stats bar and the portal sign-in screen both state these, and
-  a count restated in two templates is a count that drifts in one of them. The
-  member and working-group figures are derived from the site's own content;
+  a count restated in two templates is a count that drifts in one of them.
+
+  The member figure used to be `len hugo.Data.members` — the number of YAML
+  files in the repository at build time, which is the count issue #8 reports:
+  a fresh install said 374 members and had none. It is now a slot the navbar
+  module fills from the same edge-cached list endpoint the members mega menu
+  reads, so the page states what the database holds. The working-group figure
+  is still the site's own sections, which is what a working group is here;
   only the representative figure is an estimate the site states as such.
 
-  Returns a slice of dicts: value, label, and the page each links to.
+  Returns a slice of dicts: value, label, the page each links to, and — for a
+  figure that arrives after paint — the member slice to count.
 */}}
 {{ $wgCount := 0 }}
 {{ range where site.Pages "Section" "wg" }}
@@ -15,7 +22,7 @@
   {{ end }}
 {{ end }}
 {{ return slice
-  (dict "value" (printf "%d" (len hugo.Data.members)) "label" "Members" "href" "/members/")
+  (dict "value" "—" "memberCount" "all" "label" "Members" "href" "/members/")
   (dict "value" "~1K" "label" "Representatives" "href" "/members/")
   (dict "value" (printf "%d" $wgCount) "label" "Working Groups" "href" "/wg/")
 }}

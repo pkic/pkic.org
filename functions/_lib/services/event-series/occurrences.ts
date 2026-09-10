@@ -52,6 +52,7 @@ const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrenc
   (SELECT COUNT(*) FROM event_occurrence_join_confirmations confirmation
     WHERE confirmation.occurrence_id = occurrence.id
       AND confirmation.attendance_verified_at IS NOT NULL) AS attendance_verified_count,
+  occurrence.invitations_round, occurrence.invitations_sent_at,
   occurrence.created_at, occurrence.updated_at`;
 const OCCURRENCE_FROM = `FROM event_occurrences occurrence
   JOIN event_series series ON series.id = occurrence.series_id

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useState } from "preact/hooks";
 import { useHashQueryParam } from "../../../hooks/useHashQueryParam";
 import {
+  FORM_SUBMISSION_STATUS_LABELS,
+  FORM_SUBMISSION_STATUSES,
   formCreateResponseSchema,
   formDeleteResponseSchema,
   formDetailResponseSchema,
@@ -69,6 +71,10 @@ function collectAttendanceOptions(
  * filtered by the canonical registration lifecycle; every other purpose by the
  * submission lifecycle, so the two sets stay named where they are defined
  * rather than restated as markup.
+ *
+ * The second branch used to be markup, and said the wrong thing: it offered
+ * "Accepted" and "Rejected", which `form_submissions.status` cannot hold and
+ * which therefore matched nothing, and never offered `draft`, which it can.
  */
 function statusOptions(purpose: EventFormsPurpose): ReadonlyArray<FilterOption> {
   const all: FilterOption = { value: "", label: "All statuses" };
@@ -80,10 +86,7 @@ function statusOptions(purpose: EventFormsPurpose): ReadonlyArray<FilterOption> 
   }
   return [
     all,
-    { value: "submitted", label: "Submitted" },
-    { value: "accepted", label: "Accepted" },
-    { value: "rejected", label: "Rejected" },
-    { value: "withdrawn", label: "Withdrawn" },
+    ...FORM_SUBMISSION_STATUSES.map((status) => ({ value: status, label: FORM_SUBMISSION_STATUS_LABELS[status] })),
   ];
 }
 

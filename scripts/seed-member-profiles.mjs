@@ -30,6 +30,7 @@ import path from "node:path";
 import { DEMO_GROUPS, demoGroupSql, meetingsSql, seatSql } from "./lib/seed-demo-groups.mjs";
 import { memberProfileId as stableId } from "./lib/seed-ids.mjs";
 import { NOW, RANDOM_ID, sqlString } from "./lib/sql.mjs";
+import { slugifyOr } from "../assets/shared/slug.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
@@ -224,6 +225,17 @@ const RECOGNITIONS = [
 const DEMO_MEMBER = "paul.vanbrouwershaven@pkic.org";
 const DEMO_PEER = "admin@pkic.org";
 const DEMO_ORG = "Digitorus";
+/*
+ * The member page's long-form content, carrying the shortcode a real member
+ * page carries. It is here so the public profile has a body at all, and so
+ * the browser test has something to prove about #12 — that the shortcode
+ * resolves to an embed rather than printing its own braces.
+ */
+const DEMO_ORG_CONTENT = [
+  "Digitorus builds signature validation and policy conformance tooling.",
+  "",
+  "{{< youtube HGoZW7MCF60 >}}",
+].join("\n");
 /** Stable ids so every statement can reference the same rows idempotently. */
 const ORG_ID = stableId("org-digitorus");
 const MEMBER_ID = stableId("member-digitorus");
@@ -233,8 +245,13 @@ const PEER_MEMBER_ID = stableId("member-peer");
 
 function demoOrganizationSql() {
   return [
-    `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
-SELECT ${sqlString(ORG_ID)}, ${sqlString(DEMO_ORG)}, ${sqlString(DEMO_ORG.toLowerCase())}, ${NOW}, ${NOW}
+    /* The slug is what gives the seeded member a readable public address
+       (`/members/digitorus/`) instead of `/members/profile/?id=<uuid>` —
+       issue #15's shape, which this seed reproduced faithfully because it
+       wrote every column of the row except that one. */
+    `INSERT INTO organizations (id, name, normalized_name, slug, content_markdown, created_at, updated_at)
+SELECT ${sqlString(ORG_ID)}, ${sqlString(DEMO_ORG)}, ${sqlString(DEMO_ORG.toLowerCase())}, ${sqlString(slugifyOr(DEMO_ORG, "member"))},
+       ${sqlString(DEMO_ORG_CONTENT)}, ${NOW}, ${NOW}
  WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE normalized_name = ${sqlString(DEMO_ORG.toLowerCase())});`,
 
     `INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)

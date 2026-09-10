@@ -33,21 +33,23 @@
 {{- end -}}
 
 {{/* ── Sponsor logo ─────────────────────────────────────────────────────────── */}}
-{{- $sponsorId   := $p.Param "sponsor" -}}
-{{- $sponsorName := "" -}}
+{{/*
+  The name is the webinar page's own — it says who sponsored it, the way it
+  says its title — and the logo is an image asset addressed by the sponsor's
+  id. Neither needs the member directory, and reading it here meant scanning
+  every data/members/*.yaml at build time to learn a name the page already
+  knew (#8).
+*/}}
+{{- $sponsorId := $p.Param "sponsor" -}}
+{{- $sponsorName := $p.Param "sponsorName" | default $sponsorId | default "" -}}
 {{- $sponsorLogo := false -}}
 {{- if $sponsorId -}}
-  {{- range hugo.Data.members -}}
-    {{- if eq .id $sponsorId -}}
-      {{- $sponsorName = .name -}}
-      {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
-      {{- if $svg -}}
-        {{- $sponsorLogo = $svg -}}
-      {{- else -}}
-        {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
-        {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
-      {{- end -}}
-    {{- end -}}
+  {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
+  {{- if $svg -}}
+    {{- $sponsorLogo = $svg -}}
+  {{- else -}}
+    {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
+    {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 

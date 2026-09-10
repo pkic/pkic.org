@@ -12,7 +12,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupVoteProposalCreateSchema } from "../../assets/shared/schemas/group-vote-proposals";
 import { GroupVoteProposalForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposalForm";
-import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { voteTypeSchema } from "../../assets/shared/schemas/votes";
+import { buttonNamed, controlFor, labelNames, optionValues, typeInto } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -62,6 +63,18 @@ describe("group vote proposal form", () => {
     const describedBy = opens.getAttribute("aria-describedby");
     expect(describedBy).not.toBeNull();
     expect(container.querySelector(`#${describedBy!}`)?.textContent).toContain("Leave empty");
+  });
+
+  it("offers the vote types a proposal may carry, and only those", () => {
+    const container = mount(<GroupVoteProposalForm groupId={GROUP_ID} onCreated={() => Promise.resolve()} />);
+
+    // An election needs candidates a proposal cannot carry, which is the one
+    // exclusion the contract makes — so the offer is that exclusion, not a
+    // list typed out beside it.
+    expect(optionValues(controlFor<HTMLSelectElement>(container, "Type"))).toEqual([
+      ...voteTypeSchema.exclude(["election"]).options,
+    ]);
+    expect(optionValues(controlFor<HTMLSelectElement>(container, "Type"))).not.toContain("election");
   });
 
   it("takes every field out of play while the submission is in flight", async () => {

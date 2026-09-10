@@ -13,7 +13,7 @@
 import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyOrganization, signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./helpers/membership";
 
@@ -56,12 +56,15 @@ test("an organization contact adds a colleague and can take the access away agai
 
   await page.context().clearCookies();
   await signInToPortal(page, contactEmail);
-  await page.goto("/portal/#/profile");
+  await openMyOrganization(page, organizationName);
 
   // Adding a colleague is a member action, not a staff one.
   const addCoworker = page.getByRole("button", { name: "Add coworker" });
   await expect(addCoworker).toBeVisible({ timeout: 15_000 });
   await addCoworker.click();
+  // Adding is a page of its own, under the organization the coworker will
+  // represent: the directory it adds to is not underneath it.
+  await expect(page).toHaveURL(/#\/organizations\/[^/]+\/representatives\/new$/);
   const form = page.locator("form").filter({ has: page.locator('input[name="email"]') });
   await expect(form).toBeVisible();
   await form.locator('input[name="name"]').fill(`Colleague ${suffix}`);
@@ -73,6 +76,10 @@ test("an organization contact adds a colleague and can take the access away agai
   );
   await form.getByRole("button", { name: "Add coworker" }).click();
   expect((await added).status()).toBe(201);
+  // And it returns to the organization the coworker was added to, where the
+  // representatives are listed — the page that owns them, now that a person's
+  // own record is their user record rather than a separate profile page.
+  await expect(page).toHaveURL(/#\/organizations\/[^/]+$/);
   await expect(page.getByText(colleagueEmail, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
   // The invitation does not grant capacity until the exact colleague accepts it.
@@ -106,7 +113,7 @@ test("an organization contact adds a colleague and can take the access away agai
   // Removing that access again is the half that had no coverage.
   await page.context().clearCookies();
   await signInToPortal(page, contactEmail);
-  await page.goto("/portal/#/profile");
+  await openMyOrganization(page, organizationName);
   const identityRow = page.getByRole("row").filter({ hasText: `Colleague ${suffix}` });
   await expect(identityRow).toBeVisible({ timeout: 15_000 });
   await runRowAction(page, identityRow, "End identity");

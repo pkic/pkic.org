@@ -27,20 +27,23 @@ export interface PageHeaderProps {
   /** The page's subject — a record's name, or the section's, never both. */
   /** The subject's name; a node when the page edits the name in place. */
   title: ComponentChildren;
+  /** The kind of record, when its parent context has its own navigation. */
+  eyebrow?: string;
   /** The subject's standing: Badges, a count, a status. */
   context?: ComponentChildren;
   /** What can be done from here: Buttons, right-aligned. */
   actions?: ComponentChildren;
   /** One quiet sentence under the title, when the subject needs one. */
-  description?: string;
+  description?: ComponentChildren;
 }
 
-export function PageHeader({ trail, title, context, actions, description }: PageHeaderProps) {
+export function PageHeader({ trail, title, eyebrow, context, actions, description }: PageHeaderProps) {
   const headingId = useId();
 
   return (
     <header class="pk-page-header" aria-labelledby={headingId}>
       {trail && trail.length > 0 && <Breadcrumb items={trail} />}
+      {eyebrow && <p class="pk-small pk-muted">{eyebrow}</p>}
       <div class="pk-page-header__row">
         <div class="pk-page-header__subject">
           <h2 class="pk-page-header__title" id={headingId}>
@@ -50,7 +53,7 @@ export function PageHeader({ trail, title, context, actions, description }: Page
         </div>
         {actions && <div class="pk-page-header__actions">{actions}</div>}
       </div>
-      {description && <p class="pk-page-header__description">{description}</p>}
+      {description && <p class="pk-page-header__description pk-break">{description}</p>}
     </header>
   );
 }

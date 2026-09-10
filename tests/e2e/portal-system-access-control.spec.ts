@@ -36,17 +36,17 @@ test("permitted staff manage a custom role through the Settings portal", async (
 
   await signInToPortal(page, e2eAdminEmail("portal-access-control"));
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByRole("link", { name: "Access Control" }).click();
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/grants$/);
+  await page.getByRole("link", { name: "Access control" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/grants$/);
 
   // Tabs are URL-addressed — switching to Roles navigates to its canonical URL.
   await tab(page, "Roles").click();
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles$/);
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/roles$/);
 
   // Creation lives behind an explicit action, list-first — no inline create form.
   await expect(page.getByText("New role", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "New role" }).click();
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles\/new$/);
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/roles\/new$/);
 
   const roleName = `e2e_access_${Date.now()}`;
   // The form names itself, so it is reached by that name rather than by climbing
@@ -64,8 +64,10 @@ test("permitted staff manage a custom role through the Settings portal", async (
   expect((await createResponse).status()).toBe(201);
 
   // Creation navigates straight into the new role's URL-addressed detail.
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles\/[^/]+$/);
-  await expect(page.getByRole("heading", { name: roleName })).toBeVisible();
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/roles\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: roleName, level: 3 })).toBeVisible();
+
+  await page.screenshot({ path: test.info().outputPath("role-profile-header.png"), fullPage: true });
 
   // The role's edit is reachable from its detail, guarded by the shared PATCH contract.
   await page.getByRole("button", { name: "Edit" }).click();
@@ -83,8 +85,11 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await expect(page.getByText("Assignees", { exact: true })).toBeVisible();
   await expect(page.getByText("No one holds this role", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "← All roles" }).click();
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/roles$/);
+  await page
+    .getByRole("navigation", { name: "Access control sections" })
+    .getByRole("link", { name: "Roles", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/roles$/);
 
   const roleRow = page.getByRole("row").filter({ has: page.getByText(roleName, { exact: true }) });
   await expect(roleRow).toBeVisible();
@@ -102,12 +107,16 @@ test("permitted staff manage a custom role through the Settings portal", async (
   // The former "Staff" tab is now labeled People, without renaming the
   // underlying user_roles-backed schema fields it reads and writes.
   await tab(page, "People").click();
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/people$/);
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/people$/);
   await expect(page.getByText("Staff management", { exact: true })).toHaveCount(0);
 
-  await page.goto("/portal/#/system/access-control");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/access-control\/grants$/);
-  await expect(page.getByRole("link", { name: "Access Control" })).toBeVisible();
+  await page.goto("/portal/#/settings/access-control");
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/grants$/);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Access control navigation" })
+      .getByRole("link", { name: "Access control", exact: true }),
+  ).toBeVisible();
 
   expect(permissionRequests).toEqual(expect.arrayContaining([`GET ${PERMISSIONS_API}/grants`, `GET ${ROLES_API}`]));
   expect(permissionRequests.some((request) => request.startsWith(`PATCH ${ROLES_API}/`))).toBe(true);
@@ -125,7 +134,7 @@ test("permitted staff manage a custom role through the Settings portal", async (
 test("permitted staff grant and revoke a permission through the Grants tab", async ({ page }) => {
   const staffEmail = e2eAdminEmail("portal-access-control");
   await signInToPortal(page, staffEmail);
-  await page.goto("/portal/#/system/access-control/grants");
+  await page.goto("/portal/#/settings/access-control/grants");
 
   await page.getByRole("button", { name: "New grant", exact: true }).click();
   const grantForm = page.getByRole("form", { name: "Grant a permission" });

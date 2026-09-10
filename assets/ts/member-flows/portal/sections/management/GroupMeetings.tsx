@@ -92,7 +92,7 @@ function CreateMeetingSeries({
 
   return (
     <Panel aria-label="Schedule a recurring meeting">
-      <PanelHeader title="Schedule a recurring meeting">
+      <PanelHeader title="Schedule a recurring meeting" headingLevel={2} breadcrumb>
         <Button size="sm" disabled={saving} onClick={onCancel}>
           Cancel
         </Button>
@@ -122,6 +122,7 @@ export function GroupMeetings({
   canManage,
   seriesSegment,
   seriesTab,
+  seriesDetailId,
 }: {
   groupId: string;
   canManage: boolean;
@@ -129,6 +130,8 @@ export function GroupMeetings({
   seriesSegment?: string;
   /** The URL-addressed tab segment below a series id. */
   seriesTab?: string;
+  /** The segment below a series tab — `"new"` under occurrences opens the add page. */
+  seriesDetailId?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const meetingsPath = `/groups/${encodeURIComponent(groupId)}/meetings`;
@@ -144,11 +147,6 @@ export function GroupMeetings({
       // which names what is being created in its own heading — alone on the
       // screen rather than layered over the list.
       <div class="pk pk-stack">
-        <div class="pk-cluster">
-          <Button variant="link" size="sm" onClick={leaveToList}>
-            ← All meeting series
-          </Button>
-        </div>
         <CreateMeetingSeries
           groupId={groupId}
           onCreated={(createdSeriesId) => navigate(`${meetingsPath}/${encodeURIComponent(createdSeriesId)}`)}
@@ -166,7 +164,7 @@ export function GroupMeetings({
         groupId={groupId}
         seriesId={seriesSegment}
         initialTab={seriesTab}
-        onLeave={leaveToList}
+        occurrenceSegment={seriesDetailId}
       />
     );
   }

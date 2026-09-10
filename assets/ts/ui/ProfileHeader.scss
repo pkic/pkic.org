@@ -1,0 +1,31 @@
+@layer components {
+  .pk-profile-header__body--text {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pk-profile-header__navigation {
+    padding-inline: var(--pk-4);
+    background: var(--pk-surface-sunk);
+    border-block: 1px solid var(--pk-line-soft);
+
+    .pk-tabs__list {
+      border-bottom: 0;
+    }
+  }
+  .pk-profile-header__content > section + section,
+  .pk-profile-header__content .pk-panel + .pk-panel {
+    border-top: 1px solid var(--pk-line-soft);
+  }
+  .pk-profile-header__content .pk-panel {
+    border: 0;
+    border-radius: 0;
+  }
+  .pk-profile-header__content .pk-panel__header {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .pk-profile-header__title,
+  .pk-profile-header__lede {
+    overflow-wrap: anywhere;
+  }
+}

@@ -113,3 +113,64 @@ describe("shared OpenAPI request validation", () => {
     expect(await response.json()).toMatchObject({ code: "REQUEST_BODY_TOO_LARGE" });
   });
 });
+
+/**
+ * A list endpoint has no notion of "filter by the empty string".
+ *
+ * `?q=` is what a cleared search box, an unset filter or a hand-built query
+ * string sends. chanfana's `coerceInputs` turns the empty value into `null`,
+ * which every optional field in the shared list contract refuses with
+ * "expected string, received null" — so the whole list came back 400 and the
+ * surface rendered nothing. That is what issue #11 reported as representatives
+ * failing to appear and members failing to list, and it reached every list
+ * endpoint at once, because they all validate through this wrapper.
+ */
+describe("an empty query parameter", () => {
+  function listApp() {
+    const app = new Hono();
+    app.onError((error) => {
+      if (error instanceof AppError) {
+        return Response.json({ code: error.code, details: error.details ?? null }, { status: error.status });
+      }
+      throw error;
+    });
+    const openapi = fromHono(app);
+    openapi.get(
+      "/list",
+      openApiRoute(
+        {
+          request: {
+            query: z.object({
+              q: z.string().min(1).optional(),
+              group: z.enum(["all", "organization"]).default("all"),
+              limit: z.coerce.number().int().min(1).max(200).default(50),
+            }),
+          },
+          responses: { "200": { description: "A page." } },
+        },
+        (_context, data) => Response.json({ received: data.query }),
+      ),
+    );
+    return app;
+  }
+
+  it("is read as absent, so the field takes its default", async () => {
+    const response = await listApp().request("/list?q=&group=&limit=");
+    expect(response.status).toBe(200);
+    // Not `null`, and not the empty string: the parameter was never supplied.
+    expect(await response.json()).toEqual({ received: { group: "all", limit: 50 } });
+  });
+
+  it("still carries a value the caller did supply", async () => {
+    const response = await listApp().request("/list?q=acme&group=organization&limit=10");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: { q: "acme", group: "organization", limit: 10 } });
+  });
+
+  it("does not excuse a value that is genuinely wrong", async () => {
+    // Dropping empties must not turn the validator off: a filter set to a
+    // value the contract does not offer is still refused.
+    const response = await listApp().request("/list?group=nonsense");
+    expect(response.status).toBe(400);
+  });
+});

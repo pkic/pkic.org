@@ -6,7 +6,7 @@ describe("semantic management links", () => {
 
   it("builds current hash destinations for global management queues", () => {
     expect(buildManagementLink(appBaseUrl, { kind: "organization-content-reviews" })).toBe(
-      "https://app.test/portal/#/system/organization-content-reviews",
+      "https://app.test/portal/#/settings/organization-content-reviews",
     );
     expect(buildManagementLink(appBaseUrl, { kind: "membership-application", id: "application-1" })).toBe(
       "https://app.test/portal/#/membership/applications/application-1",

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
@@ -12,6 +12,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventWorkspace } from "./GroupEventWorkspace";
@@ -22,6 +23,15 @@ const EVENT_SOURCE_LABELS: Record<EventSourceMode, string> = {
   portal: "Portal",
   integration: "Integration",
 };
+
+/** Reserved event segment that routes to the create page instead of a record. */
+const NEW_EVENT_SEGMENT = "new";
+
+/** Redirects back to the list from an effect, not render — see its call site below. */
+function GroupEventsRedirect({ onNavigate }: { onNavigate: () => void }) {
+  useEffect(onNavigate, [onNavigate]);
+  return null;
+}
 
 export function GroupEvents({
   groupId,
@@ -36,12 +46,13 @@ export function GroupEvents({
   initialEventTab?: string;
   initialEventDetailId?: string;
 }) {
+  const [, navigate] = usePortalHashLocation();
+  const eventsPath = `/groups/${encodeURIComponent(groupId)}/events`;
+  const creating = initialEventId === NEW_EVENT_SEGMENT;
   // The event id arrives from the URL; rows are links, so this surface never
   // drives navigation itself.
-  const selectedEventId = initialEventId ?? null;
-  const [showCreate, setShowCreate] = useState(false);
+  const selectedEventId = creating ? null : (initialEventId ?? null);
   const tableActions = useRef<ApiTableActions | null>(null);
-  const createHeadingId = useId();
   const detail = useData(
     () =>
       selectedEventId
@@ -52,6 +63,29 @@ export function GroupEvents({
         : Promise.resolve(null),
     [groupId, selectedEventId],
   );
+
+  if (creating) {
+    // Navigating away belongs in an effect, not in render.
+    if (!canManage) return <GroupEventsRedirect onNavigate={() => navigate(eventsPath)} />;
+    return (
+      <div class="pk pk-stack">
+        {/* The page's way back: creating has its own address, so leaving it
+            is navigation rather than the disappearance of a layer. */}
+
+        <Panel aria-label="New group event">
+          <PanelHeader title="New group event" headingLevel={2} breadcrumb />
+          <PanelBody>
+            <GroupEventEditor
+              groupId={groupId}
+              event={null}
+              onSaved={async () => navigate(eventsPath)}
+              onCancel={() => navigate(eventsPath)}
+            />
+          </PanelBody>
+        </Panel>
+      </div>
+    );
+  }
 
   if (selectedEventId) {
     return (
@@ -73,22 +107,6 @@ export function GroupEvents({
 
   return (
     <div class="pk pk-stack">
-      {showCreate && (
-        <Panel aria-labelledby={createHeadingId}>
-          <PanelHeader id={createHeadingId} title="New group event" />
-          <PanelBody>
-            <GroupEventEditor
-              groupId={groupId}
-              event={null}
-              onSaved={async () => {
-                setShowCreate(false);
-                await tableActions.current?.reload();
-              }}
-              onCancel={() => setShowCreate(false)}
-            />
-          </PanelBody>
-        </Panel>
-      )}
       <ApiDataTable
         caption="Group events"
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
@@ -97,7 +115,11 @@ export function GroupEvents({
         resolvePage={(response) => response.page}
         paginate
         actionsRef={tableActions}
-        createAction={canManage ? { label: "Create event", onSelect: () => setShowCreate(true) } : undefined}
+        createAction={
+          canManage
+            ? { label: "Create event", onSelect: () => navigate(`${eventsPath}/${NEW_EVENT_SEGMENT}`) }
+            : undefined
+        }
         searchPlaceholder="Search events…"
         initialSort="next_occurrence_at"
         columns={[

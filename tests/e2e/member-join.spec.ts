@@ -3,6 +3,7 @@
  * @covers join.1.0.a
  * @covers join.1.0.b
  */
+import { openMembershipVerificationLink } from "./helpers/member-join";
 import { expect, test } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
@@ -96,10 +97,7 @@ test("verifies an organization email before submitting the D1-backed membership 
   const verification = await waitForCapturedEmail(email, "Verify your email address", {
     since: sinceVerification,
   });
-  await page.goto(extractEmailUrl(verification, "#verify="));
-  // The real email opens a new document. Playwright otherwise treats this as
-  // a same-document hash navigation because the test is already on /join/.
-  await page.reload();
+  await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
 
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
   await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
@@ -152,8 +150,7 @@ test("keeps the individual path an explicit policy exception for an institutiona
   await page.getByRole("button", { name: "Continue" }).click();
 
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await page.goto(extractEmailUrl(verification, "#verify="));
-  await page.reload();
+  await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
   await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
   await expect(page.getByLabel(/H5 —/)).toBeVisible();
   await expect(page.getByLabel(/F —/)).toHaveCount(0);

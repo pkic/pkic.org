@@ -118,6 +118,64 @@ describe("canonical organization management", () => {
     expect(body.organization.links).toEqual(["https://www.linkedin.com/company/peopleless"]);
   });
 
+  it("records an organization that is not a member, and grants it no membership", async () => {
+    /*
+     * Writing an organization down is not admitting a member. The consortium
+     * keeps records for organizations it is not in membership with — an
+     * attendee's employer, a sponsor, a company in conversation — and
+     * membership arrives by its own act: an application signed up through, or
+     * an explicit grant. Creation used to provision a member aggregate every
+     * time, so every organization became a member the moment it was recorded.
+     */
+    const writer = await grantToken("membership:write");
+    const created = await call("/api/v1/organizations", writer.token, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Prospective Company",
+        website: "https://prospective.example.test",
+        identities: [],
+        workingGroupSlugs: [],
+      }),
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const body = (await created.json()) as { organization: { id: string; name: string } };
+    expect(body.organization.name).toBe("Prospective Company");
+
+    // The organization exists, with its clean URL; the membership does not.
+    const [row] = await queryAll<{ slug: string | null }>(env.DB, "SELECT slug FROM organizations WHERE id = ?", [
+      body.organization.id,
+    ]);
+    expect(row.slug).toBe("prospective-company");
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id = ?", [body.organization.id])).toEqual(
+      [],
+    );
+  });
+
+  it("refuses a half-stated membership, and people for an organization that has none", async () => {
+    const writer = await grantToken("membership:write");
+
+    // A category without the date it began, or the other way about, is not a
+    // membership — it is half of one.
+    const halfStated = await call("/api/v1/organizations", writer.token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Half Stated", membershipCategory: "F", identities: [], workingGroupSlugs: [] }),
+    });
+    expect(halfStated.status).toBe(400);
+
+    // Representatives act for a member. Without a membership there is nothing
+    // for them to act for, so they are refused rather than quietly created.
+    const peopled = await call("/api/v1/organizations", writer.token, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Peopled Non Member",
+        identities: [{ name: "Ada Lovelace", email: "ada@non-member.example.test" }],
+        activationReason: "Testing the refusal.",
+        workingGroupSlugs: [],
+      }),
+    });
+    expect(peopled.status).toBe(400);
+  });
+
   /*
    * The public URL a new organization gets.
    *

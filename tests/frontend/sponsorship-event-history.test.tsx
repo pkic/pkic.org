@@ -1,38 +1,50 @@
 // @vitest-environment jsdom
+/**
+ * The sponsorship record page: its pipeline history, and the forms beside it.
+ *
+ * The history was an ordered list behind a hook of its own, with a "Load older
+ * history" button and no way to search or re-order it — though the endpoint
+ * has taken `q` and `sort=createdAt` since it was written (#42). It is the
+ * shared table now, so what is asserted here is the query string it sends,
+ * and that a failure in the trail leaves the record itself readable.
+ */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
+import { sponsorshipEventsListResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
 import { SponsorshipDetail } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail";
-import { useSponsorshipEventHistory } from "../../assets/ts/member-flows/portal/sections/sponsors/management/useSponsorshipEventHistory";
 import { buttonNamed, controlFor, groupNames, namedGroup, typeInto } from "./helpers/labelled-control";
 
-type HistoryState = ReturnType<typeof useSponsorshipEventHistory>;
+const SPONSORSHIP_ID = "000000000000000000000000000000aa";
 
-interface PendingFetch {
-  url: string;
-  resolve: (response: Response) => void;
-}
-
-function Harness(props: { id: string; onState: (state: HistoryState) => void }) {
-  const state = useSponsorshipEventHistory(props.id);
-  props.onState(state);
-  return null;
-}
-
-function event(id: string, toStage: "new_inquiry" | "active") {
+function event(id: string, toStage: "new_inquiry" | "active", note: string | null = null) {
   return {
     id,
     fromStage: toStage === "active" ? ("new_inquiry" as const) : null,
     toStage,
     actorUserId: null,
     actorName: null,
-    note: null,
+    note,
     createdAt: "2026-08-21T12:00:00.000Z",
   };
 }
 
-function historyResponse(events: ReturnType<typeof event>[], total = events.length, offset = 0, limit = 25) {
-  return Response.json({ events, page: { limit, offset, total, hasMore: offset + events.length < total } });
+/** One history page, parsed through the shared contract so a drift in it fails here. */
+function historyResponse(events: ReturnType<typeof event>[], total = events.length, offset = 0, limit = 50) {
+  return Response.json(
+    sponsorshipEventsListResponseSchema.parse({
+      events,
+      page: { limit, offset, total, hasMore: offset + events.length < total },
+    }),
+  );
+}
+
+function tiersResponse() {
+  return Response.json({
+    visibility: "public",
+    sponsorType: "consortium",
+    tiers: [{ tier: "Gold" }, { tier: "Silver" }],
+  });
 }
 
 function sponsorshipResponse(id: string) {
@@ -68,192 +80,216 @@ function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/**
- * The pipeline-history region, addressed by the heading it points at. The
- * surface's own root is a Panel — itself a `<section>` — so `querySelector`
- * on the element name would return the panel instead.
- */
-function historySection(container: HTMLElement, id: string): HTMLElement {
-  const section = container.querySelector<HTMLElement>(`section[aria-labelledby="sponsorship-history-heading-${id}"]`);
-  if (!section) throw new Error("pipeline history region was not rendered");
-  return section;
+const mounted: HTMLElement[] = [];
+
+async function detail(id = SPONSORSHIP_ID): Promise<HTMLElement> {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
+  // Two ticks: the record resolves first, and only then does the history
+  // table mount and ask for its own page.
+  await act(flush);
+  await act(flush);
+  return container;
 }
 
-describe("sponsorship event history", () => {
+/** The history table's own panel, which names itself after the list it holds. */
+function historyPanel(container: HTMLElement): HTMLElement {
+  const panel = container.querySelector<HTMLElement>('section[aria-label="Pipeline history"]');
+  if (!panel) throw new Error("the pipeline history table was not rendered");
+  return panel;
+}
+
+function isHistoryRequest(input: RequestInfo | URL): boolean {
+  return String(input).split("?", 1)[0].endsWith("/events");
+}
+
+describe("sponsorship pipeline history", () => {
   afterEach(() => {
+    for (const container of mounted.splice(0)) {
+      void act(() => render(null, container));
+      container.remove();
+    }
     vi.unstubAllGlobals();
     document.body.replaceChildren();
+    window.location.hash = "";
   });
 
-  it("rejects a stale sponsorship response after the selected sponsorship changes", async () => {
-    const pending: PendingFetch[] = [];
+  it("asks D1 for the newest page of the trail, bounded and ordered", async () => {
+    const requested: URL[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = input.toString();
-        return new Promise<Response>((resolve) => pending.push({ url, resolve }));
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "https://app.test");
+        requested.push(url);
+        return isHistoryRequest(input)
+          ? historyResponse([event("1".padStart(32, "0"), "active")])
+          : sponsorshipResponse(SPONSORSHIP_ID);
       }),
     );
-    const container = document.createElement("div");
-    let latest!: HistoryState;
-    const onState = (state: HistoryState) => {
-      latest = state;
-    };
+    await detail();
 
-    await act(() => render(h(Harness, { id: "sponsor-a", onState }), container));
-    await act(() => render(h(Harness, { id: "sponsor-b", onState }), container));
-    expect(pending.map(({ url }) => url)).toEqual([
-      "/api/v1/sponsors/sponsor-a/events?limit=25&offset=0",
-      "/api/v1/sponsors/sponsor-b/events?limit=25&offset=0",
-    ]);
-
-    await act(async () => {
-      pending[1].resolve(historyResponse([event("00000000000000000000000000000002", "active")]));
-      await flush();
-    });
-    await act(async () => {
-      pending[0].resolve(historyResponse([event("00000000000000000000000000000001", "new_inquiry")]));
-      await flush();
-    });
-
-    expect(latest.events.map(({ toStage }) => toStage)).toEqual(["active"]);
-    expect(latest.loading).toBe(false);
-    void act(() => render(null, container));
+    const history = requested.find((url) => url.pathname.endsWith("/events"));
+    expect(history?.pathname).toBe(`/api/v1/sponsors/${SPONSORSHIP_ID}/events`);
+    // Newest first, one bounded page: the browser is handed a page, not the
+    // whole trail to order itself.
+    expect(history?.searchParams.get("sort")).toBe("-createdAt");
+    expect(history?.searchParams.get("limit")).toBe("50");
+    expect(history?.searchParams.get("offset")).toBe("0");
   });
 
-  it("deduplicates synchronous load-more actions and uses the server-owned page size", async () => {
-    const pending: PendingFetch[] = [];
+  it("searches and re-orders the trail through the query string", async () => {
+    const requested: URL[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        (input: RequestInfo | URL) =>
-          new Promise<Response>((resolve) => pending.push({ url: input.toString(), resolve })),
-      ),
+      vi.fn(async (input: RequestInfo | URL) => {
+        requested.push(new URL(String(input), "https://app.test"));
+        return isHistoryRequest(input)
+          ? historyResponse([event("1".padStart(32, "0"), "active")])
+          : sponsorshipResponse(SPONSORSHIP_ID);
+      }),
     );
-    const container = document.createElement("div");
-    let latest!: HistoryState;
-    const onState = (state: HistoryState) => {
-      latest = state;
-    };
-    await act(() => render(h(Harness, { id: "sponsor", onState }), container));
-    await act(async () => {
-      pending[0].resolve(historyResponse([event("00000000000000000000000000000002", "active")], 2, 0, 1));
-      await flush();
-    });
+    const container = await detail();
+    const panel = historyPanel(container);
 
-    void act(() => {
-      latest.loadMore();
-      latest.loadMore();
-    });
-    expect(pending).toHaveLength(2);
-    expect(pending[1].url).toBe("/api/v1/sponsors/sponsor/events?limit=25&offset=1");
+    const search = panel.querySelector<HTMLInputElement>('input[type="search"]');
+    expect(search).not.toBeNull();
+    search!.value = "signature";
     await act(async () => {
-      pending[1].resolve(historyResponse([event("00000000000000000000000000000001", "new_inquiry")], 2, 1, 1));
+      search!.dispatchEvent(new Event("input", { bubbles: true }));
       await flush();
     });
-    expect(latest.events.map(({ toStage }) => toStage)).toEqual(["active", "new_inquiry"]);
-    expect(latest.loadingMore).toBe(false);
-    void act(() => render(null, container));
+    await act(async () => {
+      search!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await flush();
+    });
+    expect(requested.map((url) => url.searchParams.get("q"))).toContain("signature");
+
+    const when = [...panel.querySelectorAll<HTMLButtonElement>("th button")].find((button) =>
+      button.textContent?.includes("When"),
+    );
+    expect(when).toBeDefined();
+    await act(async () => {
+      when!.click();
+      await flush();
+    });
+    expect(requested.map((url) => url.searchParams.get("sort"))).toContain("createdAt");
   });
 
-  it("runtime-validates the response and exposes a retryable history-only error", async () => {
+  it("renders each transition as a row with a machine-readable timestamp", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json({
-          events: [{ ...event("00000000000000000000000000000001", "active"), toStage: "invented" }],
-          page: { limit: 25, offset: 0, total: 1, hasMore: false },
-        }),
+      vi.fn(async (input: RequestInfo | URL) =>
+        isHistoryRequest(input)
+          ? historyResponse([event("2".padStart(32, "0"), "active", "Signed")])
+          : sponsorshipResponse(SPONSORSHIP_ID),
       ),
     );
-    const container = document.createElement("div");
-    let latest!: HistoryState;
-    await act(() =>
-      render(
-        h(Harness, {
-          id: "sponsor",
-          onState: (state) => {
-            latest = state;
-          },
-        }),
-        container,
-      ),
-    );
-    await act(flush);
-    expect(latest.events).toEqual([]);
-    expect(latest.error).toBe("Received an invalid pipeline history response.");
-    expect(latest.error).not.toContain("Invalid option");
-    expect(latest.retry).toBeTypeOf("function");
-    void act(() => render(null, container));
+    const container = await detail();
+    const panel = historyPanel(container);
+
+    expect(panel.querySelector("caption")?.textContent).toBe("Pipeline history");
+    expect(panel.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(panel.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-21T12:00:00.000Z");
+    // The transition reads as one phrase in one cell, which is what the
+    // end-to-end flow looks for after moving a stage.
+    expect(panel.textContent).toContain("New inquiry → Active");
+    expect(panel.textContent).toContain("Signed");
   });
 
-  it("keeps sponsorship detail visible when history fails and supports an inline empty-state retry", async () => {
-    const id = "000000000000000000000000000000aa";
+  it("runtime-validates the trail and states a failure without hiding the record", async () => {
     let historyRequests = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = input.toString();
-        if (!url.split("?", 1)[0].endsWith("/events")) return sponsorshipResponse(id);
+        if (!isHistoryRequest(input)) return sponsorshipResponse(SPONSORSHIP_ID);
         historyRequests += 1;
         return historyRequests === 1
-          ? Response.json({ error: { code: "HISTORY_FAILED", message: "History unavailable" } }, { status: 500 })
+          ? Response.json({
+              events: [{ ...event("1".padStart(32, "0"), "active"), toStage: "invented" }],
+              page: { limit: 50, offset: 0, total: 1, hasMore: false },
+            })
           : historyResponse([]);
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
-    await act(flush);
+    const container = await detail();
 
+    // The record is still readable, and the refusal is a sentence rather than
+    // a schema message about an invalid option.
     expect(container.textContent).toContain("Acme Sponsor");
-    expect(container.textContent).toContain("History unavailable");
-    const alert = container.querySelector("[role='alert']");
-    expect(alert?.textContent).toContain("Retry history");
+    const alert = historyPanel(container).querySelector("[role='alert']");
+    expect(alert?.textContent).toContain("could not read");
+    expect(alert?.textContent).not.toContain("Invalid option");
+
+    // The list's own Refresh asks again — the trail is retried where it
+    // failed, without reloading the record beside it.
+    const refresh = [...historyPanel(container).querySelectorAll("button")].find(
+      (button) => button.textContent === "Refresh",
+    );
     await act(async () => {
-      (alert?.querySelector("button") as HTMLButtonElement).click();
+      refresh!.click();
       await flush();
     });
+    await act(flush);
     expect(historyRequests).toBe(2);
-    expect(container.querySelector("[role='alert']")).toBeNull();
-    expect(container.textContent).toContain("No pipeline history has been recorded.");
-    expect(historySection(container, id).getAttribute("aria-busy")).toBe("false");
-    void act(() => render(null, container));
+    expect(historyPanel(container).querySelector("[role='alert']")).toBeNull();
+    expect(historyPanel(container).querySelector("[role='status']")?.textContent).toContain(
+      "No pipeline history has been recorded.",
+    );
   });
 
-  it("renders history as a labelled chronological list with machine-readable timestamps", async () => {
-    const id = "000000000000000000000000000000aa";
+  it("asks the trail for itself again once a stage move has written to it", async () => {
+    const requested: string[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) =>
-        input.toString().split("?", 1)[0].endsWith("/events")
-          ? historyResponse([event("00000000000000000000000000000002", "active")])
-          : sponsorshipResponse(id),
-      ),
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requested.push(`${init?.method ?? "GET"} ${url.split("?", 1)[0]}`);
+        if (isHistoryRequest(input)) return historyResponse([]);
+        if (url.endsWith("/stage")) return sponsorshipResponse(SPONSORSHIP_ID);
+        return sponsorshipResponse(SPONSORSHIP_ID);
+      }),
     );
-    const container = document.createElement("div");
-    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
+    const container = await detail();
+    const before = requested.filter((request) => request.endsWith("/events")).length;
+
+    await act(async () => {
+      buttonNamed(container, "Move stage").click();
+      await flush();
+    });
+    await act(async () => {
+      buttonNamed(container, "Move").click();
+      await flush();
+    });
     await act(flush);
 
-    const section = historySection(container, id);
-    expect(container.querySelector(`#sponsorship-history-heading-${id}`)?.textContent).toBe("History");
-    expect(section.querySelectorAll("ol > li")).toHaveLength(1);
-    expect(section.querySelector("time")?.getAttribute("datetime")).toBe("2026-08-21T12:00:00.000Z");
-    expect(section.querySelector("[aria-live='polite']")?.textContent).toContain("1 history entry loaded");
-    void act(() => render(null, container));
+    expect(requested.filter((request) => request.endsWith("/events")).length).toBeGreaterThan(before);
+  });
+});
+
+describe("sponsorship record forms", () => {
+  afterEach(() => {
+    for (const container of mounted.splice(0)) {
+      void act(() => render(null, container));
+      container.remove();
+    }
+    vi.unstubAllGlobals();
+    document.body.replaceChildren();
+    window.location.hash = "";
   });
 
   it("names the sponsorship region and wires every editable field to its own label", async () => {
-    const id = "000000000000000000000000000000aa";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) =>
-        input.toString().split("?", 1)[0].endsWith("/events") ? historyResponse([]) : sponsorshipResponse(id),
-      ),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = String(input).split("?", 1)[0];
+        if (path.endsWith("/events")) return historyResponse([]);
+        if (path.endsWith("/sponsors/tiers")) return tiersResponse();
+        return sponsorshipResponse(SPONSORSHIP_ID);
+      }),
     );
-    const container = document.createElement("div");
-    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
-    await act(flush);
+    const container = await detail();
 
     // The surface is addressable by name rather than by its container's
     // class, which is what the end-to-end spec now relies on.
@@ -264,17 +300,42 @@ describe("sponsorship event history", () => {
     expect(container.querySelector("form")).toBeNull();
     await act(async () => {
       buttonNamed(container, "Edit").click();
-      buttonNamed(container, "Advance stage").click();
+      buttonNamed(container, "Move stage").click();
       await flush();
     });
+    // The tier catalog is fetched by the edit form once it mounts, so its
+    // options land a tick after the form does.
+    await act(flush);
+    /*
+     * Everything staff can correct about the record, each on its own label.
+     * The tier is a Select over the catalog rather than a text box, because a
+     * tier is a row with a price beside it — that was the substance of issue
+     * #30 along with the contact, which used to be readable and not editable.
+     */
     for (const [label, tag] of [
+      ["Sponsor name", "INPUT"],
+      ["Website", "INPUT"],
+      ["Tier", "SELECT"],
       ["Renewal date", "INPUT"],
+      ["Contact name", "INPUT"],
+      ["Contact email", "INPUT"],
       ["Notes", "TEXTAREA"],
-      ["Advance to stage", "SELECT"],
+      ["Move to stage", "SELECT"],
       ["Note (optional)", "INPUT"],
     ] as const) {
       expect(controlFor(container, label).tagName).toBe(tag);
     }
+    // The catalog, plus the empty choice for a sponsorship with no tier yet.
+    expect([...controlFor(container, "Tier").querySelectorAll("option")].map((option) => option.value)).toEqual([
+      "",
+      "Gold",
+      "Silver",
+    ]);
+    // A terminal stage for a company that decides against sponsoring, which
+    // is what staff previously had no word for.
+    expect([...controlFor(container, "Move to stage").querySelectorAll("option")].map((o) => o.value)).toContain(
+      "not_proceeding",
+    );
     // Assignment is a search-as-you-type picker over real users — the record
     // stores a user id, but nobody types a UUID. The picker lives in its own
     // named group and carries the shared control's accessible name.
@@ -285,39 +346,34 @@ describe("sponsorship event history", () => {
     expect(groupNames(container)).toEqual(["Assigned staff"]);
     expect([...container.querySelectorAll("form")].map((form) => form.getAttribute("aria-label"))).toEqual([
       "Edit sponsorship record",
-      "Advance pipeline stage",
+      "Move pipeline stage",
     ]);
-    void act(() => render(null, container));
   });
 
-  it("reports a failed stage advance without losing the note the reader typed", async () => {
-    const id = "000000000000000000000000000000aa";
+  it("reports a failed stage move without losing the note the reader typed", async () => {
     const toastArea = document.createElement("div");
     toastArea.id = "portal-toast-area";
     document.body.append(toastArea);
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
-        const url = input.toString();
-        if (url.split("?", 1)[0].endsWith("/events")) return historyResponse([]);
+        const url = String(input);
+        if (isHistoryRequest(input)) return historyResponse([]);
         if (url.endsWith("/stage")) {
           return Response.json({ error: { code: "STAGE_REJECTED", message: "Stage change refused" } }, { status: 409 });
         }
-        return sponsorshipResponse(id);
+        return sponsorshipResponse(SPONSORSHIP_ID);
       }),
     );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(h(SponsorshipDetail, { id, canWrite: true, onChanged: vi.fn() }), container));
-    await act(flush);
+    const container = await detail();
 
     await act(async () => {
-      buttonNamed(container, "Advance stage").click();
+      buttonNamed(container, "Move stage").click();
       await flush();
     });
     await typeInto(controlFor(container, "Note (optional)"), "Waiting on signature");
 
-    const advance = buttonNamed(container, "Advance");
+    const advance = buttonNamed(container, "Move");
     await act(async () => {
       advance.click();
       await flush();
@@ -326,6 +382,5 @@ describe("sponsorship event history", () => {
     expect(toastArea.textContent).toContain("Stage change refused");
     expect(controlFor(container, "Note (optional)").value).toBe("Waiting on signature");
     expect(advance.getAttribute("aria-busy")).toBeNull();
-    void act(() => render(null, container));
   });
 });

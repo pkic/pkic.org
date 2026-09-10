@@ -65,6 +65,13 @@ export function normalizeValidation(error: unknown): ValidationState {
         .filter(([, msgs]) => Array.isArray(msgs) && msgs.length > 0)
         .map(([key, msgs]) => [key, (msgs as string[])[0] ?? "Invalid value"]),
     );
+    // Keep the full path for controls inside objects and repeatable rows.
+    // The parent aliases remain for editors that display one error per group.
+    for (const issue of error.issues) {
+      if (issue.path.length === 0) continue;
+      const path = issue.path.map(String).join(".");
+      fields[path] ??= issue.message;
+    }
     return {
       globalMessage: flat.formErrors[0] ?? "Please correct the highlighted fields.",
       fields,

@@ -10,10 +10,14 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getUserDetail } from "../../../../_lib/services/user-management-detail";
 import { updateUser } from "../../../../_lib/services/user-management-update";
 import type { AdminContext } from "../../../../_lib/db/context";
-import { requireUserStaffPermission } from "../authorization";
+import { requireUserRecordReader, requireUserStaffPermission } from "../authorization";
 
 export const UserGet = openApiRoute(userDetailRouteSchema, async (c: AdminContext, data) => {
-  const { db } = await requireUserStaffPermission(c, "users:read");
+  // The person the record is about may read it; everybody else needs
+  // `users:read`. The projection is the same either way — it states nothing
+  // about the reader, only about its subject — so there is one response and
+  // one place that decides who gets it.
+  const { db } = await requireUserRecordReader(c, data.params.userId);
   return json(userDetailResponseSchema.parse({ user: await getUserDetail(db, data.params.userId) }));
 });
 

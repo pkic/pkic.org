@@ -26,7 +26,7 @@ import { classifyDonationPollResult } from "../../assets/ts/shared/donation/sess
 import { uploadFile } from "../../assets/ts/shared/file-upload";
 import { emailFromSubmitEvent } from "../../assets/ts/shared/form/helpers";
 import { replaceFormWithSuccess } from "../../assets/ts/shared/form/success-panel";
-import { memberInitials } from "../../assets/ts/shared/member-display";
+import { initialsFrom, monogramFrom } from "../../assets/ts/shared/initials";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../assets/ts/shared/organization-content";
 import { handleFormInviteSubmitError } from "../../assets/ts/shared/widgets/invite-recovery";
 import { showManageLinkRecoveryForm } from "../../assets/ts/shared/widgets/link-recovery";
@@ -236,7 +236,15 @@ describe("public shared link recovery and flow state", () => {
   });
 
   it("shares member initials, not-found, verification, menu, and organization labels", () => {
-    expect(memberInitials("Ada Byron Lovelace IV")).toBe("ABL");
+    // Two subjects, two answers: a person is known by their first and last
+    // name, an organization by the monogram on its letterhead.
+    expect(initialsFrom("Ada Byron Lovelace")).toBe("AL");
+    expect(monogramFrom("Ada Byron Lovelace IV")).toBe("ABL");
+    // Neither strips a name down to ASCII, which one of the copies did: it
+    // removed every non a-z character before taking a letter, so this name
+    // came back as "S".
+    expect(initialsFrom("Órla Ó Súilleabháin")).toBe("ÓS");
+    expect(monogramFrom("Órla Ó Súilleabháin")).toBe("ÓÓS");
     expect(statusLabel("in_consultation")).toBe("In consultation");
     expect(ORGANIZATION_CONTENT_FIELD_LABELS.blogFeedUrl).toBe("Blog feed URL");
     const container = mount(

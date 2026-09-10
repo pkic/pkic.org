@@ -7,6 +7,15 @@ date: 2023-08-31T11:00:00+00:00
 keyword: [PQC, Post-Quantum Cryptography, Conference]
 tags: [PQC, Post-Quantum Cryptography, Conference]
 
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 **The PKI Consortium is thrilled to announce the second edition of the Post-Quantum Cryptography (PQC) Conference, scheduled for November 7 and 8, 2023, at the Meervaart in Amsterdam, the Netherlands. This event will also be accessible to remote attendees online. Building on the resounding success of the inaugural conference in Ottawa, Canada, the upcoming event promises to bring together a diverse array of renowned speakers, experts, and enthusiasts from around the world to delve into the cutting-edge developments and challenges in the field of post-quantum cryptography.**

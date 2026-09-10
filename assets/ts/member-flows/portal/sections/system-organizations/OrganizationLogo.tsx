@@ -6,7 +6,7 @@
  */
 import { logoUploadResponseSchema } from "../../../../../shared/schemas/images";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
-import { LogoTile } from "../../../../components/LogoTile";
+import { PictureTile } from "../../../../components/PictureTile";
 import { deleteJson } from "../../../../shared/api-client";
 import { replaceFile } from "../../../../shared/file-upload";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
@@ -25,7 +25,7 @@ export function OrganizationLogo({
   size?: "default" | "mark";
 }) {
   return (
-    <LogoTile
+    <PictureTile
       size={size}
       name={organization.name}
       imageUrl={organization.logoUrl}

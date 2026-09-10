@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import { prepareQueueEmailStatement } from "../../email/outbox";
@@ -67,9 +68,10 @@ async function loadRegistrationEmailContext(
   const storedUser = await first<UserRow>(
     db,
     `SELECT u.id, ${REGISTRATION_RECIPIENT_EMAIL_SQL} AS email,
-            u.first_name, u.last_name, u.organization_name, u.job_title
+            u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title
        FROM registrations r
        JOIN users u ON u.id = r.user_id
+
       WHERE r.id = ? AND r.event_id = ?`,
     [registration.id, event.id],
   );

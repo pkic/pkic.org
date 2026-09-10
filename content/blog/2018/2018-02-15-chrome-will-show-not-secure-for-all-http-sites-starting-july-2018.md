@@ -23,6 +23,15 @@ tags:
 title: Chrome Will Show Not Secure for all HTTP Sites Starting July 2018
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 Through 2017 and into 2018, we have seen the use of HTTPS grow substantially. Last Fall Google announced the following status:
 

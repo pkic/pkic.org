@@ -7,6 +7,15 @@ authors:
 date: 2025-10-27T08:00:00+00:00
 keywords: [Post-Quantum Cryptography, PQC, PQC Maturity Model, PQCMM, Quantum-Ready, Quantum-Safe, Cryptography, PKI Consortium] 
 tags: [PQC, Post-Quantum Cryptography, PQC Maturity Model]
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 --- 
 
 As the industry moves toward a post-quantum future, terms like *quantum-ready* and *quantum-safe* are everywhere; but what do they actually mean in practice? While the [Post-Quantum Cryptography Capability Matrix (PQCCM)](https://pkic.org/pqccm/) provides a great overview of where vendors stand, it doesn’t always tell the full story. Organizations need clarity on what to expect from products and features, and vendors need a consistent way to communicate their capabilities.

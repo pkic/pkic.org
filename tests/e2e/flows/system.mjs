@@ -26,14 +26,21 @@ export const SYSTEM_FLOW = {
       status: "covered",
     },
     {
+      id: "12.3.a",
+      title: "Each domain answers for its own numbers, on a page under it",
+      status: "covered",
+      note: "The figures used to be one system-wide panel inside Settings, which put the membership numbers under a heading that named none of them and three clicks from the roll they describe (#39). Members, organizations and users each have an analytics page under their own section now, beside the event and donation pages that already did. Every one of those addresses is a reserved segment matched before its section's `:id` route, or \"analytics\" is read as the id of a record.",
+    },
+    {
       id: "12.4",
       title: "Staff manage donations, filter by status, and reach the badge and sync controls",
       status: "covered",
     },
     {
       id: "12.5",
-      title: "Operations reads through canonical routes and redirects legacy bookmarks",
+      title: "The outbox, the due queue and the job registry are each read and driven from their own page",
       status: "covered",
+      note: 'They were three tabs inside one "Operations" bucket, so none of them could be linked to and the entry named none of them. The walk now reaches each by its own name in the sidebar and asserts its address.',
     },
     {
       id: "12.6",
@@ -43,9 +50,10 @@ export const SYSTEM_FLOW = {
     },
     {
       id: "12.7",
-      title: "Membership settings are edited, and form edits publish to the public join flow",
+      title:
+        "The application workflow, the application form and the category catalog are each edited on their own page",
       status: "covered",
-      note: "The join form the public fills in is generated from these settings, so this step is where a staff edit becomes a change to a public page.",
+      note: "The join form the public fills in is generated from these settings, so this step is where a staff edit becomes a change to a public page. The three subjects shared one screen until they were split, and the walk now edits each at its own address.",
     },
     {
       id: "12.11",

@@ -424,3 +424,22 @@ $portal-sidebar-width: 240px;
     padding: 1.25rem 0.5rem;
   }
 }
+
+// Portraits use their own class so the design system's logo containment rule
+// cannot override their crop across the legacy and component cascade layers.
+.portal-picture-tile-portrait {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.portal-mailing-list-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(unquote("min(100%, 25rem)"), 1fr));
+  align-items: start;
+  gap: var(--pk-8);
+}
+.portal-mailing-list-fields .pk-datalist {
+  grid-column: 1 / -1;
+}

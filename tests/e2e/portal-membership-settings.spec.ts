@@ -8,6 +8,7 @@ import {
 } from "../../assets/shared/schemas/membership-application-form";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { extractEmailUrl, capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
+import { openMembershipVerificationLink } from "./helpers/member-join";
 import { signInToPortal } from "./helpers/portal-auth";
 
 const SETTINGS_API = "/api/v1/membership/settings";
@@ -39,11 +40,27 @@ test("a permitted staff identity reads and updates membership settings through t
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-membership-settings"));
-  await page.goto("/portal/#/system/membership-settings");
+  // Three pages, three addresses. They shared one "Membership Settings" tab
+  // before, so neither the workflow nor the catalog could be linked to (#40).
+  await page.goto("/portal/#/settings/application-workflow");
 
-  await expect(page.getByRole("link", { name: "Membership Settings" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Application workflow" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Application workflow" })).toHaveAttribute("aria-current", "page");
   const consultationWindow = page.getByLabel("Consultation window (days)");
+  await expect(consultationWindow).toHaveCount(0);
+  async function editWorkflow() {
+    await page.getByRole("button", { name: "Workflow settings actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit settings" }).click();
+  }
+  await editWorkflow();
+  const originalWindow = await consultationWindow.inputValue();
+  await consultationWindow.fill("999");
+  await page.getByRole("button", { name: "Save workflow settings" }).click();
+  await expect(consultationWindow).toHaveAttribute("aria-invalid", "true");
+  expect(membershipRequests).not.toContain(`PATCH ${SETTINGS_API}`);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await editWorkflow();
+  await expect(consultationWindow).toHaveValue(originalWindow);
   await expect(consultationWindow).toBeVisible();
 
   const updatedWindow = String(Number(await consultationWindow.inputValue()) + 1);
@@ -54,9 +71,20 @@ test("a permitted staff identity reads and updates membership settings through t
   await page.getByRole("button", { name: "Save workflow settings" }).click();
   expect((await saveResponse).status()).toBe(200);
   await expect(page.getByText("Membership workflow settings saved", { exact: true })).toBeVisible();
+  await expect(consultationWindow).toHaveCount(0);
+  await editWorkflow();
   await expect(consultationWindow).toHaveValue(updatedWindow);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  const categoryForm = page.getByRole("heading", { name: "Category H8" }).locator("xpath=ancestor::form");
+  await page.goto("/portal/#/settings/membership-categories");
+  await expect(page.getByRole("heading", { name: "Membership categories" })).toBeVisible();
+  const categoryForm = page.getByRole("region", { name: "Category H8", exact: true });
+  async function editCategory() {
+    await categoryForm.getByRole("button", { name: "Category H8 actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit settings" }).click();
+  }
+  await expect(categoryForm.locator("input")).toHaveCount(0);
+  await editCategory();
   const categoryLabel = categoryForm.getByLabel("Label");
   const updatedLabel = `${await categoryLabel.inputValue()} (E2E)`;
   const categoryResponse = page.waitForResponse(
@@ -67,7 +95,10 @@ test("a permitted staff identity reads and updates membership settings through t
   await categoryForm.getByRole("button", { name: "Save category H8" }).click();
   expect((await categoryResponse).status()).toBe(200);
   await expect(page.getByText("Category H8 saved", { exact: true })).toBeVisible();
+  await expect(categoryLabel).toHaveCount(0);
+  await editCategory();
   await expect(categoryLabel).toHaveValue(updatedLabel);
+  await categoryForm.getByRole("button", { name: "Cancel", exact: true }).click();
 
   expect(membershipRequests).toEqual(
     expect.arrayContaining([
@@ -79,13 +110,14 @@ test("a permitted staff identity reads and updates membership settings through t
   );
   expect(removedSystemRequests).toEqual([]);
 
-  await page.goto("/portal/#/system/membership-settings");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/membership-settings$/);
-  await expect(page.getByRole("heading", { name: "Application workflow" })).toBeVisible();
+  // Each edit survives a reload of the page it was made on, at that page's
+  // own address.
+  await page.goto("/portal/#/settings/application-workflow");
+  await editWorkflow();
   await expect(page.getByLabel("Consultation window (days)")).toHaveValue(updatedWindow);
-  await expect(
-    page.getByRole("heading", { name: "Category H8" }).locator("xpath=ancestor::form").getByLabel("Label"),
-  ).toHaveValue(updatedLabel);
+  await page.goto("/portal/#/settings/membership-categories");
+  await editCategory();
+  await expect(categoryForm.getByLabel("Label")).toHaveValue(updatedLabel);
   expect(removedAdminRequests).toEqual([]);
 });
 
@@ -99,7 +131,7 @@ test("publishes membership application form edits to the public join flow", asyn
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-membership-form"));
-  await page.goto("/portal/#/system/membership-settings");
+  await page.goto("/portal/#/settings/membership-application-form");
   await expect(page.getByRole("heading", { name: "Membership application form" })).toBeVisible();
 
   const initialResponse = await page.request.get(APPLICATION_FORM_DEFINITION_API);
@@ -124,21 +156,34 @@ test("publishes membership application form edits to the public join flow", asyn
   );
   const marker = `E2E ${Date.now()}`;
   const changedLabel = `${field.label} (${marker})`;
-  const changedFields = originalFields.map((candidate) =>
-    candidate.id === field.id ? { ...candidate, label: changedLabel } : candidate,
-  );
-  const update = membershipApplicationFormDefinitionUpdateSchema.parse({
-    expectedUpdatedAt: initial.form.updatedAt,
-    fields: changedFields,
-  });
 
   let changed = false;
   try {
-    const updateResponse = await page.request.patch(APPLICATION_FORM_DEFINITION_API, { data: update });
+    await expect(page.getByLabel("Form title", { exact: true })).toHaveCount(0);
+    async function editForm() {
+      await page.getByRole("button", { name: "Application form actions" }).click();
+      await page.getByRole("menuitem", { name: "Edit form", exact: true }).click();
+    }
+    await editForm();
+    await page.getByLabel("Form title", { exact: true }).fill("Unsaved application title");
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await editForm();
+    await expect(page.getByLabel("Form title", { exact: true })).toHaveValue(initial.form.title);
+    await page.locator("button.pk-formq").filter({ hasText: field.label }).click();
+    await page.getByLabel("Question", { exact: true }).fill(changedLabel);
+    const saving = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === APPLICATION_FORM_DEFINITION_API && response.request().method() === "PATCH",
+    );
+    await page.getByRole("button", { name: "Save form", exact: true }).click();
+    const updateResponse = await saving;
     expect(updateResponse.status()).toBe(200);
     const updated = membershipApplicationFormDefinitionResponseSchema.parse(await updateResponse.json());
     expect(updated.fields.find((candidate) => candidate.id === field.id)?.label).toBe(changedLabel);
     changed = true;
+    await expect(page.getByLabel("Form title", { exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("list", { name: "Membership application form fields" })).toContainText(changedLabel);
 
     const email = `membership-form-${Date.now()}@organization-e2e.test`;
     const sinceVerification = await capturedEmailCount();
@@ -151,8 +196,7 @@ test("publishes membership application form edits to the public join flow", asyn
     const verification = await waitForCapturedEmail(email, "Verify your email address", {
       since: sinceVerification,
     });
-    await page.goto(extractEmailUrl(verification, "#verify="));
-    await page.reload();
+    await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
     await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
     await expect(page.getByLabel(changedLabel, { exact: true })).toBeVisible();
     expect(legacyAdminFormRequests).toEqual([]);

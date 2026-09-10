@@ -1,3 +1,4 @@
+import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * The organization account page's cards, each readable and — in the page's
  * edit mode — editable in place.
@@ -14,7 +15,9 @@ import {
   orgTiedMembershipCategorySchema,
   type OrganizationDetail,
 } from "../../../../../shared/schemas/organization-management";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
+import { ORGANIZATION_CONTENT_MARKDOWN_HELP } from "../../../../shared/organization-content";
 import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
@@ -117,21 +120,15 @@ export function OrganizationAbout(props: OrganizationCardProps) {
               />
             )}
           </Field>
-          <Field
-            label="Member page content"
-            help="Markdown, shown on the organization's public member page."
-            {...fields("contentMarkdown")}
-          >
+          <Field label="Member page content" help={ORGANIZATION_CONTENT_MARKDOWN_HELP} {...fields("contentMarkdown")}>
             {(control) => (
-              <Textarea
+              <MarkdownEditor
                 {...control}
                 name="contentMarkdown"
-                class="pk-mono"
-                rows={6}
-                maxLength={20000}
-                value={draft.contentMarkdown}
+                label="Member page content"
+                initialValue={draft.contentMarkdown}
                 disabled={busy}
-                onInput={(event) => onDraft({ contentMarkdown: (event.target as HTMLTextAreaElement).value })}
+                onChange={(contentMarkdown) => onDraft({ contentMarkdown })}
               />
             )}
           </Field>
@@ -178,15 +175,15 @@ export function OrganizationLinks(props: OrganizationCardProps) {
         {LINK_FIELDS.map(([label, field]) => (
           <TextField key={field} field={field} label={label} type="url" maxLength={2048} {...edit} />
         ))}
-        <fieldset class="pk-fieldset pk-field">
-          <legend class="pk-field__label">Profiles</legend>
-          <ProfileLinksInput
-            fieldName="organization.links"
-            value={edit.draft.links}
-            inputAriaLabel="Organization profile URL"
-            onChange={(links) => edit.onDraft({ links })}
-          />
-        </fieldset>
+        {/* Named by the widget, like every other field on this form, rather
+            than by a fieldset wrapped round it for the label alone. */}
+        <ProfileLinksInput
+          fieldName="organization.links"
+          label="Other links"
+          value={edit.draft.links}
+          inputAriaLabel="Organization profile URL"
+          onChange={(links) => edit.onDraft({ links })}
+        />
       </div>
     );
   }
@@ -221,6 +218,7 @@ export function OrganizationLinks(props: OrganizationCardProps) {
 export function OrganizationMembershipCard(props: OrganizationCardProps) {
   const { organization } = props;
   const edit = editor(props);
+  const categories = useMembershipCategoryLabels();
   const created: DescriptionListItem = { term: "Created", value: fmt(organization.createdAt) };
   return (
     <Panel aria-label="Membership">
@@ -239,7 +237,7 @@ export function OrganizationMembershipCard(props: OrganizationCardProps) {
                 >
                   {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
                     <option key={category} value={category}>
-                      {category}
+                      {categories.label(category)}
                     </option>
                   ))}
                 </Select>
@@ -265,9 +263,21 @@ export function OrganizationMembershipCard(props: OrganizationCardProps) {
             edit
               ? [created]
               : [
-                  { term: "Category", value: organization.membershipCategory },
+                  { term: "Category", value: categories.label(organization.membershipCategory) || "Not a member" },
                   // A calendar date, not an instant: the contract is `z.iso.date()`.
                   { term: "Member since", value: fmtDate(organization.memberSince) },
+                  {
+                    // The address the public actually sees. Staff could not
+                    // tell whether a record had a readable one or was still
+                    // answering on its id (#15), and the page is one click
+                    // away rather than a URL to assemble by hand.
+                    term: "Member page",
+                    value: (
+                      <a class="pk-break" href={organization.publicProfileHref} target="_blank" rel="noopener">
+                        {organization.publicProfileHref}
+                      </a>
+                    ),
+                  },
                   created,
                 ]
           }

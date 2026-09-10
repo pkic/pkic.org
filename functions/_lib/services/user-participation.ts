@@ -1,3 +1,4 @@
+import { seatLeadershipJoinSql } from "./groups/seat-leadership";
 /**
  * What a person has taken part in: the groups they sit in, how reliably they
  * attend each one, and the headline figures a record shows at a glance.
@@ -55,7 +56,15 @@ export async function getUserParticipation(db: DatabaseLike, userId: string): Pr
   const [groupsResult, eventsResult] = await db.batch([
     db
       .prepare(
-        `SELECT g.id AS group_id, g.slug, g.name, g.type_key,
+        `WITH current_seats AS (
+           SELECT membership.group_id, membership.user_id, membership.joined_at, leadership.title, leadership.role_rank
+             FROM group_memberships membership ${seatLeadershipJoinSql("membership", "user")}
+            WHERE membership.user_id = ? AND membership.left_at IS NULL
+         ), current_groups AS (
+           SELECT group_id, user_id, MIN(joined_at) AS joined_at,
+             COALESCE(MIN(CASE WHEN role_rank = 0 THEN title END), MIN(title)) AS title
+             FROM current_seats GROUP BY group_id, user_id
+         ) SELECT g.id AS group_id, g.slug, g.name, g.type_key,
                 type.singular_label AS type_singular_label,
                 type.plural_label AS type_plural_label,
                 membership.title, membership.joined_at,
@@ -71,14 +80,12 @@ export async function getUserParticipation(db: DatabaseLike, userId: string): Pr
                    JOIN events event ON event.id = series.event_id
                   WHERE joined.user_id = membership.user_id
                     AND event.owner_group_id = membership.group_id) AS last_attended_at
-           FROM group_memberships membership
+           FROM current_groups membership
            JOIN groups g ON g.id = membership.group_id
            JOIN group_types type ON type.key = g.type_key
-          WHERE membership.user_id = ?
-            AND membership.left_at IS NULL
           ORDER BY g.name COLLATE NOCASE, g.id`,
       )
-      .bind(userId),
+      .bind(userId, userId),
     db
       .prepare(
         /* Events the person was a participant of, which is a different thing

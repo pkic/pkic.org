@@ -230,15 +230,38 @@ describe("GET /api/v1/audit-log", () => {
     expect(body.entries[0].details).toEqual({ note: "needle-in-details" });
   });
 
-  it("rejects an empty shared search value instead of silently returning unfiltered data", async () => {
+  it("reads a blank filter as no filter, the same as leaving it out", async () => {
+    /*
+     * This asserted a 400, on the reasoning that returning unfiltered data
+     * for `?q=` silently pretends to have searched. The reasoning was sound
+     * and the remedy was worse than the fault: any caller that sent a
+     * parameter it had left blank took the whole list down. Issue #11 is what
+     * that cost — representatives that never appeared and a members page
+     * that listed nothing, because one blank filter refused the request.
+     *
+     * A blank filter and an absent one are the same request, which is what
+     * the frontend's shared collection has always assumed: it drops empty
+     * values before building the query. Both ends now agree, and the
+     * behaviour is stated rather than inferred — an empty search returns the
+     * same rows as no search at all.
+     */
     await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "event", secondsAgo: 10 });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "user", secondsAgo: 5 });
 
-    const response = await callAppGet("/api/v1/audit-log?entityType=&q=&action=", adminToken);
-    expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({
-      error: { code: "VALIDATION_ERROR" },
-    });
+    const blank = await callAppGet("/api/v1/audit-log?entityType=&q=&action=", adminToken);
+    expect(blank.status).toBe(200);
+    const omitted = await callAppGet("/api/v1/audit-log", adminToken);
+    expect(omitted.status).toBe(200);
+
+    const blankBody = (await blank.json()) as AuditLogListResponse;
+    const omittedBody = (await omitted.json()) as AuditLogListResponse;
+    expect(blankBody.entries.map((entry) => entry.action)).toEqual(omittedBody.entries.map((entry) => entry.action));
+
+    // A filter that carries a real value is still applied, and one carrying a
+    // value the contract does not offer is still refused.
+    const filtered = await callAppGet("/api/v1/audit-log?q=a1", adminToken);
+    expect(((await filtered.json()) as AuditLogListResponse).entries).toHaveLength(1);
+    expect((await callAppGet("/api/v1/audit-log?limit=0", adminToken)).status).toBe(400);
   });
 
   it("paginates with limit/offset and reports hasMore, and supports ?sort=", async () => {

@@ -34,6 +34,17 @@
   }
 
   /*
+   * A measured column aligned to the page's start rather than centred. A lone
+   * form card centred under a left-aligned page heading reads as two pages
+   * that happen to share a screen; on a wide display the heading sat at the
+   * far left with the card floating in the middle (#49, #53).
+   */
+  .pk-container--start {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  /*
    * Vertical rhythm. The gap goes on the parent, so twelve children cannot
    * disagree about their spacing the way twelve `mb-*` classes can.
    */
@@ -145,6 +156,32 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /*
+   * Two panes that are each other's counterpart: a source and its preview.
+   *
+   * `pk-grid` is for cards that flow — it makes as many tracks as fit and
+   * leaves the rest empty, which is right for a gallery and wrong for a pair.
+   * The email template editor used it, so on a wide screen its two columns
+   * took the first two of five tracks and the remaining three were dead
+   * space: issue #49, "this page is not well balanced".
+   *
+   * A pair is two tracks or one. Below the measure where both would be too
+   * narrow to work in, they stack — the preview under the source it renders,
+   * which is the order they are read in.
+   */
+  .pk-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--pk-gap, var(--pk-4));
+    align-items: start;
+  }
+
+  @media (min-width: 64rem) {
+    .pk-split {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
   }
 
   /*

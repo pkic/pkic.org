@@ -8,6 +8,22 @@ date: 2022-11-30T14:00:00+00:00
 keyword: [PQC, Post-Quantum Cryptography, Conference]
 tags: [PQC, Post-Quantum Cryptography, Conference]
 
+authorProfiles:
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 ## The PKI Consortium is pleased to announce its first Post-Quantum Cryptography Conference, to be held in Ottawa and Online on Friday March 3, 2023

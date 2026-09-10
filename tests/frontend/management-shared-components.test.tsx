@@ -94,6 +94,7 @@ describe("shared management presentation components", () => {
     expect(select.getAttribute("aria-label")).toBeNull();
     select.value = "active";
     void act(() => {
+      select.dispatchEvent(new Event("input", { bubbles: true }));
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("active");
@@ -338,6 +339,7 @@ describe("shared management presentation components", () => {
     expect(select.options[1].textContent).toBe("Published");
     select.value = "published";
     void act(() => {
+      select.dispatchEvent(new Event("input", { bubbles: true }));
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith("published");
@@ -440,6 +442,7 @@ describe("shared management presentation components", () => {
     const categoryG = container.querySelector<HTMLInputElement>("#sync-G")!;
     categoryG.checked = true;
     void act(() => {
+      categoryG.dispatchEvent(new Event("input", { bubbles: true }));
       categoryG.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith(["G"]);
@@ -454,6 +457,7 @@ describe("shared management presentation components", () => {
     expect(categoryB.checked).toBe(false);
     categoryB.checked = true;
     void act(() => {
+      categoryB.dispatchEvent(new Event("input", { bubbles: true }));
       categoryB.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith(["B", "G"]);
@@ -469,6 +473,7 @@ describe("shared management presentation components", () => {
     expect(categoryA.checked).toBe(true);
     categoryA.checked = false;
     void act(() => {
+      categoryA.dispatchEvent(new Event("input", { bubbles: true }));
       categoryA.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onChange).toHaveBeenCalledWith([]);

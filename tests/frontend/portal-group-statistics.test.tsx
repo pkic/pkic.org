@@ -4,8 +4,8 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { formatDateTime } from "../../assets/shared/format-date";
 import { GroupStatistics } from "../../assets/ts/member-flows/portal/sections/management/GroupStatistics";
-import { groupStatsQuerySchema } from "../../assets/shared/schemas/group-statistics";
-import { chooseOption, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { GROUP_STATS_SCOPES, groupStatsQuerySchema } from "../../assets/shared/schemas/group-statistics";
+import { chooseOption, controlFor, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -122,6 +122,10 @@ describe("portal group statistics", () => {
 
     const regions = [...container.querySelectorAll("section")].map((section) => section.getAttribute("aria-label"));
     expect(regions).toEqual(["Reporting window", "Participation", "Activity"]);
+
+    // The scope select offers what the query contract accepts, so a third
+    // population added there reaches the reader without an edit here.
+    expect(optionValues(controlFor<HTMLSelectElement>(container, "Count people who"))).toEqual([...GROUP_STATS_SCOPES]);
   });
 
   it("uses the shared schema-backed UTC window controls and sends filtering to D1", async () => {

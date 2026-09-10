@@ -1,5 +1,7 @@
-import { useId } from "preact/hooks";
+import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { usePortalHashLocation } from "../../hash-location";
+import { deriveFormSubmissionWindowState } from "../../../../../shared/form-submission-window";
+import type { FormPlacement } from "../../../../../shared/schemas/forms";
 import {
   groupFormDefinitionResponseSchema,
   groupFormSubmissionResponseSchema,
@@ -15,7 +17,9 @@ import { Tabs, type TabItem } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson, postJson } from "../../../../shared/api-client";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
+import { Alert } from "../../../../ui/Alert";
+import { fmt } from "../../ui";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { GroupFormPlacementEditor } from "./GroupFormPlacementEditor";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
@@ -23,6 +27,39 @@ import { ResourceSharingEditor } from "./ResourceSharingEditor";
 type GroupFormTab = "respond" | "statistics" | "responses" | "definition" | "availability" | "sharing";
 
 const DEFAULT_TAB: GroupFormTab = "respond";
+
+/**
+ * Why a reader who may answer this form cannot answer it now.
+ *
+ * The window is stored and transported in UTC; this is the boundary that puts
+ * it on the reader's own clock, so "closed" is stated in the time they keep
+ * rather than in the time the database keeps.
+ */
+function SubmissionWindowNotice({ placement }: { placement: FormPlacement }) {
+  const state = deriveFormSubmissionWindowState(placement, new Date().toISOString());
+  if (state === "scheduled") {
+    return (
+      <Alert tone="info" title="This form is not open yet">
+        It opens on {fmt(placement.opensAt)}
+        {placement.closesAt ? ` and closes on ${fmt(placement.closesAt)}` : ""}.
+      </Alert>
+    );
+  }
+  if (state === "closed") {
+    return (
+      <Alert tone="info" title="This form is closed">
+        It closed on {fmt(placement.closesAt)}.
+      </Alert>
+    );
+  }
+  // The window is open, so the form is withheld for a reason of its own —
+  // withdrawn, or its definition archived — that the window cannot explain.
+  return (
+    <Alert tone="info" title="This form is not accepting responses">
+      Its owners have paused it. Ask them when it will reopen.
+    </Alert>
+  );
+}
 
 export function GroupFormDetail({
   groupId,
@@ -36,16 +73,17 @@ export function GroupFormDetail({
   initialTab?: string;
   onChanged: () => void | Promise<void>;
 }) {
-  const headingId = useId();
   const [, navigate] = usePortalHashLocation();
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`;
   const requestedTab = (initialTab as GroupFormTab | undefined) ?? DEFAULT_TAB;
   const detail = useData(() => getJson(base, groupFormDefinitionResponseSchema), [base]);
   const canViewResponses = detail.data?.capabilities.includes("view_responses") ?? false;
-  const canSubmitResponse =
-    (detail.data?.capabilities.includes("submit") ?? false) && (detail.data?.acceptingResponses ?? false);
+  // Holding the capability is what earns the tab; whether the window is open
+  // decides only whether the tab shows the questions or the reason it cannot.
+  const canSubmit = detail.data?.capabilities.includes("submit") ?? false;
+  const acceptingResponses = detail.data?.acceptingResponses ?? false;
   const shouldLoadStats =
-    canViewResponses && (requestedTab === "statistics" || (!canSubmitResponse && requestedTab === "respond"));
+    canViewResponses && (requestedTab === "statistics" || (!canSubmit && requestedTab === "respond"));
   const stats = useData(
     () =>
       shouldLoadStats
@@ -59,7 +97,6 @@ export function GroupFormDetail({
   if (!detail.data) return null;
 
   const form = detail.data;
-  const canSubmit = canSubmitResponse;
   const canManagePlacement = form.capabilities.includes("manage");
   const canManageDefinition = canManagePlacement && form.placement.ownerGroupId === groupId;
   const tabs: TabItem[] = [
@@ -91,15 +128,21 @@ export function GroupFormDetail({
   }
 
   return (
-    // The detail row this opens inside is already a sunk band with no padding
-    // of its own, so the form states what it is as a named panel rather than
-    // as a tinted box with a bare heading floating in it. The panel's body
-    // owns the rhythm between the description, the tabs and the active
-    // section; the `mb-*` each of them carried is gone.
-    <Panel class="pk" aria-labelledby={headingId}>
-      <PanelHeader id={headingId} title={form.form.title} />
-      <PanelBody class="pk-stack">
-        {form.form.description && <p class="pk-small">{form.form.description}</p>}
+    <BreadcrumbBranch
+      items={[
+        { label: form.form.title, href: usePortalHashLocation.hrefs(tabPath(tabs[0]?.key ?? "respond")) },
+        ...(activeTab
+          ? [
+              {
+                label: tabs.find((item) => item.key === activeTab)?.label ?? activeTab,
+                href: usePortalHashLocation.hrefs(tabPath(activeTab)),
+              },
+            ]
+          : []),
+      ]}
+    >
+      <div class="pk pk-stack">
+        <ProfileHeader headingLevel={3} title={form.form.title} lede={form.form.description} />
         {tabs.length > 1 && (
           <Tabs
             items={tabs}
@@ -115,14 +158,17 @@ export function GroupFormDetail({
             body="You can read this form, but nothing here is open to your current identity."
           />
         )}
-        {activeTab === "respond" && (
-          <FormSubmissionForm
-            fields={form.fields}
-            onSubmit={async (answers) => {
-              await postJson(`${base}/submissions`, { answers }, groupFormSubmissionResponseSchema);
-            }}
-          />
-        )}
+        {activeTab === "respond" &&
+          (acceptingResponses ? (
+            <FormSubmissionForm
+              fields={form.fields}
+              onSubmit={async (answers) => {
+                await postJson(`${base}/submissions`, { answers }, groupFormSubmissionResponseSchema);
+              }}
+            />
+          ) : (
+            <SubmissionWindowNotice placement={form.placement} />
+          ))}
         {activeTab === "statistics" &&
           (stats.loading ? (
             <Spinner label="Loading response statistics…" />
@@ -148,7 +194,9 @@ export function GroupFormDetail({
           />
         )}
         {activeTab === "availability" && (
-          <GroupFormPlacementEditor groupId={groupId} placement={form.placement} onSaved={reload} />
+          <section aria-label={`${form.form.title} availability`}>
+            <GroupFormPlacementEditor groupId={groupId} placement={form.placement} onSaved={reload} />
+          </section>
         )}
         {activeTab === "sharing" && canManageDefinition && form.placement.ownerGroupId && (
           <ResourceSharingEditor
@@ -158,7 +206,7 @@ export function GroupFormDetail({
             ownerGroupId={form.placement.ownerGroupId}
           />
         )}
-      </PanelBody>
-    </Panel>
+      </div>
+    </BreadcrumbBranch>
   );
 }

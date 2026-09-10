@@ -1,8 +1,41 @@
 import { useEffect, useState } from "preact/hooks";
-import type { EventEmailCampaignPreviewInput } from "../../../shared/schemas/event-email-campaigns";
+import type {
+  EventEmailCampaignDayWaitlistFilter,
+  EventEmailCampaignPreviewInput,
+  EventEmailCampaignSendMode,
+  EventEmailCampaignSpeakerStatusFilter,
+} from "../../../shared/schemas/event-email-campaigns";
 import { eventDaysManagementResponseSchema } from "../../../shared/schemas/event-configuration";
 import { getJson } from "../../shared/api-client";
 import type { TemplateHelperCategory } from "../../shared/email-template-helpers";
+
+/**
+ * How the composer words the campaign vocabularies the contract owns.
+ *
+ * Each map is total on its vocabulary, so a value added to
+ * `event-email-campaigns` is a compile error here rather than a choice the
+ * composer silently stops offering.
+ */
+export const SEND_MODE_LABELS: Record<EventEmailCampaignSendMode, string> = {
+  personal: "Personal (1:1)",
+  bcc_batch: "Broadcast BCC",
+};
+
+export const DAY_WAITLIST_FILTER_LABELS: Record<EventEmailCampaignDayWaitlistFilter, string> = {
+  all: "Any state",
+  active: "Active waitlist",
+  waiting: "Waiting",
+  offered: "Offer sent",
+  accepted: "Accepted offer",
+  none: "Not waitlisted",
+};
+
+export const SPEAKER_STATUS_FILTER_LABELS: Record<EventEmailCampaignSpeakerStatusFilter, string> = {
+  all: "All active",
+  confirmed: "Confirmed",
+  invited: "Invited",
+  pending: "Pending",
+};
 
 export const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 export const PERSONAL_ONLY_HELPERS = new Set([

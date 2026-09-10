@@ -43,7 +43,7 @@ import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
 import { buildFindOrCreateUserStatement, splitPersonName, type UserRecord } from "../users";
-import { normalizeOrgName } from "../sponsorship";
+import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { buildGroupCapacityJoinStatements } from "../groups/membership";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import {
@@ -290,9 +290,17 @@ async function buildProvisionIndividualMemberships(
  * "Organization creation commits... member aggregate creation commits
  * separately while identity and role statements commit later").
  */
-async function buildResolveOrganizationStatements(
+/** The organization's own fields — all this builder reads, membership aside. */
+export interface OrganizationRecordInput {
+  organizationName?: string | null;
+  website?: string | null;
+  description?: string | null;
+  links?: string[] | null;
+}
+
+export async function buildResolveOrganizationStatements(
   db: DatabaseLike,
-  input: ProvisionMembershipInput,
+  input: OrganizationRecordInput,
   now: string,
 ): Promise<{ organizationId: string; organizationWasCreated: boolean; statements: StatementLike[] }> {
   const normalizedOrgName = normalizeOrgName(input.organizationName as string);

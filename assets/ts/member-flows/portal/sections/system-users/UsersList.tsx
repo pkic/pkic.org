@@ -6,16 +6,34 @@ import { RowActions } from "../../../../ui/RowActions";
 import { patchJson } from "../../../../shared/api-client";
 import { fmtDate, toast } from "../../ui";
 import {
+  USER_ROLE_LABELS,
+  USER_ROLES,
+  USER_TYPE_LABELS,
+  USER_TYPE_VALUES,
   userUpdateResponseSchema,
   usersListResponseSchema,
   type UserListItem,
 } from "../../../../../shared/schemas/user-management";
 
-/** Only noteworthy roles get a label; the default "user" stays quiet. */
+/**
+ * A column filter over a whole vocabulary, plus the "no filter" choice.
+ *
+ * The values are the contract's, so a vocabulary that grows is offered here
+ * without anyone remembering to add a line — which is the defect issue #24
+ * reported against the membership categories. The empty value is the
+ * control's own, not one of the contract's.
+ */
+function filterOptions<Value extends string>(
+  values: readonly Value[],
+  everything: string,
+  label: (value: Value) => string,
+): { value: string; label: string }[] {
+  return [{ value: "", label: everything }, ...values.map((value) => ({ value, label: label(value) }))];
+}
+
+/** Only noteworthy roles get a label in a row; the default "user" stays quiet. */
 function roleLabel(role: string): string | null {
-  if (role === "admin") return "Administrator";
-  if (role === "guest") return "Guest";
-  return null;
+  return role === "admin" || role === "guest" ? USER_ROLE_LABELS[role] : null;
 }
 
 /**
@@ -116,12 +134,7 @@ export function UsersList({
           width: "fit",
           filter: {
             param: "type",
-            options: [
-              { value: "", label: "Everyone" },
-              { value: "member", label: "Members" },
-              { value: "event_attendee", label: "Event attendees" },
-              { value: "contact_only", label: "Contacts only" },
-            ],
+            options: filterOptions(USER_TYPE_VALUES, "Everyone", (type) => USER_TYPE_LABELS[type]),
           },
         },
         {
@@ -130,12 +143,9 @@ export function UsersList({
           width: "fit",
           filter: {
             param: "role",
-            options: [
-              { value: "", label: "All roles" },
-              { value: "admin", label: "Administrators" },
-              { value: "user", label: "Users" },
-              { value: "guest", label: "Guests" },
-            ],
+            // A filter names a set, so the words are the plural of the role's
+            // own label rather than a second, independent list of them.
+            options: filterOptions(USER_ROLES, "All roles", (role) => `${USER_ROLE_LABELS[role]}s`),
           },
         },
         {

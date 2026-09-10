@@ -87,6 +87,27 @@ describe("GET /api/v1/events/:eventSlug/promoters", () => {
     expect(secondPageBody.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
   });
 
+  /**
+   * A promoter's portrait is published at the same address every other
+   * surface publishes it at. The SQL used to build its own — `'/api/v1/' ||
+   * headshot_r2_key` — which is not a route this Worker serves, so every
+   * promoter's photo was a broken image, and a portrait carried over by the
+   * member migration would have been broken twice over.
+   */
+  it("publishes a promoter's portrait at the address the headshot codec owns", async () => {
+    const userId = await insertPromoter("portrait@example.test", 1, 1);
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?")
+      .bind("member-photos/acme-corp/jane-doe.jpg", userId)
+      .run();
+    const withoutPortrait = await insertPromoter("no-portrait@example.test", 1, 1);
+
+    const response = await call("/api/v1/events/pqc-2026/promoters?view=promoters&sort=-impact&limit=10");
+    const body = eventPromotersListResponseSchema.parse(await response.json());
+    const byUser = new Map(body.promoters.map((promoter) => [promoter.userId, promoter.headshotUrl]));
+    expect(byUser.get(userId)).toBe(`/api/v1/users/${userId}/headshots/jane-doe.jpg`);
+    expect(byUser.get(withoutPortrait)).toBeNull();
+  });
+
   it("returns a separate bounded referral-code view", async () => {
     await insertPromoter("owner@example.test", 0, 3);
     await insertPromoter("second-owner@example.test", 0, 1);

@@ -5,6 +5,7 @@ import { Panel, PanelBody } from "../../../../ui/Panel";
 import { MeetingAttendance } from "./MeetingAttendance";
 import { MeetingGuests } from "./MeetingGuests";
 import { MeetingOccurrenceEditor } from "./MeetingOccurrenceEditor";
+import { MeetingParticipantInvitations } from "./MeetingParticipantInvitations";
 
 type OccurrenceTab = "settings" | "guests" | "attendance";
 
@@ -59,12 +60,25 @@ export function MeetingOccurrenceDetail({
           <Tabs items={tabs} active={active ?? ""} idPrefix={idPrefix} onChange={(key) => setTab(key)} />
         )}
         {active === "settings" && (
-          <div id={`${idPrefix}-settings-panel`} role="tabpanel" aria-labelledby={`${idPrefix}-settings`}>
+          <div
+            id={`${idPrefix}-settings-panel`}
+            role="tabpanel"
+            aria-labelledby={`${idPrefix}-settings`}
+            class="pk-stack"
+          >
             <MeetingOccurrenceEditor
               endpoint={endpoint}
               occurrence={occurrence}
               timeZone={series.timezone}
               onChanged={onChanged}
+            />
+            {/* Inviting the group is a command on the meeting, not a field of
+                it, so it sits below the form rather than inside it. */}
+            <MeetingParticipantInvitations
+              endpoint={endpoint}
+              occurrence={occurrence}
+              eventName={series.eventName}
+              onSent={onChanged}
             />
           </div>
         )}

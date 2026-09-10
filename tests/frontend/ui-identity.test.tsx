@@ -4,6 +4,8 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -120,6 +122,42 @@ describe("Avatar", () => {
     const container = mount(<Avatar name="" />);
     const initials = container.querySelector(".pk-avatar__initials");
     expect(initials?.textContent).toBe("");
+  });
+
+  it("falls back to initials when the stored portrait will not load", () => {
+    /*
+     * A headshot whose object has gone missing leaves a broken image, which
+     * collapses to a few pixels and reads as a squashed ring rather than as a
+     * failure — issue #25's oval, on every list row that draws a person.
+     */
+    const container = mount(<Avatar name="Sofia Beaumont" src="https://example.test/missing.jpg" />);
+    const img = container.querySelector("img");
+    expect(img).not.toBeNull();
+    void act(() => {
+      img!.dispatchEvent(new Event("error"));
+    });
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector(".pk-avatar__initials")?.textContent).toBe("SB");
+  });
+
+  /*
+   * jsdom resolves no stylesheet, so the rule itself is the subject. What
+   * matters is which length the letters are a fraction of: `em` measured the
+   * surrounding text, which is why one nine-pixel size served both the 2rem
+   * list marker and the 5.75rem portrait at the top of a record (#44).
+   */
+  it("sizes the initials from the avatar's own diameter, not the text around it", () => {
+    const stylesheet = readFileSync(resolve(__dirname, "../../assets/ts/ui/Avatar.css"), "utf8");
+    const rule = stylesheet.slice(stylesheet.indexOf(".pk-avatar__initials"));
+    const fontSize = /font-size:\s*([^;]+);/.exec(rule)?.[1];
+
+    expect(fontSize).toContain("var(--pk-avatar-size)");
+    expect(fontSize).not.toMatch(/\d\s*em\b/);
+    // Every size the component offers sets that custom property, so the
+    // proportion holds for all of them rather than only the default.
+    for (const size of ["sm", "md", "lg", "xl"]) {
+      expect(stylesheet).toMatch(new RegExp(`\\.pk-avatar--${size}\\s*\\{\\s*--pk-avatar-size:`));
+    }
   });
 });
 

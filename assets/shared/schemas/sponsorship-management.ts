@@ -21,6 +21,20 @@ import { requiresPermissions } from "./route-contract";
 export const SPONSOR_TYPES = ["consortium", "event"] as const;
 export const sponsorTypeSchema = z.enum(SPONSOR_TYPES);
 
+/**
+ * The sales pipeline, in the order it is walked.
+ *
+ * `lapsed` and `not_proceeding` are the two ways it ends, and they are not the
+ * same thing: a lapsed sponsorship was one — it ran and was not renewed — while
+ * one that is not proceeding never was, because the company decided against it
+ * somewhere between the first inquiry and the invoice. Recording the second as
+ * the first would put a company on the "sponsored us once" list it never
+ * belonged on, and leaving it in `negotiating` forever is what staff do instead
+ * when the vocabulary has no word for it.
+ *
+ * `pipeline_stage` deliberately carries no D1 `CHECK`, so the vocabulary can
+ * grow here without a table rebuild.
+ */
 export const SPONSORSHIP_PIPELINE_STAGES = [
   "new_inquiry",
   "contacted",
@@ -29,6 +43,7 @@ export const SPONSORSHIP_PIPELINE_STAGES = [
   "payment_pending",
   "active",
   "lapsed",
+  "not_proceeding",
 ] as const;
 export const sponsorshipPipelineStageSchema = z.enum(SPONSORSHIP_PIPELINE_STAGES);
 export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
@@ -110,6 +125,12 @@ export const sponsorshipsListQuerySchema = listQuerySchema(SPONSORSHIP_SORT_COLU
   organizationId: databaseIdSchema.optional(),
   nonMemberName: trimmedString(1, 200).optional(),
   contactName: trimmedString(1, 200).optional(),
+  // A sponsorship carrying no organization, no sponsor name and no contact
+  // name is its own company in the grouped list, keyed `sponsorship:<id>`.
+  // Completing the decomposition here means that company's page is the same
+  // bounded, searchable, sortable query as every other one, rather than the
+  // browser fetching a single record and rendering it as a list of one.
+  sponsorshipId: databaseIdSchema.optional(),
 });
 export type SponsorshipsListQuery = z.infer<typeof sponsorshipsListQuerySchema>;
 export const sponsorshipsListResponseSchema = paginatedResponseSchema("sponsorships", sponsorshipSchema);
@@ -173,21 +194,34 @@ export const sponsorshipCompaniesListRouteSchema = {
 
 // ── Create ───────────────────────────────────────────────────────────────
 
+/**
+ * What staff may set on a sponsorship, whether they are booking it or
+ * correcting it later. Both the create and the update contract are built from
+ * this one shape, so a field that can be entered can also be fixed — an
+ * inquiry arrives with whatever the sender typed, and the tier, the contact
+ * and the sponsor's own name are all things that turn out to be wrong or to
+ * change hands during a negotiation.
+ *
+ * `sponsorType`, `organizationId` and `eventId` are not here: they decide what
+ * kind of record this is and which event it belongs to, and moving a
+ * sponsorship between them is a different operation from correcting it.
+ */
 export const sponsorshipEditableFieldsSchema = z.object({
   tier: trimmedString(1, 100).nullable().optional(),
   assignedToUserId: databaseIdSchema.nullable().optional(),
   renewalDate: z.iso.date().nullable().optional(),
   notes: trimmedString(0, 5000).nullable().optional(),
+  contactName: trimmedString(1, 200).nullable().optional(),
+  contactEmail: normalizedEmailSchema.nullable().optional(),
+  /** The sponsor's own name and site, for sponsorships with no member organization behind them. */
+  nonMemberName: trimmedString(1, 200).nullable().optional(),
+  nonMemberWebsite: httpUrlSchema.nullable().optional(),
 });
 
 export const sponsorshipCreateSchema = z
   .object({
     sponsorType: sponsorTypeSchema,
     organizationId: databaseIdSchema.nullable().optional(),
-    nonMemberName: trimmedString(1, 200).nullable().optional(),
-    nonMemberWebsite: httpUrlSchema.nullable().optional(),
-    contactName: trimmedString(1, 200).nullable().optional(),
-    contactEmail: normalizedEmailSchema.nullable().optional(),
     eventId: eventIdSchema.nullable().optional(),
     ...sponsorshipEditableFieldsSchema.shape,
   })
@@ -278,7 +312,9 @@ export const sponsorshipUpdateRouteSchema = {
   ...requiresPermissions("sponsorships:write"),
   tags: ["Sponsorships"],
   summary: "Update a sponsorship's fields",
-  description: "Tier, assigned staff, renewal date, notes. Use PATCH .../:id/stage to advance the pipeline.",
+  description:
+    "Tier, assigned staff, renewal date, notes, the point of contact, and — for a sponsorship with no member " +
+    "organization behind it — the sponsor's own name and website. Use PATCH .../:id/stage to move the pipeline.",
   request: {
     params: sponsorshipIdParamsSchema,
     body: { content: { "application/json": { schema: sponsorshipUpdateSchema } }, required: true },
@@ -290,6 +326,10 @@ export const sponsorshipUpdateRouteSchema = {
     },
     "404": { description: "Sponsorship not found." },
     "409": { description: "The sponsorship changed concurrently or the requested update violates its active state." },
+    "422": {
+      description:
+        "The sponsor's own name or website was set on a sponsorship that has a member organization behind it.",
+    },
   },
 };
 
@@ -305,7 +345,7 @@ export const sponsorshipStageUpdateRouteSchema = {
   tags: ["Sponsorships"],
   summary: "Advance a sponsorship's pipeline stage",
   description:
-    "Records the transition in sponsorship_events. Reaching 'active' writes organizations.sponsor_tier/sponsor_start_date for consortium sponsors; reaching 'lapsed' clears them.",
+    "Records the transition in sponsorship_events. Reaching 'active' writes organizations.sponsor_tier/sponsor_start_date for consortium sponsors; leaving it for any other stage, including 'lapsed' and 'not_proceeding', clears them.",
   request: {
     params: sponsorshipIdParamsSchema,
     body: { content: { "application/json": { schema: sponsorshipStageUpdateSchema } }, required: true },

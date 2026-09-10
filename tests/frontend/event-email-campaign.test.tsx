@@ -3,12 +3,16 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
+import { emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
 import {
   eventEmailCampaignCreateInputSchema,
+  eventEmailCampaignDayWaitlistFilterSchema,
   eventEmailCampaignPreviewInputSchema,
+  eventEmailCampaignSendModeSchema,
+  eventEmailCampaignSpeakerStatusFilterSchema,
 } from "../../assets/shared/schemas/event-email-campaigns";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
-import { controlFor, labelNames } from "./helpers/labelled-control";
+import { controlFor, labelNames, optionValues } from "./helpers/labelled-control";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -259,6 +263,33 @@ describe("event email campaign UI", () => {
     const send = [...container.querySelectorAll("button")].find((button) => button.textContent === "Send Email")!;
     expect(send.getAttribute("aria-busy")).toBeNull();
     expect(send.disabled).toBe(false);
+  });
+
+  it("offers every value the campaign contract accepts, in each of its vocabularies", async () => {
+    stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+
+    // Compared against the schemas the route parses rather than against a list
+    // written here: a value added to the contract has to reach the composer,
+    // which is exactly what issue #24 found missing elsewhere.
+    const attendees = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
+    await settle();
+    expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Delivery mode"))).toEqual(
+      eventEmailCampaignSendModeSchema.options,
+    );
+    expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Message type"))).toEqual(
+      emailMessageTypeSchema.options,
+    );
+    expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Day waitlist"))).toEqual(
+      eventEmailCampaignDayWaitlistFilterSchema.options,
+    );
+
+    const speakers = mount(
+      <EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} audience="speakers" />,
+    );
+    await settle();
+    expect(optionValues(controlFor<HTMLSelectElement>(speakers, "Speaker status"))).toEqual(
+      eventEmailCampaignSpeakerStatusFilterSchema.options,
+    );
   });
 
   it("does not render campaign management without the server-provided manage capability", () => {

@@ -47,6 +47,7 @@ import "../../ui/Content.css";
 
 export interface SharePanelOptions {
   shareUrl: string;
+  badgeVersion?: string;
   eventName: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -127,7 +128,7 @@ function OgBadge({
       />
       <div class="pk-cluster pk-cluster--center">
         <ButtonLink
-          href={`${ogBadgeUrl}?download=1&name=${encodeURIComponent(badgeFilename)}`}
+          href={`${ogBadgeUrl}${ogBadgeUrl.includes("?") ? "&" : "?"}download=1&name=${encodeURIComponent(badgeFilename)}`}
           download={badgeFilename}
           size="sm"
         >
@@ -491,7 +492,11 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
   const twitterUrl = `https://twitter.com/intent/tweet?text=${twitterText}`;
   const blueskyUrl = `https://bsky.app/intent/compose?text=${blueskyText}`;
   const redditUrl = `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${redditTitle}`;
-  const ogBadgeUrl = extractOgBadgeUrl(shareUrl);
+  const baseBadgeUrl = extractOgBadgeUrl(shareUrl);
+  const ogBadgeUrl =
+    baseBadgeUrl && options.badgeVersion
+      ? `${baseBadgeUrl}?v=${encodeURIComponent(options.badgeVersion)}`
+      : baseBadgeUrl;
   const badgeFilename = `attendee-badge-${nameSlug(options.firstName, options.lastName)}.png`;
 
   const canInvite = Boolean(manageToken && eventSlug);

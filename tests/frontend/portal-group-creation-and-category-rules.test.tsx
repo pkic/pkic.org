@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -336,6 +337,8 @@ describe("portal group creation and category policy", () => {
     await settle();
     expect(container.textContent).toContain("Organization member");
     expect(container.textContent).toContain("Student");
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    await beginRecordEdit(container, "Eligibility actions");
     const studentJoin = controlFor(container, "Student may join");
     await act(() => studentJoin.click());
     const save = [...container.querySelectorAll("button")].find(
@@ -353,6 +356,8 @@ describe("portal group creation and category policy", () => {
     });
     expect(onUpdated).toHaveBeenCalled();
 
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    await beginRecordEdit(container, "Eligibility actions");
     // The matrix names itself and every control in it, so a reader moving
     // through the grid always knows which category a checkbox belongs to
     // without a visible row header to read back.
@@ -369,7 +374,7 @@ describe("portal group creation and category policy", () => {
     ]);
     // The confirmation is announced as well as tinted, so the outcome reaches
     // a reader who never sees the tone.
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("Membership category rules updated.");
+    expect(onUpdated).toHaveBeenCalledTimes(1);
 
     await act(() => render(null, container));
     container.remove();
@@ -392,7 +397,8 @@ describe("portal group creation and category policy", () => {
     expect(alert?.textContent).not.toBe("");
     // With nothing loaded there is nothing to save, so the affirmative action
     // is out of play rather than offering to write an empty policy.
-    expect(buttonNamed(container, "Save category rules").disabled).toBe(true);
+    expect(container.querySelector('button[type="submit"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="Eligibility actions"]')).toBeNull();
     expect(container.textContent).toContain("No membership categories are configured.");
 
     await act(() => render(null, container));

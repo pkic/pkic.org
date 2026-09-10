@@ -8,6 +8,7 @@ import {
   thresholdTypeSchema,
   voteElectorateModeSchema,
   voteSummaryFieldsSchema,
+  voteTieBreakModeSchema,
   voteTypeSchema,
   voteVisibilitySchema,
 } from "./votes";
@@ -39,7 +40,7 @@ export const voteCreateInputSchema = z.object({
    */
   questionFormId: databaseIdSchema.nullable().optional(),
   /** `chair` settles a tie by counting the chair's own ballot twice. */
-  tieBreakMode: z.enum(["none", "chair"]).optional(),
+  tieBreakMode: voteTieBreakModeSchema.optional(),
   /**
    * Members barred from this vote regardless of category — Article 3 bars the
    * Member whose withdrawal is the subject of the proposal.

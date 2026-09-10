@@ -28,7 +28,6 @@ menu:
 outputs:
   - html
   - og-card
-  - members-data
 ---
 
 {{< members class="members-overview--wide-only" >}}

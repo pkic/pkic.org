@@ -12,6 +12,7 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { AppError } from "../../errors";
 import { resolveMappedOrderBy } from "../../db/sort";
+import { memberProfileHref } from "../../../../assets/shared/member-profile-url";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import {
   ORGANIZATIONS_SORT_COLUMNS,
@@ -54,10 +55,12 @@ interface OrgSummaryRow {
   primary_contact_first_name: string | null;
   primary_contact_last_name: string | null;
   primary_contact_email: string | null;
+  slug: string | null;
 }
 
 const ORG_SUMMARY_SELECT = `
-  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since, o.created_at, o.updated_at,
+  SELECT o.id, o.name, o.slug, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since,
+         o.created_at, o.updated_at,
          mca.category_code AS membership_category,
          (SELECT COUNT(*) FROM identities identity
            WHERE identity.organization_id = o.id
@@ -80,6 +83,11 @@ function toOrgSummary(row: OrgSummaryRow) {
   return {
     id: row.id,
     name: row.name,
+    /* The public address of the member page, so staff can see it and see
+       when a record has none — an organization created before the slug was
+       minted at creation still answers on its id, and nothing in the portal
+       said so (#15). */
+    publicProfileHref: memberProfileHref({ id: row.id, slug: row.slug }),
     ...toOrganizationSummaryContent(row),
     membershipCategory: row.membership_category,
     // Falls back to the row's own creation time for organizations created
@@ -166,7 +174,8 @@ interface IdentityRow {
 export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetailRow | null> {
   return first<OrgDetailRow>(
     db,
-    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since, o.created_at, o.updated_at,
+    `SELECT o.id, o.name, o.slug, o.website, o.description, o.slogan, o.logo_r2_key, m.member_since,
+            o.created_at, o.updated_at,
             mca.category_code AS membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
             o.links_json,
@@ -228,7 +237,7 @@ async function toOrgDetail(db: DatabaseLike, row: OrgDetailRow, identities: Iden
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       emailId: r.email_id,
       email: r.email,
-      headshotUrl: publicUserHeadshotPath(r.headshot_r2_key),
+      headshotUrl: publicUserHeadshotPath(r.user_id, r.headshot_r2_key),
       jobTitle: r.job_title,
       biography: r.biography,
       links: parseLinksJson(r.links_json),

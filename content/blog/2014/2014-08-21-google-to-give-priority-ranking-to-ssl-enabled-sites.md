@@ -16,6 +16,15 @@ tags:
 title: Google to Give Priority Ranking to SSL Enabled Sites
 
 
+authorProfiles:
+  - name: Chris Bailey
+    organization: Entrust
+    role: VP of Strategy and Business Development – Certificate Services
+    website: https://www.entrust.com/
+    social:
+      x: null
+      linkedin: null
+    assetdirectory: images/members/entrust
 ---
 [Google’s announcement](http://googlewebmastercentral.blogspot.com/2014/08/https-as-ranking-signal.html) that it will give priority ranking to SSL enabled sites is a key milestone for increased use of SSL on the Internet.
 

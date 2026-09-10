@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
+import { eventSettingsUpdateSchema } from "../../assets/shared/schemas/event-management";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +11,17 @@ import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-
 import { eventDetailTabsForCapabilities } from "../../assets/ts/member-flows/portal/sections/events/detail/EventDetail";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
 import { controlFor } from "./helpers/labelled-control";
+
+/*
+ * The surface addresses its own add page, so it reads the portal's location
+ * hook. The hook is wouter's, which is React's under preact/compat and has no
+ * dispatcher in a bare mount — the same mock every other surface test that
+ * navigates uses.
+ */
+const navigate = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
@@ -94,6 +107,42 @@ afterEach(() => {
 });
 
 describe("admin event general settings", () => {
+  it("round-trips the event wall clock without shifting UTC and refuses a DST gap", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          bodies.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ error: { code: "CONFLICT", message: "Test conflict" } }), {
+            status: 409,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const container = mount(<GeneralTab event={writableEvent} onUpdated={vi.fn()} />);
+    await settle();
+    expect(container.querySelector("input,select,textarea")).toBeNull();
+    await beginRecordEdit(container, "Event settings actions");
+    const start = controlFor(container, "Start date") as HTMLInputElement;
+    expect(start.value).toBe("2026-09-01T17:00");
+    await submitForm(container);
+    expect(bodies).toHaveLength(1);
+    expect(eventSettingsUpdateSchema.parse(bodies[0])).toMatchObject({
+      startsAt: portalEvent.startsAt,
+      endsAt: portalEvent.endsAt,
+      timezone: "Europe/Amsterdam",
+    });
+    await act(async () => {
+      start.value = "2026-03-29T02:30";
+      start.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await submitForm(container);
+    expect(bodies).toHaveLength(1);
+    expect(start.getAttribute("aria-invalid")).toBe("true");
+  });
   it("does not render or submit portal-owned attendee registration controls", async () => {
     vi.stubGlobal(
       "fetch",
@@ -117,6 +166,8 @@ describe("admin event general settings", () => {
 
     const container = mount(<GeneralTab event={writableEvent} onUpdated={vi.fn()} />);
     await settle();
+
+    await beginRecordEdit(container, "Event settings actions");
 
     // A Field's label must point at a control that exists. An orphaned `for`
     // is invisible in a screenshot and leaves the control unnamed in a screen
@@ -186,6 +237,7 @@ describe("admin event general settings", () => {
     const container = mount(<GeneralTab event={writableEvent} onUpdated={onUpdated} />);
     await settle();
 
+    await beginRecordEdit(container, "Event settings actions");
     await submitForm(container);
 
     expect(attempts).toEqual(["/api/v1/events/portal-workshop/settings"]);
@@ -207,7 +259,7 @@ describe("admin event general settings", () => {
     const notice = container.querySelector('[role="status"]');
     expect(notice?.textContent).toContain("Read-only");
     expect(notice?.textContent).toContain("You can view these settings but not change them.");
-    expect(container.querySelector("fieldset")?.disabled).toBe(true);
+    expect(container.querySelector("input,select,textarea")).toBeNull();
     expect([...container.querySelectorAll("button")].some((button) => button.type === "submit")).toBe(false);
   });
 
@@ -257,25 +309,11 @@ describe("admin event general settings", () => {
     await settle();
     await settle();
 
-    // The row is taken out of play by the `disabled` attribute on the
-    // `<fieldset>` that groups it, which is what puts every control inside it
-    // — including ones a child component renders — out of reach in one place.
-    // `:disabled` is the state a user meets; `.disabled` only reflects the
-    // attribute on the input itself, which is no longer where it lives.
-    const tierName = [...container.querySelectorAll<HTMLInputElement>("input")].find(
-      (input) => input.value === "Community",
-    );
-    expect(tierName).toBeDefined();
-    expect(tierName!.matches(":disabled")).toBe(true);
+    expect(container.querySelectorAll("input")).toHaveLength(0);
+    expect(container.textContent).toContain("Community");
+    expect(container.textContent).toContain("No attendee data access");
     expect(container.textContent).not.toContain("+ Add tier");
-    expect(container.textContent).not.toContain("Remove");
-    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Save")).toBe(false);
-
-    // Each tier is a named group whose name input is reached through its own
-    // label, so a reader is not left with an unlabelled row of text boxes.
-    const group = container.querySelector("fieldset");
-    expect(group?.querySelector("legend")?.textContent).toBe("Tier 1");
-    expect(controlFor(container, "Tier name").value).toBe("Community");
+    expect(container.textContent).not.toContain("Sponsor tier actions");
   });
 
   it("reports a refused sponsor-tier save as a failure, not as a mild caution", async () => {
@@ -296,7 +334,10 @@ describe("admin event general settings", () => {
     await settle();
     await settle();
 
-    const save = [...container.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+    await beginRecordEdit(container, "Sponsor tier actions");
+    const save = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save sponsor tiers",
+    )!;
     await act(async () => {
       save.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -369,7 +410,7 @@ describe("admin event general settings", () => {
     const tiers = mount(<Settings event={seriesEvent} onUpdated={vi.fn()} subTab="sponsor-tiers" />);
     await settle();
     await settle();
-    expect(tiers.textContent).toContain("attendee-data access in the portal");
+    expect(tiers.textContent).toContain("Choose which sponsor tiers can access attendee data");
 
     vi.stubGlobal(
       "fetch",

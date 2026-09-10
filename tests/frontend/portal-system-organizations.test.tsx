@@ -51,6 +51,7 @@ function detail() {
     organization: {
       id: organizationId,
       name: "Example Organization",
+      publicProfileHref: "/members/profile/?id=org-1",
       membershipCategory: "F",
       memberSince: "2026-01-01",
       activeIdentityCount: 1,
@@ -210,7 +211,11 @@ describe("portal System Organizations", () => {
 
     // The create page names what is being created and does not list anything,
     // so the directory is never fetched while it is open.
-    expect(fetchMock).not.toHaveBeenCalled();
+    // The directory is never fetched while the create page is open. The form
+    // does read the membership-category catalog, because a category shown as a
+    // bare code says nothing to whoever is choosing it (#53).
+    const requested = fetchMock.mock.calls.map((call) => String((call as unknown[])[0]));
+    expect(requested.filter((url) => url.includes("/organizations"))).toEqual([]);
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Add organization");
     expect(container.querySelector("table")).toBeNull();
 
@@ -265,8 +270,12 @@ describe("portal System Organizations", () => {
     const container = mount(<Organizations canRead canCreate={false} />);
     await settle();
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.pathname).toBe("/api/v1/organizations");
+    expect(requests.filter((request) => request.pathname === "/api/v1/organizations")).toHaveLength(1);
+    expect(
+      requests.every((request) =>
+        ["/api/v1/organizations", "/api/v1/members/applications/form"].includes(request.pathname),
+      ),
+    ).toBe(true);
     expect(requests.some((request) => request.pathname.startsWith("/api/v1/admin/organizations"))).toBe(false);
     expect(container.textContent).toContain("Example Organization");
     expect(container.textContent).not.toContain("Add organization");
@@ -314,7 +323,7 @@ describe("portal System Organizations", () => {
     await settle();
 
     const row = container.querySelector("tbody tr");
-    expect(row?.textContent).toContain("Not set");
+    expect(row?.textContent).toContain("Not a member");
     expect(row?.textContent).toContain("None");
     // Neither absence is carried by a colour class any more.
     expect(row?.querySelector("[class*='text-danger']")).toBeNull();

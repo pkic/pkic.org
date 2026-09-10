@@ -1,6 +1,10 @@
-import type { JSX } from "preact";
+import type { ComponentChildren, JSX } from "preact";
+import { useState } from "preact/hooks";
 
 import "./Avatar.css";
+import { initialsFrom } from "../shared/initials";
+
+export { initialsFrom, monogramFrom } from "../shared/initials";
 
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
@@ -27,39 +31,22 @@ export interface AvatarStatus {
   tone?: "accent" | "neutral";
 }
 
-/**
- * Extract initials from a name.
- *
- * Takes the first letter of the first word and the first letter of the last
- * word, uppercase them. Handles single words (one letter), empty/whitespace-only
- * input (returns ""), and non-ASCII letters.
- */
-export function initialsFrom(name: string): string {
-  if (!name) return "";
-
-  const trimmed = name.trim();
-  if (!trimmed) return "";
-
-  // Collapse repeated whitespace and split into words
-  const words = trimmed.split(/\s+/);
-  const filtered = words.filter((w) => w.length > 0);
-
-  if (filtered.length === 0) return "";
-  if (filtered.length === 1) return filtered[0][0].toUpperCase();
-
-  const first = filtered[0][0].toUpperCase();
-  const last = filtered[filtered.length - 1][0].toUpperCase();
-
-  return first + last;
-}
-
 export function Avatar({ name, src, size = "md", status, ...rest }: AvatarProps) {
   const classes = ["pk-avatar", size === "md" ? null : `pk-avatar--${size}`].filter(Boolean).join(" ");
+  /*
+   * "No usable portrait" includes one the browser could not load. A stored
+   * headshot whose object has gone missing leaves a broken `<img>`, which
+   * collapses to a few pixels and reads as a squashed ring — issue #25's oval,
+   * on every portal list row rather than on a governance card. The public
+   * person card already fell back to initials here; the design-system avatar
+   * every other surface reaches for did not.
+   */
+  const [broken, setBroken] = useState(false);
 
   const portrait = (
     <div class={classes} aria-hidden="true">
-      {src ? (
-        <img {...rest} src={src} alt="" loading="lazy" class="pk-avatar__img" />
+      {src && !broken ? (
+        <img {...rest} src={src} alt="" loading="lazy" class="pk-avatar__img" onError={() => setBroken(true)} />
       ) : (
         <span class="pk-avatar__initials">{initialsFrom(name)}</span>
       )}
@@ -68,9 +55,21 @@ export function Avatar({ name, src, size = "md", status, ...rest }: AvatarProps)
 
   if (!status) return portrait;
 
+  return <AvatarStanding status={status}>{portrait}</AvatarStanding>;
+}
+
+/**
+ * The ring and the word worn on a portrait.
+ *
+ * Exported because the portrait underneath is not always this component's: a
+ * record whose reader may change the photograph shows a `PictureTile` there
+ * instead, and it wears the same standing. Written once so the two cannot
+ * drift into two rings.
+ */
+export function AvatarStanding({ status, children }: { status: AvatarStatus; children: ComponentChildren }) {
   return (
     <span class="pk-avatar-standing" data-tone={status.tone ?? "accent"}>
-      <span class="pk-avatar-standing__ring">{portrait}</span>
+      <span class="pk-avatar-standing__ring">{children}</span>
       <span class="pk-avatar-standing__label">{status.label}</span>
     </span>
   );

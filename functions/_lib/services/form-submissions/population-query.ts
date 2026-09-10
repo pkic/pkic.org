@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, registrationOrganizationSql } from "../registrations/selected-identity";
 /**
  * Canonical SQL population shared by the submissions page, its count, and
  * per-field statistics. A form can contribute its native form_submissions
@@ -128,11 +129,12 @@ function nativeSubmissionBranch(params: {
       : params.eventId && isProposal
         ? optionalEquality("source_proposal.event_id", params.eventId)
         : { sql: "", bindings: [] };
+  const organization = isRegistration ? registrationOrganizationSql("source_registration") : "u.organization_name";
   const searchExpressions = [
     "u.email",
     "u.first_name",
     "u.last_name",
-    "u.organization_name",
+    organization,
     canonicalStatus,
     ...(isProposal ? ["source_proposal.title"] : []),
   ];
@@ -163,7 +165,7 @@ function nativeSubmissionBranch(params: {
        u.email AS user_email,
        u.first_name AS user_first_name,
        u.last_name AS user_last_name,
-       u.organization_name AS user_organization,
+       ${organization} AS user_organization,
        NULL AS answers_json,
        ${submitter} AS submitter
      FROM ${submissionSource}
@@ -202,7 +204,7 @@ function legacyRegistrationBranch(params: {
     "u.email",
     "u.first_name",
     "u.last_name",
-    "u.organization_name",
+    REGISTRATION_ORGANIZATION_SQL,
     "r.status",
     "r.custom_answers_json",
   ]);
@@ -222,7 +224,7 @@ function legacyRegistrationBranch(params: {
        u.email AS user_email,
        u.first_name AS user_first_name,
        u.last_name AS user_last_name,
-       u.organization_name AS user_organization,
+       ${REGISTRATION_ORGANIZATION_SQL} AS user_organization,
        r.custom_answers_json AS answers_json,
        ${submitter} AS submitter
      FROM registrations r

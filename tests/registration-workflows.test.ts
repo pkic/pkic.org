@@ -63,6 +63,83 @@ describe("registration workflows", () => {
   beforeEach(async () => {
     await resetDb();
   });
+  /**
+   * Issue #23: registering for an event is not joining the consortium.
+   *
+   * An event registration form asks for a name, an address and consent to a
+   * privacy policy. It does not ask whether the person wants to represent
+   * their employer, sit in its working groups, or receive its mailing lists —
+   * so confirming one must not decide any of that, however recognizable the
+   * address is. The address here is the strongest case for the coupling: it
+   * is under a domain a member organization has claimed, which is exactly
+   * what the join flow uses to place somebody inside an organization when
+   * they have asked to be there.
+   */
+  it("confirms a registration from a member organization's claimed domain without joining anyone to anything", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    const organizationId = await insertOrganization(env.DB, "Claimed Domain Corp");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await env.DB.prepare(
+      `INSERT INTO organization_domain_claims (id, domain, application_id, organization_id, created_at, updated_at)
+       VALUES (?, 'claimed-domain.test', NULL, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), organizationId)
+      .run();
+
+    const attendeeEmail = "newcomer@claimed-domain.test";
+    const createResponse = await postRegistration({
+      firstName: "New",
+      lastName: "Comer",
+      email: attendeeEmail,
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    });
+    expect(createResponse.status).toBe(200);
+    const created = (await createResponse.json()) as { registrationId: string };
+
+    const [confirmationEmail] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+    );
+    const confirmResponse = await postConfirmation({
+      token: await extractConfirmationToken(confirmationEmail.payload_json),
+    });
+
+    // The registration itself goes through: nothing here is about refusing
+    // the attendee, only about what confirming does not decide for them.
+    expect(confirmResponse.status).toBe(200);
+    expect((await confirmResponse.json()) as { status: string }).toMatchObject({ status: "registered" });
+
+    const [attendee] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE normalized_email = ?",
+      attendeeEmail,
+    );
+    expect(attendee).toBeDefined();
+    // No capacity to act for the organization, whether pending or active.
+    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", attendee.id)).toEqual([]);
+    // No membership of their own either.
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE user_id = ?", attendee.id)).toEqual([]);
+    // Nothing that follows from membership: no group seat, no mailing list.
+    expect(await queryAll(env.DB, "SELECT group_id FROM group_memberships WHERE user_id = ?", attendee.id)).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT mailing_list_id FROM mailing_list_subscription_preferences WHERE user_id = ?", [
+        attendee.id,
+      ]),
+    ).toEqual([]);
+    // And the registration is still attributed to the person who made it.
+    expect(
+      await queryAll<{ user_id: string }>(env.DB, "SELECT user_id FROM registrations WHERE id = ?", [
+        created.registrationId,
+      ]),
+    ).toEqual([{ user_id: attendee.id }]);
+  }, 15_000);
+
   it("enforces consent and supports double opt-in", async () => {
     await seedEventAndAdmin(env.DB);
 

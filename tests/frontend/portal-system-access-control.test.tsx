@@ -2,7 +2,6 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AccessControl } from "../../assets/ts/member-flows/portal/sections/access-control";
 import { Grants } from "../../assets/ts/member-flows/portal/sections/access-control/Grants";
 import { Roles } from "../../assets/ts/member-flows/portal/sections/access-control/Roles";
 import { RoleList } from "../../assets/ts/member-flows/portal/sections/access-control/roles/RoleList";
@@ -13,7 +12,6 @@ import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
 import { confirmationButton } from "./helpers/confirm-dialog";
 import { buttonNamed, controlFor } from "./helpers/labelled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
-import { tabs } from "./helpers/tabs";
 
 const navigate = vi.fn();
 
@@ -105,7 +103,7 @@ describe("portal system access control", () => {
     );
 
     // A revoke-only caller sees no way to create a grant at all.
-    const revokeOnly = mount(<Grants canGrant={false} canRevoke />);
+    const revokeOnly = mount(<Grants canGrant={false} canRevoke onNavigate={() => {}} />);
     await settle();
     expect(revokeOnly.textContent).not.toContain("New grant");
     expect(revokeOnly.textContent).not.toContain("Grant a permission");
@@ -115,7 +113,7 @@ describe("portal system access control", () => {
 
     // A grant-authorized caller sees the action, not an always-open form.
     void act(() => render(null, revokeOnly));
-    const grantAuthorized = mount(<Grants canGrant canRevoke />);
+    const grantAuthorized = mount(<Grants canGrant canRevoke onNavigate={() => {}} />);
     await settle();
     expect(grantAuthorized.textContent).toContain("New grant");
     expect(grantAuthorized.textContent).not.toContain("Grant a permission");
@@ -123,57 +121,18 @@ describe("portal system access control", () => {
       (button) => button.textContent === "New grant",
     );
     expect(newGrantButton).toBeTruthy();
-    void act(() => newGrantButton!.click());
-    expect(grantAuthorized.textContent).toContain("Grant a permission");
+    // The action navigates rather than unfolding a panel: creating a grant is
+    // a page of its own, reached under the reserved `new` segment.
+    const navigated: Array<string | undefined> = [];
+    void act(() => render(null, grantAuthorized));
+    const creating = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={(s) => navigated.push(s)} />);
+    await settle();
+    expect(creating.textContent).toContain("Grant a permission");
+    // And the page it stands in place of is not underneath it.
+    expect(creating.querySelector("caption")).toBeNull();
 
     expect(paths).toEqual(["/api/v1/permissions/grants", "/api/v1/permissions/grants"]);
     expect(paths.some((path) => path.startsWith("/api/v1/admin/"))).toBe(false);
-  });
-
-  it("navigates the top-level tabs to their canonical /system/access-control/:tab URLs", () => {
-    const container = mount(<AccessControl canGrant canRevoke resourceId="roles" />);
-    const tabButtons = Array.from(tabs(container));
-    expect(tabButtons.map((button) => button.textContent)).toEqual(["Access Grants", "Roles", "People"]);
-
-    const peopleTab = tabButtons.find((button) => button.textContent === "People")!;
-    void act(() => (peopleTab as HTMLButtonElement).click());
-    expect(navigate).toHaveBeenCalledWith("/system/access-control/people");
-
-    const grantsTab = tabButtons.find((button) => button.textContent === "Access Grants")!;
-    void act(() => (grantsTab as HTMLButtonElement).click());
-    expect(navigate).toHaveBeenCalledWith("/system/access-control/grants");
-  });
-
-  it("rewrites the bare section path to the tab it is actually showing", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
-    );
-    mount(<AccessControl canGrant canRevoke />);
-    await settle();
-    // Replaced rather than pushed: Back belongs to whoever linked here.
-    expect(navigate).toHaveBeenCalledWith("/system/access-control/grants", { replace: true });
-  });
-
-  it("leaves a URL that already names its tab alone", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
-    );
-    mount(<AccessControl canGrant canRevoke resourceId="grants" />);
-    await settle();
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the grants tab for an unrecognized resourceId", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ grants: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
-    );
-    const container = mount(<AccessControl canGrant canRevoke resourceId="not-a-real-tab" />);
-    await settle();
-    const activeTab = container.querySelector('[role="tab"][aria-selected="true"]');
-    expect(activeTab?.textContent).toBe("Access Grants");
   });
 
   describe("Roles: list-first, create behind an action, and a URL-addressed detail", () => {

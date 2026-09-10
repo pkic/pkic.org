@@ -1,3 +1,4 @@
+import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { lazy, Suspense } from "preact/compat";
 import { useId, useRef, useState } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
@@ -10,7 +11,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
-import { Button } from "../../../../ui/Button";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { HashRedirect } from "../../HashRedirect";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
@@ -18,9 +19,8 @@ import { VoteDetails } from "../Votes/VoteDetails";
 import { GroupVoteCreateForm } from "./GroupVoteCreateForm";
 import { GroupVoteBallots, GroupVoteSettings } from "./GroupVoteManagementControls";
 import { GroupVoteProposals } from "./GroupVoteProposals";
+import { GroupVoteProposalForm } from "./GroupVoteProposalForm";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
-// `pk-record-title` ships in Content.css; the module that names it loads it.
-import "../../../../ui/Content.css";
 
 const GroupVoteStatistics = lazy(() =>
   import("./GroupVoteStatistics").then((module) => ({ default: module.GroupVoteStatistics })),
@@ -28,6 +28,13 @@ const GroupVoteStatistics = lazy(() =>
 
 /** Reserved vote segment that routes to the creation page instead of a vote's detail. */
 const NEW_GROUP_VOTE_SEGMENT = "new";
+/**
+ * Proposing a vote is a second reserved segment on the same route rather than
+ * a level of its own: the proposals list is a tab this section swaps, not an
+ * address, so a nested `proposals/new` would name a place the router cannot
+ * reach. Arriving here also selects the tab the proposal belongs to.
+ */
+const PROPOSE_GROUP_VOTE_SEGMENT = "propose";
 
 /** The vote record's facets. Each one loads its data when it is opened. */
 const VOTE_RECORD_TABS = [
@@ -51,13 +58,11 @@ function GroupVoteRecord({
   groupId,
   voteId,
   initialTab,
-  onLeave,
 }: {
   groupId: string;
   voteId: string;
   /** The URL-addressed tab segment, if any. Undefined or unavailable selects Overview. */
   initialTab?: string;
-  onLeave: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
   const detail = useData(
@@ -83,23 +88,29 @@ function GroupVoteRecord({
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button variant="link" size="sm" onClick={onLeave}>
-          ← All votes
-        </Button>
-      </div>
       {detail.loading && !vote && <Spinner label="Loading vote…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {vote && (
-        <>
-          <div class="pk-stack pk-stack--tight">
-            <h3 class="pk-record-title">{vote.title}</h3>
-            <div class="pk-cluster">
-              <Badge status={vote.voteType} />
-              <Badge status={vote.status} />
-              <span class="pk-small pk-muted">Closes {fmt(vote.closesAt)}</span>
-            </div>
-          </div>
+        <BreadcrumbBranch
+          items={[
+            { label: vote.title, href: usePortalHashLocation.hrefs(tabPath("overview")) },
+            {
+              label: tabs.find((item) => item.key === tab)?.label ?? tab,
+              href: usePortalHashLocation.hrefs(tabPath(tab)),
+            },
+          ]}
+        >
+          <ProfileHeader
+            headingLevel={3}
+            title={vote.title}
+            context={
+              <>
+                <Badge status={vote.voteType} />
+                <Badge status={vote.status} />
+              </>
+            }
+            lede={<>Closes {fmt(vote.closesAt)}</>}
+          />
           {tabs.length > 1 && (
             <Tabs
               items={tabs}
@@ -133,7 +144,7 @@ function GroupVoteRecord({
               ownerGroupId={vote.ownerGroupId}
             />
           )}
-        </>
+        </BreadcrumbBranch>
       )}
     </div>
   );
@@ -159,7 +170,8 @@ export function GroupVotes({
   const panelId = `${idBase}-panel`;
   const [, navigate] = usePortalHashLocation();
   const creating = voteSegment === NEW_GROUP_VOTE_SEGMENT;
-  const [tab, setTab] = useState<"votes" | "proposals">("votes");
+  const proposing = voteSegment === PROPOSE_GROUP_VOTE_SEGMENT;
+  const [tab, setTab] = useState<"votes" | "proposals">(proposing ? "proposals" : "votes");
   const tableActions = useRef<ApiTableActions | null>(null);
   const votesPath = `/groups/${encodeURIComponent(groupId)}/votes`;
 
@@ -174,11 +186,6 @@ export function GroupVotes({
       // which names what is being created in its own heading — alone on the
       // screen rather than layered over the list.
       <div class="pk pk-stack">
-        <div class="pk-cluster">
-          <Button variant="link" size="sm" onClick={leaveCreatePage}>
-            ← All votes
-          </Button>
-        </div>
         <GroupVoteCreateForm
           groupId={groupId}
           onCreated={(createdVoteId) => navigate(`${votesPath}/${encodeURIComponent(createdVoteId)}`)}
@@ -188,10 +195,21 @@ export function GroupVotes({
     );
   }
 
+  if (proposing) {
+    if (!canParticipate) return <HashRedirect to={votesPath} />;
+    return (
+      // Proposing is a page of its own, the way creating a vote is: a way
+      // back, and the form alone rather than layered over the proposals list.
+      <div class="pk pk-stack">
+        <GroupVoteProposalForm groupId={groupId} onCreated={async () => leaveCreatePage()} />
+      </div>
+    );
+  }
+
   if (voteSegment) {
     // A vote is a record with facets, so it gets its own page rather than an
     // expansion between the list's rows.
-    return <GroupVoteRecord groupId={groupId} voteId={voteSegment} initialTab={voteTab} onLeave={leaveCreatePage} />;
+    return <GroupVoteRecord groupId={groupId} voteId={voteSegment} initialTab={voteTab} />;
   }
 
   return (
@@ -210,9 +228,27 @@ export function GroupVotes({
           { key: "proposals", label: "Proposals", panelId },
         ]}
       />
+      {/*
+        What the two collections are, in one line (#52).
+        
+        The tabs named them and nothing said how they relate, so a reader who
+        could create one and not the other reasonably read that as broken. A
+        vote is the ballot the group runs; a proposal is a participant asking
+        for one. Endorsements can trigger conversion, and leadership can also
+        approve it directly.
+      */}
+      <p class="pk-small pk-muted">
+        {tab === "proposals"
+          ? "A proposal is a participant's request for a vote. Reaching the required endorsements creates a vote automatically; leadership can also approve it directly."
+          : "A vote is a ballot this group runs. Leadership can create one directly, or a participant proposal can become a vote."}
+      </p>
       <div id={panelId} role="tabpanel" aria-labelledby={`${tabIdPrefix}-${tab}`} class="pk-stack">
         {tab === "proposals" ? (
-          <GroupVoteProposals groupId={groupId} canParticipate={canParticipate} />
+          <GroupVoteProposals
+            groupId={groupId}
+            canParticipate={canParticipate}
+            onPropose={() => navigate(`${votesPath}/${PROPOSE_GROUP_VOTE_SEGMENT}`)}
+          />
         ) : (
           <ApiDataTable
             caption="All votes"

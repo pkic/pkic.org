@@ -1,127 +1,131 @@
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { useRef, useState } from "preact/hooks";
 import {
   groupMailingListCreateSchema,
-  groupMailingListUpdateSchema,
   mailingListResponseSchema,
   mailingListsListResponseSchema,
   type MailingList,
 } from "../../../../../shared/schemas/mailing-lists";
-import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { RowActions } from "../../../../ui/RowActions";
-import { deleteJson, patchValidated, postValidated } from "../../../../shared/api-client";
+import { postValidated } from "../../../../shared/api-client";
 import { MailingListForm } from "../../../../components/mailing-lists/MailingListForm";
 import {
   emptyMailingListDraft,
   mailingListDraftToPayload,
-  mailingListToDraft,
   type MailingListDraft,
 } from "../../../../components/mailing-lists/model";
-import { ResourceSharingEditor } from "./ResourceSharingEditor";
+import { GroupMailingListRecord } from "./GroupMailingListRecord";
+import { mailingListLifecycleActions } from "./mailing-list-lifecycle";
+import { usePortalHashLocation } from "../../hash-location";
 
-/** Group-scoped list configuration. Ownership is supplied by the route, never by the form. */
-export function GroupMailingListManager({ groupId }: { groupId: string }) {
+/** Reserved mailing-list segment that routes to the create page instead of a record. */
+const NEW_MAILING_LIST_SEGMENT = "new";
+
+/**
+ * Group-scoped list configuration. Ownership is supplied by the route, never
+ * by the form — and so are the create page and each list's record, which are
+ * places with their own addresses rather than panels that unfold above or
+ * between the table's rows.
+ */
+export function GroupMailingListManager({
+  groupId,
+  listSegment,
+  listTab,
+}: {
+  groupId: string;
+  listSegment?: string;
+  /** The URL segment below a list id: the record's active tab. */
+  listTab?: string;
+}) {
+  const [, navigate] = usePortalHashLocation();
+  const listsPath = `/groups/${encodeURIComponent(groupId)}/mailing-lists`;
+  const showCreate = listSegment === NEW_MAILING_LIST_SEGMENT;
   const actions = useRef<ApiTableActions | null>(null);
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [newDraft, setNewDraft] = useState<MailingListDraft>(emptyMailingListDraft());
-  const [editDraft, setEditDraft] = useState<MailingListDraft>(emptyMailingListDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const form = useContractForm(groupMailingListCreateSchema, mailingListDraftToPayload(newDraft));
+
   async function createList(event: Event): Promise<void> {
     event.preventDefault();
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(new Error(checked.message));
+      return;
+    }
     setSaving(true);
     setError(null);
+    let created = false;
     try {
       await postValidated(
         `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`,
         groupMailingListCreateSchema,
-        mailingListDraftToPayload(newDraft),
+        checked.data,
         mailingListResponseSchema,
       );
       setNewDraft(emptyMailingListDraft());
-      setShowCreate(false);
-      await actions.current?.reload();
+      form.reset();
+      created = true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error("Could not create the mailing list"));
+      setError(new Error(form.refuse(cause)));
     } finally {
       setSaving(false);
     }
+    /*
+     * Returning is the last thing, and it is outside the flag's own scope.
+     * The create page's own segment is a re-render rather than a remount, so
+     * leaving the flag set on the way out left its button reading "Saving…"
+     * and unclickable for the rest of the session. The list fetches on its
+     * own when it comes back; there is no table here to reload.
+     */
+    if (created) navigate(listsPath);
   }
 
-  async function saveList(listId: string): Promise<void> {
-    setSaving(true);
-    setError(null);
-    try {
-      await patchValidated(
-        `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}`,
-        groupMailingListUpdateSchema,
-        mailingListDraftToPayload(editDraft),
-        mailingListResponseSchema,
-      );
-      setSelectedListId(null);
-      await actions.current?.reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error("Could not update the mailing list"));
-    } finally {
-      setSaving(false);
-    }
+  function rowActions(list: MailingList) {
+    return mailingListLifecycleActions({
+      groupId,
+      list,
+      onChanged: async () => {
+        setError(null);
+        await actions.current?.reload();
+      },
+      onDeleted: async () => {
+        setError(null);
+        await actions.current?.reload();
+      },
+      onError: setError,
+    });
   }
 
-  async function archiveList(list: MailingList): Promise<void> {
-    if (
-      !(await confirmAction({
-        title: `Archive ${list.label}?`,
-        body: "Archiving stops the list from accepting new mail.",
-        consequences: [
-          "Members can no longer send to or receive from this list",
-          "The list's configuration and history are kept, so it can be referenced later",
-        ],
-        confirmLabel: "Archive mailing list",
-      }))
-    )
-      return;
-    setError(null);
-    try {
-      await deleteJson(
-        `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(list.id)}`,
-        successResponseSchema,
-      );
-      if (selectedListId === list.id) setSelectedListId(null);
-      await actions.current?.reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error("Could not archive the mailing list"));
-    }
-  }
+  if (showCreate) {
+    return (
+      /*
+       * A form has a measure. Left to the page's full width the fields were
+       * drawn across a 1500px panel, so a three-word label and the end of its
+       * input were half a screen apart — part of what #50 called messy. Held
+       * to a reading measure, the section grid puts two fields on a line and
+       * fills it. Start-aligned, so the form sits under the page's own
+       * heading rather than centred away from it.
+       */
+      <div class="pk pk-stack pk-container pk-container--narrow pk-container--start">
+        {/* The page's way back: creating has its own address, so leaving it
+            is navigation rather than the disappearance of a layer. */}
 
-  function selectForManagement(list: MailingList): void {
-    setSelectedListId((current) => (current === list.id ? null : list.id));
-    setEditDraft(mailingListToDraft(list));
-  }
-
-  return (
-    // The list is its own panel; the workspace tab already names the section,
-    // so no second heading restates it above the table.
-    <div class="pk pk-stack">
-      {error && <ErrorAlert error={error} />}
-      {showCreate && (
-        <Panel>
-          <form onSubmit={(event) => void createList(event)}>
-            <PanelHeader title="New group mailing list" headingLevel={4}>
-              <Button size="sm" onClick={() => setShowCreate(false)}>
-                Cancel
-              </Button>
-            </PanelHeader>
+        {error && <ErrorAlert error={error} />}
+        <Panel aria-label="New group mailing list">
+          <form noValidate {...form.handlers} onSubmit={(event) => void createList(event)}>
+            <PanelHeader title="New group mailing list" headingLevel={2} breadcrumb />
             <PanelBody class="pk-stack">
               <MailingListForm
                 draft={newDraft}
+                fields={form.of}
                 onChange={(patch) => setNewDraft((current) => ({ ...current, ...patch }))}
                 idPrefix="group-mailing-list-create"
               />
@@ -129,11 +133,36 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
                 <Button type="submit" size="sm" variant="primary" disabled={saving}>
                   {saving ? "Saving…" : "Create mailing list"}
                 </Button>
+                <Button size="sm" onClick={() => navigate(listsPath)} disabled={saving}>
+                  Cancel
+                </Button>
               </div>
             </PanelBody>
           </form>
         </Panel>
-      )}
+      </div>
+    );
+  }
+
+  if (listSegment) {
+    // A list is a record with facets — its subscribers, its settings, who it
+    // is shared with — so it gets its own page rather than an expansion
+    // between the table's rows.
+    return (
+      <GroupMailingListRecord
+        groupId={groupId}
+        listId={listSegment}
+        initialTab={listTab}
+        onLeave={() => navigate(listsPath)}
+      />
+    );
+  }
+
+  return (
+    // The list is its own panel; the workspace tab already names the section,
+    // so no second heading restates it above the table.
+    <div class="pk pk-stack">
+      {error && <ErrorAlert error={error} />}
       <ApiDataTable
         caption="Managed mailing lists"
         actionsRef={actions}
@@ -142,7 +171,10 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
         resolve={(response) => response.mailingLists}
         resolvePage={(response) => response.page}
         paginate
-        createAction={{ label: "Add mailing list", onSelect: () => setShowCreate(true) }}
+        createAction={{
+          label: "Add mailing list",
+          onSelect: () => navigate(`${listsPath}/${NEW_MAILING_LIST_SEGMENT}`),
+        }}
         searchPlaceholder="Search managed mailing lists…"
         initialSort="label"
         columns={[
@@ -199,53 +231,16 @@ export function GroupMailingListManager({ groupId }: { groupId: string }) {
           },
           {
             header: "",
-            cell: (list) => (
-              <RowActions
-                subject={list.label}
-                actions={[
-                  {
-                    id: "archive",
-                    label: "Archive",
-                    onSelect: () => void archiveList(list),
-                    disabled: !list.active,
-                  },
-                ]}
-              />
-            ),
+            cell: (list) => <RowActions subject={list.label} actions={rowActions(list)} />,
           },
         ]}
         rowKey={(list) => list.id}
-        // Activating a row opens its management form in place — the same
-        // rule as every other list. The "Manage" button this replaces left
-        // the row itself inert.
+        // Activating a row opens the list's own page, the same rule as every
+        // other record in the portal.
         rowAction={(list) => ({
-          label: selectedListId === list.id ? `Close management for ${list.label}` : `Manage ${list.label}`,
-          onSelect: () => selectForManagement(list),
+          label: `Open ${list.label}`,
+          onSelect: () => navigate(`${listsPath}/${encodeURIComponent(list.id)}`),
         })}
-        detailRow={(list) =>
-          selectedListId === list.id ? (
-            // The expanded cell has no padding of its own — DataTable zeroes
-            // it so the row's owner decides — so the panel body supplies it
-            // on the space scale rather than a one-off padding utility.
-            <PanelBody class="pk-stack">
-              <h4>Manage {list.label}</h4>
-              <MailingListForm
-                draft={editDraft}
-                onChange={(patch) => setEditDraft((current) => ({ ...current, ...patch }))}
-                idPrefix={`group-mailing-list-${list.id}`}
-              />
-              <div class="pk-cluster">
-                <Button size="sm" variant="primary" disabled={saving} onClick={() => void saveList(list.id)}>
-                  {saving ? "Saving…" : "Save changes"}
-                </Button>
-                <Button size="sm" onClick={() => setSelectedListId(null)}>
-                  Cancel
-                </Button>
-              </div>
-              <ResourceSharingEditor kind="mailingList" groupId={groupId} resourceId={list.id} ownerGroupId={groupId} />
-            </PanelBody>
-          ) : null
-        }
         empty={
           <EmptyState title="No mailing lists yet" body="Create a mailing list to start managing this group's lists." />
         }

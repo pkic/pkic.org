@@ -12,9 +12,9 @@ export const FORM_FLOW = {
     { id: "6.2", title: "Staff filter the forms list and archive or delete a form", status: "covered" },
     {
       id: "6.3",
-      title: "Somebody answers a placed form, and a definition edited under them is refused",
-      status: "unit",
-      note: "Covered in group-form-sharing: the answer and the placement it came through, a definition edited between reading and submitting, and both ends of the placement window. The revision is enforced rather than recorded — a trigger refuses a write whose form or placement has moved since it was read, but the submission keeps no revision of its own. So an answer cannot be filed against questions nobody was asked, and equally cannot be read back against the questions as they stood. Worth knowing before anybody reports on an edited survey.",
+      title: "Somebody answers a placed form, and a closed window or changed definition is refused",
+      status: "covered",
+      note: "The browser journey verifies a form closed while the participant is answering, server refusal, preservation of the draft, and the closed notice after reload. Definition-change guards remain covered in group-form-sharing: the answer and the placement it came through, a definition edited between reading and submitting, and both ends of the placement window. The revision is enforced rather than recorded — a trigger refuses a write whose form or placement has moved since it was read, but the submission keeps no revision of its own. So an answer cannot be filed against questions nobody was asked, and equally cannot be read back against the questions as they stood. Worth knowing before anybody reports on an edited survey.",
     },
     {
       id: "6.4",

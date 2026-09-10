@@ -83,6 +83,12 @@ export async function prepareRegistrationSubmission(
     signingSecret: payload.signingSecret,
     unverifiedEmailCorrectionAllowed: preparedUser.created,
     verifiedIdentity: payload.verifiedIdentity,
+    eventOrganizationName: payload.verifiedIdentity?.selectedIdentity
+      ? (payload.verifiedIdentity.selectedIdentity.organizationName ?? payload.user.organizationName ?? null)
+      : null,
+    eventJobTitle: payload.verifiedIdentity?.selectedIdentity
+      ? (payload.verifiedIdentity.selectedIdentity.jobTitle ?? payload.user.jobTitle ?? null)
+      : null,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     builtRegistration.registration.id,
@@ -153,6 +159,7 @@ export async function prepareRegistrationSubmission(
         eventId: payload.eventId,
         status: builtRegistration.registration.status,
         registrationGroupId: payload.verifiedIdentity?.registrationGroupId ?? null,
+        registrationIdentityId: payload.verifiedIdentity?.selectedIdentity?.id ?? null,
       },
       undefined,
       null,
@@ -163,7 +170,13 @@ export async function prepareRegistrationSubmission(
   );
 
   return {
-    user: preparedUser.user,
+    user: payload.verifiedIdentity?.selectedIdentity
+      ? {
+          ...preparedUser.user,
+          organization_name: builtRegistration.registration.registration_organization_name,
+          job_title: builtRegistration.registration.registration_job_title,
+        }
+      : preparedUser.user,
     identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,

@@ -1,13 +1,14 @@
 import { useState } from "preact/hooks";
 import { patchJson } from "../../../../shared/api-client";
 import {
+  USER_ROLE_LABELS,
   userRoleValueSchema,
   userUpdateResponseSchema,
   userUpdateSchema,
 } from "../../../../../shared/schemas/user-management";
 import { FormActions } from "../../../../components/FormActions";
 import { useContractForm } from "../../../../hooks/useContractForm";
-import { Button } from "../../../../ui/Button";
+import { useEditorDraft } from "../../../../hooks/useEditorDraft";
 import { Checkbox, Radio } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
@@ -62,32 +63,41 @@ function payloadFromDraft(draft: EditableUser, canGrantAccess: boolean) {
   };
 }
 
+/**
+ * Editing a person's account fields.
+ *
+ * Whether it is open is the record's decision, not this component's: the
+ * record already carries a "…" menu of the commands that apply to it, and
+ * editing is one of those. It used to answer "not editing" by rendering a
+ * section of the page whose entire content was one button — a whole band
+ * across the record to say "you may edit this", which is what #46 called
+ * fundamentally wrong. Closed, it renders nothing at all.
+ */
 export function UserProfileEditor({
   user,
   canGrantAccess,
+  editing,
+  onClose,
   onSaved,
 }: {
   user: UserDetail;
   canGrantAccess: boolean;
+  editing: boolean;
+  onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [draft, setDraft] = useState<EditableUser>(() => editFormFor(user));
+  // Opening starts from the record as it stands, not from an abandoned draft
+  // — and a reload of the record while the editor is open does not reach in
+  // and retype the fields.
+  const [draft, setDraft] = useEditorDraft<EditableUser>(editing, () => editFormFor(user));
   // One basis for validation: the update contract the server parses decides
   // what each field shows as it is typed and what Save may send.
   const form = useContractForm(userUpdateSchema, payloadFromDraft(draft, canGrantAccess));
 
   function update(patch: Partial<EditableUser>): void {
     setDraft((current) => ({ ...current, ...patch }));
-  }
-
-  function startEditing() {
-    setDraft(editFormFor(user));
-    form.reset();
-    setError("");
-    setEditing(true);
   }
 
   async function save() {
@@ -102,7 +112,7 @@ export function UserProfileEditor({
     try {
       await patchJson(`/api/v1/users/${encodeURIComponent(user.id)}`, checked.data, userUpdateResponseSchema);
       toast("User updated", "success");
-      setEditing(false);
+      onClose();
       await onSaved();
     } catch (cause) {
       // A server refusal names its fields the same way the contract does.
@@ -112,15 +122,7 @@ export function UserProfileEditor({
     }
   }
 
-  if (!editing) {
-    return (
-      <div class="pk pk-cluster">
-        <Button size="sm" onClick={startEditing}>
-          Edit profile
-        </Button>
-      </div>
-    );
-  }
+  if (!editing) return null;
 
   return (
     <div class="pk">
@@ -179,7 +181,9 @@ export function UserProfileEditor({
                     value={role}
                     checked={draft.role === role}
                     onChange={() => update({ role })}
-                    label={role}
+                    // The role's own word rather than its stored code: the
+                    // reader is choosing "Administrator", not typing `admin`.
+                    label={USER_ROLE_LABELS[role]}
                   />
                 ))}
               </div>
@@ -211,7 +215,7 @@ export function UserProfileEditor({
           submitLabel="Save"
           busyLabel="Saving…"
           busy={saving}
-          onCancel={() => setEditing(false)}
+          onCancel={onClose}
           status={error || undefined}
           statusVariant="danger"
         />

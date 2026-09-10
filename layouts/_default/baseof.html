@@ -10,10 +10,7 @@
     {{- /* Design-system tokens and base layer, emitted by the frontend bundle.
          Linked in the head rather than injected by script so the first paint
          already has them; component stylesheets ride their own lazy chunks. */ -}}
-    {{- with index (index hugo.Data "asset-manifest") "loader" -}}
-      {{- $entry := . -}}
-      {{- with index $entry "css" }}<link rel="stylesheet" href="{{ . }}"{{ with index $entry "cssIntegrity" }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}>{{ end -}}
-    {{- end }}
+    {{ partial "frontend-styles.html" . }}
     {{- /* Per-page accent, as a rule rather than a `style` attribute on <body>.
          The repository forbids style attributes (assets/AGENTS.md,
          layouts/AGENTS.md); this is the same two custom properties, declared

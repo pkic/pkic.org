@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import type { FormSubmission } from "../../assets/shared/schemas/form-management";
 import type { FormFieldDefinition } from "../../assets/shared/schemas/forms";
+import { VISUALIZATIONS } from "../../assets/shared/schemas/form-field-rules";
 import { buildFormAnswerRows, formatFormAnswerValue } from "../../assets/ts/components/forms/form-answers";
 import { FormResponseStats, type ServerFieldStat } from "../../assets/ts/components/forms/FormResponseStats";
 import { FormAnswerTable, FormSubmissionsTable } from "../../assets/ts/components/forms/FormResponseViews";
@@ -222,6 +223,18 @@ describe("the per-field breakdown", () => {
     expect(page.querySelector("section")?.getAttribute("aria-label")).toBe("Priority");
     expect(page.querySelector('select[aria-label="Presentation for Priority"]')).toBeTruthy();
     expect(page.querySelector('button[aria-label="Expand Priority chart"]')).toBeTruthy();
+  });
+
+  it("offers every presentation the field rules accept", () => {
+    const page = mount(
+      <FormResponseStats fields={[field({ fieldType: "select", options: null })]} stats={stats} total={4} />,
+    );
+
+    const picker = page.querySelector<HTMLSelectElement>('select[aria-label="Presentation for Priority"]')!;
+    expect([...picker.options].map((option) => option.value)).toEqual([...VISUALIZATIONS]);
+    // "Auto" still names the presentation it resolved to, so the reader can see
+    // what an override would replace.
+    expect(picker.options[0].textContent).toBe("Auto (Pie)");
   });
 
   it("gives every bar its own value in words, not only its length", async () => {

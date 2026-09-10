@@ -1,10 +1,11 @@
 import { useState } from "preact/hooks";
 import {
   groupLeadershipListResponseSchema,
+  groupLeadershipTitleChoices,
   groupLeadershipUpdateSchema,
   type GroupLeadershipAssignment,
   type GroupLeadershipRoleId,
-  type GroupLeadershipTitles,
+  type GroupLeadershipTitleOptions,
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Button } from "../../../../ui/Button";
@@ -14,22 +15,20 @@ import { ApiClientError, patchJson } from "../../../../shared/api-client";
 import type { FieldControlProps } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { fromCalendarDateInput, toCalendarDateInput } from "../../ui";
-import { groupLeadershipTitleOptions } from "./group-leadership";
 
 /**
- * A title control that suggests the group type's default and the shared
- * vocabulary while accepting anything: the suggestions are a shortcut, the
- * text is the contract. Control-only, so its caller's `Field` names it.
+ * The title control: a choice, from the vocabulary the server offers for this
+ * role. Control-only, so its caller's `Field` names it.
  */
 export function GroupLeadershipTitleInput({
-  titles,
+  titleOptions,
   roleId,
   value,
   disabled,
   onChange,
   ...control
 }: FieldControlProps & {
-  titles: GroupLeadershipTitles;
+  titleOptions: GroupLeadershipTitleOptions;
   roleId: GroupLeadershipRoleId;
   value: string;
   disabled: boolean;
@@ -41,14 +40,19 @@ export function GroupLeadershipTitleInput({
    * This was a text box with a datalist behind it, which is free text wearing
    * a suggestion list: the browser shows the options only once somebody starts
    * typing, so a chair was something you had to know to write rather than
-   * something the form offered. The set is small and known per group type, so
-   * it is a select.
+   * something the form offered (issue #29). The set is small and known, so it
+   * is a select — and the options are the leadership response's own
+   * `titleOptions`, which the server builds from the group type's configured
+   * title and the `group_leadership_titles` reference table. A title the
+   * consortium has not used yet is added as a row there; it is never typed
+   * here, because a vocabulary a frontend can invent is not a vocabulary.
    *
    * A title already saved that is not among them is kept as an option, because
    * opening the form on an assignment must never be able to change it by
-   * itself.
+   * itself — that is how a historical "Board Chair" survives an edit to its
+   * term.
    */
-  const options = groupLeadershipTitleOptions(titles, roleId);
+  const options = groupLeadershipTitleChoices(titleOptions, roleId);
   const withCurrent = value && !options.includes(value) ? [value, ...options] : options;
   return (
     <Select
@@ -71,13 +75,13 @@ export function GroupLeadershipTitleInput({
 export function GroupLeadershipTermForm({
   groupId,
   assignment,
-  titles,
+  titleOptions,
   onSaved,
   onCancel,
 }: {
   groupId: string;
   assignment: GroupLeadershipAssignment;
-  titles: GroupLeadershipTitles;
+  titleOptions: GroupLeadershipTitleOptions;
   onSaved: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -111,10 +115,9 @@ export function GroupLeadershipTermForm({
   }
 
   return (
-    // Nested inside the tab's panel, so its heading is one rung below that
-    // panel's rather than another <h3> beside it.
+    // This is the primary heading on the term page.
     <Panel class="pk" aria-label={`Edit term for ${assignment.userName}`}>
-      <PanelHeader title={`Edit term for ${assignment.userName}`} headingLevel={4}>
+      <PanelHeader title={`Edit term for ${assignment.userName}`} headingLevel={2} breadcrumb>
         <Button size="sm" disabled={saving} onClick={onCancel}>
           Cancel
         </Button>
@@ -130,7 +133,7 @@ export function GroupLeadershipTermForm({
               {(control) => (
                 <GroupLeadershipTitleInput
                   {...control}
-                  titles={titles}
+                  titleOptions={titleOptions}
                   roleId={assignment.roleId}
                   value={title}
                   disabled={saving}

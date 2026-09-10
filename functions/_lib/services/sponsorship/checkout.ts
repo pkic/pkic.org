@@ -10,11 +10,8 @@ import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
 import type { DatabaseLike } from "../../types";
+import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import type { SponsorshipType } from "../../../../assets/shared/schemas/sponsorship";
-
-export function normalizeOrgName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
 
 export async function findOrganizationIdByName(db: DatabaseLike, organizationName: string): Promise<string | null> {
   const row = await first<{ id: string }>(db, `SELECT id FROM organizations WHERE normalized_name = ? LIMIT 1`, [

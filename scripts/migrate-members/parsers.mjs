@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
+import { resolveMarkdownShortcodes } from "../../assets/shared/markdown-shortcodes.ts";
 
 export function normalizeEmail(email) {
   return String(email).trim().toLowerCase();
@@ -105,20 +106,17 @@ export function activeRepresentatives(doc) {
 /**
  * Rewrites Hugo shortcodes found in YAML `content` fields into plain URLs,
  * since `organizations.content_markdown` is rendered as Markdown, not Hugo
- * template syntax — a literal `{{< youtube ID >}}` would otherwise show up
- * as unresolved shortcode text on an organization's profile page instead of
- * a link. Only the three shortcodes actually present in data/members/*.yaml
- * are handled (checked 2026-07-28): `youtube`, `vimeo`, `video`.
+ * template syntax.
+ *
+ * The rule itself is not written here. It lives in the shared registry the
+ * Markdown renderer also reads (`assets/shared/markdown-shortcodes.ts`), so
+ * the importer and the page cannot disagree about what a given shortcode
+ * means — this file used to keep its own three regular expressions, and a
+ * shortcode the renderer had never heard of was exactly issue #12.
  */
 export function convertHugoShortcodes(content) {
   if (!content) return content;
-  return String(content)
-    .replace(/\{\{<\s*youtube\s+([\w-]+)\s*>\}\}/gi, (_, id) => `https://www.youtube.com/watch?v=${id}`)
-    .replace(/\{\{<\s*vimeo\s+(\d+)\s*>\}\}/gi, (_, id) => `https://vimeo.com/${id}`)
-    .replace(/\{\{<\s*video\s+([^>]*)>\}\}/gi, (_, attrs) => {
-      const match = attrs.match(/link\s*=\s*"([^"]+)"/);
-      return match ? match[1] : "";
-    });
+  return resolveMarkdownShortcodes(String(content));
 }
 
 export function splitName(fullName) {

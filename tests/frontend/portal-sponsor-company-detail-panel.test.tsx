@@ -1,28 +1,32 @@
 // @vitest-environment jsdom
 /**
- * One company's sponsorships, and the detail beside them.
+ * One company's sponsorships.
  *
- * The list was a Bootstrap `list-group` whose open item was marked by the
- * `active` class alone — a filled background, and nothing a reader who cannot
- * separate those grounds could use. What is asserted here is what a visual
- * review cannot see: that the list names itself, that each row activates
- * through a real control with a name that says where it goes, that the open
- * row says so in words, and that the wait and the failure both announce
- * themselves rather than leaving an empty column.
+ * The list used to arrive as a prop: a hook fetched a 200-row page, merged
+ * "Load more" onto it, and handed a presentational table rows it could
+ * neither search nor sort. Issue #42 is that this is the shared table's work,
+ * and the endpoint behind the list has taken `q`, every sort column here, and
+ * both pipeline filters since it was written.
+ *
+ * So what is asserted is the query string: a search, a sort and a filter each
+ * reach D1, because the alternative implementation — narrowing a fetched page
+ * in the browser — is exactly what the shared table exists to prevent. The
+ * rest is what a visual review cannot see: that the list names itself, and
+ * that each row activates through a real link saying where it goes.
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { SponsorshipCompany, SponsorshipsListResponse } from "../../assets/shared/schemas/sponsorship-management";
+import {
+  sponsorshipsListResponseSchema,
+  type SponsorshipCompany,
+  type SponsorshipsListResponse,
+} from "../../assets/shared/schemas/sponsorship-management";
 import { CompanyDetailPanel } from "../../assets/ts/member-flows/portal/sections/sponsors/management/CompanyDetailPanel";
-import type { useCompanySponsorships } from "../../assets/ts/member-flows/portal/sections/sponsors/management/useCompanySponsorships";
 
-// The detail pane fetches its own record; this suite is about the list beside
-// it, so it is replaced with a marker rather than stubbed request by request.
-vi.mock("../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail", () => ({
-  SponsorshipDetail: ({ id }: { id: string }) => <div data-testid="sponsorship-detail">Detail for {id}</div>,
-}));
+const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
+const SPONSORSHIP_ID = "00000000-0000-4000-8000-000000000101";
 
 const mounted: HTMLElement[] = [];
 
@@ -34,25 +38,36 @@ function mount(node: ComponentChildren): HTMLElement {
   return container;
 }
 
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
   }
+  vi.unstubAllGlobals();
+  window.location.hash = "";
 });
 
 const COMPANY: SponsorshipCompany = {
-  key: "organization:00000000-0000-4000-8000-000000000001",
+  key: `org:${ORGANIZATION_ID}`,
   label: "Analytical Engines",
-} as SponsorshipCompany;
+  website: null,
+  sponsorshipCount: 1,
+  stages: "active",
+};
 
 type CompanySponsorship = SponsorshipsListResponse["sponsorships"][number];
 
 function sponsorship(overrides: Partial<CompanySponsorship> = {}): CompanySponsorship {
   return {
-    id: "00000000-0000-4000-8000-000000000101",
-    sponsorType: "organization",
-    organizationId: "00000000-0000-4000-8000-000000000001",
+    id: SPONSORSHIP_ID,
+    sponsorType: "event",
+    organizationId: ORGANIZATION_ID,
     organizationName: "Analytical Engines",
     nonMemberName: null,
     nonMemberWebsite: null,
@@ -73,36 +88,122 @@ function sponsorship(overrides: Partial<CompanySponsorship> = {}): CompanySponso
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
-  } as CompanySponsorship;
+  };
 }
 
-type CompanyState = ReturnType<typeof useCompanySponsorships>;
-
-function companyState(overrides: Partial<CompanyState> = {}): CompanyState {
-  return {
-    selectedCompany: COMPANY,
-    companySponsorships: [sponsorship()],
-    companyPage: { limit: 25, offset: 0, total: 1, hasMore: false },
-    companyLoading: false,
-    companyLoadingMore: false,
-    companyError: null,
-    selectedId: null,
-    setSelectedId: vi.fn(),
-    selectCompany: vi.fn(),
-    loadMore: vi.fn(),
-    backToCompanies: vi.fn(),
-    reload: vi.fn(),
-    ...overrides,
-  } as CompanyState;
+/** Serves one page, parsed through the shared contract so a drift in it fails here. */
+function listPage(rows: CompanySponsorship[]): Response {
+  return Response.json(
+    sponsorshipsListResponseSchema.parse({
+      sponsorships: rows,
+      page: { limit: 50, offset: 0, total: rows.length, hasMore: false },
+    }),
+  );
 }
 
-function panel(overrides: Partial<CompanyState> = {}) {
-  return <CompanyDetailPanel selectedCompany={COMPANY} company={companyState(overrides)} />;
+function stubList(rows: CompanySponsorship[] = [sponsorship()]): URL[] {
+  const requested: URL[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      requested.push(new URL(String(input), "https://app.test"));
+      return listPage(rows);
+    }),
+  );
+  return requested;
+}
+
+async function panel(company: SponsorshipCompany = COMPANY): Promise<HTMLElement> {
+  const container = mount(<CompanyDetailPanel selectedCompany={company} />);
+  await settle();
+  return container;
 }
 
 describe("one company's sponsorship list", () => {
-  it("captions the list and names each row after where it goes", () => {
-    const container = mount(panel());
+  it("asks the sponsorships endpoint for this company's bounded page", async () => {
+    const requested = stubList();
+    await panel();
+
+    const [url] = requested;
+    expect(url.pathname).toBe("/api/v1/sponsors");
+    // Staff visibility, the company the page is about, and a bounded page —
+    // the browser receives one page, never the pipeline to narrow itself.
+    expect(url.searchParams.get("visibility")).toBe("all");
+    expect(url.searchParams.get("organizationId")).toBe(ORGANIZATION_ID);
+    expect(url.searchParams.get("limit")).toBe("50");
+    expect(url.searchParams.get("offset")).toBe("0");
+  });
+
+  it("names a company that is only one unnamed sponsorship by that sponsorship", async () => {
+    const requested = stubList();
+    await panel({ ...COMPANY, key: `sponsorship:${SPONSORSHIP_ID}`, label: "Unspecified sponsor" });
+
+    // A sponsorship with no organization, sponsor name or contact groups
+    // under itself; its page is the same list query as every other company's,
+    // rather than a record fetch rendered as a list of one.
+    expect(requested[0].searchParams.get("sponsorshipId")).toBe(SPONSORSHIP_ID);
+  });
+
+  it("sends the reader's search to the query instead of filtering the page it holds", async () => {
+    const requested = stubList();
+    const container = await panel();
+
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]');
+    expect(search).not.toBeNull();
+    search!.value = "summit";
+    await act(async () => {
+      search!.dispatchEvent(new Event("input", { bubbles: true }));
+      await settle();
+    });
+    await act(async () => {
+      search!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await settle();
+    });
+
+    expect(requested.map((url) => url.searchParams.get("q"))).toContain("summit");
+  });
+
+  it("sorts in D1 through a column that says what the query understands", async () => {
+    const requested = stubList();
+    const container = await panel();
+
+    const tier = [...container.querySelectorAll<HTMLButtonElement>("th button")].find((button) =>
+      button.textContent?.includes("Tier"),
+    );
+    expect(tier).toBeDefined();
+    await act(async () => {
+      tier!.click();
+      await settle();
+    });
+
+    expect(requested.map((url) => url.searchParams.get("sort"))).toContain("tier");
+  });
+
+  it("narrows by pipeline stage through the column's own menu, in the query", async () => {
+    const requested = stubList();
+    const container = await panel();
+
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stage column options"]');
+    if (!trigger) throw new Error("the stage column menu is not rendered");
+    await act(async () => {
+      trigger.click();
+      await settle();
+    });
+    const contacted = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
+      item.textContent?.includes("Contacted"),
+    );
+    if (!contacted) throw new Error("the stage choices are not rendered");
+    await act(async () => {
+      contacted.click();
+      await settle();
+    });
+
+    expect(requested.some((url) => url.searchParams.get("stage") === "contacted")).toBe(true);
+  });
+
+  it("captions the list and names each row after where it goes", async () => {
+    stubList();
+    const container = await panel();
 
     expect(container.querySelector("caption")?.textContent).toBe("Analytical Engines sponsorships");
     // The row's control says what it opens, not "View", and it is a link to
@@ -110,59 +211,35 @@ describe("one company's sponsorship list", () => {
     // expanded beside the table.
     const rowLink = container.querySelector<HTMLAnchorElement>("tbody a");
     expect(rowLink?.textContent).toBe("Open Gold — Summit 2026");
-    expect(rowLink?.getAttribute("href")).toBe("#/sponsors/00000000-0000-4000-8000-000000000101");
-  });
-
-  it("activates a row through a real link rather than a handler on the tr", () => {
-    const container = mount(panel());
-
-    const row = container.querySelector("tbody tr")!;
+    expect(rowLink?.getAttribute("href")).toBe(`#/sponsors/${SPONSORSHIP_ID}`);
     // A <tr> is not focusable and takes no Enter key, so the handler must not
-    // live on it — the control inside the first cell is what activates, and
-    // a link can be opened in a new tab.
-    expect(row.getAttribute("onclick")).toBeNull();
-    expect(container.querySelector("tbody a")?.tagName).toBe("A");
-    // Nothing expands in place any more: no "Showing" marker, no side panel.
-    expect(container.querySelector("tbody")?.textContent).not.toContain("Showing");
-    expect(container.querySelector('[data-testid="sponsorship-detail"]')).toBeNull();
+    // live on it — the control inside the cell is what activates.
+    expect(container.querySelector("tbody tr")?.getAttribute("onclick")).toBeNull();
   });
 
-  it("says why the list is empty rather than showing an unexplained blank", () => {
-    const container = mount(panel({ companySponsorships: [] }));
+  it("says why the list is empty rather than showing an unexplained blank", async () => {
+    stubList([]);
+    const container = await panel();
 
-    const status = container.querySelector('[role="status"]');
-    expect(status?.textContent).toContain("No sponsorships for this company");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("No sponsorships for this company");
   });
 
-  it("announces the wait and shows no list behind it", () => {
-    const container = mount(panel({ companyLoading: true, companySponsorships: [] }));
-
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("Loading this company's sponsorships…");
-    expect(container.querySelector("table")).toBeNull();
-  });
-
-  it("states a failed load as a sentence instead of a status code", () => {
-    const container = mount(panel({ companyError: "HTTP 403" }));
+  it("states a failed load as a sentence instead of a status code", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ error: "nope" }, { status: 403 })),
+    );
+    const container = await panel();
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("You don't have access to this");
     expect(container.textContent).not.toContain("HTTP 403");
-    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector("tbody tr")).toBeNull();
   });
 
-  it("offers the next page through a real button and leaves it out when there is none", () => {
-    const loadMore = vi.fn();
-    const more = mount(panel({ loadMore, companyPage: { limit: 25, offset: 0, total: 40, hasMore: true } }));
-    const button = [...more.querySelectorAll("button")].find((candidate) => candidate.textContent === "Load more")!;
-    void act(() => button.click());
-    expect(loadMore).toHaveBeenCalledTimes(1);
-
-    const done = mount(panel());
-    expect([...done.querySelectorAll("button")].some((candidate) => candidate.textContent === "Load more")).toBe(false);
-  });
-
-  it("returns to the company list through the trail, a real link to the sponsors route", () => {
-    const container = mount(panel());
+  it("returns to the company list through the trail, a real link to the sponsors route", async () => {
+    stubList();
+    const container = await panel();
 
     // No back button: the page's trail names where it sits, and "Sponsors" is
     // a link the route reads to leave this company.

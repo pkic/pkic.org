@@ -27,7 +27,7 @@ import { groupLabelSchema } from "./groups";
  */
 export const userGroupParticipationSchema = z.object({
   group: groupLabelSchema,
-  /** The seat's own title where the roster records one — "Chair", "Treasurer". */
+  /** The current leadership title; null means ordinary group participation. */
   title: z.string().nullable(),
   joinedAt: utcInstantSchema,
   /** Meetings of this group the person joined. */

@@ -4,11 +4,7 @@
  * what parsers.mjs already loaded into plain data.
  */
 
-export function normalizeOrgName(name) {
-  // Matches functions/_lib/services/sponsorship.ts's normalizeOrgName —
-  // this is the same upsert key convention (organizations.normalized_name).
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
+export { normalizeOrgName } from "../../assets/shared/organization-name.ts";
 
 export function emailDomain(email) {
   const at = email.lastIndexOf("@");

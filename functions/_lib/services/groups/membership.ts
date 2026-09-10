@@ -50,9 +50,8 @@ async function mutationResponse(
   };
 }
 
-/** A seat's roster title and service interval, all optional on a live join. */
+/** A seat's service interval, optional on a live join. */
 export interface GroupSeatDetails {
-  title?: string | null;
   /** Backdates the seat; defaults to the command instant. */
   joinedAt?: string;
 }
@@ -126,7 +125,7 @@ export function buildGroupCapacityJoinStatements(
           memberId,
           options.source,
           options.actorDatabaseUserId === undefined ? options.actorUserId : options.actorDatabaseUserId,
-          options.title ?? null,
+          null,
           options.joinedAt ?? options.at,
           options.at,
           options.at,
@@ -190,7 +189,6 @@ export async function joinGroup(
       actorUserId: options.actorUserId,
       actorDatabaseUserId: options.actorDatabaseUserId,
       allowManaged: options.allowManaged,
-      title: options.title,
       joinedAt: options.joinedAt,
       at,
     }),
@@ -388,7 +386,7 @@ export async function recordFormerGroupMembership(
             seat.identity_id,
             seat.member_id,
             actor.identityType === "user" ? actor.id : null,
-            options.title ?? null,
+            null,
             options.joinedAt,
             options.leftAt,
             at,
@@ -408,7 +406,6 @@ export async function recordFormerGroupMembership(
           targetUserId: options.targetUserId,
           membershipIds,
           memberIds: seats.map((seat) => seat.member_id),
-          title: options.title ?? null,
           joinedAt: options.joinedAt,
           leftAt: options.leftAt,
         },
@@ -456,7 +453,7 @@ function translateSeatWriteError(error: unknown): never {
 }
 
 /**
- * Edits one seat's title or service interval. Ending a seat revokes the
+ * Edits one seat's service interval. Ending a seat revokes the
  * leadership held through it, as any leave does; reopening one requires the
  * exact capacity to still be active and no other open seat for it, which the
  * guarded UPDATE checks in the same D1 batch as the audit record.
@@ -484,10 +481,6 @@ export async function updateGroupMembership(
   const at = nowIso();
   const setters = ["joined_at = ?", "left_at = ?", "updated_at = ?"];
   const bindings: unknown[] = [joinedAt, leftAt, at];
-  if (patch.title !== undefined) {
-    setters.push("title = ?");
-    bindings.push(patch.title);
-  }
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),

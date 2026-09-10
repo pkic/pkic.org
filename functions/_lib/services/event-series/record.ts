@@ -95,6 +95,8 @@ export interface EventOccurrenceRow {
   guest_count: number;
   join_confirmed_count: number;
   attendance_verified_count: number;
+  invitations_round: number;
+  invitations_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -112,6 +114,8 @@ export function toEventOccurrence(row: EventOccurrenceRow) {
     guestCount: row.guest_count,
     joinConfirmedCount: row.join_confirmed_count,
     attendanceVerifiedCount: row.attendance_verified_count,
+    invitationsRound: row.invitations_round,
+    invitationsSentAt: row.invitations_sent_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
+  EVENT_INVITE_STATUSES,
   eventAttendeeInvitesListResponseSchema,
   eventInviteResendResponseSchema,
   eventInvitesListResponseSchema,
+  type EventInviteStatus,
   type EventInviteSummary,
 } from "../../../../../shared/schemas/event-invites";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
@@ -26,13 +28,18 @@ import {
   type BulkInviteType,
 } from "../../../../components/event-invites/BulkInviteComposer";
 
-const INVITE_STATUS_FILTERS: ReadonlyArray<{ value: "" | EventInviteSummary["status"]; label: string }> = [
+const INVITE_STATUS_LABELS: Record<EventInviteStatus, string> = {
+  sent: "Sent",
+  accepted: "Accepted",
+  declined: "Declined",
+  expired: "Expired",
+  revoked: "Revoked",
+};
+
+/** The empty value is the filter's own "no filter", not a status an invitation can hold. */
+const INVITE_STATUS_FILTERS: ReadonlyArray<{ value: "" | EventInviteStatus; label: string }> = [
   { value: "", label: "All statuses" },
-  { value: "sent", label: "Sent" },
-  { value: "accepted", label: "Accepted" },
-  { value: "declined", label: "Declined" },
-  { value: "expired", label: "Expired" },
-  { value: "revoked", label: "Revoked" },
+  ...EVENT_INVITE_STATUSES.map((status) => ({ value: status, label: INVITE_STATUS_LABELS[status] })),
 ];
 
 type InvitationRow = Pick<
@@ -90,18 +97,29 @@ export function GroupEventInvitations({
     setError(null);
     setMessage(null);
     try {
+      let outcome: string;
       if (action === "resend") {
         await postJson(
           `${endpoint}/${encodeURIComponent(invite.id)}/resend`,
           expiresAt ? { expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) } : {},
           eventInviteResendResponseSchema,
         );
-        setMessage(`Invitation resent to ${inviteeLabel(invite)}.`);
+        outcome = `Invitation resent to ${inviteeLabel(invite)}.`;
       } else {
         await postJson(`${endpoint}/${encodeURIComponent(invite.id)}/revoke`, {}, successResponseSchema);
-        setMessage(`Invitation revoked for ${inviteeLabel(invite)}.`);
+        outcome = `Invitation revoked for ${inviteeLabel(invite)}.`;
       }
+      /*
+       * The list is reloaded before the outcome is announced, not after.
+       * Announcing first said "resent" over a row that was still reloading —
+       * its actions disabled by `busyInviteId` and the row itself about to be
+       * replaced — so somebody acting on the message they had just been given
+       * reached for a menu item that was disabled, and then gone. Reloading
+       * first means the sentence and the row it describes arrive together:
+       * this and the `finally` below both land in the same render.
+       */
       await tableActions.current?.reload();
+      setMessage(outcome);
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error(`Unable to ${action} the invitation.`));
     } finally {

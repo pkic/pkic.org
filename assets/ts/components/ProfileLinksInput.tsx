@@ -3,7 +3,7 @@ import { forwardRef, type Ref } from "preact/compat";
 import { IconPlus } from "./icons";
 import { Button } from "../ui/Button";
 import { Chip } from "../ui/Chip";
-import { StateIcon } from "../ui/Field";
+import { Field, StateIcon } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { getLinkLabel, hasDuplicateLink, MAX_LINKS, parseLinkUrl } from "../../shared/schemas/links";
 
@@ -14,6 +14,16 @@ export interface ProfileLinksHandle {
 
 interface ProfileLinksInputProps {
   fieldName: string;
+  /**
+   * The widget's own name, shown the way a field label is shown.
+   *
+   * Without one it rendered as a paragraph of help above an unlabelled box,
+   * so among labelled neighbours it read as prose that had lost its field
+   * (#53). It is a group rather than a single control, so the name is a
+   * `<legend>`-shaped heading pointing at the group, not a `<label>` pointing
+   * at whichever input happens to be last.
+   */
+  label?: string;
   max?: number;
   value?: string[];
   onChange?: (links: string[]) => void;
@@ -24,6 +34,7 @@ interface ProfileLinksInputProps {
 export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
   {
     fieldName,
+    label,
     max = MAX_LINKS,
     value,
     onChange,
@@ -99,7 +110,7 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
     [tryAdd],
   );
 
-  return (
+  const body = (
     <div class="pk-stack pk-stack--snug">
       {/* Prose about the whole widget — the chips as well as the box that adds
           one — rather than one control's help text, so it is muted small print
@@ -167,5 +178,19 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
         ))}
       </span>
     </div>
+  );
+
+  /*
+   * Named through the design system's own field when the caller gives it a
+   * name, in the `group` shape — this is several inputs answering one
+   * question, so a `<label for>` would name whichever one it pointed at and
+   * leave the rest anonymous.
+   */
+  return label ? (
+    <Field label={label} group>
+      {() => body}
+    </Field>
+  ) : (
+    body
   );
 });

@@ -35,14 +35,6 @@ interface OrgDataJson {
   slogan?: string;
 }
 
-export interface PublicMemberIdentity {
-  name: string;
-  jobTitle: string | null;
-  bio: string | null;
-  featuredLink: string | null;
-  photoUrl: string | null;
-}
-
 interface DirectoryRow {
   member_id: string;
   organization_id: string | null;
@@ -134,6 +126,27 @@ export async function listPublicMembers(
     conditions.push("m.organization_id IS NOT NULL");
   }
 
+  /*
+   * A member with somebody seated in the group, counted once however many
+   * people it seats: the roll lists aggregates, and representatives inherit
+   * the membership rather than each holding one. Everything behind a seat has
+   * to be live — the person, the identity they hold it through, and the
+   * membership that identity acts for — which is the same predicate the
+   * group's own roster reads.
+   */
+  if (params.workingGroup) {
+    conditions.push(`EXISTS (
+      SELECT 1
+        FROM group_memberships membership
+        JOIN groups g ON g.id = membership.group_id AND (g.slug = ? OR g.id = ?)
+        JOIN users seated ON seated.id = membership.user_id AND seated.active = 1
+        JOIN identities identity ON identity.id = membership.identity_id
+         AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
+       WHERE membership.member_id = m.id AND membership.left_at IS NULL
+    )`);
+    args.push(params.workingGroup, params.workingGroup);
+  }
+
   if (params.q) {
     const search = buildD1TextSearchFilter(params.q, [
       "o.name",
@@ -167,7 +180,10 @@ export async function listPublicMembers(
   return { members: rows.map(toSummary), total };
 }
 
-async function loadPublicIdentities(db: DatabaseLike, organizationId: string): Promise<PublicMemberIdentity[]> {
+async function loadPublicIdentities(
+  db: DatabaseLike,
+  organizationId: string,
+): Promise<PublicMemberDetail["identities"]> {
   const rows = await all<{
     identity_id: string;
     user_id: string;
@@ -192,13 +208,17 @@ async function loadPublicIdentities(db: DatabaseLike, organizationId: string): P
     [organizationId],
   );
 
-  return rows.map((r) => ({
-    name: [r.first_name, r.last_name].filter(Boolean).join(" ") || "Unknown",
-    jobTitle: r.job_title,
-    bio: r.biography,
-    featuredLink: getFeaturedLink(parseLinksJson(r.links_json)),
-    photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.identity_id}/logo` : null,
-  }));
+  return rows.map((r) => {
+    const links = parseLinksJson(r.links_json);
+    return {
+      name: [r.first_name, r.last_name].filter(Boolean).join(" ") || "Unknown",
+      jobTitle: r.job_title,
+      bio: r.biography,
+      featuredLink: getFeaturedLink(links),
+      links,
+      photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.identity_id}/logo` : null,
+    };
+  });
 }
 
 /** `idOrSlug` resolves against an organization's UUID primary key, its clean

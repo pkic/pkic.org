@@ -109,7 +109,7 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{
     db
       .prepare(
         `UPDATE registrations
-         SET custom_answers_json = NULL, source_ref = NULL, updated_at = ?
+         SET custom_answers_json = NULL, registration_organization_name = NULL, registration_job_title = NULL, source_ref = NULL, updated_at = ?
          WHERE EXISTS (
            SELECT 1
            FROM retention_policies rp

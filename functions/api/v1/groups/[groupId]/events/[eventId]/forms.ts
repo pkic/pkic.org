@@ -1,6 +1,7 @@
 import {
   groupEventFormCreateRouteSchema,
   groupEventFormGetRouteSchema,
+  groupEventFormPlacementPatchRouteSchema,
   groupEventFormPutRouteSchema,
   groupEventFormResponseSchema,
   groupEventFormsListRouteSchema,
@@ -10,12 +11,12 @@ import { buildPageInfo } from "../../../../../../../assets/shared/schemas/pagina
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
+import { getGroupEventForm, listGroupEventAvailableForms } from "../../../../../../_lib/services/events/form-placement";
 import {
   createGroupEventForm,
-  getGroupEventForm,
-  listGroupEventAvailableForms,
   replaceGroupEventForm,
-} from "../../../../../../_lib/services/events/form-placement";
+  updateGroupEventFormPlacementWindow,
+} from "../../../../../../_lib/services/events/form-placement-mutations";
 import { requireGroupManagementActor, requireGroupResourceContext } from "../../../group-resource-context";
 
 export const GroupEventFormGet = openApiRoute(groupEventFormGetRouteSchema, async (c: AdminContext, data) => {
@@ -45,6 +46,25 @@ export const GroupEventFormPut = openApiRoute(groupEventFormPutRouteSchema, asyn
   );
   return json(groupEventFormResponseSchema.parse(result));
 });
+
+/** The submission window on the form this event has placed (#38). */
+export const GroupEventFormPlacementPatch = openApiRoute(
+  groupEventFormPlacementPatchRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const result = await updateGroupEventFormPlacementWindow(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.params.purpose,
+      data.body.expectedUpdatedAt,
+      data.body,
+    );
+    return json(groupEventFormResponseSchema.parse(result));
+  },
+);
 
 export const GroupEventFormCreate = openApiRoute(groupEventFormCreateRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);

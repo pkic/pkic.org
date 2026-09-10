@@ -1,6 +1,7 @@
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { asBool, asString, asStringArray, externalLink } from "./helpers";
+import { LinkList } from "../../../../ui/LinkList";
+import { asBool, asString, asStringArray, externalLink, toHttpUrl } from "./helpers";
 // `pk-datalist` and `pk-answer-list` are written here as class names rather
 // than reached through a component, so this module has to pull their
 // stylesheet into its own chunk. Without the import the markup renders
@@ -49,8 +50,12 @@ export function ApplicationAnswersCard({ detail }: { detail: MembershipApplicati
             <dt>Role / Job title</dt>
             <dd>{asString(detail.answers.job_title) || <NotProvided />}</dd>
 
-            <dt>LinkedIn</dt>
-            <dd>{linkedin ? externalLink(linkedin) : <NotProvided />}</dd>
+            {/* The form calls this "Professional profile (e.g., LinkedIn)"
+                and accepts an employer's leadership page just as happily; the
+                card said "LinkedIn" and printed the raw address. Named after
+                what it is, and shown as the site it points at. */}
+            <dt>Professional profile</dt>
+            <dd>{linkedin ? <LinkList links={[toHttpUrl(linkedin)]} /> : <NotProvided />}</dd>
 
             <dt>Organization website</dt>
             <dd>{website ? externalLink(website) : <NotProvided />}</dd>

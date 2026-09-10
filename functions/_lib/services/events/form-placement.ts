@@ -1,8 +1,4 @@
-import type {
-  EventFormsPurpose,
-  FormDefinitionCreateInput,
-  FormPlacement,
-} from "../../../../assets/shared/schemas/forms";
+import type { EventFormsPurpose, FormPlacement } from "../../../../assets/shared/schemas/forms";
 import type { GroupEventFormsQuery } from "../../../../assets/shared/schemas/group-event-forms";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
@@ -10,17 +6,14 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
-import { nowIso } from "../../utils/time";
-import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { isAuditChangeGuardFailure } from "../audit";
 import {
-  commitEventResourceManagementBatch,
   guardEventResourceManagementDatabase,
   queryEventResourceManagementPage,
   requireEventResourceManagementContext,
   type EventResourceManagementContext,
 } from "../event-series/management";
 import { EVENT_COLUMNS, type EventRecord } from "../events";
-import { prepareManagedForm } from "../forms/management";
 import { prepareFormPlacement, prepareFormPlacementSnapshotGuard } from "../forms/placements";
 
 interface EventFlowFormRow {
@@ -77,7 +70,7 @@ export function eventFormAudience(purpose: EventFormsPurpose): "attendee" | "spe
   return purpose === "event_registration" ? "attendee" : "speaker";
 }
 
-function eventFormLabel(purpose: EventFormsPurpose): string {
+export function eventFormLabel(purpose: EventFormsPurpose): string {
   return purpose === "event_registration" ? "attendee" : "proposal";
 }
 
@@ -189,7 +182,7 @@ function formDefinitionGuard(
 }
 
 /** Prevents two concurrent writers from selecting separate active placements for one event flow. */
-function exactEventFlowPlacementGuard(
+export function exactEventFlowPlacementGuard(
   db: DatabaseLike,
   eventId: string,
   purpose: EventFormsPurpose,
@@ -448,123 +441,4 @@ export function eventFormChangeConflict(error: unknown): AppError | null {
     return new AppError(409, "EVENT_FLOW_FORM_CHANGED", "The event form changed; reload and retry");
   }
   return null;
-}
-
-export async function replaceGroupEventForm(
-  db: DatabaseLike,
-  actor: AuthAdmin,
-  groupIdOrSlug: string,
-  eventId: string,
-  purpose: EventFormsPurpose,
-  expectedUpdatedAt: string,
-  formId: string | null,
-) {
-  const { event, ownerGroupId, context } = await requireConfigurableGroupEvent(db, actor, groupIdOrSlug, eventId);
-  const timestamp = nowIso();
-  const change = await prepareEventFormPlacementChange(db, {
-    event,
-    context,
-    ownerGroupId,
-    purpose,
-    formId,
-    timestamp,
-  });
-  try {
-    await commitEventResourceManagementBatch(db, actor, context, "manage", [
-      eventFlowLifecycleGuard(db, event.id, ownerGroupId),
-      ...change.statements,
-      db
-        .prepare("UPDATE events SET updated_at = ? WHERE id = ? AND updated_at = ?")
-        .bind(timestamp, event.id, expectedUpdatedAt),
-      prepareScopedAuditLogAfterOneChange(
-        db,
-        { type: "group", id: ownerGroupId },
-        "admin",
-        actor.id,
-        "event_form_placement_updated",
-        "event",
-        event.id,
-        { purpose, formId },
-        timestamp,
-      ),
-    ]);
-  } catch (error) {
-    throw eventFormChangeConflict(error) ?? error;
-  }
-  return { eventUpdatedAt: timestamp, purpose, form: change.form };
-}
-
-export async function createGroupEventForm(
-  db: DatabaseLike,
-  actor: AuthAdmin,
-  groupIdOrSlug: string,
-  eventId: string,
-  purpose: EventFormsPurpose,
-  expectedUpdatedAt: string,
-  input: Omit<FormDefinitionCreateInput, "purpose">,
-) {
-  if (input.status !== "active") {
-    throw new AppError(400, "EVENT_FLOW_FORM_MUST_BE_ACTIVE", "An event-flow form must be created active");
-  }
-  const { event, ownerGroupId, context } = await requireConfigurableGroupEvent(db, actor, groupIdOrSlug, eventId);
-  if (await findExactEventFlowForm(db, event.id, ownerGroupId, purpose)) {
-    throw new AppError(
-      409,
-      "EVENT_FLOW_FORM_EXISTS",
-      `This event already has an active ${eventFormLabel(purpose)} form`,
-    );
-  }
-  const prepared = await prepareManagedForm(
-    db,
-    actor.id,
-    {
-      type: "group",
-      ref: ownerGroupId,
-      groupId: ownerGroupId,
-      placement: { contextType: "event", contextRef: event.id, audience: eventFormAudience(purpose) },
-    },
-    { ...input, purpose },
-    { auditScope: { type: "group", id: ownerGroupId }, auditAction: "event_flow_form_created" },
-  );
-  const timestamp = prepared.updated_at;
-  const form: EventFlowFormSummary = {
-    placement: {
-      id: prepared.placementId,
-      formId: prepared.id,
-      ownerGroupId,
-      contextType: "event",
-      contextRef: event.id,
-      audience: eventFormAudience(purpose),
-      active: true,
-      opensAt: null,
-      closesAt: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    },
-    form: { id: prepared.id, key: prepared.key, title: input.title, description: input.description ?? null },
-  };
-  try {
-    await commitEventResourceManagementBatch(db, actor, context, "manage", [
-      eventFlowLifecycleGuard(db, event.id, ownerGroupId),
-      exactEventFlowPlacementGuard(db, event.id, purpose, null),
-      ...prepared.statements,
-      db
-        .prepare("UPDATE events SET updated_at = ? WHERE id = ? AND updated_at = ?")
-        .bind(timestamp, event.id, expectedUpdatedAt),
-      prepareScopedAuditLogAfterOneChange(
-        db,
-        { type: "group", id: ownerGroupId },
-        "admin",
-        actor.id,
-        "event_flow_form_attached",
-        "event",
-        event.id,
-        { purpose, formId: prepared.id, placementId: prepared.placementId },
-        timestamp,
-      ),
-    ]);
-  } catch (error) {
-    throw eventFormChangeConflict(error) ?? error;
-  }
-  return { eventUpdatedAt: timestamp, purpose, form };
 }

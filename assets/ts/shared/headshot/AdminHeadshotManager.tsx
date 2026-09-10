@@ -69,7 +69,11 @@ export function AdminHeadshotManager({
   const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    wireHeadshotController({
+    // The wiring is undone on cleanup rather than shed by swapping the
+    // elements for clones: the clone left `fileRef` pointing at a detached
+    // input, so the Upload button opened a picker nothing was listening to
+    // (issue #28). Re-running this effect now re-listens on the same nodes.
+    return wireHeadshotController({
       preview: previewRef.current,
       status: statusRef.current,
       fileInput: fileRef.current,
@@ -88,7 +92,6 @@ export function AdminHeadshotManager({
       uploadSuccessStatus,
       deleteSuccessStatus,
       confirmDeleteMessage,
-      resetListeners: true,
       uploadHeadshot,
       deleteHeadshot,
       onUploaded,

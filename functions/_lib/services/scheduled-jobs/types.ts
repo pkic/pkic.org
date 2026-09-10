@@ -3,6 +3,7 @@ import type { D1QueryBudget } from "../../db/query-budget";
 import type { Env } from "../../types";
 
 export type ScheduledJobKey =
+  | "member_news_refresh"
   | "due_work"
   | "on_hold_due_work"
   | "ec_auto_approve"

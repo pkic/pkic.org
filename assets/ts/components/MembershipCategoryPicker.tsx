@@ -1,5 +1,6 @@
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../shared/schemas/membership-categories";
 import { Checkbox } from "../ui/Checkbox";
+import { useMembershipCategoryCatalog } from "../hooks/useMembershipCategoryCatalog";
 // `pk-field__label` and `pk-field__help` are written here as class names
 // rather than reached through a component, so this module has to pull their
 // stylesheet into its own chunk.
@@ -32,6 +33,18 @@ export function MembershipCategoryPicker({
 }) {
   const selectedSet = new Set(selected);
   const helpId = `${idPrefix}-help`;
+  /*
+   * The codes carry no meaning on their own. "A" is not a thing a reader
+   * choosing categories can weigh, and a row of thirteen bare letters is what
+   * #50 and #53 both objected to. The words come from the configured
+   * catalogue, so a category renamed there is renamed here, and a code the
+   * catalogue has not answered for yet keeps its letter rather than waiting.
+   */
+  const catalog = useMembershipCategoryCatalog();
+  const labelFor = (category: MembershipCategory): string => {
+    const entry = catalog.find((candidate) => candidate.code === category);
+    return entry ? `${entry.label} (${category})` : category;
+  };
 
   function toggle(category: MembershipCategory, checked: boolean): void {
     if (checked === selectedSet.has(category)) return;
@@ -50,7 +63,10 @@ export function MembershipCategoryPicker({
     // legend is why this cannot be a `ui/Field`, which renders a `<label>`.
     <fieldset class="pk-fieldset pk-field" disabled={disabled} aria-describedby={helpId}>
       <legend class="pk-field__label">{label}</legend>
-      <div class="pk-cluster">
+      {/* A column once the words are on them: thirteen named choices wrapped
+          across a wide screen are a paragraph of checkboxes nobody can scan.
+          The grid keeps them in aligned columns at whatever width there is. */}
+      <div class="pk-grid pk-grid--tight">
         {MEMBERSHIP_CATEGORIES.map((category) => {
           const id = `${idPrefix}-${category}`;
           return (
@@ -60,7 +76,7 @@ export function MembershipCategoryPicker({
               checked={selectedSet.has(category)}
               disabled={disabled}
               onChange={(event) => toggle(category, (event.target as HTMLInputElement).checked)}
-              label={category}
+              label={labelFor(category)}
             />
           );
         })}

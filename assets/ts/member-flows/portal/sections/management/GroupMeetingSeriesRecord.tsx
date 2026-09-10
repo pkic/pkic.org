@@ -1,3 +1,4 @@
+import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { groupEventSeriesResponseSchema } from "../../../../../shared/schemas/event-series";
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -5,13 +6,11 @@ import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
-import { Button } from "../../../../ui/Button";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { MeetingOccurrences } from "./MeetingOccurrences";
 import { MeetingSeriesSettings } from "./MeetingSeriesSettings";
-// `pk-record-title` ships in Content.css; the module that names it loads it.
-import "../../../../ui/Content.css";
 
 /** The series record's facets. Each one loads its data when it is opened. */
 const SERIES_RECORD_TABS = [
@@ -24,7 +23,7 @@ type SeriesRecordTab = (typeof SERIES_RECORD_TABS)[number]["key"];
 const DEFAULT_TAB: SeriesRecordTab = "occurrences";
 
 /**
- * A meeting series' own page: the way back to the list, the series as the
+ * A meeting series' own page: the series as the
  * subject — name, profile, whether it is active, and when it next meets —
  * and one tab per facet. It fetches the series by id through the group
  * context, so a copied URL opens the same record the list row did, with the
@@ -34,13 +33,14 @@ export function GroupMeetingSeriesRecord({
   groupId,
   seriesId,
   initialTab,
-  onLeave,
+  occurrenceSegment,
 }: {
   groupId: string;
   seriesId: string;
   /** The URL-addressed tab segment, if any. Undefined or unavailable selects Occurrences. */
   initialTab?: string;
-  onLeave: () => void;
+  /** The segment below the occurrences tab: `"new"` opens the add page. */
+  occurrenceSegment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const detail = useData(
@@ -75,28 +75,36 @@ export function GroupMeetingSeriesRecord({
    */
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button variant="link" size="sm" onClick={onLeave}>
-          ← All meeting series
-        </Button>
-      </div>
       {detail.loading && !series && <Spinner label="Loading meeting series…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {series && (
-        <>
-          <div class="pk-stack pk-stack--tight">
-            {/* h3: the shell owns h1 and the workspace's PageHeader owns h2, so
-                a record inside a workspace tab is the next level down. */}
-            <h3 class="pk-record-title">{series.eventName}</h3>
-            <div class="pk-cluster">
-              <Badge status={series.profileKey} />
-              <Badge status={series.active ? "active" : "inactive"} />
-              <span class="pk-small pk-muted">
-                Next {fmt(series.nextOccurrenceAt ?? series.startsAt)}
-                {series.location ? ` · ${series.location}` : ""}
-              </span>
-            </div>
-          </div>
+        <BreadcrumbBranch
+          items={[
+            { label: series.eventName, href: usePortalHashLocation.hrefs(tabPath(DEFAULT_TAB)) },
+            {
+              label: tabs.find((item) => item.key === tab)?.label ?? tab,
+              href: usePortalHashLocation.hrefs(tabPath(tab)),
+            },
+          ]}
+        >
+          {!(tab === "occurrences" && occurrenceSegment === "new" && canManage) && (
+            <ProfileHeader
+              headingLevel={3}
+              title={series.eventName}
+              context={
+                <>
+                  <Badge status={series.profileKey} />
+                  <Badge status={series.active ? "active" : "inactive"} />
+                </>
+              }
+              lede={
+                <>
+                  Next {fmt(series.nextOccurrenceAt ?? series.startsAt)}
+                  {series.location ? ` · ${series.location}` : ""}
+                </>
+              }
+            />
+          )}
           {tabs.length > 1 && (
             <Tabs
               items={tabs}
@@ -108,7 +116,12 @@ export function GroupMeetingSeriesRecord({
           )}
           {tab === "occurrences" && (
             <section aria-label={`${series.eventName} occurrences`}>
-              <MeetingOccurrences groupId={groupId} series={series} onSeriesChanged={detail.reload} />
+              <MeetingOccurrences
+                groupId={groupId}
+                series={series}
+                occurrenceSegment={occurrenceSegment}
+                onSeriesChanged={detail.reload}
+              />
             </section>
           )}
           {tab === "settings" && canManage && (
@@ -116,7 +129,7 @@ export function GroupMeetingSeriesRecord({
               <MeetingSeriesSettings groupId={groupId} series={series} onChanged={detail.reload} />
             </section>
           )}
-        </>
+        </BreadcrumbBranch>
       )}
     </div>
   );

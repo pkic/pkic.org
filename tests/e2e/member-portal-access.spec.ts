@@ -57,7 +57,7 @@ test("an approved applicant can sign in to the portal as a member", async ({ pag
   await page.context().clearCookies();
   await signInToPortal(page, email);
 
-  // The identity is a member, not staff. System management is the clearest
+  // The identity is a member, not staff. Settings is the clearest
   // staff-only surface, so its absence is what distinguishes the two.
   const profile = await page.evaluate(async () => {
     const response = await fetch("/api/v1/users/current", { credentials: "same-origin" });

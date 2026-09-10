@@ -24,7 +24,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const code = walk(join(root, "assets/ts")).filter((f) => /\.(tsx?|css)$/.test(f));
+const code = walk(join(root, "assets/ts")).filter((f) => /\.(tsx?|css|scss)$/.test(f));
 const styles = [...walk(join(root, "assets/design")), ...walk(join(root, "assets/scss")), ...code]
   .filter((f) => /\.(css|scss)$/.test(f))
   .map((f) => readFileSync(f, "utf8"))

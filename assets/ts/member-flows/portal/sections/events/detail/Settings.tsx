@@ -17,10 +17,13 @@ export function Settings({
   event,
   onUpdated,
   subTab,
+  detailSegment,
 }: {
   event: EventDetail;
   onUpdated: (event: EventDetail) => void;
   subTab?: string;
+  /** The segment below a sub-tab; `"new"` under Team opens its add page. */
+  detailSegment?: string;
 }) {
   const visibleTabs = SETTINGS_TABS.filter(({ capability }) => !capability || event.capabilities.includes(capability));
   const tab: SettingsTab = visibleTabs.find(({ key }) => key === subTab)?.key ?? "general";
@@ -39,7 +42,7 @@ export function Settings({
       {tab === "general" &&
         (event.seriesId ? <SeriesManagedNotice event={event} /> : <GeneralTab event={event} onUpdated={onUpdated} />)}
       {tab === "sponsor-tiers" && <SponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />}
-      {tab === "team" && <Team slug={event.slug} />}
+      {tab === "team" && <Team slug={event.slug} teamSegment={detailSegment} />}
     </div>
   );
 }

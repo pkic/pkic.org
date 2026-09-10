@@ -59,6 +59,7 @@ export function AuditLogTable({
       columns={[
         {
           header: "When",
+          width: "fit",
           cell: (entry) => formatDateTime(entry.created_at, { seconds: true }),
           className: "pk-nowrap pk-small pk-muted",
           sort: { asc: "createdAt", desc: "-createdAt", defaultDirection: "desc" },
@@ -69,8 +70,8 @@ export function AuditLogTable({
           className: "pk-small",
           sort: { asc: "actor", desc: "-actor" },
         },
-        { header: "Action", cell: actionCell, sort: { asc: "action", desc: "-action" } },
-        { header: "Details", cell: detailsCell },
+        { header: "Action", cell: actionCell, width: "fit", sort: { asc: "action", desc: "-action" } },
+        { header: "Details", cell: detailsCell, width: "primary" },
       ]}
       empty="No audit log entries."
       rowKey={(entry) => entry.id}

@@ -19,7 +19,7 @@ import {
   updateGroupFormPlacement,
   validateCustomAnswersForSubmission,
 } from "../functions/_lib/services/forms";
-import { replaceGroupEventForm } from "../functions/_lib/services/events/form-placement";
+import { replaceGroupEventForm } from "../functions/_lib/services/events/form-placement-mutations";
 import { createGroup } from "../functions/_lib/services/groups";
 import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
@@ -1212,6 +1212,112 @@ describe("group event management routes", () => {
 
     const invalidPurpose = await request(fixture.ownerLeaderToken, `${base}/survey`);
     expect(invalidPurpose.status).toBe(400);
+  });
+
+  /*
+   * #38: an event's form takes responses inside an optional window.
+   *
+   * The window belongs to the placement, so one reusable form placed in two
+   * events can open and close on different days. Asserted through the effect
+   * that matters — whether the event actually offers the form — rather than
+   * by reading the columns back, because a window that is stored and not
+   * enforced is not a window.
+   */
+  it("opens and closes an event form on a submission window, and refuses an impossible one", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const base = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/forms/event_registration`;
+
+    const createdForm = await request(fixture.ownerLeaderToken, base, {
+      method: "POST",
+      body: JSON.stringify({
+        expectedUpdatedAt: created.updatedAt,
+        definition: {
+          key: `event-window-${crypto.randomUUID()}`,
+          title: "Attendee questions",
+          fields: [{ key: "topic", label: "Topic", fieldType: "text", required: true, sortOrder: 0 }],
+        },
+      }),
+    });
+    expect(createdForm.status, await createdForm.clone().text()).toBe(201);
+    const placed = (await createdForm.json()) as {
+      eventUpdatedAt: string;
+      form: { placement: { id: string; opensAt: string | null; closesAt: string | null } };
+    };
+    // With no window, the event offers the form.
+    expect(placed.form.placement).toMatchObject({ opensAt: null, closesAt: null });
+    expect(
+      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+    ).not.toBeNull();
+
+    // Registration that has not opened yet: the form exists for management
+    // and is not offered to a reader.
+    const scheduled = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedUpdatedAt: placed.eventUpdatedAt, opensAt: "2099-01-01T00:00:00.000Z" }),
+    });
+    expect(scheduled.status, await scheduled.clone().text()).toBe(200);
+    const scheduledBody = (await scheduled.json()) as {
+      eventUpdatedAt: string;
+      form: { placement: { opensAt: string | null } };
+    };
+    expect(scheduledBody.form.placement.opensAt).toBe("2099-01-01T00:00:00.000Z");
+    expect(
+      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+    ).toBeNull();
+    // And management can still see what it configured.
+    const managementRead = await request(fixture.ownerLeaderToken, base);
+    expect((await managementRead.json()) as unknown).toMatchObject({
+      form: { placement: { opensAt: "2099-01-01T00:00:00.000Z" } },
+    });
+
+    // Registration that has closed: same shape, other end.
+    const closed = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedUpdatedAt: scheduledBody.eventUpdatedAt,
+        opensAt: null,
+        closesAt: "2000-01-01T00:00:00.000Z",
+      }),
+    });
+    expect(closed.status, await closed.clone().text()).toBe(200);
+    const closedBody = (await closed.json()) as { eventUpdatedAt: string };
+    expect(
+      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+    ).toBeNull();
+
+    // Cleared, it takes responses again — a window is not a one-way door.
+    const reopened = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedUpdatedAt: closedBody.eventUpdatedAt, opensAt: null, closesAt: null }),
+    });
+    expect(reopened.status, await reopened.clone().text()).toBe(200);
+    const reopenedBody = (await reopened.json()) as { eventUpdatedAt: string };
+    expect(
+      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+    ).not.toBeNull();
+
+    // A close that is not after its open is refused rather than stored.
+    const impossible = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedUpdatedAt: reopenedBody.eventUpdatedAt,
+        opensAt: "2030-06-01T12:00:00.000Z",
+        closesAt: "2030-06-01T09:00:00.000Z",
+      }),
+    });
+    expect([400, 422]).toContain(impossible.status);
+    expect(
+      await getActiveFormForEvent(env.DB, { id: created.id, source_mode: "portal" }, "event_registration"),
+    ).not.toBeNull();
+
+    // A stale event revision conflicts rather than overwriting somebody's
+    // concurrent change — the same optimistic check the selection uses.
+    const stale = await request(fixture.ownerLeaderToken, base, {
+      method: "PATCH",
+      body: JSON.stringify({ expectedUpdatedAt: created.updatedAt, closesAt: "2031-01-01T00:00:00.000Z" }),
+    });
+    expect(stale.status).toBe(409);
   });
 
   it("uses event ownership for delegated form management and fails closed for malformed or stale portal placement state", async () => {

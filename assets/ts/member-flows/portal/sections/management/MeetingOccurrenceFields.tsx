@@ -4,7 +4,7 @@
  *
  * Every control is a design-system `Field`, which owns the label, the required
  * marker and the control's id; the parent forms reach a control through the
- * label that names it. The encryption note under the provider controls is one
+ * label that names it. The link-sharing note under the provider controls is one
  * paragraph both of them describe themselves by, rather than a help text
  * repeated under each.
  *
@@ -151,7 +151,9 @@ export function MeetingOccurrenceFields({
           </Field>
         )}
         <p class="pk-small" id={providerHelpId}>
-          The provider URL is encrypted and never returned by the API.
+          Use any HTTPS meeting link as a backup or for a one-off meeting. Participants receive it after confirming
+          entry and can save or share it. YouTube links open in an authenticated player on this site. Opening the link
+          does not verify attendance.
         </p>
       </div>
     </div>

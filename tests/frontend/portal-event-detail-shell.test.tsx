@@ -102,6 +102,14 @@ describe("event detail shell", () => {
     // The reload control carries a name rather than only a glyph.
     const refresh = [...container.querySelectorAll("button")].find((button) => button.textContent === "Refresh");
     expect(refresh).toBeDefined();
+
+    // And the way back to the list the record was opened from, which is what
+    // issue #9 reported missing. It is a trail rather than a back button: the
+    // record has an address of its own, so leaving it is navigation.
+    const trail = container.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail?.querySelector("a")?.getAttribute("href")).toBe("#/events");
+    expect(trail?.querySelector("a")?.textContent).toBe("Events");
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("PQC Conference Amsterdam");
   });
 
   it("announces a failed load as an alert instead of an empty workspace", async () => {

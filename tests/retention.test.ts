@@ -54,19 +54,31 @@ describe("retention job", () => {
       `),
     ]);
 
+    await env.DB.prepare(
+      "UPDATE registrations SET registration_organization_name = ?, registration_job_title = ? WHERE id = ?",
+    )
+      .bind("Event organization", "Event role", registrationId)
+      .run();
     const result = await runRetentionJob(env.DB);
     expect(result.redactedRegistrations).toBe(1);
 
     const registration = (
-      await queryAll<{ custom_answers_json: string | null; source_ref: string | null }>(
+      await queryAll<{
+        custom_answers_json: string | null;
+        source_ref: string | null;
+        registration_organization_name: string | null;
+        registration_job_title: string | null;
+      }>(
         env.DB,
-        "SELECT custom_answers_json, source_ref FROM registrations WHERE id = ?",
+        "SELECT custom_answers_json, source_ref, registration_organization_name, registration_job_title FROM registrations WHERE id = ?",
         [registrationId],
       )
     )[0];
 
     expect(registration.custom_answers_json).toBeNull();
     expect(registration.source_ref).toBeNull();
+    expect(registration.registration_organization_name).toBeNull();
+    expect(registration.registration_job_title).toBeNull();
 
     const user = (
       await queryAll<{

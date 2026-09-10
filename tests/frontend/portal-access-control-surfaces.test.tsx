@@ -51,12 +51,6 @@ function pathOf(input: RequestInfo | URL): string {
   return new URL(href, location.origin).pathname;
 }
 
-function buttonNamed(container: HTMLElement, label: string): HTMLButtonElement {
-  const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-  if (!button) throw new Error(`missing button: ${label}`);
-  return button;
-}
-
 /** The control a `<label>` points at, resolved through the `for`/`id` pair. */
 function controlFor(container: HTMLElement, labelText: string): HTMLElement {
   const label = [...container.querySelectorAll("label")].find((candidate) => candidate.textContent === labelText);
@@ -179,7 +173,7 @@ function submitGrantForm(container: HTMLElement): Promise<void> {
 describe("Grants on the design system", () => {
   it("names its controls, its table and its row menu for assistive technology", async () => {
     stubGrantsApi();
-    const container = mount(<Grants canGrant canRevoke />);
+    let container = mount(<Grants canGrant canRevoke onNavigate={() => {}} />);
     await settle();
 
     // The list names itself, so a page holding several tables does not
@@ -191,7 +185,11 @@ describe("Grants on the design system", () => {
     // "Row actions" among a page of them.
     expect(rowActionControlNames(container)).toEqual([`Actions for ${GRANT.permission} granted to ${GRANT.userEmail}`]);
 
-    void act(() => buttonNamed(container, "New grant").click());
+    // Creating a grant is a page of its own, reached under the reserved
+    // `new` segment rather than by unfolding a panel above the table.
+    void act(() => render(null, container));
+    container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
+    await settle();
 
     // Single-control fields are labelled by a real for/id pair …
     expect(controlFor(container, "Permission").tagName).toBe("SELECT");
@@ -213,9 +211,13 @@ describe("Grants on the design system", () => {
 
   it("refuses an incomplete grant in a live region and sends nothing", async () => {
     const requests = stubGrantsApi();
-    const container = mount(<Grants canGrant canRevoke />);
+    let container = mount(<Grants canGrant canRevoke onNavigate={() => {}} />);
     await settle();
-    void act(() => buttonNamed(container, "New grant").click());
+    // Creating a grant is a page of its own, reached under the reserved
+    // `new` segment rather than by unfolding a panel above the table.
+    void act(() => render(null, container));
+    container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
+    await settle();
 
     await submitGrantForm(container);
 
@@ -232,9 +234,13 @@ describe("Grants on the design system", () => {
         ? apiError("FORBIDDEN", "You cannot grant that permission.", 403)
         : undefined,
     );
-    const container = mount(<Grants canGrant canRevoke />);
+    let container = mount(<Grants canGrant canRevoke onNavigate={() => {}} />);
     await settle();
-    void act(() => buttonNamed(container, "New grant").click());
+    // Creating a grant is a page of its own, reached under the reserved
+    // `new` segment rather than by unfolding a panel above the table.
+    void act(() => render(null, container));
+    container = mount(<Grants canGrant canRevoke grantSegment="new" onNavigate={() => {}} />);
+    await settle();
     await pickCandidate(container);
 
     await submitGrantForm(container);
@@ -243,15 +249,19 @@ describe("Grants on the design system", () => {
     expect(container.querySelector('form[aria-label="Grant a permission"]')).toBeTruthy();
   });
 
-  it("posts a body the shared accessGrantCreateSchema accepts, then closes the form", async () => {
+  it("posts a body the shared accessGrantCreateSchema accepts, then returns to the list", async () => {
     const requests = stubGrantsApi((path, init) =>
       path === "/api/v1/permissions/grants" && init?.method === "POST"
         ? json({ grant: { ...GRANT, userId: CANDIDATE.id, userEmail: CANDIDATE.email } })
         : undefined,
     );
-    const container = mount(<Grants canGrant canRevoke />);
+    // Creating a grant is a page of its own, reached under the reserved
+    // `new` segment rather than by unfolding a panel above the table.
+    const navigated: Array<string | undefined> = [];
+    const container = mount(
+      <Grants canGrant canRevoke grantSegment="new" onNavigate={(segment) => navigated.push(segment)} />,
+    );
     await settle();
-    void act(() => buttonNamed(container, "New grant").click());
     await pickCandidate(container);
 
     await submitGrantForm(container);
@@ -261,7 +271,9 @@ describe("Grants on the design system", () => {
     const parsed = accessGrantCreateSchema.parse(posted!.body);
     expect(parsed.userId).toBe(CANDIDATE.id);
     expect(parsed.contextType).toBeNull();
-    expect(container.querySelector('form[aria-label="Grant a permission"]')).toBeNull();
+    // A granted permission returns to the list rather than leaving a spent
+    // form on screen.
+    expect(navigated).toEqual([undefined]);
   });
 });
 
@@ -285,7 +297,7 @@ describe("RoleDetail on the design system", () => {
 
   it("announces the wait, then titles both panels and names the assignee table", async () => {
     stubRoleApi(ROLE);
-    const container = mount(<RoleDetail roleId={ROLE.id} canGrant canRevoke onBack={vi.fn()} />);
+    const container = mount(<RoleDetail roleId={ROLE.id} canGrant canRevoke />);
 
     // The wait is announced rather than mimed by a grey rectangle.
     const busy = container.querySelector('[role="status"]');
@@ -294,10 +306,8 @@ describe("RoleDetail on the design system", () => {
     await settle();
     await settle();
 
-    // Two panels, two real headings, in document order — the role, then its
-    // assignees. A migrated surface that dropped one would leave the page's
-    // outline with a nameless region.
-    expect([...container.querySelectorAll("h3")].map((heading) => heading.textContent)).toEqual([
+    // The role owns the page heading; its assignees are a subordinate section.
+    expect([...container.querySelectorAll("h2, h3")].map((heading) => heading.textContent)).toEqual([
       ROLE.name,
       "Assignees",
     ]);
@@ -315,7 +325,7 @@ describe("RoleDetail on the design system", () => {
   it("says a system role is a system role in words, and offers no Edit", async () => {
     const systemRole = { ...ROLE, id: "role-system-1", name: "group_lead", isSystemRole: true };
     stubRoleApi(systemRole);
-    const container = mount(<RoleDetail roleId={systemRole.id} canGrant canRevoke onBack={vi.fn()} />);
+    const container = mount(<RoleDetail roleId={systemRole.id} canGrant canRevoke />);
     await settle();
     await settle();
 
@@ -326,27 +336,16 @@ describe("RoleDetail on the design system", () => {
 
   it("shows why a role could not be loaded and renders no empty panels behind it", async () => {
     stubRoleApi(ROLE, apiError("NOT_FOUND", "Role not found", 404));
-    const container = mount(<RoleDetail roleId={ROLE.id} canGrant canRevoke onBack={vi.fn()} />);
+    const container = mount(<RoleDetail roleId={ROLE.id} canGrant canRevoke />);
     await settle();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Role not found");
     expect(container.querySelector("table")).toBeNull();
-    expect(container.querySelectorAll("h3")).toHaveLength(0);
+    expect(container.querySelectorAll("h2, h3")).toHaveLength(0);
     // The way back out of the failure is still there.
-    expect(buttonNamed(container, "← All roles")).toBeTruthy();
-  });
-
-  it("returns to the list through a real button rather than a clickable div", async () => {
-    stubRoleApi(ROLE);
-    const onBack = vi.fn();
-    const container = mount(<RoleDetail roleId={ROLE.id} canGrant canRevoke onBack={onBack} />);
-    await settle();
-
-    const back = buttonNamed(container, "← All roles");
-    expect(back.tagName).toBe("BUTTON");
-    expect(back.getAttribute("type")).toBe("button");
-    void act(() => back.click());
-    expect(onBack).toHaveBeenCalledTimes(1);
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent?.includes("All roles"))).toBe(
+      false,
+    );
   });
 });
 

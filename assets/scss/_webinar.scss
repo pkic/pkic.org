@@ -159,30 +159,6 @@
   padding: 1rem 1.1rem;
 }
 
-.webinar-speaker-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  border: 2px solid rgba(0, 0, 0, 0.07);
-}
-
-.webinar-speaker-avatar--initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
 .webinar-speaker-info {
   flex: 1;
   min-width: 0;

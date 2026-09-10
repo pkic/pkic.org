@@ -58,7 +58,14 @@ let baselinesInitialized = false;
 // expected to exist by the dispatcher. Wiping it would leave every scheduled
 // pass with nothing to select, silently turning the scheduler into a no-op for
 // any test that runs after a reset.
+// `group_leadership_titles` (consolidated migration 0035) is the same class of
+// system reference data: the vocabulary a manager picks a chair's or vice
+// chair's title from is seeded once by the migration and evolves by adding a
+// row, not per test. Wiping it would leave the leadership response offering
+// only each group type's own two titles, which is exactly the frontend-owned
+// list issue #29 replaced.
 const EXCLUDED_TABLES = new Set([
+  "group_leadership_titles",
   "d1_migrations",
   "scheduled_jobs",
   "roles",
@@ -263,10 +270,10 @@ async function restoreHistoryDeleteTrigger(sql: string | null): Promise<void> {
 
 async function suspendMailingListDeleteTrigger(): Promise<string | null> {
   const trigger = await env.DB.prepare(
-    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_mailing_lists_prevent_delete'",
+    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_mailing_lists_retain_history'",
   ).first<{ sql: string }>();
   if (!trigger?.sql) return null;
-  await env.DB.prepare("DROP TRIGGER trg_mailing_lists_prevent_delete").run();
+  await env.DB.prepare("DROP TRIGGER trg_mailing_lists_retain_history").run();
   return trigger.sql;
 }
 

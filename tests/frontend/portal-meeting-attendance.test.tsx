@@ -101,6 +101,8 @@ function guestOccurrence(overrides: Partial<EventOccurrence> = {}): EventOccurre
     guestCount: 0,
     joinConfirmedCount: 0,
     attendanceVerifiedCount: 0,
+    invitationsRound: 0,
+    invitationsSentAt: null,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-25T10:00:00.000Z",
     ...overrides,

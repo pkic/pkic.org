@@ -2,11 +2,18 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { createContext } from "./helpers/context";
+import { createAdminSession } from "./helpers/auth";
+import { seedEventAndAdmin } from "./helpers/context";
+import { createContext, queryAll } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
 import { onRequestGet as getMember } from "../functions/api/v1/members/[id]";
 import { onRequestGet as getMemberLogo } from "../functions/api/v1/members/[id]/logo";
-import { seedOrganizationAggregate, addRepresentative as addRepresentativeRow, insertUser } from "./helpers/membership";
+import {
+  seedOrganizationAggregate,
+  addRepresentative as addRepresentativeRow,
+  insertOrganization,
+  insertUser,
+} from "./helpers/membership";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import {
@@ -14,6 +21,9 @@ import {
   memberWallResponseSchema,
   publicMemberDetailSchema,
 } from "../assets/shared/schemas/members-directory";
+
+/** The Post-Quantum Cryptography Working Group, seeded by migration 0035. */
+const PQC_GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 async function callEndpoint(handler: (c: any) => Promise<Response>, ctx: any): Promise<Response> {
   try {
@@ -219,6 +229,60 @@ describe("GET /api/v1/members (public directory)", () => {
     expect(independentBody.page.total).toBe(1);
   });
 
+  /**
+   * Issue #8: a working group's pages listed its members by filtering the
+   * YAML files in the repository on a `workingGroups` field. The roll answers
+   * it now, narrowed to the group — which keeps one query, one contract, and
+   * the pagination, search and sort every other list already has.
+   */
+  it("narrows the roll to the members seated in one working group", async () => {
+    const seatedUserId = crypto.randomUUID();
+    const seatedOrganizationId = crypto.randomUUID();
+    await seedOrgMember({
+      userId: seatedUserId,
+      organizationId: seatedOrganizationId,
+      organizationName: "Seated In PQC Ltd",
+      status: "active",
+    });
+    await seedOrgMember({
+      userId: crypto.randomUUID(),
+      organizationId: crypto.randomUUID(),
+      organizationName: "Elsewhere Ltd",
+      status: "active",
+    });
+    const [seatedMember] = await queryAll<{ id: string; identity_id: string }>(
+      env.DB,
+      `SELECT m.id, identity.id AS identity_id
+         FROM members m
+         JOIN identities identity ON identity.organization_id = m.organization_id
+        WHERE m.organization_id = ?`,
+      seatedOrganizationId,
+    );
+    await env.DB.prepare(
+      `INSERT INTO group_memberships
+         (id, group_id, user_id, identity_id, member_id, source, joined_at, left_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'staff', datetime('now'), NULL, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), PQC_GROUP_ID, seatedUserId, seatedMember.identity_id, seatedMember.id)
+      .run();
+
+    // By slug, which is what a charter page has to hand.
+    const bySlug = await callPublicApi("https://pkic.org/api/v1/members?workingGroup=pqc");
+    const slugBody = publicMembersListResponseSchema.parse(await bySlug.json());
+    expect(slugBody.members.map((member) => member.name)).toEqual(["Seated In PQC Ltd"]);
+
+    // And by id, because the same filter serves callers holding either.
+    const byId = await callPublicApi(`https://pkic.org/api/v1/members?workingGroup=${PQC_GROUP_ID}`);
+    expect(publicMembersListResponseSchema.parse(await byId.json()).page.total).toBe(1);
+
+    // A seat that has ended is not participation.
+    await env.DB.prepare("UPDATE group_memberships SET left_at = datetime('now') WHERE user_id = ?")
+      .bind(seatedUserId)
+      .run();
+    const afterLeaving = await callPublicApi("https://pkic.org/api/v1/members?workingGroup=pqc");
+    expect(publicMembersListResponseSchema.parse(await afterLeaving.json()).page.total).toBe(0);
+  });
+
   it("sorts and paginates in D1 with a deterministic response envelope", async () => {
     for (const name of ["Alpha Org", "Beta Org", "Gamma Org"]) {
       await seedOrgMember({
@@ -287,6 +351,39 @@ describe("GET /api/v1/members/wall", () => {
     const body = memberWallResponseSchema.parse(await response.json());
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0]?.sponsorLevel).toBeGreaterThan(0);
+  });
+
+  it("links a member to the same page the directory does, by slug where there is one", async () => {
+    /*
+     * The wall used to build this href in SQL while the directory built it in
+     * TSX and a charter roll built a third one — issue #15 under the UUID.
+     * One rule now, so a row with a slug and a row without both come back the
+     * way every other surface would link them.
+     */
+    const slugged = crypto.randomUUID();
+    const unslugged = crypto.randomUUID();
+    for (const [organizationId, organizationName] of [
+      [slugged, "Slugged Member"],
+      [unslugged, "Unslugged Member"],
+    ]) {
+      await seedOrgMember({
+        userId: crypto.randomUUID(),
+        organizationId,
+        organizationName,
+        status: "active",
+      });
+      await env.DB.prepare("UPDATE organizations SET logo_r2_key = 'org-logos/regular.svg' WHERE id = ?")
+        .bind(organizationId)
+        .run();
+    }
+    await env.DB.prepare("UPDATE organizations SET slug = 'slugged-member' WHERE id = ?").bind(slugged).run();
+
+    const response = await callPublicApi("https://pkic.org/api/v1/members/wall?memberLimit=10");
+    expect(response.status).toBe(200);
+    const body = memberWallResponseSchema.parse(await response.json());
+    const hrefByName = new Map(body.entries.map((entry) => [entry.name, entry.href]));
+    expect(hrefByName.get("Slugged Member")).toBe("/members/slugged-member/");
+    expect(hrefByName.get("Unslugged Member")).toBe(`/members/profile/?id=${unslugged}`);
   });
 
   it("never lets sponsor rows bypass the final wall bound", async () => {
@@ -432,7 +529,7 @@ describe("GET /api/v1/members/:id", () => {
       blogUrl: string | null;
       links: string[];
       featuredLink: string | null;
-      identities: Array<{ name: string; jobTitle: string | null; bio: string | null; featuredLink: string | null }>;
+      identities: Array<{ name: string; jobTitle: string | null; bio: string | null; links: string[] }>;
     };
     expect(body.content).toBe("## About us");
     expect(body.blogUrl).toBe("https://content-org.test/blog");
@@ -445,6 +542,7 @@ describe("GET /api/v1/members/:id", () => {
       jobTitle: "CTO",
       bio: "Leads engineering.",
       featuredLink: "https://mastodon.example/@rep",
+      links: ["https://mastodon.example/@rep", "https://linkedin.com/in/rep"],
     });
   });
 
@@ -656,5 +754,77 @@ describe("GET /api/v1/members/:id/logo", () => {
     expect(response.status).toBe(200);
     const buf = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(buf)).toEqual([9, 9, 9]);
+  });
+});
+
+/**
+ * A public page is public for everybody, including a reader who is signed in.
+ *
+ * `/api/v1/members` answers in two shapes and used to choose by whether the
+ * reader held `membership:read`. So the members directory — a public page —
+ * received staff rows the moment a staff member looked at it: rows with no
+ * `slug`, no `logoUrl` and no `website`, which the directory cannot render
+ * and refused outright. Every member surface on the site went blank for
+ * exactly the people who were testing it, which is what #11, #13 and #25 all
+ * reported, and why none of it ever reproduced signed out.
+ *
+ * The projection is asked for now. These pin both halves: the default shape
+ * does not change when the caller is staff, and the staff shape is still
+ * available to a caller that asks and may see it.
+ */
+describe("the members list projection", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  /** A signed-in staff reader — the case every member surface broke for. */
+  async function staffToken(label: string): Promise<string> {
+    await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+    );
+    return createAdminSession(env.DB, admin.id, `${label}-token`);
+  }
+
+  async function fetchMembers(path: string, token?: string): Promise<Response> {
+    return app.fetch(
+      new Request(`https://app.test${path}`, token ? { headers: { authorization: `Bearer ${token}` } } : undefined),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+  }
+
+  it("is the public one by default, whoever is asking", async () => {
+    await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, "Projection Test Org"), "A");
+    const token = await staffToken("members-projection-default");
+
+    const anonymous = await fetchMembers("/api/v1/members?group=organization");
+    expect(anonymous.status).toBe(200);
+    const asStaff = await fetchMembers("/api/v1/members?group=organization", token);
+    expect(asStaff.status).toBe(200);
+
+    // The same contract parses both, which is the whole point: the directory
+    // renders identically whether or not the reader happens to be staff.
+    const anonymousBody = publicMembersListResponseSchema.parse(await anonymous.json());
+    const staffBody = publicMembersListResponseSchema.parse(await asStaff.json());
+    expect(staffBody.members.map((member) => member.name)).toEqual(anonymousBody.members.map((member) => member.name));
+  });
+
+  it("is the staff one only when a permitted caller asks for it", async () => {
+    await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB, "Projection Test Org"), "A");
+    const token = await staffToken("members-projection-default");
+
+    const asked = await fetchMembers("/api/v1/members?view=staff&group=organization", token);
+    expect(asked.status).toBe(200);
+    const body = (await asked.json()) as { members: Array<Record<string, unknown>> };
+    expect(body.members[0]).toHaveProperty("membershipCategory");
+    expect(body.members[0]).toHaveProperty("representativeCount");
+
+    // Asking without the permission widens nothing: an anonymous caller still
+    // receives the public shape rather than a refusal or staff-only fields.
+    const unpermitted = await fetchMembers("/api/v1/members?view=staff&group=organization");
+    expect(unpermitted.status).toBe(200);
+    publicMembersListResponseSchema.parse(await unpermitted.json());
   });
 });

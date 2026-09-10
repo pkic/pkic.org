@@ -2,7 +2,14 @@ import { z } from "zod";
 import { httpUrlSchema } from "./urls";
 import { attendanceTypeSchema, type AttendanceType } from "./registration";
 
-const visualizationSchema = z.enum(["auto", "bar", "pie", "wordcloud", "list"]);
+/**
+ * How an answer set may be presented. Exported because the editor and the
+ * results view both offer this choice, and neither may decide on its own
+ * which presentations exist.
+ */
+export const VISUALIZATIONS = ["auto", "bar", "pie", "wordcloud", "list"] as const;
+export const visualizationSchema = z.enum(VISUALIZATIONS);
+export type Visualization = z.infer<typeof visualizationSchema>;
 const formFieldFormatSchema = z.enum([
   "iso_country",
   "phone",

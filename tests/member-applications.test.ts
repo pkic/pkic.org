@@ -23,6 +23,7 @@ import {
   memberApplicationStatusResponseSchema,
 } from "../assets/shared/schemas/member-applications";
 import { JSON_REQUEST_MAX_BYTES } from "../functions/_lib/http-body";
+import { normalizeOrgName } from "../assets/shared/organization-name";
 
 function makeEnv(overrides: Partial<typeof env> = {}) {
   return {
@@ -327,6 +328,98 @@ describe("POST /api/v1/members/applications", () => {
     expect(
       await queryAll(testEnv.DB, "SELECT id FROM email_outbox WHERE template_key = 'application-received'"),
     ).toHaveLength(1);
+  });
+
+  /**
+   * Issue #27: nothing checked whether the consortium already had the
+   * organization being applied for, so a person at an unrelated address could
+   * open an application whose only possible outcome was "they are in
+   * already". A colleague under the organization's own verified domain never
+   * reaches here — join/verify routes them straight into it — so this is
+   * about the name, which is the only thing such an applicant supplies.
+   */
+  describe("an organization the consortium already has", () => {
+    async function seedMemberOrganization(name: string, status = "active"): Promise<void> {
+      await env.DB.prepare(
+        `INSERT INTO organizations (id, name, normalized_name, created_at, updated_at)
+         VALUES ('org-existing', ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      )
+        .bind(name, normalizeOrgName(name))
+        .run();
+      if (!status) return;
+      await env.DB.prepare(
+        `INSERT INTO members (id, member_type, organization_id, status, created_at, updated_at)
+         VALUES ('member-existing', 'organization', 'org-existing', ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+      )
+        .bind(status)
+        .run();
+    }
+
+    it("refuses the application and names the organization, however it was spelled", async () => {
+      await seedMemberOrganization("Example Corp");
+      const response = await callEndpoint(
+        createApplication,
+        createContext(
+          makeEnv(),
+          // A different address entirely, and a spelling that only matches
+          // once the shared normalizer has had it.
+          await applicationRequest({
+            ...validPayload,
+            applicantEmail: "outsider@unrelated.test",
+            organizationName: "  EXAMPLE   corp ",
+          }),
+          {},
+        ),
+      );
+
+      expect(response.status).toBe(409);
+      const body = (await response.json()) as {
+        error: { code: string; message: string; details: { fieldErrors: Record<string, string[]> } };
+      };
+      expect(body.error.code).toBe("ORGANIZATION_ALREADY_MEMBER");
+      // Named as the consortium spells it, not as the applicant typed it, and
+      // carried on the box they would have to change.
+      expect(body.error.message).toContain("Example Corp");
+      expect(body.error.details.fieldErrors.organizationName?.[0]).toContain("Example Corp");
+      expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM organization_domain_claims")).toHaveLength(0);
+    });
+
+    it("accepts one for an organization that is known but is not a member", async () => {
+      // An `organizations` row is not a membership: sponsors, speakers and
+      // migrated contacts all have one. Refusing on the row alone would lock
+      // those organizations out of applying.
+      await seedMemberOrganization("Example Corp", "");
+      const response = await callEndpoint(
+        createApplication,
+        createContext(makeEnv(), await applicationRequest(validPayload), {}),
+      );
+
+      expect(response.status).toBe(201);
+    });
+
+    it("accepts one for an organization whose membership has lapsed", async () => {
+      await seedMemberOrganization("Example Corp", "lapsed");
+      const response = await callEndpoint(
+        createApplication,
+        createContext(makeEnv(), await applicationRequest(validPayload), {}),
+      );
+
+      expect(response.status).toBe(201);
+    });
+
+    it("accepts an individual application that happens to name it", async () => {
+      // An individual membership stands on the person, so the employer they
+      // name is incidental to it — it is not the aggregate being applied for,
+      // and it can be a member without saying anything about them.
+      await seedMemberOrganization("Example Corp");
+      const response = await callEndpoint(
+        createApplication,
+        createContext(makeEnv(), await applicationRequest({ ...validPayload, membershipCategory: "H6" }), {}),
+      );
+
+      expect(response.status).toBe(201);
+    });
   });
 
   it("rolls back application, answers, domain claim, event, and outbox when the atomic audit insert fails", async () => {

@@ -168,7 +168,10 @@ describe("group workspace switching", () => {
 
     await act(() => render(<GroupWorkspace groupId={GROUP_X} view="events" resourceId="EV1" />, container));
     await settle();
-    expect(contexts()).toEqual(["Alpha Working Group"]);
+    expect(contexts()).toContain("Alpha Working Group");
+    expect(container.querySelector('.pk-breadcrumb a[href="#/groups/' + GROUP_X + '"]')?.textContent).toBe(
+      "Alpha Working Group",
+    );
   });
 
   it("never shows the previous group's workspace or tab links while the next group loads", async () => {

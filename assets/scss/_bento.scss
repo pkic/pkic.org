@@ -594,7 +594,10 @@ $wg-colors: (
     width: 64px;
     height: 64px;
     flex-shrink: 0;
-    font-size: 1.25rem;
+    // Two letters at 40% of the tile, the proportion every initials avatar
+    // on the site now keeps, so the mark reads as a mark and not as a
+    // caption floating in an empty square (#44).
+    font-size: 1.6rem;
     font-weight: 800;
     letter-spacing: 0.04em;
     color: #fff;
@@ -728,16 +731,19 @@ $wg-colors: (
   color: #fff;
   user-select: none;
 
+  // Each size keeps the letters at 40% of the circle. The two big rounds on a
+  // member's profile were the worst case of #44: a 120px hero wearing 32px
+  // letters read as a mostly empty disc.
   &.standalone-initials--representative {
     width: 100px;
     height: 100px;
-    font-size: 1.5rem;
+    font-size: 2.5rem;
   }
 
   &.standalone-initials--hero {
     width: 120px;
     height: 120px;
-    font-size: 2rem;
+    font-size: 3rem;
   }
 
   &.initial-color-0 {

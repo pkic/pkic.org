@@ -84,7 +84,7 @@ afterEach(() => {
 });
 
 describe("group collection create actions", () => {
-  it("keeps event creation behind the list's create action", async () => {
+  it("sends event creation to its own address instead of unfolding inside the list", async () => {
     stubEmptyCollections();
 
     const events = mount(<GroupEvents groupId={GROUP_ID} canManage />);
@@ -92,9 +92,37 @@ describe("group collection create actions", () => {
 
     expect(events.textContent).not.toContain("New group event");
     await clickButton(events, "Create event");
-    expect(events.textContent).toContain("New group event");
-    await clickButton(events, "Cancel");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/new`);
+    // The action navigates and does nothing else: the editor does not also
+    // open in place, so this mount still shows only the list.
     expect(events.textContent).not.toContain("New group event");
+  });
+
+  it("renders the event create segment as a page of its own, with a way back", async () => {
+    stubEmptyCollections();
+
+    const events = mount(<GroupEvents groupId={GROUP_ID} canManage initialEventId="new" />);
+    await settle();
+
+    // The create page is the only thing on screen: the table and the toolbar
+    // action that opened it are gone rather than sitting below the form.
+    expect(events.textContent).toContain("New group event");
+    expect(events.querySelector("table")).toBeNull();
+    // Not asserted by the toolbar action's absence: the editor's own submit
+    // is called "Create event" too, so the table is what says the list is
+    // gone rather than sitting below the form.
+    expect(events.querySelector('[role="toolbar"]')).toBeNull();
+
+    await clickButton(events, "Cancel");
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
+  });
+
+  it("returns a viewer who cannot manage an event create segment to the list", async () => {
+    stubEmptyCollections();
+
+    mount(<GroupEvents groupId={GROUP_ID} canManage={false} initialEventId="new" />);
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
   });
 
   it("sends form and vote creation to their own addresses instead of unfolding inside the list", async () => {
@@ -135,11 +163,11 @@ describe("group collection create actions", () => {
     expect(createVoteForm(votes)).not.toBeNull();
     expect(votes.querySelector("table")).toBeNull();
 
-    await clickButton(forms, "← All forms");
+    await clickButton(forms, "Cancel");
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms`);
 
     navigate.mockReset();
-    await clickButton(votes, "← All votes");
+    await clickButton(votes, "Cancel");
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/votes`);
   });
 

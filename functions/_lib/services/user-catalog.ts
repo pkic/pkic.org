@@ -9,7 +9,9 @@ import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuer
 import { resolveOrderBy } from "../db/sort";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike } from "../types";
+import { groupCanSeatUserPredicate } from "./groups/capacities";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "./groups/governance";
+import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "./membership/capacity-query";
 import { getGroup } from "./groups/read-model";
 import { buildUserIdentitySearchFilter } from "./user-search";
 
@@ -21,7 +23,15 @@ interface UserCatalogRow {
   organization_name: string | null;
 }
 
-export function buildUserCatalogPageQuery(query: UserCatalogListQuery): OffsetPageQuery {
+/**
+ * @param seatableInGroupId When given, only the users this group could
+ *   actually seat. The picker and the seating command then answer one
+ *   question instead of two: the roster picker used to offer every active
+ *   user in the system and the seat was refused afterwards with
+ *   `GROUP_CAPACITY_REQUIRED`, once a manager had already chosen a title and
+ *   two dates (#25).
+ */
+export function buildUserCatalogPageQuery(query: UserCatalogListQuery, seatableInGroupId?: string): OffsetPageQuery {
   const conditions = ["u.active = 1"];
   const bindings: unknown[] = [];
   if (query.q) {
@@ -29,8 +39,18 @@ export function buildUserCatalogPageQuery(query: UserCatalogListQuery): OffsetPa
     conditions.push(search.sql);
     bindings.push(...search.bindings);
   }
+  if (seatableInGroupId) {
+    conditions.push(groupCanSeatUserPredicate("u"));
+    // The group, then the allow-managed flag the predicate documents: a
+    // manager seating somebody may cross a `managed` group's own join gate,
+    // which is what "managed" means.
+    bindings.push(seatableInGroupId, 1);
+  }
   return {
     source: {
+      // The shared CTE prefix, so the count statement carries it too — a page
+      // whose filter the count cannot see reports a total nothing matches.
+      withSql: seatableInGroupId ? ALL_ACTIVE_USER_CAPACITIES_CTE : undefined,
       selectSql: "SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name",
       fromSql: `FROM users u WHERE ${conditions.join(" AND ")}`,
       bindings,
@@ -65,7 +85,7 @@ export async function listGroupUsers(
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, actor, group.id);
 
-  const pageQuery = buildUserCatalogPageQuery(query);
+  const pageQuery = buildUserCatalogPageQuery(query, group.id);
   const pageStatements = buildOffsetPageStatements(db, pageQuery);
   let results;
   try {

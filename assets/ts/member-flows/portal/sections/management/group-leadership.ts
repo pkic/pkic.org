@@ -4,7 +4,6 @@
  */
 import {
   GROUP_LEADERSHIP_ROLE_IDS,
-  GROUP_LEADERSHIP_TITLE_SUGGESTIONS,
   defaultGroupLeadershipTitle,
   type GroupLeadershipRoleId,
   type GroupLeadershipTitles,
@@ -20,11 +19,6 @@ export function groupLeadershipRoleOptions(
     value: roleId,
     label: `${defaultGroupLeadershipTitle(titles, roleId)} (${roleId === "role-group_lead" ? "lead" : "deputy"} role)`,
   }));
-}
-
-/** The default title first, then the shared suggestions, without repeats. */
-export function groupLeadershipTitleOptions(titles: GroupLeadershipTitles, roleId: GroupLeadershipRoleId): string[] {
-  return [...new Set([defaultGroupLeadershipTitle(titles, roleId), ...GROUP_LEADERSHIP_TITLE_SUGGESTIONS[roleId]])];
 }
 
 /** "Since 1 Jan 2021", "1 Jan 2021 – 3 Feb 2025", or "1 Jan 2021 – until 30 Jun 2026" for a scheduled end. */

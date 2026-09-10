@@ -35,7 +35,9 @@ const WIDTHS = [
 /** The portal screens that are migrated and worth holding to this standard. */
 const SCREENS = [
   { name: "home", path: "#/" },
-  { name: "profile", path: "#/profile" },
+  // The person's record replaced the separate profile page; this session is
+  // staff, so the directory is the screen it can open without knowing an id.
+  { name: "users", path: "#/users" },
   { name: "account", path: "#/account" },
   { name: "groups", path: "#/groups" },
   { name: "organizations", path: "#/organizations" },

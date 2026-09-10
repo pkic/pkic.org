@@ -1,4 +1,10 @@
 import { Fragment, type ComponentChildren } from "preact";
+
+/**
+ * How the pairs are laid out: down the left in a panel, or flowing across the
+ * width in a table cell.
+ */
+export type DetailsLayout = "stacked" | "inline";
 import { formatDateTime } from "../shared/ui";
 // `pk-datalist`, `pk-code-block` and `pk-answer-pre` are written here as class
 // names rather than reached through a component, so this module has to pull
@@ -101,8 +107,15 @@ function RawDetailsFallback({ value }: { value: unknown }) {
  * is a two-column grid over `dl > dt` and `dl > dd`, so a wrapper element
  * between them takes both out of the grid and leaves the browser's default
  * 40px `dd` indent in place.
+ *
+ * `inline` is for a table cell. Stacked, a five-pair detail is five short rows
+ * hugging the left edge of a column that has been given most of a wide
+ * screen's width — which is the dead space #48 asked about. Flowing, the same
+ * pairs read across the width they were given. Each inline pair is one flex
+ * item, with its own term/value grid, so wrapping cannot separate a term
+ * from its value.
  */
-export function DetailsSummary({ value }: { value: unknown }) {
+export function DetailsSummary({ value, layout = "stacked" }: { value: unknown; layout?: DetailsLayout }) {
   if (value === null || value === undefined) return null;
   if (!isPlainObject(value)) return <RawDetailsFallback value={value} />;
 
@@ -111,13 +124,20 @@ export function DetailsSummary({ value }: { value: unknown }) {
   if (jsonDepth(value) > 2) return <RawDetailsFallback value={value} />;
 
   return (
-    <dl class="pk-datalist">
-      {entries.map(([key, entryValue]) => (
-        <Fragment key={key}>
-          <dt>{humanizeKey(key)}</dt>
-          <dd>{renderValue(entryValue)}</dd>
-        </Fragment>
-      ))}
+    <dl class={layout === "inline" ? "pk-datalist pk-datalist--inline" : "pk-datalist"}>
+      {entries.map(([key, entryValue]) =>
+        layout === "inline" ? (
+          <div class="pk-datalist" key={key}>
+            <dt>{humanizeKey(key)}</dt>
+            <dd>{renderValue(entryValue)}</dd>
+          </div>
+        ) : (
+          <Fragment key={key}>
+            <dt>{humanizeKey(key)}</dt>
+            <dd>{renderValue(entryValue)}</dd>
+          </Fragment>
+        ),
+      )}
     </dl>
   );
 }

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,12 +70,34 @@ function json(value: unknown, status = 200): Response {
 }
 
 async function settle(): Promise<void> {
-  // Two rounds: one for the group-detail fetch, one for the lazily imported view.
+  // A fetch, then the chunk the view lazily imports, then the chunk that view
+  // lazily imports in turn — the settings page loads its open tab.
   for (let round = 0; round < 3; round += 1) {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
   }
+}
+
+/**
+ * Waits for something to appear rather than for a number of ticks to pass.
+ *
+ * Counting `settle()` rounds is counting chunk loads, and the count changes
+ * whenever a view gains or loses a lazy boundary — which is how this file
+ * started failing for two people at once when a neighbouring surface was
+ * split. It also depends on whether the module registry is warm, so it could
+ * pass alone and fail inside the full suite. Waiting on the condition does
+ * not care about either.
+ */
+async function waitFor<T>(find: () => T | null | undefined, what: string): Promise<T> {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const found = find();
+    if (found) return found;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  throw new Error(`${what} never appeared`);
 }
 
 // The workspace lazy-loads its tab views; warm the module graph so the lazy
@@ -165,7 +188,15 @@ describe("portal selected-group workspace", () => {
 
     // The design-system Field owns the control's id, so the input is found
     // the way a reader finds it: through the label that points at it.
-    const nameLabel = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Name"))!;
+    await waitFor(
+      () => container.querySelector('button[aria-label="Group settings actions"]'),
+      "group settings actions",
+    );
+    await beginRecordEdit(container, "Group settings actions");
+    const nameLabel = await waitFor(
+      () => [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Name")),
+      "the group settings name field",
+    );
     expect(nameLabel.htmlFor).not.toBe("");
     const name = container.querySelector<HTMLInputElement>(`[id="${nameLabel.htmlFor}"]`)!;
     expect(name).not.toBeNull();
@@ -247,7 +278,7 @@ describe("portal selected-group workspace", () => {
     expect(context).not.toBeNull();
     expect(context.querySelector("h2")?.textContent).toBe("Architecture Committee");
     // The trail leads back to the catalog.
-    const trailLink = container.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a');
+    const trailLink = container.querySelector<HTMLAnchorElement>('nav[aria-label="Group navigation"] a');
     expect(trailLink?.getAttribute("href")).toBe("#/groups");
 
     // The strip says which set of sections it is, and the current one is

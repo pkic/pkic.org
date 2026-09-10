@@ -62,12 +62,40 @@ export async function typeInto(control: HTMLElement, value: string): Promise<voi
   });
 }
 
+/**
+ * Ticks or unticks a choice control the way the browser would.
+ *
+ * A browser fires `input` and then `change` for a checkbox or radio, and
+ * Preact reconciles a controlled input from the first of those. A test that
+ * dispatched only `change` was describing something no browser does, and
+ * passed against a control no reader could actually tick.
+ */
+export async function toggleChoice(control: HTMLElement): Promise<void> {
+  const input = control as HTMLInputElement;
+  input.checked = !input.checked;
+  await act(() => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 /** Chooses an option the way the browser would. */
 export async function chooseOption(control: HTMLElement, value: string): Promise<void> {
   (control as HTMLSelectElement).value = value;
   await act(() => {
     control.dispatchEvent(new Event("change", { bubbles: true }));
   });
+}
+
+/**
+ * The values a select actually offers, in document order.
+ *
+ * What a control offers is the thing issue #24 was about: the route accepted a
+ * value the form never listed. Comparing this against the shared vocabulary is
+ * how a test says the two cannot drift apart.
+ */
+export function optionValues(control: HTMLSelectElement): string[] {
+  return [...control.options].map((option) => option.value);
 }
 
 /** Submits the one form inside `root` and lets its handler settle. */

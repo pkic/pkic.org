@@ -295,13 +295,15 @@ describe("group event workspace", () => {
       "Location",
     ]);
 
-    // A link that leaves the page says so in words, not by an icon alone.
+    // A link that leaves the page says so in words, not by an icon alone —
+    // now through the shared marked list rather than a second hand-rolled one.
     const list = container.querySelector('ul[aria-label="Event links"]');
     expect(list).not.toBeNull();
     const link = list?.querySelector("a");
     expect(link?.getAttribute("href")).toBe("https://example.test/agenda");
     expect(link?.textContent).toContain("(opens in a new tab)");
     expect(link?.querySelector(".pk-sr-only")).not.toBeNull();
+    expect(link?.querySelector(".pk-link-list__label")?.textContent).toBe("example.test");
   });
 
   it("offers the meeting series as a real link rather than a handler no keyboard can reach", () => {

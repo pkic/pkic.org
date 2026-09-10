@@ -33,7 +33,18 @@ export function eventDetailTabsForCapabilities(capabilities: EventDetail["capabi
   return TABS.filter(({ capability }) => !capability || capabilities.includes(capability));
 }
 
-export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; tab?: string; subTab?: string }) {
+export function EventDetailView({
+  slug,
+  tab: tabProp,
+  subTab,
+  detailSegment,
+}: {
+  slug: string;
+  tab?: string;
+  subTab?: string;
+  /** The segment below a settings sub-tab; `"new"` under Team opens its add page. */
+  detailSegment?: string;
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
@@ -103,7 +114,9 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
         )}
         {tab === "promoters" && <Promoters slug={slug} subTab={subTab} />}
         {tab === "stats" && <EventStats slug={slug} />}
-        {tab === "settings" && <Settings event={event} onUpdated={handleUpdated} subTab={subTab} />}
+        {tab === "settings" && (
+          <Settings event={event} onUpdated={handleUpdated} subTab={subTab} detailSegment={detailSegment} />
+        )}
       </Suspense>
     </div>
   );

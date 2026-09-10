@@ -68,13 +68,8 @@ export function RoleCreate({ onCreated, onCancel }: { onCreated: (roleId: string
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button variant="secondary" size="sm" onClick={onCancel}>
-          ← All roles
-        </Button>
-      </div>
       <Panel>
-        <PanelHeader title="New role" />
+        <PanelHeader title="New role" headingLevel={2} breadcrumb />
         <PanelBody>
           {/* The form is named, so the panel it sits in and the form itself are
               distinguishable to anything navigating by landmark or by form. */}

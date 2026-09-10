@@ -20,6 +20,14 @@ export function eventRegistrationStatusLabel(status: EventRegistrationStatus): s
 }
 
 export const eventRegistrationAttendanceChangeFilterSchema = z.enum(["any", "left_in_person", "joined_in_person"]);
+export type EventRegistrationAttendanceChangeFilter = z.infer<typeof eventRegistrationAttendanceChangeFilterSchema>;
+
+/** The words the attendance-change view is offered under, beside the filter it narrows by. */
+export const EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS: Record<EventRegistrationAttendanceChangeFilter, string> = {
+  any: "Changed attendance",
+  left_in_person: "Left in-person and is no longer in-person",
+  joined_in_person: "Joined in-person and is currently in-person",
+};
 export const booleanQueryValueSchema = z.enum(["true", "false"]);
 export const eventRegistrationsQuerySchema = searchableListQuerySchema(
   sortColumnSchema(EVENT_REGISTRATIONS_SORT_COLUMNS),

@@ -1,3 +1,4 @@
+import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * One organization's record, read like an account page in a CRM.
  *
@@ -57,6 +58,7 @@ export function OrganizationDetail({
   canReadSponsorships: boolean;
 }) {
   const [organization, setOrganization] = useState<OrganizationDetailModel | null>(null);
+  const categories = useMembershipCategoryLabels(Boolean(organization?.membershipCategory));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Editing is the page's mode, not a card's: one draft, one Save, and every
@@ -172,11 +174,7 @@ export function OrganizationDetail({
         title={draft?.name.trim() ? draft.name : organization.name}
         lede={draft?.slogan.trim() ? draft.slogan : (organization.slogan ?? undefined)}
         facts={[
-          organization.membershipCategory ? (
-            <>
-              Category <span class="pk-mono">{organization.membershipCategory}</span>
-            </>
-          ) : null,
+          organization.membershipCategory ? <>{categories.label(organization.membershipCategory)}</> : null,
           organization.memberSince ? `Member since ${fmtDate(organization.memberSince)}` : null,
           /* Reads as a sentence rather than as a bare number. */
           `${String(count)} active ${count === 1 ? "representative" : "representatives"}`,

@@ -21,11 +21,21 @@ export const voteElectorateModeSchema = z.enum(VOTE_ELECTORATE_MODES);
 export const THRESHOLD_TYPES = ["simple_majority", "supermajority", "successive_elimination"] as const;
 export const thresholdTypeSchema = z.enum(THRESHOLD_TYPES);
 
+/**
+ * How a tie is settled. `chair` counts the chair's own ballot twice; `none`
+ * leaves the question unresolved, which the bylaws read as not approved.
+ */
+export const VOTE_TIE_BREAK_MODES = ["none", "chair"] as const;
+export const voteTieBreakModeSchema = z.enum(VOTE_TIE_BREAK_MODES);
+export type VoteTieBreakMode = z.infer<typeof voteTieBreakModeSchema>;
+
 export const VOTE_VISIBILITIES = ["private", "public"] as const;
 export const voteVisibilitySchema = z.enum(VOTE_VISIBILITIES);
+export type VoteVisibility = z.infer<typeof voteVisibilitySchema>;
 
 export const PUBLIC_DETAIL_LEVELS = ["outcome_only", "aggregate", "full_breakdown"] as const;
 export const publicDetailLevelSchema = z.enum(PUBLIC_DETAIL_LEVELS);
+export type PublicDetailLevel = z.infer<typeof publicDetailLevelSchema>;
 
 export const VOTE_STATUSES = ["scheduled", "open", "closed", "cancelled"] as const;
 export const voteStatusSchema = z.enum(VOTE_STATUSES);
@@ -171,7 +181,7 @@ export const voteSummaryFieldsSchema = {
   thresholdType: thresholdTypeSchema,
   questionFormId: databaseIdSchema.nullable().default(null),
   quorumPercent: z.number().int().min(1).max(100).nullable().default(null),
-  tieBreakMode: z.enum(["none", "chair"]).default("none"),
+  tieBreakMode: voteTieBreakModeSchema.default("none"),
   excludedMemberIds: z.array(databaseIdSchema).max(200).nullable().default(null),
   eligibleCategories: membershipCategorySelectionSchema.nullable(),
   opensAt: z.string(),

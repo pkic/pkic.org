@@ -22,7 +22,6 @@ test("permitted staff manage donations through the neutral resource API", async 
   await signInToPortal(page, e2eAdminEmail("portal-donations"));
   await page.goto("/portal/#/donations");
 
-  await expect(tab(page, "Donations")).toBeVisible();
   const donorCell = page.getByRole("cell", { name: /E2E Donor — Example Organization/ });
   await expect(donorCell).toBeVisible();
 
@@ -32,16 +31,28 @@ test("permitted staff manage donations through the neutral resource API", async 
   await expect(page.getByText("cs_test_e2e_portal_donation", { exact: true })).toBeVisible();
 
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Donations" }).click();
-  await tab(page, "Share Links").click();
+
+  // The section's other pages are listed in the sidebar under Donations while
+  // the reader is in it, rather than as a tab strip above the list (#43).
+  const donationPages = page.getByRole("list", { name: "Donations pages" });
+  await donationPages.getByRole("link", { name: "Share links" }).click();
   await expect(page).toHaveURL(/\/portal\/#\/donations\/promoters$/);
   await expect(page.getByText("E2E Promoter", { exact: true })).toBeVisible();
 
-  // Donation analytics moved from System Analytics into a Stats tab here,
-  // alongside the domain that owns it (see portal-system-analytics.spec.ts,
-  // which confirms Donations no longer appears in System Analytics's tabs).
-  await tab(page, "Stats").click();
-  await expect(page).toHaveURL(/\/portal\/#\/donations\/stats$/);
+  // Donation analytics moved out of the system-wide panel into a page here,
+  // alongside the domain that owns it (see portal-event-analytics.spec.ts,
+  // which confirms Donations no longer appears in the event analytics tabs).
+  await donationPages.getByRole("link", { name: "Analytics" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/donations\/analytics$/);
+  await expect(page.getByRole("heading", { name: "Donation analytics" })).toBeVisible();
   await expect(page.getByText("Total Gross (USD)", { exact: true })).toBeVisible();
+
+  // The four period views are tabs on that page, each with its own address,
+  // so the totals stay in view while one period is being read.
+  await tab(page, "Weekly").click();
+  await expect(page).toHaveURL(/\/portal\/#\/donations\/analytics\/weekly$/);
+  await expect(page.getByText("Total Gross (USD)", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Donations — Weekly (last 12 weeks)" })).toBeVisible();
 
   await page.goto("/portal/#/donations");
   await expect(page).toHaveURL(/\/portal\/#\/donations$/);
@@ -55,7 +66,9 @@ test("permitted staff manage donations through the neutral resource API", async 
     ]),
   );
   expect(legacyRequests).toEqual([]);
-  expect(analyticsRequests).toEqual(["/api/v1/analytics/donations"]);
+  // Which analytics endpoint was asked, not how many times: moving between the
+  // period views may re-read the same one.
+  expect([...new Set(analyticsRequests)]).toEqual(["/api/v1/analytics/donations"]);
 });
 
 test("permitted staff filter donations by status and open the donation's badge and sync controls", async ({ page }) => {

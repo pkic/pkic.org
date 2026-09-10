@@ -123,6 +123,7 @@ describe("secure meeting join browser flow", () => {
     const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
     checkbox.checked = true;
     void act(() => {
+      checkbox.dispatchEvent(new Event("input", { bubbles: true }));
       checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     });
     const button = container.querySelector<HTMLButtonElement>("button")!;
@@ -177,6 +178,7 @@ describe("secure meeting join browser flow", () => {
     const checkbox = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
     await act(async () => {
       checkbox.checked = true;
+      checkbox.dispatchEvent(new Event("input", { bubbles: true }));
       checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await act(async () => {

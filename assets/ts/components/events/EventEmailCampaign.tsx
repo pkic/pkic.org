@@ -8,16 +8,26 @@ import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../ui/TextControl";
 import { highlightTemplateSyntax } from "../../shared/email-template-syntax";
 import {
+  eventEmailCampaignDayWaitlistFilterSchema,
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
+  eventEmailCampaignSendModeSchema,
+  eventEmailCampaignSpeakerStatusFilterSchema,
+  type EventEmailCampaignDayWaitlistFilter,
   type EventEmailCampaignPreviewResponse,
+  type EventEmailCampaignSendMode,
+  type EventEmailCampaignSpeakerStatusFilter,
 } from "../../../shared/schemas/event-email-campaigns";
+import { EMAIL_MESSAGE_TYPE_OPTIONS } from "../../shared/email-type-options";
 import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../shared/email-template-helpers";
 import type { EmailMessageType } from "../../../shared/schemas/email-templates";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import {
+  DAY_WAITLIST_FILTER_LABELS,
   HELPER_CATEGORIES,
   PERSONAL_ONLY_HELPERS,
+  SEND_MODE_LABELS,
+  SPEAKER_STATUS_FILTER_LABELS,
   availableHelperLabelsForAudience,
   availablePartialsForAudience,
   type CampaignPayload,
@@ -87,7 +97,7 @@ export function EventEmailCampaign({
   const days = useDays(daysPath);
 
   const [templateKey, setTemplateKey] = useState("");
-  const [mode, setMode] = useState<"personal" | "bcc_batch">("personal");
+  const [mode, setMode] = useState<EventEmailCampaignSendMode>("personal");
   const [messageType, setMessageType] = useState<EmailMessageType>("promotional");
   const [batchSize, setBatchSize] = useState(500);
   const [subject, setSubject] = useState("");
@@ -98,10 +108,10 @@ export function EventEmailCampaign({
   const [attendeeStatus, setAttendeeStatus] = useState<EventRegistrationStatusFilter>("registered");
   const [attendanceType, setAttendanceType] = useState("all");
   const [dayFilter, setDayFilter] = useState("");
-  const [dayWaitlistStatus, setDayWaitlistStatus] = useState("all");
+  const [dayWaitlistStatus, setDayWaitlistStatus] = useState<EventEmailCampaignDayWaitlistFilter>("all");
 
   // speaker filters
-  const [speakerStatus, setSpeakerStatus] = useState("confirmed");
+  const [speakerStatus, setSpeakerStatus] = useState<EventEmailCampaignSpeakerStatusFilter>("confirmed");
 
   // preview state
   const [preview, setPreview] = useState<EventEmailCampaignPreviewResponse | null>(null);
@@ -190,9 +200,9 @@ export function EventEmailCampaign({
       base.filter.attendeeStatus = attendeeStatus as CampaignPayload["filter"]["attendeeStatus"];
       base.filter.attendanceType = attendanceType as CampaignPayload["filter"]["attendanceType"];
       if (dayFilter) base.filter.dayDate = dayFilter;
-      base.filter.dayWaitlistStatus = dayWaitlistStatus as CampaignPayload["filter"]["dayWaitlistStatus"];
+      base.filter.dayWaitlistStatus = dayWaitlistStatus;
     } else {
-      base.filter.speakerStatus = speakerStatus as CampaignPayload["filter"]["speakerStatus"];
+      base.filter.speakerStatus = speakerStatus;
     }
     return base;
   }
@@ -282,10 +292,13 @@ export function EventEmailCampaign({
             <Select
               {...control}
               value={mode}
-              onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
+              onChange={(e) => setMode(eventEmailCampaignSendModeSchema.parse((e.target as HTMLSelectElement).value))}
             >
-              <option value="personal">Personal (1:1)</option>
-              <option value="bcc_batch">Broadcast BCC</option>
+              {eventEmailCampaignSendModeSchema.options.map((sendMode) => (
+                <option key={sendMode} value={sendMode}>
+                  {SEND_MODE_LABELS[sendMode]}
+                </option>
+              ))}
             </Select>
           )}
         </Field>
@@ -296,8 +309,11 @@ export function EventEmailCampaign({
               value={messageType}
               onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
             >
-              <option value="transactional">Transactional</option>
-              <option value="promotional">Promotional</option>
+              {EMAIL_MESSAGE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </Select>
           )}
         </Field>
@@ -458,14 +474,17 @@ export function EventEmailCampaign({
               <Select
                 {...control}
                 value={dayWaitlistStatus}
-                onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
+                onChange={(e) =>
+                  setDayWaitlistStatus(
+                    eventEmailCampaignDayWaitlistFilterSchema.parse((e.target as HTMLSelectElement).value),
+                  )
+                }
               >
-                <option value="all">Any state</option>
-                <option value="active">Active waitlist</option>
-                <option value="waiting">Waiting</option>
-                <option value="offered">Offer sent</option>
-                <option value="accepted">Accepted offer</option>
-                <option value="none">Not waitlisted</option>
+                {eventEmailCampaignDayWaitlistFilterSchema.options.map((waitlistStatus) => (
+                  <option key={waitlistStatus} value={waitlistStatus}>
+                    {DAY_WAITLIST_FILTER_LABELS[waitlistStatus]}
+                  </option>
+                ))}
               </Select>
             )}
           </Field>
@@ -477,12 +496,21 @@ export function EventEmailCampaign({
               <Select
                 {...control}
                 value={speakerStatus}
-                onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
+                onChange={(e) =>
+                  setSpeakerStatus(
+                    eventEmailCampaignSpeakerStatusFilterSchema.parse((e.target as HTMLSelectElement).value),
+                  )
+                }
               >
-                <option value="confirmed">Confirmed</option>
-                <option value="all">All active</option>
-                <option value="invited">Invited</option>
-                <option value="pending">Pending</option>
+                {/* Reading the contract's order puts "All active" at the head
+                    of the list where the hand-written version led with
+                    "Confirmed"; the composer still opens on confirmed
+                    speakers, because that is what the state starts as. */}
+                {eventEmailCampaignSpeakerStatusFilterSchema.options.map((status) => (
+                  <option key={status} value={status}>
+                    {SPEAKER_STATUS_FILTER_LABELS[status]}
+                  </option>
+                ))}
               </Select>
             )}
           </Field>

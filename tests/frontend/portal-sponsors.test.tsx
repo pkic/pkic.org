@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
@@ -53,12 +54,78 @@ describe("portal sponsor management", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const container = mount(<Sponsorships canRead={false} canWrite />);
+    const container = mount(<Sponsorships canRead={false} canWrite onNavigate={() => {}} />);
     await settle();
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    /*
+     * Nothing from the pipeline is fetched: no sponsorship list, no company
+     * grouping, no tier pricing. The one request is the public tier catalog
+     * the create form offers as choices — reference data with no pricing and
+     * no permission behind it, which is the same endpoint the public inquiry
+     * form reads.
+     */
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+      "/api/v1/sponsors/tiers?sponsorType=consortium",
+    ]);
     expect(container.textContent).toContain("Create sponsorship");
     expect(container.textContent).not.toContain("Sponsorship tier pricing");
+  });
+
+  it("searches and sorts the company list through the shared table, not on its own", async () => {
+    /*
+     * Issue #31: this was the one list in the portal with neither a search
+     * box nor a sortable column, though the endpoint behind it had taken `q`
+     * and both sort columns from the day it was written. What is asserted is
+     * that the list asks — the query string carries them — because the
+     * alternative implementation, filtering a fetched page in the browser,
+     * is exactly what the shared table exists to prevent.
+     */
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          "https://app.test",
+        );
+        requests.push(url);
+        if (url.pathname === "/api/v1/sponsors/companies") {
+          return Response.json({
+            companies: [{ key: "org:1", label: "Acme Corp", website: null, sponsorshipCount: 2, stages: "active" }],
+            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+          });
+        }
+        return Response.json({ tiers: [] });
+      }),
+    );
+
+    const container = mount(<Sponsorships canRead canWrite onNavigate={() => {}} />);
+    await settle();
+
+    // A search box the list did not have, sending the term to the endpoint.
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]');
+    expect(search).not.toBeNull();
+    search!.value = "acme";
+    await act(async () => {
+      search!.dispatchEvent(new Event("input", { bubbles: true }));
+      await settle();
+    });
+    await act(async () => {
+      search!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await settle();
+    });
+    expect(requests.map((url) => url.searchParams.get("q"))).toContain("acme");
+
+    // And a column header that sorts, in D1 rather than in the browser.
+    const companyHeader = [...container.querySelectorAll<HTMLButtonElement>("th button")].find((button) =>
+      button.textContent?.includes("Company"),
+    );
+    expect(companyHeader).toBeDefined();
+    await act(async () => {
+      companyHeader!.click();
+      await settle();
+    });
+    expect(requests.map((url) => url.searchParams.get("sort"))).toContain("label");
   });
 
   it("loads tier pricing for readers and hides mutation controls without write permission", async () => {
@@ -111,9 +178,13 @@ describe("portal sponsor management", () => {
 
     const container = mount(<SponsorshipTierConfig canWrite />);
     await settle();
+    expect(container.querySelectorAll("input")).toHaveLength(0);
+    await beginRecordEdit(container, "Event Leader pricing actions", "Edit pricing");
     const amount = container.querySelector('input[name="amountCents"]') as HTMLInputElement;
     amount.value = "75000";
-    amount.dispatchEvent(new Event("input", { bubbles: true }));
+    await act(async () => {
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(async () => {
       (container.querySelector('button[type="submit"]') as HTMLButtonElement).click();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -144,6 +215,8 @@ describe("portal sponsor management", () => {
 
     const container = mount(<SponsorshipTierConfig canWrite />);
     await settle();
+    expect(container.querySelectorAll("input")).toHaveLength(0);
+    await beginRecordEdit(container, "Event Leader pricing actions", "Edit pricing");
 
     // A table with no caption is announced as "table"; several on one page are
     // announced as several tables.
@@ -225,7 +298,7 @@ describe("portal sponsorship pipeline filters", () => {
       vi.fn(async () => companiesPage([])),
     );
 
-    const container = mount(<Sponsorships canWrite={false} />);
+    const container = mount(<Sponsorships canWrite={false} onNavigate={() => {}} />);
     await settle();
 
     // No selects in the toolbar: the stage filter is the Stages column's own
@@ -246,7 +319,7 @@ describe("portal sponsorship pipeline filters", () => {
       }),
     );
 
-    const container = mount(<Sponsorships canWrite={false} />);
+    const container = mount(<Sponsorships canWrite={false} onNavigate={() => {}} />);
     await settle();
 
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stages column options"]');
@@ -279,7 +352,7 @@ describe("portal sponsorship pipeline filters", () => {
       ),
     );
 
-    const container = mount(<Sponsorships canWrite={false} />);
+    const container = mount(<Sponsorships canWrite={false} onNavigate={() => {}} />);
     await settle();
 
     const alert = container.querySelector('[role="alert"]');
@@ -291,7 +364,7 @@ describe("portal sponsorship pipeline filters", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const container = mount(<Sponsorships canRead={false} canWrite={false} />);
+    const container = mount(<Sponsorships canRead={false} canWrite={false} onNavigate={() => {}} />);
     await settle();
 
     expect(container.textContent).toBe("");

@@ -16,7 +16,7 @@ import {
   type EcDecisionRecordInput,
   type MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
-import type { EcDecisionValue } from "../../../../../shared/schemas/ec-review";
+import { ecDecisionValueSchema, type EcDecisionValue } from "../../../../../shared/schemas/ec-review";
 
 /** The two decisions, in the words the reader sees rather than the stored value. */
 const DECISION_LABEL: Record<EcDecisionValue, string> = {
@@ -149,8 +149,11 @@ export function ApplicationEcDecisionsCard({
                       value={ecDecision}
                       onChange={(event) => setEcDecision((event.target as HTMLSelectElement).value as EcDecisionValue)}
                     >
-                      <option value="approve">{DECISION_LABEL.approve}</option>
-                      <option value="decline">{DECISION_LABEL.decline}</option>
+                      {ecDecisionValueSchema.options.map((decision) => (
+                        <option key={decision} value={decision}>
+                          {DECISION_LABEL[decision]}
+                        </option>
+                      ))}
                     </Select>
                   )}
                 </Field>

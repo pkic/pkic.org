@@ -35,7 +35,7 @@ export const JOIN_FLOW = {
       id: "1.1.a",
       title: "Refuse a duplicate application, or one for an organization already known",
       status: "covered",
-      note: "A verified claimed domain routes an applicant to the existing Member. A second attempt by the same applicant produces no second application. An organization name that already exists is deliberately not refused — two organizations may legitimately share one, and staff resolve it at review.",
+      note: "A verified claimed domain routes an applicant to the existing Member. A second attempt by the same applicant produces no second application. Naming an organization that is already a member is refused at submission with that organization's name, so the applicant asks a representative rather than waiting on a review whose outcome was fixed before it opened (#27); an organization the consortium merely knows — a sponsor, a speaker's employer — is not a membership and does not refuse anything.",
     },
     {
       id: "1.1.b",

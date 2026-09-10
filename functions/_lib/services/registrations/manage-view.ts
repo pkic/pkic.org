@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { batchFirst } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -31,10 +32,12 @@ export async function buildRegistrationManageView(
     db.batch([
       db
         .prepare(
-          `SELECT id, email, first_name, last_name, organization_name, job_title, headshot_r2_key
-             FROM users WHERE id = ?`,
+          `SELECT u.id, u.email, u.first_name, u.last_name,
+             ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, u.headshot_r2_key
+             FROM registrations r JOIN users u ON u.id = r.user_id
+              WHERE r.id = ?`,
         )
-        .bind(registration.user_id),
+        .bind(registration.id),
       db.prepare(firstReferralCodeQuerySql("registration", "?")).bind(registration.id),
     ]),
     listEventDays(db, registration.event_id),
@@ -47,10 +50,12 @@ export async function buildRegistrationManageView(
     throw new AppError(409, "REGISTRATION_USER_MISSING", "The registration identity is no longer available");
   }
   const referral = batchFirst<{ code: string }>(identityResults[1]);
-  const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user?.headshot_r2_key ?? null);
+  const headshotUrl = publicUserHeadshotUrl(appBaseUrl, user.id, user.headshot_r2_key);
 
   return registrationManageReadResponseSchema.parse({
     success: true,
+    identityId: registration.registration_identity_id ?? null,
+    badgeVersion: registration.updated_at,
     registration: {
       id: registration.id,
       event_id: registration.event_id,

@@ -6,20 +6,18 @@
  * only their org's active tier (My Organization, not built here).
  *
  * Split into feature components (PR #1 review, Phase 8) — see
- * useCompanySponsorships, CompanyDetailPanel, SponsorshipDetail,
- * SponsorshipLogo, and CreateSponsorshipForm in this directory. This file
- * is just the filters + companies-table + company-drill-down composition.
+ * CompanyDetailPanel, SponsorshipDetail, SponsorshipLogo, and
+ * CreateSponsorshipForm in this directory. This file is just the
+ * companies-table + company-drill-down composition.
  *
  * 2026-07-30 testing feedback: the flat list mixed every sponsor of every
  * type/stage in one scroll, so finding "what does company X sponsor" meant
  * scanning the whole list for name matches. This drills down instead:
- * companies → that company's sponsorships → sponsorship detail. Company
- * grouping/sorting/pagination happens in D1 via `/companies`
- * (`listSponsorshipCompanies`), not by fetching every matching sponsorship
- * into the browser to group client-side (PR #1 review) — the detail panel
- * fetches only the selected company's rows, one server-paginated page at a
- * time, with an explicit "Load more" rather than a single capped fetch
- * rendered as complete (PR #1 review, Phase 7.2).
+ * companies → that company's sponsorships → sponsorship detail. Both lists
+ * are the shared table over a bounded D1 query — grouping, search, sort,
+ * filters and pagination all happen in `/companies`
+ * (`listSponsorshipCompanies`) and `/sponsors` respectively, never in the
+ * browser.
  */
 import { useEffect, useRef, useState } from "preact/hooks";
 import { readHashQueryParam } from "../../../../../shared/hash-query";
@@ -37,14 +35,7 @@ import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
 import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
 import { CompanyDetailPanel } from "./CompanyDetailPanel";
-import { useCompanySponsorships } from "./useCompanySponsorships";
 import { SponsorshipDetail } from "./SponsorshipDetail";
-
-export {
-  companyDetailParams,
-  buildCompanySponsorshipsUrl,
-  mergeCompanySponsorshipsPage,
-} from "./companySponsorshipsPage";
 
 function SponsorshipDetailPage({
   detailId,
@@ -65,6 +56,15 @@ function SponsorshipDetailPage({
     );
   }
   return <SponsorshipDetail id={detailId} canWrite={canWrite} />;
+}
+
+/** Reserved sponsorship segment that routes to the create page instead of a record. */
+const NEW_SPONSORSHIP_SEGMENT = "new";
+
+/** Redirects back to the pipeline from an effect, not render — see its call site below. */
+function SponsorshipsRedirect({ onNavigate }: { onNavigate: (segment?: string) => void }) {
+  useEffect(() => onNavigate(), [onNavigate]);
+  return null;
 }
 
 function SponsorshipCreateOnly() {
@@ -110,21 +110,41 @@ export function Sponsorships({
   canRead = true,
   canWrite,
   detailId,
+  onNavigate,
 }: {
   canRead?: boolean;
   canWrite: boolean;
   detailId?: string;
+  onNavigate: (segment?: string) => void;
 }) {
   if (!canRead) {
     return canWrite ? <SponsorshipCreateOnly /> : null;
   }
+  // Creating a sponsorship is a place with its own address, under a reserved
+  // segment, rather than a panel that unfolds above the pipeline it adds to.
+  if (detailId === NEW_SPONSORSHIP_SEGMENT) {
+    if (!canWrite) return <SponsorshipsRedirect onNavigate={onNavigate} />;
+    return (
+      <div class="pk pk-stack">
+        {/* The page's way back: creating has its own address, so leaving it
+            is navigation rather than the disappearance of a layer. */}
+        <div class="pk-cluster">
+          <Button size="sm" onClick={() => onNavigate()}>
+            ← All sponsorships
+          </Button>
+        </div>
+        <CreateSponsorshipForm onCreated={() => onNavigate()} onCancel={() => onNavigate()} />
+      </div>
+    );
+  }
   if (detailId) return <SponsorshipDetailPage detailId={detailId} canRead={canRead} canWrite={canWrite} />;
 
-  const [showCreate, setShowCreate] = useState(false);
   const tableRef = useRef<ApiTableActions | null>(null);
 
-  const company = useCompanySponsorships();
-  const { selectedCompany, selectCompany, backToCompanies, reload: reloadCompany } = company;
+  // Which company is open is a selection and nothing more: the panel it opens
+  // asks the sponsorships endpoint for that company's page itself, through the
+  // shared table, so there is no fetched page to keep here.
+  const [selectedCompany, setSelectedCompany] = useState<SponsorshipCompany | null>(null);
   // The company view is addressed by `?company=<key>` on the sponsors route,
   // so the trail's "Sponsors" crumb is a real link back: when the query goes,
   // the view goes with it. The portal's location hook strips the query, so
@@ -136,10 +156,10 @@ export function Sponsorships({
     return () => window.removeEventListener("hashchange", sync);
   }, []);
   useEffect(() => {
-    if (!companyKey && selectedCompany) backToCompanies();
-  }, [companyKey, selectedCompany, backToCompanies]);
+    if (!companyKey && selectedCompany) setSelectedCompany(null);
+  }, [companyKey, selectedCompany]);
   function openCompany(next: SponsorshipCompany) {
-    selectCompany(next);
+    setSelectedCompany(next);
     // Remembered here as well as in the address: `replaceState` announces no
     // hashchange, and the effect above would otherwise read the stale key
     // and send the view straight back to the list.
@@ -151,16 +171,15 @@ export function Sponsorships({
     history.replaceState(history.state, "", `#/sponsors?company=${encodeURIComponent(next.key)}`);
   }
 
-  function reloadAll() {
-    void tableRef.current?.reload();
-    reloadCompany();
-  }
-
   // The list contract's two filters live in the columns they narrow: the
   // stage filter on the stages column, the type filter on the count of
   // sponsorships — which is, once narrowed, the count of that type.
   const companyColumns: Column<SponsorshipCompany>[] = [
-    { header: "Company", cell: (c) => <span class="pk-strong">{c.label}</span> },
+    {
+      header: "Company",
+      cell: (c) => <span class="pk-strong">{c.label}</span>,
+      sort: { asc: "label", desc: "-label", defaultDirection: "asc" },
+    },
     {
       header: "Stages",
       cell: (c) => (
@@ -182,6 +201,7 @@ export function Sponsorships({
       header: "Sponsorships",
       cell: (c) => `${c.sponsorshipCount} sponsorship${c.sponsorshipCount === 1 ? "" : "s"}`,
       width: "fit",
+      sort: { asc: "sponsorshipCount", desc: "-sponsorshipCount", defaultDirection: "desc" },
       filter: {
         param: "type",
         options: [
@@ -194,20 +214,18 @@ export function Sponsorships({
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      {canWrite && showCreate && (
-        <CreateSponsorshipForm
-          onCreated={() => {
-            setShowCreate(false);
-            reloadAll();
-          }}
-          onCancel={() => setShowCreate(false)}
-        />
-      )}
-
       {!selectedCompany && (
         <ApiDataTable
           caption="Sponsoring companies"
           urlState="sponsorships"
+          /*
+           * Search and sort are the shared table's, not this list's: the
+           * companies endpoint has taken `q` and both sort columns since it
+           * was written, and this was the one list that never asked for them
+           * (#31). Nothing here implements either — the column says it sorts
+           * and the bar says what it searches, and the query does the rest.
+           */
+          searchPlaceholder="company, contact, event or tier"
           endpoint="/api/v1/sponsors/companies"
           responseSchema={sponsorshipCompaniesListResponseSchema}
           resolve={(data) => data.companies}
@@ -215,9 +233,7 @@ export function Sponsorships({
           paginate
           actionsRef={tableRef}
           createAction={
-            canWrite
-              ? { label: "Create sponsorship", onSelect: () => setShowCreate(true), disabled: showCreate }
-              : undefined
+            canWrite ? { label: "Create sponsorship", onSelect: () => onNavigate(NEW_SPONSORSHIP_SEGMENT) } : undefined
           }
           columns={companyColumns}
           rowKey={(c) => c.key}
@@ -232,7 +248,7 @@ export function Sponsorships({
         />
       )}
 
-      {selectedCompany && <CompanyDetailPanel selectedCompany={selectedCompany} company={company} />}
+      {selectedCompany && <CompanyDetailPanel selectedCompany={selectedCompany} />}
     </div>
   );
 }

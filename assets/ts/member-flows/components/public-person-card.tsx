@@ -1,18 +1,11 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { PublicOrganizationPerson } from "../../../shared/schemas/public-person";
+import { initialsFrom } from "../../shared/initials";
 import { LinkList } from "../../ui/LinkList";
-import { EMPTY_DATE, formatMonthYear } from "../../shared/ui";
+import { EMPTY_DATE, formatServiceDate } from "../../shared/ui";
 
 export type PublicPerson = PublicOrganizationPerson;
-
-export function initialsFor(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join("");
-}
 
 export function PublicPersonOrgLink({
   person,
@@ -60,7 +53,7 @@ export function PersonAvatar({
 }) {
   const [broken, setBroken] = useState(false);
   if (!person.photoUrl || broken) {
-    return <div class={`${initialsClass} wg-${color}`}>{initialsFor(person.name)}</div>;
+    return <div class={`${initialsClass} wg-${color}`}>{initialsFrom(person.name)}</div>;
   }
   return (
     // The name is the next thing in the card, so an alt repeating it makes a
@@ -126,8 +119,8 @@ export function PublicPersonCard({
    * actually be written down. A start the formatter cannot parse otherwise
    * produced "In role since —", which says less than saying nothing.
    */
-  const fromLabel = formatMonthYear(from);
-  const tillLabel = formatMonthYear(till);
+  const fromLabel = formatServiceDate(from);
+  const tillLabel = formatServiceDate(till);
   const tenure = fromLabel !== EMPTY_DATE || tillLabel !== EMPTY_DATE;
   const frameClasses = [
     "person-card-avatar-frame",
@@ -150,17 +143,25 @@ export function PublicPersonCard({
           <span class={`person-card-role-arc${past ? " person-card-role-arc--past" : ""}`}>{role}</span>
         </div>
         <div class="person-card-body">
-          <div class="person-card-name-row">
-            <span class="person-card-name">{person.name}</span>
-            <PersonLinks person={person} />
-          </div>
-          {person.jobTitle && (
-            <div class="person-card-jobtitle">
-              {person.jobTitle}
-              {person.organizationName && person.organizationName !== person.name && ` at ${person.organizationName}`}
-            </div>
-          )}
+          <span class="person-card-name">{person.name}</span>
+          {/*
+            The line under the name says what this person is, not where they
+            work: their own job title, or — when the profile carries none —
+            the title their term was made with. The employer is the
+            organization block directly below, with its logo and its link, and
+            naming it here as well said the company twice and the person's
+            standing nowhere but an 8px badge on the ring (issue #19).
+          */}
+          {(person.jobTitle || role) && <div class="person-card-jobtitle">{person.jobTitle ?? role}</div>}
           <OrganizationBlock person={person} />
+          {/*
+            A profile link is another fact about the person, so it reads with
+            the others rather than beside their name. On the name's own line it
+            pushed the name sideways in a row that could not wrap, so a card
+            with a link and a card without one no longer lined up — which is
+            what #13 came back as "socials are messed up for the chairs".
+          */}
+          <PersonLinks person={person} />
         </div>
       </div>
       {tenure && (

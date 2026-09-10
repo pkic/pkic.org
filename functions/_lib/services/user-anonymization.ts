@@ -4,6 +4,7 @@ import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../types"
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import { prepareStorageDeletion } from "./storage-deletion-outbox";
+import { profileImageBucketName } from "./profile-image-storage";
 import { buildUserAccessOffboardingStatements } from "./membership/offboarding";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
 import { prepareRotateUserProposalSpeakerManageSecrets } from "./registrations/manage-capability-revocation";
@@ -54,6 +55,7 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
       .prepare(
         `UPDATE registrations
             SET confirmation_link_secret = NULL,
+                registration_organization_name = NULL, registration_job_title = NULL,
                 pending_confirmation_deadline_at = NULL,
                 confirmation_reminder_sent_at = NULL,
                 manage_link_secret = lower(hex(randomblob(32))),
@@ -77,7 +79,12 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
     })),
     prepareBadgeRenderJobsForUser(authorizedDb, user.id, at),
   ];
-  const deletion = prepareStorageDeletion(authorizedDb, user.headshot_r2_key, at, "speaker_uploads");
+  const deletion = prepareStorageDeletion(
+    authorizedDb,
+    user.headshot_r2_key,
+    at,
+    profileImageBucketName(user.headshot_r2_key),
+  );
   if (deletion) statements.push(deletion);
   try {
     await authorizedDb.batch(statements);

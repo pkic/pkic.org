@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import { encodeBoundedCsv } from "../../csv";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -71,13 +72,14 @@ export async function buildRegistrationCsv(
     `SELECT r.id, r.status, r.attendance_type, r.source_type, r.created_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-            u.organization_name AS organization,
-            u.job_title,
+            ${REGISTRATION_ORGANIZATION_SQL} AS organization,
+            ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
             EXISTS(SELECT 1 FROM consent_acceptances ca
                    WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
             r.custom_answers_json, r.form_placement_id
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
+
      WHERE r.event_id = ?
        AND r.status IN ('registered', 'pending_email_confirmation')
      ORDER BY r.status ASC, r.created_at ASC

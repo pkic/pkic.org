@@ -41,6 +41,18 @@ export interface FieldProps {
   errorSlot?: string;
   /** A caller-supplied control id, for a form whose markup others address by id. */
   id?: string;
+  /**
+   * The field is a set of controls rather than one, so its name is a
+   * `<legend>` on a `<fieldset>` instead of a `<label for>`.
+   *
+   * A label points at exactly one control. Pointed at a group — a row of
+   * radios, a set of checkboxes, a widget made of several inputs — it names
+   * whichever one it happens to reference and leaves the rest anonymous,
+   * which is why every such group in this portal had hand-rolled its own
+   * legend and drifted. The typography, the help text and the message are the
+   * field's either way; only the element carrying the name changes.
+   */
+  group?: boolean;
   /** Receives the ids and ARIA the control must carry. */
   children: (control: FieldControlProps) => ComponentChildren;
 }
@@ -61,7 +73,17 @@ export function StateIcon({ state, class: className }: { state: FieldState; clas
   );
 }
 
-export function Field({ label, required = false, help, state, message, errorSlot, id: givenId, children }: FieldProps) {
+export function Field({
+  label,
+  required = false,
+  help,
+  state,
+  message,
+  errorSlot,
+  id: givenId,
+  group = false,
+  children,
+}: FieldProps) {
   const generated = useId();
   const id = givenId ?? generated;
   const controlId = givenId ?? `${id}-control`;
@@ -79,17 +101,39 @@ export function Field({ label, required = false, help, state, message, errorSlot
         ? helpId
         : undefined;
 
+  const Frame = group ? "fieldset" : "div";
+
   return (
-    <div class={["pk-field", state ? `pk-field--${state}` : null].filter(Boolean).join(" ")}>
-      <label class="pk-field__label" for={controlId}>
-        {label}
-        {required && (
-          <span class="pk-field__required">
-            <span aria-hidden="true">*</span>
-            <span class="pk-field__sr">(required)</span>
-          </span>
-        )}
-      </label>
+    <Frame
+      class={["pk-field", group ? "pk-field--group" : null, state ? `pk-field--${state}` : null]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {/* The same name, on whichever element may carry it: a `<legend>` names
+          a set of controls, a `<label for>` names exactly one. Written out
+          twice rather than hoisted, so the required mark stays inside the
+          field that styles it. */}
+      {group ? (
+        <legend class="pk-field__label">
+          {label}
+          {required && (
+            <span class="pk-field__required">
+              <span aria-hidden="true">*</span>
+              <span class="pk-field__sr">(required)</span>
+            </span>
+          )}
+        </legend>
+      ) : (
+        <label class="pk-field__label" for={controlId}>
+          {label}
+          {required && (
+            <span class="pk-field__required">
+              <span aria-hidden="true">*</span>
+              <span class="pk-field__sr">(required)</span>
+            </span>
+          )}
+        </label>
+      )}
 
       <div class="pk-field__control">
         {children({
@@ -124,6 +168,6 @@ export function Field({ label, required = false, help, state, message, errorSlot
       {!showMessage && errorSlot && (
         <p class="pk-field__message" id={messageId} data-field-error={errorSlot} aria-live="polite" hidden />
       )}
-    </div>
+    </Frame>
   );
 }

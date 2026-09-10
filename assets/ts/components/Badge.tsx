@@ -120,6 +120,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   negotiating: "warn",
   payment_pending: "warn",
   lapsed: "neutral",
+  not_proceeding: "neutral",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -145,6 +146,7 @@ const STATUS_LABEL: Record<string, string> = {
   new_inquiry: "New inquiry",
   proposal_sent: "Proposal sent",
   payment_pending: "Payment pending",
+  not_proceeding: "Not proceeding",
   budget_exhausted: "Budget exhausted",
   not_quorate: "Not decided — turnout too low",
   open_for_endorsement: "Open for endorsement",

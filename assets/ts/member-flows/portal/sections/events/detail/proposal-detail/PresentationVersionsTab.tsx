@@ -4,6 +4,8 @@ import { Spinner } from "../../../../../../components/Spinner";
 import { presentationUploadRequest } from "../../../../../../../shared/presentation-upload";
 import { deleteJson, postJson, requestJson } from "../../../../../../shared/api-client";
 import {
+  PRESENTATION_REVIEW_STATUS_LABELS,
+  presentationReviewStatusSchema,
   presentationVersionResponseSchema,
   presentationVersionReviewRequestSchema,
 } from "../../../../../../../shared/schemas/presentation-versions";
@@ -283,9 +285,11 @@ export function PresentationVersionsTab({
                         )
                       }
                     >
-                      <option value="approved">Approved</option>
-                      <option value="needs_revision">Needs revision</option>
-                      <option value="rejected">Rejected</option>
+                      {presentationReviewStatusSchema.options.map((status) => (
+                        <option key={status} value={status}>
+                          {PRESENTATION_REVIEW_STATUS_LABELS[status]}
+                        </option>
+                      ))}
                     </Select>
                   )}
                 </Field>

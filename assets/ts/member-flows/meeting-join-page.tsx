@@ -7,4 +7,7 @@ import { consumeMeetingGuestInvitationFragment } from "./meeting-join/invitation
 // credential from browser history before the app starts verification.
 const invitation = consumeMeetingGuestInvitationFragment(window.location, window.history);
 const mount = document.getElementById("meeting-join-app");
-if (mount) render(<App invitation={invitation} />, mount);
+if (mount) {
+  mount.replaceChildren();
+  render(<App invitation={invitation} />, mount);
+}

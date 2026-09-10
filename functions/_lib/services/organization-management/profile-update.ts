@@ -9,7 +9,7 @@
 import { all, first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
-import { normalizeOrgName } from "../sponsorship";
+import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { buildGetOrCreateOrganizationMemberAggregateStatements } from "../membership/memberships";
 import { isActiveIdentityForMember } from "../membership/identities";
 import {

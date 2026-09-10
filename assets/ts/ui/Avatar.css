@@ -46,7 +46,17 @@
   }
 
   .pk-avatar__initials {
-    font-size: 0.65em;
+    /*
+     * The letters are a proportion of the circle, not of the text around it.
+     *
+     * `0.65em` measured the inherited body size, so every avatar wore the same
+     * nine-pixel initials whatever its diameter: legible enough in a 2rem list
+     * marker, and two specks adrift in the 5.75rem portrait at the top of a
+     * record (#44). Two capitals at 40% of the diameter fill the round the way
+     * a cropped photograph does, and leave an even margin at every size —
+     * including any the caller sets `--pk-avatar-size` to.
+     */
+    font-size: calc(var(--pk-avatar-size) * 0.4);
     font-weight: 700;
     color: var(--pk-accent-ink);
     line-height: 1;

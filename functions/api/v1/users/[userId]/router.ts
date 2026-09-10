@@ -4,7 +4,7 @@ import type { RequestDbContext } from "../../../../_lib/db/context";
 import { UserAnonymizePost } from "./anonymize";
 import { UserGravatarPost } from "./gravatar";
 import { UserHeadshotDelete, UserHeadshotGet, UserHeadshotPut } from "./headshot";
-import { UserGet, UserPatch } from "./index";
+import { UserPatch } from "./index";
 import { MemberAvailabilityPut } from "./member-profile";
 import emailsRouter from "./emails/router";
 import participationHistoryRouter from "./participation/router";
@@ -22,7 +22,8 @@ openapi.route("/participation", participationHistoryRouter);
 openapi.put("/availability", MemberAvailabilityPut);
 openapi.route("/emails", emailsRouter);
 openapi.route("/roles", rolesRouter);
-openapi.get("/", UserGet);
+// Reading the record is not here: it is served by the community-profile
+// router, ahead of this staff boundary, so its subject can open their own.
 openapi.patch("/", UserPatch);
 
 export default openapi;

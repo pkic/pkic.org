@@ -28,6 +28,7 @@ import { getJson } from "../../../../shared/api-client";
 // system's tones, which is exactly the translation that layer exists for.
 import { Badge } from "../../../../components/Badge";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { usePortalHashLocation } from "../../hash-location";
 import { TabList } from "../../../../ui/TabList";
 import { fmt } from "../../ui";
 
@@ -141,6 +142,11 @@ function EventsTab({ userId, canRead }: { userId: string; canRead: boolean }) {
       columns={columns}
       rows={data?.events ?? []}
       rowKey={(row) => row.eventId}
+      // The row names an event, so it opens that event (#45).
+      rowAction={(row) => ({
+        label: `Open ${row.eventName}`,
+        href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(row.eventSlug)}`),
+      })}
       loading={loading}
       empty={emptyState("Events appear here as they are attended.")}
     />

@@ -4,23 +4,17 @@
 */}}
 {{ define "main" }}
 
-{{- $sponsorId   := .Param "sponsor" -}}
-{{- $sponsorName := $sponsorId -}}
-{{- $sponsorLogo := false -}}
-{{- if $sponsorId -}}
-  {{- range hugo.Data.members -}}
-    {{- if eq .id $sponsorId -}}
-      {{- $sponsorName = .name -}}
-      {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
-      {{- if $svg -}}
-        {{- $sponsorLogo = $svg -}}
-      {{- else -}}
-        {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
-        {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
+{{- $sponsorId := .Param "sponsor" -}}
+{{/*
+  The sponsor's display name is the page's own subject — this webinar was
+  sponsored by that company — so the page states it, the way it states its
+  title. It used to be looked up from data/members/*.yaml by id at build
+  time (#8), beside a logo lookup whose result nothing ever rendered. The
+  member directory is not the source for a hero line about the page itself,
+  and resolving it client-side would swap the name in after paint on the
+  first thing a reader sees.
+*/}}
+{{- $sponsorName := .Param "sponsorName" | default $sponsorId -}}
 
 {{/* ── Hero image (optional background) ───────────────────────────────────── */}}
 {{- $heroBg := false -}}

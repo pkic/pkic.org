@@ -27,6 +27,7 @@ import {
   type EmailMessageType,
 } from "../../../../../shared/schemas/email-templates";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
+import { EMAIL_CONTENT_TYPE_OPTIONS, EMAIL_MESSAGE_TYPE_OPTIONS } from "../../../../shared/email-type-options";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
 import { EMAIL_TEMPLATES_API } from "../../../../shared/email-template-catalog";
 
@@ -255,12 +256,25 @@ export function TemplateEditor({
       <Panel>
         <PanelHeader title={`Edit: ${templateKey}`}>
           {isLayout && <Badge tone="info">shared shell</Badge>}
+          {canWrite && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => void doSave()}
+              disabled={saving || !hasPreviewedRef.current}
+              loading={saving}
+            >
+              {saving ? "Saving…" : "Save as Draft"}
+            </Button>
+          )}
           <Button size="sm" onClick={onBack}>
             ← Back to list
           </Button>
         </PanelHeader>
         <PanelBody>
-          <div class="pk-grid pk-grid--roomy">
+          {/* A source and its preview are a pair, so they take half the page
+              each rather than two of however many tracks fit (#49). */}
+          <div class="pk-split">
             {/* Editor column */}
             <div class="pk-stack">
               {isLayout && <Alert tone="info">This template controls the outer email shell used for all emails.</Alert>}
@@ -274,9 +288,11 @@ export function TemplateEditor({
                         disabled={!canWrite}
                         onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
                       >
-                        <option value="markdown">Markdown</option>
-                        <option value="html">HTML</option>
-                        <option value="text">Plain text</option>
+                        {EMAIL_CONTENT_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </Select>
                     )}
                   </Field>
@@ -288,8 +304,11 @@ export function TemplateEditor({
                         disabled={!canWrite}
                         onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
                       >
-                        <option value="transactional">Transactional</option>
-                        <option value="promotional">Promotional</option>
+                        {EMAIL_MESSAGE_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </Select>
                     )}
                   </Field>
@@ -351,112 +370,77 @@ export function TemplateEditor({
                 )}
               </Field>
 
-              {/* Partials */}
-              <Field label="Insert partial">
-                {(control) => (
-                  <Select
-                    {...control}
-                    disabled={!canWrite}
-                    onChange={(e) => {
-                      const sel = e.target as HTMLSelectElement;
-                      if (!sel.value) return;
-                      insertSnippet(`{{> ${sel.value}}}`, "body");
-                      sel.value = "";
-                    }}
-                  >
-                    <option value="">— select partial to insert —</option>
-                    {TEMPLATE_PARTIALS.map((p) => (
-                      <option key={p.name} value={p.name}>
-                        {p.name} — {p.description}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-
-              {/* Template helpers */}
-              <div class="pk-stack pk-stack--snug">
-                {/* A heading over a row of buttons, not the label of a control:
-                    `pk-field__label` outside a `pk-field` names nothing and can
-                    never carry a state. */}
-                <div class="pk-stack pk-stack--tight">
-                  <span class="pk-small pk-strong">Template helpers</span>
-                  <span class="pk-small">Click to insert into the active field.</span>
-                </div>
-                {HELPER_CATEGORIES.map((cat) => (
-                  <div key={cat} class="pk-stack pk-stack--tight">
-                    <span class="pk-small pk-strong">{cat}</span>
-                    <div class="pk-cluster">
-                      {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
-                        <Button
-                          key={item.label}
-                          size="sm"
-                          disabled={!canWrite}
-                          onClick={() => insertSnippet(item.snippet, item.target)}
-                        >
-                          {item.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Preview data. The reset sits under the field rather than in
-                  its label row: the label names the control and nothing else. */}
-              {canWrite && (
-                <div class="pk-stack pk-stack--tight">
-                  <Field label="Preview data (JSON)">
+              <details>
+                <summary class="pk-small pk-strong">Insert variables and reusable content</summary>
+                <div class="pk-stack">
+                  {/* Partials */}
+                  <Field label="Insert partial">
                     {(control) => (
-                      <Textarea
+                      <Select
                         {...control}
-                        class="pk-mono"
-                        rows={6}
-                        value={previewData}
-                        onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
-                      />
+                        disabled={!canWrite}
+                        onChange={(e) => {
+                          const sel = e.target as HTMLSelectElement;
+                          if (!sel.value) return;
+                          insertSnippet(`{{> ${sel.value}}}`, "body");
+                          sel.value = "";
+                        }}
+                      >
+                        <option value="">— select partial to insert —</option>
+                        {TEMPLATE_PARTIALS.map((p) => (
+                          <option key={p.name} value={p.name}>
+                            {p.name} — {p.description}
+                          </option>
+                        ))}
+                      </Select>
                     )}
                   </Field>
-                  <div class="pk-cluster pk-cluster--end">
-                    <Button
-                      variant="link"
-                      size="sm"
-                      onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
-                    >
-                      Reset to defaults
-                    </Button>
+
+                  {/* Template helpers */}
+                  <div class="pk-stack pk-stack--snug">
+                    {/* A heading over a row of buttons, not the label of a control:
+                    `pk-field__label` outside a `pk-field` names nothing and can
+                    never carry a state. */}
+                    <div class="pk-stack pk-stack--tight">
+                      <span class="pk-small pk-strong">Template helpers</span>
+                      <span class="pk-small">Click to insert into the active field.</span>
+                    </div>
+                    {HELPER_CATEGORIES.map((cat) => (
+                      <div key={cat} class="pk-stack pk-stack--tight">
+                        <span class="pk-small pk-strong">{cat}</span>
+                        <div class="pk-cluster">
+                          {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
+                            <Button
+                              key={item.label}
+                              size="sm"
+                              disabled={!canWrite}
+                              onClick={() => insertSnippet(item.snippet, item.target)}
+                            >
+                              {item.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
+              </details>
 
-              <div class="pk-cluster">
-                {canWrite ? (
-                  <>
-                    <Button variant="secondary" onClick={() => void doPreview()}>
-                      Render Preview
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={() => void doSave()}
-                      disabled={saving || !hasPreviewedRef.current}
-                      loading={saving}
-                    >
-                      {saving ? "Saving…" : "Save as Draft"}
-                    </Button>
-                    <span class="pk-small">
-                      Preview required before saving. Saving creates a new draft version — activate it below.
-                    </span>
-                  </>
-                ) : (
-                  <span class="pk-small">Read-only access. Template changes require write permission.</span>
-                )}
-              </div>
+              <p class="pk-small">
+                {canWrite
+                  ? "Preview your changes, save a draft, then activate it in Version history."
+                  : "Read-only access. Template changes require write permission."}
+              </p>
             </div>
 
             {/* Preview column */}
             {canWrite && (
               <Panel>
-                <PanelHeader title="Rendered Preview" />
+                <PanelHeader title="Rendered Preview">
+                  <Button variant="secondary" size="sm" onClick={() => void doPreview()}>
+                    Render Preview
+                  </Button>
+                </PanelHeader>
                 <PanelBody class="pk-stack pk-stack--snug">
                   <div class="pk-stack pk-stack--tight">
                     <span class="pk-small">Subject</span>
@@ -481,6 +465,35 @@ export function TemplateEditor({
                   <p class="pk-small" role="status">
                     {previewStatus}
                   </p>
+                  <details>
+                    <summary class="pk-small pk-strong">Preview sample data</summary>
+                    {/* Preview data. The reset sits under the field rather than in
+                  its label row: the label names the control and nothing else. */}
+                    {canWrite && (
+                      <div class="pk-stack pk-stack--tight">
+                        <Field label="Preview data (JSON)">
+                          {(control) => (
+                            <Textarea
+                              {...control}
+                              class="pk-mono"
+                              rows={6}
+                              value={previewData}
+                              onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
+                            />
+                          )}
+                        </Field>
+                        <div class="pk-cluster pk-cluster--end">
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
+                          >
+                            Reset to defaults
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </details>
                 </PanelBody>
               </Panel>
             )}

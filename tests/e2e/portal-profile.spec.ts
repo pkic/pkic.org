@@ -1,5 +1,5 @@
 /**
- * My Profile — the identity's own editable record.
+ * A member's own user record — the same page anybody else's record is.
  *
  * `portal-dual-capacity.spec.ts` already exercises the organization-scoped
  * fields (job title, biography, links) while switching between two
@@ -14,15 +14,10 @@
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyProfile, openProfileEditor, signInToPortal } from "./helpers/portal-auth";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
-
-// A one-pixel JPEG, small enough to inline and real enough for the browser's
-// own `Image` decoder and `canvas.drawImage` to accept without complaint.
-const TINY_JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=",
-  "base64",
-);
+import { agreeToHeadshotTerms, chooseHeadshotThroughUploadButton } from "./helpers/headshot-upload";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 test("a member edits their name fields and toggles organization-page visibility", async ({ page }) => {
   const suffix = uniqueSuffix();
@@ -34,10 +29,15 @@ test("a member edits their name fields and toggles organization-page visibility"
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  await page.goto("/portal/#/profile");
+  await openMyProfile(page);
   // The record opens with the member, not with a page title: `ProfileHeader`
-  // names the subject, and "My Profile" said nothing the sidebar had not.
+  // names the subject, and the retired "My Profile" page said nothing the
+  // sidebar had not.
   await expect(page.getByRole("heading", { name: `Profile Fields ${suffix}`, level: 2 })).toBeVisible();
+
+  // A record never arrives in edit mode, not even your own (#47): the fields
+  // open only once the reader takes "Edit profile" from the record's actions.
+  await openProfileEditor(page);
 
   // Required fields carry a "(required)" suffix in their accessible name
   // (see ui/Field.tsx), so an exact match on the bare label never resolves.
@@ -52,8 +52,10 @@ test("a member edits their name fields and toggles organization-page visibility"
   await expect(page.locator(".my-toast", { hasText: "Profile updated" })).toBeVisible({ timeout: 15_000 });
 
   // Reload from a clean mount: the saved values must come back from the
-  // server, not merely persist in still-mounted component state.
+  // server, not merely persist in still-mounted component state. A fresh
+  // mount is a record again, so the editor is reopened to read them back.
   await page.reload();
+  await openProfileEditor(page);
   await expect(page.getByRole("textbox", { name: "First name (required)" })).toHaveValue("Renamed First");
   await expect(page.getByRole("textbox", { name: "Last name (required)" })).toHaveValue("Renamed Last");
   await expect(page.getByRole("textbox", { name: "Preferred name", exact: true })).toHaveValue("Renamed Preferred");
@@ -100,35 +102,23 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  await page.goto("/portal/#/profile");
+  await openMyProfile(page);
   await expect(page.getByRole("heading", { name: `Profile Headshot ${suffix}`, level: 2 })).toBeVisible();
 
-  // MyProfile overrides the placeholder's default copy with `emptyLabel="You"`.
-  await expect(page.getByText("You", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Upload headshot" }).click();
-  await page.locator('input[type="file"][accept="image/jpeg,image/png,image/webp"]').setInputFiles({
-    name: "headshot.jpg",
-    mimeType: "image/jpeg",
-    buffer: TINY_JPEG,
-  });
+  /*
+   * The portrait itself is the control (#28), and it names what pressing it
+   * does: there is no photograph yet, so it offers to upload one. It used to
+   * be an "Upload headshot" button under a placeholder reading "You", in a
+   * panel further down the record.
+   */
+  const portrait = page.getByRole("img", { name: `Profile Headshot ${suffix}'s photo` });
+  await expect(page.getByRole("button", { name: "Upload photo" })).toBeVisible();
+  await expect(portrait).toHaveCount(0);
+  // Driven through the tile and the picker it opens, not by reaching past it
+  // to the input: see helpers/headshot-upload.ts.
+  await chooseHeadshotThroughUploadButton(page);
 
-  // Both mounted-from-<template> dialogs (layouts/partials/headshot-modals.html)
-  // are native <dialog> elements opened with showModal(), so each is reachable
-  // by role — which is what `getByRole("dialog")` below asserts, since the
-  // roots used to carry a static `aria-hidden="true"` that put every control
-  // inside them outside the accessibility tree. The `hsd-*`/`crop-headshot-*`
-  // classes are the contract between the partial and the scripts that drive
-  // it, and are what this spec uses to reach the individual controls.
-  const disclaimer = page.getByRole("dialog", { name: "Before uploading a photo" });
-  await expect(disclaimer).toBeVisible({ timeout: 10_000 });
-  // AdminHeadshotManager overrides the default disclaimer title with its own.
-  await expect(disclaimer.locator(".hsd-title")).toHaveText("Before uploading a photo");
-  await disclaimer.locator(".hsd-agree").check();
-  await disclaimer.locator(".hsd-confirm").click();
-
-  const crop = page.getByRole("dialog", { name: "Crop headshot" });
-  await expect(crop).toBeVisible({ timeout: 10_000 });
-  await expect(crop.locator(".crop-headshot-title")).toHaveText("Crop headshot");
+  const crop = await agreeToHeadshotTerms(page);
   const uploaded = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current/headshot") && response.request().method() === "PUT",
   );
@@ -136,18 +126,25 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   expect((await uploaded).status()).toBe(200);
 
   // The "Headshot uploaded" status line is written by the same closure that
-  // resolved the upload, but MyProfile's `uploadHeadshot` awaits a full
+  // resolved the upload, but the record's `uploadHeadshot` awaits a full
   // `refreshProfile()` first — which re-renders `AdminHeadshotManager` with a
   // new `initialUrl` and re-runs its wiring effect before that write lands, so
   // the status text is not a reliable signal here. What matters to the reader
   // is the outcome: the real, persisted photo replaces the placeholder.
-  await expect(page.getByRole("img", { name: email })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("img", { name: email })).toHaveAttribute("src", /\/headshots\//);
+  await expect(portrait).toBeVisible({ timeout: 15_000 });
+  await expect(portrait).toHaveAttribute("src", /\/headshots\//);
+  // Visible is not loaded: a broken image still occupies its box, and an
+  // empty portrait frame is exactly what #25 and #28 both reported seeing.
+  await expect
+    .poll(async () => portrait.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
+    .toBeGreaterThan(0);
+  // The tile now offers the other verb, because there is something to change.
+  await expect(page.getByRole("button", { name: "Change photo" })).toBeVisible();
 
   // The headshot survives a fresh mount, proving it was persisted rather than
   // only reflected in the component the upload happened in.
   await page.reload();
-  await expect(page.getByRole("img", { name: email })).toBeVisible({ timeout: 15_000 });
+  await expect(portrait).toBeVisible({ timeout: 15_000 });
 });
 
 // The other half of the upload flow above: a photo a member put up is theirs
@@ -168,36 +165,30 @@ test("a member can remove their own headshot", async ({ page }) => {
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
-  await page.goto("/portal/#/profile");
-  await page.getByRole("button", { name: "Upload headshot" }).click();
-  await page.locator('input[type="file"][accept="image/jpeg,image/png,image/webp"]').setInputFiles({
-    name: "headshot.jpg",
-    mimeType: "image/jpeg",
-    buffer: TINY_JPEG,
-  });
-  // See the note on the disclaimer/crop dialogs above.
-  const disclaimer = page.getByRole("dialog", { name: "Before uploading a photo" });
-  await disclaimer.locator(".hsd-agree").check();
-  await disclaimer.locator(".hsd-confirm").click();
-  await page.locator("#crop-headshot-modal .crop-headshot-confirm").click();
-  await expect(page.getByRole("img", { name: email })).toBeVisible({ timeout: 15_000 });
+  await openMyProfile(page);
+  await chooseHeadshotThroughUploadButton(page);
+  await (await agreeToHeadshotTerms(page)).locator(".crop-headshot-confirm").click();
+  const portrait = page.getByRole("img", { name: `Profile Headshot Remove ${suffix}'s photo` });
+  await expect(portrait).toBeVisible({ timeout: 15_000 });
 
-  // The shared headshot controller still confirms through the native dialog
-  // (see its TODO(confirm-dialog) note: it is also mounted on public token
-  // pages that never render <ConfirmDialogHost/>), and Playwright dismisses
-  // dialogs unless something accepts them.
-  page.on("dialog", (dialog) => void dialog.accept());
-
+  /*
+   * Removing is confirmed in the portal's own dialog rather than the
+   * browser's. The portrait tile takes the same route an organization's logo
+   * does — `confirmAction`, which the portal mounts — instead of the shared
+   * headshot controller's native `confirm()`, which exists only because that
+   * controller is also mounted on public token pages with no dialog host.
+   */
   const remove = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current/headshot") && response.request().method() === "DELETE",
   );
-  await page.getByRole("button", { name: "Remove headshot" }).click();
+  await page.getByRole("button", { name: "Remove photo" }).click();
+  await acceptConfirmDialog(page, "Remove photo");
   expect((await remove).status()).toBe(200);
-  // MyProfile overrides the placeholder's default copy with `emptyLabel="You"`.
-  await expect(page.getByText("You", { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("img", { name: email })).toHaveCount(0);
+  // Back to the tile offering to upload one, with no picture behind it.
+  await expect(page.getByRole("button", { name: "Upload photo" })).toBeVisible({ timeout: 15_000 });
+  await expect(portrait).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByText("You", { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("img", { name: email })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Upload photo" })).toBeVisible({ timeout: 15_000 });
+  await expect(portrait).toHaveCount(0);
 });

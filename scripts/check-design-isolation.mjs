@@ -77,7 +77,9 @@ const scanned = [
   "assets/ts/components/proposals/ProposalSpeakerCard.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/RegistrationDetailPage.tsx",
   "assets/ts/member-flows/portal/sections/management/EventDaysEditor.tsx",
-  "assets/ts/member-flows/portal/sections/MembershipConfiguration.tsx",
+  "assets/ts/member-flows/portal/sections/membership-settings/ApplicationWorkflow.tsx",
+  "assets/ts/member-flows/portal/sections/membership-settings/MembershipApplicationForm.tsx",
+  "assets/ts/member-flows/portal/sections/membership-settings/MembershipCategories.tsx",
   "assets/ts/components/forms/FormDefinitionEditor.tsx",
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationCreateForm.tsx",
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile.tsx",
@@ -102,6 +104,7 @@ const scanned = [
   "assets/ts/components/PersonCell.tsx",
   "assets/ts/components/StatCard.tsx",
   "assets/ts/components/Markdown.tsx",
+  "assets/ts/components/markdown-editor",
   "assets/ts/components/AuditLogTable.tsx",
   "assets/ts/components/ConsentCard.tsx",
   "assets/ts/components/passkey-settings.tsx",
@@ -119,6 +122,7 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/system-users/UserProfileEditor.tsx",
   "assets/ts/member-flows/portal/sections/system-donations/DonationAnalytics.tsx",
   "assets/ts/member-flows/portal/sections/system-donations/Donations.tsx",
+  "assets/ts/member-flows/portal/sections/system-donations/DonationShareLinks.tsx",
   "assets/ts/components/proposals/ProposalReviewsPanel.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingGuests.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/proposal-detail/PresentationVersionsTab.tsx",
@@ -211,10 +215,11 @@ const scanned = [
   "assets/ts/shared/widgets/link-recovery.tsx",
   "layouts/shortcodes/livestream.html",
   "assets/ts/member-flows/portal/sections/management/ResourceCapabilities.tsx",
-  "assets/ts/member-flows/portal/sections/system-operations/Operations.tsx",
+  "assets/ts/member-flows/portal/sections/system-operations/ScheduledWork.tsx",
   "layouts/partials/social.html",
   "layouts/shortcodes/carousel.html",
-  "assets/ts/member-flows/portal/sections/SystemManagement.tsx",
+  "assets/ts/member-flows/portal/sections/settings/SettingsSection.tsx",
+  "assets/ts/member-flows/portal/sections/settings/SettingsIndex.tsx",
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationLogo.tsx",
   "layouts/partials/menu.html",
   "layouts/shortcodes/members.html",
@@ -284,7 +289,7 @@ function definedClasses() {
         collect(full);
         continue;
       }
-      if (!entry.endsWith(".css")) continue;
+      if (!/\.(css|scss)$/.test(entry)) continue;
       for (const match of readFileSync(full, "utf8").matchAll(/\.(pk-[a-z0-9_-]+)/g)) {
         names.add(match[1]);
       }
@@ -316,7 +321,7 @@ function walk(dir) {
     // `.html` too. An adopted DIRECTORY used to have its templates skipped
     // entirely — only an adopted file path was ever inspected — so a Hugo
     // layout could sit inside a ratcheted directory carrying anything at all.
-    if (/\.(css|tsx?|html)$/.test(entry)) inspect(full);
+    if (/\.(css|scss|tsx?|html)$/.test(entry)) inspect(full);
   }
 }
 
@@ -408,7 +413,7 @@ function inspect(file) {
         report(file, lineNumber, line, "uses an inline style attribute");
       }
 
-      if (file.endsWith(".css") && !isGeneratedTokens && COLOUR_LITERAL.test(code)) {
+      if (/\.(css|scss)$/.test(file) && !isGeneratedTokens && COLOUR_LITERAL.test(code)) {
         report(file, lineNumber, line, "hard-codes a colour instead of reading a token");
       }
 
@@ -416,7 +421,7 @@ function inspect(file) {
       // icon's width is legitimately local; a type size, a corner radius, or a
       // duration is not, because those are what make separate components look
       // like one system.
-      if (!isTokenSource && !isGeneratedTokens && file.endsWith(".css")) {
+      if (!isTokenSource && !isGeneratedTokens && /\.(css|scss)$/.test(file)) {
         const declaration = code.match(/^\s*(?!--)([a-z-]+)\s*:\s*([^;]+);/);
         if (declaration) {
           const [, property, value] = declaration;

@@ -11,8 +11,12 @@ import { ProposalReviewCard } from "../../assets/ts/components/proposals/Proposa
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
 import { ProposalCoSpeakerInviteForm } from "../../assets/ts/components/proposals/ProposalCoSpeakerInviteForm";
 import { coSpeakerInviteSchema } from "../../assets/shared/schemas/proposal-management";
-import { proposalReviewUpsertSchema, type ProposalReview } from "../../assets/shared/schemas/proposal-reviews";
-import { buttonNamed, chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import {
+  PROPOSAL_RECOMMENDATIONS,
+  proposalReviewUpsertSchema,
+  type ProposalReview,
+} from "../../assets/shared/schemas/proposal-reviews";
+import { buttonNamed, chooseOption, controlFor, labelNames, optionValues, typeInto } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -153,6 +157,14 @@ describe("shared proposal management components", () => {
     expect(root.querySelector("form")).toBeNull();
   });
 
+  it("offers every recommendation the review contract accepts", () => {
+    const root = mount(reviewPanel({ canReview: true }));
+
+    // The set and the order are the contract's, so a verdict added to
+    // `proposal-reviews` reaches the reviewer without a second edit here.
+    expect(optionValues(controlFor<HTMLSelectElement>(root, "Recommendation"))).toEqual([...PROPOSAL_RECOMMENDATIONS]);
+  });
+
   it("submits the reviewer's draft as the shared upsert contract", async () => {
     const onSave = vi.fn(async (_draft: ProposalReviewDraft) => review);
     const onSaved = vi.fn();
@@ -262,6 +274,7 @@ describe("shared proposal management components", () => {
       comment.value = "Speaker unavailable";
       comment.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.checked = true;
+      confirmation.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(submit?.disabled).toBe(false);
@@ -320,6 +333,7 @@ describe("shared proposal management components", () => {
       comment.value = "Speaker unavailable";
       comment.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.checked = true;
+      confirmation.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await act(async () => {
@@ -443,6 +457,7 @@ describe("shared proposal management components", () => {
       email.value = "SPEAKER@example.test";
       email.dispatchEvent(new Event("input", { bubbles: true }));
       role.value = "panelist";
+      role.dispatchEvent(new Event("input", { bubbles: true }));
       role.dispatchEvent(new Event("change", { bubbles: true }));
       deadline.value = "2027-01-01T12:00";
       deadline.dispatchEvent(new Event("input", { bubbles: true }));

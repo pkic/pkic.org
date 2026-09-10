@@ -139,8 +139,22 @@ async function manageInvitation(
   await expect(invitations.getByText("Sent 1 invites")).toBeVisible();
 
   const invitationSearch = invitations.getByPlaceholder("Search invitations…");
+  /*
+   * The narrowed list is awaited, not merely watched for a matching row. The
+   * table renders the unfiltered page first and replaces it when the filtered
+   * one arrives, so a row found before that lands is detached mid-interaction
+   * — which closed the actions menu between focusing its trigger and pressing
+   * Enter, about one sharded run in six.
+   */
+  const filtered = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/events/${event.id}/invites`) &&
+      response.url().includes(encodeURIComponent(inviteeEmail)) &&
+      response.request().method() === "GET",
+  );
   await invitationSearch.fill(inviteeEmail);
   await invitationSearch.press("Enter");
+  expect((await filtered).status()).toBe(200);
   const inviteRow = invitations.getByRole("row").filter({ hasText: inviteeEmail });
   await expect(inviteRow).toBeVisible();
 

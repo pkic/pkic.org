@@ -11,7 +11,52 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(26rem, 1fr));
   align-items: stretch;
+  /*
+   * As tall as the space between the header and the footer — not the space
+   * between the header and the fold.
+   *
+   * Issue #33 reported a white band under the brand panel: the login block was
+   * only as tall as its content, so whatever the viewport had left over showed
+   * as page. Measuring against `100dvh` closed the band and opened a worse
+   * hole — the block then ran to the bottom of the screen and pushed the
+   * footer out of it, so every visit began with a scrollbar it did not need.
+   *
+   * The page decides instead. `body` is a column that is at least a screen
+   * tall, `main` takes the slack, and this fills `main`: with a short footer
+   * the block reaches the footer exactly, and with the tall one it is its own
+   * height and the footer follows immediately. Either way there is no band,
+   * and no scroll the content did not ask for.
+   */
   min-height: 100%;
+  /*
+   * Inside the flex `#portal-app` below, a grid child takes its content width
+   * unless told otherwise — and a narrow container makes `auto-fit` collapse
+   * the two panels into one stacked column. Harmless anywhere else: an element
+   * that is not a flex item ignores it.
+   */
+  flex: 1;
+}
+
+/*
+ * Scoped by what is on the page rather than by a class the template would have
+ * to remember to set — the signed-out screen is the only place that needs the
+ * page itself to distribute height, and `.pk-login` is Preact's own marker for
+ * being on it.
+ */
+body:has(.pk-login) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+body:has(.pk-login) > main {
+  display: flex;
+  flex: 1 0 auto;
+}
+
+body:has(.pk-login) > main > #portal-app {
+  display: flex;
+  flex: 1;
 }
 
 .pk-login__backdrop {
@@ -135,6 +180,16 @@
 }
 
 @media (max-width: 52rem) {
+  /*
+   * Stacked, the two panels are rows rather than columns, so a screen-height
+   * floor would stretch whichever of them has slack — usually the card, into
+   * a tall box around a short form. The band is a band; it takes the height
+   * its own words need.
+   */
+  .pk-login {
+    min-height: auto;
+  }
+
   .pk-login__backdrop {
     gap: var(--pk-4);
   }

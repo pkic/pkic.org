@@ -14,6 +14,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange, type AuditScope } from "../audit";
+import { formSubmissionWindowOpenSql } from "./submission-window";
 
 export interface FormPlacementRow {
   id: string;
@@ -367,8 +368,7 @@ async function queryFormPlacement(
       `SELECT ${FORM_PLACEMENT_COLUMNS}
        FROM form_placements
        WHERE ${conditions.join(" AND ")}
-         ${activeOnly ? "AND (opens_at IS NULL OR unixepoch(opens_at) <= unixepoch())" : ""}
-         ${activeOnly ? "AND (closes_at IS NULL OR unixepoch(closes_at) > unixepoch())" : ""}
+         ${activeOnly ? `AND ${formSubmissionWindowOpenSql("form_placements")}` : ""}
        ORDER BY created_at ASC, id ASC
        LIMIT 2`,
     )

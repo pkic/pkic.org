@@ -13,8 +13,10 @@
  * profile therefore share this header rather than growing two that drift.
  */
 import type { ComponentChildren } from "preact";
+import { useId } from "preact/hooks";
 
 import "./ProfileHeader.css";
+import "./ProfileHeader.scss";
 
 export interface ProfileHeaderProps {
   /** The subject's portrait or mark: an `Avatar`, a logo tile, an icon. */
@@ -42,22 +44,42 @@ export interface ProfileHeaderProps {
    * the document outline stays unbroken. Raise it to 1 only where this header
    * is the whole page — a standalone public profile.
    */
-  headingLevel?: 1 | 2;
+  headingLevel?: 1 | 2 | 3;
+  context?: ComponentChildren;
+  /** Optional navigation and content keep a record inside its identity card. */
+  navigation?: ComponentChildren;
+  children?: ComponentChildren;
 }
 
-export function ProfileHeader({ media, title, pill, lede, facts, actions, headingLevel = 2 }: ProfileHeaderProps) {
-  const Heading = headingLevel === 1 ? "h1" : "h2";
+export function ProfileHeader({
+  media,
+  title,
+  pill,
+  lede,
+  facts,
+  actions,
+  headingLevel = 2,
+  context,
+  navigation,
+  children,
+}: ProfileHeaderProps) {
+  const Heading = headingLevel === 1 ? "h1" : headingLevel === 3 ? "h3" : "h2";
+  const Container = children === undefined ? "header" : "section";
+  const headingId = useId();
 
   return (
-    <header class="pk-profile-header">
+    <Container class="pk-profile-header" aria-labelledby={headingId}>
       {/* The brand stripe is decoration and carries nothing a reader needs. */}
       <div class="pk-profile-header__stripe" aria-hidden="true" />
-      <div class="pk-profile-header__body">
+      <div class={`pk-profile-header__body${media === undefined ? " pk-profile-header__body--text" : ""}`}>
         {media !== undefined && <div class="pk-profile-header__media">{media}</div>}
 
         <div class="pk-profile-header__identity">
           <div class="pk-profile-header__name">
-            <Heading class="pk-profile-header__title">{title}</Heading>
+            <Heading class="pk-profile-header__title" id={headingId}>
+              {title}
+            </Heading>
+            {context}
             {pill !== undefined && <span class="pk-profile-header__pill">{pill}</span>}
           </div>
 
@@ -76,6 +98,8 @@ export function ProfileHeader({ media, title, pill, lede, facts, actions, headin
 
         {actions !== undefined && <div class="pk-profile-header__actions">{actions}</div>}
       </div>
-    </header>
+      {navigation && <div class="pk-profile-header__navigation">{navigation}</div>}
+      {children !== undefined && <div class="pk-profile-header__content">{children}</div>}
+    </Container>
   );
 }

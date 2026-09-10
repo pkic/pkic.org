@@ -1,3 +1,7 @@
+import {
+  selectRegistrationIdentity,
+  prepareSelectedRegistrationIdentityGuard,
+} from "../registrations/selected-identity";
 import type { AttendeeRegistrationParticipation } from "../../../../assets/shared/schemas/registration";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -37,6 +41,9 @@ export async function submitGroupEventRegistration(
   if (!user.first_name?.trim() || !user.last_name?.trim()) {
     throw new AppError(422, "REGISTRATION_PROFILE_INCOMPLETE", "Complete your name before registering");
   }
+  const selectedIdentity = input.identityId
+    ? await selectRegistrationIdentity(db, user.id, input.identityId)
+    : undefined;
   return submitEventRegistration(
     db,
     env,
@@ -57,9 +64,10 @@ export async function submitGroupEventRegistration(
       ...metadata,
       eventSlug: event.slug,
       eventBasePath: null,
-      verifiedIdentity: { userId: user.id, registrationGroupId: groupId },
+      verifiedIdentity: { userId: user.id, registrationGroupId: groupId, selectedIdentity },
       authorizationGuards: [
         prepareVerifiedRegistrationUserGuard(db, user),
+        ...(selectedIdentity ? [prepareSelectedRegistrationIdentityGuard(db, selectedIdentity)] : []),
         prepareGroupEventRegistrationGuard(db, { eventId: event.id, groupId, userId: user.id }),
       ],
     },

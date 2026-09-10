@@ -1,9 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import type { PageInfo } from "../../../shared/schemas/pagination";
-import type {
-  ProposalRecommendation,
-  ProposalReview,
-  ProposalReviewSummary,
+import {
+  PROPOSAL_RECOMMENDATIONS,
+  type ProposalRecommendation,
+  type ProposalReview,
+  type ProposalReviewSummary,
 } from "../../../shared/schemas/proposal-reviews";
 import { EmptyState } from "../EmptyState";
 import { ErrorAlert } from "../ErrorAlert";
@@ -15,6 +16,17 @@ import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../ui/TextControl";
 import { ProposalReviewCard } from "./ProposalReviewCard";
+
+/**
+ * How the reviewer's verdicts are worded. Total on the contract's vocabulary,
+ * so a recommendation added to `proposal-reviews` has to be named here before
+ * this file compiles.
+ */
+const RECOMMENDATION_LABELS: Record<ProposalRecommendation, string> = {
+  accept: "Accept",
+  reject: "Reject",
+  "needs-work": "Needs Work",
+};
 
 export interface ProposalReviewDraft {
   recommendation: ProposalRecommendation;
@@ -149,9 +161,14 @@ export function ProposalReviewsPanel({
                         setRecommendation((event.target as HTMLSelectElement).value as ProposalRecommendation)
                       }
                     >
-                      <option value="accept">Accept</option>
-                      <option value="needs-work">Needs Work</option>
-                      <option value="reject">Reject</option>
+                      {/* Reading the contract's order swaps the last two
+                          entries, so "Reject" now sits above "Needs Work"; the
+                          set of verdicts on offer is unchanged. */}
+                      {PROPOSAL_RECOMMENDATIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {RECOMMENDATION_LABELS[option]}
+                        </option>
+                      ))}
                     </Select>
                   )}
                 </Field>

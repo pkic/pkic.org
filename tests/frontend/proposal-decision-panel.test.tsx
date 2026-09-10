@@ -134,6 +134,7 @@ async function previewAndConfirm(root: HTMLElement, status: string, note?: strin
   const confirmation = root.querySelector("#proposal-decision-preview-confirm") as HTMLInputElement;
   await act(() => {
     confirmation.checked = true;
+    confirmation.dispatchEvent(new Event("input", { bubbles: true }));
     confirmation.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
@@ -212,6 +213,7 @@ describe("proposal decision panel", () => {
     expect(confirmation.closest("label")?.classList.contains("pk-check")).toBe(true);
     await act(() => {
       confirmation.checked = true;
+      confirmation.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(recordButton.disabled).toBe(false);

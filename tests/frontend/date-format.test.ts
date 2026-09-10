@@ -5,9 +5,11 @@ import {
   formatDateRange,
   formatDateTime,
   formatDateTimeInZone,
+  formatDayAndMonth,
   formatEventWhen,
   formatMonthYear,
   formatRelativeDays,
+  formatTimeOfDay,
 } from "../../assets/ts/shared/ui";
 
 afterEach(() => {
@@ -132,5 +134,51 @@ describe("friendly date formatting", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  /*
+   * Issue #19: a leadership card read "In role since Invalid Date". Every
+   * formatter here has to answer a value it cannot read with the empty marker
+   * instead, because a surface has no way to tell "Invalid Date" apart from a
+   * date it was meant to print.
+   */
+  it("answers an em dash for a value it cannot read, never the words 'Invalid Date'", () => {
+    const unreadable = ["", "not-a-date", "0000-13-45", "In role since"];
+    for (const value of unreadable) {
+      for (const format of [
+        formatDate,
+        formatCalendarDate,
+        formatDayAndMonth,
+        formatMonthYear,
+        formatDateTime,
+        formatTimeOfDay,
+      ]) {
+        expect(format(value)).toBe("—");
+      }
+      expect(formatDateTimeInZone(value, "Europe/Amsterdam")).toBe("—");
+      // A range throws RangeError where the others merely misprint, so an
+      // unreadable end must not take the readable start down with it.
+      expect(formatDateRange(value, null)).toBe("—");
+      expect(formatDateRange(value, "2026-12-03T17:00:00.000Z")).toBe("—");
+      expect(formatDateRange("2026-12-01T08:00:00.000Z", value)).toContain("2026");
+    }
+    for (const format of [formatDate, formatCalendarDate, formatDayAndMonth, formatMonthYear, formatTimeOfDay]) {
+      expect(format(null)).toBe("—");
+      expect(format(undefined)).toBe("—");
+    }
+  });
+
+  it("renders a calendar day as day and month on the UTC calendar, whatever zone the viewer is in", () => {
+    // A date-only value read through a zone west of Greenwich would land on
+    // the previous day; the day of an event is the day it says it is.
+    expect(formatDayAndMonth("2026-09-04")).toMatch(/4/);
+    expect(formatDayAndMonth("2026-09-04")).toMatch(/Sep|sep/i);
+    expect(formatDayAndMonth("2026-09-04")).not.toMatch(/2026/);
+  });
+
+  it("names the viewer's zone when speaking a time of day, so it cannot be read as UTC", () => {
+    const spoken = formatTimeOfDay("2026-12-01T08:00:00.000Z");
+    expect(spoken).toMatch(/\d/);
+    expect(spoken).not.toContain(",");
   });
 });

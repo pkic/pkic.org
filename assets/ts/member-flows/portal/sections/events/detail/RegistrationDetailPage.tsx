@@ -1,3 +1,5 @@
+import { BreadcrumbBranch } from "../../../../../ui/BreadcrumbScope";
+import { PageHeader } from "../../../../../ui/PageHeader";
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
@@ -44,7 +46,17 @@ interface ActionOutcome {
   message: string;
 }
 
-export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; regId: string; onBack?: () => void }) {
+export function RegistrationDetailPage({
+  slug,
+  regId,
+  onBack,
+  parentNavigation = false,
+}: {
+  slug: string;
+  regId: string;
+  onBack?: () => void;
+  parentNavigation?: boolean;
+}) {
   const [, navigate] = usePortalHashLocation();
   const [resending, setResending] = useState(false);
   const [resendOutcome, setResendOutcome] = useState<ActionOutcome | null>(null);
@@ -140,16 +152,22 @@ export function RegistrationDetailPage({ slug, regId, onBack }: { slug: string; 
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
+      {!parentNavigation && (
         <Button size="sm" onClick={() => (onBack ? onBack() : navigate(eventRegistrationsViewPath(slug)))}>
           ← Back
         </Button>
-        <h2>{name}</h2>
-        <Badge status={reg.status} />
-        <Button size="sm" class="pk-push" onClick={() => void reload()}>
-          ↺ Refresh
-        </Button>
-      </div>
+      )}
+      {parentNavigation && <BreadcrumbBranch items={[{ label: name }]} />}
+      <PageHeader
+        eyebrow="Registration"
+        title={name}
+        context={<Badge status={reg.status} />}
+        actions={
+          <Button size="sm" onClick={() => void reload()}>
+            ↺ Refresh
+          </Button>
+        }
+      />
 
       <Panel>
         <PanelHeader title="Registration summary" />

@@ -5,7 +5,6 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { runRowAction } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
-import { tab } from "./helpers/tabs";
 
 const LEGACY_OPERATIONS_APIS = [
   "/api/v1/admin/email/outbox",
@@ -15,7 +14,7 @@ const LEGACY_OPERATIONS_APIS = [
   "/api/v1/internal/jobs/run",
 ];
 
-test("System Operations uses canonical read routes and redirects legacy bookmarks", async ({ page }) => {
+test("the outbox, the due queue and the job registry are pages, each on canonical read routes", async ({ page }) => {
   const requests: string[] = [];
   const canonicalRequests: string[] = [];
   page.on("request", (request) => {
@@ -35,20 +34,32 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-system-operations"));
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByRole("link", { name: "Operations", exact: true }).click();
-
-  // The Settings hub heads the page; the selected tab names the surface.
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(tab(page, "Email Outbox")).toBeVisible();
-  await expect(tab(page, "Scheduled Work")).toBeVisible();
-  await expect(tab(page, "Scheduled Jobs")).toBeVisible();
+  /*
+   * The three subjects used to be tabs inside one "Operations" entry, so
+   * none of them had an address and the entry named none of them (#40). Each
+   * is a sidebar page now, and reaching it is a click on its own name.
+   */
+  const sidebar = page.getByRole("complementary", { name: "Portal navigation" });
+  await sidebar.getByRole("link", { name: "Settings", exact: true }).click();
+  /*
+   * From the sidebar, not from the page: `/settings` is an index that lists
+   * the same pages the sidebar does, so each name is on screen twice and an
+   * unscoped locator matches both. Following the sidebar is also what the
+   * reader does once they are already inside the section.
+   */
+  await sidebar.getByRole("link", { name: "Email outbox", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/email-outbox$/);
+  await expect(page.getByRole("heading", { name: "Email outbox" })).toBeVisible();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/email/outbox")).toBe(true);
-  await tab(page, "Scheduled Work").click();
+
+  await sidebar.getByRole("link", { name: "Scheduled work", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/scheduled-work$/);
+  await expect(page.getByRole("heading", { name: "Scheduled work" })).toBeVisible();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/retention/due")).toBe(true);
 
-  await tab(page, "Scheduled Jobs").click();
+  await sidebar.getByRole("link", { name: "Scheduled jobs", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/scheduled-jobs$/);
+  await expect(page.getByRole("heading", { name: "Scheduled jobs" })).toBeVisible();
   await expect.poll(() => canonicalRequests.includes("GET /api/v1/scheduler/jobs")).toBe(true);
   // The pause form expands as the job's own detail row, so the data row is
   // anchored to its `…` menu — the one control the detail row does not carry —
@@ -91,8 +102,7 @@ test("System Operations uses canonical read routes and redirects legacy bookmark
   }
   await expect.poll(() => canonicalRequests.filter((request) => request.startsWith("PATCH ")).length).toBe(2);
 
-  await page.goto("/portal/#/system/operations");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/operations$/);
-  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.goto("/portal/#/settings/scheduled-jobs");
+  await expect(page.getByRole("link", { name: "Scheduled jobs", exact: true })).toHaveAttribute("aria-current", "page");
   expect(requests).toEqual([]);
 });

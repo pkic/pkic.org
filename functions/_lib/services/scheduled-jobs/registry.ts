@@ -1,3 +1,4 @@
+import { refreshMemberNews } from "../member-news/refresh";
 import { getConfig } from "../../config";
 import {
   runConsultationBatch,
@@ -42,6 +43,12 @@ const VOTES_INTERVAL_SECONDS = 900;
  * how often a job runs is a data change instead of a deployment.
  */
 export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
+  {
+    key: "member_news_refresh",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["organizations:write"],
+    run: async ({ env, d1QueryBudget }) => refreshMemberNews(env.DB, d1QueryBudget),
+  },
   {
     key: "due_work",
     leaseSeconds: DEFAULT_LEASE_SECONDS,

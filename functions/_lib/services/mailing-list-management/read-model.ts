@@ -3,11 +3,12 @@ import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from
 import type { AuthAdmin } from "../../types";
 import { isAuthorizationGuardFailure, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
-import { all } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
+import { requireManagedGroupMailingList } from "./authorization";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
 import {
   buildLiveAccessibleGroupResourceIdsCte,
@@ -104,6 +105,23 @@ export async function listGroupManagedMailingLists(
     }
     throw error;
   }
+}
+
+/**
+ * One list, read through the group that manages it. The record page and the
+ * row's menu ask the same question the list page did, so ownership and the
+ * shared manage grant are resolved by the same helper the writes use.
+ */
+export async function getGroupManagedMailingList(db: DatabaseLike, actor: AuthAdmin, groupId: string, listId: string) {
+  await requireManagedGroupMailingList(db, actor, groupId, listId);
+  return loadMailingList(db, listId);
+}
+
+/** Reads one list back after a write, so a command answers with what was actually stored. */
+export async function loadMailingList(db: DatabaseLike, id: string) {
+  const row = await first<MailingListRow>(db, `SELECT ${MAILING_LIST_COLUMNS} FROM mailing_lists WHERE id = ?`, [id]);
+  if (!row) throw new AppError(500, "MAILING_LIST_READ_FAILED", "Failed to read the mailing list after mutation");
+  return toMailingList(row);
 }
 
 export async function resolveAutoSyncListEmails(db: DatabaseLike, membershipCategory: string): Promise<string[]> {

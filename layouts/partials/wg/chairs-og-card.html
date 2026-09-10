@@ -3,7 +3,7 @@
   panel on the Puppeteer-rendered OG card (all.og-card.html). Same public
   GET /api/v1/groups/:slug/directory endpoint as wg/chairs-app.html's sidebar
   widget, rendered in "card" mode (full person-card markup, sized like
-  person-card.html's "sm") instead of the sidebar's compact rows. Starts
+  the small avatar) instead of the sidebar's compact rows. Starts
   hidden — functions/og/[...path].ts's `waitUntil: networkidle0`
   screenshot wait gives the widget's fetch (and this mount's own
   `data-module` script) time to resolve and reveal it before capture; if the

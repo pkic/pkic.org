@@ -17,12 +17,15 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Spinner } from "../../../../components/Spinner";
 import { Button } from "../../../../ui/Button";
+import { Menu } from "../../../../ui/Menu";
+import { DescriptionList } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { getJson, postJson, putJson } from "../../../../shared/api-client";
 import type { ServerCatalog } from "../../../../shared/server-catalog";
 import { toast } from "../../ui";
 import { GroupFormEditor } from "./GroupFormEditor";
+import { EventSubmissionWindow } from "./EventSubmissionWindow";
 
 type EventFormResponse = z.infer<typeof groupEventFormResponseSchema>;
 type EventForm = z.infer<typeof groupEventFormsResponseSchema>["forms"][number];
@@ -62,13 +65,13 @@ export function EventFormPlacementEditor({
   const [placement, setPlacement] = useState<EventFormResponse | null>(null);
   const [formId, setFormId] = useState<string | null>(null);
   const [formLabel, setFormLabel] = useState<string | undefined>();
+  const [choosing, setChoosing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<EditableFormDetail | null>(null);
   const [loadingEditor, setLoadingEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -98,6 +101,7 @@ export function EventFormPlacementEditor({
       setFormId(response.form?.form.id ?? null);
       setFormLabel(response.form?.form.title);
       onRevision(response.eventUpdatedAt);
+      setChoosing(false);
       toast(
         `${purpose === "event_registration" ? "Registration" : "Proposal submission"} form selection saved`,
         "success",
@@ -161,36 +165,77 @@ export function EventFormPlacementEditor({
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      <Field label={title}>
-        {(control) => (
-          <ServerSearchSelect
-            {...control}
-            searchLabel={title}
-            catalog={catalog}
-            value={formId}
-            selectedLabel={formLabel}
-            placeholder={`No ${purpose === "event_registration" ? "registration" : "proposal submission"} questions`}
-            disabled={saving}
-            onChange={(form) => {
-              setFormId(form?.id ?? null);
-              setFormLabel(form?.title);
-            }}
+      <div class="pk-cluster pk-cluster--between">
+        <h6>{title}</h6>
+        {!choosing && (
+          <Menu
+            label={`${title} actions`}
+            align="end"
+            items={[
+              {
+                id: "choose",
+                label: "Change attached form",
+                onSelect: () => {
+                  setChoosing(true);
+                  setError(null);
+                },
+              },
+            ]}
           />
         )}
-      </Field>
+      </div>
+      {choosing ? (
+        <Field label={title}>
+          {(control) => (
+            <ServerSearchSelect
+              {...control}
+              searchLabel={title}
+              catalog={catalog}
+              value={formId}
+              selectedLabel={formLabel}
+              placeholder={`No ${purpose === "event_registration" ? "registration" : "proposal submission"} questions`}
+              disabled={saving}
+              onChange={(form) => {
+                setFormId(form?.id ?? null);
+                setFormLabel(form?.title);
+              }}
+            />
+          )}
+        </Field>
+      ) : (
+        <DescriptionList
+          items={[{ term: "Attached form", value: placement.form?.form.title ?? "No custom questions" }]}
+        />
+      )}
       <div class="pk-cluster">
         {/* `loading` rather than `disabled` while a save is in flight: a
             disabled control loses focus, which throws a screen-reader user out
             of the form they were part-way through. */}
-        <Button
-          variant="primary"
-          size="sm"
-          loading={saving}
-          disabled={!hasSelectionChange}
-          onClick={() => void savePlacement()}
-        >
-          {saving ? "Saving…" : `Save ${purpose === "event_registration" ? "registration" : "proposal"} form`}
-        </Button>
+        {choosing && (
+          <>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={saving}
+              disabled={!hasSelectionChange}
+              onClick={() => void savePlacement()}
+            >
+              {saving ? "Saving…" : `Save ${purpose === "event_registration" ? "registration" : "proposal"} form`}
+            </Button>
+            <Button
+              size="sm"
+              disabled={saving}
+              onClick={() => {
+                setFormId(currentFormId);
+                setFormLabel(placement.form?.form.title);
+                setChoosing(false);
+                setError(null);
+              }}
+            >
+              Cancel form selection
+            </Button>
+          </>
+        )}
         <Button
           variant="secondary"
           size="sm"
@@ -215,6 +260,17 @@ export function EventFormPlacementEditor({
           </Button>
         )}
       </div>
+      {placement.form && (
+        <EventSubmissionWindow
+          base={base}
+          placement={placement.form.placement}
+          expectedUpdatedAt={expectedUpdatedAt}
+          onSaved={(response) => {
+            setPlacement(response);
+            onRevision(response.eventUpdatedAt);
+          }}
+        />
+      )}
       {error && <ErrorAlert error={error} />}
       {creating && (
         // The panel is named as well as titled, so it is a region a reader —

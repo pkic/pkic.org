@@ -1,27 +1,58 @@
-import { useState } from "preact/hooks";
+/**
+ * When a form accepts responses.
+ *
+ * The window is two optional instants stored in UTC. The controls are
+ * `datetime-local`, which speaks a wall clock with no zone attached, so both
+ * directions go through the shared timezone codec against the reader's own
+ * zone: the browser shows and takes local time, the wire carries UTC, and the
+ * conversion happens here and nowhere deeper.
+ */
+import { useEffect, useState } from "preact/hooks";
 import {
   groupFormDefinitionResponseSchema,
   groupFormPlacementUpdateSchema,
-  type GroupFormPlacementUpdateInput,
 } from "../../../../../shared/schemas/group-forms";
 import type { FormPlacement } from "../../../../../shared/schemas/forms";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
+import { PanelHeader } from "../../../../ui/Panel";
+import { EditActions } from "../../../../ui/EditActions";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { formatDateTime } from "../../../../../shared/format-date";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
-import { toast } from "../../ui";
+import { browserTimeZone, toast } from "../../ui";
+import {
+  SubmissionWindowFields,
+  instantFromLocal,
+  localFromInstant,
+} from "../../../../components/forms/SubmissionWindowFields";
 
-function localDateTime(value: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+interface WindowDraft {
+  audience: string;
+  active: boolean;
+  opensAt: string;
+  closesAt: string;
 }
 
-function isoDateTime(value: string): string | null {
-  return value ? new Date(value).toISOString() : null;
+function draftFrom(placement: FormPlacement): WindowDraft {
+  return {
+    audience: placement.audience,
+    active: placement.active,
+    opensAt: localFromInstant(placement.opensAt),
+    closesAt: localFromInstant(placement.closesAt),
+  };
+}
+
+function payloadFrom(draft: WindowDraft, timeZone: string) {
+  return {
+    audience: draft.audience,
+    active: draft.active,
+    opensAt: instantFromLocal(draft.opensAt, timeZone),
+    closesAt: instantFromLocal(draft.closesAt, timeZone),
+  };
 }
 
 export function GroupFormPlacementEditor({
@@ -33,92 +64,131 @@ export function GroupFormPlacementEditor({
   placement: FormPlacement;
   onSaved: () => void | Promise<void>;
 }) {
-  const [audience, setAudience] = useState(placement.audience);
-  const [active, setActive] = useState(placement.active);
-  const [opensAt, setOpensAt] = useState(localDateTime(placement.opensAt));
-  const [closesAt, setClosesAt] = useState(localDateTime(placement.closesAt));
+  const [timeZone] = useState(browserTimeZone);
+  const [draft, setDraft] = useState<WindowDraft>(() => draftFrom(placement));
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const form = useContractForm(groupFormPlacementUpdateSchema, payloadFrom(draft, timeZone));
   const activeId = `form-placement-active-${placement.id}`;
+  useEffect(() => {
+    setDraft(draftFrom(placement));
+    setEditing(false);
+  }, [placement.id, placement.updatedAt]);
+  function reset() {
+    setDraft(draftFrom(placement));
+    form.reset();
+    setError("");
+  }
+
+  const set = <K extends keyof WindowDraft>(key: K, value: WindowDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
 
   async function save(event: Event): Promise<void> {
     event.preventDefault();
-    setSaving(true);
+    if (!editing || saving) return;
     setError("");
+    const { data, message } = form.submit();
+    if (!data) {
+      setError(message);
+      toast(message, "error");
+      return;
+    }
+    setSaving(true);
     try {
-      const input: GroupFormPlacementUpdateInput = groupFormPlacementUpdateSchema.parse({
-        audience,
-        active,
-        opensAt: isoDateTime(opensAt),
-        closesAt: isoDateTime(closesAt),
-      });
       await patchJson(
         `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placement.id)}`,
-        input,
+        data,
         groupFormDefinitionResponseSchema,
       );
       toast("Form availability updated", "success");
       await onSaved();
+      setEditing(false);
     } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      toast(message, "error");
+      const refusal = form.refuse(caught);
+      setError(refusal);
+      toast(refusal, "error");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form class="pk pk-stack" onSubmit={(event) => void save(event)}>
-      {/* One disabled fieldset takes every control out of play while the save
+    // `noValidate`: the contract speaks for the form, so the browser's own
+    // bubble never gets in ahead of it.
+    <form class="pk pk-stack" noValidate onSubmit={(event) => void save(event)} {...form.handlers}>
+      <PanelHeader title="Form availability" headingLevel={3}>
+        <EditActions
+          label="Form availability actions"
+          editing={editing}
+          saving={saving}
+          saveLabel="Save availability"
+          onEdit={() => {
+            reset();
+            setEditing(true);
+          }}
+          onCancel={() => {
+            reset();
+            setEditing(false);
+          }}
+        />
+      </PanelHeader>
+      {editing ? (
+        <>
+          {/* One disabled fieldset takes every control out of play while the save
           is in flight, rather than each deciding for itself. The submit stays
           outside it so the button the reader just pressed keeps focus instead
           of being disabled from under them. */}
-      <fieldset class="pk-fieldset pk-stack" disabled={saving}>
-        <div class="pk-grid pk-grid--tight">
-          <Field label="Audience" required help="Who this form is offered to, in the words readers will see.">
-            {(control) => (
-              <TextInput
-                {...control}
-                value={audience}
-                maxLength={100}
-                onInput={(event) => setAudience(event.currentTarget.value)}
+          <fieldset class="pk-fieldset pk-stack" disabled={saving}>
+            <div class="pk-grid pk-grid--tight">
+              <Field
+                label="Audience"
+                required
+                help="Who this form is offered to, in the words readers will see."
+                {...form.of("audience")}
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="audience"
+                    value={draft.audience}
+                    maxLength={100}
+                    onInput={(event) => set("audience", event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <SubmissionWindowFields
+                timeZone={timeZone}
+                opensAt={draft.opensAt}
+                closesAt={draft.closesAt}
+                onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+                fieldProps={{ opensAt: form.of("opensAt"), closesAt: form.of("closesAt") }}
               />
-            )}
-          </Field>
-          <Field label="Opens" help="Leave empty to accept responses from now.">
-            {(control) => (
-              <TextInput
-                {...control}
-                type="datetime-local"
-                value={opensAt}
-                onInput={(event) => setOpensAt(event.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Field label="Closes" help="Leave empty to keep the form open indefinitely.">
-            {(control) => (
-              <TextInput
-                {...control}
-                type="datetime-local"
-                value={closesAt}
-                onInput={(event) => setClosesAt(event.currentTarget.value)}
-              />
-            )}
-          </Field>
-        </div>
-        <Checkbox
-          id={activeId}
-          checked={active}
-          onChange={(event) => setActive(event.currentTarget.checked)}
-          label="Accept responses while within the availability window"
+            </div>
+            <Checkbox
+              id={activeId}
+              name="active"
+              checked={draft.active}
+              onChange={(event) => set("active", event.currentTarget.checked)}
+              label="Accept responses while within the availability window"
+            />
+          </fieldset>
+        </>
+      ) : (
+        <DescriptionList
+          items={[
+            { term: "Audience", value: placement.audience },
+            { term: "Responses", value: placement.active ? "Accepted within the submission window" : "Paused" },
+            { term: "Opens", value: placement.opensAt ? formatDateTime(placement.opensAt) : "No opening restriction" },
+            {
+              term: "Closes",
+              value: placement.closesAt ? formatDateTime(placement.closesAt) : "No closing restriction",
+            },
+            { term: "Time zone", value: timeZone },
+          ]}
         />
-      </fieldset>
-      <div class="pk-cluster">
-        <Button type="submit" variant="primary" loading={saving}>
-          {saving ? "Saving…" : "Save availability"}
-        </Button>
-      </div>
+      )}
       {/* The failure is a block with role="alert", not a coloured span: the
           words have to reach a reader who cannot separate the red. */}
       {error && <Alert tone="danger">{error}</Alert>}

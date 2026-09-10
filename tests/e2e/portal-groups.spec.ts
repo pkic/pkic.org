@@ -41,8 +41,15 @@ const ADMIN_EMAIL = e2eAdminEmail("portal-group-self-service");
  * its own level-3 heading (the group's name), the way `helpers/membership.ts`
  * locates the membership-application header.
  */
-function participationCard(page: Page, groupName: string) {
-  return page.locator("section").filter({ has: page.getByRole("heading", { name: groupName, level: 3 }) });
+/**
+ * A group's row in the catalog.
+ *
+ * The catalog is a table (#51): it was a column of cards, each carrying a
+ * checkbox per affiliation and its own Join button, which could not be
+ * searched, sorted or paged like every other list in the portal.
+ */
+function catalogRow(page: Page, groupName: string) {
+  return page.getByRole("row").filter({ hasText: groupName });
 }
 
 test.describe("Groups: catalog, creation, self-service participation, and the Members tab", () => {
@@ -165,24 +172,31 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await signInToPortal(page, email);
     await page.goto("/portal/#/groups");
 
-    const card = participationCard(page, "Post-Quantum Cryptography Working Group");
-    await expect(card).toBeVisible({ timeout: 10_000 });
-    const affiliationCheckbox = card.getByRole("checkbox", { name: orgName });
-    await expect(affiliationCheckbox).toBeChecked();
-    await card.getByRole("button", { name: "Join selected" }).click();
+    const row = catalogRow(page, "Post-Quantum Cryptography Working Group");
+    await expect(row).toBeVisible({ timeout: 10_000 });
+
+    /*
+     * Nothing is asked until the command is taken. The catalog states what
+     * each group is; joining is a command on the row, and the affiliation it
+     * acts on behalf of is asked for in the confirmation (#51) rather than by
+     * a checkbox standing open beside every group in the list.
+     */
+    await expect(row.getByRole("checkbox")).toHaveCount(0);
+    await runRowAction(page, row, "Join group…");
+
+    // One eligible affiliation, so there is nothing to choose: the dialog
+    // names it and confirms rather than offering a list of one.
+    const joinDialog = page.getByRole("alertdialog").or(page.getByRole("dialog"));
+    await expect(joinDialog.getByText(`You will participate on behalf of ${orgName}.`)).toBeVisible();
+    await acceptConfirmDialog(page, "Join group");
     await expect(
       page.locator(".my-toast", { hasText: "Joined Post-Quantum Cryptography Working Group" }).last(),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Joined, the card now shows the affiliation under "Participating as" with
-    // its own Remove action (behind the row's "Actions for …" menu, like every
-    // other row menu in the portal), and the join fieldset/button are gone
-    // (nothing left to join).
-    await expect(card.getByText("Participating as")).toBeVisible();
-    await expect(card.getByRole("button", { name: "Join selected" })).toHaveCount(0);
-    const affiliationRow = card.getByRole("listitem").filter({ hasText: orgName });
-    await expect(affiliationRow).toBeVisible();
-    await runRowAction(page, affiliationRow, "Remove");
+    // The row now states the affiliation it participates as, and the command
+    // that would join again is gone — there is nothing left to join with.
+    await expect(row.getByText(orgName, { exact: false })).toBeVisible({ timeout: 10_000 });
+    await runRowAction(page, row, `Stop participating as ${orgName}…`);
 
     const dialog = page.getByRole("alertdialog").or(page.getByRole("dialog"));
     await expect(
@@ -192,8 +206,8 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(
       page.locator(".my-toast", { hasText: "Updated Post-Quantum Cryptography Working Group participation" }).last(),
     ).toBeVisible({ timeout: 10_000 });
-    await expect(card.getByText("Participating as")).toHaveCount(0);
-    await expect(card.getByRole("button", { name: "Join selected" })).toBeVisible();
+    // Back to offering the join, with the affiliation no longer stated.
+    await expect(row.getByText(orgName, { exact: false })).toHaveCount(0, { timeout: 10_000 });
   });
 
   test("a member representing two organizations joins selectively and leaves all affiliations at once", async ({
@@ -234,44 +248,46 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await page.context().clearCookies();
     await signInToPortal(page, email);
     await page.goto("/portal/#/groups");
-    const card = participationCard(page, "Post-Quantum Cryptography Working Group");
-    await expect(card).toBeVisible({ timeout: 10_000 });
+    const row = catalogRow(page, "Post-Quantum Cryptography Working Group");
+    await expect(row).toBeVisible({ timeout: 10_000 });
 
-    // Both affiliations are eligible and pre-selected; deselect the second so
-    // only the first joins.
-    await card.getByRole("checkbox", { name: secondOrg }).uncheck();
-    await card.getByRole("button", { name: "Join selected" }).click();
+    /*
+     * Two eligible affiliations, so the command has a scope to ask about. The
+     * dialog offers both, every one selected — the common case is all of them
+     * — and the reader clears the ones they do not want. This is the choice
+     * that used to be a column of checkboxes on the card (#51).
+     */
+    await runRowAction(page, row, "Join group…");
+    const dialog = page.getByRole("alertdialog").or(page.getByRole("dialog"));
+    await expect(dialog.getByRole("group", { name: "Join on behalf of" })).toBeVisible();
+    await expect(dialog.getByRole("checkbox", { name: firstOrg })).toBeChecked();
+    await dialog.getByRole("checkbox", { name: secondOrg }).uncheck();
+    await acceptConfirmDialog(page, "Join group");
     await expect(
       page.locator(".my-toast", { hasText: "Joined Post-Quantum Cryptography Working Group" }).last(),
     ).toBeVisible({ timeout: 10_000 });
-    await expect(card.getByText(firstOrg, { exact: false })).toBeVisible();
-    // The remaining eligible affiliation is still offered, now under "Add
-    // another affiliation" and with an "Add selected" button.
-    await expect(card.getByText("Add another affiliation")).toBeVisible();
-    const addButton = card.getByRole("button", { name: "Add selected" });
-    await expect(addButton).toBeVisible();
-    await card.getByRole("checkbox", { name: secondOrg }).check();
-    await addButton.click();
+    await expect(row.getByText(firstOrg, { exact: false })).toBeVisible({ timeout: 10_000 });
+
+    // The affiliation that stayed out is still offered, under a command that
+    // says what it would do rather than repeating "Join".
+    await runRowAction(page, row, "Join on behalf of…");
+    await expect(dialog.getByText(`You will participate on behalf of ${secondOrg}.`)).toBeVisible();
+    await acceptConfirmDialog(page, "Join group");
     await expect(
       page.locator(".my-toast", { hasText: "Joined Post-Quantum Cryptography Working Group" }).last(),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(row.getByText(secondOrg, { exact: false })).toBeVisible({ timeout: 10_000 });
 
-    // With two affiliations joined, "Leave all" appears alongside the
-    // per-affiliation Remove actions.
-    const leaveAll = card.getByRole("button", { name: "Leave all" });
-    await expect(leaveAll).toBeVisible();
-    await leaveAll.click();
+    // With two joined, leaving for all of them at once is offered.
+    await runRowAction(page, row, "Leave for every affiliation…");
     await expect(
-      page
-        .getByRole("alertdialog")
-        .or(page.getByRole("dialog"))
-        .getByText("Leave Post-Quantum Cryptography Working Group for every affiliation?"),
+      dialog.getByText("Leave Post-Quantum Cryptography Working Group for every affiliation?"),
     ).toBeVisible();
     await acceptConfirmDialog(page, "Leave group");
     await expect(
       page.locator(".my-toast", { hasText: "Left Post-Quantum Cryptography Working Group" }).last(),
     ).toBeVisible({ timeout: 10_000 });
-    await expect(card.getByText("Participating as")).toHaveCount(0);
+    await expect(row.getByText(firstOrg, { exact: false })).toHaveCount(0, { timeout: 10_000 });
   });
 
   test("a group manager adds and removes a member through the Members tab", async ({ page }) => {
@@ -286,8 +302,11 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(page.getByRole("region", { name: "Members" })).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Add person" }).click();
 
+    // Adding is a page of its own: the roster it adds to is not underneath it.
+    await expect(page).toHaveURL(new RegExp(`#/groups/${PQC_GROUP_ID}/members/add$`));
     const addForm = page.getByRole("region", { name: "Add a person" });
     await expect(addForm).toBeVisible();
+    await expect(page.getByRole("region", { name: "Members" })).toHaveCount(0);
     await addForm.getByLabel("Search for a user").fill(email);
     await expect(page.getByRole("group", { name: "Matching users" })).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: new RegExp(email) }).click();
@@ -299,7 +318,8 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     );
     await addForm.getByRole("button", { name: "Add to group" }).click();
     expect((await added).status()).toBe(200);
-    // A successful add closes the form and the table reloads with the new row.
+    // A successful add returns to the roster, which reloads with the new row.
+    await expect(page).toHaveURL(new RegExp(`#/groups/${PQC_GROUP_ID}/members$`));
     await expect(page.getByRole("region", { name: "Add a person" })).toHaveCount(0);
 
     await page.getByPlaceholder("Search name, email, organization, or category…").fill(name);

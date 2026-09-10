@@ -3,12 +3,11 @@
  *
  * A profile's links are a set of destinations, not a paragraph: the reader is
  * scanning for one of them, and the mark is what makes that scan quick. The
- * mark is derived from the host rather than passed in, so a record that stores
- * a bare URL — which is all the link schema keeps — still gets one, and two
- * records never disagree about what LinkedIn looks like.
- *
- * Deliberately not icons. A glyph set would be another asset pipeline and a
- * licensing question for a set of marks that are two characters wide anyway.
+ * mark and the label both come from `LINK_HOSTS` — the shared reference data,
+ * not a table this component keeps — so a site added once is recognized
+ * everywhere, and no surface can decide on its own that one platform deserves
+ * a treatment the rest do not get. That was issue #13 in both directions:
+ * LinkedIn with a badge and everything else as a raw address.
  *
  * The words beside the mark name the site — "LinkedIn", "GitHub", or the bare
  * host for somewhere the table has no name for — rather than printing the
@@ -16,44 +15,8 @@
  * and a long one wrapped over three lines is what issue #13 objected to. The
  * address stays reachable as the link's tooltip and in the status bar.
  */
-import { getLinkLabel } from "../../shared/schemas/links";
+import { getLinkLabel, getLinkMark } from "../../shared/schemas/links";
 import "./LinkList.css";
-
-/**
- * The two-character mark for a host.
- *
- * Matched on the registrable part rather than the whole hostname so
- * `www.linkedin.com` and `linkedin.com` mark the same. Anything unrecognized
- * gets the outbound arrow — the honest answer for a link to somewhere the
- * system knows nothing about.
- */
-const HOST_MARKS: readonly (readonly [RegExp, string])[] = [
-  [/(^|\.)linkedin\.com$/i, "in"],
-  [/(^|\.)github\.com$/i, "gh"],
-  [/(^|\.)gitlab\.com$/i, "gl"],
-  [/(^|\.)(x|twitter)\.com$/i, "x"],
-  [/(^|\.)bsky\.app$/i, "bs"],
-  [/(^|\.)youtube\.com$/i, "yt"],
-  [/(^|\.)orcid\.org$/i, "id"],
-];
-
-/** A Mastodon instance announces itself in the path, not the host. */
-const MASTODON_PATH = /^\/@[^/]+\/?$/;
-
-export function linkMark(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return "↗";
-  }
-  if (parsed.protocol === "mailto:") return "@";
-  if (MASTODON_PATH.test(parsed.pathname)) return "@";
-  for (const [pattern, mark] of HOST_MARKS) {
-    if (pattern.test(parsed.hostname)) return mark;
-  }
-  return "↗";
-}
 
 export interface LinkListProps {
   links: readonly string[];
@@ -65,13 +28,25 @@ export interface LinkListProps {
    * their own. Omitted where the subject is already the page.
    */
   ownerName?: string;
+  /**
+   * A name for the list itself, where the surrounding heading does not already
+   * give it one — a group event's links sit under a heading that names them,
+   * a person's links usually do not.
+   */
+  label?: string;
 }
 
-export function LinkList({ links, ownerName }: LinkListProps) {
+/**
+ * Every link here opens away from the page, and a reader who cannot see the
+ * layout has no other way to know that. Said in words rather than by an icon.
+ */
+const NEW_TAB = "(opens in a new tab)";
+
+export function LinkList({ links, ownerName, label }: LinkListProps) {
   if (links.length === 0) return null;
 
   return (
-    <ul class="pk-link-list">
+    <ul class="pk-link-list" aria-label={label}>
       {links.map((link) => (
         <li key={link}>
           <a
@@ -80,14 +55,17 @@ export function LinkList({ links, ownerName }: LinkListProps) {
             rel="noreferrer noopener"
             target="_blank"
             title={link}
-            aria-label={ownerName ? `${ownerName} on ${getLinkLabel(link)}` : undefined}
+            aria-label={ownerName ? `${ownerName} on ${getLinkLabel(link)} ${NEW_TAB}` : undefined}
           >
-            {/* Decoration: the address beside it is the accessible name, and
-                "in" announced before it would only be noise. */}
+            {/* Decoration: the site's name beside it is the accessible name,
+                and "in" announced before it would only be noise. */}
             <span class="pk-link-list__mark" aria-hidden="true">
-              {linkMark(link)}
+              {getLinkMark(link)}
             </span>
             <span class="pk-link-list__label">{getLinkLabel(link)}</span>
+            {/* Dropped from the announcement when `ownerName` supplies the
+                whole accessible name, which is why that branch says it too. */}
+            <span class="pk-sr-only"> {NEW_TAB}</span>
           </a>
         </li>
       ))}

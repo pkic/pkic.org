@@ -1,24 +1,28 @@
 /** Generic self-service participation view shared by every configured group type. */
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import type { z } from "zod";
 import { usePortalHashLocation } from "../hash-location";
 import { groupSchema, groupsListResponseSchema } from "../../../../shared/schemas/groups";
-import { selfGroupsListResponseSchema } from "../../../../shared/schemas/group-participation";
-import { ApiDataTable } from "../../../components/ApiDataTable";
+import { selfGroupsListResponseSchema, type SelfGroup } from "../../../../shared/schemas/group-participation";
+import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
+import { RowActions } from "../../../ui/RowActions";
+import type { MenuItem } from "../../../ui/Menu";
 import { Badge } from "../../../components/Badge";
 import { EmptyState } from "../../../components/EmptyState";
-import { ErrorAlert } from "../../../components/ErrorAlert";
-import { Pager } from "../../../components/Pager";
-import { Spinner } from "../../../components/Spinner";
-import { useApiPage } from "../../../hooks/useApiPage";
 import { Button } from "../../../ui/Button";
 import { PageHeader } from "../../../ui/PageHeader";
-import { ApiClientError } from "../../../shared/api-client";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalSession } from "../state";
 import { refreshPortalSidebarGroups } from "../shell/SidebarGroups";
-import { GroupParticipationCard } from "./GroupParticipationCard";
 import { GroupCreateForm } from "./management/GroupCreateForm";
+import {
+  affiliationLabel,
+  availableCapacities,
+  joinGroupOnBehalf,
+  leaveGroupAsCapacity,
+  leaveGroupEntirely,
+} from "./group-participation-commands";
+import { fmtDate } from "../ui";
 
 type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
 type Group = z.infer<typeof groupSchema>;
@@ -34,43 +38,151 @@ function GroupsRedirect({ navigate }: { navigate: (path: string) => void }) {
   return null;
 }
 
+/**
+ * The groups a member can join, as a table (#51).
+ *
+ * It was a column of cards, one per group, each carrying the group's name and
+ * description, a checkbox for every affiliation the reader represents and a
+ * "Join selected" button. Ten groups meant ten open forms stacked down a page
+ * that could not be sorted, searched or paged like every other list in the
+ * portal — and the decision each of them offered is one a reader makes rarely
+ * and takes whole.
+ *
+ * So it is the same `ApiDataTable` the rest of the portal uses, and joining is
+ * a command on the row. What the card asked with checkboxes standing open, the
+ * command asks in its confirmation: on whose behalf.
+ */
 function MemberGroupCatalog() {
-  const catalog = useApiPage<SelfGroupsPage>(
-    "/api/v1/users/current/groups",
-    { view: "catalog" },
-    selfGroupsListResponseSchema,
-    (data) => data.groups,
-  );
-  const groups = catalog.data?.groups ?? [];
+  const tableRef = useRef<ApiTableActions | null>(null);
+  const [, navigate] = usePortalHashLocation();
 
-  if (catalog.error) {
-    return (
-      <ErrorAlert error={catalog.error instanceof ApiClientError ? catalog.error.message : "Could not load groups."} />
-    );
+  async function afterChange(changed: boolean): Promise<void> {
+    if (!changed) return;
+    refreshPortalSidebarGroups();
+    await tableRef.current?.reload();
   }
-  if (!catalog.data) return <Spinner />;
-  if (groups.length === 0 && !catalog.data.page.hasMore) {
-    return <EmptyState title="No groups are available right now." />;
+
+  /**
+   * What can be done to one row. Joining is offered only where there is
+   * something left to join with, and leaving names the affiliation it ends —
+   * "Leave" alone would be ambiguous for a reader who represents three.
+   */
+  function participationActions(group: SelfGroup): MenuItem[] {
+    const available = availableCapacities(group);
+    const joined = group.memberships.length > 0;
+    const items: MenuItem[] = [];
+
+    if (available.length > 0) {
+      items.push({
+        id: "join",
+        label: joined ? "Join on behalf of…" : "Join group…",
+        onSelect: () => void joinGroupOnBehalf(group).then(afterChange),
+      });
+    }
+    if (joined) {
+      items.push({
+        id: "meetings",
+        label: "Meetings and calendar",
+        // A menu item is a command, not a link: navigation goes through the
+        // portal's own router rather than a bare href the menu cannot render.
+        onSelect: () => navigate(`${GROUPS_PATH}/${encodeURIComponent(group.id)}/meetings`),
+      });
+      for (const membership of group.memberships) {
+        const label = affiliationLabel({
+          memberId: membership.memberId,
+          memberType: membership.memberType,
+          organizationName: membership.organizationName,
+          membershipCategory: membership.membershipCategory,
+        });
+        items.push({
+          id: `leave-${membership.memberId}`,
+          label: `Stop participating as ${label}…`,
+          danger: true,
+          separatorBefore: items.length > 0,
+          onSelect: () => void leaveGroupAsCapacity(group, membership.memberId, label).then(afterChange),
+        });
+      }
+    }
+    if (group.memberships.length > 1) {
+      items.push({
+        id: "leave-all",
+        label: "Leave for every affiliation…",
+        danger: true,
+        onSelect: () => void leaveGroupEntirely(group).then(afterChange),
+      });
+    }
+    return items;
   }
 
   return (
-    <>
-      <p class="pk-small">
-        Join or leave groups using the Member affiliations you currently represent. All eligible affiliations are
-        selected by default; clear one to join for an explicit subset.
-      </p>
-      {groups.map((group) => (
-        <GroupParticipationCard
-          key={group.id}
-          group={group}
-          onChanged={async () => {
-            refreshPortalSidebarGroups();
-            await catalog.reload();
-          }}
-        />
-      ))}
-      {catalog.pagerProps && <Pager {...catalog.pagerProps} />}
-    </>
+    <ApiDataTable
+      caption="Groups you can join"
+      urlState="catalog"
+      endpoint="/api/v1/users/current/groups"
+      params={{ view: "catalog" }}
+      responseSchema={selfGroupsListResponseSchema}
+      resolve={(response: SelfGroupsPage) => response.groups}
+      resolvePage={(response: SelfGroupsPage) => response.page}
+      paginate
+      initialSort="name"
+      searchPlaceholder="Search groups…"
+      actionsRef={tableRef}
+      rowKey={(group: SelfGroup) => group.id}
+      columns={[
+        {
+          header: "Group",
+          cell: (group: SelfGroup) => (
+            <div>
+              <div class="pk-strong">{group.name}</div>
+              <div class="pk-small pk-muted">
+                {group.type.singularLabel}
+                {group.parentGroup ? ` · part of ${group.parentGroup.name}` : ""}
+              </div>
+            </div>
+          ),
+          sort: { asc: "name", desc: "-name", defaultDirection: "asc" },
+          width: "primary",
+        },
+        {
+          /*
+           * Membership is per affiliation, so the column says which — an
+           * em dash where none participate, rather than an empty cell that
+           * reads as missing data.
+           */
+          header: "Participating as",
+          cell: (group: SelfGroup) =>
+            group.memberships.length === 0 ? (
+              <span class="pk-muted">—</span>
+            ) : (
+              <ul class="pk-stack pk-stack--tight">
+                {group.memberships.map((membership) => (
+                  <li key={membership.id}>
+                    {affiliationLabel({
+                      memberId: membership.memberId,
+                      memberType: membership.memberType,
+                      organizationName: membership.organizationName,
+                      membershipCategory: membership.membershipCategory,
+                    })}{" "}
+                    <span class="pk-small pk-muted">since {fmtDate(membership.joinedAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            ),
+        },
+        {
+          // The row's own commands, where every other table in the portal
+          // keeps them.
+          header: "",
+          cell: (group: SelfGroup) => <RowActions subject={group.name} actions={participationActions(group)} />,
+          width: "fit",
+        },
+      ]}
+      empty={<EmptyState title="No groups are available right now." />}
+      rowAction={(group: SelfGroup) => ({
+        label: `Open ${group.name}`,
+        href: `#/groups/${encodeURIComponent(group.id)}/overview`,
+      })}
+    />
   );
 }
 

@@ -1,3 +1,5 @@
+import { BreadcrumbBranch } from "../../../../../ui/BreadcrumbScope";
+import { PageHeader } from "../../../../../ui/PageHeader";
 import { useState, useEffect } from "preact/hooks";
 import { useHashQueryParam } from "../../../../../hooks/useHashQueryParam";
 import { usePortalHashLocation } from "../../../hash-location";
@@ -58,11 +60,13 @@ export function ProposalDetailPage({
   proposalId,
   contextLabel,
   onBack,
+  parentNavigation = false,
 }: {
   slug: string;
   proposalId: string;
   contextLabel?: string | null;
   onBack?: () => void;
+  parentNavigation?: boolean;
 }) {
   const [, navigate] = usePortalHashLocation();
   const [rawTab, setRawTab] = useHashQueryParam("proposalTab", "submission");
@@ -232,24 +236,32 @@ export function ProposalDetailPage({
 
   return (
     <div class="pk pk-stack">
-      {/* ── Header ── */}
-      <div class="pk-cluster">
+      {!parentNavigation && (
         <Button size="sm" onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}>
           ← Back
         </Button>
-        {contextLabel && <span class="pk-small">{contextLabel}</span>}
-        <h2>{proposal.title}</h2>
-        <Badge status={proposal.status} />
-        {proposal.decision_status && <Badge status={proposal.decision_status} />}
-        <span class="pk-small">{proposer}</span>
-        <span class="pk-small" aria-hidden="true">
-          ·
-        </span>
-        <span class="pk-mono pk-small">{fmt(proposal.submitted_at)}</span>
-        <Button size="sm" class="pk-push" onClick={() => void reload()}>
-          ↺ Refresh
-        </Button>
-      </div>
+      )}
+      {parentNavigation && <BreadcrumbBranch items={[{ label: proposal.title }]} />}
+      <PageHeader
+        eyebrow={contextLabel ?? "Proposal"}
+        title={proposal.title}
+        context={
+          <>
+            <Badge status={proposal.status} />
+            {proposal.decision_status && <Badge status={proposal.decision_status} />}
+          </>
+        }
+        description={
+          <>
+            {proposer} · {fmt(proposal.submitted_at)}
+          </>
+        }
+        actions={
+          <Button size="sm" onClick={() => void reload()}>
+            ↺ Refresh
+          </Button>
+        }
+      />
 
       {/* ── Stat cards ── */}
       <Panel>

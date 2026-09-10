@@ -8,21 +8,33 @@
  * is the stack's gap.
  */
 import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
+import {
+  eventEmailCampaignAudienceSchema,
+  type EventEmailCampaignAudience,
+} from "../../../../../shared/schemas/event-email-campaigns";
 import { EventEmailCampaign } from "../../../../components/events/EventEmailCampaign";
 import { Tabs } from "../../../../components/Tabs";
 import { Panel, PanelBody } from "../../../../ui/Panel";
 import { toast } from "../../ui";
 
-type Audience = "attendees" | "speakers";
+/**
+ * A tab per audience a campaign can address. The set is the campaign
+ * contract's — the composer below sends whichever one is showing — so it is
+ * derived rather than restated; the words are this page's.
+ */
+const AUDIENCE_LABELS: Record<EventEmailCampaignAudience, string> = {
+  attendees: "Attendees",
+  speakers: "Speakers",
+};
 
-const AUDIENCE_TABS = [
-  { key: "attendees", label: "Attendees" },
-  { key: "speakers", label: "Speakers" },
-];
+const AUDIENCE_TABS = eventEmailCampaignAudienceSchema.options.map((audience) => ({
+  key: audience,
+  label: AUDIENCE_LABELS[audience],
+}));
 
 export function GroupEventCommunications({ groupId, eventId }: { groupId: string; eventId: string }) {
   const [rawAudience, setAudience] = useHashQueryParam("commsTab", "attendees");
-  const audience: Audience = rawAudience === "speakers" ? "speakers" : "attendees";
+  const audience: EventEmailCampaignAudience = rawAudience === "speakers" ? "speakers" : "attendees";
   const eventPath = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
   return (
     <Panel>

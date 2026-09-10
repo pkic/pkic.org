@@ -2,12 +2,16 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { EventAttendeeInviteSummary, EventInviteSummary } from "../../assets/shared/schemas/event-invites";
+import {
+  EVENT_INVITE_STATUSES,
+  type EventAttendeeInviteSummary,
+  type EventInviteSummary,
+} from "../../assets/shared/schemas/event-invites";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { controlFor } from "./helpers/labelled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
@@ -217,6 +221,10 @@ describe("portal event invitations", () => {
     // Two actions, so this row collapses into its menu; the helper finds it
     // there without the test having to know that.
     await runRowAction(container, "Ada Lovelace", "Resend invitation");
+    // The outcome is announced after the list has been reloaded, so the
+    // sentence and the row it describes arrive together — one tick for the
+    // action, one for the reload behind it.
+    await settle();
     await settle();
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -232,6 +240,7 @@ describe("portal event invitations", () => {
 
     await runRowAction(container, "Ada Lovelace", "Revoke invitation");
     await act(async () => confirmDialogButton("Revoke invitation").click());
+    await settle();
     await settle();
     expect(requests).toContainEqual(
       expect.objectContaining({
@@ -321,6 +330,7 @@ describe("portal event invitations", () => {
     expect(composer.textContent).toContain("Review and confirm below.");
     const confirm = await waitForElement(() => composer.querySelector<HTMLInputElement>('input[type="checkbox"]'));
     confirm.checked = true;
+    confirm.dispatchEvent(new Event("input", { bubbles: true }));
     confirm.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
     const send = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
@@ -390,6 +400,7 @@ describe("portal event invitations", () => {
     await settle();
     const confirm = await waitForElement(() => composer.querySelector<HTMLInputElement>('input[type="checkbox"]'));
     confirm.checked = true;
+    confirm.dispatchEvent(new Event("input", { bubbles: true }));
     confirm.dispatchEvent(new Event("change", { bubbles: true }));
     await settle();
     const send = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
@@ -499,5 +510,20 @@ describe("portal event invitations", () => {
     expect(
       Array.from(container.querySelectorAll("section[aria-label]")).map((s) => s.getAttribute("aria-label")),
     ).toContain("Speaker invitations");
+  });
+
+  it("offers every invitation status the list contract accepts", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(response([]))),
+    );
+    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
+    await settle();
+
+    // "All statuses" is the filter's own way of saying "no filter" and is not
+    // a status an invitation can hold; every status that is one is offered.
+    const offered = columnFilterOptions(container, "Status");
+    expect(offered).toEqual(["All statuses", "Sent", "Accepted", "Declined", "Expired", "Revoked"]);
+    expect(offered).toHaveLength(EVENT_INVITE_STATUSES.length + 1);
   });
 });

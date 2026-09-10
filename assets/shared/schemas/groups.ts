@@ -231,15 +231,12 @@ export const groupMembershipSchema = z.object({
   membershipCategory: membershipCategorySchema.nullable(),
   source: groupMembershipSourceSchema,
   createdByUserId: databaseIdSchema.nullable(),
-  /** Optional roster title for this seat ("Treasurer", "PKI Consortium Chair"); null renders as a plain member. */
+  /** Current leadership title, or preserved legacy title on a former seat; null means Member. */
   title: z.string().nullable(),
   joinedAt: z.string(),
   leftAt: z.string().nullable(),
 });
 export type GroupMembership = z.infer<typeof groupMembershipSchema>;
-
-/** A membership's optional roster title, trimmed; null clears it. */
-export const groupMembershipTitleSchema = trimmedString(1, 80).nullable();
 
 /**
  * Privacy-reduced roster row for a caller with only the `participate`
@@ -264,14 +261,13 @@ export type GroupCapacitySelection = z.infer<typeof groupCapacitySelectionSchema
 export const groupJoinSchema = z.object({ capacitySelection: groupCapacitySelectionSchema });
 
 /**
- * A manager adds a person with an optional roster title and service interval.
+ * A manager adds a person with a service interval. Titles belong to leadership.
  * `joinedAt` backdates the seat; a `leftAt` at or before now records a former
  * member in one step, which is how a governing body keeps its history in the
  * same roster as its current seats.
  */
 const groupMemberAddShape = {
   capacitySelection: groupCapacitySelectionSchema,
-  title: groupMembershipTitleSchema.optional(),
   joinedAt: utcInstantSchema.optional(),
   leftAt: utcInstantSchema.nullable().optional(),
 };
@@ -286,20 +282,25 @@ function requireOrderedServiceInterval(
 }
 
 /** The request body of the staff add route; the user is addressed by the path. */
-export const groupMemberAddBodySchema = z.object(groupMemberAddShape).superRefine(requireOrderedServiceInterval);
+export const groupMemberAddBodySchema = z
+  .object(groupMemberAddShape)
+  .strict()
+  .superRefine(requireOrderedServiceInterval);
 export type GroupMemberAddBody = z.infer<typeof groupMemberAddBodySchema>;
 export const groupMemberAddSchema = z
   .object({ ...groupMemberAddShape, userId: databaseIdSchema })
+  .strict()
   .superRefine(requireOrderedServiceInterval);
 export type GroupMemberAddInput = z.infer<typeof groupMemberAddSchema>;
 
-/** Edits one seat's title or service interval; `leftAt: null` reopens an ended seat. */
+/** Edits a service interval; `leftAt: null` reopens an ended seat. */
 export const groupMembershipUpdateSchema = z
   .object({
-    title: groupMembershipTitleSchema.optional(),
     joinedAt: utcInstantSchema.optional(),
     leftAt: utcInstantSchema.nullable().optional(),
   })
+  .strict()
+  .superRefine(requireOrderedServiceInterval)
   .refine((value) => Object.keys(value).length > 0, { message: "No fields to update" });
 export type GroupMembershipUpdateInput = z.infer<typeof groupMembershipUpdateSchema>;
 export const groupLeaveSchema = z.discriminatedUnion("mode", [
@@ -325,18 +326,32 @@ export const groupLeadershipRoleIdSchema = z.enum(GROUP_LEADERSHIP_ROLE_IDS);
 export type GroupLeadershipRoleId = z.infer<typeof groupLeadershipRoleIdSchema>;
 
 /**
- * Titles a manager can pick for each role beside the group type's own
- * default. Any other title is still accepted: the vocabulary is a shortcut,
- * not a constraint, so a type can be renamed without a code change.
+ * The titles a manager may choose from for each leadership role.
+ *
+ * This was a constant compiled into the bundle, which made the vocabulary a
+ * deploy rather than a decision and let the frontend and the database
+ * disagree about what a chair is called. The server answers it from the
+ * `group_leadership_titles` reference table with the group type's own
+ * configured title first, so recording a title nobody has used yet is a row
+ * and every surface offering titles offers the same ones (issue #29).
  */
-export const GROUP_LEADERSHIP_TITLE_SUGGESTIONS: Record<GroupLeadershipRoleId, readonly string[]> = {
-  "role-group_lead": ["Chair", "Co-Chair", "Lead", "Co-Lead", "President"],
-  "role-group_deputy_lead": ["Vice Chair", "Deputy Lead", "Deputy Chair", "Vice President", "Secretary"],
-};
+export const groupLeadershipTitleOptionsSchema = z.object({
+  lead: z.array(groupLeadershipTitleSchema).min(1),
+  deputyLead: z.array(groupLeadershipTitleSchema).min(1),
+});
+export type GroupLeadershipTitleOptions = z.infer<typeof groupLeadershipTitleOptionsSchema>;
 
 /** The type's default title for one leadership role. */
 export function defaultGroupLeadershipTitle(titles: GroupLeadershipTitles, roleId: GroupLeadershipRoleId): string {
   return roleId === "role-group_lead" ? titles.lead : titles.deputyLead;
+}
+
+/** The offered titles for one leadership role, in the order the server ranked them. */
+export function groupLeadershipTitleChoices(
+  options: GroupLeadershipTitleOptions,
+  roleId: GroupLeadershipRoleId,
+): readonly string[] {
+  return roleId === "role-group_lead" ? options.lead : options.deputyLead;
 }
 
 /**
@@ -441,6 +456,8 @@ export const groupLeadershipListResponseSchema = z.object({
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema,
   /** The group type's default titles, used to label roles and pre-fill new assignments. */
   titles: groupLeadershipTitlesSchema,
+  /** The vocabulary the title control offers per role: the type's own title first, then reference data. */
+  titleOptions: groupLeadershipTitleOptionsSchema,
   /** Effective leadership right now: local assignments plus those inherited from ancestors. */
   assignments: z.array(groupLeadershipAssignmentSchema),
   /** Closed local terms, most recently ended first. */
@@ -475,6 +492,12 @@ export const GROUP_MEMBERSHIP_SORT_COLUMNS = [
 /** The subset of {@link GROUP_MEMBERSHIP_SORT_COLUMNS} the reduced participant roster may sort by. */
 export const GROUP_PARTICIPANT_SORT_COLUMNS = ["user_name", "organization_name"] as const;
 export const groupMembershipsListQuerySchema = listQuerySchema(GROUP_MEMBERSHIP_SORT_COLUMNS).extend({
+  /**
+   * One seat by its own id — the same roster, narrowed to a single row, for a
+   * surface that edits one. It is what makes the seat editor's address real:
+   * without it the page could only be opened from the row that filled it in.
+   */
+  membershipId: databaseIdSchema.optional(),
   userId: databaseIdSchema.optional(),
   memberId: databaseIdSchema.optional(),
   membershipCategory: membershipCategorySchema.optional(),

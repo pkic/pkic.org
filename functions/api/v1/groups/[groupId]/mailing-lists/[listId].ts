@@ -3,14 +3,14 @@ import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { json } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { setMailingListPreference } from "../../../../../_lib/services/mailing-list-subscriptions";
-import {
-  archiveGroupMailingList,
-  updateGroupMailingList,
-} from "../../../../../_lib/services/mailing-list-management/commands";
+import { updateGroupMailingList } from "../../../../../_lib/services/mailing-list-management/commands";
+import { deleteGroupMailingList } from "../../../../../_lib/services/mailing-list-management/lifecycle";
+import { getGroupManagedMailingList } from "../../../../../_lib/services/mailing-list-management/read-model";
 import { getVisibleGroup } from "../../../../../_lib/services/groups";
 import { AppError } from "../../../../../_lib/errors";
 import {
-  groupMailingListArchiveRouteSchema,
+  groupMailingListDeleteRouteSchema,
+  groupMailingListGetRouteSchema,
   groupMailingListPreferenceRouteSchema,
   groupMailingListUpdateRouteSchema,
   mailingListPreferenceMutationResponseSchema,
@@ -44,13 +44,18 @@ export const GroupMailingListUpdate = openApiRoute(groupMailingListUpdateRouteSc
   return json(mailingListResponseSchema.parse({ mailingList }));
 });
 
-export const GroupMailingListArchive = openApiRoute(
-  groupMailingListArchiveRouteSchema,
-  async (c: AdminContext, data) => {
-    const db = requestDb(c);
-    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
-    const actor = requireGroupManagementActor(context);
-    await archiveGroupMailingList(db, actor, context.group.id, data.params.listId);
-    return json({ success: true });
-  },
-);
+export const GroupMailingListGet = openApiRoute(groupMailingListGetRouteSchema, async (c: AdminContext, data) => {
+  const db = requestDb(c);
+  const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+  const actor = requireGroupManagementActor(context);
+  const mailingList = await getGroupManagedMailingList(db, actor, context.group.id, data.params.listId);
+  return json(mailingListResponseSchema.parse({ mailingList }));
+});
+
+export const GroupMailingListDelete = openApiRoute(groupMailingListDeleteRouteSchema, async (c: AdminContext, data) => {
+  const db = requestDb(c);
+  const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+  const actor = requireGroupManagementActor(context);
+  await deleteGroupMailingList(db, actor, context.group.id, data.params.listId);
+  return json({ success: true });
+});

@@ -9,11 +9,9 @@ import {
   donationPromotersListResponseSchema,
   donationSyncRequestSchema,
 } from "../../assets/shared/schemas/donation-management";
-import { donationAnalyticsResponseSchema } from "../../assets/shared/schemas/analytics";
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { DonationDetailPage } from "../../assets/ts/member-flows/portal/sections/system-donations/DonationDetailPage";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
-import { portalSessionFixture } from "../helpers/portal-session";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/donations", vi.fn()] }));
 
@@ -111,49 +109,6 @@ function promoter() {
     currency: "usd",
     created_at: "2026-01-01T00:00:00Z",
   };
-}
-
-function period(month: string) {
-  return {
-    month,
-    count: 4,
-    completed: 3,
-    pending: 1,
-    failed: 0,
-    expired: 0,
-    gross: 4_000,
-    grossUsd: 4_000,
-    netUsd: 3_800,
-  };
-}
-
-function analyticsResponse() {
-  return new Response(
-    JSON.stringify(
-      donationAnalyticsResponseSchema.parse({
-        generatedAt: "2026-08-28T12:00:00.000Z",
-        donations: {
-          byStatus: { completed: 3 },
-          byCurrency: [
-            {
-              status: "completed",
-              currency: "usd",
-              count: 3,
-              totalGross: 4_000,
-              averageGross: 1_333,
-              totalNet: 3_800,
-              totalGrossUsd: 4_000,
-            },
-          ],
-          totals: { grossUsd: 4_000, netUsd: 3_800 },
-          daily: [],
-          weekly: [],
-          monthly: [period("2026-08")],
-        },
-      }),
-    ),
-    { status: 200, headers: { "content-type": "application/json" } },
-  );
 }
 
 /** A route that fails, so the surface's error path is exercised rather than assumed. */
@@ -301,7 +256,7 @@ describe("portal system donations", () => {
       }),
     );
 
-    const promoters = mount(<Donations subTab="promoters" />);
+    const promoters = mount(<Donations pageSegment="promoters" />);
     await settle();
     expect(requests[0]?.pathname).toBe("/api/v1/donations/promoters");
     expect(promoters.textContent).toContain("No promoter links yet");
@@ -310,68 +265,6 @@ describe("portal system donations", () => {
     await settle();
     expect(requests.at(-1)?.pathname).toBe("/api/v1/donations/donation-1");
     expect(detail.textContent).toContain("Ada Lovelace");
-  });
-
-  it("renders the donation analytics on the Stats tab for a global analytics reader", async () => {
-    portalSession.value = portalSessionFixture({
-      staff: true,
-      staffRole: "user",
-      grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
-    });
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        requests.push(url);
-        return new Response(
-          JSON.stringify({
-            generatedAt: "2026-08-28T12:00:00.000Z",
-            donations: {
-              byStatus: { completed: 1 },
-              byCurrency: [],
-              totals: { grossUsd: 1_000, netUsd: 900 },
-              daily: [],
-              weekly: [],
-              monthly: [],
-            },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }),
-    );
-
-    const container = mount(<Donations subTab="stats" />);
-    await settle();
-
-    expect(requests[0]?.pathname).toBe("/api/v1/analytics/donations");
-    expect(container.textContent).toContain("Total Gross (USD)");
-    expect(container.textContent).toContain("Stats");
-  });
-
-  it("does not offer the Stats tab or fetch analytics without analytics:read", async () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "user", grants: [] });
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        requests.push(url);
-        return response();
-      }),
-    );
-
-    const container = mount(<Donations subTab="stats" />);
-    await settle();
-
-    expect(container.textContent).not.toContain("Stats");
-    expect(requests.some((url) => url.pathname === "/api/v1/analytics/donations")).toBe(false);
   });
 
   it("names the donation table and exposes each status filter's pressed state", async () => {
@@ -427,7 +320,7 @@ describe("portal system donations", () => {
       }),
     );
 
-    const container = mount(<Donations subTab="promoters" />);
+    const container = mount(<Donations pageSegment="promoters" />);
     await settle();
 
     expect(captions(container)).toContain("Promoter share links, ranked by total impact");
@@ -439,6 +332,43 @@ describe("portal system donations", () => {
     expect(link).not.toBeNull();
     expect(link?.textContent).toBe("/donate/r/ADA1");
     expect(container.textContent).toContain("Ada Lovelace");
+  });
+
+  it("gives each donations page its own heading instead of a tab strip (#43)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname === "/api/v1/donations/promoters" ? promotersResponse([promoter()]) : response();
+      }),
+    );
+
+    const list = mount(<Donations canSync={false} />);
+    await settle();
+    expect(list.querySelector(".pk-page-header__title")?.textContent).toBe("Donations");
+    // The pages a reader chooses between are in the sidebar under Donations,
+    // so nothing above the list offers them a second time.
+    expect(list.querySelector(".pk-tabs")).toBeNull();
+    expect(list.textContent).not.toContain("Share Links");
+
+    const shareLinks = mount(<Donations pageSegment="promoters" />);
+    await settle();
+    expect(shareLinks.querySelector(".pk-page-header__title")?.textContent).toBe("Share links");
+    expect(shareLinks.querySelector(".pk-tabs")).toBeNull();
+  });
+
+  it("refuses the share links page without donations:read", async () => {
+    const fetchMock = vi.fn(async () => promotersResponse([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const container = mount(<Donations pageSegment="promoters" canRead={false} />);
+    await settle();
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("donations:read");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("reports a failed promoter request as an alert instead of an empty leaderboard", async () => {
@@ -453,7 +383,7 @@ describe("portal system donations", () => {
       }),
     );
 
-    const container = mount(<Donations subTab="promoters" />);
+    const container = mount(<Donations pageSegment="promoters" />);
     await settle();
 
     const alert = container.querySelector('[role="alert"]');
@@ -461,43 +391,6 @@ describe("portal system donations", () => {
     // "No promoter links yet" would claim the list is empty when it is unknown.
     expect(container.textContent).not.toContain("No promoter links yet");
     expect(captions(container)).not.toContain("Promoter share links, ranked by total impact");
-  });
-
-  it("names every analytics table and reports a failed analytics request as an alert", async () => {
-    portalSession.value = portalSessionFixture({
-      staff: true,
-      staffRole: "user",
-      grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => analyticsResponse()),
-    );
-
-    const ok = mount(<Donations subTab="stats" />);
-    await settle();
-
-    expect(captions(ok)).toEqual(
-      expect.arrayContaining([
-        "Donations by status and currency",
-        "Donations — Daily (last 30 days)",
-        "Donations — Weekly (last 12 weeks)",
-        "Donations — Monthly (last 12 months)",
-      ]),
-    );
-    expect(ok.textContent).toContain("Total Gross (USD)");
-
-    vi.unstubAllGlobals();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => serverError()),
-    );
-
-    const failed = mount(<Donations subTab="stats" />);
-    await settle();
-
-    expect(failed.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side");
-    expect(captions(failed)).toEqual([]);
   });
 
   it("presents the donation record as a term/value list a screen reader can walk", async () => {

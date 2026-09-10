@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 /**
  * The registration policy for one managed event.
  *
@@ -90,6 +91,8 @@ describe("the event registration settings editor", () => {
     stub();
     const container = mount(editor());
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Registration policy actions", "Edit settings");
 
     const policy = controlFor<HTMLSelectElement>(container, "Registration policy");
     expect(policy.tagName).toBe("SELECT");
@@ -110,6 +113,8 @@ describe("the event registration settings editor", () => {
     const onRevision = vi.fn();
     const container = mount(editor(onRevision));
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Registration policy actions", "Edit settings");
 
     await chooseOption(controlFor<HTMLSelectElement>(container, "Registration policy"), "optional");
     await act(async () => {
@@ -131,6 +136,8 @@ describe("the event registration settings editor", () => {
     const onRevision = vi.fn();
     const container = mount(editor(onRevision));
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Registration policy actions", "Edit settings");
 
     await chooseOption(controlFor<HTMLSelectElement>(container, "Registration policy"), "required");
     await act(async () => {
@@ -154,6 +161,7 @@ describe("the event registration settings editor", () => {
     );
     const container = mount(editor());
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Event management access is required.");
     expect(container.querySelector("select")).toBeNull();

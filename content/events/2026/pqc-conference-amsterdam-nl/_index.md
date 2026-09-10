@@ -328,6 +328,34 @@ data:
             locations:
               - blue_hall
 
+          - title: "Industry roundtable: Finance"
+            description: |
+              _Held under Chatham House Rules. In person only, with limited seats
+              taken on the day — these sessions are not livestreamed or recorded._
+
+              A moderated, sector-specific discussion for banks, payment providers and
+              market infrastructure: what post-quantum migration looks like inside a
+              regulated institution, and which obstacles are shared across the sector.
+
+              Moderators to be confirmed.
+            track: Roundtable
+            locations:
+              - room_b
+
+          - title: "Industry roundtable: Government and public sector"
+            description: |
+              _Held under Chatham House Rules. In person only, with limited seats
+              taken on the day — these sessions are not livestreamed or recorded._
+
+              A moderated, sector-specific discussion for departments, agencies and public
+              bodies: national roadmaps and mandates, how they reach suppliers through
+              procurement, and where coordination between administrations helps.
+
+              Moderators to be confirmed.
+            track: Roundtable
+            locations:
+              - room_c
+
       - time: "11:45"
         sessions:
           - title: To be announced
@@ -341,6 +369,22 @@ data:
               Session details will be announced soon.
             locations:
               - blue_hall
+
+          - title: "Industry roundtable: Finance (continues)"
+            description: |
+              The roundtable that began at 11:00 runs on through this slot until
+              lunch. The room is closed to new arrivals once it has started.
+            track: Roundtable
+            locations:
+              - room_b
+
+          - title: "Industry roundtable: Government and public sector (continues)"
+            description: |
+              The roundtable that began at 11:00 runs on through this slot until
+              lunch. The room is closed to new arrivals once it has started.
+            track: Roundtable
+            locations:
+              - room_c
 
       - time: "12:45"
         title: Lunch
@@ -497,6 +541,34 @@ data:
             locations:
               - blue_hall
 
+          - title: "Industry roundtable: Telecommunications"
+            description: |
+              _Held under Chatham House Rules. In person only, with limited seats
+              taken on the day — these sessions are not livestreamed or recorded._
+
+              A moderated, sector-specific discussion for network operators and their
+              suppliers: migration across long-lived network infrastructure,
+              subscriber identity and roaming, and inventory at telco scale.
+
+              Moderators to be confirmed.
+            track: Roundtable
+            locations:
+              - room_b
+
+          - title: "Industry roundtable: Transport and rail"
+            description: |
+              _Held under Chatham House Rules. In person only, with limited seats
+              taken on the day — these sessions are not livestreamed or recorded._
+
+              A moderated, sector-specific discussion for transport and rail operators and
+              their suppliers: safety-critical systems with lifetimes measured in
+              decades, and migration for equipment that cannot simply be replaced.
+
+              Moderators to be confirmed.
+            track: Roundtable
+            locations:
+              - room_c
+
       - time: "11:45"
         sessions:
           - title: To be announced
@@ -510,6 +582,22 @@ data:
               Session details will be announced soon.
             locations:
               - blue_hall
+
+          - title: "Industry roundtable: Telecommunications (continues)"
+            description: |
+              The roundtable that began at 11:00 runs on through this slot until
+              lunch. The room is closed to new arrivals once it has started.
+            track: Roundtable
+            locations:
+              - room_b
+
+          - title: "Industry roundtable: Transport and rail (continues)"
+            description: |
+              The roundtable that began at 11:00 runs on through this slot until
+              lunch. The room is closed to new arrivals once it has started.
+            track: Roundtable
+            locations:
+              - room_c
 
       - time: "12:45"
         title: Lunch

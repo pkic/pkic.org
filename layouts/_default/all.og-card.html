@@ -123,50 +123,21 @@
 */}}
 {{- $isWgPage := and (eq $page.Section "wg") ($page.Params.wgID) -}}
 
-{{/* Member logo wall — collected for the /members/ section list page and the home page */}}
-{{- $memberLogos := slice -}}
-{{- if or (and $page.IsSection (eq $page.Section "members")) $page.IsHome -}}
-  {{- range where $page.Site.RegularPages "Section" "members" -}}
-    {{- $id := .Params.id -}}
-    {{- if $id -}}
-      {{- $logo := "" -}}
-      {{- with resources.Get (printf "images/members/%s/%s.svg" $id $id) -}}
-        {{- $logo = .RelPermalink -}}
-      {{- else -}}
-        {{- with resources.Get (printf "images/members/%s/%s.png" $id $id) -}}
-          {{- $logo = .RelPermalink -}}
-        {{- end -}}
-      {{- end -}}
-      {{- if $logo -}}
-        {{- $memberLogos = $memberLogos | append $logo -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
+{{/*
+  Member logo wall — the home page, the /members/ section card, and a working
+  group's card. Both collections that used to build it here are gone: the
+  members section's pages plus assets/images/members/, and hugo.Data.members
+  filtered on a workingGroups field. Each listed whoever was in a YAML file
+  rather than whoever is a member (#8), and each resolved logos from the
+  repository rather than from the organization's own record. It is a mount
+  now, read from D1 — see members/logo-wall-og.html for why fetching is
+  possible on a page that is screenshotted.
+*/}}
+{{- $wallGroup := "" -}}
+{{- with $page.Params.wgID -}}{{- $wallGroup = . | lower -}}{{- end -}}
+{{- $hasMemberWall := or (and $page.IsSection (eq $page.Section "members")) $page.IsHome (ne $wallGroup "") -}}
 
-{{/* WG member wall — same treatment for individual WG pages, filtered to that WG's members */}}
-{{- with $page.Params.wgID -}}
-  {{- $wgID := . -}}
-  {{- range hugo.Data.members -}}
-    {{- if in (.workingGroups | default slice) $wgID -}}
-      {{- $id := .id -}}
-      {{- $logo := "" -}}
-      {{- with resources.Get (printf "images/members/%s/%s.svg" $id $id) -}}
-        {{- $logo = .RelPermalink -}}
-      {{- else -}}
-        {{- with resources.Get (printf "images/members/%s/%s.png" $id $id) -}}
-          {{- $logo = .RelPermalink -}}
-        {{- end -}}
-      {{- end -}}
-      {{- if $logo -}}
-        {{- $memberLogos = $memberLogos | append $logo -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
 
-{{- $hasMemberWall := gt (len $memberLogos) 0 -}}
-{{- if $hasMemberWall -}}{{- $memberLogos = shuffle $memberLogos -}}{{- end -}}
 
 {{/*
   Event sponsor strip — only Diamond/Titanium (consortium) and Leader (event)
@@ -204,11 +175,7 @@
   <div class="pkic-rainbow-stripe"></div>
   <div class="pkic-page-hero">
     {{ if not $hasMemberWall }}<div class="og-hero-watermark" aria-hidden="true"></div>{{ end }}
-    {{ if $hasMemberWall }}
-    <div class="og-member-wall-bg" aria-hidden="true">
-      {{ range $memberLogos }}<div class="og-member-logo"><img src="{{ . }}" alt=""></div>{{ end }}
-    </div>
-    {{ end }}
+    {{ if $hasMemberWall }}{{ partial "members/logo-wall-og.html" (dict "workingGroup" $wallGroup) }}{{ end }}
     <div class="og-hero-inner{{ if $visualImage }} og-hero-inner--with-visual{{ end }}">
       <section>
         {{ with $eyebrow }}<p class="pkic-page-hero-kicker">{{ . }}</p>{{ end }}

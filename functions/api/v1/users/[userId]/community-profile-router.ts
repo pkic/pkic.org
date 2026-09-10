@@ -7,6 +7,11 @@
  * not an administrator, so these routes are registered ahead of it — the same
  * way `/:userId/headshots` already is — and carry their own authorization.
  *
+ * The record itself is here for the same reason: a member has no `users:read`,
+ * yet "My profile" is their own record and they must be able to open it. Its
+ * guard answers "is this you, or do you administer users" rather than trusting
+ * the boundary it sits in front of.
+ *
  * Only reads and the vouch pair live here. Everything administrative about a
  * user record stays behind the staff boundary where it belongs.
  */
@@ -21,6 +26,7 @@ import {
   MemberSkillVouchPost,
   MemberStandingGet,
 } from "./member-profile";
+import { UserGet } from "./index";
 import { UserParticipationGet } from "./participation";
 import participationHistoryRouter from "./participation/router";
 
@@ -34,5 +40,7 @@ openapi.get("/standing", MemberStandingGet);
 openapi.get("/availability", MemberAvailabilityGet);
 openapi.get("/participation", UserParticipationGet);
 openapi.route("/participation", participationHistoryRouter);
+// Registered last so the named sub-paths above are matched first.
+openapi.get("/", UserGet);
 
 export default openapi;

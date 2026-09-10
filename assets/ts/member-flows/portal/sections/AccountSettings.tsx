@@ -1,32 +1,25 @@
-/** Member account email, access summary, shared passkey management, and notifications. */
+/** Member account email, access summary, acting capacity, passkeys, and notifications. */
 import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
+import { ActingIdentitySwitcher } from "./ActingIdentitySwitcher";
 import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { Button } from "../../../ui/Button";
-import { Checkbox } from "../../../ui/Checkbox";
+import { NotificationPreferencesCard } from "./NotificationPreferencesCard";
 import { Badge } from "../../../ui/Badge";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { ApiClientError, getJson, patchJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
-import type { NotificationPreferences, PortalSession } from "../types";
+import type { PortalSession } from "../types";
 import { toast } from "../ui";
 import { useMembershipCategoryLabels } from "../../../hooks/useMembershipCategoryLabels";
-import { myNotificationPreferencesSchema } from "../../../../shared/schemas/me";
 import {
   identitiesListResponseSchema,
   identityMutationResponseSchema,
   type ActingIdentity,
 } from "../../../../shared/schemas/identity";
-
-const PREFERENCE_LABELS: Record<keyof NotificationPreferences, string> = {
-  workingGroupUpdates: "Working group updates",
-  voteReminders: "Vote reminders",
-  generalAnnouncements: "General consortium announcements",
-  wgChairMembershipDigest: "Working group roster change digest (chairs & vice-chairs only, weekly)",
-};
 
 function IdentityInvitationsCard() {
   const [invitations, setInvitations] = useState<ActingIdentity[] | null>(null);
@@ -78,64 +71,6 @@ function IdentityInvitationsCard() {
               </div>
             ))}
           </div>
-        )}
-      </PanelBody>
-    </Panel>
-  );
-}
-
-function NotificationPreferencesCard() {
-  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    getJson("/api/v1/users/current/notifications/preferences", myNotificationPreferencesSchema)
-      .then(setPreferences)
-      .catch((reason: unknown) =>
-        setError(reason instanceof ApiClientError ? reason.message : "Could not load preferences."),
-      );
-  }, []);
-
-  async function toggle(key: keyof NotificationPreferences, next: boolean): Promise<void> {
-    setSavingKey(key);
-    try {
-      const updated = await patchJson(
-        "/api/v1/users/current/notifications/preferences",
-        { [key]: next },
-        myNotificationPreferencesSchema,
-      );
-      setPreferences(updated);
-    } catch (reason) {
-      toast(reason instanceof ApiClientError ? reason.message : "Could not update preference.", "error");
-    } finally {
-      setSavingKey(null);
-    }
-  }
-
-  return (
-    <Panel>
-      <PanelHeader title="Notification preferences" />
-      <PanelBody class="pk-stack pk-stack--snug">
-        {error && <ErrorAlert error={error} />}
-        {!preferences && !error ? (
-          <Spinner />
-        ) : (
-          preferences && (
-            <div class="pk-stack pk-stack--snug">
-              {(Object.keys(PREFERENCE_LABELS) as Array<keyof NotificationPreferences>).map((key) => (
-                <Checkbox
-                  key={key}
-                  role="switch"
-                  id={`portal-notif-${key}`}
-                  checked={preferences[key]}
-                  disabled={savingKey === key}
-                  onChange={(event) => void toggle(key, (event.target as HTMLInputElement).checked)}
-                  label={<span class="pk-small">{PREFERENCE_LABELS[key]}</span>}
-                />
-              ))}
-            </div>
-          )
         )}
       </PanelBody>
     </Panel>
@@ -250,6 +185,10 @@ export function AccountSettings() {
         </Panel>
 
         {session && <AccessSummaryCard session={session} />}
+        {/* Which capacity the portal is acting as is a setting on this
+            session, so it sits beside the list of capacities rather than on
+            the reader's own record, which states facts about a person. */}
+        {profile.value && <ActingIdentitySwitcher profile={profile.value} />}
         {hasAccountSecurityCapacity && <PasskeySettings toastTargetId="portal-toast-area" />}
         {hasMemberCapacity && <NotificationPreferencesCard />}
       </div>

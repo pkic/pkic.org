@@ -8,7 +8,8 @@ import {
   emailTemplateVersionSchema,
   type EmailTemplateVersion,
 } from "../../assets/shared/schemas/email-templates";
-import { controlFor, labelNames } from "./helpers/labelled-control";
+import { emailContentTypeSchema, emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
+import { controlFor, labelNames, optionValues } from "./helpers/labelled-control";
 
 const TEMPLATE_KEY = "welcome_email";
 const VERSIONS_PATH = `/api/v1/email/templates/${TEMPLATE_KEY}/versions`;
@@ -175,6 +176,20 @@ describe("portal email template editor", () => {
     expect(backdrop.innerHTML).toContain("firstName");
     // The preview is untrusted rendered HTML and stays fully sandboxed.
     expect(previewFrame()!.getAttribute("sandbox")).toBe("");
+  });
+
+  it("offers the content and message types the version contract accepts", async () => {
+    stubApi();
+    await mount();
+
+    // The editor writes a version through the same vocabularies the API parses,
+    // so the choices are read from those schemas rather than restated here.
+    expect(optionValues(controlFor<HTMLSelectElement>(container!, "Content type"))).toEqual(
+      emailContentTypeSchema.options,
+    );
+    expect(optionValues(controlFor<HTMLSelectElement>(container!, "Default message type"))).toEqual(
+      emailMessageTypeSchema.options,
+    );
   });
 
   it("previews the edited body and only then allows saving a draft", async () => {

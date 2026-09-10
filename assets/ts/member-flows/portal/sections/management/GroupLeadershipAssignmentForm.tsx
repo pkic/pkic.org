@@ -6,6 +6,7 @@ import {
   groupLeadershipListResponseSchema,
   type GroupLeadershipCandidate,
   type GroupLeadershipRoleId,
+  type GroupLeadershipTitleOptions,
   type GroupLeadershipTitles,
 } from "../../../../../shared/schemas/groups";
 import { EnumSelect } from "../../../../components/EnumSelect";
@@ -48,18 +49,21 @@ function leadershipCandidateCatalog(groupId: string): ServerCatalog<GroupLeaders
 
 /**
  * Assigns a leadership term to someone already participating in the group.
- * The title follows the chosen role's default until the manager types their
- * own; the term starts today unless backdated, and an end date in the past
- * records history rather than granting anything.
+ * The title follows the chosen role's default until the manager picks another
+ * from the vocabulary the server offers; the term starts today unless
+ * backdated, and an end date in the past records history rather than granting
+ * anything.
  */
 export function GroupLeadershipAssignmentForm({
   groupId,
   titles,
+  titleOptions,
   onAssigned,
   onCancel,
 }: {
   groupId: string;
   titles: GroupLeadershipTitles;
+  titleOptions: GroupLeadershipTitleOptions;
   onAssigned: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -107,10 +111,9 @@ export function GroupLeadershipAssignmentForm({
   }
 
   return (
-    // Nested inside the leadership panel, so its heading is one rung below
-    // that panel's rather than another <h3> beside it.
+    // This is the primary heading on the assignment page.
     <Panel class="pk" aria-label="Add leadership">
-      <PanelHeader title="Add leadership" headingLevel={4}>
+      <PanelHeader title="Add leadership" headingLevel={2} breadcrumb>
         {onCancel && (
           <Button size="sm" disabled={saving} onClick={onCancel}>
             Cancel
@@ -166,7 +169,7 @@ export function GroupLeadershipAssignmentForm({
               {(control) => (
                 <GroupLeadershipTitleInput
                   {...control}
-                  titles={titles}
+                  titleOptions={titleOptions}
                   roleId={roleId}
                   value={title}
                   disabled={saving}

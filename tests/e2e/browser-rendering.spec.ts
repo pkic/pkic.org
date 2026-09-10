@@ -1460,7 +1460,22 @@ test.describe("browser workflows", () => {
     await expect(page.locator("[data-event-speaker-presentation] [data-speaker-content]")).toBeVisible({
       timeout: 15_000,
     });
-    await page.locator("[data-presentation-file]").setInputFiles({
+    /*
+     * Through "Upload presentation", not past it. The input is screen-reader
+     * only and the button opens a consent dialog before it ever reaches the
+     * picker, so setting files on the input directly — which is what this did
+     * — exercised neither the button nor the terms a speaker has to accept
+     * (#28's class). The chooser opens only once the disclaimer is agreed.
+     */
+    const presentationChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Upload presentation" }).click();
+    const presentationTerms = page.getByRole("dialog", { name: "Before you upload your presentation" });
+    await expect(presentationTerms).toBeVisible({ timeout: 10_000 });
+    await presentationTerms.locator(".hsd-agree").check();
+    await presentationTerms.locator(".hsd-confirm").click();
+    await (
+      await presentationChooser
+    ).setFiles({
       name: "pqc-migration-talk.pdf",
       mimeType: "application/pdf",
       buffer: Buffer.from(

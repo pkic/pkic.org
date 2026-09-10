@@ -91,6 +91,8 @@ function occurrence(overrides: Partial<EventOccurrence> = {}): EventOccurrence {
     guestCount: 0,
     joinConfirmedCount: 0,
     attendanceVerifiedCount: 0,
+    invitationsRound: 0,
+    invitationsSentAt: null,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-25T10:00:00.000Z",
     ...overrides,
@@ -150,16 +152,23 @@ describe("meeting occurrence list", () => {
       }),
     );
 
+    // Adding is a page of its own, under the reserved `new` segment, rather
+    // than a disclosure that unfolds above the list it adds to.
+    const list = mount(<MeetingOccurrences groupId={GROUP_ID} series={series()} onSeriesChanged={() => undefined} />);
+    await settle();
+    expect(list.querySelector("form")).toBeNull();
+    expect(buttonNamed(list, "Add occurrence")).toBeTruthy();
+
     const container = mount(
-      <MeetingOccurrences groupId={GROUP_ID} series={series()} onSeriesChanged={() => undefined} />,
+      <MeetingOccurrences
+        groupId={GROUP_ID}
+        series={series()}
+        occurrenceSegment="new"
+        onSeriesChanged={() => undefined}
+      />,
     );
     await settle();
-
-    // The form is a disclosure too, so the toggle says whether it is open.
-    const toggle = buttonNamed(container, "Add occurrence");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    await act(() => toggle.click());
-    expect(buttonNamed(container, "Hide occurrence form").getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector("table")).toBeNull();
 
     await act(async () => {
       container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

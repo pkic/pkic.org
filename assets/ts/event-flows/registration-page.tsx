@@ -1,3 +1,4 @@
+import { RegistrationIdentitySelect } from "../components/RegistrationIdentitySelect";
 import { render, createRef } from "preact";
 import type { ComponentChildren } from "preact";
 import { getJson, postJson } from "../shared/api-client";
@@ -447,6 +448,9 @@ async function main(): Promise<void> {
       });
     }
 
+    const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
+    if (nextButton) nextButton.disabled = false;
+
     // Apply Cloudflare geo hint to any country-select widgets.
     // Fire-and-forget: we don't block form load on this.
     if (customFields) void applyGeolocationCountryHint(customFields, apiBase);
@@ -483,6 +487,9 @@ async function main(): Promise<void> {
     referralInput.value = query.referralCode;
   }
 
+  const identityMount = form.querySelector<HTMLElement>("[data-registration-identity]");
+  if (identityMount) render(<RegistrationIdentitySelect />, identityMount);
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     updateRegistrationReview(boot.root, form, customFieldDefs);
@@ -499,6 +506,7 @@ async function main(): Promise<void> {
         const dayAttendance = readDayAttendance(form);
         const payload = registrationCreateSchema.parse({
           firstName,
+          identityId: readField(form, "identityId") || undefined,
           lastName: readField(form, "lastName"),
           email: readField(form, "email"),
           attendanceType: dayAttendance.length === 0 ? "virtual" : undefined,

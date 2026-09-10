@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { confirmAction } from "../../../../components/ConfirmDialog";
-import { deleteJson, getJson, postJson, requestJson } from "../../../../shared/api-client";
-import { confirmHeadshotUsage } from "../../../../shared/headshot/controller";
-import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
-import { successResponseSchema } from "../../../../../shared/schemas/api-common";
-import { userAnonymizeResponseSchema, userDetailResponseSchema } from "../../../../../shared/schemas/user-management";
-import { userGravatarImportResponseSchema } from "../../../../../shared/schemas/route-contracts-headshots";
-import { fmt, toast } from "../../ui";
+import { getJson } from "../../../../shared/api-client";
+import { userDetailResponseSchema } from "../../../../../shared/schemas/user-management";
+import { fmt } from "../../ui";
 import { UserEmailAddressesPanel } from "./UserAccountPanels";
 import {
   MemberAvailabilityPanel,
@@ -20,11 +15,14 @@ import { UserAdministrationSection } from "./UserAdministrationSection";
 import { UserAffiliationsPanel } from "./UserAffiliationsPanel";
 import { UserParticipationHistory } from "./UserParticipationHistory";
 import { UserProfileEditor } from "./UserProfileEditor";
+import { CURRENT_USER_API, SelfProfilePanel } from "./SelfProfilePanel";
+import { profile as profileSignal, saveProfile } from "../../state";
+import { myProfileSchema } from "../../../../../shared/schemas/me";
 import type { UserDetail as UserDetailModel } from "./model";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { usePortalHashLocation } from "../../hash-location";
 import { Alert } from "../../../../ui/Alert";
-import { Avatar } from "../../../../ui/Avatar";
+import { Avatar, AvatarStanding } from "../../../../ui/Avatar";
 import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import {
@@ -33,9 +31,13 @@ import {
   type UserParticipation,
 } from "../../../../../shared/schemas/user-participation";
 import { Button } from "../../../../ui/Button";
-import { Menu, type MenuItem } from "../../../../ui/Menu";
+import { IconPencil } from "../../../../components/icons";
+import { UserPortrait } from "./UserPortrait";
+import { useUserRecordCommands } from "./use-user-record-commands";
+import { Menu } from "../../../../ui/Menu";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
-import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { userRecordFacts } from "./user-record-facts";
 import { LinkList } from "../../../../ui/LinkList";
 import { Meter } from "../../../../ui/Meter";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -85,15 +87,27 @@ export function UserDetail({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<UserDetailModel | null>(null);
-  const [headshotStatus, setHeadshotStatus] = useState("");
-  const [anonymizing, setAnonymizing] = useState(false);
   // Participation is its own resource: it is the expensive half of the record
   // and answers a different question from the detail, so it loads separately
   // and the rest of the page does not wait on it.
   const [participation, setParticipation] = useState<UserParticipation | null>(null);
+  /*
+   * A record about the reader offers different things than one about somebody
+   * else. Nobody messages themselves, follows themselves, or vouches for their
+   * own skills — the last of those is a rule the write path already enforces,
+   * and offering a control whose only outcome is a refusal is worse than not
+   * offering it.
+   *
+   * It is settled from the address rather than from the loaded record, because
+   * it also decides whether the record may be loaded at all: a member holds no
+   * `users:read`, and their own record is the one page they can still open.
+   */
+  const isSelf = viewerUserId !== undefined && viewerUserId === userId;
+  const canRead = permissions.canRead || isSelf;
+  const selfProfile = isSelf ? profileSignal.value : null;
 
   const load = useCallback(async () => {
-    if (!permissions.canRead) return;
+    if (!canRead) return;
     setLoading(true);
     setError(null);
     try {
@@ -104,14 +118,14 @@ export function UserDetail({
     } finally {
       setLoading(false);
     }
-  }, [permissions.canRead, userId]);
+  }, [canRead, userId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    if (!permissions.canRead) return;
+    if (!canRead) return;
     let cancelled = false;
     void getJson(`/api/v1/users/${encodeURIComponent(userId)}/participation`, userParticipationResponseSchema)
       .then((data) => {
@@ -125,64 +139,21 @@ export function UserDetail({
     return () => {
       cancelled = true;
     };
-  }, [permissions.canRead, userId]);
+  }, [canRead, userId]);
 
-  async function uploadHeadshot(file: Blob) {
-    if (!user) return;
-    await requestJson(`/api/v1/users/${encodeURIComponent(user.id)}/headshot`, successResponseSchema, {
-      method: "PUT",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      body: file,
-    });
+  /**
+   * Re-reads the signed-in member's own profile after they change it.
+   *
+   * The record and the account menu draw the same person from two responses;
+   * whichever one changed, the other has to be told, or the sidebar keeps
+   * showing the portrait that was just replaced.
+   */
+  async function refreshSelfProfile(): Promise<void> {
+    saveProfile(await getJson(CURRENT_USER_API, myProfileSchema));
+    await load();
   }
 
-  async function fetchGravatar() {
-    if (!user) return;
-    const accepted = await confirmHeadshotUsage({
-      title: "Before uploading a photo",
-      texts: ADMIN_HEADSHOT_DISCLAIMER,
-      confirmText: "Proceed",
-    });
-    if (!accepted) return;
-    setHeadshotStatus("Looking up Gravatar…");
-    try {
-      await postJson(`/api/v1/users/${encodeURIComponent(user.id)}/gravatar`, {}, userGravatarImportResponseSchema);
-      toast("Gravatar imported successfully", "success");
-      await load();
-    } catch (cause) {
-      const message = (cause as Error).message;
-      toast(message, "error");
-      setHeadshotStatus(`Error: ${message}`);
-    }
-  }
-
-  async function anonymize() {
-    if (!user) return;
-    const confirmed = await confirmAction({
-      title: `Anonymize ${user.email}?`,
-      body: "This is permanent and cannot be undone.",
-      consequences: [
-        "Their name, email, biography, links, and headshot are permanently erased",
-        "Their sign-in access is revoked immediately",
-        "Their membership and event history records are kept, but no longer identify them",
-      ],
-      confirmLabel: "Anonymize user",
-      typedConfirmation: user.email,
-    });
-    if (!confirmed) return;
-    setAnonymizing(true);
-    try {
-      await postJson(`/api/v1/users/${encodeURIComponent(user.id)}/anonymize`, {}, userAnonymizeResponseSchema);
-      toast("User anonymized", "success");
-      await load();
-    } catch (cause) {
-      toast((cause as Error).message, "error");
-    } finally {
-      setAnonymizing(false);
-    }
-  }
-
-  if (!permissions.canRead) {
+  if (!canRead) {
     return <ErrorAlert error="You need Users read permission to open a user record." />;
   }
   if (loading) return <Spinner label="Loading user…" />;
@@ -190,15 +161,20 @@ export function UserDetail({
   if (!user) return null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  const [editingProfile, setEditingProfile] = useState(false);
   const editable = permissions.canWrite && !user.pii_redacted_at;
   /*
-   * A record about the reader offers different things than one about somebody
-   * else. Nobody messages themselves, follows themselves, or vouches for their
-   * own skills — the last of those is a rule the write path already enforces,
-   * and offering a control whose only outcome is a refusal is worse than not
-   * offering it.
+   * The subject's own hold over their photo. It is not `editable`: a member
+   * administers nobody, including themselves, yet their portrait has always
+   * been theirs to set — it just used to be set on a page of its own.
    */
-  const isSelf = viewerUserId !== undefined && viewerUserId === user.id;
+  const selfEditable = isSelf && !user.pii_redacted_at;
+  /*
+   * Who may change the photograph. The same reach the photo panel has
+   * always had — staff who may write the record, and the record's own
+   * subject over their own likeness — now spent on the portrait itself.
+   */
+  const portraitEditable = editable || selfEditable;
 
   /*
    * What the person actually does lives on their membership identity, not on
@@ -269,28 +245,16 @@ export function UserDetail({
   ];
 
   /** Copying the link is the one share affordance that needs no new feature. */
-  async function copyRecordLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast("Record link copied", "success");
-    } catch {
-      // Clipboard access is refused in some browsers and every insecure
-      // context; say so rather than leaving the reader wondering.
-      toast("Your browser would not let the page copy the link", "error");
-    }
-  }
-
-  const recordActions: MenuItem[] = [{ id: "copy", label: "Copy record link", onSelect: () => void copyRecordLink() }];
-  if (permissions.canAnonymize && !user.pii_redacted_at) {
-    recordActions.push({
-      id: "anonymize",
-      label: anonymizing ? "Anonymizing…" : "Anonymize user…",
-      danger: true,
-      separatorBefore: true,
-      disabled: anonymizing,
-      onSelect: () => void anonymize(),
-    });
-  }
+  const recordActions = useUserRecordCommands({
+    user,
+    editable,
+    selfEditable,
+    canWrite: permissions.canWrite,
+    canAnonymize: permissions.canAnonymize,
+    editing: editingProfile,
+    onEdit: () => setEditingProfile(true),
+    reload: load,
+  });
 
   /*
    * Two lists, two questions. Contact answers "how do I reach this person",
@@ -299,22 +263,10 @@ export function UserDetail({
    * Contact card existed, and a fact stated twice on one page is a fact the
    * reader has to check for agreement.
    */
-  const contactEmail = identity?.email ?? user.email;
-  const contactFacts: DescriptionListItem[] = [{ term: "Email", value: <span class="pk-break">{contactEmail}</span> }];
-
-  const accountFacts: DescriptionListItem[] = [
-    // Restated only when the sign-in address is not the one above it, which is
-    // the case that would otherwise be invisible.
-    ...(contactEmail === user.email
-      ? []
-      : [{ term: "Sign-in email", value: <span class="pk-break">{user.email}</span> }]),
-    { term: "First name", value: user.first_name },
-    { term: "Last name", value: user.last_name },
-    { term: "Preferred name", value: user.preferred_name },
-    { term: "Role", value: <Badge status={user.role} /> },
-    { term: "Active", value: user.active ? "Yes" : "No" },
-    { term: "Created", value: <span class="pk-nowrap">{fmt(user.created_at)}</span> },
-  ];
+  const { contactEmail, contactFacts, accountFacts } = userRecordFacts(user, identity, {
+    // The subject's own card states and edits them instead.
+    namesStatedElsewhere: isSelf && Boolean(selfProfile),
+  });
 
   return (
     <div class="pk pk-stack">
@@ -332,22 +284,49 @@ export function UserDetail({
       <Breadcrumb items={[{ label: "Users", href: usePortalHashLocation.hrefs("/users") }, { label: displayName }]} />
       <ProfileHeader
         media={
-          <Avatar
-            name={displayName}
-            src={user.headshotUrl ?? undefined}
-            size="xl"
-            // The role is worn on the portrait; `neutral` desaturates it for a
-            // deactivated account, so the standing reads as held-before
-            // without a second badge saying so.
-            status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}
-          />
+          /*
+            The portrait is the control that changes it, for a reader who may
+            (#28). A photograph used to be set only from a file input at the
+            foot of the record under "Account administration"; here it is the
+            face itself, the way every network the reader already uses does
+            it. A reader who may not change it sees the portrait alone.
+
+            Either way it wears the same standing: the role on the ring, and
+            `neutral` desaturating it for a deactivated account so the
+            standing reads as held-before without a second badge saying so.
+          */
+          <AvatarStanding status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}>
+            {portraitEditable ? (
+              <UserPortrait
+                userId={user.id}
+                displayName={displayName}
+                headshotUrl={user.headshotUrl ?? null}
+                isSelf={isSelf}
+                canEdit
+                /* The subject's own portrait is read by the rest of the portal
+                   from the stored profile, so their change re-reads that as
+                   well as the record; everybody else's is only the record. */
+                onChanged={isSelf ? refreshSelfProfile : load}
+              />
+            ) : (
+              <Avatar name={displayName} src={user.headshotUrl ?? undefined} size="xl" />
+            )}
+          </AvatarStanding>
         }
         title={displayName}
         pill={user.active ? undefined : <Badge status="inactive" />}
         lede={lede}
-        facts={[user.email, `Created ${fmt(user.created_at)}`, user.pii_redacted_at ? "Anonymized" : null].filter(
-          (fact): fact is string => Boolean(fact),
-        )}
+        /*
+         * The address is only a fact when it is not already the title. A user
+         * with no name is headed by their email, and repeating it on the line
+         * underneath said the same string twice in a row — a third time in the
+         * Contact card, which is where it belongs.
+         */
+        facts={[
+          displayName === user.email ? null : user.email,
+          `Created ${fmt(user.created_at)}`,
+          user.pii_redacted_at ? "Anonymized" : null,
+        ].filter((fact): fact is string => Boolean(fact))}
         /*
          * Message and Follow are on the record because this is a community
          * profile and they are part of what it will offer — but they are
@@ -428,7 +407,7 @@ export function UserDetail({
             </Panel>
           )}
 
-          <MemberSkillsPanel userId={user.id} canRead={permissions.canRead} canVouch={!isSelf} />
+          <MemberSkillsPanel userId={user.id} canRead={canRead} canVouch={!isSelf} />
 
           {participationGroups.length > 0 && (
             <div class="pk-table-list">
@@ -438,6 +417,15 @@ export function UserDetail({
                 columns={groupColumns}
                 rows={participationGroups}
                 rowKey={(row) => row.group.id}
+                /*
+                 * A row here names another record, so it goes to that record
+                 * (#45). An href rather than a handler, because it is a
+                 * navigation: it opens in a new tab if the reader asks it to.
+                 */
+                rowAction={(row) => ({
+                  label: `Open ${row.group.name}`,
+                  href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(row.group.id)}`),
+                })}
               />
             </div>
           )}
@@ -453,67 +441,42 @@ export function UserDetail({
             summarizedIdentityId={identity?.identityId}
           />
 
-          <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />
+          <UserParticipationHistory userId={user.id} canRead={canRead} />
+
+          {/*
+            Who edits this record, and as what. Its subject edits it as
+            themselves, through the member contract — nobody administers
+            themselves, and a role or a deactivation is somebody else's
+            decision to record. Everybody else edits it as staff.
+
+            The name stays with the record rather than behind the disclosure
+            below. It is the record's own title: a person whose name came
+            across a migration wrong is exactly who somebody opens this page to
+            fix, and they should not have to find "account administration".
+          */}
+          {isSelf && selfProfile ? (
+            <SelfProfilePanel
+              profile={selfProfile}
+              editing={editingProfile}
+              onEdit={() => setEditingProfile(true)}
+              onClose={() => setEditingProfile(false)}
+              onSaved={refreshSelfProfile}
+            />
+          ) : null}
 
           {/* Operations on the account rather than statements about the
               person, so they are disclosed under the record instead of
               reading as three more things it says. */}
-          {/*
-            The name stays with the record rather than behind the disclosure.
-            It is the record's own title: a person whose name came across a
-            migration wrong is exactly who somebody opens this page to fix, and
-            they should not have to find "account administration" to do it.
-          */}
-          {editable && (
-            <Panel>
-              <PanelHeader title="Profile" />
-              <PanelBody>
-                <UserProfileEditor user={user} canGrantAccess={permissions.canGrantAccess} onSaved={load} />
-              </PanelBody>
-            </Panel>
+          {permissions.canRead && (
+            <UserAdministrationSection>
+              <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
+            </UserAdministrationSection>
           )}
-
-          <UserAdministrationSection>
-            <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
-
-            <Panel>
-              <PanelHeader title="Photo" />
-              <PanelBody>
-                <AdminHeadshotManager
-                  initialUrl={user.headshotUrl}
-                  alt="Headshot"
-                  emptyLabel="User"
-                  statusText={headshotStatus}
-                  readOnly={!editable}
-                  uploadHeadshot={uploadHeadshot}
-                  deleteHeadshot={async () => {
-                    await deleteJson(`/api/v1/users/${encodeURIComponent(user.id)}/headshot`, successResponseSchema);
-                  }}
-                  onFetchGravatar={editable ? fetchGravatar : undefined}
-                  onUploaded={async () => {
-                    toast("Headshot uploaded", "success");
-                    await load();
-                  }}
-                  onDeleted={async () => {
-                    toast("Headshot removed", "success");
-                    await load();
-                  }}
-                  onError={(message) => toast(message, "error")}
-                  confirmDeleteMessage="Remove this user's headshot?"
-                />
-              </PanelBody>
-            </Panel>
-          </UserAdministrationSection>
         </div>
 
         <aside class="pk-stack">
-          <MemberAvailabilityPanel
-            userId={user.id}
-            canRead={permissions.canRead}
-            canWrite={editable}
-            contactEmail={contactEmail}
-          />
-          <MemberStandingPanel userId={user.id} canRead={permissions.canRead} />
+          <MemberAvailabilityPanel userId={user.id} canRead={canRead} canWrite={editable} contactEmail={contactEmail} />
+          <MemberStandingPanel userId={user.id} canRead={canRead} />
 
           <Panel aria-label="At a glance">
             <PanelHeader title="At a glance" />
@@ -538,12 +501,51 @@ export function UserDetail({
             </PanelBody>
           </Panel>
 
+          {/*
+            The record's account fields, read and written in the one place.
+
+            Editing used to open a whole second panel further down the page
+            carrying the same fields the card beside it was already stating,
+            so a reader changing a name looked at it twice and the two could
+            disagree while the draft was open. #46 asked for the fields to be
+            edited where they are shown, and this is that: the same card, the
+            same fields, in the same order — a list while nobody is editing,
+            the fields themselves once somebody is.
+          */}
           <Panel aria-label="Account">
-            <PanelHeader title="Account" />
+            <PanelHeader title="Account">
+              {/* The quiet second way in that #46 asked for, beside the facts
+                  it edits. The record's actions menu still carries the same
+                  command in words; this is the shortcut, not the only door,
+                  so it is an icon and it disappears while the fields are
+                  open. */}
+              {editable && !editingProfile && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon
+                  aria-label="Edit profile"
+                  title="Edit profile"
+                  onClick={() => setEditingProfile(true)}
+                >
+                  <IconPencil />
+                </Button>
+              )}
+            </PanelHeader>
             <PanelBody>
-              {/* One record's fields as a description list rather than an
-                  unnamed table, on a page that already has several tables. */}
-              <DescriptionList density="compact" items={accountFacts} />
+              {editable && editingProfile ? (
+                <UserProfileEditor
+                  user={user}
+                  canGrantAccess={permissions.canGrantAccess}
+                  editing={editingProfile}
+                  onClose={() => setEditingProfile(false)}
+                  onSaved={load}
+                />
+              ) : (
+                /* One record's fields as a description list rather than an
+                   unnamed table, on a page that already has several tables. */
+                <DescriptionList density="compact" items={accountFacts} />
+              )}
             </PanelBody>
           </Panel>
 

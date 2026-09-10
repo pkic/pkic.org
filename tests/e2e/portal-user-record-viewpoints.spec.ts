@@ -68,11 +68,17 @@ test("a contact record offers different things on your own page than on someone 
   await expect(page.getByRole("button", { name: "Message — not available yet" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Follow — not available yet" })).toHaveCount(0);
 
-  // The record is still the reader's to administer: the actions menu is there,
-  // the name is editable without hunting for it, and the account section opens
-  // for the things that genuinely are administration.
-  await expect(page.getByRole("button", { name: "Record actions" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeVisible();
+  // The record is still the reader's to administer: the actions menu is there
+  // and offers the name straight away, while the account section opens
+  // separately for the things that genuinely are administration.
+  const recordActions = page.getByRole("button", { name: "Record actions" });
+  await expect(recordActions).toBeVisible();
+  await recordActions.click();
+  // Offered, not taken: a record never arrives in edit mode (#47), so the
+  // menu is closed again without opening the fields.
+  await expect(page.getByRole("menuitem", { name: "Edit profile" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
   const administration = page.getByRole("button", { name: "Account administration", exact: true });
   await expect(administration).toHaveAttribute("aria-expanded", "false");
   await administration.click();

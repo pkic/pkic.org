@@ -24,6 +24,15 @@ tags:
 title: How a SWEET32 Birthday Attack is Deployed and How to Prevent It
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 Details surrounding the [SWEET32: Birthday attacks on 64-bit block ciphers in TLS and OpenVPN][1] can be found in the paper released by Karthikeyan Bhargavan and Gaëtan Leurent from INRIA in France. The paper shows that cipher suites using 64-bit block length ciphers are vulnerable to plaintext recovery attacks. As such, Triple-DES (3DES) and Blowfish are vulnerable. Here’s an overview.
 

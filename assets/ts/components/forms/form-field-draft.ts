@@ -5,10 +5,11 @@
  * JSON view is the same rules as text. Pure functions; the editor renders.
  */
 import type { FormFieldDefinition, FormFieldOptionSource } from "../../../shared/schemas/forms";
-import { type FormFieldRules } from "../../../shared/schemas/form-field-rules";
+import { type FormFieldRules, type Visualization } from "../../../shared/schemas/form-field-rules";
 
 export type FieldType = FormFieldDefinition["fieldType"];
-export type VisualizationConfig = "auto" | "bar" | "pie" | "wordcloud" | "list";
+/** An alias, not a second list: the presentations are the contract's. */
+export type VisualizationConfig = Visualization;
 
 export interface FieldDraft {
   key: string;

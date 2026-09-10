@@ -104,14 +104,20 @@ describe("shared mailing-list form model", () => {
     };
     void act(() => render(<MailingListForm draft={draft} onChange={vi.fn()} idPrefix="mailing-list" />, container));
 
-    expect(container.querySelector<HTMLInputElement>("input[readonly]")?.value).toBe("This group");
+    /*
+     * Ownership is stated, not offered: it used to be a text input carrying
+     * `readOnly`, which reads as a field a reader may type in and cannot
+     * (#50). The group it belongs to is a fact about the list.
+     */
+    expect(container.querySelector("input[readonly]")).toBeNull();
+    expect(container.textContent).toContain("Owned by this group");
     expect(container.textContent).not.toContain("Group ID");
     expect(container.querySelector('input[type="email"]')).not.toBeNull();
     // purpose, subscription default, posting policy, moderation policy
     expect(container.querySelectorAll("select")).toHaveLength(4);
     expect(container.textContent).toContain("Posting policy");
     expect(container.textContent).toContain("Moderation policy");
-    expect(container.textContent).toContain("Auto-sync categories");
+    expect(container.textContent).toContain("Subscribe these membership categories automatically");
 
     expect(controlFor<HTMLSelectElement>(container, "Posting policy").value).toBe("members");
     expect(controlFor<HTMLSelectElement>(container, "Moderation policy").value).toBe("moderated");
@@ -133,6 +139,7 @@ describe("shared mailing-list form model", () => {
     const categoryB = container.querySelector<HTMLInputElement>("#mailing-list-auto-sync-categories-B")!;
     categoryB.checked = true;
     void act(() => {
+      categoryB.dispatchEvent(new Event("input", { bubbles: true }));
       categoryB.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
@@ -145,24 +152,36 @@ describe("shared mailing-list form model", () => {
     // The names a screen reader reads out, in order, up to the category
     // checkboxes the picker contributes.
     const names = labelNames(container);
-    expect(names.slice(0, 7)).toEqual([
-      "Email",
-      "Label",
-      "Purpose",
-      "Ownership",
-      "Default subscription",
-      "Posting policy",
-      "Moderation policy",
-    ]);
-    expect(names.slice(-2)).toEqual(["Primary discussion", "Active"]);
+    /*
+     * In the order the reader meets them, grouped by the question each
+     * answers (#50): what the list is, who is on it, what may be done on it.
+     * Ownership is no longer among them — it is a fact the Audience section
+     * states rather than a field wearing `readOnly`.
+     */
+    const sectionLabels = (title: string) => {
+      const section = [...container.querySelectorAll("fieldset.pk-form-section")].find(
+        (node) => node.querySelector("legend.pk-form-section__title")?.textContent === title,
+      );
+      // The required mark is part of the label's markup, so the words are
+      // taken from the text node the reader reads rather than the whole.
+      return [...(section?.querySelectorAll("label.pk-field__label") ?? [])].map((label) =>
+        label.firstChild?.textContent?.trim(),
+      );
+    };
+
+    expect(sectionLabels("Identity")).toEqual(["Email", "Label"]);
+    expect(sectionLabels("Audience")).toEqual(["Purpose", "Default subscription"]);
+    expect(sectionLabels("Policy")).toEqual(["Posting policy", "Moderation policy"]);
+    // Every named control still belongs to one of the groups.
+    expect(names).toContain("Email");
+    expect(names).toContain("Moderation policy");
 
     // Resolving through the pair fails exactly when the pair is broken.
     expect(controlFor(container, "Email").type).toBe("email");
     expect(controlFor<HTMLSelectElement>(container, "Purpose").tagName).toBe("SELECT");
-    expect(controlFor(container, "Ownership").readOnly).toBe(true);
   });
 
-  it("marks the blocking fields required and points the read-only field at its explanation", () => {
+  it("marks the blocking fields required and groups the rest under what they decide", () => {
     const container = mount(<MailingListForm draft={emptyMailingListDraft()} onChange={vi.fn()} />);
 
     expect(controlFor(container, "Email").required).toBe(true);
@@ -170,12 +189,16 @@ describe("shared mailing-list form model", () => {
     // Nothing is invalid until it has been checked, so no control claims to be.
     expect(container.querySelector("[aria-invalid]")).toBeNull();
 
-    const ownership = controlFor(container, "Ownership");
-    const describedBy = ownership.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toBe(
-      "Set by the group this list belongs to.",
+    /*
+     * #50: seven fields in one undifferentiated grid put the address, the
+     * label, the purpose, the ownership, the default subscription and two
+     * policies in a single row on a wide screen, with nothing saying which
+     * belonged with which. Each group states the question it answers.
+     */
+    const sections = [...container.querySelectorAll("legend.pk-form-section__title")].map(
+      (legend) => legend.textContent,
     );
+    expect(sections).toEqual(["Identity", "Audience", "Policy", "Standing"]);
   });
 
   it("draws each choice control with all three check parts, not an operating-system default", () => {
@@ -191,10 +214,20 @@ describe("shared mailing-list form model", () => {
       expect(check.querySelector("input.pk-check__input")).not.toBeNull();
       expect(check.querySelector("span.pk-check__label")?.textContent).toBeTruthy();
     }
+    /*
+     * The categories are named, not coded. A row of thirteen bare letters is
+     * not a choice a reader can weigh — the same complaint #53 made about the
+     * organization form's category select. The catalogue that carries the
+     * words is fetched, so with none loaded each keeps its code rather than
+     * rendering blank.
+     */
     expect(checks.slice(0, MEMBERSHIP_CATEGORIES.length).map((check) => check.textContent)).toEqual([
       ...MEMBERSHIP_CATEGORIES,
     ]);
-    expect(checks.slice(-2).map((check) => check.textContent)).toEqual(["Primary discussion", "Active"]);
+    expect(checks.slice(-2).map((check) => check.textContent)).toEqual([
+      "Active",
+      "The group's primary discussion list",
+    ]);
   });
 
   it("reports an edit that still satisfies the shared create contract", async () => {

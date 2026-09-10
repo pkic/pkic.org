@@ -1,3 +1,4 @@
+import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * Granting a person a new acting capacity.
  *
@@ -47,6 +48,7 @@ export function UserIdentityGrantForm({
   onGranted: () => void;
   onCancel: () => void;
 }) {
+  const categories = useMembershipCategoryLabels();
   const [mode, setMode] = useState<string>(GRANT_MODE_ORG_TIED);
   const [orgQuery, setOrgQuery] = useState("");
   const [orgResults, setOrgResults] = useState<OrganizationSummary[]>([]);
@@ -154,8 +156,8 @@ export function UserIdentityGrantForm({
   const organizationHelp =
     selectedOrgId && selectedOrgCategory !== undefined
       ? selectedOrgCategory
-        ? `Category: ${selectedOrgCategory}`
-        : "No category set on this organization yet."
+        ? categories.label(selectedOrgCategory)
+        : "This organization is not a consortium member."
       : undefined;
 
   return (
@@ -174,7 +176,7 @@ export function UserIdentityGrantForm({
                 MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
                   (category) => (
                     <option key={category} value={category}>
-                      {category}
+                      {categories.label(category)}
                     </option>
                   ),
                 )}

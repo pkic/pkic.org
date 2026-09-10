@@ -9,6 +9,7 @@
  * control it names, the checkbox parts all present so the drawn control is
  * the real one, and each outcome carrying a role rather than only a hue.
  */
+import { beginRecordEdit } from "./helpers/record-edit";
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -118,10 +119,33 @@ afterEach(() => {
 });
 
 describe("group settings form", () => {
+  it("opens as facts and discards a canceled draft without a request", async () => {
+    const { bodies } = stubPatch(() => json(saveResponse));
+    const container = mount(<GroupSettingsForm group={group} onUpdated={vi.fn(async () => undefined)} />);
+    await settle();
+    expect(container.querySelector("input,select,textarea")).toBeNull();
+    expect(container.querySelector('button[type="submit"]')).toBeNull();
+    await beginRecordEdit(container, "Group settings actions");
+    const name = labelled(container, "Name")[0] as HTMLInputElement;
+    await act(async () => {
+      name.value = "Unsaved name";
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () =>
+      [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel")?.click(),
+    );
+    expect(bodies).toEqual([]);
+    expect(container.textContent).toContain(group.name);
+    expect(container.textContent).not.toContain("Unsaved name");
+    await beginRecordEdit(container, "Group settings actions");
+    expect((labelled(container, "Name")[0] as HTMLInputElement).value).toBe(group.name);
+  });
   it("binds every label to the control it names and draws real choice controls", async () => {
     stubPatch(() => json(saveResponse));
     const container = mount(<GroupSettingsForm group={group} onUpdated={vi.fn(async () => undefined)} />);
     await settle();
+    expect(container.querySelector("input")).toBeNull();
+    await beginRecordEdit(container, "Group settings actions");
 
     expect(container.querySelector("form")?.classList.contains("pk")).toBe(true);
 
@@ -166,6 +190,7 @@ describe("group settings form", () => {
     const container = mount(<GroupSettingsForm group={group} onUpdated={onUpdated} />);
     await settle();
 
+    await beginRecordEdit(container, "Group settings actions");
     const name = labelled(container, "Name")[0] as HTMLInputElement;
     name.value = "Architecture and Design Committee";
     void act(() => {
@@ -192,6 +217,7 @@ describe("group settings form", () => {
     stubPatch(() => json({ error: { code: "CONFLICT", message: "Revision mismatch" } }, 409));
     const container = mount(<GroupSettingsForm group={group} onUpdated={onUpdated} />);
     await settle();
+    await beginRecordEdit(container, "Group settings actions");
     await save(container);
 
     const alert = container.querySelector(".pk-alert--danger");

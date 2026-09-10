@@ -1,3 +1,4 @@
+import { seatLeadershipJoinSql } from "./seat-leadership";
 import type {
   Group,
   GroupMembership,
@@ -375,13 +376,14 @@ function mapMembership(row: MembershipRow): GroupMembership {
 const MEMBERSHIP_SELECT = `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
   u.first_name, u.last_name, u.email, o.name AS organization_name,
   mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
-  gm.title, gm.joined_at, gm.left_at`;
+  CASE WHEN gm.left_at IS NULL THEN leadership.title ELSE gm.title END AS title, gm.joined_at, gm.left_at`;
 
 const MEMBERSHIP_FROM = `FROM group_memberships gm
   JOIN users u ON u.id = gm.user_id
   JOIN members m ON m.id = gm.member_id
   LEFT JOIN organizations o ON o.id = m.organization_id
-  LEFT JOIN member_category_assignments mca ON mca.member_id = m.id`;
+  LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
+  ${seatLeadershipJoinSql("gm")}`;
 
 const MEMBERSHIP_SORT_EXPRESSIONS = {
   user_name: "LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, '') || ' ' || u.email)",
@@ -397,9 +399,21 @@ export function buildGroupMembershipsPageQuery(groupId: string, query: GroupMemb
     ? buildD1TextSearchFilter(query.q, ["u.first_name", "u.last_name", "u.email", "o.name", "mca.category_code"])
     : null;
   const conditions = ["gm.group_id = ?"];
-  const bindings: unknown[] = [groupId];
-  if (query.active) conditions.push("gm.left_at IS NULL");
-  else conditions.push("gm.left_at IS NOT NULL");
+  const bindings: unknown[] = [JSON.stringify([groupId]), groupId];
+  if (query.membershipId) {
+    /*
+     * One seat by its own id is a request for that seat, whatever its state.
+     * The current/former filter is a property of the roster; applying it here
+     * as well would hide an ended seat from the page that edits it, and the
+     * flag defaults to "current" for a caller that named none.
+     */
+    conditions.push("gm.id = ?");
+    bindings.push(query.membershipId);
+  } else if (query.active) {
+    conditions.push("gm.left_at IS NULL");
+  } else {
+    conditions.push("gm.left_at IS NOT NULL");
+  }
   if (query.userId) {
     conditions.push("gm.user_id = ?");
     bindings.push(query.userId);
@@ -455,7 +469,7 @@ function mapParticipant(row: ParticipantRow): GroupParticipant {
   return {
     userId: row.user_id,
     name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Participant",
-    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
+    headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     organizationName: row.organization_name,
   };
 }
@@ -523,7 +537,7 @@ export async function listActiveGroupMembershipsForUser(
        ${MEMBERSHIP_FROM}
       WHERE gm.group_id = ? AND gm.user_id = ? AND gm.left_at IS NULL
       ORDER BY LOWER(COALESCE(o.name, '')), gm.member_id, gm.id`,
-    [groupId, userId],
+    [JSON.stringify([groupId]), groupId, userId],
   );
   return rows.map(mapMembership);
 }
@@ -542,7 +556,7 @@ export async function listActiveGroupMembershipsForGroupsForUser(
        JOIN json_each(?) requested_group ON requested_group.value = gm.group_id
       WHERE gm.user_id = ? AND gm.left_at IS NULL
       ORDER BY gm.group_id, LOWER(COALESCE(o.name, '')), gm.member_id, gm.id`,
-    [JSON.stringify(groupIds), userId],
+    [JSON.stringify(groupIds), JSON.stringify(groupIds), userId],
   );
   for (const row of rows) {
     const memberships = byGroup.get(row.group_id) ?? [];

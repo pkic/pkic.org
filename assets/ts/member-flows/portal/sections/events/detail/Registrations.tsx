@@ -13,7 +13,9 @@ import type { Registration, RegistrationAttendanceChange } from "../types";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { EventFormResponses } from "./Forms";
 import {
+  EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS,
   EVENT_REGISTRATION_STATUSES,
+  eventRegistrationAttendanceChangeFilterSchema,
   eventRegistrationStatusLabel,
   eventRegistrationsListResponseSchema,
   type EventRegistrationsListResponse,
@@ -346,9 +348,10 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
               value={attendanceChangeFilter}
               options={[
                 { value: "", label: "All attendance activity" },
-                { value: "any", label: "Changed attendance" },
-                { value: "left_in_person", label: "Left in-person and is no longer in-person" },
-                { value: "joined_in_person", label: "Joined in-person and is currently in-person" },
+                ...eventRegistrationAttendanceChangeFilterSchema.options.map((change) => ({
+                  value: change,
+                  label: EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS[change],
+                })),
               ]}
               onChange={(value) => {
                 setAttendanceChangeFilter(value);

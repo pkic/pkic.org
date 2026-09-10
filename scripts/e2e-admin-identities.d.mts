@@ -15,6 +15,8 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-donations",
   "portal-email-templates",
   "portal-leadership",
+  "portal-group-leadership",
+  "public-members-signed-in",
   "portal-mailing-lists",
   "portal-organizations",
   "portal-organizations-representatives",
@@ -24,10 +26,14 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-user-record-self",
   "portal-users",
   "portal-user-headshot",
+  "meeting-participant-links",
   "portal-members-roll",
   // Never signed in as: a pool identity is a bare `users` row with no
   // membership, which is exactly the starting state a grant needs.
   "portal-members-roll-target",
+  "portal-join-existing-organization",
+  "portal-sponsor-filters",
+  "portal-sponsor-tier-pricing",
   "portal-system-operations",
   "portal-membership-settings",
   "portal-membership-form",

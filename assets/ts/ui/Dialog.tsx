@@ -40,6 +40,12 @@ export interface DialogProps {
   confirmPrompt?: string;
   confirmLabel: string;
   cancelLabel?: string;
+  /**
+   * Holds the confirm button closed for a reason the dialog's own content
+   * carries — a scoped decision with nothing left in scope, say. The typed
+   * phrase gate below is the other reason, and both have to be satisfied.
+   */
+  confirmDisabled?: boolean;
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -55,6 +61,7 @@ export function Dialog({
   confirmPrompt,
   confirmLabel,
   cancelLabel = "Cancel",
+  confirmDisabled = false,
   destructive = false,
   onConfirm,
   onCancel,
@@ -70,7 +77,7 @@ export function Dialog({
   // Trimmed, because the phrase is usually pasted — an organization's name, an
   // email address — and a trailing space is not a sign that the operator meant
   // something else.
-  const confirmable = !confirmPhrase || typed.trim() === confirmPhrase;
+  const confirmable = !confirmDisabled && (!confirmPhrase || typed.trim() === confirmPhrase);
 
   const restoreFocus = useCallback(() => {
     const opener = openerRef.current;

@@ -2,6 +2,10 @@
  * Fails an end-to-end spec that signs in more times on one address than the
  * application's own email rate limiter allows.
  *
+ * It counts sign-ins rather than mentions: a scope named once and bound to a
+ * constant can still be signed in with four times, and an address named in a
+ * helper that never requests a link costs nothing.
+ *
  * `EMAIL_RATE_LIMITER` permits three sign-in link requests a minute for an
  * address. That is the product's rule and it is correct; the mistake is a spec
  * file whose tests all authenticate as the same scope identity, because
@@ -43,9 +47,35 @@ const overspent = [];
 for (const file of specFiles(specDir)) {
   const source = readFileSync(file, "utf8");
   const uses = new Map();
-  for (const match of source.matchAll(/e2eAdminEmail\(\s*"([^"]+)"\s*\)/g)) {
-    const scope = match[1];
+
+  /*
+   * A scope reached through a constant counts too.
+   *
+   * `portal-management-verification.spec.ts` bound its address to
+   * `const ADMIN_EMAIL = e2eAdminEmail("…")` and then signed in four times
+   * with it — four link requests inside the limiter's minute — while this
+   * check, matching only the inline call, saw one. The file failed
+   * intermittently on a rule the application is right to enforce, and
+   * nothing said why.
+   */
+  const scopeByBinding = new Map();
+  for (const match of source.matchAll(/(?:const|let)\s+(\w+)\s*=\s*e2eAdminEmail\(\s*"([^"]+)"\s*\)/g)) {
+    scopeByBinding.set(match[1], match[2]);
+  }
+
+  function record(scope) {
     uses.set(scope, (uses.get(scope) ?? 0) + 1);
+  }
+
+  for (const match of source.matchAll(/signInToPortal\(\s*\w+\s*,\s*([^)]+?)\s*\)/g)) {
+    const argument = match[1].trim();
+    const inline = /^e2eAdminEmail\(\s*"([^"]+)"\s*\)$/.exec(argument);
+    if (inline) {
+      record(inline[1]);
+      continue;
+    }
+    const bound = scopeByBinding.get(argument);
+    if (bound) record(bound);
   }
   for (const [scope, count] of uses) {
     if (count > REQUESTS_PER_ADDRESS) {

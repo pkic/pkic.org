@@ -4,11 +4,12 @@ import { fileURLToPath } from "node:url";
 
 export const REPOSITORY_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 
-export function listTypeScriptFiles(directory: string): string[] {
+export function listTypeScriptFiles(directory: string, extensions: readonly string[] = [".ts"]): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return listTypeScriptFiles(path);
-    return entry.isFile() && entry.name.endsWith(".ts") && !entry.name.startsWith("._") ? [path] : [];
+    if (entry.isDirectory()) return listTypeScriptFiles(path, extensions);
+    if (!entry.isFile() || entry.name.startsWith("._")) return [];
+    return extensions.some((extension) => entry.name.endsWith(extension)) ? [path] : [];
   });
 }
 

@@ -26,6 +26,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
+import { userDetailResponseSchema, usersListResponseSchema } from "../assets/shared/schemas/user-management";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -526,5 +527,96 @@ describe("Organization management — membership category on the aggregate (Phas
       organizationId,
     );
     expect(Number(identityCount[0].total)).toBe(2);
+  });
+  /**
+   * Issue #11: "the organization does not populate when viewing the
+   * representative under the users in the UI. Even though the representative
+   * is affiliated with the organization, that text field is blank".
+   *
+   * Nothing about a person's organization is stored on their account — it is
+   * read from the identity they hold, which is why this is asserted at the
+   * two endpoints the Users screens actually read rather than against a
+   * column. A representative created with the organization and one added to
+   * it afterwards have to arrive at the same place.
+   */
+  describe("a representative's organization, as the Users screens read it", () => {
+    async function userDetail(userId: string) {
+      const response = await call(adminToken, `/api/v1/users/${userId}`);
+      expect(response.status, await response.clone().text()).toBe(200);
+      return userDetailResponseSchema.parse(await response.json()).user;
+    }
+
+    async function userListRow(email: string) {
+      const response = await call(adminToken, `/api/v1/users?q=${encodeURIComponent(email)}`);
+      expect(response.status, await response.clone().text()).toBe(200);
+      const { users } = usersListResponseSchema.parse(await response.json());
+      const row = users.find((user) => user.email === email);
+      if (!row) throw new Error(`${email} is not in the users list`);
+      return row;
+    }
+
+    it("names it for the representative the organization was created with", async () => {
+      const { userId } = await createOrg();
+
+      const user = await userDetail(userId);
+      expect(user.identities.map((identity) => identity.organizationName)).toEqual(["Acme Corp"]);
+
+      // And in the listing, which is where staff look first.
+      expect(await userListRow("jane@acme.test")).toMatchObject({
+        organizationNames: ["Acme Corp"],
+        organizationCount: 1,
+      });
+    });
+
+    it("names it for a representative added to the organization afterwards", async () => {
+      const { organizationId } = await createOrg();
+      await addIdentity(organizationId, { name: "Added Later", email: "later@acme.test", jobTitle: "Engineer" });
+
+      const [added] = await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM users WHERE normalized_email = ?",
+        "later@acme.test",
+      );
+      const user = await userDetail(added.id);
+      expect(user.identities.map((identity) => identity.organizationName)).toEqual(["Acme Corp"]);
+      expect(user.identities[0].jobTitle).toBe("Engineer");
+
+      expect(await userListRow("later@acme.test")).toMatchObject({
+        organizationNames: ["Acme Corp"],
+        organizationCount: 1,
+      });
+    });
+
+    it("names it for an account that already existed before it represented anyone", async () => {
+      // The other arm of the add: an account the consortium already knows,
+      // chosen from the user directory rather than entered as an address.
+      const { organizationId } = await createOrg();
+      const existingUserId = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+         VALUES (?, 'known@elsewhere.test', 'known@elsewhere.test', 'Known', 'Person', datetime('now'), datetime('now'))`,
+      )
+        .bind(existingUserId)
+        .run();
+
+      const response = await call(adminToken, `/api/v1/organizations/${organizationId}/identities`, {
+        method: "POST",
+        body: JSON.stringify({
+          userReference: "existing_user",
+          userId: existingUserId,
+          jobTitle: "Analyst",
+          showOnOrganizationProfile: true,
+          activation: { mode: "immediate", reason: "Verified staff test fixture" },
+        }),
+      });
+      expect(response.status, await response.clone().text()).toBe(201);
+
+      const user = await userDetail(existingUserId);
+      expect(user.identities.map((identity) => identity.organizationName)).toEqual(["Acme Corp"]);
+      expect(await userListRow("known@elsewhere.test")).toMatchObject({
+        organizationNames: ["Acme Corp"],
+        organizationCount: 1,
+      });
+    });
   });
 });

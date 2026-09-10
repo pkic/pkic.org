@@ -1,27 +1,28 @@
 {{/*
   events/webinar-disclaimer.html — auto-injected notice on sponsored webinar pages.
 
-  Resolves the sponsor name and logo (if they are a PKI Consortium member).
+  Takes the sponsor name from the page and the logo from the image assets.
   Usage: {{ partial "events/webinar-disclaimer.html" . }}
 */}}
 
-{{- $sponsorId   := .Param "sponsor" -}}
-{{- $sponsorName := $sponsorId -}}
+{{- $sponsorId := .Param "sponsor" -}}
+{{- $sponsorName := .Param "sponsorName" | default $sponsorId -}}
+{{/*
+  The name is the page's own — it says who sponsored the webinar it is about,
+  the way it says its title — and the logo is an image asset addressed by the
+  sponsor's id. Neither needs the member directory, and reading it here meant
+  scanning every data/members/*.yaml at build time to learn a name the page
+  already knew (#8).
+*/}}
 {{- $sponsorLogo := false -}}
-
 {{- if $sponsorId -}}
-  {{- range hugo.Data.members -}}
-    {{- if eq .id $sponsorId -}}
-      {{- $sponsorName = .name -}}
-      {{/* Try SVG first, then PNG */}}
-      {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
-      {{- if $svg -}}
-        {{- $sponsorLogo = $svg -}}
-      {{- else -}}
-        {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
-        {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
-      {{- end -}}
-    {{- end -}}
+  {{/* SVG first, then PNG. */}}
+  {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
+  {{- if $svg -}}
+    {{- $sponsorLogo = $svg -}}
+  {{- else -}}
+    {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
+    {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
   {{- end -}}
 {{- end -}}
 

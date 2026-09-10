@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
+/**
+ * The company key's grammar, and the response contract the company page reads.
+ *
+ * The key is built server-side in `listSponsorshipCompanies`; the panel turns
+ * it back into a filter the sponsorships endpoint takes, so a company's page
+ * is one bounded D1 query. Paging and merging used to live here too — that is
+ * the shared table's work now, and it is exercised through the panel in
+ * portal-sponsor-company-detail-panel.test.tsx.
+ */
 import { describe, expect, it } from "vitest";
 import { sponsorshipsListResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
-import {
-  companyDetailParams,
-  buildCompanySponsorshipsUrl,
-  mergeCompanySponsorshipsPage,
-} from "../../assets/ts/member-flows/portal/sections/sponsors/management";
+import { companyDetailParams } from "../../assets/ts/member-flows/portal/sections/sponsors/management/companyKey";
 import type { Sponsorship } from "../../assets/shared/schemas/sponsorship-management";
 
 function sponsorship(id: string): Sponsorship {
@@ -47,63 +52,9 @@ describe("companyDetailParams", () => {
   it("decomposes a contact-keyed company row", () => {
     expect(companyDetailParams("contact:Jane Doe")).toEqual({ contactName: "Jane Doe" });
   });
-});
 
-describe("buildCompanySponsorshipsUrl", () => {
-  it("builds a bounded, offset-paginated URL with no filters", () => {
-    const url = buildCompanySponsorshipsUrl("org:abc-123", 0);
-    expect(url).toBe("/api/v1/sponsors?visibility=all&organizationId=abc-123&limit=200&offset=0");
-  });
-
-  it("carries the offset forward for a 'Load more' page", () => {
-    const url = buildCompanySponsorshipsUrl("org:abc-123", 200);
-    expect(url).toBe("/api/v1/sponsors?visibility=all&organizationId=abc-123&limit=200&offset=200");
-  });
-
-  it("lists everything a company holds, whatever the companies list is narrowed to", () => {
-    const url = buildCompanySponsorshipsUrl("nonmember:Acme", 0);
-    expect(url).toBe("/api/v1/sponsors?visibility=all&nonMemberName=Acme&limit=200&offset=0");
-  });
-});
-
-describe("mergeCompanySponsorshipsPage", () => {
-  it("replaces rows outright on a fresh offset-0 load", () => {
-    const previous = [sponsorship("stale-1")];
-    const fetched = {
-      sponsorships: [sponsorship("a"), sponsorship("b")],
-      page: { limit: 200, offset: 0, total: 2, hasMore: false },
-    };
-
-    const result = mergeCompanySponsorshipsPage(previous, 0, fetched);
-
-    expect(result.sponsorships.map((s) => s.id)).toEqual(["a", "b"]);
-    expect(result.page.hasMore).toBe(false);
-  });
-
-  it("appends onto existing rows for a 'Load more' page instead of dropping earlier ones", () => {
-    const previous = [sponsorship("a"), sponsorship("b")];
-    const fetched = {
-      sponsorships: [sponsorship("c")],
-      page: { limit: 200, offset: 200, total: 201, hasMore: false },
-    };
-
-    const result = mergeCompanySponsorshipsPage(previous, 200, fetched);
-
-    expect(result.sponsorships.map((s) => s.id)).toEqual(["a", "b", "c"]);
-    expect(result.page.total).toBe(201);
-  });
-
-  it("never silently caps rows: total beyond one page still reports hasMore", () => {
-    const fetched = {
-      sponsorships: Array.from({ length: 200 }, (_, i) => sponsorship(`row-${i}`)),
-      page: { limit: 200, offset: 0, total: 250, hasMore: true },
-    };
-
-    const result = mergeCompanySponsorshipsPage([], 0, fetched);
-
-    expect(result.sponsorships).toHaveLength(200);
-    expect(result.page.total).toBe(250);
-    expect(result.page.hasMore).toBe(true);
+  it("names a sponsorship that groups under itself, so its page is a list query too", () => {
+    expect(companyDetailParams("sponsorship:abc-123")).toEqual({ sponsorshipId: "abc-123" });
   });
 });
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -177,6 +178,7 @@ describe("portal event management flows", () => {
     const container = mount(<GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" />);
     await settle();
     expect(container.textContent).toContain("Registration setup");
+    await beginRecordEdit(container, "Event terms actions", "Edit terms");
     expect(
       Array.from(container.querySelectorAll<HTMLInputElement>("input")).some(
         (input) => input.value === "I agree to the event terms",
@@ -207,6 +209,7 @@ describe("portal event management flows", () => {
       },
     });
 
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
     const saveDays = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Save days",
     )!;
@@ -323,6 +326,7 @@ describe("portal event management flows", () => {
     // Resolved through the label's own for/id pair rather than through an id
     // the surface happened to compose, so the lookup fails exactly when the
     // labelling contract is broken.
+    await beginRecordEdit(container, "Registration policy actions");
     const policy = controlFor<HTMLSelectElement>(container, "Registration policy");
     policy.value = "optional";
     policy.dispatchEvent(new Event("change", { bubbles: true }));
@@ -348,9 +352,7 @@ describe("portal event management flows", () => {
     await settle();
     // Located by the heading that names the panel, not by a framework class:
     // the name is what the surface actually promises a reader.
-    const editor = Array.from(container.querySelectorAll<HTMLElement>("section.pk-panel")).find(
-      (panel) => panel.querySelector(".pk-panel__title")?.textContent === "New registration form",
-    )!;
+    const editor = container.querySelector<HTMLElement>('section[aria-label="New registration form"]')!;
     await nameForm(editor, "Workshop registration", "workshop-registration");
     await settle();
     await act(async () => {
@@ -371,8 +373,9 @@ describe("portal event management flows", () => {
         },
       },
     });
-    // The chosen form's title reads back from the closed combobox itself.
-    expect(controlFor(container, "Registration questions").value).toBe("Workshop registration");
+    // The attached form reads back as a saved fact.
+    expect(container.textContent).toContain("Workshop registration");
+    expect(container.querySelector('button[aria-label="Registration questions actions"]')).not.toBeNull();
     expect(onUpdated).toHaveBeenCalledTimes(2);
   });
 });

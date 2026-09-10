@@ -13,7 +13,7 @@ export function GroupAuditLog({ groupId }: { groupId: string }) {
         caption="Group history"
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/audit-log`}
         actionCell={(entry) => <code class="pk-small">{entry.action}</code>}
-        detailsCell={(entry) => <DetailsSummary value={entry.details} />}
+        detailsCell={(entry) => <DetailsSummary value={entry.details} layout="inline" />}
         entityHref={portalEntityHref}
       />
     </div>

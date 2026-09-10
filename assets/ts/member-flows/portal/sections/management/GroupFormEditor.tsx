@@ -1,5 +1,6 @@
 import { useRef } from "preact/hooks";
 import {
+  GROUP_FORM_PURPOSES,
   groupFormDefinitionCreateSchema,
   groupFormDefinitionMutationResponseSchema,
   groupFormDefinitionUpdateSchema,
@@ -19,7 +20,9 @@ export function GroupFormEditor({
   groupId,
   placementId,
   detail,
-  purposes = ["survey", "feedback"],
+  // What a group may raise a form for is the create contract's business, not
+  // this component's: `groupFormDefinitionCreateSchema` refuses anything else.
+  purposes = GROUP_FORM_PURPOSES,
   onSaved,
   onCancel,
 }: {

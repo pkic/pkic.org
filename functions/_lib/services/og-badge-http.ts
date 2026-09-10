@@ -31,6 +31,11 @@ function badgeHeaders(contentType: string, cacheStatus: "HIT" | "MISS", isDownlo
 export async function readCachedBadge(options: BadgeResponseOptions): Promise<Response | null> {
   const cached = await options.bucket?.get(options.cacheKey);
   if (!cached) return null;
+  if (
+    options.cacheMetadata.badgeGeneration !== undefined &&
+    cached.customMetadata?.badgeGeneration !== options.cacheMetadata.badgeGeneration
+  )
+    return null;
   return finalizeBadgeResponse(
     new Response(await cached.arrayBuffer(), {
       headers: badgeHeaders(cached.httpMetadata?.contentType ?? JPEG_CONTENT_TYPE, "HIT", options.isDownload),

@@ -1,3 +1,4 @@
+import { badgeCacheMetadata } from "../../../../../_lib/services/badge-render-job-statements";
 /**
  * Registration referral badge image endpoint
  * GET /api/v1/registrations/referrals/:code/badge
@@ -29,7 +30,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const responseOptions = {
     bucket,
     cacheKey: r2Key,
-    cacheMetadata: { referralCode: code },
+    cacheMetadata: await badgeCacheMetadata(c.env.DB, code),
     isDownload,
     downloadName: rawName,
     fallbackDownloadName: "attendee-badge",

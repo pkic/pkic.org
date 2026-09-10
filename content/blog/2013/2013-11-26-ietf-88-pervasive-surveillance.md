@@ -31,6 +31,15 @@ tags:
 title: IETF 88 – Pervasive Surveillance
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 ### Internet Surveillance
 

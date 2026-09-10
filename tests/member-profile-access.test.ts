@@ -6,13 +6,17 @@
  * without holding staff permission over user administration. The tests below
  * are the boundary — an ordinary member gets in, an unauthenticated caller
  * does not, and vouching stays a member's act rather than an administrator's.
+ *
+ * The user record itself answers a narrower question, tested at the bottom:
+ * its own subject may read it, and everybody else still needs `users:read`.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 
 import app from "../functions/router";
-import { createMemberSession } from "./helpers/auth";
-import { insertIndividualMember } from "./helpers/membership";
+import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
+import { createMcpSession, createMemberSession } from "./helpers/auth";
+import { insertIndividualMember, insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 const NOW = () => new Date().toISOString();
@@ -132,5 +136,71 @@ describe("community profile access", () => {
     });
 
     expect([401, 403]).toContain(response.status);
+  });
+});
+
+/**
+ * The record page a member reaches from "My profile" is `/users/:userId` —
+ * the same page staff open about anybody. That only works if its subject may
+ * read it, so the rule is here rather than in a second endpoint: you, or
+ * `users:read`.
+ */
+describe("reading one user record", () => {
+  beforeEach(resetDb);
+
+  it("lets a member read their own record without staff permission", async () => {
+    const self = await insertIndividualMember(env.DB, "H6", "self@example.test");
+    const token = await createMemberSession(env.DB, self.userId, "self-token");
+
+    const response = await call(token, `/api/v1/users/${self.userId}`);
+
+    expect(response.status).toBe(200);
+    const body = userDetailResponseSchema.parse(await response.json());
+    expect(body.user.id).toBe(self.userId);
+    expect(body.user.email).toBe("self@example.test");
+    // The identity the record speaks from is theirs, so the page can show the
+    // job title, biography and links a member came to edit.
+    expect(body.user.identities.map((identity) => identity.identityId)).toContain(self.identityId);
+  });
+
+  it("refuses that same member another person's record", async () => {
+    const self = await insertIndividualMember(env.DB, "H6", "reader6@example.test");
+    const other = await insertIndividualMember(env.DB, "H6", "other6@example.test");
+    const token = await createMemberSession(env.DB, self.userId, "reader6-token");
+
+    const response = await call(token, `/api/v1/users/${other.userId}`);
+
+    // Widening the page to its own subject must not widen it to everybody:
+    // reading somebody else is still administration, and takes the grant.
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses an unauthenticated reader", async () => {
+    const subject = await insertIndividualMember(env.DB, "H6", "subject7@example.test");
+
+    const response = await call(null, `/api/v1/users/${subject.userId}`);
+
+    expect([401, 403]).toContain(response.status);
+  });
+
+  it("does not let a scope-restricted client read its own operator's record", async () => {
+    const operator = await insertUser(env.DB, "operator8@example.test");
+    await env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?`).bind(operator).run();
+    const token = await createMcpSession(
+      env.DB,
+      { id: operator, email: "operator8@example.test", role: "admin" },
+      "mcp-token-8",
+      ["groups:read"],
+    );
+
+    // The machine header is what routes the bearer token to the MCP verifier.
+    const response = await call(token, `/api/v1/users/${operator}`, {
+      headers: { "x-pkic-machine-auth": "mcp" },
+    });
+
+    // "It is your own record" is an argument about the person, not about the
+    // client they delegated a named subset of their authority to.
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("SCOPE_REQUIRED");
   });
 });

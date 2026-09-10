@@ -13,7 +13,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
 
-test("a member toggles every notification preference and it persists across reload", async ({ page }) => {
+test("a member explicitly edits every notification preference and it persists across reload", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `account-notifications-${suffix}@account-notifications-${suffix}.test`;
   const organizationName = `Account Notifications Org ${suffix}`;
@@ -33,39 +33,33 @@ test("a member toggles every notification preference and it persists across relo
     "Working group roster change digest (chairs & vice-chairs only, weekly)",
   ] as const;
 
-  // Every preference starts checked (the schema's default), so this exercises
-  // the same PATCH round trip four times, once per named preference.
+  const panel = page.getByRole("region", { name: "Notification preferences" });
+  async function editPreferences() {
+    await panel.getByRole("button", { name: "Notification preference actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit settings" }).click();
+  }
+  await expect(panel.locator("input")).toHaveCount(0);
+  await editPreferences();
+  await panel.getByRole("checkbox", { name: preferences[0], exact: true }).uncheck();
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+  await editPreferences();
   for (const label of preferences) {
-    const toggle = page.getByRole("switch", { name: label });
-    await expect(toggle).toBeVisible();
+    const toggle = panel.getByRole("checkbox", { name: label, exact: true });
     await expect(toggle).toBeChecked();
-    const patched = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/v1/users/current/notifications/preferences") &&
-        response.request().method() === "PATCH",
-    );
-    await toggle.click();
-    expect((await patched).status(), `toggling "${label}"`).toBe(200);
-    await expect(toggle).not.toBeChecked();
+    await toggle.uncheck();
   }
-
-  // Reload from a clean mount: every preference must come back off from the
-  // server, not merely reflect still-mounted component state.
-  await page.reload();
-  for (const label of preferences) {
-    await expect(page.getByRole("switch", { name: label })).not.toBeChecked();
-  }
-
-  // Flip one back on to prove the toggle is not one-directional.
-  const first = page.getByRole("switch", { name: preferences[0] });
-  const restored = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/v1/users/current/notifications/preferences") &&
-      response.request().method() === "PATCH",
+  const patched = page.waitForResponse(
+    (response) => response.url().endsWith("/notifications/preferences") && response.request().method() === "PATCH",
   );
-  await first.click();
-  expect((await restored).status()).toBe(200);
-  await expect(first).toBeChecked();
+  await panel.getByRole("button", { name: "Save changes" }).click();
+  expect((await patched).status()).toBe(200);
+  await expect(panel.locator("input")).toHaveCount(0);
+  await page.reload();
+  await expect(panel.locator("dd")).toHaveText(["Off", "Off", "Off", "Off"]);
+  await editPreferences();
+  await panel.getByRole("checkbox", { name: preferences[0], exact: true }).check();
+  await panel.getByRole("button", { name: "Save changes" }).click();
+  await expect(panel.locator("dd").first()).toHaveText("On");
 });
 
 test("the access summary names a member's organization and category", async ({ page }) => {

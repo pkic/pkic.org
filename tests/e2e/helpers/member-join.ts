@@ -44,3 +44,9 @@ export async function verifyMembershipJoinEmail(
   expect(verified.status, JSON.stringify(verified.body)).toBe(200);
   return memberJoinVerifyResponseSchema.parse(verified.body);
 }
+
+/** Open the email in a fresh document, without racing the join page's hash handler. */
+export async function openMembershipVerificationLink(page: Page, url: string): Promise<void> {
+  await page.goto("about:blank");
+  await page.goto(url);
+}

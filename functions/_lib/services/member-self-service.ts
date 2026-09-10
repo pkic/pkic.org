@@ -124,7 +124,7 @@ function toProfile(
     organizationName: row.org_name,
     memberSince: row.member_since ?? row.member_created_at,
     showOnOrgProfile: row.show_on_org_profile === 1,
-    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
+    headshotUrl: publicUserHeadshotPath(member.userId, row.headshot_r2_key),
     isOrgContact,
     organizationIdentities,
     activeIdentities: member.activeIdentities,

@@ -39,6 +39,13 @@ export const memberSkillsResponseSchema = z.object({
  * than by a table constraint.
  */
 export const availabilityVisibilitySchema = z.enum(["members", "private"]);
+export type AvailabilityVisibility = z.infer<typeof availabilityVisibilitySchema>;
+
+/** The words each audience is offered under, beside the vocabulary itself. */
+export const AVAILABILITY_VISIBILITY_LABELS: Record<AvailabilityVisibility, string> = {
+  members: "Signed-in members",
+  private: "Nobody — keep this to myself",
+};
 
 export const memberAvailabilitySchema = z.object({
   openToEmployment: z.boolean(),

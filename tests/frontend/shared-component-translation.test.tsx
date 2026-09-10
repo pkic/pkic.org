@@ -95,6 +95,32 @@ describe("shared component translation layer", () => {
     expect(linked.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer");
   });
 
+  /*
+   * The shapes a member actually pastes.
+   *
+   * A member page carries its video as a Hugo shortcode no longer (#12): the
+   * renderer takes the URL itself, and the URL people copy out of a browser
+   * is the `watch?v=` one, sometimes with a playlist or a timestamp hanging
+   * off it. A URL inside a sentence stays a sentence — embedding one would
+   * drop the words around it.
+   */
+  it.each([
+    ["https://www.youtube.com/watch?v=HGoZW7MCF60", "https://www.youtube.com/embed/HGoZW7MCF60"],
+    ["https://youtube.com/watch?list=PL1&v=HGoZW7MCF60", "https://www.youtube.com/embed/HGoZW7MCF60"],
+    ["https://youtu.be/HGoZW7MCF60", "https://www.youtube.com/embed/HGoZW7MCF60"],
+    ["https://vimeo.com/76979871", "https://player.vimeo.com/video/76979871"],
+    ["[Our keynote](https://www.youtube.com/watch?v=HGoZW7MCF60)", "https://www.youtube.com/embed/HGoZW7MCF60"],
+  ])("Markdown embeds %s on a line of its own", (markdown, embedUrl) => {
+    const container = mount(<Markdown markdown={markdown} />);
+    expect(container.querySelector("iframe")?.getAttribute("src")).toBe(embedUrl);
+  });
+
+  it("Markdown leaves a video URL inside a sentence as prose", () => {
+    const container = mount(<Markdown markdown="Watch https://www.youtube.com/watch?v=HGoZW7MCF60 for more." />);
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.textContent).toContain("Watch");
+  });
+
   it("AuditLogTable names its table and says which history it is showing", async () => {
     vi.stubGlobal(
       "fetch",

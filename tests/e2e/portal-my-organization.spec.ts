@@ -16,6 +16,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
+import { uploadThroughButton } from "./helpers/file-upload";
 
 // A full-canvas single-colour fill reads to the sanitizer's crop step as
 // background with nothing to crop to ("The SVG has no visible content."), so
@@ -42,14 +43,24 @@ test("an organization contact submits a logo and content changes for review, the
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/portal\/#\/organizations\/[^/]+$/);
 
+  // The way back (issue #9). A representative has no Organizations entry in
+  // the sidebar, so without the trail this record is where navigation stops.
+  const recordUrl = page.url();
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Organizations" }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/organizations$/);
+  // And the list it lands on is the one this record was opened from.
+  await expect(page.locator("tr").filter({ hasText: organizationName })).toBeVisible({ timeout: 15_000 });
+  await page.goto(recordUrl);
+  await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible({ timeout: 15_000 });
+
   // Logo first: the review record it creates is the same one content changes
   // land in, so submitting content afterward exercises the merge rather than
   // a second, independent review.
-  await page.getByRole("button", { name: "Change logo (SVG)" }).click();
   const logoSubmitted = page.waitForResponse((response) =>
     /\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname),
   );
-  await page.locator('input[type="file"][accept="image/svg+xml"]').setInputFiles({
+  // Through the tile, not past it (#28).
+  await uploadThroughButton(page, "Change logo (SVG)", {
     name: "logo.svg",
     mimeType: "image/svg+xml",
     buffer: SANITIZED_SVG,
@@ -60,7 +71,7 @@ test("an organization contact submits a logo and content changes for review, the
 
   const editorPanel = page
     .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Edit organization content" }) });
+    .filter({ has: page.getByRole("heading", { name: "Member page content" }) });
   await expect(editorPanel.getByText("A content change is pending staff review", { exact: false })).toBeVisible();
   await expect(editorPanel.getByText("Includes a new logo.")).toBeVisible();
   // The pending review occupies the editor slot, so the form itself is gone
@@ -75,12 +86,18 @@ test("an organization contact submits a logo and content changes for review, the
   await acceptConfirmDialog(page, "Withdraw submission");
   expect((await logoWithdrawn).status()).toBe(200);
   await expect(page.locator(".my-toast", { hasText: "Submission withdrawn" })).toBeVisible({ timeout: 15_000 });
-  await expect(editorPanel.getByLabel("Slogan")).toBeVisible();
+  await expect(editorPanel.getByLabel("Slogan")).toHaveCount(0);
+
+  await editorPanel.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit settings" }).click();
 
   // Now content: the form is back, and a real field submission queues a
   // second review naming exactly the fields that changed.
   await editorPanel.getByLabel("Slogan").fill("A slogan awaiting review");
   await editorPanel.getByLabel("Description").fill("A description awaiting review.");
+  await editorPanel
+    .getByRole("textbox", { name: "Long-form content (Markdown)", exact: true })
+    .fill("A member page awaiting review.");
   await editorPanel.getByLabel("Website").fill("https://example.test/my-org-content");
   const contentSubmitted = page.waitForResponse(
     (response) => /\/organizations\/[^/]+\/content\/reviews$/.test(new URL(response.url()).pathname) && response.ok(),
@@ -92,6 +109,7 @@ test("an organization contact submits a logo and content changes for review, the
   await expect(editorPanel.getByText("Slogan:", { exact: false })).toBeVisible();
   await expect(editorPanel.getByText("A slogan awaiting review")).toBeVisible();
   await expect(editorPanel.getByText("Website:", { exact: false })).toBeVisible();
+  await expect(editorPanel.getByText("A member page awaiting review.", { exact: true })).toBeVisible();
 
   const contentWithdrawn = page.waitForResponse(
     (response) =>
@@ -100,7 +118,11 @@ test("an organization contact submits a logo and content changes for review, the
   await editorPanel.getByRole("button", { name: "Withdraw submission" }).click();
   await acceptConfirmDialog(page, "Withdraw submission");
   expect((await contentWithdrawn).status()).toBe(200);
+  await expect(editorPanel.getByLabel("Slogan")).toHaveCount(0);
+  await editorPanel.getByRole("button", { name: "Member page content actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit settings" }).click();
   await expect(editorPanel.getByLabel("Slogan")).toHaveValue("");
+  await editorPanel.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // The organization's own public profile never changed: every submission
   // above was withdrawn before a staff decision.

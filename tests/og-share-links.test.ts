@@ -193,7 +193,7 @@ describe("OG share links", () => {
 
   it("preserves cached webp badge filenames for event and donation cards", async () => {
     const code = await seedEventReferral();
-    const cachedObject = cachedImage("image/webp");
+    const cachedObject = { ...cachedImage("image/webp"), customMetadata: { badgeGeneration: "0" } };
     const envWithCachedWebp = {
       ...baseEnv,
       ASSETS_BUCKET: {

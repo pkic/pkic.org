@@ -54,7 +54,16 @@ export function UserAffiliationsPanel({
 
   return (
     <Panel>
-      <PanelHeader title="Organizations">
+      {/*
+        "Affiliations", not "Organizations": a row here is the person's tie to
+        a member, and an individual member — a consultant who is a member in
+        their own right — has no organization behind theirs. Titling the panel
+        after organizations made that row read as an organization named
+        "Individual member". The word is the one this panel already used
+        everywhere else: its own counter says "affiliation" and its menu is
+        "Affiliation settings".
+      */}
+      <PanelHeader title="Affiliations">
         <span class="pk-small pk-muted">
           {user.identities.length} {user.identities.length === 1 ? "affiliation" : "affiliations"}
         </span>

@@ -225,8 +225,11 @@ test.describe("Group votes: lifecycle actions, proposal moderation, and sharing"
     await tab(page, "Proposals").click();
     await expectCurrentTab(page, "Proposals");
     await page.getByRole("button", { name: "Propose a vote" }).click();
+    // Proposing is a page of its own: the proposals list is not underneath it.
+    await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes/propose$`));
     const proposeForm = page.getByRole("form", { name: "Propose a vote" });
     await expect(proposeForm).toBeVisible();
+    await expect(page.getByRole("table", { name: "Vote proposals" })).toHaveCount(0);
     await proposeForm.getByLabel("Title").fill(title);
     // Required fields carry a hidden "(required)" suffix inside the <label>,
     // so their accessible name is not exactly the visible text — substring
@@ -239,10 +242,9 @@ test.describe("Group votes: lifecycle actions, proposal moderation, and sharing"
     );
     await proposeForm.getByRole("button", { name: "Submit proposal" }).click();
     expect((await submitted).status()).toBe(200);
-    // A successful submit reloads the table and clears the form's own fields,
-    // but leaves the disclosure itself open (only the toggle button hides
-    // it) — the new row shows up in the list alongside the still-open form.
-    await expect(proposeForm.getByLabel("Title")).toHaveValue("");
+    // A successful submit returns to the proposals it was added to.
+    await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes$`));
+    await tab(page, "Proposals").click();
 
     const proposalRow = page
       .getByRole("row")

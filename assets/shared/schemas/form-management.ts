@@ -71,8 +71,36 @@ export const formCreateResponseSchema = successResponseSchema.extend({
 
 export const formsListResponseSchema = paginatedResponseSchema("forms", formSummarySchema);
 
+/**
+ * `form_submissions.status` — mirrored from migration 0000's deployed, and
+ * therefore immutable, CHECK constraint, the way `MEMBER_STATUSES` mirrors its
+ * own.
+ *
+ * It is stated here because it had never been stated anywhere: the submissions
+ * filter offered "Accepted" and "Rejected", which the column cannot hold and
+ * which therefore matched nothing, and never offered `draft`, which it can.
+ * That is the shape issue #24 reported — a control's choices maintained apart
+ * from the values the data can take.
+ */
+export const FORM_SUBMISSION_STATUSES = ["submitted", "draft", "withdrawn"] as const;
+export const formSubmissionStatusSchema = z.enum(FORM_SUBMISSION_STATUSES);
+export type FormSubmissionStatus = z.infer<typeof formSubmissionStatusSchema>;
+export const FORM_SUBMISSION_STATUS_LABELS: Record<FormSubmissionStatus, string> = {
+  submitted: "Submitted",
+  draft: "Draft",
+  withdrawn: "Withdrawn",
+};
+
 const formSubmissionFiltersSchema = z.object({
   placementId: databaseIdSchema.optional(),
+  /**
+   * Two lifecycles reach this one parameter: a registration form's submissions
+   * are the registrations themselves and carry
+   * `EVENT_REGISTRATION_STATUSES`, while every other purpose carries
+   * `FORM_SUBMISSION_STATUSES`. Which one applies is a property of the form
+   * being read, so the parameter stays a bounded string here and each surface
+   * offers the vocabulary that form's purpose actually uses.
+   */
   status: z.string().trim().max(50).optional(),
   attendanceType: z.string().trim().max(50).optional(),
   eventSlug: z.string().trim().min(1).max(200).optional(),

@@ -21,6 +21,7 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import { apiErrorPayloadSchema } from "../assets/shared/schemas/api-common";
 import {
   organizationContentReviewDecisionResponseSchema,
   organizationContentReviewsListResponseSchema,
@@ -192,6 +193,42 @@ describe("Organization content moderation", () => {
     ]);
   });
 
+  it("refuses long-form content carrying a shortcode the page cannot render", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("shortcode@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "content-shortcode-token");
+
+    // Issue #12: this used to be stored verbatim and printed with its braces
+    // on the public page. The contract refuses it instead, and says so.
+    const response = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
+      body: JSON.stringify({ contentMarkdown: 'Watch this.\n\n{{< figure src="/x.png" >}}' }),
+    });
+    expect(response.status).toBe(400);
+    const payload = apiErrorPayloadSchema.parse(await response.json());
+    expect(payload.error.code).toBe("VALIDATION_ERROR");
+    expect(JSON.stringify(payload.error.details)).toContain("figure");
+
+    // Nothing queued: a refused submission is not a pending review.
+    expect(
+      await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM organization_content_reviews WHERE organization_id = ?",
+        organizationId,
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts long-form content carrying a shortcode the page does render", async () => {
+    const { organizationId, userId } = await seedOrgWithContact("shortcode-ok@example.test", "F");
+    const token = await createMemberSession(env.DB, userId, "content-shortcode-ok-token");
+
+    const response = await call(token, organizationContentReviewsPath(organizationId), {
+      method: "POST",
+      body: JSON.stringify({ contentMarkdown: "Our keynote.\n\n{{< youtube HGoZW7MCF60 >}}" }),
+    });
+    expect(response.status).toBe(200);
+  });
+
   it("GET organization content reviews applies the shared list query to D1", async () => {
     const { organizationId, userId } = await seedOrgWithContact("review-list@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "review-list-token");
@@ -342,13 +379,13 @@ describe("Organization content moderation", () => {
         recipient_email: "admin@pkic.org",
         organization_name: "Org for snapshot-submit@example.test",
         submitter_name: "snapshot-submit@example.test",
-        review_url: "https://app.test/portal/#/system/organization-content-reviews",
+        review_url: "https://app.test/portal/#/settings/organization-content-reviews",
       },
       {
         recipient_email: "content-reviewer@example.test",
         organization_name: "Org for snapshot-submit@example.test",
         submitter_name: "snapshot-submit@example.test",
-        review_url: "https://app.test/portal/#/system/organization-content-reviews",
+        review_url: "https://app.test/portal/#/settings/organization-content-reviews",
       },
     ]);
     expect(unrelatedUserId).not.toBe(permittedUserId);
@@ -573,7 +610,7 @@ describe("Organization content moderation", () => {
         activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Queue me" },
-      "https://app.test/portal/#/system/organization-content-reviews",
+      "https://app.test/portal/#/settings/organization-content-reviews",
     );
     const [review] = await queryAll<{ id: string }>(
       env.DB,
@@ -638,7 +675,7 @@ describe("Organization content moderation", () => {
         activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Retry me" },
-      "https://app.test/portal/#/system/organization-content-reviews",
+      "https://app.test/portal/#/settings/organization-content-reviews",
     );
     expect(await listPendingOrganizationContentReviewNotificationIntents(env.DB, 10)).toHaveLength(1);
     await env.DB.prepare(
@@ -683,7 +720,7 @@ describe("Organization content moderation", () => {
         activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Mark race" },
-      "https://app.test/portal/#/system/organization-content-reviews",
+      "https://app.test/portal/#/settings/organization-content-reviews",
     );
     await env.DB.prepare(
       `CREATE TRIGGER fail_content_review_notification_mark
@@ -732,7 +769,7 @@ describe("Organization content moderation", () => {
         activeIdentities: [{ identityId, memberId, organizationId, organizationName: null, membershipCategory: "F" }],
       },
       { slogan: "Wait for the next pass" },
-      "https://app.test/portal/#/system/organization-content-reviews",
+      "https://app.test/portal/#/settings/organization-content-reviews",
     );
     const budgeted = createD1QueryBudgetedDatabase(env.DB, 6);
     const result = await runScheduledDueWork(

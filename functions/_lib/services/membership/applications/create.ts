@@ -27,6 +27,8 @@ import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
 } from "../../../../../assets/shared/schemas/membership-categories";
+import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
+import { first } from "../../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
 
@@ -34,6 +36,43 @@ export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
 export function emailDomain(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "";
+}
+
+/**
+ * Refuses an application for an organization the consortium already has.
+ *
+ * A colleague of an existing member arrives through their verified domain and
+ * continues straight into that organization; this is the other case — a
+ * person at some other address naming a member organization, whose
+ * application could only ever end in "they are already in". Approving it
+ * would reuse the organization rather than duplicate it, so nothing breaks;
+ * the applicant simply waits on a review that was decided before it started,
+ * which is what issue #27 reports.
+ *
+ * The name is matched the way every other surface matches it, so a differently
+ * spaced or capitalized spelling is still the same organization. Being an
+ * `organizations` row is not enough: the refusal is about membership, and an
+ * organization can exist without one.
+ */
+async function refuseIfAlreadyAMember(db: DatabaseLike, organizationName: string): Promise<void> {
+  const existing = await first<{ name: string }>(
+    db,
+    `SELECT organization.name
+       FROM organizations organization
+       JOIN members member ON member.organization_id = organization.id AND member.status = 'active'
+      WHERE organization.normalized_name = ?
+      LIMIT 1`,
+    [normalizeOrgName(organizationName)],
+  );
+  if (!existing) return;
+  const message = `${existing.name} is already a member of the PKI Consortium. Ask one of its representatives to invite you, or write to us if you meant a different organization.`;
+  // Carried as a field error as well as a sentence, so the refusal lands on
+  // the box the applicant would have to change — the same shape every other
+  // refusal in this flow takes.
+  throw new AppError(409, "ORGANIZATION_ALREADY_MEMBER", message, {
+    formErrors: [message],
+    fieldErrors: { organizationName: [`The consortium already has ${existing.name} as a member.`] },
+  });
 }
 
 export interface CreateMemberApplicationInput {
@@ -114,6 +153,7 @@ export async function createMemberApplication(
       "The membership category is not eligible for this verified join path",
     );
   }
+  if (!isIndividual && input.organizationName) await refuseIfAlreadyAMember(db, input.organizationName);
   const organizationDomain = isIndividual ? null : emailDomain(input.applicantEmail);
   const statusUrl = `${input.appBaseUrl}/application-status/?id=${encodeURIComponent(id)}&token=${encodeURIComponent(manageToken)}`;
 

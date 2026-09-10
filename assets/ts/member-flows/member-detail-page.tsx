@@ -16,6 +16,7 @@
  * height, which are this site's own devices rather than Bootstrap's.
  */
 import { Fragment, render } from "preact";
+import { memberProfileLinks } from "../../shared/member-profile-links";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
 import { Spinner } from "../components/Spinner";
@@ -24,7 +25,7 @@ import { Markdown } from "../components/Markdown";
 import { NotFoundPanel } from "../components/NotFoundPanel";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import { LinkList } from "../ui/LinkList";
-import { memberInitials } from "../shared/member-display";
+import { initialsFrom, monogramFrom } from "../shared/initials";
 import { formatMonthYear } from "../shared/ui";
 import {
   publicMemberDetailSchema,
@@ -64,13 +65,13 @@ function IdentityCard({ identity }: { identity: PublicIdentity }) {
               aria-hidden="true"
               class={`standalone-initials standalone-initials--representative initial-color-${identity.name.length % 6}`}
             >
-              {memberInitials(identity.name)}
+              {initialsFrom(identity.name)}
             </div>
           )}
           <div class="pk-stack pk-stack--tight">
             <h3>{identity.name}</h3>
             {identity.jobTitle && <p class="pk-muted">{identity.jobTitle}</p>}
-            <LinkList links={identity.featuredLink ? [identity.featuredLink] : []} ownerName={identity.name} />
+            <LinkList links={memberProfileLinks(identity)} ownerName={identity.name} />
           </div>
         </div>
         {identity.bio && <Markdown markdown={identity.bio} />}
@@ -98,7 +99,7 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
             <img class="member-profile-logo" alt={member.name} src={member.logoUrl} />
           ) : (
             <div aria-hidden="true" class={`standalone-initials standalone-initials--hero initial-color-${colorIdx}`}>
-              {memberInitials(member.name)}
+              {monogramFrom(member.name)}
             </div>
           )}
         </div>
@@ -110,7 +111,7 @@ export function MemberDetailView({ member, directoryHref }: { member: MemberDeta
         {member.description && <p class="pk-lede">{member.description}</p>}
       </header>
 
-      <div class="pk-container pk-grid pk-grid--roomy">
+      <div class={member.content ? "pk-container pk-record" : "pk-container"}>
         {member.content && (
           <div class="pk-stack">
             <Markdown markdown={member.content} />

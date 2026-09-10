@@ -225,6 +225,23 @@ export const formPlacementCreateSchema = z
   })
   .superRefine(addPlacementIssues);
 export const formPlacementUpdateSchema = z.object(formPlacementInputShape).partial().superRefine(addPlacementIssues);
+/**
+ * The window a placement accepts responses in, as a shape a caller can extend.
+ *
+ * A shape rather than a schema because the schemas that carry it also carry
+ * something else — an event's optimistic revision, say — and a refined object
+ * schema cannot be extended or picked from once its rules are attached.
+ * `addPlacementIssues` is exported alongside so whoever composes it keeps the
+ * one rule that matters: a close must be after its open.
+ */
+export const formSubmissionWindowShape = {
+  opensAt: formPlacementInputShape.opensAt,
+  closesAt: formPlacementInputShape.closesAt,
+  active: formPlacementInputShape.active.optional(),
+};
+
+export { addPlacementIssues };
+
 export const formPlacementPolicyUpdateSchema = z
   .strictObject(formPlacementInputShape)
   .omit({ ownerGroupId: true })

@@ -44,7 +44,7 @@ test("submits a sponsor inquiry for a named tier and renders both messages", asy
   expect((await submission).status()).toBe(201);
   await expect(page.getByRole("heading", { name: "Thanks for your interest!" })).toBeVisible();
 
-  const applicantMessage = await waitForCapturedEmail(email, "PKI Consortium sponsorship information");
+  const applicantMessage = await waitForCapturedEmail(email, "Sponsoring the PKI Consortium");
   const applicantContent = applicantMessage.payload.content as Array<{ type: string; value: string }> | undefined;
   const applicantRendered = applicantContent?.map(({ value }) => value).join("\n") ?? "";
   expect(applicantRendered, "no template placeholder may survive rendering").not.toMatch(/\{\{[^}]+\}\}/);

@@ -76,7 +76,7 @@ describe("scheduling a group meeting series", () => {
     // its heading is the next rung below the workspace's own.
     const form = container.querySelector('[aria-label="Schedule a recurring meeting"]');
     expect(form).not.toBeNull();
-    expect(form?.querySelector("h3")?.textContent).toBe("Schedule a recurring meeting");
+    expect(form?.querySelector("h2")?.textContent).toBe("Schedule a recurring meeting");
 
     await typeInto(controlFor(container, "Meeting name"), "Architecture call");
     await act(async () => {

@@ -9,46 +9,44 @@
  * enforces in the organization-content and member-organization services.
  */
 import { Fragment } from "preact";
-import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { getJson, postJson, deleteJson, ApiClientError } from "../../../shared/api-client";
-import { friendlyErrorMessage } from "../../../components/ErrorAlert";
-import { confirmAction } from "../../../components/ConfirmDialog";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { getJson, ApiClientError } from "../../../shared/api-client";
+import { ErrorAlert } from "../../../components/ErrorAlert";
 import { statusLabel } from "../../../components/Badge";
 import type { PagerProps as OffsetPagerProps } from "../../../components/Pager";
-import { Alert } from "../../../ui/Alert";
 import { Badge, type BadgeTone } from "../../../ui/Badge";
+import { Breadcrumb } from "../../../ui/Breadcrumb";
 import { Button } from "../../../ui/Button";
 import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
 import { EmptyState } from "../../../ui/EmptyState";
-import { Field } from "../../../ui/Field";
+import { LinkList } from "../../../ui/LinkList";
 import { Pager } from "../../../ui/Pager";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Spinner } from "../../../ui/Spinner";
-import { TextInput, Textarea } from "../../../ui/TextControl";
 import { useApiPage } from "../../../hooks/useApiPage";
+import { usePortalHashLocation } from "../hash-location";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
 import type { MyOrganizationProfile, MyOrganizationReview } from "../types";
-import { linksToText, textToLinks } from "../../../shared/links-text";
 import type { z } from "zod";
 import { uploadFile } from "../../../shared/file-upload";
-import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
-import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import {
-  organizationContentReviewCreateResponseSchema,
+  ORGANIZATION_CONTENT_FIELD_LABELS,
+  ORGANIZATION_URL_FIELD_ORDER,
+  organizationPath,
+} from "../../../shared/organization-content";
+import {
   organizationContentReviewsListResponseSchema,
   organizationLogoReviewResponseSchema,
   organizationMemberProfileResponseSchema,
 } from "../../../../shared/schemas/organization-self-service";
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
+import { ContentEditorCard } from "./MyOrganizationContentEditor";
+import { OrganizationRepresentatives } from "./OrganizationRepresentatives";
 import "../../../ui/Content.css";
 
 export { IdentitySelect } from "./MyOrganizationGovernance";
-
-const organizationPath = (organizationId: string) => `/api/v1/organizations/${encodeURIComponent(organizationId)}`;
-
-const URL_FIELD_ORDER = ["website", "blogUrl", "blogFeedUrl", "pressUrl", "pressFeedUrl", "careersUrl"] as const;
 
 /**
  * The review lifecycle as tones. Written out per status rather than derived
@@ -68,10 +66,6 @@ const REVIEW_STATUS_TONE: Record<MyOrganizationReview["status"], BadgeTone> = {
  * English; only the surface that shows it moves here, because the shared
  * `ErrorAlert` is still Bootstrap markup.
  */
-function ErrorNotice({ error }: { error: string | Error }) {
-  return <Alert tone="danger">{friendlyErrorMessage(error instanceof Error ? error.message : error)}</Alert>;
-}
-
 /**
  * The shared offset-pager state, as the design system's Pager reads it. The
  * hook still speaks the older prev/next/page-size shape, so translating once
@@ -153,8 +147,8 @@ function OrganizationProfileCard({
   org: MyOrganizationProfile;
   reload: () => Promise<void>;
 }) {
-  const links = URL_FIELD_ORDER.filter((key) => org[key]);
-  const hasWords = Boolean(org.slogan || org.description || links.length > 0);
+  const addressRows = ORGANIZATION_URL_FIELD_ORDER.filter((key) => org[key]);
+  const hasWords = Boolean(org.slogan || org.description || addressRows.length > 0 || org.links.length > 0);
 
   return (
     <Panel>
@@ -177,259 +171,26 @@ function OrganizationProfileCard({
           <div class="pk-stack pk-stack--snug">
             {org.slogan && <p class="pk-lede">{org.slogan}</p>}
             {org.description && <p>{org.description}</p>}
-            {links.length > 0 && (
+            {addressRows.length > 0 && (
               <dl class="pk-datalist pk-small">
-                {links.map((key) => (
+                {addressRows.map((key) => (
                   <Fragment key={key}>
                     <dt>{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
                     <dd class="pk-break">
                       <a href={org[key] as string} target="_blank" rel="noreferrer">
-                        {org[key]}
+                        {(org[key] as string).replace(/^https?:\/\//, "")}
                       </a>
                     </dd>
                   </Fragment>
                 ))}
               </dl>
             )}
+            {/* The profile links were editable here and shown nowhere: a
+                member could not see what their own public page carries, while
+                staff saw the same set as marked badges. Same list, same
+                marks. */}
+            <LinkList links={org.links} />
           </div>
-        )}
-      </PanelBody>
-    </Panel>
-  );
-}
-
-function PendingReviewBanner({
-  review,
-  organizationId,
-  onWithdrawn,
-}: {
-  review: MyOrganizationReview;
-  organizationId: string;
-  onWithdrawn: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const fields = Object.entries(review.proposedChanges);
-
-  async function withdraw(): Promise<void> {
-    const confirmed = await confirmAction({
-      title: "Withdraw this pending submission?",
-      body: `Submitted ${fmt(review.submittedAt)}, still awaiting staff review.`,
-      consequences: ["The proposed changes are discarded", "You can submit new changes at any time"],
-      confirmLabel: "Withdraw submission",
-      tone: "danger",
-    });
-    if (!confirmed) return;
-    setBusy(true);
-    try {
-      await deleteJson(
-        `${organizationPath(organizationId)}/content/reviews/${encodeURIComponent(review.id)}`,
-        successResponseSchema,
-      );
-      toast("Submission withdrawn", "success");
-      await onWithdrawn();
-    } catch (e) {
-      toast(e instanceof ApiClientError ? e.message : "Could not withdraw.", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Alert tone="info" title={`A content change is pending staff review — submitted ${fmt(review.submittedAt)}.`}>
-      <div class="pk-stack pk-stack--snug">
-        {review.hasLogoChange && <p class="pk-small">Includes a new logo.</p>}
-        {fields.length > 0 && (
-          <ul class="pk-stack pk-stack--tight pk-small">
-            {fields.map(([field, value]) => (
-              <li key={field}>
-                <strong>{ORGANIZATION_CONTENT_FIELD_LABELS[field] ?? field}:</strong>{" "}
-                {value === null || value === "" || (Array.isArray(value) && value.length === 0) ? (
-                  <em>(cleared)</em>
-                ) : Array.isArray(value) ? (
-                  value.join(", ")
-                ) : (
-                  String(value)
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <div class="pk-cluster">
-          <Button variant="secondary" size="sm" loading={busy} onClick={() => void withdraw()}>
-            {busy ? "Withdrawing…" : "Withdraw submission"}
-          </Button>
-        </div>
-      </div>
-    </Alert>
-  );
-}
-
-type EditableField = (typeof URL_FIELD_ORDER)[number] | "slogan" | "description" | "contentMarkdown";
-
-function ContentEditForm({
-  organizationId,
-  org,
-  reload,
-}: {
-  organizationId: string;
-  org: MyOrganizationProfile;
-  reload: () => Promise<void>;
-}) {
-  const initial = useMemo<Record<EditableField, string>>(
-    () => ({
-      slogan: org.slogan ?? "",
-      description: org.description ?? "",
-      contentMarkdown: org.contentMarkdown ?? "",
-      website: org.website ?? "",
-      blogUrl: org.blogUrl ?? "",
-      blogFeedUrl: org.blogFeedUrl ?? "",
-      pressUrl: org.pressUrl ?? "",
-      pressFeedUrl: org.pressFeedUrl ?? "",
-      careersUrl: org.careersUrl ?? "",
-    }),
-    [org],
-  );
-  const initialLinksText = useMemo(() => linksToText(org.links), [org]);
-  const [form, setForm] = useState(initial);
-  const [linksText, setLinksText] = useState(initialLinksText);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => setForm(initial), [initial]);
-  useEffect(() => setLinksText(initialLinksText), [initialLinksText]);
-
-  function setField(key: EditableField, value: string): void {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  async function handleSubmit(e: Event): Promise<void> {
-    e.preventDefault();
-    setError(null);
-
-    const changes: Record<string, string | string[] | null> = {};
-    for (const key of Object.keys(initial) as EditableField[]) {
-      const next = form[key].trim();
-      const prev = initial[key].trim();
-      if (next !== prev) changes[key] = next === "" ? null : next;
-    }
-    if (linksText.trim() !== initialLinksText.trim()) {
-      changes.links = textToLinks(linksText);
-    }
-    if (Object.keys(changes).length === 0) {
-      setError("No changes to submit.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await postJson(
-        `${organizationPath(organizationId)}/content/reviews`,
-        changes,
-        organizationContentReviewCreateResponseSchema,
-      );
-      toast("Submitted for staff review", "success");
-      await reload();
-    } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not submit your changes.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={(e) => void handleSubmit(e)} class="pk-stack">
-      <p class="pk-muted pk-small">
-        Changes are queued for staff review — your organization's public page won't update until they're approved.
-      </p>
-      <Field label="Slogan">
-        {(control) => (
-          <TextInput
-            {...control}
-            value={form.slogan}
-            onInput={(e) => setField("slogan", (e.target as HTMLInputElement).value)}
-            disabled={saving}
-          />
-        )}
-      </Field>
-      <Field label="Description">
-        {(control) => (
-          <Textarea
-            {...control}
-            rows={3}
-            value={form.description}
-            onInput={(e) => setField("description", (e.target as HTMLTextAreaElement).value)}
-            disabled={saving}
-          />
-        )}
-      </Field>
-      <Field label="Long-form content (Markdown)">
-        {(control) => (
-          <Textarea
-            {...control}
-            rows={6}
-            value={form.contentMarkdown}
-            onInput={(e) => setField("contentMarkdown", (e.target as HTMLTextAreaElement).value)}
-            disabled={saving}
-          />
-        )}
-      </Field>
-      <div class="pk-grid">
-        {URL_FIELD_ORDER.map((key) => (
-          <Field key={key} label={ORGANIZATION_CONTENT_FIELD_LABELS[key]}>
-            {(control) => (
-              <TextInput
-                {...control}
-                type="url"
-                placeholder="https://…"
-                value={form[key]}
-                onInput={(e) => setField(key, (e.target as HTMLInputElement).value)}
-                disabled={saving}
-              />
-            )}
-          </Field>
-        ))}
-      </div>
-      <Field label="Links (X, LinkedIn, Facebook, etc — one URL per line)">
-        {(control) => (
-          <Textarea
-            {...control}
-            rows={4}
-            placeholder="https://…"
-            value={linksText}
-            onInput={(e) => setLinksText((e.target as HTMLTextAreaElement).value)}
-            disabled={saving}
-          />
-        )}
-      </Field>
-
-      {error && <ErrorNotice error={error} />}
-
-      <div class="pk-cluster">
-        <Button type="submit" variant="primary" loading={saving}>
-          {saving ? "Submitting…" : "Submit for review"}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function ContentEditorCard({
-  organizationId,
-  org,
-  reload,
-}: {
-  organizationId: string;
-  org: MyOrganizationProfile;
-  reload: () => Promise<void>;
-}) {
-  return (
-    <Panel>
-      <PanelHeader title="Edit organization content" />
-      <PanelBody>
-        {org.pendingReview ? (
-          <PendingReviewBanner review={org.pendingReview} organizationId={organizationId} onWithdrawn={reload} />
-        ) : (
-          <ContentEditForm organizationId={organizationId} org={org} reload={reload} />
         )}
       </PanelBody>
     </Panel>
@@ -460,7 +221,7 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
       <PanelHeader title="Submission history" />
       <PanelBody class="pk-stack pk-stack--snug">
         {history.error ? (
-          <ErrorNotice error={history.error instanceof Error ? history.error : "Could not load submission history."} />
+          <ErrorAlert error={history.error instanceof Error ? history.error : "Could not load submission history."} />
         ) : (
           <>
             <DataTable
@@ -486,7 +247,10 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
   );
 }
 
-export function MyOrganization({ organizationId: requestedOrganizationId }: { organizationId?: string } = {}) {
+export function MyOrganization({
+  organizationId: requestedOrganizationId,
+  representativeSegment,
+}: { organizationId?: string; representativeSegment?: string } = {}) {
   // Any organization the user actively represents may be requested; the
   // backend authorizes by representation and 404s everything else.
   const organizationId = requestedOrganizationId ?? profileSignal.value?.organizationId ?? null;
@@ -540,7 +304,7 @@ export function MyOrganization({ organizationId: requestedOrganizationId }: { or
             body="You participate in the consortium in your own name rather than for an organization, and everything works just the same. If your organization joins later, its page appears here."
           />
         ) : (
-          <ErrorNotice error={error} />
+          <ErrorAlert error={error} />
         )}
       </div>
     );
@@ -549,12 +313,27 @@ export function MyOrganization({ organizationId: requestedOrganizationId }: { or
 
   return (
     <div class="pk pk-stack content-width-lg">
+      {/*
+        The way back, which this page had none of (issue #9). A representative
+        arrives here from the list of the organizations they represent, and
+        the Organizations sidebar entry is a staff destination they do not
+        have — so without the trail this record was where navigation stopped.
+        It is the same trail the staff twin of this route renders
+        (system-organizations/OrganizationDetail), pointing at the same list.
+      */}
+      <Breadcrumb
+        items={[{ label: "Organizations", href: usePortalHashLocation.hrefs("/organizations") }, { label: org.name }]}
+      />
       <PageHeader title={org.name} />
       <OrganizationProfileCard organizationId={organizationId} org={org} reload={reload} />
       {org.isOrgContact && <ContentEditorCard organizationId={organizationId} org={org} reload={reload} />}
       {org.isOrgContact && (
         <ReviewHistoryCard organizationId={organizationId} key={org.pendingReview?.id ?? "no-pending-review"} />
       )}
+      {/* Who acts for this organization, on the organization's own page: the
+          roster used to sit on the reader's profile, which is a page about a
+          person. */}
+      <OrganizationRepresentatives organizationId={organizationId} representativeSegment={representativeSegment} />
       <OrganizationGovernanceCard organizationId={organizationId} org={org} reload={reload} />
       <OrganizationSponsorshipCard organizationId={organizationId} />
     </div>

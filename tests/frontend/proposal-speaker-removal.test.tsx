@@ -13,7 +13,8 @@ import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/se
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/event-flows/proposal-manage-page";
-import { buttonNamed, controlFor, labelNames, submitForm, typeInto } from "./helpers/labelled-control";
+import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
+import { buttonNamed, controlFor, labelNames, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
 
 let container: HTMLElement | null = null;
 
@@ -303,6 +304,47 @@ describe("proposal speaker removal UI", () => {
     const groupName = group?.getAttribute("aria-labelledby");
     expect(groupName).toBeTruthy();
     expect(root.ownerDocument.getElementById(groupName!)?.textContent?.trim()).toBe("Profile links");
+  });
+
+  it("offers a co-speaker every role in the contract except the proposer's", () => {
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker()}
+        proposalId="proposal-1"
+        canEdit
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+
+    void act(() => buttonNamed(root, "Edit profile").click());
+
+    // Derived from the vocabulary rather than listed here: a role added to the
+    // contract becomes available to every speaker but the proposer, whose role
+    // moves by promoting someone else.
+    expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(
+      PROPOSAL_SPEAKER_ROLES.filter((role) => role !== "proposer"),
+    );
+  });
+
+  it("holds the proposer's own card to the proposer role", () => {
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker({ role: "proposer" })}
+        proposalId="proposal-1"
+        canEdit
+        isCurrentProposer
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+
+    void act(() => buttonNamed(root, "Edit profile").click());
+
+    expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(["proposer"]);
   });
 
   it("reports a refused profile save and keeps the reader in the form", async () => {

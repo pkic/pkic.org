@@ -1,58 +1,14 @@
 import { useEffect, useState } from "preact/hooks";
-import {
-  GROUP_AUTOMATIC_ENROLLMENT_MODES,
-  GROUP_ELIGIBILITY_MODES,
-  GROUP_GOVERNANCE_INHERITANCE_MODES,
-  GROUP_VISIBILITIES,
-  groupResponseSchema,
-  groupUpdateSchema,
-  type GroupSettingsDetail,
-} from "../../../../../shared/schemas/groups";
+import { groupResponseSchema, groupUpdateSchema, type GroupSettingsDetail } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
-import { ApiClientError, patchJson } from "../../../../shared/api-client";
+import { useContractForm } from "../../../../hooks/useContractForm";
+import { patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
-import { Checkbox } from "../../../../ui/Checkbox";
-import { Field } from "../../../../ui/Field";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { EditActions } from "../../../../ui/EditActions";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
-
-interface GroupSettingsDraft {
-  name: string;
-  description: string;
-  links: string[];
-  visibility: GroupSettingsDetail["visibility"];
-  governanceInheritanceMode: GroupSettingsDetail["governanceInheritanceMode"];
-  eligibilityMode: GroupSettingsDetail["eligibilityMode"];
-  automaticEnrollmentMode: GroupSettingsDetail["automaticEnrollmentMode"];
-  allowAutomaticOptOut: boolean;
-  publicLeadership: boolean;
-  publicRoster: boolean;
-  minEndorsersForBallot: number;
-  active: boolean;
-}
-
-function draftFromGroup(group: GroupSettingsDetail): GroupSettingsDraft {
-  return {
-    name: group.name,
-    description: group.description ?? "",
-    links: group.links,
-    visibility: group.visibility,
-    governanceInheritanceMode: group.governanceInheritanceMode,
-    eligibilityMode: group.eligibilityMode,
-    automaticEnrollmentMode: group.automaticEnrollmentMode,
-    allowAutomaticOptOut: group.allowAutomaticOptOut,
-    publicLeadership: group.publicLeadership,
-    publicRoster: group.publicRoster,
-    minEndorsersForBallot: group.minEndorsersForBallot,
-    active: group.active,
-  };
-}
-
-function optionLabel(value: string): string {
-  return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
-}
+import { GroupSettingsFields } from "./GroupSettingsFields";
+import { draftFromGroup, optionLabel } from "./group-settings-draft";
 
 export function GroupSettingsForm({
   group,
@@ -62,249 +18,96 @@ export function GroupSettingsForm({
   onUpdated: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState(() => draftFromGroup(group));
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
+  const body = { ...draft, expectedRevision: group.revision, description: draft.description.trim() || null };
+  const form = useContractForm(groupUpdateSchema, body);
   useEffect(() => {
     setDraft(draftFromGroup(group));
+    setEditing(false);
     setError(null);
   }, [group.id, group.revision]);
-
-  useEffect(() => setSaved(false), [group.id]);
-
-  function setField<Key extends keyof GroupSettingsDraft>(key: Key, value: GroupSettingsDraft[Key]): void {
-    setDraft((current) => ({ ...current, [key]: value }));
+  function reset() {
+    setDraft(draftFromGroup(group));
+    form.reset();
+    setError(null);
+    setSaved(false);
   }
-
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
-    // The submit control stays focusable while it saves, so it also stays
-    // clickable; the guard is what stops a second in-flight request.
-    if (saving) return;
+    if (saving || !editing) return;
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
-      const changes = groupUpdateSchema.parse({
-        expectedRevision: group.revision,
-        name: draft.name,
-        description: draft.description.trim() || null,
-        links: draft.links,
-        visibility: draft.visibility,
-        governanceInheritanceMode: draft.governanceInheritanceMode,
-        eligibilityMode: draft.eligibilityMode,
-        automaticEnrollmentMode: draft.automaticEnrollmentMode,
-        allowAutomaticOptOut: draft.allowAutomaticOptOut,
-        publicLeadership: draft.publicLeadership,
-        publicRoster: draft.publicRoster,
-        minEndorsersForBallot: draft.minEndorsersForBallot,
-        active: draft.active,
-      });
-      await patchJson(`/api/v1/groups/${encodeURIComponent(group.id)}`, changes, groupResponseSchema);
+      await patchJson(`/api/v1/groups/${encodeURIComponent(group.id)}`, checked.data, groupResponseSchema);
       await onUpdated();
+      setEditing(false);
       setSaved(true);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : "Could not update this group.");
+      setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
   }
-
-  const optOutUnavailable = draft.automaticEnrollmentMode === "none";
-
   return (
-    <form class="pk" onSubmit={(event) => void submit(event)}>
+    <form noValidate class="pk" {...form.handlers} onSubmit={submit}>
       <Panel>
-        <PanelHeader title="Group settings" />
+        <PanelHeader title="Group settings">
+          <EditActions
+            label="Group settings actions"
+            editing={editing}
+            saving={saving}
+            saveLabel="Save group settings"
+            onEdit={() => {
+              reset();
+              setEditing(true);
+            }}
+            onCancel={() => {
+              reset();
+              setEditing(false);
+            }}
+          />
+        </PanelHeader>
         <PanelBody class="pk-stack">
-          {/* One attribute takes the whole form out of play while it saves,
-              including the link editor's own controls, which take no prop for
-              it. The submit button stays outside so it keeps focus. */}
-          <fieldset class="pk-fieldset pk-stack" disabled={saving}>
-            <Field label="Name" required>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  value={draft.name}
-                  onInput={(event) => setField("name", (event.target as HTMLInputElement).value)}
-                />
-              )}
-            </Field>
-
-            <Field label="Description">
-              {(control) => (
-                <Textarea
-                  {...control}
-                  rows={4}
-                  value={draft.description}
-                  onInput={(event) => setField("description", (event.target as HTMLTextAreaElement).value)}
-                />
-              )}
-            </Field>
-
-            {/* The link editor is several controls, not one, so the group is
-                named by a legend rather than by a label with nothing to point
-                at. Its own input keeps its own accessible name. */}
-            <fieldset class="pk-fieldset pk-field">
-              <legend class="pk-field__label">Links</legend>
-              <ProfileLinksInput
-                fieldName="group.links"
-                value={draft.links}
-                onChange={(links) => setField("links", links)}
-                helpText="Add any relevant group resources, such as a website, repository, document library, or meeting page."
-                inputAriaLabel="Group resource URL"
-              />
-            </fieldset>
-
-            <div class="pk-grid pk-grid--roomy">
-              <Field label="Visibility">
-                {(control) => (
-                  <Select
-                    {...control}
-                    value={draft.visibility}
-                    onChange={(event) =>
-                      setField(
-                        "visibility",
-                        (event.target as HTMLSelectElement).value as GroupSettingsDetail["visibility"],
-                      )
-                    }
-                  >
-                    {GROUP_VISIBILITIES.map((value) => (
-                      <option key={value} value={value}>
-                        {optionLabel(value)}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-
-              <Field label="Leadership inheritance">
-                {(control) => (
-                  <Select
-                    {...control}
-                    value={draft.governanceInheritanceMode}
-                    onChange={(event) =>
-                      setField(
-                        "governanceInheritanceMode",
-                        (event.target as HTMLSelectElement).value as GroupSettingsDetail["governanceInheritanceMode"],
-                      )
-                    }
-                  >
-                    {GROUP_GOVERNANCE_INHERITANCE_MODES.map((value) => (
-                      <option key={value} value={value}>
-                        {optionLabel(value)}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-
-              <Field label="Join eligibility">
-                {(control) => (
-                  <Select
-                    {...control}
-                    value={draft.eligibilityMode}
-                    onChange={(event) =>
-                      setField(
-                        "eligibilityMode",
-                        (event.target as HTMLSelectElement).value as GroupSettingsDetail["eligibilityMode"],
-                      )
-                    }
-                  >
-                    {GROUP_ELIGIBILITY_MODES.map((value) => (
-                      <option key={value} value={value}>
-                        {optionLabel(value)}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-
-              <Field label="Automatic enrollment">
-                {(control) => (
-                  <Select
-                    {...control}
-                    value={draft.automaticEnrollmentMode}
-                    onChange={(event) => {
-                      const value = (event.target as HTMLSelectElement)
-                        .value as GroupSettingsDetail["automaticEnrollmentMode"];
-                      setDraft((current) => ({
-                        ...current,
-                        automaticEnrollmentMode: value,
-                        allowAutomaticOptOut: value === "none" ? false : current.allowAutomaticOptOut,
-                      }));
-                    }}
-                  >
-                    {GROUP_AUTOMATIC_ENROLLMENT_MODES.map((value) => (
-                      <option key={value} value={value}>
-                        {optionLabel(value)}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-
-              <Field label="Minimum endorsers for a ballot">
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    type="number"
-                    min={0}
-                    max={1000}
-                    value={draft.minEndorsersForBallot}
-                    onInput={(event) =>
-                      setField("minEndorsersForBallot", (event.target as HTMLInputElement).valueAsNumber)
-                    }
-                  />
-                )}
-              </Field>
-            </div>
-
-            <div class="pk-stack pk-stack--snug">
-              {/* The control is dimmed when it does not apply; the reason is
-                  stated in words so the state is not carried by the dimming
-                  alone. */}
-              <Checkbox
-                checked={draft.allowAutomaticOptOut}
-                disabled={optOutUnavailable}
-                onChange={(event) => setField("allowAutomaticOptOut", (event.target as HTMLInputElement).checked)}
-                label="Allow people to opt out of automatic enrollment"
-                hint={
-                  optOutUnavailable
-                    ? "Available once automatic enrollment is set to something other than “None”."
-                    : undefined
-                }
-              />
-
-              <Checkbox
-                checked={draft.publicLeadership}
-                onChange={(event) => setField("publicLeadership", (event.target as HTMLInputElement).checked)}
-                label="Publish leadership on the public site"
-              />
-
-              <Checkbox
-                checked={draft.publicRoster}
-                onChange={(event) => setField("publicRoster", (event.target as HTMLInputElement).checked)}
-                label="Publish the member roster and its history on the public site"
-              />
-
-              <Checkbox
-                checked={draft.active}
-                onChange={(event) => setField("active", (event.target as HTMLInputElement).checked)}
-                label="Active"
-              />
-            </div>
-          </fieldset>
-
+          {editing ? (
+            <GroupSettingsFields draft={draft} saving={saving} setDraft={setDraft} fields={form.of} />
+          ) : (
+            <DescriptionList
+              items={[
+                { term: "Name", value: group.name },
+                { term: "Description", value: group.description },
+                {
+                  term: "Links",
+                  value: group.links.length
+                    ? group.links.map((url) => (
+                        <a key={url} href={url} class="pk-break">
+                          {url}
+                        </a>
+                      ))
+                    : null,
+                },
+                { term: "Visibility", value: optionLabel(group.visibility) },
+                { term: "Leadership inheritance", value: optionLabel(group.governanceInheritanceMode) },
+                { term: "Join eligibility", value: optionLabel(group.eligibilityMode) },
+                { term: "Automatic enrollment", value: optionLabel(group.automaticEnrollmentMode) },
+                { term: "Minimum endorsers for a ballot", value: group.minEndorsersForBallot },
+                { term: "Automatic enrollment opt-out", value: group.allowAutomaticOptOut ? "Allowed" : "Not allowed" },
+                { term: "Public leadership", value: group.publicLeadership ? "Published" : "Private" },
+                { term: "Public roster", value: group.publicRoster ? "Published" : "Private" },
+                { term: "Status", value: group.active ? "Active" : "Inactive" },
+              ]}
+            />
+          )}
           {error && <ErrorAlert error={error} />}
           {saved && <Alert tone="ok">Group settings updated.</Alert>}
-
-          <div class="pk-cluster">
-            <Button type="submit" variant="primary" loading={saving} disabled={!draft.name.trim()}>
-              {saving ? "Saving…" : "Save group settings"}
-            </Button>
-          </div>
         </PanelBody>
       </Panel>
     </form>

@@ -13,6 +13,7 @@ import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 let adminToken: string;
@@ -205,6 +206,44 @@ describe("form-submission read-model population", () => {
     ({ eventId } = await seedEventAndAdmin(env.DB));
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
     adminToken = await createAdminSession(env.DB, admin.id, "form-read-model-admin");
+  });
+
+  it("searches and displays the confirmed event organization before and after form backfill", async () => {
+    const formId = await insertForm("identity-population", "event_registration", "food", null, true);
+    const userId = await insertUser("identity-population@example.test");
+    await env.DB.prepare("UPDATE users SET organization_name = 'Account organization' WHERE id = ?").bind(userId).run();
+    const organizationId = await insertOrganization(env.DB, "Current organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const identityId = await addRepresentative(env.DB, memberId, userId);
+    const registrationId = await insertRegistration({
+      eventId,
+      userId,
+      status: "registered",
+      attendanceType: "virtual",
+      answer: "Vegetarian",
+    });
+    await env.DB.prepare(
+      "UPDATE registrations SET registration_identity_id = ?, registration_organization_name = 'Confirmed organization' WHERE id = ?",
+    )
+      .bind(identityId, registrationId)
+      .run();
+    const before = await readPopulation("identity-population", { q: "Confirmed organization" });
+    expect(before.list.page.total).toBe(1);
+    expect(before.list.submissions[0]?.submitter?.organization).toBe("Confirmed organization");
+    expect(before.stats.total).toBe(1);
+    expect((await readPopulation("identity-population", { q: "Account organization" })).list.page.total).toBe(0);
+    await backfillSourceAnswer({
+      formId,
+      contextType: "registration",
+      contextRef: registrationId,
+      fieldKey: "food",
+      answer: "Vegetarian",
+    });
+    const after = await readPopulation("identity-population", { q: "Confirmed organization" });
+    expect(after.list.page.total).toBe(1);
+    expect(after.list.submissions[0]?.submitter?.organization).toBe("Confirmed organization");
+    expect(after.stats).toEqual(before.stats);
+    expect((await readPopulation("identity-population", { q: "Account organization" })).list.page.total).toBe(0);
   });
 
   it("keeps registration filters, page totals, and statistics identical before and after backfill", async () => {

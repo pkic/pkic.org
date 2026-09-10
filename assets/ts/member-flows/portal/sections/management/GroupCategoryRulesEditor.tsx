@@ -12,7 +12,7 @@ import { Spinner } from "../../../../components/Spinner";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { ApiClientError, getJson, putJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
+import { EditActions } from "../../../../ui/EditActions";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { DataTable } from "../../../../ui/DataTable";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -32,6 +32,8 @@ function draftFromResponse(response: GroupCategoryRulesResponse): RuleDraft[] {
 export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: string; onUpdated: () => Promise<void> }) {
   const headingId = useId();
   const [rules, setRules] = useState<RuleDraft[]>([]);
+  const [savedRules, setSavedRules] = useState<RuleDraft[]>([]);
+  const [editing, setEditing] = useState(false);
   const [revision, setRevision] = useState(0);
   const [categories, setCategories] = useState<Awaited<ReturnType<typeof loadCategories>>>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,8 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
         if (cancelled) return;
         setRevision(response.revision);
         setRules(draftFromResponse(response));
+        setSavedRules(draftFromResponse(response));
+        setEditing(false);
         setCategories(categoryCatalog);
       })
       .catch((cause) => {
@@ -88,6 +92,7 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
+    if (!editing || saving) return;
     setSaved(false);
     setError(null);
     const checked = form.submit();
@@ -104,6 +109,8 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
       );
       setRevision(response.group.revision);
       await onUpdated();
+      setSavedRules(rules);
+      setEditing(false);
       setSaved(true);
     } catch (cause) {
       // A server refusal names its fields the way the contract does.
@@ -117,11 +124,30 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
   return (
     <form noValidate class="pk" {...form.handlers} onSubmit={submit}>
       <Panel aria-labelledby={headingId}>
-        <PanelHeader id={headingId} title="Membership category eligibility" />
+        <PanelHeader id={headingId} title="Membership category eligibility">
+          {categories.length > 0 && (
+            <EditActions
+              label="Eligibility actions"
+              editing={editing}
+              saving={saving}
+              saveLabel="Save category rules"
+              onEdit={() => {
+                setError(null);
+                setSaved(false);
+                form.reset();
+                setEditing(true);
+              }}
+              onCancel={() => {
+                setRules(savedRules);
+                setEditing(false);
+                setError(null);
+                form.reset();
+              }}
+            />
+          )}
+        </PanelHeader>
         <PanelBody class="pk-stack">
-          <p class="pk-small">
-            Choose which active membership categories may join this group and which are enrolled automatically.
-          </p>
+          <p class="pk-small">The membership categories that may join this group and those enrolled automatically.</p>
           {error && <ErrorAlert error={error} />}
           {/* Two checkboxes per category, each named after the category it
               belongs to, so a reader moving through the grid always knows
@@ -148,44 +174,44 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
                 // The name is real label text, hidden because the row and
                 // column headers already carry it visually, so a reader moving
                 // through the grid still hears which category a box belongs to.
-                cell: (category) => (
-                  <Checkbox
-                    checked={rulesByCategory.get(category.code)?.permitsJoin ?? false}
-                    disabled={saving}
-                    onChange={(event) =>
-                      updateRule(category.code, "permitsJoin", (event.target as HTMLInputElement).checked)
-                    }
-                    label={<span class="pk-sr-only">{`${category.label} may join`}</span>}
-                  />
-                ),
+                cell: (category) =>
+                  editing ? (
+                    <Checkbox
+                      checked={rulesByCategory.get(category.code)?.permitsJoin ?? false}
+                      disabled={saving}
+                      onChange={(event) =>
+                        updateRule(category.code, "permitsJoin", (event.target as HTMLInputElement).checked)
+                      }
+                      label={<span class="pk-sr-only">{`${category.label} may join`}</span>}
+                    />
+                  ) : rulesByCategory.get(category.code)?.permitsJoin ? (
+                    "Allowed"
+                  ) : (
+                    "Not allowed"
+                  ),
               },
               {
                 id: "automatic",
                 header: "Automatic enrollment",
-                cell: (category) => (
-                  <Checkbox
-                    checked={rulesByCategory.get(category.code)?.automaticEnrollment ?? false}
-                    disabled={saving}
-                    onChange={(event) =>
-                      updateRule(category.code, "automaticEnrollment", (event.target as HTMLInputElement).checked)
-                    }
-                    label={<span class="pk-sr-only">{`${category.label} automatic enrollment`}</span>}
-                  />
-                ),
+                cell: (category) =>
+                  editing ? (
+                    <Checkbox
+                      checked={rulesByCategory.get(category.code)?.automaticEnrollment ?? false}
+                      disabled={saving}
+                      onChange={(event) =>
+                        updateRule(category.code, "automaticEnrollment", (event.target as HTMLInputElement).checked)
+                      }
+                      label={<span class="pk-sr-only">{`${category.label} automatic enrollment`}</span>}
+                    />
+                  ) : rulesByCategory.get(category.code)?.automaticEnrollment ? (
+                    "Enabled"
+                  ) : (
+                    "Disabled"
+                  ),
               },
             ]}
           />
           {saved && <Alert tone="ok">Membership category rules updated.</Alert>}
-          <div class="pk-cluster">
-            <Button
-              type="submit"
-              variant="primary"
-              loading={saving}
-              disabled={saving || (!!error && categories.length === 0)}
-            >
-              {saving ? "Saving…" : "Save category rules"}
-            </Button>
-          </div>
         </PanelBody>
       </Panel>
     </form>

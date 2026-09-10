@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { beginRecordEdit } from "./helpers/record-edit";
 /**
  * The attendance-days editor after its move onto the design system.
  *
@@ -140,6 +141,8 @@ describe("event attendance days editor", () => {
       <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
 
     expect(container.querySelector("form")?.classList.contains("pk")).toBe(true);
 
@@ -180,6 +183,8 @@ describe("event attendance days editor", () => {
       <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={vi.fn()} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
 
     const empty = container.querySelector(".pk-empty-state");
     expect(empty?.getAttribute("role")).toBe("status");
@@ -197,6 +202,8 @@ describe("event attendance days editor", () => {
       <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={onRevision} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
     await submit(container);
 
     const put = captured.find(({ method }) => method === "PUT");
@@ -232,6 +239,8 @@ describe("event attendance days editor", () => {
       <EventDaysEditor groupId={GROUP_ID} event={event} expectedUpdatedAt={event.updatedAt} onRevision={onRevision} />,
     );
     await settle();
+    expect(container.querySelectorAll("input, select")).toHaveLength(0);
+    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
     await submit(container);
 
     const alert = container.querySelector('[role="alert"]');

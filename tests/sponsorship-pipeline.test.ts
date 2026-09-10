@@ -139,6 +139,139 @@ describe("Sponsorship sales pipeline", () => {
     expect(updated.sponsorship.renewalDate).toBe("2027-01-01");
   });
 
+  /**
+   * Issue #30: everything about an inquiry can turn out to be wrong.
+   *
+   * The record used to accept corrections only to the fields the pipeline's
+   * own automation needed — assigned staff, renewal date, notes — so a
+   * mistyped tier or a contact who left the company meant re-entering the
+   * sponsorship. The create contract and the update contract are now the same
+   * editable shape, which is what makes that impossible to drift.
+   */
+  describe("correcting a sponsorship's own details", () => {
+    async function createNonMemberSponsorship(): Promise<string> {
+      const response = await call(adminToken, "/api/v1/sponsors", {
+        method: "POST",
+        body: JSON.stringify({
+          sponsorType: "event",
+          eventId,
+          nonMemberName: "Typo Industies",
+          contactName: "Wrong Person",
+          contactEmail: "wrong@typo-industries.test",
+          tier: "Leader",
+        }),
+      });
+      expect(response.status).toBe(201);
+      return ((await response.json()) as { sponsorship: { id: string } }).sponsorship.id;
+    }
+
+    it("corrects the tier, the point of contact, and the sponsor's own name and site", async () => {
+      const id = await createNonMemberSponsorship();
+
+      const response = await call(adminToken, `/api/v1/sponsors/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          tier: "Innovator",
+          contactName: "Right Person",
+          contactEmail: "right@typo-industries.test",
+          nonMemberName: "Typo Industries",
+          nonMemberWebsite: "https://typo-industries.test",
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      const { sponsorship } = (await response.json()) as {
+        sponsorship: {
+          tier: string;
+          contactName: string;
+          contactEmail: string;
+          nonMemberName: string;
+          nonMemberWebsite: string;
+        };
+      };
+      expect(sponsorship).toMatchObject({
+        tier: "Innovator",
+        contactName: "Right Person",
+        contactEmail: "right@typo-industries.test",
+        nonMemberName: "Typo Industries",
+        nonMemberWebsite: "https://typo-industries.test",
+      });
+    });
+
+    it("refuses to name a member organization's sponsorship on the sponsorship itself", async () => {
+      // The organization's row carries its name. A second one here would be a
+      // name nothing reads and that quietly disagrees with the first.
+      const { organizationId } = await seedOrganization("Named By Organization");
+      const created = await call(adminToken, "/api/v1/sponsors", {
+        method: "POST",
+        body: JSON.stringify({ sponsorType: "consortium", organizationId, tier: "Gold" }),
+      });
+      const { sponsorship } = (await created.json()) as { sponsorship: { id: string } };
+
+      const response = await call(adminToken, `/api/v1/sponsors/${sponsorship.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ nonMemberName: "Something Else" }),
+      });
+
+      expect(response.status).toBe(422);
+      expect((await response.json()) as { error: { code: string } }).toMatchObject({
+        error: { code: "MEMBER_SPONSOR_NAMED_BY_ORGANIZATION" },
+      });
+    });
+  });
+
+  /**
+   * Issue #30's other half: a company that decides against sponsoring.
+   *
+   * Without a word for it staff either left the sponsorship in `negotiating`
+   * forever or lapsed it, and a lapsed sponsorship claims the company
+   * sponsored once. `not_proceeding` says it never started, and clears the
+   * organization projection the same way every other exit from active does.
+   */
+  it("records a company that decides not to sponsor without claiming it ever did", async () => {
+    const { organizationId } = await seedOrganization("Decided Against");
+    const created = await call(adminToken, "/api/v1/sponsors", {
+      method: "POST",
+      body: JSON.stringify({
+        sponsorType: "consortium",
+        organizationId,
+        tier: "Gold",
+        renewalDate: futureRenewalDate(),
+      }),
+    });
+    const { sponsorship } = (await created.json()) as { sponsorship: { id: string } };
+    await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "active" }),
+    });
+
+    const response = await call(adminToken, `/api/v1/sponsors/${sponsorship.id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "not_proceeding", note: "Budget pulled for the year" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { sponsorship: { pipelineStage: string } }).sponsorship.pipelineStage).toBe(
+      "not_proceeding",
+    );
+    // Off the sponsor wall, and off the organization's own record.
+    expect(
+      await queryAll(env.DB, "SELECT sponsor_tier, sponsor_start_date FROM organizations WHERE id = ?", organizationId),
+    ).toEqual([{ sponsor_tier: null, sponsor_start_date: null }]);
+    // And no renewal work is scheduled for something that is not running.
+    expect(
+      await queryAll(env.DB, "SELECT renewal_action_due_at FROM sponsorships WHERE id = ?", sponsorship.id),
+    ).toEqual([{ renewal_action_due_at: null }]);
+    // The transition is on the record, with the reason staff gave.
+    expect(
+      await queryAll<{ to_stage: string; note: string }>(
+        env.DB,
+        "SELECT to_stage, note FROM sponsorship_events WHERE sponsorship_id = ? ORDER BY created_at DESC LIMIT 1",
+        sponsorship.id,
+      ),
+    ).toEqual([{ to_stage: "not_proceeding", note: "Budget pulled for the year" }]);
+  });
+
   it("accepts the create form's exact payloads — explicit nulls included — for both sponsor types", async () => {
     const { organizationId } = await seedOrganization("Form Shaped Corp");
 
@@ -261,6 +394,46 @@ describe("Sponsorship sales pipeline", () => {
     expect(body.sponsorships).toHaveLength(1);
     expect(body.sponsorships[0].organizationId).toBe(first.organizationId);
     expect(body.page).toMatchObject({ total: 1, hasMore: false });
+  });
+
+  it("lists a sponsorship that groups under itself as a company of one", async () => {
+    // A sponsorship with no organization, no sponsor name and no contact name
+    // is its own company row, keyed `sponsorship:<id>`. Its page is this same
+    // list query, so the drill-down never falls back to fetching one record
+    // and rendering it as a list the reader cannot search or sort.
+    const created = await call(adminToken, "/api/v1/sponsors", {
+      method: "POST",
+      body: JSON.stringify({ sponsorType: "event", eventId, tier: "Gold" }),
+    });
+    expect(created.status).toBe(201);
+    const { sponsorship } = (await created.json()) as { sponsorship: { id: string } };
+
+    const other = await call(adminToken, "/api/v1/sponsors", {
+      method: "POST",
+      body: JSON.stringify({ sponsorType: "event", eventId, tier: "Silver" }),
+    });
+    expect(other.status).toBe(201);
+
+    const response = await call(
+      adminToken,
+      `/api/v1/sponsors?visibility=all&sponsorshipId=${encodeURIComponent(sponsorship.id)}`,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      sponsorships: Array<{ id: string }>;
+      page: { total: number; hasMore: boolean };
+    };
+    expect(body.sponsorships.map((row) => row.id)).toEqual([sponsorship.id]);
+    expect(body.page).toMatchObject({ total: 1, hasMore: false });
+
+    // And it is a filter on the list, not a route of its own: the search and
+    // sort the shared table sends still apply to it.
+    const searched = await call(
+      adminToken,
+      `/api/v1/sponsors?visibility=all&sponsorshipId=${encodeURIComponent(sponsorship.id)}&q=Silver&sort=tier`,
+    );
+    expect(searched.status).toBe(200);
+    expect(((await searched.json()) as { sponsorships: unknown[] }).sponsorships).toHaveLength(0);
   });
 
   it("advancing a consortium sponsorship to active writes organizations.sponsor_tier/sponsor_start_date, and lapsing clears them", async () => {
@@ -661,12 +834,29 @@ describe("Sponsorship sales pipeline", () => {
     );
     expect(outboxRows).toHaveLength(1);
     expect(outboxRows[0].recipient_email).toBe("primary@gamma.test");
-    expect(JSON.parse(outboxRows[0].payload_json)).toEqual({
+    const payload = JSON.parse(outboxRows[0].payload_json) as Record<string, unknown>;
+    expect(payload).toEqual({
       contactNameText: "Primary Contact",
       organizationNameText: "Gamma LLC",
       tierText: "Silver",
-      startDate: expect.any(String),
+      /*
+       * A calendar date, not the instant the row was written. This assertion
+       * was `expect.any(String)`, which is what let #32 through: a
+       * sponsorship activated with no recorded start date was told its
+       * sponsorship began "as of 2026-09-07T13:34:41.870Z".
+       */
+      startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
+
+    /*
+     * What the sponsor actually reads is guarded separately: every seeded
+     * template's block tags are checked against the helpers the renderer
+     * implements in `tests/tools/email-template-syntax.test.ts`. That is
+     * where #32's other half lived — `{{#startDate}}` printed verbatim
+     * because the renderer only knows `{{#if}}`, `{{#unless}}` and
+     * `{{#each}}` — and it cannot be checked here, because `resetDb()`
+     * empties the table the templates are seeded into.
+     */
   });
 
   it("advancing an event sponsorship to active at a qualifying tier queues sponsor workspace access", async () => {

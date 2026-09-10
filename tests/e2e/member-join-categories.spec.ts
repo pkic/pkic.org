@@ -16,7 +16,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
-import { verifyMembershipJoinEmail } from "./helpers/member-join";
+import { openMembershipVerificationLink, verifyMembershipJoinEmail } from "./helpers/member-join";
 import { ensureAppOrigin, submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 
 /** Reaches the rendered application form the way an applicant does. */
@@ -36,8 +36,7 @@ async function openVerifiedApplicationForm(
   }
   await page.getByRole("button", { name: "Continue" }).click();
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
-  await page.goto(extractEmailUrl(verification, "#verify="));
-  await page.reload();
+  await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
   await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
   await expect(page.locator('[data-membership-categories] input[name="category"]').first()).toBeVisible();
 }
@@ -171,10 +170,54 @@ test("a verified claimed domain continues into organization access without a sec
   }, application.applicationId);
   expect(approved.status, JSON.stringify(approved.body)).toBe(200);
 
-  // A colleague at the same verified domain must be recognized as belonging
-  // to the existing Member, not routed into a duplicate application.
+  /*
+   * A colleague at the same verified domain is recognized as belonging to the
+   * organization that already holds the membership, not routed into a second
+   * application — which is what #27 asked to be sure of: "those users can
+   * automatically be admitted as a member under that organization if
+   * verified. Ensure we have a test for this."
+   *
+   * The status alone would not show it. What matters is the outcome: they are
+   * admitted under THAT organization, they arrive with a working session, and
+   * no second application exists for a company the consortium already has.
+   */
   await page.context().clearCookies();
   await ensureAppOrigin(page);
   const join = await verifyMembershipJoinEmail(page, colleagueEmail);
   expect(join.status).toBe("organization_access_ready");
+  if (join.status !== "organization_access_ready") throw new Error("Expected organization access");
+  // The membership they were admitted under is the founder's organization,
+  // named on the capacity they now act in.
+  expect(join.member.activeIdentities.map((identity) => identity.organizationName)).toContain(
+    `Claimed Domain Organization ${suffix}`,
+  );
+
+  /*
+   * And it is a real session, not a claim about one: the portal opens, and
+   * the record it opens says which organization they represent. A colleague
+   * who is "admitted" but cannot get in has not been admitted.
+   */
+  await page.goto("/portal/");
+  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0);
+
+  const current = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users/current", { credentials: "same-origin" });
+    return { status: response.status, body: (await response.json()) as { organizationName?: string | null } };
+  });
+  expect(current.status, JSON.stringify(current.body)).toBe(200);
+  expect(current.body.organizationName).toBe(`Claimed Domain Organization ${suffix}`);
+
+  // No duplicate application was filed for an organization already admitted.
+  await page.context().clearCookies();
+  await signInToPortal(page, e2eAdminEmail("portal-join-categories"));
+  const applications = await page.evaluate(async (organizationName) => {
+    const response = await fetch(`/api/v1/members/applications?q=${encodeURIComponent(organizationName)}`, {
+      credentials: "same-origin",
+    });
+    const body = (await response.json()) as { applications?: unknown[] };
+    return { status: response.status, count: body.applications?.length ?? 0 };
+  }, `Claimed Domain Organization ${suffix}`);
+  expect(applications.status).toBe(200);
+  expect(applications.count).toBe(1);
 });

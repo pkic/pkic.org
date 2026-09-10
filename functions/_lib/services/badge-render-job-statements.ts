@@ -45,3 +45,12 @@ export function prepareBadgeRenderJobsForUser(db: DatabaseLike, userId: string, 
     )
     .bind(createdAt, createdAt, createdAt, userId);
 }
+
+/** Generation metadata keeps R2 results aligned with the durable render request. */
+export async function badgeCacheMetadata(db: DatabaseLike, referralCode: string): Promise<Record<string, string>> {
+  const row = await db
+    .prepare("SELECT requested_generation FROM badge_render_jobs WHERE referral_code = ?")
+    .bind(referralCode)
+    .first<{ requested_generation: number }>();
+  return { referralCode, badgeGeneration: String(row?.requested_generation ?? 0) };
+}

@@ -9,6 +9,15 @@ tags: [PKIC, ETSI]
 resources:
 - src: images/partners/etsi.svg
   title: ETSI
+authorProfiles:
+  - name: Sándor Szőke
+    organization: Microsec
+    role: Deputy Director of eIDAS Trust Services
+    website: https://www.microsec.hu/en
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/s%C3%A1ndor-sz%C5%91ke-05b28749/
+    assetdirectory: images/members/microsec
 ---
 
 On 26 January PKI Consortium and [ETSI][1] signed a Memorandum of Understanding ([MoU][2]) to structure and strengthen the relationship between both organizations and foster a closer relationship.

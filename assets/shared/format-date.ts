@@ -2,10 +2,15 @@
  * Canonical rendering for every DISPLAYED date on the site.
  *
  * Displayed dates follow the viewer's own browser locale by policy
- * (issue #10): every helper passes `undefined` as the locale, and no caller
- * may pin a literal such as "en-US" — that is exactly the bug this module
- * exists to prevent, because a pinned locale silently shows US month-first
- * ordering to viewers who expect day-first (or vice versa).
+ * (issue #10, confirmed by the user): every helper passes `undefined` as the
+ * locale, and no caller may pin a literal such as "en-US" — that is exactly
+ * the bug this module exists to prevent, because a pinned locale silently
+ * shows US month-first ordering to viewers who expect day-first (or vice
+ * versa). A reader seeing month-first is seeing their own browser locale.
+ *
+ * `tests/tools/displayed-date-formatting.test.ts` holds both halves of that
+ * policy: nothing outside this file formats a date for a reader, and nothing
+ * inside it pins a locale.
  *
  * Zones follow the repository's time rules: instants localize to the
  * viewer's zone at this presentation boundary, an in-person event renders on
@@ -50,6 +55,19 @@ export function formatCalendarDate(value: string | null | undefined): string {
   const date = toDate(`${value}T00:00:00Z`);
   if (!date) return EMPTY;
   return date.toLocaleString(undefined, { dateStyle: "medium", timeZone: "UTC" });
+}
+
+/**
+ * A `YYYY-MM-DD` calendar date as day and month, without the year — used
+ * where the year is already established by the surrounding text, such as the
+ * days of one event. Day-precise, so it renders on the UTC calendar; an
+ * unreadable or absent value is the empty marker rather than "Invalid Date".
+ */
+export function formatDayAndMonth(value: string | null | undefined): string {
+  if (!value) return EMPTY;
+  const date = toDate(DATE_ONLY.test(value) ? `${value}T00:00:00Z` : value);
+  if (!date) return EMPTY;
+  return date.toLocaleString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 /**
@@ -115,6 +133,20 @@ export function formatDateTime(
 }
 
 /**
+ * The time of day of an instant, in the viewer's own zone and locale, with the
+ * zone named — what a `<time class="localTime">` on a public page shows. A
+ * value the browser cannot read is the empty marker, never "Invalid Date".
+ */
+export function formatTimeOfDay(value: string | null | undefined): string {
+  if (!value) return EMPTY;
+  const date = toDate(value);
+  if (!date) return EMPTY;
+  return date
+    .toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short", hour12: false })
+    .replace(",", "");
+}
+
+/**
  * An instant on the wall clock of a specific IANA zone, with the zone named
  * so the reader cannot mistake it for their own — "Dec 1, 2026, 9:00 AM CET"
  * in an en-US browser.
@@ -152,10 +184,16 @@ export function formatDateRange(
     ...(timeZone ? { timeZone } : {}),
   };
   const formatter = new Intl.DateTimeFormat(undefined, options);
-  const start = new Date(startsAt);
-  if (!endsAt) return formatter.format(start);
+  // `Intl.DateTimeFormat.format` throws RangeError on an unreadable value
+  // rather than writing "Invalid Date", which takes the whole surface down
+  // instead of one line of it. Every other formatter here answers the empty
+  // marker; a range is no different (issue #19's class).
+  const start = toDate(startsAt);
+  if (!start) return EMPTY;
+  const end = endsAt ? toDate(endsAt) : null;
+  if (!end) return formatter.format(start);
   try {
-    return formatter.formatRange(start, new Date(endsAt));
+    return formatter.formatRange(start, end);
   } catch {
     return formatter.format(start);
   }

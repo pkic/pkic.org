@@ -1,3 +1,9 @@
+import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { AppError } from "../../../../_lib/errors";
+import {
+  selectRegistrationIdentity,
+  prepareSelectedRegistrationIdentityGuard,
+} from "../../../../_lib/services/registrations/selected-identity";
 import type { ValidatedData } from "chanfana";
 import { registrationSubmissionResponseSchema } from "../../../../../assets/shared/schemas/registration";
 import { eventRegistrationCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-registrations";
@@ -20,9 +26,33 @@ async function handlePublicRegistration(
     email: data.body.email,
     clientIp: getClientIp(request),
   });
+  const actor = data.body.identityId ? await requireIdentityFromRequest(c.env.DB, request, c.env) : null;
+  if (actor && actor.email.toLowerCase() !== data.body.email.toLowerCase()) {
+    throw new AppError(
+      422,
+      "REGISTRATION_SESSION_EMAIL_REQUIRED",
+      "Use your signed-in email when selecting an existing identity.",
+    );
+  }
+  const selectedIdentity =
+    actor && data.body.identityId
+      ? await selectRegistrationIdentity(c.env.DB, actor.userId, data.body.identityId)
+      : undefined;
   const config = getConfig(c.env, request);
   const result = await submitPublicRegistration(c.env.DB, c.env, data.body, {
     eventSlug: data.params.eventSlug,
+    verifiedIdentity: selectedIdentity ? { userId: selectedIdentity.userId, selectedIdentity } : undefined,
+    authorizationGuards:
+      selectedIdentity && actor
+        ? [
+            prepareSelectedRegistrationIdentityGuard(
+              c.env.DB,
+              selectedIdentity,
+              actor.sessionId,
+              data.body.email.toLowerCase(),
+            ),
+          ]
+        : [],
     eventBasePath: request.headers.get("x-event-base-path"),
     clientIp: getClientIp(request),
     userAgent: getUserAgent(request),

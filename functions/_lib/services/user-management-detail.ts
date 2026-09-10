@@ -1,4 +1,5 @@
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
+import { publicUserHeadshotPath } from "./user-headshot";
 import { batchFirst, batchRows } from "../db/pagination";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
@@ -158,11 +159,15 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
       },
     })),
   }));
-  const headshotUrl = user.headshot_r2_key
-    ? `/api/v1/users/${user.id}/headshot${
-        user.headshot_updated_at ? `?v=${encodeURIComponent(user.headshot_updated_at)}` : ""
-      }`
-    : null;
+  /*
+   * The same headshot path the users list and the member's own profile answer
+   * with, from the one codec that builds it. This used to point at the staff
+   * `GET /users/:id/headshot`, which a member reading their own record cannot
+   * call — and there was nothing to gain by gating it, since the stored key it
+   * serves is reachable unauthenticated at `/headshots/:file` either way. The
+   * key names its own version, so no cache-busting query is needed.
+   */
+  const headshotUrl = publicUserHeadshotPath(user.id, user.headshot_r2_key);
   const { headshot_r2_key: _headshotR2Key, headshot_updated_at: _headshotUpdatedAt, ...publicUser } = user;
   const formerIdentities = batchRows<FormerIdentityRow>(formerResult).map((identity) => ({
     identityId: identity.id,

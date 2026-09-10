@@ -105,6 +105,36 @@ export async function listEligibleGroupCapacities(
   }));
 }
 
+/**
+ * The correlated form of the same eligibility question, for a query that is
+ * scanning users rather than resolving one user's capacities: "could this
+ * group seat `<userAlias>` at all?"
+ *
+ * Written here beside `listEligibleGroupCapacities` so the picker that offers
+ * a person and the command that seats them agree. They did not: the picker
+ * offered every active user in the system and the seat was refused afterwards
+ * with `GROUP_CAPACITY_REQUIRED`, once the manager had already chosen a title
+ * and two dates (#25).
+ *
+ * Expects `active_user_capacities` (from {@link ALL_ACTIVE_USER_CAPACITIES_CTE})
+ * to be in scope. The aliases are source constants, never request input; the
+ * two `?` placeholders are the group id and the allow-managed flag, in that
+ * order.
+ */
+export function groupCanSeatUserPredicate(userAlias: string): string {
+  return `EXISTS (
+    SELECT 1
+      FROM active_user_capacities capacity
+      JOIN groups g ON g.id = ? AND g.active = 1
+      LEFT JOIN group_membership_category_rules rule
+        ON rule.group_id = g.id
+       AND rule.membership_category_code = capacity.membership_category
+     WHERE capacity.user_id = ${userAlias}.id
+       AND ${eligibleGroupCapacityPredicate("g", "rule", "?")}
+       AND ${activeParentGroupMembershipPredicate("g", `${userAlias}.id`)}
+  )`;
+}
+
 export async function listEligibleGroupCapacitiesForGroups(
   db: DatabaseLike,
   groupIds: readonly string[],

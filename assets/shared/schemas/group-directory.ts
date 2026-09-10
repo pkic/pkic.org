@@ -33,7 +33,7 @@ export type PublicGroupRosterEntry = z.infer<typeof publicGroupRosterEntrySchema
 
 /**
  * The published member roster. Current seats list leaders first with their
- * leadership title, then members with their seat title or "Member". Past
+ * leadership title, then plain members. Past
  * entries are closed seats and closed leadership terms, most recently ended
  * first, which is what the public "past positions" timeline renders.
  */
@@ -63,7 +63,8 @@ export const groupDirectoryRouteSchema = {
   summary: "Get a public group directory",
   description:
     "Returns public metadata, the configured public leadership with titles and tenures, and, for groups that " +
-    "publish it, the dated member roster with its history.",
+    "publish it, the dated member roster with its history. Which members are in the group is a different " +
+    "question, answered by the canonical members list's `workingGroup` filter.",
   request: { params: groupDirectoryParamsSchema },
   responses: {
     "200": {

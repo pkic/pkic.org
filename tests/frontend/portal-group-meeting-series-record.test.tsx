@@ -90,23 +90,22 @@ describe("the meeting series record page", () => {
     const requests: URL[] = [];
     stubSeriesFetch(series, requests);
 
-    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} onLeave={() => {}} />);
+    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} />);
     await settle();
     await settle();
 
     expect(requests.map((url) => url.pathname)).toContain(`/api/v1/groups/${GROUP_ID}/meetings/series/${series.id}`);
-    // h3: the shell owns h1 and the workspace's PageHeader owns h2, so the
-    // record inside a workspace tab is the next level down.
-    expect(container.querySelector("h3.pk-record-title")?.textContent).toBe("Architecture call");
+    // The selected record is the page subject; its group is navigation context.
+    expect(container.querySelector("h3.pk-profile-header__title")?.textContent).toBe("Architecture call");
     expect(container.textContent).toContain("Online");
-    expect(backLink(container)).toBeDefined();
+    expect(backLink(container)).toBeUndefined();
   });
 
   it("names each series region after the series it belongs to, and links no tab to a missing id", async () => {
     const series = baseSeries();
     stubSeriesFetch(series);
 
-    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} onLeave={() => {}} />);
+    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} />);
     await settle();
 
     // The tabs navigate, so they are links marked `aria-current` — not the
@@ -121,19 +120,7 @@ describe("the meeting series record page", () => {
     }
   });
 
-  it("returns to the meeting series list from the record's back link", async () => {
-    const series = baseSeries();
-    stubSeriesFetch(series);
-    const onLeave = vi.fn();
-
-    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} onLeave={onLeave} />);
-    await settle();
-    await act(async () => backLink(container)!.click());
-
-    expect(onLeave).toHaveBeenCalledOnce();
-  });
-
-  it("announces a series that cannot be fetched as an alert and keeps the way back", async () => {
+  it("announces a series that cannot be fetched as an alert without repeating parent navigation", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -147,37 +134,32 @@ describe("the meeting series record page", () => {
       ),
     );
 
-    const container = mount(
-      <GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={baseSeries().id} onLeave={() => {}} />,
-    );
+    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={baseSeries().id} />);
     await settle();
 
     expect(container.querySelector("[role='alert']")).not.toBeNull();
-    expect(container.querySelector("h3.pk-record-title")).toBeNull();
-    expect(backLink(container)).toBeDefined();
+    expect(container.querySelector("h3.pk-profile-header__title")).toBeNull();
+    expect(backLink(container)).toBeUndefined();
   });
 
   it("opens the tab given by an initial resourceTab", async () => {
     const series = baseSeries();
     stubSeriesFetch(series);
 
-    const container = mount(
-      <GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} initialTab="settings" onLeave={() => {}} />,
-    );
+    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} initialTab="settings" />);
     await settle();
 
     const settingsTab = tabs(container).find((item) => item.textContent === "Series settings");
     expect(isCurrentTab(settingsTab)).toBe(true);
-    expect(container.textContent).toContain("Save series");
+    expect(container.querySelector('button[aria-label="Meeting series actions"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Save series");
   });
 
   it("shows no tab row when only Occurrences is open to the reader, whatever the resourceTab asks for", async () => {
     const series = baseSeries({ capabilities: ["view"] });
     stubSeriesFetch(series);
 
-    const container = mount(
-      <GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} initialTab="settings" onLeave={() => {}} />,
-    );
+    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} initialTab="settings" />);
     await settle();
 
     // One facet is not a choice, so there is nothing to switch between; the
@@ -193,7 +175,7 @@ describe("the meeting series record page", () => {
     const series = baseSeries();
     stubSeriesFetch(series);
 
-    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} onLeave={() => {}} />);
+    const container = mount(<GroupMeetingSeriesRecord groupId={GROUP_ID} seriesId={series.id} />);
     await settle();
 
     const occurrencesTab = tabs(container).find((item) => item.textContent === "Occurrences")!;

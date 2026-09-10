@@ -7,6 +7,7 @@
  */
 
 import "./Tabs.css";
+import { useActiveTabVisibility } from "./useActiveTabVisibility";
 
 export interface TabItem {
   readonly id: string;
@@ -22,11 +23,12 @@ export interface TabsProps {
 }
 
 export function Tabs({ items, activeId, label, class: className }: TabsProps) {
+  const listRef = useActiveTabVisibility(activeId);
   const classes = ["pk-tabs", className].filter(Boolean).join(" ");
 
   return (
     <nav class={classes} aria-label={label}>
-      <div class="pk-tabs__list">
+      <div class="pk-tabs__list" ref={listRef}>
         {items.map((item) => (
           <a
             key={item.id}

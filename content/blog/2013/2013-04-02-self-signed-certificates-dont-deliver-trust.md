@@ -24,6 +24,15 @@ tags:
 title: Self-Signed Certificates Don’t Deliver Trust
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 We’ve heard the argument that website operators could just use [self-signed certificates](https://en.wikipedia.org/wiki/Self-signed_certificate). They are easy to issue and they are “free.” Before issuing self-signed certificates, it’s a good idea to examine the trust and security model. You should also compare self-signed certificates to the publicly trusted certification authority (CA) model; and then make your own decision.
 

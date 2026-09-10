@@ -29,6 +29,12 @@ aliases:
 - /2014/01/09/intermediate-ca-certificates/
 
 
+authorProfiles:
+  - name: Robin Alden
+    organization: Sectigo
+    role: Chief Compliance Officer
+    website: https://www.sectigo.com/
+    assetdirectory: images/members/sectigo
 ---
 We have seen recently that Google detected that publicly trusted TLS/(SSL) certificates had been created for Google domains without having been requested by Google themselves.
 

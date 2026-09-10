@@ -13,8 +13,24 @@ import { linksSchema } from "./links";
 import { groupLabelSchema } from "./groups";
 import { httpOrSameOriginUrlSchema } from "./urls";
 
-export const userRoleValueSchema = z.enum(["admin", "user", "guest"]);
+export const USER_ROLES = ["admin", "user", "guest"] as const;
+export const userRoleValueSchema = z.enum(USER_ROLES);
 export type UserRoleValue = z.infer<typeof userRoleValueSchema>;
+
+/**
+ * The words each role is offered and shown under.
+ *
+ * They live beside the vocabulary, the way `EVENT_REGISTRATION_POLICY_LABELS`
+ * does, so a surface that offers the roles cannot offer a different set than
+ * the one this contract accepts — the shape issue #24 reported. Being a total
+ * `Record`, a role added above is a compile error here rather than a choice
+ * that quietly stops being offered.
+ */
+export const USER_ROLE_LABELS: Record<UserRoleValue, string> = {
+  admin: "Administrator",
+  user: "User",
+  guest: "Guest",
+};
 
 export const userUpdateSchema = z
   .object({
@@ -40,6 +56,14 @@ export const USERS_SORT_COLUMNS = ["last_name", "email", "role", "created_at"] a
 export const USER_TYPE_VALUES = ["member", "event_attendee", "contact_only"] as const;
 
 export const userTypeValueSchema = z.enum(USER_TYPE_VALUES).optional();
+export type UserTypeValue = (typeof USER_TYPE_VALUES)[number];
+
+/** The words the `type` filter offers, beside the vocabulary it filters on. */
+export const USER_TYPE_LABELS: Record<UserTypeValue, string> = {
+  member: "Members",
+  event_attendee: "Event attendees",
+  contact_only: "Contacts only",
+};
 
 export const usersListQuerySchema = listQuerySchema(USERS_SORT_COLUMNS).extend({
   // `role` is a passthrough filter against users.role — never validated
@@ -129,6 +153,8 @@ export const userDetailResponseSchema = z.object({ user: userDetailSchema });
 export const userDetailRouteSchema = {
   tags: ["Users"],
   summary: "Get a user detail",
+  description:
+    "Readable by the person the record is about — this is the page they reach from “My profile” — and by staff holding users:read. Reading anybody else still requires the permission.",
   "x-pkic-auth": { required: true, scopes: ["users:read"] },
   request: { params: userIdParamsSchema },
   responses: {
@@ -137,7 +163,8 @@ export const userDetailRouteSchema = {
       content: { "application/json": { schema: userDetailResponseSchema } },
     },
     "400": { description: "Invalid user identifier." },
-    "401": { description: "Staff authorization required." },
+    "401": { description: "Authentication required." },
+    "403": { description: "Reading another user's record requires users:read." },
     "404": { description: "User not found." },
   },
 };

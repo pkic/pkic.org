@@ -38,6 +38,22 @@ tags:
 title: Why Are You Removing Website Identity, Google and Mozilla?
 
 
+authorProfiles:
+  - name: Tim Callan
+    organization: Sectigo
+    role: Chief Compliance Officer at Sectigo
+    website: https://www.sectigo.com/
+    social:
+      linkedin: https://www.linkedin.com/in/tim-callan
+      soundcloud: https://soundcloud.com/tim-callan/tracks
+    assetdirectory: images/members/sectigo
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
 ---
 ## You can’t have consumer privacy without having strong website identity
 

@@ -1,3 +1,4 @@
+import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * The Members tab. A caller who cannot manage the group (only `participate`)
  * gets the read-only roster: no add-person action, no row menus, no email or
@@ -5,7 +6,7 @@
  * seat list: current or former, searchable, with each seat's title and
  * service dates, and the commands to add, edit, or end a seat.
  */
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   groupMembershipMutationResponseSchema,
   groupMembershipsManagementListResponseSchema,
@@ -16,14 +17,16 @@ import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDa
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { EmptyState } from "../../../../ui/EmptyState";
+import { Spinner } from "../../../../components/Spinner";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
-import { deleteJson, ApiClientError } from "../../../../shared/api-client";
+import { deleteJson, getJson, ApiClientError } from "../../../../shared/api-client";
 import { fmtCalendarDate } from "../../ui";
 import { GroupMemberAddForm } from "./GroupMemberAddForm";
 import { GroupMembersRoster } from "./GroupMembersRoster";
 import { GroupMembershipSeatForm } from "./GroupMembershipSeatForm";
 import { capacityLabel } from "./group-leadership";
+import { usePortalHashLocation } from "../../hash-location";
 
 /** How the membership came to be, in product language rather than enum keys. */
 const SOURCE_LABELS: Record<GroupMembershipSource, string> = {
@@ -37,28 +40,75 @@ const SOURCE_LABELS: Record<GroupMembershipSource, string> = {
 /** A seat with no title of its own is simply a member of the group. */
 const DEFAULT_SEAT_TITLE = "Member";
 
+/** Reserved seat segment that routes to the add page instead of a seat's own. */
+const ADD_SEAT_SEGMENT = "add";
+
 type SeatView = "current" | "former";
 
 export function GroupMembers({
   groupId,
   canManage,
+  seatSegment,
   onChanged,
 }: {
   groupId: string;
   canManage: boolean;
+  /** `undefined` for the roster, `"add"` for the add page, a seat id to edit one. */
+  seatSegment?: string;
   onChanged: () => Promise<void>;
 }) {
   if (!canManage) return <GroupMembersRoster groupId={groupId} />;
-  return <GroupMembersManager groupId={groupId} onChanged={onChanged} />;
+  return <GroupMembersManager groupId={groupId} seatSegment={seatSegment} onChanged={onChanged} />;
 }
 
-function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChanged: () => Promise<void> }) {
+function GroupMembersManager({
+  groupId,
+  seatSegment,
+  onChanged,
+}: {
+  groupId: string;
+  seatSegment?: string;
+  onChanged: () => Promise<void>;
+}) {
+  const [, navigate] = usePortalHashLocation();
+  const categories = useMembershipCategoryLabels();
+  const membersPath = `/groups/${encodeURIComponent(groupId)}/members`;
   const [view, setView] = useState<SeatView>("current");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [editing, setEditing] = useState<GroupMembership | null>(null);
   const listActions = useRef<ApiTableActions | null>(null);
+
+  /*
+   * The seat being edited is loaded from its own address rather than handed
+   * over by the row that opened it, so the page is a real place: opening it
+   * cold, or reloading it, shows the same seat. The roster narrowed to one
+   * membership is the read — the collection is the canonical listing, and a
+   * second read model for one row would be a second answer to one question.
+   */
+  useEffect(() => {
+    if (!seatSegment || seatSegment === ADD_SEAT_SEGMENT) {
+      setEditing(null);
+      return;
+    }
+    let cancelled = false;
+    void getJson(
+      `/api/v1/groups/${encodeURIComponent(groupId)}/memberships?limit=1&offset=0&membershipId=${encodeURIComponent(seatSegment)}`,
+      groupMembershipsManagementListResponseSchema,
+    )
+      .then((page) => {
+        if (cancelled) return;
+        const seat = page.memberships.find((candidate) => candidate.id === seatSegment);
+        if (seat) setEditing(seat);
+        else navigate(membersPath);
+      })
+      .catch(() => {
+        if (!cancelled) navigate(membersPath);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [seatSegment, groupId, membersPath, navigate]);
 
   async function changed(): Promise<void> {
     await Promise.all([listActions.current?.reload(), onChanged()]);
@@ -94,19 +144,44 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
     }
   }
 
+  if (seatSegment === ADD_SEAT_SEGMENT) {
+    // The add page supplies its own heading and its way back, so nothing is
+    // wrapped around it here — and the roster it adds to is not underneath it.
+    return (
+      <GroupMemberAddForm
+        groupId={groupId}
+        onAdded={async () => {
+          // Back to the roster first: the reload is for the page being
+          // returned to, and making the return wait on it leaves the reader
+          // on a finished form if anything about the refresh is slow.
+          navigate(membersPath);
+          await changed();
+        }}
+        onCancel={() => navigate(membersPath)}
+      />
+    );
+  }
+
+  if (seatSegment) {
+    // The seat is still being read from its address. The roster must not
+    // appear underneath in the meantime: the reader asked for one seat, and
+    // showing the list they came from would be the wrong page briefly.
+    if (!editing) return <Spinner />;
+    return (
+      <GroupMembershipSeatForm
+        groupId={groupId}
+        membership={editing}
+        onSaved={async () => {
+          navigate(membersPath);
+          await changed();
+        }}
+        onCancel={() => navigate(membersPath)}
+      />
+    );
+  }
+
   return (
     <div class="pk pk-stack">
-      {editing && (
-        <GroupMembershipSeatForm
-          groupId={groupId}
-          membership={editing}
-          onSaved={async () => {
-            await changed();
-            setEditing(null);
-          }}
-          onCancel={() => setEditing(null)}
-        />
-      )}
       {mutationError && <ErrorAlert error={mutationError} />}
       <ApiDataTable
         caption="Members"
@@ -118,31 +193,9 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
         initialSort="user_name"
         actionsRef={listActions}
         searchPlaceholder="Search name, email, organization, or category…"
-        /*
-         * Inside the list's own panel, under the toolbar that opened it —
-         * which is where the form's heading level already assumed it was, and
-         * where "Add person" is. It used to render as a sibling above the
-         * panel, so the form and the button that opens it sat in different
-         * regions and neither named the other.
-         */
-        inset={
-          showAddForm ? (
-            <GroupMemberAddForm
-              groupId={groupId}
-              onAdded={async () => {
-                await changed();
-                setShowAddForm(false);
-              }}
-              onCancel={() => setShowAddForm(false)}
-            />
-          ) : undefined
-        }
         createAction={{
           label: "Add person",
-          onSelect: () => {
-            setEditing(null);
-            setShowAddForm(true);
-          },
+          onSelect: () => navigate(`${membersPath}/${ADD_SEAT_SEGMENT}`),
         }}
         // One seat is one person participating on behalf of one Member, and a
         // seat that ends stays as the group's history: the roster a governing
@@ -176,8 +229,7 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
           },
           {
             header: "Category",
-            width: "fit",
-            cell: (membership: GroupMembership) => membership.membershipCategory ?? "—",
+            cell: (membership: GroupMembership) => categories.label(membership.membershipCategory) || "—",
             sort: { asc: "membership_category", desc: "-membership_category", defaultDirection: "asc" },
           },
           {
@@ -214,10 +266,7 @@ function GroupMembersManager({ groupId, onChanged }: { groupId: string; onChange
                   {
                     id: "edit",
                     label: "Edit seat",
-                    onSelect: () => {
-                      setShowAddForm(false);
-                      setEditing(membership);
-                    },
+                    onSelect: () => navigate(`${membersPath}/${encodeURIComponent(membership.id)}`),
                     disabled: busyId !== null,
                   },
                   ...(membership.leftAt

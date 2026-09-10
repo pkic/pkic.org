@@ -1,3 +1,4 @@
+import { memberProfileHref } from "../../../../assets/shared/member-profile-url";
 import type { MemberWallEntry } from "../../../../assets/shared/schemas/members-directory";
 import { sanitizeLegacyHttpOrSameOriginUrl } from "../../../../assets/shared/schemas/urls";
 import { all } from "../../db/queries";
@@ -5,6 +6,10 @@ import type { DatabaseLike } from "../../types";
 import { buildPublicSponsorReadModel } from "../public-sponsors";
 
 interface MemberWallRow extends Omit<MemberWallEntry, "href" | "logoUrl"> {
+  /** The organization behind a `member:` row; null on a sponsor-only row. */
+  memberId: string | null;
+  memberSlug: string | null;
+  /** A sponsor-only row's own website. A member row's page is computed. */
   href: string | null;
   logoUrl: string | null;
 }
@@ -27,9 +32,9 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
           AND o.logo_r2_key IS NOT NULL
      ), member_entries AS (
        SELECT 'member:' || member.id AS key,
-              CASE WHEN member.slug IS NOT NULL
-                   THEN '/members/' || member.slug || '/'
-                   ELSE '/members/profile/?id=' || member.id END AS href,
+              member.id AS memberId,
+              member.slug AS memberSlug,
+              NULL AS href,
               '/api/v1/members/' || member.id || '/logo' AS logoUrl,
               member.name,
               member.slogan,
@@ -39,6 +44,8 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
          LEFT JOIN enriched_sponsors sponsor ON sponsor.id = member.id
      ), sponsor_only_entries AS (
        SELECT 'sponsor:' || sponsor.id AS key,
+              NULL AS memberId,
+              NULL AS memberSlug,
               sponsor.website AS href,
               CASE WHEN sponsor.logo_r2_key IS NOT NULL
                    THEN '/api/v1/members/' || sponsor.id || '/logo'
@@ -52,13 +59,14 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
           AND (sponsor.logo_r2_key IS NOT NULL OR sponsor.sponsorship_logo_r2_key IS NOT NULL)
           AND NOT EXISTS (SELECT 1 FROM active_member_organizations member WHERE member.id = sponsor.id)
      ), selected_entries AS (
-       SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+       SELECT key, memberId, memberSlug, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
          FROM member_entries
        UNION ALL
-       SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+       SELECT key, memberId, memberSlug, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
          FROM sponsor_only_entries
      ), ranked_entries AS (
-       SELECT selected_entries.key, selected_entries.href, selected_entries.logoUrl,
+       SELECT selected_entries.key, selected_entries.memberId, selected_entries.memberSlug,
+              selected_entries.href, selected_entries.logoUrl,
               selected_entries.name, selected_entries.slogan, selected_entries.sponsorLevel,
               selected_entries.sponsorLevelName,
               ROW_NUMBER() OVER (
@@ -68,16 +76,24 @@ export async function listMemberWall(db: DatabaseLike, memberLimit: number): Pro
               ) AS display_rank
          FROM selected_entries
      )
-     SELECT key, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
+     SELECT key, memberId, memberSlug, href, logoUrl, name, slogan, sponsorLevel, sponsorLevelName
        FROM ranked_entries
       WHERE display_rank <= ?
       ORDER BY display_rank`,
     [...readModel.bindings, memberLimit],
   );
 
-  return rows.map((row) => ({
+  return rows.map(({ memberId, memberSlug, ...row }) => ({
     ...row,
-    href: sanitizeLegacyHttpOrSameOriginUrl(row.href) ?? (row.key.startsWith("sponsor:") ? "/sponsors/" : "/members/"),
+    /*
+     * A member's page comes from the shared rule rather than from a CASE in
+     * this query: the wall, the directory grid and a charter page's roll all
+     * link to the same page, and writing the rule three times is how one of
+     * them ended up linking somewhere else entirely (#15).
+     */
+    href: memberId
+      ? memberProfileHref({ id: memberId, slug: memberSlug })
+      : (sanitizeLegacyHttpOrSameOriginUrl(row.href) ?? "/sponsors/"),
     logoUrl: sanitizeLegacyHttpOrSameOriginUrl(row.logoUrl) ?? "/img/logo.svg",
   }));
 }

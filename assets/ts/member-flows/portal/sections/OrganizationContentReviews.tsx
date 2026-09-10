@@ -17,6 +17,7 @@ import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
 import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
+import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Textarea } from "../../../ui/TextControl";
 import { fmt, toast } from "../ui";
@@ -201,6 +202,9 @@ export function OrganizationContentReviews() {
 
   return (
     <div class="pk pk-stack">
+      {/* A page under Settings heads itself. It used to be a tab on the
+          Settings hub, which meant the strip named it and the page did not. */}
+      <PageHeader title="Content reviews" />
       <ApiDataTable
         caption="Organization content reviews"
         endpoint={API_BASE}

@@ -56,8 +56,21 @@ export const groupFormDefinitionResponseSchema = groupFormPlacementSummarySchema
   fields: z.array(formFieldDefinitionSchema),
 });
 
+/**
+ * What a group may raise a form for. A narrower set than `formPurposeSchema`:
+ * a group cannot create a registration or membership form, because those
+ * belong to an event and to the application flow respectively.
+ *
+ * Named so the editor offers exactly this set instead of carrying a default of
+ * its own — the shape issue #24 reported, where a control's choices and a
+ * contract's accepted values were maintained apart.
+ */
+export const GROUP_FORM_PURPOSES = ["survey", "feedback"] as const;
+export const groupFormPurposeSchema = z.enum(GROUP_FORM_PURPOSES);
+export type GroupFormPurpose = z.infer<typeof groupFormPurposeSchema>;
+
 export const groupFormDefinitionCreateSchema = formDefinitionCreateSchema.safeExtend({
-  purpose: z.enum(["survey", "feedback"]),
+  purpose: groupFormPurposeSchema,
 });
 export const groupFormDefinitionUpdateSchema = formDefinitionUpdateSchema;
 export type GroupFormDefinitionCreateInput = z.infer<typeof groupFormDefinitionCreateSchema>;
@@ -175,7 +188,9 @@ export const groupFormSubmissionCreateRouteSchema = {
     },
     "403": jsonErrorResponse("The caller lacks the submit capability."),
     "404": jsonErrorResponse("The form is not available through this group or is not accepting responses."),
-    "409": jsonErrorResponse("The form changed while the response was being saved."),
+    "409": jsonErrorResponse(
+      "The form is outside its submission window, or it changed while the response was being saved.",
+    ),
     "422": jsonErrorResponse("The answers do not satisfy the live form definition."),
   },
 };

@@ -90,7 +90,9 @@
   <div class="pk-container pk-container--wide">
     <div class="pkic-stats-bar__row">
       {{ range $stats }}
-      <a href="{{ .href }}" class="pkic-stat"><span class="pkic-stat-num">{{ .value }}</span><span class="pkic-stat-label">{{ .label }}</span></a>
+      {{/* A figure that arrives after paint carries the slice to count and an
+           honest dash until it does; aria-live announces it when it lands. */}}
+      <a href="{{ .href }}" class="pkic-stat"><span class="pkic-stat-num"{{ with .memberCount }} data-member-count="{{ . }}" aria-live="polite"{{ end }}>{{ .value }}</span><span class="pkic-stat-label">{{ .label }}</span></a>
       {{ end }}
       <a href="/join/" class="pkic-stat pkic-stat--wide-only"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></a>
     </div>

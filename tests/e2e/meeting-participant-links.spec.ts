@@ -1,0 +1,258 @@
+/**
+ * Every participant gets their own link to the meeting — and it is only
+ * their own.
+ *
+ * The consortium wanted to know who actually comes to a meeting, which one
+ * address forwarded around a company cannot answer (#6). What goes out is the
+ * occurrence's join page: personal not because it carries a secret — a secret
+ * in a mailbox is exactly the thing that gets forwarded — but because opening
+ * it needs the reader's own session. So the journey is two halves: a manager
+ * sends the round from the meeting, and the link that arrives, opened by
+ * somebody who is not signed in, asks who they are instead of letting them in.
+ *
+ * @covers event.3.10
+ */
+import { expect, test } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { clientIpForIdentity, openEmailSignIn } from "./helpers/portal-auth";
+import { signInAsE2eStaff } from "./helpers/staff-auth";
+import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+
+const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+
+for (const broadcast of [false, true]) {
+  test(`a manager sends a personal ${broadcast ? "broadcast" : "meeting"} link and the participant signs in to use it`, async ({
+    browser,
+    page,
+  }) => {
+    await signInAsE2eStaff(page, e2eAdminEmail("meeting-participant-links"));
+
+    const unique = `${String(Date.now())}-${String(test.info().workerIndex)}`;
+    const eventName = `E2E participant links ${unique}`;
+    const startsAt = new Date(Date.now() + 3_600_000).toISOString();
+    const endsAt = new Date(Date.now() + 7_200_000).toISOString();
+
+    /*
+     * A member of the consortium, seated in the meeting's group. Created here
+     * rather than borrowed from the seeded governance rosters, which carry real
+     * people: this test sends mail, and the only address it may send to is one
+     * it invented.
+     */
+    const participantEmail = `participant-${unique}@participant-${unique}.test`;
+    const created = await page.evaluate(
+      async ({ groupId, eventName, unique, startsAt, endsAt, participantEmail, broadcast }) => {
+        async function post(path: string, body: unknown) {
+          const response = await fetch(path, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          return { status: response.status, body: (await response.json()) as Record<string, any> };
+        }
+
+        const organization = await post("/api/v1/organizations", {
+          name: `E2E Participant Links Corp ${unique}`,
+          membershipCategory: "F",
+          memberSince: new Date().toISOString().slice(0, 10),
+          identities: [{ name: "E2E Meeting Participant", email: participantEmail }],
+          workingGroupSlugs: [],
+          activationReason: "E2E: a participant to send a meeting link to",
+        });
+        const participantUserId = organization.body.organization?.identities?.[0]?.userId as string | undefined;
+        if (!participantUserId) return { stage: "organization", ...organization };
+
+        const seat = await post(`/api/v1/groups/${groupId}/memberships/${participantUserId}`, {
+          capacitySelection: { mode: "all_eligible", confirmed: true },
+        });
+        if (seat.status !== 200) return { stage: "seat", ...seat };
+
+        const series = await post(`/api/v1/groups/${groupId}/meetings/series`, {
+          eventName,
+          eventSlug: `e2e-participant-links-${unique}`,
+          profileKey: broadcast ? "conference" : "meeting",
+          policy: {
+            registrationPolicy: "no_registration",
+            memberEligibility: "owner_group",
+            guestPolicy: "occurrence_invitation",
+          },
+          startsAt,
+          recurrenceRule: "FREQ=WEEKLY;COUNT=1",
+          timezone: "UTC",
+          durationMinutes: 60,
+          location: "Online",
+          providerType: "external_url",
+        });
+        if (!series.body.series) return { stage: "series", ...series };
+
+        const seriesId = series.body.series.id as string;
+        const occurrence = await post(`/api/v1/groups/${groupId}/meetings/series/${seriesId}/occurrences`, {
+          startsAt,
+          endsAt,
+          providerJoinUrl: broadcast
+            ? "https://www.youtube.com/live/jfKfPfyJRdk"
+            : `https://meet.example.test/${unique}`,
+        });
+        if (!occurrence.body.occurrence) return { stage: "occurrence", ...occurrence };
+
+        return {
+          stage: "ready",
+          status: occurrence.status,
+          body: occurrence.body,
+          seriesId,
+          participantUserId,
+          occurrenceId: occurrence.body.occurrence.id as string,
+        };
+      },
+      { groupId: GROUP_ID, eventName, unique, startsAt, endsAt, participantEmail, broadcast },
+    );
+    expect(created.stage, JSON.stringify(created.body)).toBe("ready");
+    const occurrenceId = created.occurrenceId!;
+
+    // The manager sends the round from the meeting itself, where they set it
+    // up: the occurrence's management detail opens in place on its row, which
+    // is how every list in the portal opens a record.
+    await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${created.seriesId!}/settings`);
+    const settingsForm = page
+      .locator("form")
+      .filter({ has: page.getByRole("button", { name: "Meeting series actions" }) });
+    await expect(settingsForm.locator("input")).toHaveCount(0);
+    async function editSeries() {
+      await page.getByRole("button", { name: "Meeting series actions" }).click();
+      await page.getByRole("menuitem", { name: "Edit settings" }).click();
+    }
+    await editSeries();
+    await page.getByLabel("Meeting name").fill("");
+    await page.getByRole("button", { name: "Save series", exact: true }).click();
+    await expect(page.getByLabel("Meeting name")).toHaveAttribute("aria-invalid", "true");
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await editSeries();
+    await expect(page.getByLabel("Meeting name")).toHaveValue(eventName);
+    for (const label of ["Time zone", "First occurrence", "Duration (minutes)"]) {
+      await expect(page.getByLabel(label)).toBeDisabled();
+    }
+    await page.getByLabel("Location or public meeting page", { exact: true }).fill("Online meeting room");
+    const savedSeries = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/meetings/series/${created.seriesId!}`) && response.request().method() === "PATCH",
+    );
+    await page.getByRole("button", { name: "Save series", exact: true }).click();
+    expect((await savedSeries).status()).toBe(200);
+    await expect(page.getByLabel("Meeting name")).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText("Online meeting room", { exact: true })).toBeVisible();
+    await editSeries();
+    await expect(page.getByLabel("Location or public meeting page", { exact: true })).toHaveValue(
+      "Online meeting room",
+    );
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${created.seriesId!}/occurrences`);
+    const row = page.getByRole("row").filter({ hasText: "Scheduled" }).first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    // One action, so it is the row's own button rather than a menu behind it.
+    await row.getByRole("button", { name: /^Manage the occurrence starting / }).click();
+    const occurrence = page.getByRole("region", { name: `Occurrence of ${eventName}` });
+    await expect(occurrence).toBeVisible({ timeout: 15_000 });
+    await expect(occurrence.getByText("No join links have been sent for this meeting yet.")).toBeVisible();
+
+    const since = await capturedEmailCount();
+    await occurrence.getByRole("button", { name: "Send join links" }).click();
+    await acceptConfirmDialog(page, "Send join links");
+    await expect(page.locator(".my-toast", { hasText: /Join links queued for \d+ participants?/ })).toBeVisible();
+    // The panel says which round went out, so a manager deciding whether to
+    // remind can see it without opening the audit log.
+    await expect(occurrence.getByText(/^Round 1 went out /)).toBeVisible({ timeout: 15_000 });
+    await expect(occurrence.getByRole("button", { name: "Send join links again" })).toBeVisible();
+
+    // The reused local server has no scheduled outbox drain. Process the bounded
+    // synthetic backlog left by earlier journeys, as the scheduler does in preview.
+    const drained = await page.request.post("/api/v1/email/outbox/process", { data: { limit: 100 } });
+    expect(drained.status()).toBe(200);
+    const invitation = await waitForCapturedEmail(participantEmail, eventName, { since: since - 1 });
+    const joinUrl = extractEmailUrl(invitation, "/meetings/join/");
+    expect(joinUrl).toContain(`occurrence=${occurrenceId}`);
+    // No token, no code, nothing to steal: the link is the meeting's address.
+    expect(joinUrl).not.toContain("token=");
+
+    /*
+     * And forwarded, it is worth nothing. A reader who is not signed in reaches
+     * the portal's own sign-in rather than the meeting — so the attendance the
+     * link produces always belongs to whoever proved who they were.
+     */
+    const forwarded = await browser.newContext({ storageState: undefined });
+    const forwardedPage = await forwarded.newPage();
+    try {
+      await forwardedPage.goto(joinUrl);
+      // Told to identify themselves, and told nothing about the meeting: the
+      // page does not name it, place it, or offer a way in.
+      await expect(forwardedPage.getByRole("alert")).toHaveText(/session is required/i, { timeout: 15_000 });
+      await expect(forwardedPage.getByRole("heading", { name: eventName })).toHaveCount(0);
+      await expect(forwardedPage.getByRole("button", { name: /join meeting/i })).toHaveCount(0);
+      expect(await forwardedPage.content()).not.toContain("jfKfPfyJRdk");
+      const anonymous = await forwardedPage.request.post(`/api/v1/meetings/occurrences/${occurrenceId}/join`, {
+        data: { intentionalJoin: true, acceptedTerms: [], landingRevision: "a".repeat(64) },
+      });
+      expect(anonymous.status()).toBe(401);
+      expect(await anonymous.text()).not.toContain("jfKfPfyJRdk");
+
+      await forwardedPage.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(participantEmail) });
+      await forwardedPage.getByRole("link", { name: "Sign in to continue" }).click();
+      await openEmailSignIn(forwardedPage);
+      await forwardedPage.getByLabel("Work email").fill(participantEmail);
+      const signInSince = await capturedEmailCount();
+      await forwardedPage.getByRole("button", { name: "Send sign-in link" }).click();
+      const signInEmail = await waitForCapturedEmail(participantEmail, "sign-in link", { since: signInSince });
+      await forwardedPage.goto(extractEmailUrl(signInEmail, "/portal/"));
+      await forwardedPage.reload();
+      await expect(forwardedPage).toHaveURL(new RegExp(`/meetings/join/\\?occurrence=${occurrenceId}$`));
+      await expect(forwardedPage.getByRole("heading", { name: eventName })).toBeVisible();
+      await expect(forwardedPage.getByText("Preparing secure meeting entry…", { exact: true })).toHaveCount(0);
+      await expect(forwardedPage.locator("iframe")).toHaveCount(0);
+      if (!broadcast) {
+        await forwardedPage.route("https://meet.example.test/**", (route) =>
+          route.fulfill({ contentType: "text/plain", body: "External meeting provider" }),
+        );
+        await forwardedPage.getByRole("button", { name: "Agree and join meeting" }).click();
+        await expect(forwardedPage).toHaveURL(`https://meet.example.test/${unique}`);
+      } else {
+        // Deliberately block provider playback: the page must still offer a usable recovery path.
+        await forwardedPage.route("https://www.youtube.com/**", (route) => route.abort());
+        await forwardedPage.getByRole("button", { name: "Agree and join meeting" }).click();
+        const player = forwardedPage.getByTitle(`${eventName} broadcast`);
+        await expect(player).toHaveAttribute("src", "https://www.youtube.com/embed/jfKfPfyJRdk");
+        await expect(forwardedPage.getByRole("link", { name: "Video not playing? Open on YouTube" })).toHaveAttribute(
+          "href",
+          "https://www.youtube.com/live/jfKfPfyJRdk",
+        );
+        await forwardedPage.getByRole("button", { name: "Reload player" }).click();
+        await expect(player).toBeVisible();
+        await forwardedPage.setViewportSize({ width: 1440, height: 1000 });
+        await forwardedPage.evaluate(() => window.scrollTo(0, 0));
+        await forwardedPage.screenshot({ path: test.info().outputPath("broadcast-desktop.png"), fullPage: true });
+        await forwardedPage.setViewportSize({ width: 390, height: 844 });
+        const frame = await player.boundingBox();
+        expect(frame!.width).toBeLessThanOrEqual(390);
+        expect(await forwardedPage.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+        await forwardedPage.evaluate(() => window.scrollTo(0, 0));
+        await forwardedPage.screenshot({ path: test.info().outputPath("broadcast-mobile.png"), fullPage: true });
+
+        await page.goto(`/portal/#/groups/${GROUP_ID}/members`);
+        const participantRow = page.getByRole("row").filter({ hasText: participantEmail });
+        await participantRow.getByRole("button", { name: /^Actions for/ }).click();
+        await page.getByRole("menuitem", { name: "End participation" }).click();
+        await acceptConfirmDialog(page, "End participation");
+        await expect(participantRow).toHaveCount(0);
+        await forwardedPage.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expect(forwardedPage.getByRole("alert")).toContainText("viewing access could not be confirmed");
+        await expect(player).toHaveCount(0);
+        await forwardedPage.reload();
+        await expect(forwardedPage.getByRole("alert")).toContainText("not currently eligible");
+        await expect(forwardedPage.locator("iframe")).toHaveCount(0);
+      }
+    } finally {
+      await forwarded.close();
+    }
+  });
+}

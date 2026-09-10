@@ -23,6 +23,7 @@ import { resolve, relative, dirname } from "node:path";
 import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { entryStylesheets } from "./lib/frontend-entry-assets.mjs";
 import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -80,8 +81,10 @@ const config = {
     minify: !isDev,
     sourcemap: isDev ? "inline" : false,
     rollupOptions: {
+      preserveEntrySignatures: false,
       input: entries,
       output: {
+        strictExecutionOrder: true,
         entryFileNames: isDev ? "[name].js" : "[name].[hash].js",
         chunkFileNames: isDev ? "chunks/[name].js" : "chunks/[name].[hash].js",
         // Stylesheets follow the same rule as the scripts: stable names in a
@@ -102,6 +105,13 @@ const config = {
         // deprecated aliases for it as of rolldown 1.2.
         codeSplitting: {
           groups: [
+            // The visual editor loads only on Edit. Cache its stable engine
+            // layers independently from the form UI and optional table support.
+            { name: "editor-model", includeDependenciesRecursively: false, test: /node_modules[\\/]prosemirror-(model|state|transform)[\\/]/ },
+            { name: "editor-view", includeDependenciesRecursively: false, test: /node_modules[\\/]prosemirror-view[\\/]/ },
+            { name: "editor-tables", includeDependenciesRecursively: false, test: /node_modules[\\/](prosemirror-tables|@tiptap[\\/]extension-table)[\\/]/ },
+            { name: "editor-core", includeDependenciesRecursively: false, test: /node_modules[\\/]@tiptap[\\/]core[\\/]/ },
+            { name: "editor-markdown", includeDependenciesRecursively: false, test: /node_modules[\\/]@tiptap[\\/]markdown[\\/]/ },
             {
               name: "vendor",
               test: /node_modules[\\/]zod[\\/]/,
@@ -156,12 +166,10 @@ function manifestPlugin({ entries, dataDir, root, isDev }) {
         // recorded here on purpose: Vite injects their stylesheets when the
         // chunk loads, which is what keeps component CSS off pages that never
         // reach that component.
-        const entryCss = [...(chunk.viteMetadata?.importedCss ?? [])];
+        const entryCss = entryStylesheets(fileName, bundle);
         const cssUrl = entryCss.length > 0 ? `/js/built/${entryCss[0]}` : null;
         if (entryCss.length > 1) {
-          console.warn(
-            `[build-frontend] entry "${key}" emitted ${entryCss.length} stylesheets; only the first is linked.`,
-          );
+          throw new Error(`Entry "${key}" needs ${entryCss.length} stylesheets; consolidate its static styles before publishing.`);
         }
 
         if (isDev) {

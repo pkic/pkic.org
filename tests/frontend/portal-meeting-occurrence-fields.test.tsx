@@ -4,7 +4,7 @@
  * the occurrence settings form.
  *
  * What is asserted here is what a visual review cannot see: that every control
- * is reachable through its own label's `for`/`id` pair, that the encryption
+ * is reachable through its own label's `for`/`id` pair, that the link-sharing
  * note is attached to the control it explains rather than floating beside it,
  * and that a replacement URL the reader has not typed blocks submission
  * instead of posting an empty string over a configured one.
@@ -92,7 +92,7 @@ describe("meeting occurrence fields", () => {
     const describedBy = url.getAttribute("aria-describedby");
     expect(describedBy).not.toBeNull();
     expect(page.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain(
-      "encrypted and never returned by the API",
+      "Opening the link does not verify attendance.",
     );
   });
 

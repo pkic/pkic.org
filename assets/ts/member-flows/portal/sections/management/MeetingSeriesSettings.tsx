@@ -5,36 +5,29 @@ import {
   eventSeriesResponseSchema,
   eventSeriesUpdateSchema,
   type GroupEventSeries,
+  EVENT_PROFILE_LABELS,
+  EVENT_REGISTRATION_POLICY_LABELS,
+  EVENT_VISIBILITY_LABELS,
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody } from "../../../../ui/Panel";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { TextInput } from "../../../../ui/TextControl";
 import { patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
-import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
-import { defaultFutureDate, isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
+import { MeetingSeriesFields, ELIGIBILITY_LABELS, GUEST_LABELS } from "./MeetingSeriesFields";
+import { defaultFutureDate, isoDateTimeValue } from "./meeting-form-utils";
+import { draftFromSeries, seriesChanges } from "./meeting-series-draft";
+import { useContractForm } from "../../../../hooks/useContractForm";
+import { EditActions } from "../../../../ui/EditActions";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { formatDateTimeInZone } from "../../../../../shared/format-date";
+import { describeRecurrenceShape, matchRecurrenceShape } from "../../../../components/RecurrenceEditor";
 // The `pk-check` trio below is written as class names rather than reached
 // through a component, so this module names their stylesheet itself.
 import "../../../../ui/Field.css";
-
-function draftFromSeries(series: GroupEventSeries): MeetingSeriesDraft {
-  return {
-    name: series.eventName,
-    profileKey: series.profileKey,
-    startsAt: localDateTimeValue(series.startsAt, series.timezone),
-    recurrenceRule: series.recurrenceRule,
-    timezone: series.timezone,
-    durationMinutes: series.durationMinutes,
-    location: series.location ?? "",
-    registrationPolicy: series.registrationPolicy,
-    visibility: series.visibility,
-    memberEligibility: series.memberEligibility ?? "owner_group",
-    guestPolicy: series.guestPolicy ?? "none",
-  };
-}
 
 export function MeetingSeriesSettings({
   groupId,
@@ -48,57 +41,48 @@ export function MeetingSeriesSettings({
   const [draft, setDraft] = useState(() => draftFromSeries(series));
   const [active, setActive] = useState(series.active);
   const [through, setThrough] = useState(() => defaultFutureDate(180, 23, 59, series.timezone));
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [materializing, setMaterializing] = useState(false);
   const [error, setError] = useState("");
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}`;
 
+  const form = useContractForm(eventSeriesUpdateSchema, seriesChanges(series, draft, active));
+  function reset() {
+    setDraft(draftFromSeries(series));
+    setActive(series.active);
+    form.reset();
+    setError("");
+  }
+
   useEffect(() => {
     setDraft(draftFromSeries(series));
     setActive(series.active);
+    setEditing(false);
   }, [series.id, series.updatedAt]);
 
   async function save(event: Event): Promise<void> {
     event.preventDefault();
+    if (!editing || saving) return;
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      const changes: Record<string, unknown> = { expectedUpdatedAt: series.updatedAt };
-      if (draft.name !== series.eventName) changes.eventName = draft.name;
-      if (draft.profileKey !== series.profileKey) changes.profileKey = draft.profileKey;
-      if (series.occurrenceCount === 0) {
-        const startsAt = isoDateTimeValue(draft.startsAt, draft.timezone);
-        if (startsAt !== series.startsAt) changes.startsAt = startsAt;
-        if (draft.recurrenceRule !== series.recurrenceRule) changes.recurrenceRule = draft.recurrenceRule;
-        if (draft.timezone !== series.timezone) changes.timezone = draft.timezone;
-        if (draft.durationMinutes !== series.durationMinutes) changes.durationMinutes = draft.durationMinutes;
-      }
-      const location = draft.location.trim() || null;
-      if (location !== series.location) changes.location = location;
-      if (
-        draft.registrationPolicy !== series.registrationPolicy ||
-        draft.visibility !== series.visibility ||
-        draft.memberEligibility !== (series.memberEligibility ?? "owner_group") ||
-        draft.guestPolicy !== (series.guestPolicy ?? "none")
-      ) {
-        changes.policy = {
-          registrationPolicy: draft.registrationPolicy,
-          visibility: draft.visibility,
-          memberEligibility: draft.memberEligibility,
-          guestPolicy: draft.guestPolicy,
-        };
-      }
-      if (active !== series.active) changes.active = active;
-      if (Object.keys(changes).length === 1) {
+      if (Object.keys(checked.data).length === 1) {
         toast("No meeting series changes to save", "info");
+        setEditing(false);
         return;
       }
-      const input = eventSeriesUpdateSchema.parse(changes);
-      await patchJson(base, input, eventSeriesResponseSchema);
+      await patchJson(base, checked.data, eventSeriesResponseSchema);
       toast("Meeting series updated", "success");
+      setEditing(false);
       await onChanged();
     } catch (caught) {
-      const message = (caught as Error).message;
+      const message = form.refuse(caught);
       setError(message);
       toast(message, "error");
     } finally {
@@ -126,39 +110,83 @@ export function MeetingSeriesSettings({
     }
   }
 
+  const recurrence = matchRecurrenceShape(series.recurrenceRule);
   const activeId = `meeting-series-active-${series.id}`;
   const generateHeadingId = `meeting-series-generate-${series.id}`;
 
   return (
     <div class="pk pk-stack">
-      <form class="pk-stack" onSubmit={(event) => void save(event)}>
-        <MeetingSeriesFields
-          draft={draft}
-          disabled={saving}
-          scheduleLocked={series.occurrenceCount > 0}
-          onChange={setDraft}
-        />
-        {/* A note about the whole form, not the help text of one control:
+      <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void save(event)}>
+        <PanelHeader title="Series settings" headingLevel={3}>
+          <EditActions
+            label="Meeting series actions"
+            editing={editing}
+            saving={saving}
+            saveLabel="Save series"
+            onEdit={() => {
+              reset();
+              setEditing(true);
+            }}
+            onCancel={() => {
+              reset();
+              setEditing(false);
+            }}
+          />
+        </PanelHeader>
+        {editing ? (
+          <>
+            <MeetingSeriesFields
+              draft={draft}
+              disabled={saving}
+              scheduleLocked={series.occurrenceCount > 0}
+              onChange={setDraft}
+              fieldProps={{
+                name: form.of("eventName"),
+                profileKey: form.of("profileKey"),
+                startsAt: form.of("startsAt"),
+                timezone: form.of("timezone"),
+                durationMinutes: form.of("durationMinutes"),
+                location: form.of("location"),
+                registrationPolicy: form.of("policy.registrationPolicy"),
+                visibility: form.of("policy.visibility"),
+                memberEligibility: form.of("policy.memberEligibility"),
+                guestPolicy: form.of("policy.guestPolicy"),
+              }}
+            />
+            {/* A note about the whole form, not the help text of one control:
             `pk-field__help` belongs to a control inside a `pk-field`. */}
-        {series.occurrenceCount > 0 && (
-          <p class="pk-muted pk-small">
-            The recurring schedule is locked after occurrences are generated. Mutable policy, profile, name, location,
-            and active state remain editable.
-          </p>
+            {series.occurrenceCount > 0 && (
+              <p class="pk-muted pk-small">
+                The recurring schedule is locked after occurrences are generated. Mutable policy, profile, name,
+                location, and active state remain editable.
+              </p>
+            )}
+            <Checkbox
+              id={activeId}
+              name="active"
+              checked={active}
+              onChange={(e) => setActive(e.currentTarget.checked)}
+              label="Active series"
+            />
+          </>
+        ) : (
+          <DescriptionList
+            items={[
+              { term: "Meeting name", value: series.eventName },
+              { term: "Event profile", value: EVENT_PROFILE_LABELS[series.profileKey] },
+              { term: "First occurrence", value: formatDateTimeInZone(series.startsAt, series.timezone) },
+              { term: "Repeats", value: recurrence ? describeRecurrenceShape(recurrence) : series.recurrenceRule },
+              { term: "Time zone", value: series.timezone },
+              { term: "Duration", value: `${series.durationMinutes} minutes` },
+              { term: "Location", value: series.location },
+              { term: "Registration", value: EVENT_REGISTRATION_POLICY_LABELS[series.registrationPolicy] },
+              { term: "Visibility", value: EVENT_VISIBILITY_LABELS[series.visibility] },
+              { term: "Attendee eligibility", value: ELIGIBILITY_LABELS[series.memberEligibility ?? "owner_group"] },
+              { term: "External guests", value: GUEST_LABELS[series.guestPolicy ?? "none"] },
+              { term: "Status", value: series.active ? "Active" : "Inactive" },
+            ]}
+          />
         )}
-        <Checkbox
-          id={activeId}
-          checked={active}
-          onChange={(e) => setActive(e.currentTarget.checked)}
-          label="Active series"
-        />
-        {/* `loading` rather than `disabled`: a disabled control loses focus,
-            which throws a screen-reader user out of the form mid-save. */}
-        <div class="pk-cluster">
-          <Button type="submit" variant="primary" size="sm" loading={saving}>
-            {saving ? "Saving…" : "Save series"}
-          </Button>
-        </div>
         {error && <ErrorAlert error={error} />}
       </form>
       {/* The rule the Bootstrap version drew with `border-top` is the panel's

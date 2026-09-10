@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyProfile, signInToPortal } from "./helpers/portal-auth";
 
 const OUT = process.env["CAPTURE_DIR"];
 
@@ -9,7 +9,7 @@ test("captures my profile", async ({ page }) => {
 
   await signInToPortal(page, "paul.vanbrouwershaven@pkic.org");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("/portal/#/profile");
+  await openMyProfile(page);
   await expect(page.getByRole("heading", { name: "Paul van Brouwershaven", level: 2 })).toBeVisible();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/my-profile.png`, fullPage: true });

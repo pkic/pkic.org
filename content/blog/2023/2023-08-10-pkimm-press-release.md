@@ -7,6 +7,15 @@ categories:
 keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
 tags: [PKIMM, Maturity model, Press Release]
 
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 ## The model promises comprehensive assessment, benchmarking, and optimization of PKI implementations

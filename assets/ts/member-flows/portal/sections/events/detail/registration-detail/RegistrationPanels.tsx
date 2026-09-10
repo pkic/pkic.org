@@ -129,7 +129,7 @@ export function RegistrationAuditLogSection({ slug, regId }: { slug: string; reg
       caption="Registration history"
       endpoint={eventRegistrationResourcePath(slug, regId, "audit")}
       actionCell={(entry) => <code class="pk-small">{entry.action}</code>}
-      detailsCell={(entry) => <DetailsSummary value={entry.details} />}
+      detailsCell={(entry) => <DetailsSummary value={entry.details} layout="inline" />}
     />
   );
 }

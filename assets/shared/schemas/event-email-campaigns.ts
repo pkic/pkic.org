@@ -6,13 +6,34 @@ import { attendanceTypeSchema } from "./registration";
 export const eventEmailCampaignAudienceSchema = z.enum(["attendees", "speakers"]);
 export type EventEmailCampaignAudience = z.infer<typeof eventEmailCampaignAudienceSchema>;
 
+/**
+ * The campaign's own vocabularies, each named rather than written inline in
+ * the shape below, so the composer can offer exactly what this contract
+ * accepts instead of restating the values in its markup.
+ */
+export const eventEmailCampaignDayWaitlistFilterSchema = z.enum([
+  "all",
+  "active",
+  "waiting",
+  "offered",
+  "accepted",
+  "none",
+]);
+export type EventEmailCampaignDayWaitlistFilter = z.infer<typeof eventEmailCampaignDayWaitlistFilterSchema>;
+
+export const eventEmailCampaignSpeakerStatusFilterSchema = z.enum(["all", "confirmed", "invited", "pending"]);
+export type EventEmailCampaignSpeakerStatusFilter = z.infer<typeof eventEmailCampaignSpeakerStatusFilterSchema>;
+
+export const eventEmailCampaignSendModeSchema = z.enum(["personal", "bcc_batch"]);
+export type EventEmailCampaignSendMode = z.infer<typeof eventEmailCampaignSendModeSchema>;
+
 export const eventEmailCampaignFilterSchema = z.object({
   audience: eventEmailCampaignAudienceSchema,
   attendeeStatus: eventRegistrationStatusFilterSchema.optional(),
   attendanceType: z.union([z.literal("all"), attendanceTypeSchema]).optional(),
   dayDate: z.string().trim().max(20).optional(),
-  dayWaitlistStatus: z.enum(["all", "active", "waiting", "offered", "accepted", "none"]).optional(),
-  speakerStatus: z.enum(["all", "confirmed", "invited", "pending"]).optional(),
+  dayWaitlistStatus: eventEmailCampaignDayWaitlistFilterSchema.optional(),
+  speakerStatus: eventEmailCampaignSpeakerStatusFilterSchema.optional(),
 });
 export type EventEmailCampaignFilter = z.infer<typeof eventEmailCampaignFilterSchema>;
 
@@ -22,7 +43,7 @@ export const eventEmailCampaignPreviewInputSchema = z.object({
   customText: z.string().trim().max(100_000).optional(),
   bodyContent: z.string().trim().max(100_000).optional(),
   messageType: emailMessageTypeSchema.optional(),
-  sendMode: z.enum(["personal", "bcc_batch"]),
+  sendMode: eventEmailCampaignSendModeSchema,
   batchSize: z.number().int().min(1).max(500).default(50),
   filter: eventEmailCampaignFilterSchema,
 });

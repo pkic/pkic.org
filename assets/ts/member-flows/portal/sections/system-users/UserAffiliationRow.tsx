@@ -1,3 +1,4 @@
+import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * One tie between a person and an organization, stated and managed in place.
  *
@@ -25,7 +26,6 @@ import { successResponseSchema } from "../../../../../shared/schemas/api-common"
 import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { fmtDate, toast } from "../../ui";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { AffiliationRow } from "../../../../ui/AffiliationRow";
 import { Avatar } from "../../../../ui/Avatar";
 import { Button } from "../../../../ui/Button";
@@ -53,8 +53,10 @@ export function UserAffiliationRow({
    */
   summarized?: boolean;
 }) {
+  const categories = useMembershipCategoryLabels();
   const [busy, setBusy] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [editingMembership, setEditingMembership] = useState(false);
   const [jobTitle, setJobTitle] = useState(membership.jobTitle ?? "");
   const [biography, setBiography] = useState(membership.biography ?? "");
   const [links, setLinks] = useState(membership.links);
@@ -197,6 +199,21 @@ export function UserAffiliationRow({
         ),
     });
   }
+  if (categoryEditable || statusEditable) {
+    /*
+     * The category and the standing are stated on the row already, as the two
+     * badges beside the name. They used to be a pair of open selects in the
+     * footer as well — a record arriving in edit mode (#47), and one that
+     * wrote on every change, so a stray click on a `<select>` changed a
+     * person's membership with nothing to confirm and nothing to undo.
+     */
+    rowActions.push({
+      id: "membership",
+      label: editingMembership ? "Close membership editor" : "Edit membership…",
+      disabled: busy,
+      onSelect: () => setEditingMembership((current) => !current),
+    });
+  }
   rowActions.push({
     id: "end",
     label: "End identity…",
@@ -228,7 +245,7 @@ export function UserAffiliationRow({
        */
       marker={
         <span class="pk-cluster">
-          <ToneBadge tone="neutral">{membership.membershipCategory}</ToneBadge>
+          <span class="pk-small pk-muted">{categories.label(membership.membershipCategory)}</span>
           <Badge status={membership.status} />
           {membership.organizationId && membership.showOnOrgProfile && (
             <span class="pk-small pk-muted">Shown on the organization page</span>
@@ -241,7 +258,7 @@ export function UserAffiliationRow({
       }
       footer={
         <>
-          {(categoryEditable || statusEditable) && (
+          {editingMembership && (categoryEditable || statusEditable) && (
             <div class="pk-grid pk-grid--tight">
               {categoryEditable && (
                 <Field label="Category">
@@ -257,7 +274,7 @@ export function UserAffiliationRow({
                       {MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
                         (category) => (
                           <option key={category} value={category}>
-                            {category}
+                            {categories.label(category)}
                           </option>
                         ),
                       )}

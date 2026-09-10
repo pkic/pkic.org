@@ -10,7 +10,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyProfile, openProfileEditor, signInToPortal } from "./helpers/portal-auth";
 import { submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 
 interface Profile {
@@ -109,10 +109,15 @@ test("a person representing two organizations can switch between both contexts",
   const target = profile.activeIdentities.find((identity) => identity.organizationName !== profile.organizationName);
   expect(target, "a second distinct context must exist to switch to").toBeTruthy();
 
-  await page.goto("/portal/#/profile");
+  // The identity-scoped fields live on the person's own record — the same
+  // page anybody else's record is — and switching which identity the portal
+  // acts as is a session setting, so it lives in Account Settings. The walk
+  // below moves between the two the way a member does.
+  await openMyProfile(page);
   // The record opens with the member, not a page title: ProfileHeader names
   // the subject, and the sidebar had already said where we are.
   await expect(page.locator(".pk-profile-header h2")).toBeVisible();
+  await openProfileEditor(page);
   await page
     .getByRole("textbox", { name: "Job title for this organization", exact: true })
     .fill("Security lead in the first capacity");
@@ -129,6 +134,7 @@ test("a person representing two organizations can switch between both contexts",
     page.getByRole("button", { name: "Save changes" }).click(),
   ]);
 
+  await page.goto("/portal/#/account");
   const targetCapacity = page.getByRole("listitem").filter({ hasText: target!.organizationName! });
   const switched = page.waitForResponse(
     (response) =>
@@ -136,6 +142,9 @@ test("a person representing two organizations can switch between both contexts",
   );
   await targetCapacity.getByRole("button", { name: "Switch" }).click();
   expect((await switched).status()).toBe(200);
+
+  await openMyProfile(page);
+  await openProfileEditor(page);
   await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
     "Delegate",
   );
@@ -166,6 +175,7 @@ test("a person representing two organizations can switch between both contexts",
     links: ["https://example.test/second-capacity"],
   });
 
+  await page.goto("/portal/#/account");
   const firstCapacity = page.getByRole("listitem").filter({ hasText: profile.organizationName! });
   const switchedBack = page.waitForResponse(
     (response) =>
@@ -173,6 +183,9 @@ test("a person representing two organizations can switch between both contexts",
   );
   await firstCapacity.getByRole("button", { name: "Switch" }).click();
   expect((await switchedBack).status()).toBe(200);
+
+  await openMyProfile(page);
+  await openProfileEditor(page);
   await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
     "Security lead in the first capacity",
   );

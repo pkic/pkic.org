@@ -21,7 +21,32 @@
   }
 
   .pk-field__required {
+    /* Its own word, not the last letter of the label's. */
+    margin-inline-start: 0.2em;
     color: var(--pk-danger-ink);
+  }
+
+  /*
+   * A field whose name belongs to a set of controls rather than to one. The
+   * browser's own fieldset frame and padding go; a `<legend>` is positioned on
+   * that frame by default, so it is floated back into the flow to sit where a
+   * label sits.
+   */
+  .pk-field--group {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  .pk-field--group > .pk-field__label {
+    float: inline-start;
+    width: 100%;
+    padding: 0;
+  }
+
+  .pk-field--group > * + * {
+    clear: both;
   }
 
   /* The asterisk is decorative; the word behind it is what gets announced. */

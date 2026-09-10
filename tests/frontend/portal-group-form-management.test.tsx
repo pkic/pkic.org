@@ -149,7 +149,8 @@ describe("group form management", () => {
     );
     await settle();
 
-    expect(container.textContent).toContain("Save availability");
+    expect(container.querySelector('button[aria-label="Form availability actions"]')).not.toBeNull();
+    expect(container.querySelector("input")).toBeNull();
     expect(container.textContent).not.toContain("Edit form");
     // No editor is mounted at all, so it asks nothing.
     expect(container.querySelector('input[placeholder="What are you asking?"]')).toBeNull();
@@ -245,7 +246,7 @@ describe("group form management", () => {
 
     // The panel is labelled by the heading that names the form, so the row it
     // expands inside is not an unnamed region among the others.
-    const panel = container.querySelector("section")!;
+    const panel = container.querySelector("header[aria-labelledby]")!;
     const headingId = panel.getAttribute("aria-labelledby")!;
     expect(container.querySelector(`[id="${headingId}"]`)?.textContent).toContain("Architecture survey");
 
@@ -282,6 +283,58 @@ describe("group form management", () => {
 
     const status = container.querySelector('[role="status"]')!;
     expect(status.textContent).toContain("No actions are available for this form.");
+  });
+
+  it("tells a submitter when a form opens instead of hiding it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const body = detail(GROUP_ID, ["view_definition", "submit", "view_responses"]);
+        return json({
+          ...body,
+          placement: { ...body.placement, opensAt: "2099-03-04T08:00:00.000Z" },
+          acceptingResponses: false,
+        });
+      }),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    // The tab is still theirs — they hold the capability — and it explains
+    // itself rather than disappearing without a reason.
+    expect(tabs(container).map((tab) => tab.textContent)).toContain("Respond");
+    const status = container.querySelector('[role="status"]')!;
+    expect(status.textContent).toContain("This form is not open yet");
+    // The window is transported in UTC and shown on the reader's clock, so the
+    // sentence must not simply echo the stored instant back at them.
+    expect(status.textContent).not.toContain("2099-03-04T08:00:00.000Z");
+    expect(status.textContent).toContain(
+      new Date("2099-03-04T08:00:00.000Z").toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }),
+    );
+    // No questions are offered while the window is shut.
+    expect(container.querySelector("form")).toBeNull();
+  });
+
+  it("tells a submitter when a form closed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const body = detail(GROUP_ID, ["view_definition", "submit"]);
+        return json({
+          ...body,
+          placement: { ...body.placement, opensAt: "2020-01-01T00:00:00.000Z", closesAt: "2020-02-01T17:00:00.000Z" },
+          acceptingResponses: false,
+        });
+      }),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    const status = container.querySelector('[role="status"]')!;
+    expect(status.textContent).toContain("This form is closed");
+    expect(status.textContent).toContain(
+      new Date("2020-02-01T17:00:00.000Z").toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }),
+    );
   });
 
   it("opens the tab given by an initial resourceTab", async () => {

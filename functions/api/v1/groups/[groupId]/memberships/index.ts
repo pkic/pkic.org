@@ -57,7 +57,7 @@ export const GroupMembershipsList = openApiRoute(groupMembershipsListRouteSchema
 /**
  * A seat that already ended is history rather than a join: it is recorded
  * closed through the capacity the person once held. Everything else is a
- * live join with an optional title and backdated start.
+ * live join with an optional backdated start.
  */
 export const GroupMemberAdd = openApiRoute(groupMemberAddRouteSchema, async (c: AdminContext, data) => {
   const db = requestDb(c);
@@ -65,13 +65,12 @@ export const GroupMemberAdd = openApiRoute(groupMemberAddRouteSchema, async (c: 
   const group = await getGroup(db, data.params.groupId);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, admin, group.id);
-  const { capacitySelection, title, joinedAt, leftAt } = data.body;
+  const { capacitySelection, joinedAt, leftAt } = data.body;
   if (leftAt) {
     return json(
       await recordFormerGroupMembership(db, group.id, admin, {
         targetUserId: data.params.userId,
         selection: capacitySelection,
-        title,
         joinedAt: joinedAt ?? leftAt,
         leftAt,
       }),
@@ -83,7 +82,6 @@ export const GroupMemberAdd = openApiRoute(groupMemberAddRouteSchema, async (c: 
       actorDatabaseUserId: admin.identityType === "user" ? admin.id : null,
       targetUserId: data.params.userId,
       selection: capacitySelection,
-      title,
       joinedAt,
       source: "staff",
       allowManaged: true,

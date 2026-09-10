@@ -16,7 +16,7 @@
  */
 
 import type { RefObject } from "preact";
-import { useCallback, useEffect, useLayoutEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useLayoutEffect } from "preact/hooks";
 
 export interface PopupPosition {
   top: number;
@@ -60,6 +60,20 @@ export function applyPopupPosition(popup: HTMLElement, position: PopupPosition):
  * and no clamp. Below the fold that put the matches off-screen, where they
  * could be seen but never clicked.
  *
+ * Measuring and writing happen in **one** layout effect, with no state
+ * between them. Holding the position in state cost a render: the popup was
+ * mounted at whatever `position: fixed` with no `top`/`left` resolves to —
+ * its static place inside the row — painted there, and only then moved to
+ * the measured spot. That is the jump in issue #36. A layout effect runs
+ * after the DOM is mutated and before the browser paints, so doing both
+ * there means the popup is never painted anywhere but where it belongs.
+ *
+ * The order inside the effect matters too. `min-width` comes from the
+ * anchor and can widen the popup, and a wider popup wraps less and is
+ * therefore shorter — so it is written *before* the height that decides
+ * whether the popup flips above the anchor is measured. Measuring first
+ * decided the flip on a height the popup was about to stop having.
+ *
  * `open` gates everything; `revision` is any value that changes when the
  * popup's own size can have changed, which is what forces a re-measure.
  */
@@ -77,43 +91,62 @@ export function usePopupPlacement({
   /** Changes whenever the popup's measured size can have changed. */
   revision?: string | number;
 }): void {
-  const [position, setPosition] = useState<PopupPosition | null>(null);
-
-  const measure = useCallback((): PopupPosition | null => {
+  const place = useCallback((): void => {
     const anchor = anchorRef.current;
     const popup = popupRef.current;
-    if (!anchor || !popup) return null;
-    return measurePopupPosition(anchor.getBoundingClientRect(), popup.getBoundingClientRect(), align);
+    if (!anchor || !popup) return;
+    const anchorRect = anchor.getBoundingClientRect();
+    popup.style.setProperty("min-width", `${anchorRect.width}px`);
+    applyPopupPosition(popup, measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align));
   }, [align, anchorRef, popupRef]);
 
   useLayoutEffect(() => {
-    const popup = popupRef.current;
-    if (!popup || !position) return;
-    applyPopupPosition(popup, position);
-  }, [popupRef, position]);
+    if (!open) return;
+    place();
 
-  // Measured once the popup is in the document — the first render after
-  // opening, when there is finally a box to measure — and again whenever its
-  // contents change size underneath it.
-  useLayoutEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return;
-    }
-    setPosition(measure());
-  }, [open, measure, revision]);
+    /*
+     * And again once the browser has settled, because the first pass can
+     * measure a page that is still moving.
+     *
+     * A layout effect runs before paint, which is what keeps the popup from
+     * being seen at its static spot — but "before paint" is also before a
+     * webfont swap has reflowed the popup's own text and before a table has
+     * finished settling its column widths. Measured then, a row menu in the
+     * users list came out 49px right of its trigger and stayed there: the
+     * arithmetic was right and the rectangles it was given were about to stop
+     * being true. Issue #36 is what that looks like to a reader.
+     *
+     * A second pass on the next frame corrects it, and the observer below
+     * catches anything slower. Both re-run the same placement, so neither can
+     * disagree with the first about where the popup belongs.
+     */
+    const frame = requestAnimationFrame(place);
+
+    /*
+     * The popup's own size is the thing most likely to change under it — a
+     * font finishing, an item's label arriving. `revision` covers the changes
+     * a caller knows about; this covers the ones it does not.
+     */
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => place());
+    if (observer && popupRef.current) observer.observe(popupRef.current);
+    if (observer && anchorRef.current) observer.observe(anchorRef.current);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [open, place, revision, anchorRef, popupRef]);
 
   // A fixed popup does not move with its anchor, so it is re-placed as the
   // page moves. Closing instead would mean any scroll momentum — unavoidable
   // on a touch screen — eats the popup on the way to it.
   useEffect(() => {
     if (!open) return;
-    const onReflow = () => setPosition(measure());
-    window.addEventListener("resize", onReflow);
-    window.addEventListener("scroll", onReflow, true);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
     return () => {
-      window.removeEventListener("resize", onReflow);
-      window.removeEventListener("scroll", onReflow, true);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
-  }, [open, measure]);
+  }, [open, place]);
 }

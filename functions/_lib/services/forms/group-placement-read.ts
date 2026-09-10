@@ -22,6 +22,7 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 import { getFormDefinitionByPlacement } from "./read";
+import { formSubmissionWindowOpenSql } from "./submission-window";
 
 export type GroupFormViewer = GroupResourceViewer;
 
@@ -100,8 +101,7 @@ const FORM_PLACEMENT_SELECT = `SELECT
   placement.closes_at, placement.created_at AS placement_created_at,
   placement.updated_at AS placement_updated_at,
   CASE WHEN form.status = 'active' AND placement.active = 1
-         AND (placement.opens_at IS NULL OR unixepoch(placement.opens_at) <= unixepoch())
-         AND (placement.closes_at IS NULL OR unixepoch(placement.closes_at) > unixepoch())
+         AND ${formSubmissionWindowOpenSql("placement")}
        THEN 1 ELSE 0 END AS accepting_responses,
   GROUP_CONCAT(DISTINCT grant_row.capability) AS granted_capabilities`;
 

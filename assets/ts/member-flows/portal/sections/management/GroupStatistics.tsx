@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import {
+  GROUP_STATS_SCOPES,
   groupStatsQuerySchema,
   groupStatsResponseSchema,
   type GroupStatsQuery,
@@ -25,6 +26,12 @@ interface DateWindow {
 }
 
 const DEFAULT_WINDOW: DateWindow = { scope: "current", from: "", to: "" };
+
+/** Each scope is described by what it counts, not by the word the contract uses for it. */
+const SCOPE_LABELS: Record<GroupStatsQuery["scope"], string> = {
+  current: "Participate now",
+  historical: "Participated during the window",
+};
 
 function toUtcBoundary(value: string): string | undefined {
   return value ? `${value}T00:00:00.000Z` : undefined;
@@ -107,8 +114,11 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                     value={draft.scope}
                     onChange={(event) => updateDraft("scope", event.currentTarget.value)}
                   >
-                    <option value="current">Participate now</option>
-                    <option value="historical">Participated during the window</option>
+                    {GROUP_STATS_SCOPES.map((scope) => (
+                      <option key={scope} value={scope}>
+                        {SCOPE_LABELS[scope]}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>

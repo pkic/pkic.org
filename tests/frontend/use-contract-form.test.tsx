@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { httpUrlSchema } from "../../assets/shared/schemas/urls";
 import { useContractForm } from "../../assets/ts/hooks/useContractForm";
+import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { Field } from "../../assets/ts/ui/Field";
 import { TextInput } from "../../assets/ts/ui/TextControl";
@@ -95,6 +96,21 @@ afterEach(() => {
 });
 
 describe("useContractForm", () => {
+  it("keeps individual nested and repeated field errors alongside group errors", () => {
+    const result = z
+      .object({
+        tiers: z.array(z.object({ tierName: z.string().min(1, "Name this tier") })),
+        policy: z.object({ guestPolicy: z.enum(["closed", "invitation"]) }),
+      })
+      .safeParse({ tiers: [{ tierName: "Community" }, { tierName: "" }], policy: { guestPolicy: "unknown" } });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const { fields } = normalizeValidation(result.error);
+    expect(fields["tiers.1.tierName"]).toBe("Name this tier");
+    expect(fields["tiers.0.tierName"]).toBeUndefined();
+    expect(fields["policy.guestPolicy"]).toBeTruthy();
+    expect(fields.tiers).toBe("Name this tier");
+  });
   it("shows nothing until a field is touched, then the contract's verdict on that field alone", async () => {
     const root = mount();
     // The body is invalid from the start (no name), but an untouched form is

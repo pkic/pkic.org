@@ -8,6 +8,11 @@ export const VOTE_FLOW = {
     "A group puts a question or an election to its eligible members, each votes once per capacity they hold, and the result is only counted inside the window.",
   personas: ["group manager", "eligible member", "member representing two organizations"],
   steps: [
+    {
+      id: "5.12",
+      title: "A proposal becomes a reachable vote through endorsement or manager approval",
+      status: "covered",
+    },
     { id: "5.1", title: "A person representing two organizations casts a separate ballot for each", status: "covered" },
     { id: "5.2", title: "Changing your mind replaces your ballot rather than adding one", status: "covered" },
     { id: "5.3", title: "An election is decided by choosing from the candidate list", status: "covered" },

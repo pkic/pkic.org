@@ -10,6 +10,7 @@ import { Button } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { Select, TextInput } from "../../../../../ui/TextControl";
+import { usePortalHashLocation } from "../../../hash-location";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
@@ -32,9 +33,14 @@ const ROLE_LABELS: Record<EventTeamRole, string> = {
   volunteer: "Volunteer",
 };
 
-export function Team({ slug }: { slug: string }) {
+/** Reserved team segment that routes to the add page instead of the list. */
+const NEW_TEAM_MEMBER_SEGMENT = "new";
+
+export function Team({ slug, teamSegment }: { slug: string; teamSegment?: string }) {
+  const [, navigate] = usePortalHashLocation();
+  const teamPath = `/events/${encodeURIComponent(slug)}/settings/team`;
+  const showAddForm = teamSegment === NEW_TEAM_MEMBER_SEGMENT;
   const tableRef = useRef<ApiTableActions | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<EventTeamRole>("organizer");
   const [newExpiresAt, setNewExpiresAt] = useState("");
@@ -82,29 +88,31 @@ export function Team({ slug }: { slug: string }) {
         setNewEmail("");
         setNewExpiresAt("");
         setAddError("");
-        setShowAddForm(false);
-        await tableRef.current?.reload();
+        // Back to the list, which fetches on its own when it mounts; there is
+        // no table on this page to reload.
+        navigate(teamPath);
       },
       onError: setAddError,
     });
   }
 
-  return (
-    <div class="pk pk-stack">
-      {showAddForm && (
-        <Panel>
-          <PanelHeader title="Add team member" headingLevel={4}>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setShowAddForm(false);
-                setAddError("");
-              }}
-            >
-              Cancel
-            </Button>
-          </PanelHeader>
+  function leaveAddPage(): void {
+    setAddError("");
+    navigate(teamPath);
+  }
+
+  if (showAddForm) {
+    return (
+      <div class="pk pk-stack">
+        {/* The page's way back: adding has its own address, so leaving it is
+            navigation rather than the disappearance of a layer. */}
+        <div class="pk-cluster">
+          <Button size="sm" onClick={leaveAddPage} disabled={adding}>
+            ← All team members
+          </Button>
+        </div>
+        <Panel aria-label="Add team member">
+          <PanelHeader title="Add team member" headingLevel={2} />
           <PanelBody>
             <form class="pk-stack" aria-label="Add team member" onSubmit={(e) => void handleAdd(e)}>
               {/* One `disabled` on the group rather than one per control: the
@@ -153,12 +161,19 @@ export function Team({ slug }: { slug: string }) {
                 <Button type="submit" variant="primary" size="sm" loading={adding}>
                   {adding ? "Adding…" : "Add"}
                 </Button>
+                <Button size="sm" onClick={leaveAddPage} disabled={adding}>
+                  Cancel
+                </Button>
               </div>
             </form>
           </PanelBody>
         </Panel>
-      )}
+      </div>
+    );
+  }
 
+  return (
+    <div class="pk pk-stack">
       <ApiDataTable
         caption="Event team members"
         endpoint={`/api/v1/events/${encodeURIComponent(slug)}/roles`}
@@ -167,7 +182,10 @@ export function Team({ slug }: { slug: string }) {
         resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="Search email or role…"
-        createAction={{ label: "Add team member", onSelect: () => setShowAddForm(true) }}
+        createAction={{
+          label: "Add team member",
+          onSelect: () => navigate(`${teamPath}/${NEW_TEAM_MEMBER_SEGMENT}`),
+        }}
         actionsRef={tableRef}
         columns={[
           { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },

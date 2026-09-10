@@ -9,6 +9,7 @@
 import type { ComponentChildren, JSX } from "preact";
 
 import "./Panel.css";
+import { BreadcrumbBranch } from "./BreadcrumbScope";
 
 export interface PanelProps extends JSX.HTMLAttributes<HTMLElement> {
   /**
@@ -37,16 +38,26 @@ export interface PanelHeaderProps extends JSX.HTMLAttributes<HTMLElement> {
   title: string;
   /** The semantic heading level. Defaults to 3 to support nesting. */
   headingLevel?: 2 | 3 | 4;
+  /** Use this page/form title as the current breadcrumb in a containing workspace. */
+  breadcrumb?: boolean;
   children?: ComponentChildren;
 }
 
-export function PanelHeader({ title, headingLevel = 3, class: className, children, ...rest }: PanelHeaderProps) {
+export function PanelHeader({
+  title,
+  headingLevel = 3,
+  breadcrumb = false,
+  class: className,
+  children,
+  ...rest
+}: PanelHeaderProps) {
   const classes = ["pk-panel__header", className].filter(Boolean).join(" ");
 
   const HeadingTag = `h${headingLevel}` as const as keyof JSX.IntrinsicElements;
 
   return (
     <header class={classes} {...rest}>
+      {breadcrumb && <BreadcrumbBranch items={[{ label: title }]} />}
       <HeadingTag class="pk-panel__title">{title}</HeadingTag>
       {children && <div class="pk-panel__toolbar">{children}</div>}
     </header>

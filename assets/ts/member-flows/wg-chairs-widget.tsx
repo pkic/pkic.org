@@ -9,7 +9,7 @@
  * endpoint, with public photo/profile-link/organization enrichment.
  *
  * Two render modes, chosen via the mount's `data-mode` attribute — both use
- * the same person-card.html-style ring card, differing only in avatar size
+ * the same PublicPersonCard ring card, differing only in avatar size
  * and page wrapper:
  *   - "compact" (default) — layouts/partials/wg/chairs-app.html's sidebar
  *     mount on the public WG page, wrapped in the "Working Group Leadership"

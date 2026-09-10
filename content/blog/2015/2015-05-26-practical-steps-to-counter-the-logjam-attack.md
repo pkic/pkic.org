@@ -24,6 +24,14 @@ tags:
 title: Practical Steps to Counter the Logjam Attack
 
 
+authorProfiles:
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
 ---
 Another flaw has been found in the basic encryption algorithms that secure the Internet. This flaw, named the Logjam attack by its discoverers (researchers from various universities and companies), allows an attacker that can carry out man-in-the-middle (MitM) attacks to weaken the encryption used in secure connections (such as HTTPS, SSH, and VPNs). In theory, this means that an attacker (with sufficient resources) can break the encryption and read the “secure” traffic.
 

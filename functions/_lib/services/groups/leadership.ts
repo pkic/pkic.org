@@ -13,6 +13,8 @@ import type {
   GroupLeadershipAssignInput,
   GroupLeadershipListResponse,
   GroupLeadershipRoleId,
+  GroupLeadershipTitleOptions,
+  GroupLeadershipTitles,
   GroupLeadershipUpdateInput,
 } from "../../../../assets/shared/schemas/groups";
 import { GROUP_LEADERSHIP_ROLE_IDS, defaultGroupLeadershipTitle } from "../../../../assets/shared/schemas/groups";
@@ -86,7 +88,7 @@ function mapLeadership(row: LeadershipRow): GroupLeadershipAssignment {
     userName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     email: row.email,
     jobTitle: row.job_title,
-    headshotUrl: publicUserHeadshotPath(row.headshot_r2_key),
+    headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     roleId: row.role_id,
     title: row.title,
     sourceGroup: {
@@ -191,26 +193,58 @@ async function listPastLeadership(db: DatabaseLike, groupId: string): Promise<Gr
   return rows.map(mapLeadership);
 }
 
+/**
+ * The title vocabulary offered for each role: the group type's own configured
+ * title first, then the active reference rows in their curated order, with no
+ * repeats.
+ *
+ * The type's title leads whether or not it is also a reference row, because
+ * it is what this particular group calls the role; the reference table is the
+ * shared vocabulary a manager reaches past it for (issue #29). Neither list
+ * is compiled into the frontend.
+ */
+async function leadershipTitleOptions(
+  db: DatabaseLike,
+  titles: GroupLeadershipTitles,
+): Promise<GroupLeadershipTitleOptions> {
+  const rows = await all<{ role_id: GroupLeadershipRoleId; title: string }>(
+    db,
+    `SELECT role_id, title FROM group_leadership_titles
+      WHERE active = 1 AND role_id IN ('role-group_lead', 'role-group_deputy_lead')
+      ORDER BY role_id, sort_order, title`,
+  );
+  const forRole = (roleId: GroupLeadershipRoleId): string[] => [
+    ...new Set([
+      defaultGroupLeadershipTitle(titles, roleId),
+      ...rows.filter((row) => row.role_id === roleId).map((row) => row.title),
+    ]),
+  ];
+  return { lead: forRole("role-group_lead"), deputyLead: forRole("role-group_deputy_lead") };
+}
+
 export async function listEffectiveGroupLeadership(
   db: DatabaseLike,
   groupIdOrSlug: string,
 ): Promise<GroupLeadershipListResponse> {
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
-  const titles = await first<{ lead_title: string; deputy_lead_title: string }>(
+  const typeTitles = await first<{ lead_title: string; deputy_lead_title: string }>(
     db,
     "SELECT lead_title, deputy_lead_title FROM group_types WHERE key = ?",
     [group.type.key],
   );
-  if (!titles) throw new AppError(500, "GROUP_TYPE_MISSING", "The group's type is not configured");
-  const [assignments, past] = await Promise.all([
+  if (!typeTitles) throw new AppError(500, "GROUP_TYPE_MISSING", "The group's type is not configured");
+  const titles = { lead: typeTitles.lead_title, deputyLead: typeTitles.deputy_lead_title };
+  const [titleOptions, assignments, past] = await Promise.all([
+    leadershipTitleOptions(db, titles),
     listCurrentLeadership(db, group.id),
     listPastLeadership(db, group.id),
   ]);
   return {
     group: { id: group.id, slug: group.slug, name: group.name, type: group.type },
     governanceInheritanceMode: group.governanceInheritanceMode,
-    titles: { lead: titles.lead_title, deputyLead: titles.deputy_lead_title },
+    titles,
+    titleOptions,
     assignments,
     past,
   };

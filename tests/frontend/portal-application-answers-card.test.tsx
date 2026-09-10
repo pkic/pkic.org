@@ -85,7 +85,7 @@ describe("membership application answers card", () => {
 
     expect(termNames(page)).toEqual([
       "Role / Job title",
-      "LinkedIn",
+      "Professional profile",
       "Organization website",
       "About yourself",
       "About organization",
@@ -147,13 +147,24 @@ describe("membership application answers card", () => {
     expect(answerTo(page, "Wants to present").textContent).toBe("Yes");
     expect(answerTo(page, "Legal agreements").textContent).toBe("Code of Conduct, IPR Policy");
 
-    // A bare host gains the scheme it needs to be a link at all, and the
-    // reader still sees what they typed.
-    const linkedin = answerTo(page, "LinkedIn").querySelector("a")!;
-    expect(linkedin.getAttribute("href")).toBe("https://linkedin.com/in/example");
-    expect(linkedin.textContent).toBe("linkedin.com/in/example");
+    /*
+     * The applicant's own profile, shown as the site it points at rather than
+     * as the address they typed — the field takes any professional profile,
+     * not only LinkedIn, and issue #13 is that a link is read as "where".
+     * A bare host still gains the scheme it needs to be a link at all.
+     */
+    const profile = answerTo(page, "Professional profile").querySelector("a")!;
+    expect(profile.getAttribute("href")).toBe("https://linkedin.com/in/example");
+    expect(profile.querySelector(".pk-link-list__label")?.textContent).toBe("LinkedIn");
+    expect(profile.querySelector(".pk-link-list__mark")?.getAttribute("aria-hidden")).toBe("true");
+    expect(profile.textContent).not.toContain("linkedin.com/in/example");
     // An outbound link opened in a new context does not hand the opener over.
-    expect(linkedin.getAttribute("rel")).toBe("noreferrer");
+    expect(profile.getAttribute("rel")).toContain("noreferrer");
+
+    // The organization's website stays an address a reviewer reads and checks,
+    // minus the scheme every other address row also drops.
+    const website = answerTo(page, "Organization website").querySelector("a")!;
+    expect(website.textContent).toBe("example.test");
 
     const groups = answerTo(page, "Working groups requested").querySelectorAll("li");
     expect([...groups].map((item) => item.textContent)).toEqual(["Working Group One", "Working Group Two"]);

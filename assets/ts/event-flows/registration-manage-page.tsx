@@ -1,3 +1,4 @@
+import { applyConfirmedRegistrationIdentity } from "./registration-manage-identity";
 import { Fragment, render } from "preact";
 import { getJson, patchJson } from "../shared/api-client";
 import { formatDateTime } from "../shared/ui";
@@ -251,6 +252,8 @@ async function main(): Promise<void> {
     customFieldsSection.hidden = true;
   }
 
+  if (manageData.identityId) applyConfirmedRegistrationIdentity(form, user);
+
   // ── Day attendance ────────────────────────────────────────────────────────
   if (dayAttendanceContainer) {
     renderDayAttendance(dayAttendanceContainer, eventDays);
@@ -411,6 +414,7 @@ async function main(): Promise<void> {
   if (sharePanelEl && manageData.shareUrl) {
     renderSharePanel(sharePanelEl, {
       shareUrl: manageData.shareUrl,
+      badgeVersion: manageData.badgeVersion,
       eventName,
       firstName,
       lastName: user?.last_name ?? undefined,

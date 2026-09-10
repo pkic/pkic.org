@@ -184,6 +184,23 @@ describe("public member detail page", () => {
 });
 
 describe("public member detail content", () => {
+  it("keeps a cached single-link representative readable during deployment", async () => {
+    const container = await mountView({
+      identities: [
+        {
+          name: "Cached Representative",
+          jobTitle: null,
+          bio: null,
+          featuredLink: "https://www.linkedin.com/in/cached-person",
+          photoUrl: null,
+        },
+      ],
+    });
+    expect(container.querySelector('a[href="https://www.linkedin.com/in/cached-person"]')?.textContent).toContain(
+      "LinkedIn",
+    );
+  });
+
   function terms(list: Element): string[] {
     return [...list.querySelectorAll(":scope > dt")].map((term) => term.textContent ?? "");
   }
@@ -225,7 +242,7 @@ describe("public member detail content", () => {
           name: "Ada Lovelace",
           jobTitle: "Chief Engineer",
           bio: null,
-          featuredLink: "https://www.linkedin.com/in/ada",
+          links: ["https://www.linkedin.com/in/ada", "https://x.com/ada"],
           photoUrl: null,
         },
       ],
@@ -239,8 +256,14 @@ describe("public member detail content", () => {
       "GitHub",
       "LinkedIn",
       "LinkedIn",
+      "X (Twitter)",
     ]);
-    expect(badges.map((link) => link.getAttribute("aria-label"))).toEqual([null, null, "Ada Lovelace on LinkedIn"]);
+    expect(badges.map((link) => link.getAttribute("aria-label"))).toEqual([
+      null,
+      null,
+      "Ada Lovelace on LinkedIn (opens in a new tab)",
+      "Ada Lovelace on X (Twitter) (opens in a new tab)",
+    ]);
     expect(badges[0]?.getAttribute("href")).toBe("https://github.com/example-corp");
     // The address is still reachable, as the link's own tooltip.
     expect(badges[0]?.getAttribute("title")).toBe("https://github.com/example-corp");
@@ -258,9 +281,9 @@ describe("public member detail content", () => {
           jobTitle: "Chief Engineer",
           bio: "Writes **compilers**.",
           photoUrl: null,
-          featuredLink: null,
+          links: [],
         },
-        { name: "Grace Hopper", jobTitle: null, bio: null, photoUrl: "/assets/grace.jpg", featuredLink: null },
+        { name: "Grace Hopper", jobTitle: null, bio: null, photoUrl: "/assets/grace.jpg", links: [] },
       ],
     });
 

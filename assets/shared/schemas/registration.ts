@@ -237,6 +237,7 @@ export const attendeeRegistrationFieldsSchema = z.object({
   email: normalizedEmailSchema,
   organizationName: organizationNameSchema.optional(),
   jobTitle: jobTitleSchema.optional(),
+  identityId: databaseIdSchema.optional(),
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
   customAnswers: formAnswersSchema.optional(),
@@ -247,6 +248,7 @@ export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFiel
 /** Authenticated registration payload; identity and profile fields come from the verified session user. */
 export const attendeeRegistrationParticipationSchema = attendeeRegistrationFieldsSchema
   .pick({
+    identityId: true,
     attendanceType: true,
     dayAttendance: true,
     customAnswers: true,
@@ -357,6 +359,8 @@ export const registrationManageUserSchema = z.object({
 
 export const registrationManageReadResponseSchema = successResponseSchema.extend({
   registration: registrationManageRegistrationSchema,
+  identityId: databaseIdSchema.nullable().optional(),
+  badgeVersion: z.string().optional(),
   event: eventSummarySchema,
   user: registrationManageUserSchema,
   eventDays: z.array(eventDayReadModelSchema),

@@ -6,7 +6,12 @@ import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { FormFold } from "./FormFold";
 import { Select, TextInput, Textarea } from "../../ui/TextControl";
-import { formFieldRulesSchema, formFieldRulesTextSchema } from "../../../shared/schemas/form-field-rules";
+import {
+  formFieldRulesSchema,
+  formFieldRulesTextSchema,
+  VISUALIZATIONS,
+  type Visualization,
+} from "../../../shared/schemas/form-field-rules";
 import {
   caps,
   visualRules,
@@ -20,13 +25,23 @@ import "../../ui/Content.css";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const VIZ_OPTIONS: Array<{ value: VisualizationConfig; label: string }> = [
-  { value: "auto", label: "Auto" },
-  { value: "bar", label: "Bar chart" },
-  { value: "pie", label: "Pie chart" },
-  { value: "wordcloud", label: "Word cloud" },
-  { value: "list", label: "Top list" },
-];
+/**
+ * What the author calls each presentation the rules schema accepts. The map is
+ * total on that vocabulary, so a new presentation is a compile error here
+ * rather than a choice this editor never offers.
+ */
+const VIZ_LABELS: Record<Visualization, string> = {
+  auto: "Auto",
+  bar: "Bar chart",
+  pie: "Pie chart",
+  wordcloud: "Word cloud",
+  list: "Top list",
+};
+
+const VIZ_OPTIONS: Array<{ value: VisualizationConfig; label: string }> = VISUALIZATIONS.map((visualization) => ({
+  value: visualization,
+  label: VIZ_LABELS[visualization],
+}));
 
 const UI_WIDGETS = ["", "tags", "checkboxes", "rating_stars", "nps"];
 

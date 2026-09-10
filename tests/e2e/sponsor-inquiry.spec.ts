@@ -48,7 +48,7 @@ test("submits a generic consortium sponsor inquiry using D1 tiers", async ({ pag
   expect(response.status()).toBe(201);
   await expect(page.getByRole("heading", { name: "Thanks for your interest!" })).toBeVisible();
 
-  const message: CapturedEmail = await waitForCapturedEmail(email, "PKI Consortium sponsorship information");
+  const message: CapturedEmail = await waitForCapturedEmail(email, "Sponsoring the PKI Consortium");
   const content = message.payload.content as Array<{ type: string; value: string }> | undefined;
   const rendered = content?.map(({ value }) => value).join("\n") ?? "";
   expect(rendered).not.toMatch(/\{\{[^}]+\}\}/);

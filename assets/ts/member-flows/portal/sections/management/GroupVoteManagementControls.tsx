@@ -6,6 +6,12 @@ import {
   groupVoteVisibilityUpdateInputSchema,
 } from "../../../../../shared/schemas/group-vote-management";
 import type { GroupVoteDetail } from "../../../../../shared/schemas/group-votes";
+import {
+  PUBLIC_DETAIL_LEVELS,
+  VOTE_VISIBILITIES,
+  type PublicDetailLevel,
+  type VoteVisibility,
+} from "../../../../../shared/schemas/votes";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { patchJson } from "../../../../shared/api-client";
@@ -19,6 +25,17 @@ import { GroupVoteLifecycleActions } from "./GroupVoteLifecycleActions";
 // identifiers), and component CSS ships in a lazy chunk, so the stylesheet
 // that defines them has to be imported by the module that names them.
 import "../../../../ui/Content.css";
+
+const VISIBILITY_LABELS: Record<VoteVisibility, string> = {
+  private: "Private",
+  public: "Public",
+};
+
+const PUBLIC_DETAIL_LEVEL_LABELS: Record<PublicDetailLevel, string> = {
+  outcome_only: "Outcome only",
+  aggregate: "Aggregate counts",
+  full_breakdown: "Full breakdown",
+};
 
 function localDateTime(value: string): string {
   const date = new Date(value);
@@ -173,8 +190,11 @@ export function GroupVoteSettings({
                       value={visibility}
                       onChange={(event) => setVisibility(event.currentTarget.value as typeof visibility)}
                     >
-                      <option value="private">Private</option>
-                      <option value="public">Public</option>
+                      {VOTE_VISIBILITIES.map((option) => (
+                        <option key={option} value={option}>
+                          {VISIBILITY_LABELS[option]}
+                        </option>
+                      ))}
                     </Select>
                   )}
                 </Field>
@@ -188,9 +208,11 @@ export function GroupVoteSettings({
                       value={publicDetailLevel}
                       onChange={(event) => setPublicDetailLevel(event.currentTarget.value as typeof publicDetailLevel)}
                     >
-                      <option value="outcome_only">Outcome only</option>
-                      <option value="aggregate">Aggregate counts</option>
-                      <option value="full_breakdown">Full breakdown</option>
+                      {PUBLIC_DETAIL_LEVELS.map((level) => (
+                        <option key={level} value={level}>
+                          {PUBLIC_DETAIL_LEVEL_LABELS[level]}
+                        </option>
+                      ))}
                     </Select>
                   )}
                 </Field>

@@ -5,8 +5,20 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 export const PRESENTATION_VERSION_SORT_COLUMNS = ["versionNumber", "fileName", "uploadedAt"] as const;
 export const presentationVersionsListQuerySchema = listQuerySchema(PRESENTATION_VERSION_SORT_COLUMNS, { limit: 25 });
 
-export const presentationReviewStatusSchema = z.enum(["approved", "rejected", "needs_revision"]);
+/**
+ * Declared in the order a reviewer meets them — approved first, then the two
+ * outcomes that send the version back — so a surface can offer the outcomes by
+ * mapping this rather than by restating them in its own order.
+ */
+export const presentationReviewStatusSchema = z.enum(["approved", "needs_revision", "rejected"]);
 export type PresentationReviewStatus = z.infer<typeof presentationReviewStatusSchema>;
+
+/** The words a reviewer picks the outcome by, beside the vocabulary itself. */
+export const PRESENTATION_REVIEW_STATUS_LABELS: Record<PresentationReviewStatus, string> = {
+  approved: "Approved",
+  needs_revision: "Needs revision",
+  rejected: "Rejected",
+};
 
 export const presentationVersionReviewSchema = z.object({
   id: databaseIdSchema,

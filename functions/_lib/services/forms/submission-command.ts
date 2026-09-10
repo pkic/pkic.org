@@ -2,14 +2,17 @@ import { AppError } from "../../errors";
 import { all } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
+import { nowIso } from "../../utils/time";
 import type { ActiveFormDefinition } from "./read";
+import { requireOpenFormSubmissionWindow } from "./submission-window";
 import type { CustomAnswerValue } from "./validation";
+import type { FormSubmissionStatus } from "../../../../assets/shared/schemas/form-management";
 
 interface SubmissionContext {
   submittedByUserId: string | null;
   contextType: "registration" | "proposal" | "membership" | "survey" | "feedback";
   contextRef: string | null;
-  status?: "submitted" | "draft" | "withdrawn";
+  status?: FormSubmissionStatus;
 }
 
 export interface PreparedFormSubmission {
@@ -28,12 +31,23 @@ function requirePlacement(form: ActiveFormDefinition) {
   return form.placement;
 }
 
+/**
+ * The one place a form write is admitted.
+ *
+ * Every placement-backed write — a survey answer, a registration, a proposal,
+ * a membership application, and each later edit of one — passes through this
+ * guard, so the submission window is checked here rather than by each caller.
+ * The database trigger this row feeds refuses the same window, but it can only
+ * say the context changed; refusing here first is what lets the submitter be
+ * told when the form opens or when it closed.
+ */
 export function prepareFormSubmissionGuard(
   db: DatabaseLike,
   form: ActiveFormDefinition,
   submissionId: string | null = null,
 ): StatementLike {
   const placement = requirePlacement(form);
+  requireOpenFormSubmissionWindow(placement, nowIso());
   return db
     .prepare(
       `INSERT INTO form_submission_guards

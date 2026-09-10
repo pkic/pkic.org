@@ -7,7 +7,12 @@ import { organizationContentReviewCreateSchema } from "../../assets/shared/schem
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { MyOrganization } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
 import { profile } from "../../assets/ts/member-flows/portal/state";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { controlFor } from "./helpers/labelled-control";
+
+// The page carries the representatives roster, whose "Add coworker" leads to
+// an address of its own; the location hook needs a router in this environment.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations/example", vi.fn()] }));
 
 const organizationId = "00000000-0000-4000-8000-000000000210";
 const userId = "00000000-0000-4000-8000-000000000211";
@@ -289,6 +294,8 @@ describe("portal organization self-service", () => {
     void act(() => render(<MyOrganization />, container));
     await settle();
 
+    await beginRecordEdit(container, "Member page content actions");
+    await settle();
     const slogan = labelledControl(container, "Slogan");
     slogan.value = "Trust, made routine";
     await act(() => {
@@ -334,17 +341,26 @@ describe("portal organization self-service", () => {
     void act(() => render(<MyOrganization />, container));
     await settle();
 
+    await beginRecordEdit(container, "Member page content actions");
+    await settle();
     // Every editable field is bound to its label, so a screen reader announces
     // the field rather than an unlabelled edit box.
-    for (const label of ["Slogan", "Description", "Long-form content (Markdown)", "Website"]) {
+    for (const label of ["Slogan", "Description", "Website"]) {
       expect(labelledControl(container, label)).toBeInstanceOf(HTMLElement);
     }
+
+    // The visual editor is a lazy module; wait for its accessible editing surface.
+    await vi.waitFor(() => {
+      const visualContent = container.querySelector('[role="textbox"][aria-label="Long-form content (Markdown)"]');
+      expect(visualContent?.getAttribute("contenteditable")).toBe("true");
+    });
+    expect(container.querySelector('input[name="contentMarkdown"]')).not.toBeNull();
 
     // The history table is named, so it is identifiable among the surface's
     // regions, and its wait is announced rather than mimed by grey rectangles.
     const table = container.querySelector("table");
     expect(table?.querySelector("caption")?.textContent).toBe("Organization content submissions");
-    expect(table?.getAttribute("aria-busy")).toBe("true");
+    expect(table?.getAttribute("aria-busy")).toBeNull();
 
     // The history request is issued once the profile has resolved, so it
     // settles a tick later than the rest of the surface.
@@ -449,6 +465,28 @@ describe("portal organization self-service", () => {
     // The capitalization is in the text, so the word reaches a screen reader
     // the same way it reaches the screen.
     expect(container.textContent).toContain("Active Gold sponsor since");
+  });
+
+  /**
+   * A representative arrives at this record from the list of organizations
+   * they represent, and the Organizations sidebar entry is a staff
+   * destination they do not have — so without a trail the record was where
+   * navigation stopped (issue #9). The staff twin of the same route has
+   * always rendered one; this is the same trail, to the same list.
+   */
+  it("offers the way back to the organizations the reader represents", async () => {
+    stubGovernance(organizationProfile(), { sponsorship: { tier: null, startDate: null } });
+
+    void act(() => render(<MyOrganization />, container));
+    await settle();
+
+    const trail = container.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail).not.toBeNull();
+    expect(trail!.querySelector("a")?.getAttribute("href")).toBe("#/organizations");
+    expect(trail!.querySelector("a")?.textContent).toBe("Organizations");
+    // The record itself is the trail's last step, and says so rather than
+    // offering a link back to where the reader already is.
+    expect(trail!.querySelector('[aria-current="page"]')?.textContent).toBe("Example Organization");
   });
 
   it("reports a refused sponsorship lookup as a sentence, not a status code", async () => {

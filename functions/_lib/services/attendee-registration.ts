@@ -36,6 +36,26 @@ export async function prepareValidatedAttendeeRegistration(
     throw new AppError(400, "ATTENDANCE_REQUIRED", "attendanceType or dayAttendance is required");
   }
 
+  const selected = options.verifiedIdentity?.selectedIdentity;
+  if (selected) {
+    for (const [key, value] of Object.entries({
+      organization_name: selected.organizationName,
+      job_title: selected.jobTitle,
+    })) {
+      const answer = input.customAnswers?.[key];
+      if (value && answer !== undefined && answer !== value) {
+        throw new AppError(
+          422,
+          "REGISTRATION_IDENTITY_DETAILS_CHANGED",
+          "Use the details from your selected identity.",
+          {
+            fieldErrors: { [key]: ["Use the details from your selected identity."] },
+          },
+        );
+      }
+    }
+  }
+
   const requiredTerms = await getRequiredTerms(db, event.id, "attendee");
   await validateRequiredConsents(requiredTerms, input.consents);
   const validatedForm = await validateCustomAnswersForSubmission(db, {

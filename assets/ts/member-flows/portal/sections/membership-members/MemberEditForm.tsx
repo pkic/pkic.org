@@ -59,7 +59,7 @@ export function MemberEditForm({
   useEffect(() => {
     let cancelled = false;
     void getJson(
-      `/api/v1/members?limit=1&offset=0&memberId=${encodeURIComponent(memberId)}`,
+      `/api/v1/members?view=staff&limit=1&offset=0&memberId=${encodeURIComponent(memberId)}`,
       staffMembersListResponseSchema,
     )
       .then((page) => {

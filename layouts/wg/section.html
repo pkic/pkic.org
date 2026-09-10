@@ -272,13 +272,14 @@
       </div>
       {{ end }}
       {{ if $membersSubPage }}
-      {{- $wgMemberCount := 0 -}}
-      {{- range hugo.Data.members -}}{{- if in .workingGroups $wgID -}}{{- $wgMemberCount = add $wgMemberCount 1 -}}{{- end -}}{{- end -}}
       <div>
         <a href="{{ $membersSubPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }}">
           <div class="wg-explore-icon">🏢</div>
           <div class="wg-explore-title">Members</div>
-          <div class="wg-explore-desc">{{ $wgMemberCount }} participating organizations</div>
+          {{/* Counted from the roll after paint, like every other member
+               figure on the site (#8); until it lands the card says what it
+               links to rather than a number from a YAML file. */}}
+          <div class="wg-explore-desc"><span data-member-count="workingGroup:{{ $wgID | lower }}">—</span> participating organizations</div>
           <div class="wg-explore-arrow pk-push-block">Explore →</div>
         </a>
       </div>
@@ -354,17 +355,18 @@
   <div class="pk-container pk-stack">
     <h2 class="pk-strong">Working Group Members</h2>
     <p class="pk-muted">Organizations actively participating in the {{ $.Title }}</p>
-    <div class="members-grid">
-      {{- $wgMembers := slice -}}
-      {{- range hugo.Data.members -}}
-        {{- if in .workingGroups $wgID -}}
-          {{- $wgMembers = $wgMembers | append . -}}
-        {{- end -}}
-      {{- end -}}
-      {{- range (shuffle $wgMembers) -}}
-        {{- partial "members/card.html" (dict "member" . "site" $.Site "showDescription" false "showWorkingGroups" false "showSocialHover" true) -}}
-      {{- end -}}
-    </div>
+      {{/*
+        The members of this group, from the canonical roll narrowed to it
+        (#8). This was a build-time loop over data/members/*.yaml filtered on
+        a `workingGroups` field, which listed whoever was in a file rather
+        than whoever is in the group.
+      */}}
+      <div
+        data-group-member-grid
+        data-module="member-flows/member-directory-page"
+        data-api-base="/api/v1"
+        data-working-group="{{ $wgID | lower }}"
+      ></div>
     <div class="pk-center">
       <a href="/members/" class="pk-btn pk-btn--secondary">View All Members</a>
     </div>

@@ -42,7 +42,7 @@ export function Roles({
   }
 
   if (roleSegment) {
-    return <RoleDetail roleId={roleSegment} canGrant={canGrant} canRevoke={canRevoke} onBack={() => onNavigate()} />;
+    return <RoleDetail roleId={roleSegment} canGrant={canGrant} canRevoke={canRevoke} />;
   }
 
   return (

@@ -389,7 +389,8 @@
   justify-content: center;
   background: linear-gradient(135deg, $green 0%, $blue 100%);
   color: #fff;
-  font-size: 0.85rem;
+  // 40% of the 48px avatar above, the proportion the initials avatars share.
+  font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -784,54 +785,25 @@
   }
 }
 
-// ── Card footer: logo (left) + domain link (right) ────────────
+// Publisher identity remains readable at narrow card widths.
 .news-card-footer {
   margin-top: auto;
   padding-top: 0.875rem;
   border-top: 1px solid $gray-100;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
   position: relative;
   z-index: 2; // above stretched-link so links are clickable
 }
 
-// Logo container — plain when fallback text, pill when real logo image
-.news-card-logo {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-
-  &--img {
-    border-radius: 4px;
-    padding: 0.2rem 0.4rem;
-  }
-}
-
-// The actual logo image — scoped inside .news-card to beat global [data-pagefind-body] img rules
-.news-card .news-card-logo-img {
-  display: block !important;
-  width: 80px !important;
-  height: 24px !important;
-  max-width: 80px !important;
-  max-height: 24px !important;
-  object-fit: contain;
-  object-position: left center;
-  // Make white/light logos readable on any background without a coloured pill
-  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.35));
-}
-
-// Fallback when there's no logo: show the member name as small text
 .news-card-member-name {
   font-size: 0.78rem;
   font-weight: 600;
   color: $gray-700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .news-card-domain {
@@ -844,10 +816,11 @@
   align-items: center;
   gap: 0.2rem;
   font-size: 0.72rem;
-  color: $gray-400;
+  color: $gray-600;
   text-decoration: none;
   transition: color 0.15s;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 
   &:hover {
     color: $green;

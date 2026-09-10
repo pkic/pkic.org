@@ -45,6 +45,11 @@ tags:
 title: What Are Subordinate CAs and Why Would You Want Your Own?
 
 
+authorProfiles:
+  - name: Doug Beattie
+    organization: GlobalSign
+    role: VP Product Management
+    website: https://www.globalsign.com
 ---
 Digital certificate and PKI adoption has changed quite a bit in recent years. Gone are the days where certificates were only synonymous with SSL/TLS; compliance drivers like stronger authentication requirements and digital signature regulations (e.g. [eIDAS][1]) have greatly expanded the role of PKI within the enterprise.
 

@@ -1,3 +1,5 @@
+import { BreadcrumbBranch } from "../../../../../ui/BreadcrumbScope";
+import { ProfileHeader } from "../../../../../ui/ProfileHeader";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
@@ -28,17 +30,7 @@ import { RoleEditForm } from "./RoleEditForm";
 import "../../../../../ui/Content.css";
 
 /** Role detail: fields with Edit, its assignee list, and an assign control — reachable from the roles list. */
-export function RoleDetail({
-  roleId,
-  canGrant,
-  canRevoke,
-  onBack,
-}: {
-  roleId: string;
-  canGrant: boolean;
-  canRevoke: boolean;
-  onBack: () => void;
-}) {
+export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; canGrant: boolean; canRevoke: boolean }) {
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,33 +73,34 @@ export function RoleDetail({
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button variant="secondary" size="sm" onClick={onBack}>
-          ← All roles
-        </Button>
-      </div>
-
       {loading ? (
         <Spinner label="Loading role…" />
       ) : error ? (
         <ErrorAlert error={error} />
       ) : role ? (
         <>
-          <Panel>
-            <PanelHeader title={role.name}>
-              {/* "System" is the word, not only a tone: a role that cannot be
-                  edited has to say so where its Edit button would otherwise be. */}
-              {role.isSystemRole && (
+          <BreadcrumbBranch items={[{ label: role.name }]} />
+          <ProfileHeader
+            headingLevel={3}
+            title={role.name}
+            context={
+              role.isSystemRole && (
                 <Badge tone="info" dot={false}>
                   System
                 </Badge>
-              )}
-              {canGrant && !role.isSystemRole && !editing && (
+              )
+            }
+            actions={
+              canGrant &&
+              !role.isSystemRole &&
+              !editing && (
                 <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
                   Edit
                 </Button>
-              )}
-            </PanelHeader>
+              )
+            }
+          />
+          <Panel>
             <PanelBody class="pk-stack pk-stack--snug">
               {!editing && role.description && <p class="pk-muted pk-small">{role.description}</p>}
               {editing ? (

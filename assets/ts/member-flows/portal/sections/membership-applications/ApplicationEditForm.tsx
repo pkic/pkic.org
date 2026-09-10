@@ -112,7 +112,7 @@ export function ApplicationEditForm({
               />
             )}
           </Field>
-          <Field label="LinkedIn">
+          <Field label="Professional profile">
             {(control) => (
               <TextInput
                 {...control}

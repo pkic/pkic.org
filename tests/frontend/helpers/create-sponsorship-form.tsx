@@ -52,6 +52,7 @@ export function organizationsPage() {
       {
         id: ORGANIZATION_ID,
         name: "Example Organization",
+        publicProfileHref: "/members/example-organization/",
         membershipCategory: "P1",
         memberSince: "2020-01-01",
         activeIdentityCount: 3,
@@ -97,6 +98,13 @@ export function eventsPage() {
     ],
     page: { limit: 25, offset: 0, total: 1, count: 1, hasMore: false },
   };
+}
+
+/** The active tiers for one sponsor type, shaped like the public catalog contract. */
+export function tiersPage(url: URL) {
+  const sponsorType = url.searchParams.get("sponsorType") === "event" ? "event" : "consortium";
+  const tiers = sponsorType === "event" ? ["Leader", "Innovator"] : ["Gold", "Silver"];
+  return { visibility: "public", sponsorType, tiers: tiers.map((tier) => ({ tier })) };
 }
 
 let container: HTMLElement | null = null;
@@ -149,6 +157,9 @@ export function stubFetch(bodies: unknown[], status = 200, requests: string[] = 
 
       if (method === "GET" && url.pathname === "/api/v1/organizations") return json(organizationsPage());
       if (method === "GET" && url.pathname === "/api/v1/events") return json(eventsPage());
+      // The tier is chosen from the catalog for the selected sponsor type,
+      // which is the same public endpoint the inquiry form reads.
+      if (method === "GET" && url.pathname === "/api/v1/sponsors/tiers") return json(tiersPage(url));
 
       bodies.push(JSON.parse(String(init?.body)));
       if (status !== 200) {

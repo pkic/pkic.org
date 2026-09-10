@@ -65,6 +65,30 @@ function sharedValidationDetails(
  * `formatChanfanaError` shape (`{errors,success,result}`) would otherwise
  * be a second, inconsistent error format for validation failures only.
  */
+/**
+ * An empty query parameter means the caller did not supply one.
+ *
+ * `?q=` is what a cleared search box, an unset filter or a hand-built query
+ * string produces, and chanfana's `coerceInputs` turns the empty value into
+ * `null` — which every optional field in the shared list contract then
+ * refuses with "expected string, received null". The whole list came back as
+ * a 400 and the surface rendered nothing, which is what issue #11 reported as
+ * representatives failing to appear and members failing to list.
+ *
+ * A list endpoint has no notion of "filter by the empty string": absent and
+ * empty are the same request. The frontend's shared collection already drops
+ * empty values before it builds the query, so this makes the two ends agree
+ * — and, more to the point, means no caller can take a list down by sending
+ * a parameter it left blank.
+ */
+function withoutEmptyValues(query: URLSearchParams): URLSearchParams {
+  const supplied = new URLSearchParams();
+  for (const [key, value] of query.entries()) {
+    if (value !== "") supplied.append(key, value);
+  }
+  return supplied;
+}
+
 export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
   schema: Schema,
   handle: RouteHandler<Context, Schema>,
@@ -84,7 +108,8 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
       }
 
       if (schema.request?.query) {
-        unvalidatedData.query = coerceInputs(new URL(request.url).searchParams, schema.request.query) ?? {};
+        const supplied = withoutEmptyValues(new URL(request.url).searchParams);
+        unvalidatedData.query = coerceInputs(supplied, schema.request.query) ?? {};
       }
 
       if (schema.request?.headers) {

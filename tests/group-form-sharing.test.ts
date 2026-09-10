@@ -743,11 +743,17 @@ describe("group form sharing", () => {
       .bind("2020-01-01T00:00:00.000Z", fixture.placementId)
       .run();
 
+    // Not a bare "not found": the submitter is told the form closed, and when.
     await expect(
       submitGroupFormResponse(env.DB, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
         answers: { topic: "Too late" },
       }),
-    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_ACCEPTING_RESPONSES" });
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "FORM_CLOSED",
+      message: "This form closed on 2020-01-01T00:00:00.000Z",
+      details: { state: "closed", closesAt: "2020-01-01T00:00:00.000Z" },
+    });
 
     expect(
       await queryAll<{ total: number }>(
@@ -772,6 +778,56 @@ describe("group form sharing", () => {
       submitGroupFormResponse(env.DB, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
         answers: { topic: "Too early" },
       }),
-    ).rejects.toMatchObject({ status: 404, code: "FORM_NOT_ACCEPTING_RESPONSES" });
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "FORM_NOT_OPEN_YET",
+      message: "This form opens on 2999-01-01T00:00:00.000Z",
+      details: { state: "scheduled", opensAt: "2999-01-01T00:00:00.000Z" },
+    });
+  });
+
+  /**
+   * The window is half-open, and both edges are load-bearing: a submitter one
+   * millisecond inside is inside, and the closing instant itself is already
+   * out. Driving the boundary through the database rather than the pure policy
+   * keeps SQLite's comparison honest against the TypeScript one.
+   */
+  it("accepts a response at the opening instant and refuses one at the closing instant", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.owner.id, "formPlacement", fixture.placementId, {
+      granteeGroupId: fixture.grantee.id,
+      capability: "submit",
+    });
+
+    const now = new Date();
+    const openedExactlyNow = new Date(now.getTime() - 1).toISOString();
+    await env.DB.prepare("UPDATE form_placements SET opens_at = ?, closes_at = NULL WHERE id = ?")
+      .bind(openedExactlyNow, fixture.placementId)
+      .run();
+    await expect(
+      submitGroupFormResponse(env.DB, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
+        answers: { topic: "Inside the window" },
+      }),
+    ).resolves.toBeTruthy();
+
+    const closesNow = new Date(now.getTime() + 1).toISOString();
+    await env.DB.prepare("UPDATE form_placements SET closes_at = ? WHERE id = ?")
+      .bind(closesNow, fixture.placementId)
+      .run();
+    // Wait past the closing instant rather than assuming the clock moved.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await expect(
+      submitGroupFormResponse(env.DB, { userId: fixture.memberId }, fixture.grantee.id, fixture.placementId, {
+        answers: { topic: "On the closing instant" },
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "FORM_CLOSED" });
+
+    expect(
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM form_submissions WHERE placement_id = ?",
+        [fixture.placementId],
+      ),
+    ).toEqual([{ total: 1 }]);
   });
 });

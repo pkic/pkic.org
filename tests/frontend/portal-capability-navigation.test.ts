@@ -6,11 +6,12 @@ import {
   portalDefaultPath,
   portalHasGlobalPermission,
   portalHasPermissionAtAnyScope,
-  portalHasSystemManagement,
+  portalHasSettingsAccess,
   portalNavigationItems,
   portalSectionEnabled,
-  portalSystemNavigationItems,
+  portalSettingsPages,
   portalActiveSection,
+  portalSectionChildren,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
 
@@ -32,7 +33,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalSectionEnabled(session, "account")).toBe(true);
   });
 
-  it("shows system management only for the matching global permission", () => {
+  it("shows Settings only for the matching global permission", () => {
     const globalAudit = portalSessionFixture({
       staff: true,
       staffRole: "user",
@@ -47,48 +48,69 @@ describe("portal capability-derived navigation", () => {
     expect(portalNavigationItems(globalAudit).map((item) => item.label)).toContain("Settings");
     expect(portalHasGlobalPermission(contextualAudit, "audit:read")).toBe(false);
     expect(portalNavigationItems(contextualAudit).map((item) => item.label)).not.toContain("Settings");
-    expect(portalCapacityFallbackPath(contextualAudit, "/system/audit-log")).toBe("/home");
+    expect(portalCapacityFallbackPath(contextualAudit, "/settings/audit-log")).toBe("/home");
   });
 
-  it("shows only the system-management tabs granted to a staff identity", () => {
+  it("lists only the settings pages granted to a staff identity, under a Settings entry that opens Settings", () => {
     const contentReviewer = portalSessionFixture({
       staff: true,
       staffRole: "user",
       grants: [{ permission: "organizations:content-review", contextType: null, contextId: null }],
     });
-    expect(portalHasSystemManagement(contentReviewer)).toBe(true);
+    expect(portalHasSettingsAccess(contentReviewer)).toBe(true);
+    // The sidebar entry named "Settings" opens Settings. It used to resolve
+    // to whichever page the reader's grants happened to put first, so the
+    // entry and the page it opened disagreed about what it was (#40).
     expect(portalNavigationItems(contentReviewer)).toContainEqual({
-      path: "/system/organization-content-reviews",
-      section: "system",
+      path: "/settings",
+      section: "settings",
       label: "Settings",
     });
-    expect(portalSystemNavigationItems(contentReviewer)).toEqual([
+    expect(portalSettingsPages(contentReviewer)).toEqual([
       {
-        path: "/system/organization-content-reviews",
-        section: "system",
-        label: "Content Reviews",
+        path: "/settings/organization-content-reviews",
+        section: "settings",
+        label: "Content reviews",
+        description: "Organization profile changes waiting for a decision.",
       },
     ]);
-    expect(portalCapacityFallbackPath(contentReviewer, "/system/organization-content-reviews")).toBeNull();
+    expect(portalCapacityFallbackPath(contentReviewer, "/settings/organization-content-reviews")).toBeNull();
   });
 
-  it("exposes System Analytics only to a global analytics reader", () => {
+  it("lists the three membership pages that used to share one settings tab", () => {
+    const reader = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "membership:read", contextType: null, contextId: null }],
+    });
+
+    /*
+     * "Membership Settings" was one tab holding an application-workflow form,
+     * a form editor and a category catalog. Each is a page with an address of
+     * its own now, and the sidebar lists all three under Settings (#40).
+     */
+    expect(portalSettingsPages(reader).map((page) => [page.path, page.label])).toEqual([
+      ["/settings/application-workflow", "Application workflow"],
+      ["/settings/membership-application-form", "Membership application form"],
+      ["/settings/membership-categories", "Membership categories"],
+    ]);
+    expect(portalSettingsPages(reader).every((page) => page.section === "settings")).toBe(true);
+  });
+
+  it("no longer offers Analytics inside Settings, since it moved to the domains it measures", () => {
+    /*
+     * Analytics are not settings (#39). Event analytics is a page under
+     * /events, donation analytics a page under /donations, and neither is
+     * reached through the Settings hub — so a reader whose only global grant
+     * is `analytics:read` has nothing in that hub at all.
+     */
     const reader = portalSessionFixture({
       staff: true,
       staffRole: "user",
       grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
     });
-    const contextualReader = portalSessionFixture({
-      staff: true,
-      staffRole: "user",
-      grants: [{ permission: "analytics:read", contextType: "group", contextId: "group-1" }],
-    });
 
-    expect(portalSystemNavigationItems(reader)).toEqual([
-      { path: "/system/analytics", section: "system", label: "Analytics" },
-    ]);
-    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
-    expect(portalCapacityFallbackPath(contextualReader, "/system/analytics")).toBe("/home");
+    expect(portalSettingsPages(reader)).toEqual([]);
   });
 
   it("exposes Forms only to global form readers", () => {
@@ -173,7 +195,7 @@ describe("portal capability-derived navigation", () => {
     expect(portalHasGlobalPermission(synchronizer, "donations:read")).toBe(false);
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/donations" }));
     // Donations is a domain entry now, not part of the Settings residue.
-    expect(portalSystemNavigationItems(reader)).toEqual([]);
+    expect(portalSettingsPages(reader)).toEqual([]);
   });
 
   it("exposes Sponsors as a resource workspace to global readers or writers", () => {
@@ -300,18 +322,11 @@ describe("portal capability-derived navigation", () => {
       section: "membership",
       label: "Applications",
     });
-    expect(portalSystemNavigationItems(reader)).toEqual([
-      {
-        path: "/system/membership-settings",
-        section: "system",
-        label: "Membership Settings",
-      },
-    ]);
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(
       expect.objectContaining({ path: "/membership/applications" }),
     );
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(expect.objectContaining({ path: "/members" }));
-    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+    expect(portalSettingsPages(contextualReader)).toEqual([]);
   });
 
   it("exposes email templates to a global reader or writer", () => {
@@ -339,22 +354,24 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "email-templates:read", contextType: "group", contextId: "group-1" }],
     });
 
-    expect(portalSystemNavigationItems(reader)).toContainEqual({
-      path: "/system/email-templates",
-      section: "system",
-      label: "Email Templates",
-    });
+    expect(portalSettingsPages(reader)).toContainEqual(
+      expect.objectContaining({ path: "/settings/email-templates", section: "settings", label: "Email templates" }),
+    );
     expect(portalHasGlobalPermission(reader, "email-templates:write")).toBe(false);
     expect(portalHasGlobalPermission(writer, "email-templates:write")).toBe(true);
-    expect(portalSystemNavigationItems(writeOnly)).toContainEqual({
-      path: "/system/email-templates",
-      section: "system",
-      label: "Email Templates",
-    });
-    expect(portalSystemNavigationItems(contextualReader)).toEqual([]);
+    expect(portalSettingsPages(writeOnly)).toContainEqual(
+      expect.objectContaining({ path: "/settings/email-templates", section: "settings", label: "Email templates" }),
+    );
+    expect(portalSettingsPages(contextualReader)).toEqual([]);
   });
 
-  it("exposes System Operations for global email, retention, or scheduler read authority", () => {
+  it("gives the outbox, the due queue and the job registry a page each, gated by the grant each needs", () => {
+    /*
+     * They were three tabs inside one "Operations" entry reachable with any
+     * one of three grants, so an email reader was offered a bucket that was
+     * mostly refusals behind it. Each is a page now, and a reader sees the
+     * ones their own grant reaches (#40).
+     */
     const emailReader = portalSessionFixture({
       staff: true,
       staffRole: "user",
@@ -381,27 +398,15 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "retention:read", contextType: "group", contextId: "group-1" }],
     });
 
-    expect(portalSystemNavigationItems(emailReader)).toContainEqual({
-      path: "/system/operations",
-      section: "system",
-      label: "Operations",
-    });
-    expect(portalSystemNavigationItems(retentionReader)).toContainEqual({
-      path: "/system/operations",
-      section: "system",
-      label: "Operations",
-    });
-    expect(portalSystemNavigationItems(schedulerReader)).toContainEqual({
-      path: "/system/operations",
-      section: "system",
-      label: "Operations",
-    });
-    expect(portalSystemNavigationItems(writeOnly)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/operations" }),
+    expect(portalSettingsPages(emailReader).map((page) => page.path)).toEqual(["/settings/email-outbox"]);
+    expect(portalSettingsPages(retentionReader).map((page) => page.path)).toEqual(["/settings/scheduled-work"]);
+    expect(portalSettingsPages(schedulerReader).map((page) => page.path)).toEqual(["/settings/scheduled-jobs"]);
+    // The bucket the three came out of is gone rather than kept as an alias.
+    expect(portalSettingsPages(emailReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/settings/operations" }),
     );
-    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/operations" }),
-    );
+    expect(portalSettingsPages(writeOnly)).toEqual([]);
+    expect(portalSettingsPages(contextual)).toEqual([]);
   });
 
   it("exposes Access Control for either global grant or revoke authority, never contextual authority", () => {
@@ -421,23 +426,19 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "access:grant", contextType: "group", contextId: "group-1" }],
     });
 
-    expect(portalSystemNavigationItems(grantOnly)).toContainEqual({
-      path: "/system/access-control",
-      section: "system",
-      label: "Access Control",
-    });
-    expect(portalSystemNavigationItems(revokeOnly)).toContainEqual({
-      path: "/system/access-control",
-      section: "system",
-      label: "Access Control",
-    });
-    expect(portalSystemNavigationItems(contextual)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/access-control" }),
+    expect(portalSettingsPages(grantOnly)).toContainEqual(
+      expect.objectContaining({ path: "/settings/access-control", section: "settings", label: "Access control" }),
     );
-    expect(portalCapacityFallbackPath(contextual, "/system/access-control")).toBe("/home");
-    // Governance rosters live on their groups; there is no System leadership page.
-    expect(portalSystemNavigationItems(grantOnly)).not.toContainEqual(
-      expect.objectContaining({ path: "/system/leadership" }),
+    expect(portalSettingsPages(revokeOnly)).toContainEqual(
+      expect.objectContaining({ path: "/settings/access-control", section: "settings", label: "Access control" }),
+    );
+    expect(portalSettingsPages(contextual)).not.toContainEqual(
+      expect.objectContaining({ path: "/settings/access-control" }),
+    );
+    expect(portalCapacityFallbackPath(contextual, "/settings/access-control")).toBe("/home");
+    // Governance rosters live on their groups; there is no settings leadership page.
+    expect(portalSettingsPages(grantOnly)).not.toContainEqual(
+      expect.objectContaining({ path: "/settings/leadership" }),
     );
   });
 
@@ -448,7 +449,10 @@ describe("portal capability-derived navigation", () => {
     // Identity destinations live in the avatar menu, not the sidebar.
     expect(labels).not.toContain("My Profile");
     expect(labels).not.toContain("My Application");
-    expect(portalSectionEnabled(session, "profile")).toBe(true);
+    // "My profile" is the member's own user record, so the routes are open to
+    // them — but the directory the sidebar entry leads to is not.
+    expect(portalSectionEnabled(session, "users")).toBe(true);
+    expect(labels).not.toContain("Users");
     expect(portalSectionEnabled(session, "participation")).toBe(true);
     expect(labels).toContain("Groups");
     // Organizations are reached through the avatar menu and dashboard; the
@@ -475,13 +479,13 @@ describe("portal capability-derived navigation", () => {
     const labels = portalNavigationItems(session).map((item) => item.label);
     expect(labels).toContain("Groups");
     expect(labels).not.toContain("Management");
-    expect(portalSectionEnabled(session, "profile")).toBe(true);
+    expect(portalSectionEnabled(session, "application")).toBe(true);
   });
 
   it("keeps shared selected-group routes after member-capacity loss", () => {
     const staffOnly = portalSessionFixture({ staff: true });
     expect(portalDefaultPath(staffOnly)).toBe("/home");
-    expect(portalCapacityFallbackPath(staffOnly, "/profile")).toBe("/home");
+    expect(portalCapacityFallbackPath(staffOnly, "/application")).toBe("/home");
     expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBeNull();
     // Superseded /management and /working-groups URLs redirect within the groups section.
     expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBeNull();
@@ -505,7 +509,37 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/overview")).toBeNull();
     expect(portalActiveSection("/groups/group-id/overview")).toBe("groups");
     expect(portalActiveSection("/management/group-id/overview")).toBe("groups");
-    expect(portalActiveSection("/system/audit-log")).toBe("system");
+    expect(portalActiveSection("/settings/audit-log")).toBe("settings");
+  });
+
+  it("lists a donations page only for the permission that page needs (#43)", () => {
+    const both = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [
+        { permission: "donations:read", contextType: null, contextId: null },
+        { permission: "analytics:read", contextType: null, contextId: null },
+      ],
+    });
+    expect(portalSectionChildren("donations", both).map((child) => child.path)).toEqual([
+      "/donations/promoters",
+      "/donations/analytics",
+    ]);
+
+    // Reconciling donations does not imply reading them: an identity holding
+    // only `donations:sync` reaches the section, but neither page under it.
+    const synchronizer = portalSessionFixture({
+      staff: true,
+      staffRole: "user",
+      grants: [{ permission: "donations:sync", contextType: null, contextId: null }],
+    });
+    expect(portalSectionEnabled(synchronizer, "donations")).toBe(true);
+    expect(portalSectionChildren("donations", synchronizer)).toEqual([]);
+
+    // Every page keeps the section that owns it, so the sidebar entry above
+    // them stays open while one is being read.
+    expect(portalActiveSection("/donations/promoters")).toBe("donations");
+    expect(portalActiveSection("/donations/analytics/weekly")).toBe("donations");
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {

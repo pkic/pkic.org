@@ -1,6 +1,10 @@
 {{/*
   members/directory-app.html — mount point for the client-fetched member
-  directory. Params (dict): group, prefix, label, detailBase.
+  directory. Params (dict): group, prefix, label.
+
+  No `detailBase`: where a member's page lives is a property of the site, not
+  of the page mounting the grid, and both callers passed the same value.
+  `assets/shared/member-profile-url.ts` decides it now (#15).
 */}}
 <div
   data-member-directory
@@ -9,5 +13,4 @@
   data-group="{{ .group | default "organization" }}"
   data-prefix="{{ .prefix | default "m" }}"
   data-label="{{ .label | default "members" }}"
-  data-detail-base="{{ .detailBase | default "/members/profile/" }}"
 ></div>

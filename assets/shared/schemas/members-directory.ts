@@ -5,6 +5,8 @@ import {
   organizationProfileLongContentSchema,
   organizationProfileSummaryFieldsSchema,
 } from "./organization-profile";
+import { linksSchema } from "./links";
+import { trimmedString } from "./api-common";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import {
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
@@ -37,8 +39,63 @@ export const MEMBERS_LIST_SORT_COLUMNS = [
   "representativeCount",
   "memberSince",
 ] as const;
+/**
+ * The kinds of membership the roll can be narrowed to. `all` is the query's
+ * own default rather than a fourth kind.
+ *
+ * Named, with its words beside it, so a surface offering the filter derives
+ * what it offers from what the route accepts — the shape issue #24 reported
+ * for the membership categories, where a select's options and a contract's
+ * accepted values were maintained separately.
+ */
+export const MEMBER_GROUPS = ["all", "organization", "independent"] as const;
+export const memberGroupSchema = z.enum(MEMBER_GROUPS);
+export type MemberGroup = z.infer<typeof memberGroupSchema>;
+export const MEMBER_GROUP_LABELS: Record<MemberGroup, string> = {
+  all: "Every kind",
+  organization: "Organizations",
+  independent: "Individuals",
+};
+
+/** Whether anybody is seated for a membership. */
+export const MEMBER_REPRESENTATION_STATES = ["none", "some"] as const;
+export const memberRepresentationSchema = z.enum(MEMBER_REPRESENTATION_STATES);
+export type MemberRepresentationState = z.infer<typeof memberRepresentationSchema>;
+export const MEMBER_REPRESENTATION_LABELS: Record<MemberRepresentationState, string> = {
+  none: "Without representatives",
+  some: "With representatives",
+};
+
 export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS).extend({
-  group: z.enum(["all", "organization", "independent"]).default("all"),
+  /**
+   * Which projection the caller needs, stated rather than inferred.
+   *
+   * This endpoint answers in two shapes, and it used to choose by whether the
+   * reader happened to hold `membership:read`. That made a public page's data
+   * depend on who was looking: a staff member browsing `/members/` received
+   * rows with no `slug`, `logoUrl` or `website` at all — the directory could
+   * not render them and refused the whole response, which is what #11, #13
+   * and #25 all reported as members failing to list.
+   *
+   * A public surface is public for everybody, so `public` is the default and
+   * a signed-in reader sees exactly what an anonymous one does. `staff` is
+   * for the portal's own list, and still yields the public shape to a caller
+   * without the permission — the projection widens with what you may see, it
+   * never narrows what you asked for.
+   */
+  view: z.enum(["public", "staff"]).default("public"),
+  group: memberGroupSchema.default("all"),
+  /**
+   * Narrows the roll to the members with somebody seated in one group, by
+   * that group's slug or id.
+   *
+   * A member, not a seat: an organization with five people in a working group
+   * is one member and is listed once, because its representatives inherit its
+   * membership rather than each holding one. This is what a working group's
+   * own pages state, and what they used to state by filtering the YAML files
+   * in the repository by a `workingGroups` field (#8).
+   */
+  workingGroup: trimmedString(1, 200).optional(),
   membershipCategory: membershipCategorySchema.optional(),
   /**
    * Staff only. The public directory always lists active members, so this
@@ -50,7 +107,7 @@ export const membersListQuerySchema = listQuerySchema(MEMBERS_LIST_SORT_COLUMNS)
    * membership lapses after a grace period, and which nothing reaches until
    * then.
    */
-  representatives: z.enum(["none", "some"]).optional(),
+  representatives: memberRepresentationSchema.optional(),
   /**
    * One membership by its aggregate id — the same list, narrowed to a single
    * row, for a surface that edits one. `groupMembershipsListQuerySchema`
@@ -197,8 +254,9 @@ export const publicMemberIdentitySchema = z.object({
   name: z.string(),
   jobTitle: z.string().nullable(),
   bio: z.string().nullable(),
-  // The identity's owner-ordered featured profile link (links[0]), any platform.
-  featuredLink: httpUrlSchema.nullable(),
+  // Keep the earlier field readable while cached public responses and open clients roll over.
+  featuredLink: httpUrlSchema.nullable().optional(),
+  links: linksSchema.optional(),
   photoUrl: httpOrSameOriginUrlSchema.nullable(),
 });
 

@@ -16,9 +16,10 @@ import { Pager } from "../components/Pager";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
+import { memberProfileHref } from "../../shared/member-profile-url";
 import { publicMembersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { useApiPage } from "../hooks/useApiPage";
-import { memberInitials } from "../shared/member-display";
+import { monogramFrom } from "../shared/initials";
 
 const API_BASE_FALLBACK = "/api/v1";
 const DIGITS = new Set("0123456789".split(""));
@@ -32,13 +33,11 @@ function letterBucket(name: string): string {
   return "…";
 }
 
-function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBase: string }) {
-  // Org-tied members get a clean URL (functions/members/[slug].ts); org-less
-  // individuals have no organizations row to hold a slug on, so they keep
-  // the query-string form.
-  const href = member.slug
-    ? `/members/${encodeURIComponent(member.slug)}/`
-    : `${detailBase}?id=${encodeURIComponent(member.id)}`;
+function MemberCard({ member }: { member: DirectoryMember }) {
+  // Decided in `assets/shared/member-profile-url.ts`, not here: the wall, the
+  // charter roll and this grid all link to the same page and used to answer
+  // "where is it?" three separate ways (#15).
+  const href = memberProfileHref(member);
   const colorIdx = member.name.length % 6;
 
   return (
@@ -48,7 +47,7 @@ function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBas
         {member.logoUrl ? (
           <img class="member-card-logo" src={member.logoUrl} alt={`${member.name} logo`} loading="lazy" />
         ) : (
-          <div class={`member-card-initials initial-color-${colorIdx}`}>{memberInitials(member.name)}</div>
+          <div class={`member-card-initials initial-color-${colorIdx}`}>{monogramFrom(member.name)}</div>
         )}
       </div>
       <div class="member-card-name">{member.name}</div>
@@ -62,15 +61,7 @@ function MemberCard({ member, detailBase }: { member: DirectoryMember; detailBas
   );
 }
 
-function DirectoryGrid({
-  members,
-  prefix,
-  detailBase,
-}: {
-  members: DirectoryMember[];
-  prefix: string;
-  detailBase: string;
-}) {
+function DirectoryGrid({ members, prefix }: { members: DirectoryMember[]; prefix: string }) {
   const buckets = useMemo(() => {
     const map = new Map<string, DirectoryMember[]>();
     for (const m of members) {
@@ -123,7 +114,7 @@ function DirectoryGrid({
             <h3 class="member-letter-heading">0 – 9</h3>
             <div class="members-grid">
               {buckets.get("#")!.map((m) => (
-                <MemberCard key={m.id} member={m} detailBase={detailBase} />
+                <MemberCard key={m.id} member={m} />
               ))}
             </div>
           </section>
@@ -133,7 +124,7 @@ function DirectoryGrid({
             <h3 class="member-letter-heading">{l}</h3>
             <div class="members-grid">
               {buckets.get(l)!.map((m) => (
-                <MemberCard key={m.id} member={m} detailBase={detailBase} />
+                <MemberCard key={m.id} member={m} />
               ))}
             </div>
           </section>
@@ -143,7 +134,7 @@ function DirectoryGrid({
             <h3 class="member-letter-heading">Other</h3>
             <div class="members-grid">
               {buckets.get("…")!.map((m) => (
-                <MemberCard key={m.id} member={m} detailBase={detailBase} />
+                <MemberCard key={m.id} member={m} />
               ))}
             </div>
           </section>
@@ -153,18 +144,49 @@ function DirectoryGrid({
   );
 }
 
+/**
+ * The same roll, narrowed to one group and shown as a plain grid.
+ *
+ * A working group's page states who is in the room; it is not the members
+ * directory, so it carries no search, no A-Z rail and no paging — it links to
+ * the directory for that. It used to filter `data/members/*.yaml` on a
+ * `workingGroups` field, which listed whoever was in a file (#8).
+ */
+export function GroupMemberGrid({ apiBase, workingGroup }: { apiBase: string; workingGroup: string }) {
+  const listing = useApiPage(
+    `${apiBase}/members`,
+    { workingGroup, group: "organization", sort: "name" },
+    publicMembersListResponseSchema,
+    (data) => data.members,
+  );
+  const members = listing.data?.members;
+
+  if (listing.error) return <ErrorAlert error={listing.error} />;
+  if (!members) return <Spinner />;
+  // Nothing rather than an empty-state box: the section around this already
+  // says what it is, and a group with no members yet is a fact about the
+  // group, not a failure the reader can act on.
+  if (members.length === 0) return null;
+
+  return (
+    <div class="members-grid">
+      {members.map((member) => (
+        <MemberCard key={member.id} member={member} />
+      ))}
+    </div>
+  );
+}
+
 export function MemberDirectory({
   apiBase,
   group,
   prefix,
   label,
-  detailBase,
 }: {
   apiBase: string;
   group: "organization" | "independent";
   prefix: string;
   label: string;
-  detailBase: string;
 }) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -216,7 +238,7 @@ export function MemberDirectory({
         </form>
       </div>
       <div class="pk-container pk-container--wide">
-        <DirectoryGrid members={members} prefix={prefix} detailBase={detailBase} />
+        <DirectoryGrid members={members} prefix={prefix} />
         {listing.pagerProps && <Pager {...listing.pagerProps} />}
       </div>
     </div>
@@ -224,6 +246,12 @@ export function MemberDirectory({
 }
 
 function main(): void {
+  for (const grid of document.querySelectorAll<HTMLElement>("[data-group-member-grid]")) {
+    const workingGroup = grid.dataset.workingGroup ?? "";
+    if (!workingGroup) continue;
+    render(<GroupMemberGrid apiBase={grid.dataset.apiBase ?? API_BASE_FALLBACK} workingGroup={workingGroup} />, grid);
+  }
+
   const root = document.querySelector<HTMLElement>("[data-member-directory]");
   if (!root) return;
 
@@ -231,12 +259,8 @@ function main(): void {
   const group = root.dataset.group === "independent" ? "independent" : "organization";
   const prefix = root.dataset.prefix ?? "m";
   const label = root.dataset.label ?? "members";
-  const detailBase = root.dataset.detailBase ?? "/members/profile/";
 
-  render(
-    <MemberDirectory apiBase={apiBase} group={group} prefix={prefix} label={label} detailBase={detailBase} />,
-    root,
-  );
+  render(<MemberDirectory apiBase={apiBase} group={group} prefix={prefix} label={label} />, root);
 }
 
 main();

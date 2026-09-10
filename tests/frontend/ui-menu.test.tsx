@@ -26,6 +26,7 @@ function mount(node: ComponentChildren): HTMLElement {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
@@ -72,6 +73,40 @@ describe("Menu", () => {
     const menu = container.querySelector('[role="menu"]');
     expect(menu).not.toBeNull();
     expect(trigger(container).getAttribute("aria-controls")).toBe(menu?.id);
+  });
+
+  /**
+   * Issue #36: the row menu jumped when it opened.
+   *
+   * The popup is `position: fixed` with no `top`/`left` of its own, so until
+   * something writes them it resolves to its static place inside the row.
+   * Placement used to go through component state — measure in one effect,
+   * write in the next render's — which meant the browser could paint the
+   * popup at that static place first and move it afterwards. Measuring and
+   * writing in one layout effect means the position is on the element before
+   * the first paint of it: by the time `act` returns from the click, the
+   * coordinates are already there.
+   */
+  it("is positioned before it can be painted, rather than moved afterwards", () => {
+    // jsdom reports a zero-sized layout, so the geometry that decides the
+    // placement is supplied: a trigger part-way down the viewport, and a
+    // popup short enough to sit under it.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const popup = this.classList.contains("pk-menu__popup");
+      const box = popup ? { top: 0, left: 0, width: 220, height: 120 } : { top: 300, left: 480, width: 32, height: 32 };
+      return { ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top } as DOMRect;
+    });
+
+    const container = mount(<Menu label="Actions for Marit" items={items()} />);
+    void act(() => trigger(container).click());
+
+    const popup = container.querySelector<HTMLElement>(".pk-menu__popup");
+    expect(popup).not.toBeNull();
+    // Placed against the trigger's own box: below it, by the 4px gap.
+    expect(popup!.style.top).toBe("336px");
+    expect(popup!.style.left).toBe("480px");
+    // And never narrower than what it hangs from.
+    expect(popup!.style.minWidth).toBe("32px");
   });
 
   it("opens onto the first item with ArrowDown and the last with ArrowUp", () => {

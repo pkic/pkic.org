@@ -10,6 +10,7 @@ import {
   requestJobWake,
   selectRunnableJobs,
 } from "../functions/_lib/services/scheduled-jobs/dispatcher";
+import { SCHEDULED_JOB_DEFINITIONS } from "../functions/_lib/services/scheduled-jobs/registry";
 import type { ScheduledJobDefinition } from "../functions/_lib/services/scheduled-jobs/types";
 
 const JOB = "retention" as const;
@@ -84,7 +85,9 @@ describe("scheduled job dispatcher", () => {
     expect(row.consecutive_failures).toBe(0);
     expect(row.running_since).toBeNull();
     // Reaping must make the job eligible again, not strand it.
-    expect((await selectRunnableJobs(env.DB, 10)).some((job) => job.job_key === JOB)).toBe(true);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
+    ).toBe(true);
   });
 
   it("does not reap a run whose lease is still valid", async () => {
@@ -99,11 +102,15 @@ describe("scheduled job dispatcher", () => {
 
   it("never selects a paused job, and pausing loses no work", async () => {
     await setJob({ paused_at: "2000-01-01T00:00:00.000Z", paused_reason: "investigating" });
-    expect((await selectRunnableJobs(env.DB, 10)).some((job) => job.job_key === JOB)).toBe(false);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
+    ).toBe(false);
 
     await setJob({ paused_at: null, paused_reason: null });
     // The work was never queued anywhere, so resuming simply finds it due again.
-    expect((await selectRunnableJobs(env.DB, 10)).some((job) => job.job_key === JOB)).toBe(true);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
+    ).toBe(true);
   });
 
   it("backs off after a failure instead of auto-pausing", async () => {
@@ -115,7 +122,9 @@ describe("scheduled job dispatcher", () => {
     expect(row.consecutive_failures).toBe(1);
     expect(row.last_success_at).toBeNull();
     expect(row.next_run_at > new Date().toISOString()).toBe(true);
-    expect((await selectRunnableJobs(env.DB, 10)).some((job) => job.job_key === JOB)).toBe(false);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
+    ).toBe(false);
   });
 
   it("separates last_run_at from last_success_at so a persistently failing job is visible", async () => {
@@ -146,10 +155,14 @@ describe("scheduled job dispatcher", () => {
 
   it("runs a woken job before its interval and clears the wake flag", async () => {
     await setJob({ next_run_at: "2999-01-01T00:00:00.000Z" });
-    expect((await selectRunnableJobs(env.DB, 10)).some((job) => job.job_key === JOB)).toBe(false);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
+    ).toBe(false);
 
     await requestJobWake(env.DB, JOB);
-    expect((await selectRunnableJobs(env.DB, 10)).some((job) => job.job_key === JOB)).toBe(true);
+    expect(
+      (await selectRunnableJobs(env.DB, SCHEDULED_JOB_DEFINITIONS.length)).some((job) => job.job_key === JOB),
+    ).toBe(true);
 
     await claimJob(env.DB, JOB, 600);
     expect((await jobRow()).wake_requested).toBe(0);

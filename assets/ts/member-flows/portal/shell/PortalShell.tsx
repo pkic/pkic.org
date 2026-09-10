@@ -1,79 +1,44 @@
 /** Capability-derived portal shell shared by member and management identities. */
-import { lazy, Suspense } from "preact/compat";
+import type { ComponentChildren } from "preact";
+import { Suspense } from "preact/compat";
 import { Router, Route, Switch } from "wouter";
+import { portalAnalyticsRoutes } from "./portal-analytics-routes";
 import { usePortalHashLocation } from "../hash-location";
+import { LazyEventWorkspace } from "./LazyEventWorkspace";
+import {
+  AccountSettings,
+  DonationAnalytics,
+  DonationDetailPage,
+  Donations,
+  EventAnalytics,
+  Forms,
+  GroupWorkspace,
+  Groups,
+  Home,
+  Members,
+  MembershipApplications,
+  MyApplications,
+  MyOrganization,
+  OrganizationDetail,
+  Organizations,
+  Participation,
+  RepresentedOrganizations,
+  SettingsSection,
+  SponsorWorkspace,
+  Users,
+} from "./portal-sections";
 import { clearAuth, portalSession, profile, signedInWithLink } from "../state";
-import type { EventWorkspaceProps } from "../sections/events/EventWorkspace";
 import { Spinner } from "../../../components/Spinner";
 import { PortalNavigationShell } from "./PortalNavigationShell";
 import { PortalRouteFallback, PortalRouteRedirect, ScrollResetOnNavigate, SectionWrapper } from "./PortalRouteChrome";
 import { useAutomaticPasskeyUpgrade } from "../../../components/passkey-enrollment";
 import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
+  PORTAL_SUPERSEDED_SETTINGS_ROUTES,
   portalDefaultPath,
-  portalHasAnyGlobalPermission,
   portalHasGlobalPermission,
-  portalSectionEnabled,
 } from "./portal-navigation";
-
-const EventWorkspace = lazy(() =>
-  import("../sections/events/EventWorkspace").then((module) => ({ default: module.EventWorkspace })),
-);
-const MyProfile = lazy(() => import("../sections/MyProfile").then((module) => ({ default: module.MyProfile })));
-const MyOrganization = lazy(() =>
-  import("../sections/MyOrganization").then((module) => ({ default: module.MyOrganization })),
-);
-const Groups = lazy(() => import("../sections/Groups").then((module) => ({ default: module.Groups })));
-const Home = lazy(() => import("../sections/Home").then((module) => ({ default: module.Home })));
-const Participation = lazy(() =>
-  import("../sections/Participation").then((module) => ({ default: module.Participation })),
-);
-const MyApplications = lazy(() =>
-  import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
-);
-const AccountSettings = lazy(() =>
-  import("../sections/AccountSettings").then((module) => ({ default: module.AccountSettings })),
-);
-const Forms = lazy(() => import("../sections/Forms").then((module) => ({ default: module.Forms })));
-const SystemManagement = lazy(() =>
-  import("../sections/SystemManagement").then((module) => ({ default: module.SystemManagement })),
-);
-const GroupWorkspace = lazy(() =>
-  import("../sections/management/GroupWorkspace").then((module) => ({ default: module.GroupWorkspace })),
-);
-const DonationDetailPage = lazy(() =>
-  import("../sections/system-donations/DonationDetailPage").then((module) => ({ default: module.DonationDetailPage })),
-);
-const Donations = lazy(() =>
-  import("../sections/system-donations/Donations").then((module) => ({ default: module.Donations })),
-);
-const Users = lazy(() => import("../sections/system-users/Users").then((module) => ({ default: module.Users })));
-const Organizations = lazy(() =>
-  import("../sections/system-organizations/Organizations").then((module) => ({ default: module.Organizations })),
-);
-const OrganizationDetail = lazy(() =>
-  import("../sections/system-organizations/OrganizationDetail").then((module) => ({
-    default: module.OrganizationDetail,
-  })),
-);
-const MembershipApplications = lazy(() =>
-  import("../sections/membership-applications").then((module) => ({ default: module.MembershipApplications })),
-);
-const Members = lazy(() => import("../sections/membership-members").then((module) => ({ default: module.Members })));
-const RepresentedOrganizations = lazy(() =>
-  import("../sections/RepresentedOrganizations").then((module) => ({ default: module.RepresentedOrganizations })),
-);
-const SponsorWorkspace = lazy(() =>
-  import("../sections/sponsors").then((module) => ({ default: module.SponsorWorkspace })),
-);
-
-function LazyEventWorkspace(props: EventWorkspaceProps) {
-  return (
-    <Suspense fallback={<Spinner />}>
-      <EventWorkspace {...props} />
-    </Suspense>
-  );
-}
+import { derivePortalAccess } from "./portal-access";
 
 export function PortalShell() {
   const session = portalSession.value;
@@ -84,29 +49,7 @@ export function PortalShell() {
    * not have one made for it.
    */
   useAutomaticPasskeyUpgrade(signedInWithLink.value && Boolean(session?.member || session?.staff));
-  const hasGroupsAccess = portalSectionEnabled(session, "groups");
-  const hasEventWorkspace = portalSectionEnabled(session, "events");
-  const hasSponsorWorkspace = portalSectionEnabled(session, "sponsors");
-  const hasFormsAccess = portalSectionEnabled(session, "forms");
-  const hasMemberCapacity = portalSectionEnabled(session, "profile");
-  const hasOrganizationsAccess = portalSectionEnabled(session, "organizations");
-  const hasOrganizationsDirectory = portalHasAnyGlobalPermission(session, ["organizations:read", "membership:write"]);
-  // Creating an organization activates its initial identities at once, so it
-  // takes both permissions. Named once, because the directory route and the
-  // create route have to agree on who may reach the create page.
-  const canCreateOrganizations =
-    portalHasGlobalPermission(session, "membership:write") && portalHasGlobalPermission(session, "identities:activate");
-  const hasMembershipQueue = portalSectionEnabled(session, "membership");
-  const hasMembersRoll = portalSectionEnabled(session, "members");
-  /* A grant activates the membership at once, so it takes the same pair of
-     permissions the API demands of it. */
-  const canGrantMembership =
-    portalHasGlobalPermission(session, "membership:write") && portalHasGlobalPermission(session, "identities:activate");
-  const hasUsersDirectory = portalSectionEnabled(session, "users");
-  const hasDonationsAccess = portalSectionEnabled(session, "donations");
-  const hasSystemManagement = portalSectionEnabled(session, "system");
-  const hasAccountAccess = portalSectionEnabled(session, "account");
-  const hasAdminCapacity = Boolean(session?.staff);
+  const access = derivePortalAccess(session);
   const defaultPath = portalDefaultPath(session);
   const displayName =
     profile.value?.preferredName ||
@@ -124,7 +67,29 @@ export function PortalShell() {
       >
         <Suspense fallback={<Spinner />}>
           <Switch>
-            {hasEventWorkspace && (
+            {/* Each domain's analytics page, every one of them a reserved
+                segment that has to match before its section's own `:id` route.
+                See `portal-analytics-routes.tsx` (#39). */}
+            {portalAnalyticsRoutes(access, (children: ComponentChildren) => (
+              <SectionWrapper>{children}</SectionWrapper>
+            ))}
+            {/*
+              A reserved segment, and it has to be routed above `/events/:slug`
+              or the workspace claims it as the slug of an event called
+              "analytics". Analytics live under the domain they measure rather
+              than in one system-wide panel inside Settings (#39).
+            */}
+            {access.hasEventWorkspace && access.canReadAnalytics && (
+              <Route
+                path="/events/analytics/:tab?"
+                component={({ params }: { params: { tab?: string } }) => (
+                  <SectionWrapper>
+                    <EventAnalytics initialTab={params.tab} />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {access.hasEventWorkspace && (
               <Route
                 path="/events/:slug/registrations/detail/:registrationId"
                 component={({ params }: { params: { slug: string; registrationId: string } }) => (
@@ -132,7 +97,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasEventWorkspace && (
+            {access.hasEventWorkspace && (
               <Route
                 path="/events/:slug/proposals/detail/:proposalId"
                 component={({ params }: { params: { slug: string; proposalId: string } }) => (
@@ -140,7 +105,24 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasEventWorkspace && (
+            {access.hasEventWorkspace && (
+              // A team member is added on a page below the Team tab, which is
+              // one segment deeper than the generic route reaches — the same
+              // shape the registration and proposal detail routes above use.
+              <Route
+                path="/events/:slug/settings/team/:teamSegment"
+                component={({ params }: { params: { slug: string; teamSegment: string } }) => (
+                  <LazyEventWorkspace
+                    view="detail"
+                    slug={params.slug}
+                    tab="settings"
+                    subTab="team"
+                    detailSegment={params.teamSegment}
+                  />
+                )}
+              />
+            )}
+            {access.hasEventWorkspace && (
               <Route
                 path="/events/:slug/:tab/:subTab"
                 component={({ params }: { params: { slug: string; tab: string; subTab: string } }) => (
@@ -148,7 +130,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasEventWorkspace && (
+            {access.hasEventWorkspace && (
               <Route
                 path="/events/:slug/:tab?"
                 component={({ params }: { params: { slug: string; tab?: string } }) => (
@@ -156,11 +138,11 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasEventWorkspace && <Route path="/events" component={() => <LazyEventWorkspace view="list" />} />}
-            {hasSponsorWorkspace && (
+            {access.hasEventWorkspace && <Route path="/events" component={() => <LazyEventWorkspace view="list" />} />}
+            {access.hasSponsorWorkspace && (
               <Route path="/sponsors/access" component={() => <PortalRouteRedirect to="/sponsors" />} />
             )}
-            {hasSponsorWorkspace && (
+            {access.hasSponsorWorkspace && (
               <Route
                 path="/sponsors/:sponsorId"
                 component={({ params }: { params: { sponsorId: string } }) => (
@@ -176,7 +158,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasSponsorWorkspace && (
+            {access.hasSponsorWorkspace && (
               <Route
                 path="/sponsors"
                 component={() => (
@@ -191,7 +173,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasFormsAccess && (
+            {access.hasFormsAccess && (
               <Route
                 path="/forms/:formKey"
                 component={({ params }: { params: { formKey: string } }) => (
@@ -201,7 +183,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasFormsAccess && (
+            {access.hasFormsAccess && (
               <Route
                 path="/forms"
                 component={() => (
@@ -211,7 +193,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasOrganizationsAccess && (
+            {access.hasOrganizationsAccess && (
               // Creation has its own address, so it survives a reload and Back
               // closes it. Must stay above `/organizations/:organizationId`:
               // wouter's <Switch> renders the first match, and the detail route
@@ -219,8 +201,8 @@ export function PortalShell() {
               <Route
                 path="/organizations/new"
                 component={() =>
-                  hasOrganizationsDirectory && canCreateOrganizations ? (
-                    <SectionWrapper title="Organizations">
+                  access.hasOrganizationsDirectory && access.canCreateOrganizations ? (
+                    <SectionWrapper>
                       <Organizations
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
                         canCreate
@@ -233,11 +215,33 @@ export function PortalShell() {
                 }
               />
             )}
-            {hasOrganizationsAccess && (
+            {access.hasOrganizationsAccess && (
+              // Adding a representative has its own address, so it survives a
+              // reload and Back closes it. Must stay above
+              // `/organizations/:organizationId`, which would otherwise win.
+              // The staff record manages representatives from its own roster,
+              // so a directory reader is sent back to it.
+              <Route
+                path="/organizations/:organizationId/representatives/:representativeSegment"
+                component={({ params }: { params: { organizationId: string; representativeSegment: string } }) =>
+                  access.hasOrganizationsDirectory ? (
+                    <PortalRouteRedirect to={`/organizations/${encodeURIComponent(params.organizationId)}`} />
+                  ) : (
+                    <SectionWrapper>
+                      <MyOrganization
+                        organizationId={params.organizationId}
+                        representativeSegment={params.representativeSegment}
+                      />
+                    </SectionWrapper>
+                  )
+                }
+              />
+            )}
+            {access.hasOrganizationsAccess && (
               <Route
                 path="/organizations/:organizationId"
                 component={({ params }: { params: { organizationId: string } }) =>
-                  hasOrganizationsDirectory ? (
+                  access.hasOrganizationsDirectory ? (
                     // No section title here: the record's PageHeader already
                     // carries the "Organizations" trail and the record's name,
                     // and the anatomy allows each name exactly once.
@@ -260,15 +264,15 @@ export function PortalShell() {
                 }
               />
             )}
-            {hasOrganizationsAccess && (
+            {access.hasOrganizationsAccess && (
               <Route
                 path="/organizations"
                 component={() =>
-                  hasOrganizationsDirectory ? (
-                    <SectionWrapper title="Organizations">
+                  access.hasOrganizationsDirectory ? (
+                    <SectionWrapper>
                       <Organizations
                         canRead={portalHasGlobalPermission(session, "organizations:read")}
-                        canCreate={canCreateOrganizations}
+                        canCreate={access.canCreateOrganizations}
                       />
                     </SectionWrapper>
                   ) : (
@@ -279,7 +283,7 @@ export function PortalShell() {
                 }
               />
             )}
-            {hasMembersRoll && (
+            {access.hasMembersRoll && (
               // One route with an optional segment, as `/users/:userId?` is:
               // the grant has its own address, so it survives a reload and
               // Back closes it.
@@ -288,7 +292,7 @@ export function PortalShell() {
                 component={({ params }: { params: { memberSegment?: string } }) => (
                   <SectionWrapper>
                     <Members
-                      canGrant={canGrantMembership}
+                      canGrant={access.canGrantMembership}
                       canWrite={portalHasGlobalPermission(session, "membership:write")}
                       memberSegment={params.memberSegment}
                     />
@@ -296,7 +300,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasMembershipQueue && (
+            {access.hasMembershipQueue && (
               <Route
                 path="/membership/applications/:applicationId?"
                 component={({ params }: { params: { applicationId?: string } }) => (
@@ -310,7 +314,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasUsersDirectory && (
+            {access.hasUserRecords && (
               <Route
                 path="/users/:userId?"
                 component={({ params }: { params: { userId?: string } }) => (
@@ -331,7 +335,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasDonationsAccess && (
+            {access.hasDonationsAccess && (
               <Route
                 path="/donations/detail/:donationId"
                 component={({ params }: { params: { donationId: string } }) => (
@@ -345,13 +349,31 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasDonationsAccess && (
+            {/*
+              A sub page, so it is a page: routed above the section's own tab
+              route, or "analytics" would be read as the name of a tab (#43).
+            */}
+            {access.hasDonationsAccess && access.canReadAnalytics && (
               <Route
-                path="/donations/:subTab?"
-                component={({ params }: { params: { subTab?: string } }) => (
+                path="/donations/analytics"
+                component={() => (
+                  <SectionWrapper>
+                    <DonationAnalytics />
+                  </SectionWrapper>
+                )}
+              />
+            )}
+            {access.hasDonationsAccess && (
+              <Route
+                // The section's pages — the list, the share links, and the
+                // analytics with its own views — are addresses under one
+                // lazily loaded module rather than a chunk each.
+                path="/donations/:pageSegment?/:view?"
+                component={({ params }: { params: { pageSegment?: string; view?: string } }) => (
                   <SectionWrapper>
                     <Donations
-                      subTab={params.subTab}
+                      pageSegment={params.pageSegment}
+                      view={params.view}
                       canRead={portalHasGlobalPermission(session, "donations:read")}
                       canSync={portalHasGlobalPermission(session, "donations:sync")}
                     />
@@ -359,100 +381,60 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasUsersDirectory && (
+            {/* Addresses the Settings shell used to own; the table says where
+                each domain took them, so the shell only mounts them. */}
+            {PORTAL_SUPERSEDED_SETTINGS_ROUTES.filter((route) => route.access(session)).map((route) => (
               <Route
-                path="/system/users/:resourceId?"
+                key={route.from}
+                path={route.from}
                 component={({ params }: { params: { resourceId?: string } }) => (
-                  <PortalRouteRedirect
-                    to={params.resourceId ? `/users/${encodeURIComponent(params.resourceId)}` : "/users"}
-                  />
+                  <PortalRouteRedirect to={route.to(params.resourceId)} />
                 )}
               />
-            )}
-            {hasOrganizationsDirectory && (
+            ))}
+            {access.hasSettingsAccess && (
+              // An access-control sub-view — a role's detail, the grant create
+              // page — needs a second segment beyond the generic
+              // `/settings/:page/:resourceId` shape below, so this route composes
+              // it into one `:tab/:detailId` resourceId rather than threading a
+              // third URL param through every consumer. Must stay above the
+              // generic route, which would otherwise win and drop the id.
               <Route
-                path="/system/organizations/:resourceId?"
-                component={({ params }: { params: { resourceId?: string } }) => (
-                  <PortalRouteRedirect
-                    to={
-                      params.resourceId ? `/organizations/${encodeURIComponent(params.resourceId)}` : "/organizations"
-                    }
-                  />
-                )}
-              />
-            )}
-            {hasMembershipQueue && (
-              <Route
-                path="/system/membership-applications/:resourceId?"
-                component={({ params }: { params: { resourceId?: string } }) => (
-                  <PortalRouteRedirect
-                    to={
-                      params.resourceId
-                        ? `/membership/applications/${encodeURIComponent(params.resourceId)}`
-                        : "/membership/applications"
-                    }
-                  />
-                )}
-              />
-            )}
-            {hasDonationsAccess && (
-              <Route
-                path="/system/donations/detail/:donationId"
-                component={({ params }: { params: { donationId: string } }) => (
-                  <PortalRouteRedirect to={`/donations/detail/${encodeURIComponent(params.donationId)}`} />
-                )}
-              />
-            )}
-            {hasDonationsAccess && (
-              <Route
-                path="/system/donations/:resourceId?"
-                component={({ params }: { params: { resourceId?: string } }) => (
-                  <PortalRouteRedirect
-                    to={params.resourceId ? `/donations/${encodeURIComponent(params.resourceId)}` : "/donations"}
-                  />
-                )}
-              />
-            )}
-            {hasSystemManagement && (
-              // A role detail needs a second path segment beyond the generic
-              // `/system/:view/:resourceId` shape below (view="access-control",
-              // resourceId="roles"), so this route composes the extra
-              // `:roleId` into a single `roles/:roleId` resourceId string
-              // instead of threading a third URL param through SystemManagement
-              // and every other `/system/:view/:resourceId` consumer. Must stay
-              // above the generic route: wouter's <Switch> renders the first
-              // match, and the generic route would otherwise win with
-              // resourceId="roles" and silently drop the role id.
-              <Route
-                path="/system/access-control/roles/:roleId"
-                component={({ params }: { params: { roleId: string } }) => (
+                path="/settings/access-control/:tab/:detailId"
+                component={({ params }: { params: { tab: string; detailId: string } }) => (
                   <SectionWrapper>
-                    <SystemManagement session={session} view="access-control" resourceId={`roles/${params.roleId}`} />
+                    <SettingsSection
+                      session={session}
+                      page="access-control"
+                      resourceId={`${params.tab}/${params.detailId}`}
+                    />
                   </SectionWrapper>
                 )}
               />
             )}
-            {hasSystemManagement && (
+            {access.hasSettingsAccess && (
               <Route
-                path="/system/:view/:resourceId"
-                component={({ params }: { params: { view: string; resourceId: string } }) => (
+                path="/settings/:page/:resourceId"
+                component={({ params }: { params: { page: string; resourceId: string } }) => (
                   <SectionWrapper>
-                    <SystemManagement session={session} view={params.view} resourceId={params.resourceId} />
+                    <SettingsSection session={session} page={params.page} resourceId={params.resourceId} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {hasSystemManagement && (
+            {/* Each segment is a settings page, not a tab on one: the section
+                has no tabbed surface for a page name to be mistaken for. */}
+            {access.hasSettingsAccess && (
               <Route
-                path="/system/:view?"
-                component={({ params }: { params: { view?: string } }) => (
+                path="/settings/:page?"
+                component={({ params }: { params: { page?: string } }) => (
                   <SectionWrapper>
-                    <SystemManagement session={session} view={params.view} />
+                    <SettingsSection session={session} page={params.page} />
                   </SectionWrapper>
                 )}
               />
             )}
-            {(hasMemberCapacity || hasAdminCapacity) && (
+            {access.hasHomeAccess && (
               <Route
                 path="/home"
                 component={() => (
@@ -462,7 +444,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasGroupsAccess && (
+            {access.hasGroupsAccess && (
               // Same reservation as the organizations create route: this must
               // stay above `/groups/:groupId/*?`, which would otherwise load a
               // group workspace for the id "new".
@@ -475,7 +457,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasGroupsAccess && (
+            {access.hasGroupsAccess && (
               <Route
                 path="/groups"
                 component={() => (
@@ -485,7 +467,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasGroupsAccess && (
+            {access.hasGroupsAccess && (
               // One route for the whole group surface: every view, resource,
               // and event sub-tab under a group renders the SAME mounted
               // GroupWorkspace, so moving between views, resources, and
@@ -510,7 +492,7 @@ export function PortalShell() {
                 }}
               />
             )}
-            {hasGroupsAccess && (
+            {access.hasGroupsAccess && (
               <Route
                 path="/management/:groupId/:view?"
                 component={({ params }: { params: { groupId: string; view?: string } }) => (
@@ -520,18 +502,10 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasGroupsAccess && <Route path="/management" component={() => <PortalRouteRedirect to="/groups" />} />}
-            {hasMemberCapacity && (
-              <Route
-                path="/profile"
-                component={() => (
-                  <SectionWrapper>
-                    <MyProfile />
-                  </SectionWrapper>
-                )}
-              />
+            {access.hasGroupsAccess && (
+              <Route path="/management" component={() => <PortalRouteRedirect to="/groups" />} />
             )}
-            {hasMemberCapacity && (
+            {access.hasMemberOrganization && (
               <Route
                 path="/organization"
                 component={() => {
@@ -546,11 +520,11 @@ export function PortalShell() {
                 }}
               />
             )}
-            {hasGroupsAccess &&
+            {access.hasGroupsAccess &&
               Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
                 <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
               ))}
-            {hasMemberCapacity && (
+            {access.hasMemberApplication && (
               <Route
                 path="/application"
                 component={() => (
@@ -560,7 +534,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {portalSectionEnabled(session, "participation") && (
+            {access.hasParticipationRecord && (
               <Route
                 path="/participation"
                 component={() => (
@@ -570,7 +544,7 @@ export function PortalShell() {
                 )}
               />
             )}
-            {hasAccountAccess && (
+            {access.hasAccountAccess && (
               <Route
                 path="/account"
                 component={() => (

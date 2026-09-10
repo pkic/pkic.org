@@ -11,6 +11,8 @@
 import { useState } from "preact/hooks";
 
 import {
+  AVAILABILITY_VISIBILITY_LABELS,
+  availabilityVisibilitySchema,
   memberAvailabilityResponseSchema,
   memberAvailabilityUpdateSchema,
   type MemberAvailability,
@@ -199,8 +201,11 @@ export function UserAvailabilityEditor({
               set("visibility", (event.currentTarget as HTMLSelectElement).value as AvailabilityDraft["visibility"]);
             }}
           >
-            <option value="members">Signed-in members</option>
-            <option value="private">Nobody — keep this to myself</option>
+            {availabilityVisibilitySchema.options.map((visibility) => (
+              <option key={visibility} value={visibility}>
+                {AVAILABILITY_VISIBILITY_LABELS[visibility]}
+              </option>
+            ))}
           </Select>
         )}
       </Field>

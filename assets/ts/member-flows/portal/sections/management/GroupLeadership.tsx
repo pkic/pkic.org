@@ -3,7 +3,7 @@
  * when, and the closed terms that came before. Inherited rows are shown but
  * edited at their source group; local rows carry their commands.
  */
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import {
   groupLeadershipListResponseSchema,
   type GroupLeadershipAssignment,
@@ -13,6 +13,7 @@ import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Button } from "../../../../ui/Button";
+import { usePortalHashLocation } from "../../hash-location";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -107,15 +108,25 @@ function leadershipColumns(
   ];
 }
 
-export function GroupLeadership({ groupId }: { groupId: string }) {
+/** Reserved leadership segment that routes to the add page instead of one term's own. */
+const ADD_LEADERSHIP_SEGMENT = "add";
+
+export function GroupLeadership({
+  groupId,
+  assignmentSegment,
+}: {
+  groupId: string;
+  /** `undefined` for the list, `"add"` for the add page, a userRoleId to edit one term. */
+  assignmentSegment?: string;
+}) {
   const leadership = useData(
     () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`, groupLeadershipListResponseSchema),
     [groupId],
   );
+  const [, navigate] = usePortalHashLocation();
+  const leadershipPath = `/groups/${encodeURIComponent(groupId)}/leadership`;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editing, setEditing] = useState<GroupLeadershipAssignment | null>(null);
 
   async function endTerm(assignment: GroupLeadershipAssignment): Promise<void> {
     if (
@@ -142,9 +153,79 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
     }
   }
 
-  if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
+  /*
+   * Adding and editing are pages, not panels that unfold above the table.
+   *
+   * Both forms used to open in place, which made the table the page and the
+   * form a mode of it: nothing addressed the form, reloading lost it, and the
+   * list the reader was leaving stayed underneath the thing they had moved on
+   * to. They follow the Members roster's idiom instead — a reserved `add`
+   * segment and one term at its own address — so a form is somewhere you go
+   * and coming back is a navigation.
+   *
+   * The term is resolved from the address rather than handed over by the row
+   * that opened it, so the page is a real place: opening it cold, or
+   * reloading it, shows the same term.
+   */
   const data: GroupLeadershipListResponse | null = leadership.data;
+  const editingSegment = assignmentSegment && assignmentSegment !== ADD_LEADERSHIP_SEGMENT ? assignmentSegment : null;
+  const editing =
+    data && editingSegment
+      ? ([...data.assignments, ...data.past].find(
+          (candidate) => candidate.userRoleId === editingSegment && !candidate.inherited,
+        ) ?? null)
+      : null;
+  /*
+   * An address that names no local term of this group is not an empty editor:
+   * an inherited row is edited at its source, and a userRoleId that belongs to
+   * nobody here is a stale link. Either way the reader belongs back on the
+   * list rather than in front of a form for nothing. The redirect is an
+   * effect, not something render does on its way past.
+   */
+  const strayAddress = Boolean(data && editingSegment && !editing);
+  useEffect(() => {
+    if (strayAddress) navigate(leadershipPath);
+  }, [strayAddress, leadershipPath, navigate]);
+
+  if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
   const titles = data?.titles ?? { lead: "Chair", deputyLead: "Vice Chair" };
+
+  if (data && assignmentSegment === ADD_LEADERSHIP_SEGMENT) {
+    return (
+      <GroupLeadershipAssignmentForm
+        groupId={groupId}
+        titles={data.titles}
+        titleOptions={data.titleOptions}
+        onAssigned={async () => {
+          // Back to the list first: the reload is for the page being returned
+          // to, and making the return wait on it leaves the reader looking at
+          // a finished form for as long as the refresh takes.
+          navigate(leadershipPath);
+          await leadership.reload();
+        }}
+        onCancel={() => navigate(leadershipPath)}
+      />
+    );
+  }
+
+  if (data && editingSegment) {
+    // The list the reader came from must not appear underneath in the
+    // meantime: they asked for one term, and briefly showing the page they
+    // left would be the wrong page.
+    if (!editing) return <Spinner />;
+    return (
+      <GroupLeadershipTermForm
+        groupId={groupId}
+        assignment={editing}
+        titleOptions={data.titleOptions}
+        onSaved={async () => {
+          navigate(leadershipPath);
+          await leadership.reload();
+        }}
+        onCancel={() => navigate(leadershipPath)}
+      />
+    );
+  }
 
   return (
     <div class="pk pk-stack">
@@ -157,14 +238,7 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
               {data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherits parent leadership"}
             </span>
           )}
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => {
-              setEditing(null);
-              setShowAddForm(true);
-            }}
-          >
+          <Button size="sm" variant="primary" onClick={() => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`)}>
             Add leadership
           </Button>
         </PanelHeader>
@@ -175,29 +249,6 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
             Inherited leadership is changed at its source group.
           </p>
           {mutationError && <ErrorAlert error={mutationError} />}
-          {showAddForm && data && (
-            <GroupLeadershipAssignmentForm
-              groupId={groupId}
-              titles={data.titles}
-              onAssigned={async () => {
-                await leadership.reload();
-                setShowAddForm(false);
-              }}
-              onCancel={() => setShowAddForm(false)}
-            />
-          )}
-          {editing && (
-            <GroupLeadershipTermForm
-              groupId={groupId}
-              assignment={editing}
-              titles={titles}
-              onSaved={async () => {
-                await leadership.reload();
-                setEditing(null);
-              }}
-              onCancel={() => setEditing(null)}
-            />
-          )}
           {/* A failed load replaces the table rather than sitting above an
               empty one: "No leadership yet" is a claim about the group, and
               the surface does not know that when the request did not arrive. */}
@@ -208,21 +259,27 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
               caption="Current leadership of this group"
               columns={leadershipColumns(
                 busyId,
-                (assignment) => {
-                  setShowAddForm(false);
-                  setEditing(assignment);
-                },
+                (assignment) => navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
                 (assignment) => void endTerm(assignment),
               )}
               rows={data?.assignments ?? []}
               rowKey={(assignment) => assignment.userRoleId}
+              // A leader is a person with a record; the row goes to it (#45).
+              rowAction={(assignment) => ({
+                label: `Open ${assignment.userName}`,
+                href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
+              })}
               loading={leadership.loading}
               empty={
                 <EmptyState
                   title="No leadership yet"
                   body={`Give this group a ${titles.lead.toLowerCase()} from among the people who participate in it.`}
                 >
-                  <Button size="sm" variant="primary" onClick={() => setShowAddForm(true)}>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`)}
+                  >
                     Add leadership
                   </Button>
                 </EmptyState>
@@ -237,12 +294,16 @@ export function GroupLeadership({ groupId }: { groupId: string }) {
           <PanelBody>
             <DataTable
               caption="Closed leadership terms of this group"
-              columns={leadershipColumns(busyId, (assignment) => {
-                setShowAddForm(false);
-                setEditing(assignment);
-              })}
+              columns={leadershipColumns(busyId, (assignment) =>
+                navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
+              )}
               rows={data.past}
               rowKey={(assignment) => assignment.userRoleId}
+              // A leader is a person with a record; the row goes to it (#45).
+              rowAction={(assignment) => ({
+                label: `Open ${assignment.userName}`,
+                href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
+              })}
             />
           </PanelBody>
         </Panel>

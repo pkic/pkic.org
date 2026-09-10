@@ -25,7 +25,11 @@
         {{ partial "anchor.html" .name }}
         {{ partial "contribute.html" (dict "url" (printf "https://github.com/pkic/ltl/edit/main/data/%s.yaml" .id) "title" (printf "Improve information for %s" .name)) }}
     </h2>
-    <p><small><a href="{{.website}}">{{.website}}</a></small></p>
+    {{/* The authority's site, named rather than spelled out: a bare address
+         under a heading is a string to transcribe, and every other fact in
+         this block already carries a label. The full URL stays the
+         destination and the tooltip. */}}
+    <p><small><strong>Website:</strong> <a href="{{ .website }}" title="{{ .website }}">{{ replaceRE "^https?://" "" .website }}</a></small></p>
 
     <p>{{ .description }}</p>
 

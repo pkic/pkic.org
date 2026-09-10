@@ -133,4 +133,28 @@ describe("DetailsSummary", () => {
     const nullContainer = mount(<DetailsSummary value={null} />);
     expect(nullContainer.innerHTML).toBe("");
   });
+
+  it("flows its pairs across the width when it sits in a table cell", () => {
+    /*
+     * #48: the audit log's details column is the one the table hands a wide
+     * screen's slack to. Stacked, a five-pair detail was five short rows
+     * against that column's left edge with the rest of it empty; flowing,
+     * the pairs use the measure they were given.
+     *
+     * The layout is a modifier on the same list, not a second component: the
+     * pairs stay `dt`/`dd` pairs either way, so the relationship survives for
+     * a reader who is not looking at the layout.
+     */
+    const stacked = mount(<DetailsSummary value={{ tier: "Bronze", renewal_date: "2027-01-01" }} />);
+    expect(stacked.querySelector("dl")?.className).toBe("pk-datalist");
+
+    const inline = mount(<DetailsSummary value={{ tier: "Bronze", renewal_date: "2027-01-01" }} layout="inline" />);
+    const list = inline.querySelector("dl");
+    expect(list?.className).toContain("pk-datalist--inline");
+    // Each pair is a single wrapping item, so a term cannot wrap away from its value.
+    expect(list?.querySelectorAll(":scope > div")).toHaveLength(2);
+    for (const pair of list!.children) expect([...pair.children].map((child) => child.tagName)).toEqual(["DT", "DD"]);
+    expect([...list!.querySelectorAll("dt")].map((term) => term.textContent)).toEqual(["Tier", "Renewal date"]);
+    expect([...list!.querySelectorAll("dd")].map((value) => value.textContent)).toEqual(["Bronze", "2027-01-01"]);
+  });
 });

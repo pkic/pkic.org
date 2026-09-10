@@ -8,18 +8,14 @@
 import { Link } from "wouter";
 import type { EventViewerState } from "../../../../../shared/schemas/event-management";
 import { Badge } from "../../../../components/Badge";
+// Dates render through the one shared module, which is day-precise, follows
+// the viewer's own locale, and answers an em dash rather than "Invalid Date"
+// for a value it cannot read. A formatter written here would be another copy
+// of that policy, and copies drift (issue #19).
+import { formatDayAndMonth } from "../../../../shared/ui";
 
 function attendanceLabel(value: string): string {
   return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
-}
-
-/** Calendar dates are day-precise; render them as such, never through a zone shift. */
-function formatDayLabel(date: string): string {
-  return new Date(`${date}T00:00:00.000Z`).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
 }
 
 export function ViewerEventState({ viewer }: { viewer: EventViewerState }) {
@@ -32,8 +28,8 @@ export function ViewerEventState({ viewer }: { viewer: EventViewerState }) {
     <Link href="/participation" class="pk-cluster pk-small">
       <Badge status={viewer.registrationStatus} label={attendanceLabel(viewer.registrationStatus)} />
       <span>{attendanceLabel(viewer.attendanceType)}</span>
-      {registeredDays.length > 0 && <span>Days: {registeredDays.map(formatDayLabel).join(", ")}</span>}
-      {waitlistedDays.length > 0 && <span>Waitlisted: {waitlistedDays.map(formatDayLabel).join(", ")}</span>}
+      {registeredDays.length > 0 && <span>Days: {registeredDays.map(formatDayAndMonth).join(", ")}</span>}
+      {waitlistedDays.length > 0 && <span>Waitlisted: {waitlistedDays.map(formatDayAndMonth).join(", ")}</span>}
       {viewer.waitlisted && waitlistedDays.length === 0 && <Badge status="waitlisted" label="Waitlisted" />}
     </Link>
   );

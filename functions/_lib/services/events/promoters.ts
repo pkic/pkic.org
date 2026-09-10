@@ -10,6 +10,7 @@ import {
 import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
+import { publicUserHeadshotPath } from "../user-headshot";
 import type { DatabaseLike } from "../../types";
 
 // Keep schema-facing keys and SQL mappings type-coupled: adding a key to a
@@ -44,7 +45,7 @@ interface EventPromoterRow {
   last_name: string | null;
   organization: string | null;
   job_title: string | null;
-  headshot_url: string | null;
+  headshot_r2_key: string | null;
   invites_sent: number;
   invites_accepted: number;
   invites_declined: number;
@@ -102,7 +103,7 @@ const PROMOTER_READ_MODEL = `
            u.last_name,
            u.organization_name AS organization,
            u.job_title,
-           CASE WHEN u.headshot_r2_key IS NOT NULL THEN '/api/v1/' || u.headshot_r2_key ELSE NULL END AS headshot_url,
+           u.headshot_r2_key,
            COALESCE(i.invites_sent, 0) AS invites_sent,
            COALESCE(i.invites_accepted, 0) AS invites_accepted,
            COALESCE(i.invites_declined, 0) AS invites_declined,
@@ -141,7 +142,7 @@ const REFERRAL_CODE_SELECT = `
     LEFT JOIN users u ON u.id = COALESCE(rc.created_by_user_id, reg.user_id)
    WHERE rc.event_id = ?`;
 
-const PROMOTER_SELECT_COLUMNS = `user_id, email, first_name, last_name, organization, job_title, headshot_url,
+const PROMOTER_SELECT_COLUMNS = `user_id, email, first_name, last_name, organization, job_title, headshot_r2_key,
   invites_sent, invites_accepted, invites_declined, invites_expired, invite_conversion_rate, last_invite_at,
   referral_codes_issued, referral_clicks, referral_conversions, impact_score`;
 
@@ -219,7 +220,11 @@ export async function listEventPromotionActivity(
           lastName: row.last_name,
           organization: row.organization,
           jobTitle: row.job_title,
-          headshotUrl: row.headshot_url,
+          // The address is built by the one codec that knows how a stored key
+          // becomes a public path. The SQL used to concatenate `'/api/v1/' ||
+          // headshot_r2_key`, which is not a route this Worker serves at all —
+          // every promoter's portrait was a broken image.
+          headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
           invitesSent: row.invites_sent,
           invitesAccepted: row.invites_accepted,
           invitesDeclined: row.invites_declined,

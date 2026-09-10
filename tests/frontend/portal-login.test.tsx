@@ -210,6 +210,109 @@ describe("portal login", () => {
     }
   });
 
+  it("counts the members roll rather than repeating a number the repository once had", async () => {
+    /*
+     * Issue #8: the site stated its membership from the YAML files in the
+     * repository, so a fresh install claimed 374 members and had none. A
+     * figure marked as counting a slice of the roll asks the list endpoint
+     * for its size, and the authored placeholder stands only until it lands.
+     */
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(String(input));
+        return Response.json({ members: [], page: { limit: 1, offset: 0, total: 412, hasMore: true } });
+      }),
+    );
+    const copy = document.createElement("script");
+    copy.type = "application/json";
+    copy.id = "portal-login-copy";
+    copy.textContent = JSON.stringify({
+      facts: [{ value: "—", label: "members", memberCount: "all" }],
+    });
+    document.body.append(copy);
+
+    try {
+      await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(requests).toEqual(["/api/v1/members?group=all&limit=1"]);
+      // The counted figure replaces the placeholder in the slot that carries
+      // it, rather than appearing beside it.
+      expect(container.querySelector(".pk-login__fact-value")?.textContent).toBe("412");
+    } finally {
+      copy.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps its figures when one of them carries an explicit null", async () => {
+    /*
+     * Hugo's `dict` writes every key it is given, so a figure with nothing to
+     * count arrived as `"memberCount": null`. A schema that took only
+     * `undefined` failed the parse for the whole block and every figure left
+     * the screen together — the "missing stats" half of issue #33, and the
+     * reason the brand panel looked short.
+     */
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ members: [], page: { limit: 1, offset: 0, total: 7, hasMore: false } })),
+    );
+    const copy = document.createElement("script");
+    copy.type = "application/json";
+    copy.id = "portal-login-copy";
+    copy.textContent = JSON.stringify({
+      facts: [
+        { value: "—", label: "members", memberCount: "all" },
+        { value: "~1K", label: "representatives", memberCount: null },
+      ],
+    });
+    document.body.append(copy);
+
+    try {
+      await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const values = [...container.querySelectorAll(".pk-login__fact-value")].map((node) => node.textContent);
+      // The counted one counted, the authored one left alone, and neither of
+      // them taken off the page by the other.
+      expect(values).toEqual(["7", "~1K"]);
+    } finally {
+      copy.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps the placeholder when the members roll cannot be counted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 500 })),
+    );
+    const copy = document.createElement("script");
+    copy.type = "application/json";
+    copy.id = "portal-login-copy";
+    copy.textContent = JSON.stringify({ facts: [{ value: "—", label: "members", memberCount: "all" }] });
+    document.body.append(copy);
+
+    try {
+      await act(() => render(<Login onSignedIn={vi.fn()} />, container));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // A dash, not a guess: the screen has no business inventing this.
+      expect(container.querySelector(".pk-login__fact-value")?.textContent).toBe("—");
+    } finally {
+      copy.remove();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("states no figure the page did not give it", async () => {
     const copy = document.createElement("script");
     copy.type = "application/json";

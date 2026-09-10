@@ -4,9 +4,10 @@
 import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInToPortal } from "./helpers/portal-auth";
+import { openMyOrganization, openProfileEditor, signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { definitionFor } from "./helpers/definition-list";
+import { uploadThroughControl } from "./helpers/file-upload";
 
 /**
  * Enters the organization record's edit mode.
@@ -41,6 +42,7 @@ test("permitted staff manage organizations through the canonical domain API", as
 
   await signInToPortal(page, e2eAdminEmail("portal-organizations"));
   await page.goto("/portal/#/organizations");
+  await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toHaveCount(1);
 
   await expect(page.getByRole("link", { name: "Organizations", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add organization", exact: true }).first().click();
@@ -67,8 +69,15 @@ test("permitted staff manage organizations through the canonical domain API", as
   const createForm = page.getByRole("region", { name: "Add organization" });
   const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
   await organizationGroup.getByLabel("Organization name").fill(organizationName);
-  await organizationGroup.getByLabel("Membership category").selectOption("F");
-  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  /*
+   * Membership is its own act, so its terms only appear once the organization
+   * is said to be a member (#53): an organization is a record the consortium
+   * keeps, and it becomes a member by applying or by being granted one here.
+   */
+  const membershipGroup = createForm.getByRole("group", { name: "Membership", exact: true });
+  await membershipGroup.getByLabel("This organization is a consortium member").check();
+  await membershipGroup.getByLabel("Membership category").selectOption("F");
+  await membershipGroup.getByLabel("Member since").fill("2026-01-15");
   await createForm.getByRole("group", { name: "Web presence" }).getByLabel("Website").fill("https://example.invalid");
   // People are optional and the form starts with none; the activation reason
   // only exists once a person has been added, because only that path skips
@@ -172,10 +181,10 @@ test("permitted staff manage organizations through the canonical domain API", as
   await expect(affiliation).toContainText(secondaryEmail);
   await expect(affiliation).toContainText("Program Manager");
 
-  // Editing the account is administration, not part of what the record says
-  // about the person, so it is disclosed rather than stacked under the record.
-  await page.getByRole("button", { name: "Account administration", exact: true }).click();
-  await page.getByRole("button", { name: "Edit profile", exact: true }).click();
+  // The profile a staff member edits is the person, not their place in an
+  // organization: the tie above is the organization's to state, so neither of
+  // its fields appears in the editor the record's actions menu opens.
+  await openProfileEditor(page);
   await expect(page.locator("#user-organizationName")).toHaveCount(0);
   await expect(page.locator("#user-jobTitle")).toHaveCount(0);
 
@@ -185,8 +194,10 @@ test("permitted staff manage organizations through the canonical domain API", as
 
   await page.context().clearCookies();
   await signInToPortal(page, primaryEmail);
-  await page.goto("/portal/#/profile");
-  await expect(page.getByRole("heading", { name: "Organization identities", exact: true })).toBeVisible();
+  // The roster is on the organization's own page: who represents an
+  // organization is a fact about the organization, not about one person.
+  await openMyOrganization(page, organizationName);
+  await expect(page.getByRole("heading", { name: "Representatives", exact: true })).toBeVisible();
 
   let representativeRow = page.getByRole("row").filter({ hasText: secondaryEmail });
   await expect(representativeRow).toContainText("Active");
@@ -240,8 +251,15 @@ test("permitted staff link an existing user as a representative through the User
   const createForm = page.getByRole("region", { name: "Add organization" });
   const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
   await organizationGroup.getByLabel("Organization name").fill(organizationName);
-  await organizationGroup.getByLabel("Membership category").selectOption("F");
-  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  /*
+   * Membership is its own act, so its terms only appear once the organization
+   * is said to be a member (#53): an organization is a record the consortium
+   * keeps, and it becomes a member by applying or by being granted one here.
+   */
+  const membershipGroup = createForm.getByRole("group", { name: "Membership", exact: true });
+  await membershipGroup.getByLabel("This organization is a consortium member").check();
+  await membershipGroup.getByLabel("Membership category").selectOption("F");
+  await membershipGroup.getByLabel("Member since").fill("2026-01-15");
 
   const createResponse = page.waitForResponse(
     (response) =>
@@ -310,8 +328,15 @@ async function createBareOrganization(page: import("@playwright/test").Page, org
   const createForm = page.getByRole("region", { name: "Add organization" });
   const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
   await organizationGroup.getByLabel("Organization name").fill(organizationName);
-  await organizationGroup.getByLabel("Membership category").selectOption("F");
-  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  /*
+   * Membership is its own act, so its terms only appear once the organization
+   * is said to be a member (#53): an organization is a record the consortium
+   * keeps, and it becomes a member by applying or by being granted one here.
+   */
+  const membershipGroup = createForm.getByRole("group", { name: "Membership", exact: true });
+  await membershipGroup.getByLabel("This organization is a consortium member").check();
+  await membershipGroup.getByLabel("Membership category").selectOption("F");
+  await membershipGroup.getByLabel("Member since").fill("2026-01-15");
   await page.getByRole("button", { name: "Create organization" }).click();
   await expect(page.getByRole("heading", { name: organizationName, exact: true })).toBeVisible();
 }
@@ -384,7 +409,9 @@ test("permitted staff edit the organization through the page-level Edit/Save", a
     "https://e2e-profile-edit.example.invalid",
   );
   const membership = page.getByRole("region", { name: "Membership", exact: true });
-  await expect(definitionFor(membership, "Category")).toHaveText("A");
+  await expect(definitionFor(membership, "Category")).toHaveText(
+    "Certification Authorities and Trust Service Providers (A)",
+  );
 
   // The formatted "Member since" display is locale-dependent; re-opening
   // edit round-trips it back into the date input, whose value is always the
@@ -406,14 +433,14 @@ test("permitted staff remove an organization's logo", async ({ page }) => {
   // are reached directly rather than through a "Logo" region that no longer
   // exists. There is only one logo tile on the page, so this stays unambiguous.
   const logo = page;
-  await logo.getByRole("button", { name: "Upload logo" }).click();
   const uploadResponse = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "PUT",
     { timeout: 20_000 },
   );
-  await page.locator('input[type="file"][accept="image/svg+xml"]').setInputFiles({
+  // Through the tile, not past it (#28).
+  await uploadThroughControl(page, logo.getByRole("button", { name: "Upload logo" }), {
     name: "logo.svg",
     mimeType: "image/svg+xml",
     buffer: PROFILE_LOGO_SVG,

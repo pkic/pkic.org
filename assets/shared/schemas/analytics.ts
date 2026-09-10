@@ -49,6 +49,91 @@ export const registrationAnalyticsResponseSchema = generatedAnalyticsSchema.exte
   }),
 });
 
+/**
+ * A count against a month, for the twelve months behind the reader.
+ *
+ * Bounded in SQL rather than trimmed here: an analytics page is a read model,
+ * and a series with no horizon grows without one.
+ */
+const monthlySeriesSchema = z.array(z.object({ month: z.string(), count: z.number().int().nonnegative() }));
+
+/** A membership category, named as well as coded — "A", and what an A is. */
+const categoryCountSchema = z.object({
+  code: z.string(),
+  label: z.string(),
+  count: z.number().int().nonnegative(),
+});
+
+/**
+ * What the consortium's roll looks like: how many memberships there are, held
+ * under what, standing how, and how many are actually spoken for.
+ *
+ * A row is one membership — an organization or an individual — never one per
+ * representative, because an organization's representatives inherit its
+ * membership rather than each holding one of their own. The same rule the
+ * roll itself lists by.
+ */
+export const membershipAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
+  members: z.object({
+    total: z.number().int().nonnegative(),
+    byStatus: countMapSchema,
+    /** `individual` and `organization`: the two kinds a membership can be. */
+    byKind: countMapSchema,
+    byCategory: z.array(categoryCountSchema),
+    /**
+     * A membership nobody acts for is the one that needs attention: an
+     * organization whose last representative left still holds its membership,
+     * and nothing reaches it until somebody is seated.
+     */
+    representation: z.object({
+      withRepresentatives: z.number().int().nonnegative(),
+      withoutRepresentatives: z.number().int().nonnegative(),
+    }),
+    joinedMonthly: monthlySeriesSchema,
+  }),
+});
+
+/**
+ * Organizations, and how many of them are members.
+ *
+ * The distinction is the point: an organization is a record the consortium
+ * keeps — an attendee's employer, a sponsor, a company in conversation — and
+ * membership is a separate thing it may or may not hold.
+ */
+export const organizationAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
+  organizations: z.object({
+    total: z.number().int().nonnegative(),
+    /** Holding a membership. */
+    members: z.number().int().nonnegative(),
+    /** Recorded, but not a member — the majority, and not a problem. */
+    recordedOnly: z.number().int().nonnegative(),
+    withRepresentatives: z.number().int().nonnegative(),
+    withoutRepresentatives: z.number().int().nonnegative(),
+    /** What the public directory can actually draw for them. */
+    withLogo: z.number().int().nonnegative(),
+    withWebsite: z.number().int().nonnegative(),
+    createdMonthly: monthlySeriesSchema,
+  }),
+});
+
+/**
+ * Accounts: who can sign in, in what role, and how many act in a membership
+ * capacity at all.
+ */
+export const userAnalyticsResponseSchema = generatedAnalyticsSchema.extend({
+  users: z.object({
+    total: z.number().int().nonnegative(),
+    active: z.number().int().nonnegative(),
+    inactive: z.number().int().nonnegative(),
+    byRole: countMapSchema,
+    /** Holding at least one live identity, and so acting for somebody. */
+    withIdentities: z.number().int().nonnegative(),
+    /** Able to sign in and acting in no capacity — contacts, mostly. */
+    withoutIdentities: z.number().int().nonnegative(),
+    createdMonthly: monthlySeriesSchema,
+  }),
+});
+
 export const donationPeriodSchema = z.object({
   count: z.number().int().nonnegative(),
   completed: z.number().int().nonnegative(),
@@ -115,3 +200,25 @@ export const donationAnalyticsRouteSchema = analyticsRoute(
   "Platform-wide donation totals and bounded daily, weekly, and monthly series.",
   donationAnalyticsResponseSchema,
 );
+
+export const membershipAnalyticsRouteSchema = analyticsRoute(
+  "Get membership analytics",
+  "Consortium-wide membership totals by standing, kind and category, representation, and a bounded monthly series.",
+  membershipAnalyticsResponseSchema,
+);
+
+export const organizationAnalyticsRouteSchema = analyticsRoute(
+  "Get organization analytics",
+  "Organization record totals, how many hold a membership, how many are represented, and a bounded monthly series.",
+  organizationAnalyticsResponseSchema,
+);
+
+export const userAnalyticsRouteSchema = analyticsRoute(
+  "Get user account analytics",
+  "Account totals by standing and role, how many act in a membership capacity, and a bounded monthly series.",
+  userAnalyticsResponseSchema,
+);
+
+export type MembershipAnalytics = z.infer<typeof membershipAnalyticsResponseSchema>;
+export type OrganizationAnalytics = z.infer<typeof organizationAnalyticsResponseSchema>;
+export type UserAnalytics = z.infer<typeof userAnalyticsResponseSchema>;

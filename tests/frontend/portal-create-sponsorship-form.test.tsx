@@ -111,7 +111,9 @@ describe("create sponsorship form", () => {
     expect(requests.some((request) => request === "GET /api/v1/organizations")).toBe(true);
 
     await chooseComboboxOption(page, "Member organization", ORGANIZATION_ID);
-    await typeInto(controlFor(page, "Tier"), "Gold");
+    // The tier is picked from the catalog, not spelled: it is a row with a
+    // price beside it, and the two sponsor types do not share a vocabulary.
+    await chooseOption(controlFor<HTMLSelectElement>(page, "Tier"), "Gold");
     await typeInto(controlFor(page, "Contact email"), "sponsor@example.test");
     await submitForm(page);
 

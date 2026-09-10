@@ -1,3 +1,5 @@
+import { badgeCacheMetadata } from "./badge-render-job-statements";
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./registrations/selected-identity";
 /**
  * OG badge pre-rendering service.
  *
@@ -174,7 +176,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
   if (ref.owner_type === "registration") {
     const row = await first<AttendeeRow>(
       env.DB,
-      `SELECT u.first_name, u.last_name, u.organization_name, u.job_title,
+      `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
               u.headshot_r2_key,
               e.name   AS event_name,
               e.starts_at, e.ends_at, e.settings_json,
@@ -188,6 +190,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
               )) AS effective_role
        FROM   registrations r
        JOIN   users  u ON u.id = r.user_id
+
        JOIN   events e ON e.id = r.event_id
        LEFT JOIN registration_badge_role_overrides bro ON bro.registration_id = r.id
        WHERE  r.id = ?`,
@@ -294,9 +297,10 @@ async function pngToR2(
  * left in place until the replacement bytes have been generated successfully.
  */
 export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
+  const metadata = await badgeCacheMetadata(env.DB, code);
   const png = await generateBadgePng(code, env, origin);
   if (!png) throw new Error(`Badge source not found for referral code ${code}`);
-  await pngToR2(png, `${R2_KEY_PREFIX}${code}`, { referralCode: code }, env);
+  await pngToR2(png, `${R2_KEY_PREFIX}${code}`, metadata, env);
 }
 
 /**

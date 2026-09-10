@@ -11,6 +11,7 @@ import type { OffsetPageQuery } from "../../db/pagination";
 import { queryPage } from "../../db/pagination";
 import { getResourceGrantDefinition, memberResourceGrantCapabilitiesFor } from "../resource-grants";
 import type { DatabaseLike } from "../../types";
+import { formSubmissionWindowOpenSql } from "./submission-window";
 
 const FORM_GRANT_DEFINITION = getResourceGrantDefinition("formPlacement");
 const FORM_SUBMIT_CAPABILITIES = memberResourceGrantCapabilitiesFor(FORM_GRANT_DEFINITION, "submit");
@@ -49,8 +50,7 @@ function toMemberFormPlacement(row: MemberFormPlacementRow): MemberFormPlacement
 }
 
 const ACCEPTING_RESPONSES_SQL = `form.status = 'active' AND placement.active = 1
-  AND (placement.opens_at IS NULL OR unixepoch(placement.opens_at) <= unixepoch())
-  AND (placement.closes_at IS NULL OR unixepoch(placement.closes_at) > unixepoch())`;
+  AND ${formSubmissionWindowOpenSql("placement")}`;
 
 /** Canonical page/count query, also used by the D1 EXPLAIN plan regression test. */
 export function buildMemberFormPlacementsPageQuery(userId: string, query: MemberFormPlacementsQuery): OffsetPageQuery {

@@ -50,16 +50,31 @@ export interface LogoManagerProps {
  * the file control after every attempt.
  */
 export function useLogoCommands(
-  props: Pick<LogoManagerProps, "onUpload" | "onRemove" | "onChanged" | "toast" | "removeConfirmation" | "removeLabel">,
+  props: Pick<
+    LogoManagerProps,
+    "onUpload" | "onRemove" | "onChanged" | "toast" | "removeConfirmation" | "removeLabel"
+  > & {
+    /** What the picture is called in the outcome messages. */
+    noun?: string;
+  },
 ) {
+  // "Logo uploaded" is wrong over a person's face. The word comes from the
+  // caller, capitalized for the start of the sentence it begins.
+  const noun = props.noun ?? "logo";
+  const Noun = noun.charAt(0).toUpperCase() + noun.slice(1);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   async function upload(file: File) {
     setBusy(true);
     try {
-      await props.onUpload(file);
-      props.toast("Logo uploaded", "success");
+      // A caller whose upload asks the reader something first — the headshot
+      // disclaimer, a crop they can back out of — says so by answering
+      // `false`. Abandoning is not a failure and not a success, so it is
+      // announced as neither.
+      const outcome = await props.onUpload(file);
+      if (outcome === false) return;
+      props.toast(`${Noun} uploaded`, "success");
       props.onChanged();
     } catch (error) {
       props.toast((error as Error).message, "error");
@@ -79,7 +94,7 @@ export function useLogoCommands(
     setBusy(true);
     try {
       await props.onRemove();
-      props.toast("Logo removed", "success");
+      props.toast(`${Noun} removed`, "success");
       props.onChanged();
     } catch (error) {
       props.toast((error as Error).message, "error");

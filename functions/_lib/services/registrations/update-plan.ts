@@ -176,7 +176,7 @@ export async function buildRegistrationUpdate(
         .prepare(
           `UPDATE registrations
            SET status = 'cancelled', cancellation_reason_code = 'unauthorized_registration',
-               cancelled_at = ?, custom_answers_json = NULL, manage_link_secret = ?,
+               cancelled_at = ?, custom_answers_json = NULL, registration_organization_name = NULL, registration_job_title = NULL, manage_link_secret = ?,
                confirmation_link_secret = NULL, pending_confirmation_deadline_at = NULL,
                confirmation_reminder_sent_at = NULL, created_identity_user_id = NULL,
                updated_at = ?

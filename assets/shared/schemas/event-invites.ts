@@ -8,10 +8,15 @@ export { eventInviteValiditySchema } from "./event-invite-validity";
 
 export const eventInviteResendSchema = eventInviteValiditySchema;
 
+/** Where an invitation stands. The filter and the projection read the same set. */
+export const EVENT_INVITE_STATUSES = ["sent", "accepted", "declined", "expired", "revoked"] as const;
+export const eventInviteStatusSchema = z.enum(EVENT_INVITE_STATUSES);
+export type EventInviteStatus = z.infer<typeof eventInviteStatusSchema>;
+
 export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
 export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
 export const eventInvitesListQuerySchema = searchableListQuerySchema(eventInvitesSortValueSchema).extend({
-  status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]).optional(),
+  status: eventInviteStatusSchema.optional(),
   type: inviteTypeSchema.optional(),
 });
 export type EventInvitesListQuery = z.infer<typeof eventInvitesListQuerySchema>;
@@ -27,7 +32,7 @@ export const eventInviteSummarySchema = z.object({
   inviteeFirstName: z.string().nullable(),
   inviteeLastName: z.string().nullable(),
   inviteType: inviteTypeSchema,
-  status: z.enum(["sent", "accepted", "declined", "expired", "revoked"]),
+  status: eventInviteStatusSchema,
   declineReasonCode: z.string().nullable(),
   declineReasonNote: z.string().nullable(),
   unsubscribeFuture: z.number(),

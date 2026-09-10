@@ -73,21 +73,21 @@ describe("portal API interceptors", () => {
   });
 
   it("restores and clears the saved return path once a session is (re-)established", () => {
-    sessionStorage.setItem("pkic_portal_return_path", "#/system/donations");
+    sessionStorage.setItem("pkic_portal_return_path", "#/settings/donations");
     window.location.hash = "#/";
 
     savePortalSession(SESSION);
 
-    expect(window.location.hash).toBe("#/system/donations");
+    expect(window.location.hash).toBe("#/settings/donations");
     expect(sessionStorage.getItem("pkic_portal_return_path")).toBeNull();
   });
 
   it("leaves the hash untouched when there is no saved return path", () => {
-    window.location.hash = "#/profile";
+    window.location.hash = "#/participation";
 
     savePortalSession(SESSION);
 
-    expect(window.location.hash).toBe("#/profile");
+    expect(window.location.hash).toBe("#/participation");
   });
 
   it("does not expose internal scope names and tells the user to sign in again", async () => {

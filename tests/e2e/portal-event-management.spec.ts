@@ -13,6 +13,8 @@ import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
 
+test.use({ timezoneId: "Europe/Amsterdam" });
+
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
@@ -24,12 +26,17 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   const eventName = `Portal architecture workshop ${unique}`;
   const eventSlug = `portal-architecture-workshop-${unique}`;
 
-  // Two controls legitimately read "Create event": the list toolbar's button
-  // that opens the form, and the form's own submit. Each is addressed through
-  // the surface that owns it rather than by adding `.first()`.
+  /*
+   * Two controls legitimately read "Create event": the list toolbar's button
+   * that opens the page, and the page's own submit. Each is addressed through
+   * the surface that owns it rather than by adding `.first()`.
+   */
   const eventsToolbar = page.getByRole("toolbar", { name: "Group events controls" });
   await eventsToolbar.getByRole("button", { name: "Create event" }).click();
+  // Creating is a page of its own: the list it adds to is not underneath it.
+  await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events/new$`));
   const eventForm = page.getByRole("region", { name: "New group event" });
+  await expect(eventsToolbar).toHaveCount(0);
   await page.getByLabel("Event name").fill(eventName);
   await page.getByLabel("Slug").fill(eventSlug);
   await expect(page.getByLabel("Slug")).toHaveValue(eventSlug);
@@ -48,6 +55,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   );
   await eventForm.getByRole("button", { name: "Create event", exact: true }).click();
   expect((await eventCreated).status()).toBe(201);
+  // And it returns to the list it added to.
+  await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events$`));
 
   const row = page.getByRole("row").filter({ hasText: eventName });
   await expect(row).toBeVisible({ timeout: 10_000 });
@@ -59,6 +68,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
     "https://example.test/portal-workshop",
   );
   await expect(page.getByRole("link", { name: "Open registration" })).toHaveCount(0);
+
+  await page.screenshot({ path: test.info().outputPath("event-attached-surface.png"), fullPage: true });
 
   await tab(detail, "Communications").click();
   const communications = detail.locator("details").filter({ has: page.getByText("Email campaigns", { exact: true }) });
@@ -78,6 +89,9 @@ test("a portal manager creates and edits a group-owned standalone event", async 
 
   await tab(detail, "Settings").click();
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
+  await expect(registrationSetup.getByLabel("Agreement text")).toHaveCount(0);
+  await registrationSetup.getByRole("button", { name: "Event terms actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit terms", exact: true }).click();
   await registrationSetup.getByRole("button", { name: "Add attendee term" }).click();
   await registrationSetup.getByLabel("Key").fill("event-terms");
   await registrationSetup.getByLabel("Agreement text").fill("I agree to the workshop terms");
@@ -91,6 +105,8 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   expect((await termsSaved).status()).toBe(200);
 
   const policySection = registrationSetup.locator("details").filter({ hasText: "Policy and registration questions" });
+  await policySection.getByRole("button", { name: "Registration policy actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
   await policySection.getByLabel("Registration policy").selectOption("optional");
   const registrationSettingsSaved = page.waitForResponse(
     (response) =>
@@ -124,14 +140,58 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   );
   await formEditor.getByRole("button", { name: "Create form" }).click();
   expect((await formCreated).status()).toBe(201);
-  // The picker is a combobox now: the attached form's title reads back from
-  // the input's value rather than from a selected <option>'s text.
+  await expect(policySection.getByText("Workshop registration questions", { exact: true })).toBeVisible();
+  await expect(policySection.getByLabel("Registration questions", { exact: true })).toHaveCount(0);
+  await policySection.getByRole("button", { name: "Registration questions actions" }).click();
+  await page.getByRole("menuitem", { name: "Change attached form" }).click();
   await expect(policySection.getByLabel("Registration questions", { exact: true })).toHaveValue(
     "Workshop registration questions",
   );
+  await policySection.getByRole("button", { name: "Cancel form selection" }).click();
+
+  const submissionWindow = policySection.getByRole("region", { name: "Submission window", exact: true });
+  await expect(submissionWindow).toContainText("No opening restriction");
+  await expect(submissionWindow.locator("input")).toHaveCount(0);
+  async function editWindow() {
+    await submissionWindow.getByRole("button", { name: "Submission window actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit settings" }).click();
+  }
+  await editWindow();
+  // Amsterdam's spring-forward gap must produce a field error, not silently move the opening time.
+  await submissionWindow.getByLabel("Opens", { exact: true }).fill("2027-03-28T02:30");
+  await submissionWindow.getByRole("button", { name: "Save submission window" }).click();
+  await expect(submissionWindow.getByLabel("Opens", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  await submissionWindow.getByLabel("Opens", { exact: true }).fill("2027-06-10T09:00");
+  await submissionWindow.getByLabel("Closes", { exact: true }).fill("2027-06-10T08:00");
+  await submissionWindow.getByRole("button", { name: "Save submission window" }).click();
+  await expect(submissionWindow.getByLabel("Closes", { exact: true })).toHaveAttribute("aria-invalid", "true");
+  await submissionWindow.getByLabel("Closes", { exact: true }).fill("2027-06-10T17:00");
+  const windowSaved = page.waitForResponse(
+    (response) => response.url().endsWith("/forms/event_registration") && response.request().method() === "PATCH",
+  );
+  await submissionWindow.getByRole("button", { name: "Save submission window" }).click();
+  const savedWindow = await windowSaved;
+  expect(savedWindow.status()).toBe(200);
+  expect(savedWindow.request().postDataJSON()).toMatchObject({
+    opensAt: "2027-06-10T07:00:00.000Z",
+    closesAt: "2027-06-10T15:00:00.000Z",
+  });
+  await expect(submissionWindow.locator("input")).toHaveCount(0);
+  await page.reload();
+  await expect(submissionWindow).toBeVisible();
+  await editWindow();
+  await expect(submissionWindow.getByLabel("Opens", { exact: true })).toHaveValue("2027-06-10T09:00");
+  await expect(submissionWindow.getByLabel("Closes", { exact: true })).toHaveValue("2027-06-10T17:00");
+  await submissionWindow.getByLabel("Opens", { exact: true }).fill("");
+  await submissionWindow.getByRole("button", { name: "Cancel", exact: true }).click();
+  await editWindow();
+  await expect(submissionWindow.getByLabel("Opens", { exact: true })).toHaveValue("2027-06-10T09:00");
+  await submissionWindow.getByRole("button", { name: "Cancel", exact: true }).click();
 
   registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
   await registrationSetup.getByText("Attendance days", { exact: true }).click();
+  await registrationSetup.getByRole("button", { name: "Attendance days actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit attendance days", exact: true }).click();
   await registrationSetup.getByRole("button", { name: "Add day" }).click();
   await registrationSetup.getByLabel("Date").fill("2027-06-10");
   await registrationSetup.getByLabel("Starts at").fill("09:00");

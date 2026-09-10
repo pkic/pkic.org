@@ -6,7 +6,6 @@ import { groupFormsListResponseSchema } from "../../../../../shared/schemas/grou
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
-import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { GroupFormDetail } from "./GroupFormDetail";
 import { GroupFormEditor } from "./GroupFormEditor";
@@ -54,13 +53,8 @@ export function GroupForms({
       // Creation is a page of its own: a heading that names what is being
       // created, a way back, and no list competing for the same screen.
       <div class="pk pk-stack">
-        <div class="pk-cluster">
-          <Button size="sm" onClick={leaveCreatePage}>
-            ← All forms
-          </Button>
-        </div>
         <Panel aria-label="New group form">
-          <PanelHeader title="New group form" />
+          <PanelHeader title="New group form" headingLevel={2} breadcrumb />
           <PanelBody>
             <GroupFormEditor
               groupId={groupId}
@@ -82,11 +76,6 @@ export function GroupForms({
     // list's rows. The detail fetches itself by placement id.
     return (
       <div class="pk pk-stack">
-        <div class="pk-cluster">
-          <Button variant="link" size="sm" onClick={leaveCreatePage}>
-            ← All forms
-          </Button>
-        </div>
         <GroupFormDetail
           groupId={groupId}
           placementId={placementSegment}

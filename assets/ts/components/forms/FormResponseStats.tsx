@@ -23,6 +23,7 @@
 
 import { useMemo, useEffect, useState } from "preact/hooks";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
+import { VISUALIZATIONS, visualizationSchema, type Visualization } from "../../../shared/schemas/form-field-rules";
 import { FilterSelect } from "../FilterSelect";
 import { Button } from "../../ui/Button";
 import { EmptyState } from "../../ui/EmptyState";
@@ -35,8 +36,10 @@ import { isRecord } from "./form-answers";
 import "../../ui/Content.css";
 import "../../ui/Chart.css";
 
-type VisualizationKind = "bar" | "pie" | "wordcloud" | "list";
-type VisualizationChoice = "auto" | VisualizationKind;
+// A reader may choose any presentation the field rules accept; "auto" is the
+// choice to let the field decide, so a rendered chart is one of the others.
+type VisualizationChoice = Visualization;
+type VisualizationKind = Exclude<VisualizationChoice, "auto">;
 
 interface FieldStat {
   field: FormFieldDefinition;
@@ -55,10 +58,26 @@ export interface ServerFieldStat {
 
 const CHART_SEGMENT_COUNT = 7;
 
+/**
+ * What the presentation picker calls each choice. These are the reader's
+ * words, shorter than the author's in the field editor, and the map is total
+ * on the contract's vocabulary so a new presentation cannot go unnamed.
+ */
+const PRESENTATION_LABELS: Record<VisualizationChoice, string> = {
+  auto: "Auto",
+  bar: "Bar",
+  pie: "Pie",
+  wordcloud: "Word cloud",
+  list: "List",
+};
+
 function configuredVisualization(field: FormFieldDefinition): VisualizationKind | null {
   const validation = isRecord(field.validation) ? field.validation : null;
   const value = validation?.adminVisualization ?? validation?.visualization;
-  return value === "bar" || value === "pie" || value === "wordcloud" || value === "list" ? value : null;
+  const configured = visualizationSchema.safeParse(value);
+  // "auto" is a deferral rather than a chart, so it reads the same as an
+  // unconfigured field: the caller works the presentation out from the data.
+  return configured.success && configured.data !== "auto" ? configured.data : null;
 }
 
 function autoVisualization(field: FormFieldDefinition, uniqueAnswers: number): VisualizationKind {
@@ -229,13 +248,15 @@ function StatCardHeader({
         <FilterSelect
           ariaLabel={`Presentation for ${stat.field.label}`}
           value={choice}
-          options={[
-            { value: "auto", label: `Auto (${visualizationLabel})` },
-            { value: "bar", label: "Bar" },
-            { value: "pie", label: "Pie" },
-            { value: "wordcloud", label: "Word cloud" },
-            { value: "list", label: "List" },
-          ]}
+          options={VISUALIZATIONS.map((visualization) => ({
+            value: visualization,
+            // "Auto" says which presentation it resolved to, so the reader can
+            // see what they are overriding before they override it.
+            label:
+              visualization === "auto"
+                ? `${PRESENTATION_LABELS.auto} (${visualizationLabel})`
+                : PRESENTATION_LABELS[visualization],
+          }))}
           onChange={onChoiceChange}
         />
         {onExpand && (

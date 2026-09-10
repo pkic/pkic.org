@@ -131,13 +131,22 @@ describe("WgChairsWidget", () => {
     expect(container.textContent).toContain("Ada Lovelace");
     expect(container.textContent).toContain("Grace Hopper");
     expect(container.textContent).toContain("Katherine Johnson");
-    expect(container.textContent).toContain("Principal Cryptographer at Example Consortium");
+    // The line under the name is the person's own job title. Their employer is
+    // said once, by the organization block below it, rather than again here
+    // (issue #19).
+    expect(container.textContent).toContain("Principal Cryptographer");
+    expect(container.textContent).not.toContain("Principal Cryptographer at Example Consortium");
+    expect(container.querySelector(".person-card-org")?.textContent).toContain("Example Consortium");
     // Each profile link is a marked badge in the shared list, named after the
     // person rather than after the site: three links all carrying the same
     // site label are nothing to choose between when read out on their own.
     expect(
       [...container.querySelectorAll("a.pk-link-list__link")].map((link) => link.getAttribute("aria-label")),
-    ).toEqual(["Ada Lovelace on LinkedIn", "Grace Hopper on LinkedIn", "Katherine Johnson on LinkedIn"]);
+    ).toEqual([
+      "Ada Lovelace on LinkedIn (opens in a new tab)",
+      "Grace Hopper on LinkedIn (opens in a new tab)",
+      "Katherine Johnson on LinkedIn (opens in a new tab)",
+    ]);
   });
 
   it("keeps the mount hidden when the directory has no public leadership", async () => {

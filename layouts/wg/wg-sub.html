@@ -228,17 +228,18 @@
     <p class="pk-muted">
       Organizations actively participating in the {{ $wg.Title }}
     </p>
-    <div class="members-grid">
-      {{- $wgMembers := slice -}}
-      {{- range hugo.Data.members -}}
-        {{- if in .workingGroups $wgID -}}
-          {{- $wgMembers = $wgMembers | append . -}}
-        {{- end -}}
-      {{- end -}}
-      {{- range (sort $wgMembers "name") -}}
-        {{- partial "members/card.html" (dict "member" . "site" $.Site "showDescription" true "showWorkingGroups" false "showSocialHover" true) -}}
-      {{- end -}}
-    </div>
+      {{/*
+        The members of this group, from the canonical roll narrowed to it
+        (#8). This was a build-time loop over data/members/*.yaml filtered on
+        a `workingGroups` field, which listed whoever was in a file rather
+        than whoever is in the group.
+      */}}
+      <div
+        data-group-member-grid
+        data-module="member-flows/member-directory-page"
+        data-api-base="/api/v1"
+        data-working-group="{{ $wgID | lower }}"
+      ></div>
     <div class="pk-center">
       <a href="/members/" class="pk-btn pk-btn--secondary">View All Members</a>
     </div>

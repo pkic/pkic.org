@@ -28,6 +28,7 @@ export const sponsorsCollectionQuerySchema = listQuerySchema(SPONSOR_SORT_COLUMN
   organizationId: sponsorshipsListQuerySchema.shape.organizationId,
   nonMemberName: sponsorshipsListQuerySchema.shape.nonMemberName,
   contactName: sponsorshipsListQuerySchema.shape.contactName,
+  sponsorshipId: sponsorshipsListQuerySchema.shape.sponsorshipId,
 });
 export type SponsorsCollectionQuery = z.infer<typeof sponsorsCollectionQuerySchema>;
 

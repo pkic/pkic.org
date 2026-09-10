@@ -29,6 +29,7 @@ import { OrganizationCreateForm } from "../../assets/ts/member-flows/portal/sect
 import {
   OrganizationAbout,
   OrganizationLinks,
+  OrganizationMembershipCard,
 } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
 
@@ -53,6 +54,7 @@ function detail() {
     organization: {
       id: organizationId,
       name: "Example Organization",
+      publicProfileHref: "/members/profile/?id=org-1",
       membershipCategory: "F",
       memberSince: "2026-01-01",
       activeIdentityCount: 1,
@@ -108,6 +110,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** Makes the draft organization a member, which is what representatives act for. */
+async function makeMember(container: HTMLElement): Promise<void> {
+  const membership = namedGroup(container, "Membership");
+  await act(async () => controlFor<HTMLInputElement>(membership, "This organization is a consortium member").click());
+}
+
 describe("portal organization create form", () => {
   it("names every control through a label and posts the shared create contract", async () => {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
@@ -133,8 +141,18 @@ describe("portal organization create form", () => {
 
     const organizationGroup = namedGroup(container, "Details");
     await typeInto(controlFor(organizationGroup, "Organization name"), "Example Organization");
-    await typeInto(controlFor(organizationGroup, "Member since"), "2026-01-15");
-    await chooseOption(controlFor(organizationGroup, "Membership category"), "F");
+
+    /*
+     * Membership is its own act, so its terms are not on the form until the
+     * organization is said to be a member (#53). An organization is a record
+     * the consortium keeps; it becomes a member by applying or by being given
+     * one here, deliberately.
+     */
+    const membership = namedGroup(container, "Membership");
+    expect(membership.querySelector("select")).toBeNull();
+    await act(async () => controlFor<HTMLInputElement>(membership, "This organization is a consortium member").click());
+    await typeInto(controlFor(membership, "Member since"), "2026-01-15");
+    await chooseOption(controlFor(membership, "Membership category"), "F");
 
     // The website and the additional links are one concept, grouped as the
     // organization's web presence rather than scattered through the form.
@@ -216,6 +234,8 @@ describe("portal organization create form", () => {
     // absent rather than disabled or optional.
     expect(labelNames(container)).not.toContain(reasonLabel);
 
+    // People act for a member, so there is nobody to add until there is one.
+    await makeMember(container);
     await act(async () => buttonNamed(container, "Add person").click());
     const reason = controlFor(container, reasonLabel);
     expect(reason.required).toBe(true);
@@ -231,22 +251,44 @@ describe("portal organization create form", () => {
     );
     const container = mount(<OrganizationCreateForm onCreated={vi.fn()} onCancel={vi.fn()} />);
 
-    // The form is three named groups in one column, and it starts with no
-    // person cards: an organization can exist before anyone represents it.
-    expect(groupNames(container)).toEqual(["Details", "Web presence", "People"]);
+    /*
+     * The form starts with no people, and no place to put any: representatives
+     * act for a member, and an organization is not one until it is said to be
+     * (#53). "Other links" is a named group of its own — the links widget is
+     * several inputs answering one question, so it carries the design system's
+     * group field rather than a paragraph of help above an unlabelled box.
+     */
+    expect(groupNames(container)).toEqual(["Details", "Membership", "Web presence", "Other links"]);
+    await makeMember(container);
+    expect(groupNames(container)).toEqual(["Details", "Membership", "Web presence", "Other links", "People"]);
 
     await act(async () => buttonNamed(container, "Add person").click());
     await act(async () => buttonNamed(container, "Add person").click());
-    expect(groupNames(container)).toEqual(["Details", "Web presence", "People", "Person 1", "Person 2"]);
+    expect(groupNames(container)).toEqual([
+      "Details",
+      "Membership",
+      "Web presence",
+      "Other links",
+      "People",
+      "Person 1",
+      "Person 2",
+    ]);
     // A quick-create is not the place to curate someone's LinkedIn: the card
     // holds name, email, and job title, and links are added later on the
     // person. No per-person link editor, so no rival "Profile links" group.
     expect(groupNames(container)).not.toContain("Profile links");
 
     await act(async () => buttonNamed(container, "Remove person 2").click());
-    expect(groupNames(container)).toEqual(["Details", "Web presence", "People", "Person 1"]);
+    expect(groupNames(container)).toEqual([
+      "Details",
+      "Membership",
+      "Web presence",
+      "Other links",
+      "People",
+      "Person 1",
+    ]);
     await act(async () => buttonNamed(container, "Remove person 1").click());
-    expect(groupNames(container)).toEqual(["Details", "Web presence", "People"]);
+    expect(groupNames(container)).toEqual(["Details", "Membership", "Web presence", "Other links", "People"]);
   });
 
   it("announces a rejected creation as a blocking alert and keeps the draft", async () => {
@@ -297,6 +339,18 @@ describe("portal organization profile", () => {
     // The scheme is not read out: it is the same on every row and the address
     // is what a reader is scanning for.
     expect(links[0]?.textContent).toBe("example.test");
+  });
+
+  it("shows the address the public sees for this member, as a link", () => {
+    // Issue #15: a record created through the portal used to answer on its
+    // UUID and nothing in the portal said which address it had, so there was
+    // no way to tell a readable one from an id-keyed one.
+    const container = mount(<OrganizationMembershipCard organization={detail().organization} />);
+    const terms = [...container.querySelectorAll("dt")].map((term) => term.textContent);
+    expect(terms).toContain("Member page");
+    const link = container.querySelector<HTMLAnchorElement>('a[href^="/members/"]');
+    expect(link?.getAttribute("href")).toBe("/members/profile/?id=org-1");
+    expect(link?.textContent).toBe("/members/profile/?id=org-1");
   });
 
   /**

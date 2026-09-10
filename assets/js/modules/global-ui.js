@@ -1,4 +1,4 @@
-import { formatDateTime } from '../../shared/format-date';
+import { formatDateTime, formatTimeOfDay } from '../../shared/format-date';
 
 var e = document.querySelectorAll('.nav-tabs .nav-link');
 for (var i = 0; i < e.length; i++) {
@@ -30,8 +30,9 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
   }
 
   if ($e.classList.contains('localTime')) {
-    var options = { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', hour12: false };
-    $e.textContent = date.toLocaleTimeString([], options).replace(',', '');
+    // Through the shared formatter, which answers an em dash for a datetime
+    // attribute it cannot read instead of writing "Invalid Date" into the page.
+    $e.textContent = formatTimeOfDay($e.dateTime);
   }
 });
 

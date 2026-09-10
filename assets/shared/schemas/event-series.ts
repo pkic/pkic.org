@@ -202,10 +202,33 @@ export const eventOccurrenceSchema = z.object({
   guestCount: z.number().int().min(0),
   joinConfirmedCount: z.number().int().min(0),
   attendanceVerifiedCount: z.number().int().min(0),
+  /** How many rounds of participant join links have gone out; 0 means none. */
+  invitationsRound: z.number().int().min(0),
+  /** When the most recent round was sent, or `null` while none has been. */
+  invitationsSentAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type EventOccurrence = z.infer<typeof eventOccurrenceSchema>;
+
+/**
+ * What one round of participant join links did.
+ *
+ * The link itself is not in here and is not per-recipient state: a
+ * participant's link is the occurrence's own join page, which is personal
+ * because entering it needs their session — that is what binds attendance to
+ * a person and makes a forwarded link useless to whoever receives it.
+ */
+export const eventOccurrenceInvitationsResultSchema = z.object({
+  round: z.number().int().min(1),
+  /** Participants the round was queued for. */
+  recipientCount: z.number().int().min(0),
+  sentAt: utcInstantSchema,
+});
+export type EventOccurrenceInvitationsResult = z.infer<typeof eventOccurrenceInvitationsResultSchema>;
+export const eventOccurrenceInvitationsResponseSchema = z.object({
+  invitations: eventOccurrenceInvitationsResultSchema,
+});
 
 const eventOccurrenceInputSchema = z.object({
   startsAt: utcInstantSchema,
@@ -402,6 +425,21 @@ export const eventOccurrenceGuestInviteRouteSchema = {
     body: { required: true, content: { "application/json": { schema: eventOccurrenceGuestInviteSchema } } },
   },
   responses: { "201": { description: "Guest invitation created." }, ...eventManagementErrorResponses },
+};
+export const eventOccurrenceInvitationsSendRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Meetings"],
+  summary: "Send every participant their own link to this meeting",
+  description:
+    "Queues one message per active participant of the owning group, addressed at the identity they act under " +
+    "there. The link is the occurrence's join page, which requires the recipient's own session — so attendance " +
+    "is recorded against a person and a forwarded link admits nobody. Each send is a numbered round; sending " +
+    "again is a new round rather than a duplicate of the last one.",
+  request: { params: eventOccurrenceParamsSchema },
+  responses: {
+    "200": { description: "A round of participant invitations was queued." },
+    ...eventManagementErrorResponses,
+  },
 };
 export const eventOccurrenceGuestsListRouteSchema = {
   ...requiresSession(),

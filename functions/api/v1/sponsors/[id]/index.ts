@@ -1,8 +1,10 @@
 /**
  * GET   /api/v1/sponsors/:id — detail
- * PATCH /api/v1/sponsors/:id — update tier/assigned staff/renewal
- *                                         date/notes (see stage.ts for
- *                                         pipeline stage advancement)
+ * PATCH /api/v1/sponsors/:id — correct the record: tier, assigned staff,
+ *                                         renewal date, notes, the point of
+ *                                         contact, and a non-member sponsor's
+ *                                         own name and website (see stage.ts
+ *                                         for pipeline stage movement)
  */
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { json } from "../../../../_lib/http";

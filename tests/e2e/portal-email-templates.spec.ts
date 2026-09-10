@@ -22,9 +22,9 @@ test("permitted staff create, preview, activate, and reopen an email template th
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-email-templates"));
-  await page.goto("/portal/#/system/email-templates");
+  await page.goto("/portal/#/settings/email-templates");
 
-  await expect(page.getByRole("link", { name: "Email Templates" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Email templates" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New Template", exact: false })).toBeVisible();
 
   const templateKey = `e2e_system_template_${Date.now()}`;
@@ -59,6 +59,37 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
     "ready for immediate activation",
   );
+
+  // The editor and rendered result share the working width on a wide screen.
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  const split = page.locator(".pk-split");
+  const columns = await split.locator(":scope > *").evaluateAll((elements) =>
+    elements.map((element) => ({
+      width: element.getBoundingClientRect().width,
+      top: element.getBoundingClientRect().top,
+    })),
+  );
+  expect(columns).toHaveLength(2);
+  expect(Math.abs(columns[0].width - columns[1].width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(columns[0].top - columns[1].top)).toBeLessThanOrEqual(1);
+  await page.getByRole("heading", { name: `Edit: ${templateKey}`, exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
+    "ready for immediate activation",
+  );
+  await page.screenshot({ path: test.info().outputPath("email-editor-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
+    0,
+  );
+  const mobileColumns = await split.locator(":scope > *").evaluateAll((elements) =>
+    elements.map((element) => ({
+      top: element.getBoundingClientRect().top,
+      bottom: element.getBoundingClientRect().bottom,
+    })),
+  );
+  expect(mobileColumns[1].top).toBeGreaterThanOrEqual(mobileColumns[0].bottom);
+  await page.screenshot({ path: test.info().outputPath("email-editor-mobile.png"), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   const saveResponse = page.waitForResponse(
     (response) =>
@@ -96,9 +127,9 @@ test("permitted staff create, preview, activate, and reopen an email template th
       .getByText("In use"),
   ).toBeVisible();
 
-  await page.goto("/portal/#/system/email-templates");
-  await expect(page).toHaveURL(/\/portal\/#\/system\/email-templates$/);
-  await expect(page.getByRole("link", { name: "Email Templates" })).toBeVisible();
+  await page.goto("/portal/#/settings/email-templates");
+  await expect(page).toHaveURL(/\/portal\/#\/settings\/email-templates$/);
+  await expect(page.getByRole("link", { name: "Email templates" })).toBeVisible();
 
   expect(emailTemplateRequests).toEqual(
     expect.arrayContaining([

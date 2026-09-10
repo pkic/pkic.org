@@ -264,7 +264,7 @@ describe("portal group management resources", () => {
     // The record fetches its own series by id rather than borrowing a list
     // row, so a copied URL lands on the same page the row would have opened.
     expect(requests.map((url) => url.pathname)).toContain(`/api/v1/groups/${GROUP_ID}/meetings/series/${SERIES_ID}`);
-    expect(container.querySelector("h3.pk-record-title")?.textContent).toBe("Architecture call");
+    expect(container.querySelector("h3.pk-profile-header__title")?.textContent).toBe("Architecture call");
     expect(container.textContent).toContain("on our side");
   });
 
@@ -394,11 +394,12 @@ describe("portal group management resources", () => {
       }),
     );
     const onChanged = vi.fn(async () => {});
-    const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={onChanged} />);
+    // Adding is a page of its own, reached under the reserved `add` segment
+    // rather than by unfolding a panel above the roster it adds to.
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage seatSegment="add" onChanged={onChanged} />);
     await settle();
-
-    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
-    await act(async () => buttonNamed(container, "Add person").click());
+    // The roster it stands in place of is not underneath it.
+    expect(container.querySelector("table")).toBeNull();
 
     // The picker names its own search box, so the heading beside it is the
     // `<legend>` of the group it belongs to rather than a `<label>` pointing
@@ -420,8 +421,10 @@ describe("portal group management resources", () => {
       capacitySelection: { mode: "all_eligible", confirmed: true },
     });
     expect(groupMemberAddBodySchema.parse(addRequest?.body)).not.toHaveProperty("leftAt");
+    // A successful add tells the workspace to refresh and returns to the
+    // roster. The return is navigation, so `portal-groups.spec.ts` is what
+    // asserts it: this mount has no router to navigate within.
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(container.querySelector('input[placeholder="Search by email or name…"]')).toBeNull();
   });
 
   it("announces a refused add and keeps the form open with the picked person", async () => {
@@ -441,10 +444,9 @@ describe("portal group management resources", () => {
       }),
     );
     const onChanged = vi.fn(async () => {});
-    const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={onChanged} />);
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage seatSegment="add" onChanged={onChanged} />);
     await settle();
 
-    await act(async () => buttonNamed(container, "Add person").click());
     await pickUser(container, "refused@example.test");
     await act(async () => buttonNamed(container, "Add to group").click());
     await settle();

@@ -9,7 +9,8 @@ import {
   setAutomaticEnrollmentOptOut,
   updateGroup,
 } from "../functions/_lib/services/groups";
-import { createMailingList, deleteMailingList } from "../functions/_lib/services/mailing-list-management/commands";
+import { createMailingList } from "../functions/_lib/services/mailing-list-management/commands";
+import { archiveMailingList } from "../functions/_lib/services/mailing-list-management/lifecycle";
 import {
   listEffectiveGroupMailingListSubscriptions,
   setMailingListPreference,
@@ -324,7 +325,7 @@ describe("group mailing-list subscriptions", () => {
       ]),
     );
 
-    await deleteMailingList(env.DB, optional.id, admin.id);
+    await archiveMailingList(env.DB, optional.id, admin.id);
     expect(await desiredAction(userId, optionalEmail)).toBe("remove_from_list");
   });
 

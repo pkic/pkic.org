@@ -1,3 +1,7 @@
+{{- with .Get "occurrence" -}}
+{{/* Gated broadcasts keep the provider URL in the occurrence, never in static HTML. */}}
+<p><a href="{{ printf "/meetings/join/?occurrence=%s" (. | urlquery) | relURL }}">Sign in to watch the broadcast</a></p>
+{{- else -}}
 {{ $id := getenv (.Get "id") }}
 {{/* Layout lives in `.livestream-*` (assets/scss/_base-layout-and-modules.scss):
      one grid declaration with `--pk-*` gaps in place of the Bootstrap row/col
@@ -15,3 +19,5 @@
       src="https://www.youtube.com/live_chat?v={{ $id }}&theme=light&embed_domain=pkic.org"></iframe>
   </div>
 </div>
+
+{{- end -}}

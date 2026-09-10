@@ -7,6 +7,7 @@ import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
 import { getJson, postJson } from "../../../../shared/api-client";
@@ -20,6 +21,7 @@ import {
   type EmailContentType,
   type EmailMessageType,
 } from "../../../../../shared/schemas/email-templates";
+import { EMAIL_CONTENT_TYPE_OPTIONS, EMAIL_MESSAGE_TYPE_OPTIONS } from "../../../../shared/email-type-options";
 import { TemplateEditor } from "./EmailTemplateEditor";
 import { EMAIL_TEMPLATES_API, getEmailTemplateEditorVersion } from "../../../../shared/email-template-catalog";
 
@@ -175,9 +177,11 @@ function CreateTemplate({
                     value={contentType}
                     onChange={(e) => setContentType((e.target as HTMLSelectElement).value as EmailContentType)}
                   >
-                    <option value="markdown">Markdown</option>
-                    <option value="html">HTML</option>
-                    <option value="text">Plain text</option>
+                    {EMAIL_CONTENT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>
@@ -189,8 +193,11 @@ function CreateTemplate({
                     value={messageType}
                     onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
                   >
-                    <option value="transactional">Transactional</option>
-                    <option value="promotional">Promotional</option>
+                    {EMAIL_MESSAGE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>
@@ -320,60 +327,66 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
   }
 
   return (
-    <ApiDataTable
-      caption="Email templates"
-      urlState="templates"
-      endpoint={EMAIL_TEMPLATES_API}
-      responseSchema={emailTemplatesListResponseSchema}
-      resolve={(data) => data.templates}
-      resolvePage={(data) => data.page}
-      paginate
-      searchPlaceholder="Search template key…"
-      createAction={canWrite ? { label: "New template", onSelect: () => setView("create") } : undefined}
-      columns={[
-        {
-          header: "Template Key",
-          cell: (t) => t.template_key,
-          className: "pk-mono pk-small",
-          sort: { asc: "template_key", desc: "-template_key" },
-        },
-        {
-          header: "Active",
-          cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
-          className: "pk-mono",
-          width: "fit",
-          sort: { asc: "active_version", desc: "-active_version" },
-        },
-        {
-          header: "Status",
-          cell: (t) => {
-            const hasActive = t.active_version != null;
-            return (
-              <div class="pk-cluster">
-                <Badge status={hasActive ? "active" : "draft"} />
-                {hasActive && t.draft_count > 0 && <ToneBadge tone="warn">draft pending</ToneBadge>}
-              </div>
-            );
+    // The catalog is the page under Settings, so it heads itself; the create
+    // form and the editor below are screens this one opens, and carry their
+    // own headings.
+    <div class="pk pk-stack">
+      <PageHeader title="Email templates" />
+      <ApiDataTable
+        caption="Email templates"
+        urlState="templates"
+        endpoint={EMAIL_TEMPLATES_API}
+        responseSchema={emailTemplatesListResponseSchema}
+        resolve={(data) => data.templates}
+        resolvePage={(data) => data.page}
+        paginate
+        searchPlaceholder="Search template key…"
+        createAction={canWrite ? { label: "New template", onSelect: () => setView("create") } : undefined}
+        columns={[
+          {
+            header: "Template Key",
+            cell: (t) => t.template_key,
+            className: "pk-mono pk-small",
+            sort: { asc: "template_key", desc: "-template_key" },
           },
-        },
-        {
-          header: "Versions",
-          cell: (t) => t.version_count,
-          className: "pk-mono",
-          width: "fit",
-          sort: { asc: "version_count", desc: "-version_count", defaultDirection: "desc" },
-        },
-      ]}
-      empty={
-        canWrite ? <EmptyState title="No templates yet" body="Create a template to get started." /> : "No templates"
-      }
-      rowKey={(t) => t.template_key}
-      // The whole row opens the template. It used to be an "Edit →" button in
-      // a nameless last column, which left the row itself inert.
-      rowAction={(t) => ({
-        label: `${canWrite ? "Edit" : "View"} ${t.template_key}`,
-        onSelect: () => void openEditor(t.template_key),
-      })}
-    />
+          {
+            header: "Active",
+            cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
+            className: "pk-mono",
+            width: "fit",
+            sort: { asc: "active_version", desc: "-active_version" },
+          },
+          {
+            header: "Status",
+            cell: (t) => {
+              const hasActive = t.active_version != null;
+              return (
+                <div class="pk-cluster">
+                  <Badge status={hasActive ? "active" : "draft"} />
+                  {hasActive && t.draft_count > 0 && <ToneBadge tone="warn">draft pending</ToneBadge>}
+                </div>
+              );
+            },
+          },
+          {
+            header: "Versions",
+            cell: (t) => t.version_count,
+            className: "pk-mono",
+            width: "fit",
+            sort: { asc: "version_count", desc: "-version_count", defaultDirection: "desc" },
+          },
+        ]}
+        empty={
+          canWrite ? <EmptyState title="No templates yet" body="Create a template to get started." /> : "No templates"
+        }
+        rowKey={(t) => t.template_key}
+        // The whole row opens the template. It used to be an "Edit →" button in
+        // a nameless last column, which left the row itself inert.
+        rowAction={(t) => ({
+          label: `${canWrite ? "Edit" : "View"} ${t.template_key}`,
+          onSelect: () => void openEditor(t.template_key),
+        })}
+      />
+    </div>
   );
 }

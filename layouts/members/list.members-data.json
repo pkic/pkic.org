@@ -1,7 +1,0 @@
-{{- $members := slice -}}
-{{- range hugo.Data.members -}}
-  {{- if .name -}}
-    {{- $members = $members | append (dict "title" .name "id" .id) -}}
-  {{- end -}}
-{{- end -}}
-{{- $members | jsonify -}}

@@ -12,9 +12,10 @@
 import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { emailContentTypeSchema, emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
 import { emailTemplateCreateSchema, emailTemplateVersionSchema } from "../../assets/shared/schemas/email-templates";
 import { EmailTemplates } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplates";
-import { submitForm } from "./helpers/labelled-control";
+import { optionValues, submitForm } from "./helpers/labelled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -160,6 +161,20 @@ describe("portal email templates", () => {
     });
     expect(emailTemplateCreateSchema.parse({ key: templateKey, ...body }).key).toBe(templateKey);
     expect(container!.textContent).toContain("Template created");
+  });
+
+  it("offers the content and message types the create contract accepts", async () => {
+    mount(<EmailTemplates canRead={false} canWrite />);
+    await settle();
+
+    // Read from the contract instead of a list repeated here, so a type added
+    // to `api-common` has to appear in the form for this to keep passing.
+    expect(optionValues(labelled<HTMLSelectElement>(container!, "Content type"))).toEqual(
+      emailContentTypeSchema.options,
+    );
+    expect(optionValues(labelled<HTMLSelectElement>(container!, "Default message type"))).toEqual(
+      emailMessageTypeSchema.options,
+    );
   });
 
   it("opens the canonical editor after creating a template from the unmounted list", async () => {

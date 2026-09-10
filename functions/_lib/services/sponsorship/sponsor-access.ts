@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
 /**
  * Organization-member sponsorship status and sponsor attendee
  * data. Split out of sponsorship.ts.
@@ -106,7 +107,7 @@ function prepareSponsorAttendeeExport(db: DatabaseLike, eventId: string, maxRows
   return db
     .prepare(
       `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
-              u.organization_name, u.job_title, r.attendance_type
+              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, r.attendance_type
        ${SPONSOR_ATTENDEES_FROM}
        ORDER BY u.last_name ASC, u.first_name ASC
        LIMIT ?`,
@@ -137,8 +138,8 @@ function buildSponsorAttendeesPageQuery(eventId: string, params: SponsorAttendee
         "u.first_name",
         "u.last_name",
         "u.email",
-        "u.organization_name",
-        "u.job_title",
+        REGISTRATION_ORGANIZATION_SQL,
+        REGISTRATION_JOB_TITLE_SQL,
         "r.attendance_type",
       ])
     : null;
@@ -149,7 +150,7 @@ function buildSponsorAttendeesPageQuery(eventId: string, params: SponsorAttendee
     {
       name: "LOWER(COALESCE(u.last_name, '') || ' ' || COALESCE(u.first_name, ''))",
       email: "u.email COLLATE NOCASE",
-      organizationName: "u.organization_name COLLATE NOCASE",
+      organizationName: `${REGISTRATION_ORGANIZATION_SQL} COLLATE NOCASE`,
       attendanceType: "r.attendance_type",
     },
     "u.last_name ASC, u.first_name ASC",
@@ -157,7 +158,7 @@ function buildSponsorAttendeesPageQuery(eventId: string, params: SponsorAttendee
   );
   return {
     sql: `SELECT r.id AS registration_id, u.first_name, u.last_name, u.email,
-              u.organization_name, u.job_title, r.attendance_type
+              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, r.attendance_type
        ${SPONSOR_ATTENDEES_FROM}
        ${searchSql}
        `,

@@ -14,6 +14,7 @@ import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt, toast } from "../../ui";
 import { MeetingOccurrenceDetail } from "./MeetingOccurrenceDetail";
+import { usePortalHashLocation } from "../../hash-location";
 import { MeetingOccurrenceFields, type MeetingOccurrenceDraft } from "./MeetingOccurrenceFields";
 import { defaultFutureDate, isoDateTimeValue } from "./meeting-form-utils";
 
@@ -28,18 +29,32 @@ function initialOccurrenceDraft(timeZone: string): MeetingOccurrenceDraft {
   };
 }
 
+/** Reserved occurrence segment that routes to the add page instead of a record. */
+const NEW_OCCURRENCE_SEGMENT = "new";
+
+/** Redirects back to the list from an effect, not render — see its call site below. */
+function OccurrencesRedirect({ onNavigate }: { onNavigate: () => void }) {
+  useEffect(onNavigate, [onNavigate]);
+  return null;
+}
+
 export function MeetingOccurrences({
   groupId,
   series,
+  occurrenceSegment,
   onSeriesChanged,
 }: {
   groupId: string;
   series: GroupEventSeries;
+  /** `undefined` for the list, `"new"` for the add page. */
+  occurrenceSegment?: string;
   onSeriesChanged: () => void | Promise<void>;
 }) {
+  const [, navigate] = usePortalHashLocation();
+  const occurrencesPath = `/groups/${encodeURIComponent(groupId)}/meetings/${encodeURIComponent(series.id)}/occurrences`;
+  const showCreate = occurrenceSegment === NEW_OCCURRENCE_SEGMENT;
   const actions = useRef<ApiTableActions | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [draft, setDraft] = useState(() => initialOccurrenceDraft(series.timezone));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +64,6 @@ export function MeetingOccurrences({
 
   useEffect(() => {
     setDraft(initialOccurrenceDraft(series.timezone));
-    setShowCreate(false);
     setError("");
   }, [series.id, series.timezone]);
 
@@ -57,6 +71,7 @@ export function MeetingOccurrences({
     event.preventDefault();
     setSaving(true);
     setError("");
+    let created = false;
     try {
       const input = eventOccurrenceCreateSchema.parse({
         startsAt: isoDateTimeValue(draft.startsAt, series.timezone),
@@ -65,11 +80,9 @@ export function MeetingOccurrences({
         providerJoinUrl: draft.providerJoinUrl.trim() || null,
       });
       await postJson(`${base}/occurrences`, input, eventOccurrenceResponseSchema);
-      setShowCreate(false);
       setDraft(initialOccurrenceDraft(series.timezone));
       toast("Meeting occurrence created", "success");
-      await actions.current?.reload();
-      await onSeriesChanged();
+      created = true;
     } catch (caught) {
       const message = (caught as Error).message;
       setError(message);
@@ -77,19 +90,37 @@ export function MeetingOccurrences({
     } finally {
       setSaving(false);
     }
+    /*
+     * Returning is the last thing, outside the flag's own scope: this surface
+     * shares one `saving` with the occurrence editor below it, and a segment
+     * change re-renders rather than remounts, so leaving the flag set on the
+     * way out would strand the editor's button reading "Saving…".
+     */
+    if (created) {
+      navigate(occurrencesPath);
+      await Promise.all([actions.current?.reload(), onSeriesChanged()]);
+    }
   }
 
-  return (
-    <div class="pk pk-stack">
-      {canManage && showCreate && (
-        <Panel>
-          <PanelHeader title="New occurrence" />
+  if (showCreate) {
+    // Navigating away belongs in an effect, not in render.
+    if (!canManage) return <OccurrencesRedirect onNavigate={() => navigate(occurrencesPath)} />;
+    return (
+      <div class="pk pk-stack">
+        {/* The page's way back: adding has its own address, so leaving it is
+            navigation rather than the disappearance of a layer. */}
+
+        <Panel aria-label="New occurrence">
+          <PanelHeader title="New occurrence" headingLevel={2} breadcrumb />
           <PanelBody class="pk-stack">
             <form class="pk-stack" onSubmit={(event) => void create(event)}>
               <MeetingOccurrenceFields draft={draft} disabled={saving} onChange={setDraft} />
               <div class="pk-cluster">
                 <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
                   {saving ? "Creating…" : "Create occurrence"}
+                </Button>
+                <Button size="sm" onClick={() => navigate(occurrencesPath)} disabled={saving}>
+                  Cancel
                 </Button>
               </div>
               {/* Below the actions rather than beside them: an alert is a
@@ -99,7 +130,12 @@ export function MeetingOccurrences({
             </form>
           </PanelBody>
         </Panel>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div class="pk pk-stack">
       <ApiDataTable
         caption={`Scheduled occurrences of ${series.eventName}`}
         endpoint={`${base}/occurrences`}
@@ -111,11 +147,7 @@ export function MeetingOccurrences({
         actionsRef={actions}
         createAction={
           canManage
-            ? {
-                label: showCreate ? "Hide occurrence form" : "Add occurrence",
-                onSelect: () => setShowCreate((shown) => !shown),
-                expanded: showCreate,
-              }
+            ? { label: "Add occurrence", onSelect: () => navigate(`${occurrencesPath}/${NEW_OCCURRENCE_SEGMENT}`) }
             : undefined
         }
         columns={[

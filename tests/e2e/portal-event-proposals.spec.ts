@@ -102,7 +102,7 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   const row = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(row).toBeVisible();
   await row.click();
-  await expect(page.getByText("Canonical portal proposal journey", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Canonical portal proposal journey", exact: true })).toBeVisible();
   const auditResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "GET" &&

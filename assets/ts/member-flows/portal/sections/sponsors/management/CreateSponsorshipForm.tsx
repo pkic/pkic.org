@@ -20,6 +20,7 @@ import { Button } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
 import { Panel, PanelBody } from "../../../../../ui/Panel";
 import { Select, TextInput } from "../../../../../ui/TextControl";
+import { useSponsorshipTierCatalog } from "../../../../../hooks/useSponsorshipTierCatalog";
 import { portalHasGlobalPermission } from "../../../shell/portal-navigation";
 import { portalSession } from "../../../state";
 import { fmtDate, toast } from "../../../ui";
@@ -120,6 +121,10 @@ export function CreateSponsorshipForm({
   // event picker needs no fallback.
   const canPickOrganizations = portalHasGlobalPermission(portalSession.value, "organizations:read");
 
+  // Consortium and event sponsorships have separate tier catalogs, so this
+  // follows the type the draft currently carries.
+  const tiers = useSponsorshipTierCatalog(draft.sponsorType);
+
   /** The invalid state and message for one contract field, if it has any. */
   function fieldFor(key: string): { state: "invalid"; message: string } | Record<string, never> {
     const message = fieldErrors[key];
@@ -196,6 +201,9 @@ export function CreateSponsorshipForm({
                       setDraft((d) => ({
                         ...d,
                         sponsorType: (e.target as HTMLSelectElement).value as CreateDraft["sponsorType"],
+                        // The two types keep separate tier catalogs, so a tier
+                        // chosen under the old one is not a tier under the new.
+                        tier: "",
                       }))
                     }
                   >
@@ -289,13 +297,23 @@ export function CreateSponsorshipForm({
                 </>
               )}
 
+              {/* The tier catalog for this sponsor type, not a text box: a
+                  tier is a row with a price beside it, and the two types do
+                  not share a vocabulary. */}
               <Field label="Tier" {...fieldFor("tier")}>
                 {(control) => (
-                  <TextInput
+                  <Select
                     {...control}
                     value={draft.tier}
-                    onInput={(e) => setDraft((d) => ({ ...d, tier: (e.target as HTMLInputElement).value }))}
-                  />
+                    onChange={(e) => setDraft((d) => ({ ...d, tier: (e.target as HTMLSelectElement).value }))}
+                  >
+                    <option value="">No tier yet</option>
+                    {tiers.map((tier) => (
+                      <option key={tier} value={tier}>
+                        {tier}
+                      </option>
+                    ))}
+                  </Select>
                 )}
               </Field>
               <Field label="Contact name" {...fieldFor("contactName")}>

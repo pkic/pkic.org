@@ -490,27 +490,31 @@ async function main(): Promise<void> {
     });
   });
 
-  const token = new URLSearchParams(window.location.hash.slice(1)).get("verify");
-  if (!token) return;
-  history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
-  try {
-    const result = await postJson(
-      `${API_BASE}/members/join/verify`,
-      memberJoinVerifySchema.parse({ token }),
-      memberJoinVerifyResponseSchema,
-    );
-    if (result.status === "application_ready") {
-      applicationContext = result;
-      await loadApplication(result);
-    } else if (result.status === "organization_access_ready") {
-      showSection(accessSection);
-    } else {
-      showSection(supportSection);
+  const verifyFromLocation = async () => {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("verify");
+    if (!token) return;
+    history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+    try {
+      const result = await postJson(
+        `${API_BASE}/members/join/verify`,
+        memberJoinVerifySchema.parse({ token }),
+        memberJoinVerifyResponseSchema,
+      );
+      if (result.status === "application_ready") {
+        applicationContext = result;
+        await loadApplication(result);
+      } else if (result.status === "organization_access_ready") {
+        showSection(accessSection);
+      } else {
+        showSection(supportSection);
+      }
+    } catch (_error) {
+      setStatus(statusEl, "This verification link is invalid or has expired. Please start again.", true);
+      showSection(startSection);
     }
-  } catch (_error) {
-    setStatus(statusEl, "This verification link is invalid or has expired. Please start again.", true);
-    showSection(startSection);
-  }
+  };
+  window.addEventListener("hashchange", () => void verifyFromLocation());
+  await verifyFromLocation();
 }
 
 void main();

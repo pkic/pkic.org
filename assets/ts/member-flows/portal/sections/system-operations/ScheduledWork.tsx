@@ -2,6 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../ui/Badge";
 import { Field } from "../../../../ui/Field";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { TextInput } from "../../../../ui/TextControl";
 import { OperationActions } from "./OperationActions";
 import { RetentionDueTable } from "./RetentionDueTable";
@@ -10,9 +11,10 @@ import { RetentionDueTable } from "./RetentionDueTable";
 const DEFAULT_REMINDER_LIMIT = 120;
 
 /**
- * Operational commands plus the retention domain's own pending list. The
- * outbox has its own tab backed by the email domain, and due reminders are
- * resolved by the reminder run's preview mode rather than a second read model.
+ * The work that has fallen due: the commands that run it, and retention's own
+ * pending list. The outbox is its own page, backed by the email domain, and
+ * due reminders are resolved by the reminder run's preview mode rather than a
+ * second read model.
  */
 export function ScheduledWork({
   canManageEmail,
@@ -32,11 +34,11 @@ export function ScheduledWork({
   const canRunAnything = canManageEmail || canWriteMembership || canApproveMembership || canRunRetention;
 
   return (
-    // The "Scheduled Work" tab already names this surface, so it opens with
-    // its panels rather than a heading repeating the tab. Each region below
-    // is its own panel: the commands (with the reminder batch size that
+    // Its own page under Settings, so it heads itself. Each region below is
+    // its own panel: the commands (with the reminder batch size that
     // parametrizes them), then retention's pending list.
     <section aria-label="Scheduled work" class="pk pk-stack">
+      <PageHeader title="Scheduled work" />
       {!canRunAnything && (
         <div class="pk-cluster pk-cluster--end">
           <Badge tone="neutral">Read only</Badge>

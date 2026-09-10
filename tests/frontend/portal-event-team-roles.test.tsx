@@ -11,6 +11,17 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { Team } from "../../assets/ts/member-flows/portal/sections/events/detail/Team";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
+/*
+ * The surface addresses its own add page, so it reads the portal's location
+ * hook. The hook is wouter's, which is React's under preact/compat and has no
+ * dispatcher in a bare mount — the same mock every other surface test that
+ * navigates uses.
+ */
+const navigate = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
+
 const ROLE_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "10000000-0000-4000-8000-000000000002";
 const GRANTER_ID = "10000000-0000-4000-8000-000000000003";
@@ -84,7 +95,7 @@ function stubFetch({
   return requests;
 }
 
-function mount(): HTMLElement {
+function mount(teamSegment?: string): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
@@ -92,7 +103,7 @@ function mount(): HTMLElement {
     render(
       <>
         <ConfirmDialogHost />
-        <Team slug="architecture-workshop" />
+        <Team slug="architecture-workshop" teamSegment={teamSegment} />
       </>,
       container,
     ),
@@ -118,8 +129,16 @@ async function settle(): Promise<void> {
   });
 }
 
-async function openAddForm(container: HTMLElement): Promise<void> {
+/**
+ * Adding is a page of its own, under the reserved `new` segment: the action
+ * on the list navigates rather than unfolding a panel, so a test that wants
+ * the form mounts the page.
+ */
+async function openAddForm(container: HTMLElement): Promise<HTMLElement> {
   await act(async () => buttonNamed(container, "Add team member").click());
+  const page = mount("new");
+  await settle();
+  return page;
 }
 
 async function submitAddForm(container: HTMLElement): Promise<void> {
@@ -173,17 +192,17 @@ describe("event team role management", () => {
     });
 
     expect(container.querySelector('input[type="email"]')).toBeNull();
-    await openAddForm(container);
+    const addPage = await openAddForm(container);
 
-    const email = container.querySelector<HTMLInputElement>('input[type="email"]')!;
-    const role = container.querySelector<HTMLSelectElement>("select")!;
+    const email = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
+    const role = addPage.querySelector<HTMLSelectElement>("select")!;
     await act(async () => {
       email.value = "organizer@example.test";
       email.dispatchEvent(new Event("input", { bubbles: true }));
       role.value = "organizer";
       role.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await submitAddForm(container);
+    await submitAddForm(addPage);
 
     const posted = requests.find(({ method }) => method === "POST");
     expect(posted?.path).toBe("/api/v1/events/architecture-workshop/roles");
@@ -195,8 +214,9 @@ describe("event team role management", () => {
       role: "organizer",
     });
 
-    // A successful assignment closes the form again.
-    expect(container.querySelector('input[type="email"]')).toBeNull();
+    // A successful assignment returns to the list, which is an address rather
+    // than the disappearance of a layer.
+    expect(navigate).toHaveBeenCalledWith("/events/architecture-workshop/settings/team");
   });
 
   it("names its table and pairs every control with its label", async () => {
@@ -208,26 +228,26 @@ describe("event team role management", () => {
     // Four unnamed tables on a page are announced as four tables.
     expect(container.querySelector("caption")?.textContent).toBe("Event team members");
 
-    await openAddForm(container);
+    const addPage = await openAddForm(container);
 
-    const form = container.querySelector<HTMLFormElement>("form")!;
+    const form = addPage.querySelector<HTMLFormElement>("form")!;
     expect(form.getAttribute("aria-label")).toBe("Add team member");
 
-    const email = container.querySelector<HTMLInputElement>('input[type="email"]')!;
+    const email = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
     expect(email.id).not.toBe("");
-    expect(labelFor(container, "Email").getAttribute("for")).toBe(email.id);
+    expect(labelFor(addPage, "Email").getAttribute("for")).toBe(email.id);
     expect(email.required).toBe(true);
 
-    const role = container.querySelector<HTMLSelectElement>("select")!;
-    expect(labelFor(container, "Role").getAttribute("for")).toBe(role.id);
+    const role = addPage.querySelector<HTMLSelectElement>("select")!;
+    expect(labelFor(addPage, "Role").getAttribute("for")).toBe(role.id);
 
     // The optional expiry explains itself through a described-by relationship
     // rather than a floating paragraph nothing points at.
-    const expires = container.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
-    expect(labelFor(container, "Expires").getAttribute("for")).toBe(expires.id);
+    const expires = addPage.querySelector<HTMLInputElement>('input[type="datetime-local"]')!;
+    expect(labelFor(addPage, "Expires").getAttribute("for")).toBe(expires.id);
     const helpId = expires.getAttribute("aria-describedby");
     expect(helpId).toBeTruthy();
-    expect(container.querySelector(`#${helpId!}`)?.textContent).toContain("never expires");
+    expect(addPage.querySelector(`#${helpId!}`)?.textContent).toContain("never expires");
   });
 
   it("keeps the form open and announces the reason when an assignment is rejected", async () => {
@@ -239,24 +259,28 @@ describe("event team role management", () => {
     const container = mount();
     await settle();
     await settle();
-    await openAddForm(container);
+    const addPage = await openAddForm(container);
+    // From here on, any navigation is the submit's own.
+    navigate.mockClear();
 
-    const email = container.querySelector<HTMLInputElement>('input[type="email"]')!;
+    const email = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
     await act(async () => {
       email.value = "organizer@example.test";
       email.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await submitAddForm(container);
+    await submitAddForm(addPage);
 
     expect(requests.some(({ method }) => method === "POST")).toBe(true);
 
-    const alert = container.querySelector('[role="alert"]');
+    const alert = addPage.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("That person already holds this role.");
 
-    // The form survives the failure with the typed value intact, so the fix is
-    // one edit away rather than a re-entry from scratch.
-    const stillThere = container.querySelector<HTMLInputElement>('input[type="email"]')!;
+    // The page survives the failure with the typed value intact, so the fix is
+    // one edit away rather than a re-entry from scratch — and the reader is
+    // not sent back to the list with nothing to correct.
+    const stillThere = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
     expect(stillThere.value).toBe("organizer@example.test");
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("says in words that an assignment has run out, not only in colour", async () => {

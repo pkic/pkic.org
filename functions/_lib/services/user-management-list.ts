@@ -108,7 +108,7 @@ export async function listUsers(db: DatabaseLike, query: UsersListQuery) {
       ...row
     }) => ({
       ...row,
-      headshotUrl: publicUserHeadshotPath(headshotR2Key),
+      headshotUrl: publicUserHeadshotPath(row.id, headshotR2Key),
       type: organizationCount > 0 ? "member" : hasEventParticipation ? "event_attendee" : "contact_only",
       organizationNames: organizationNames ? organizationNames.split(NAME_SEPARATOR) : [],
       organizationCount,

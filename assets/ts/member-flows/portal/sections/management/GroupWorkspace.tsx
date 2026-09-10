@@ -1,3 +1,5 @@
+import { ButtonLink } from "../../../../ui/Button";
+import { BreadcrumbScope } from "../../../../ui/BreadcrumbScope";
 /**
  * The selected-group workspace: one URL-addressed context whose tabs derive
  * from the identity's live capabilities in that group. The same views serve
@@ -5,6 +7,8 @@
  */
 import { lazy, Suspense } from "preact/compat";
 import { Link } from "wouter";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import "../../../../ui/Content.css";
 import {
   authenticatedGroupDetailResponseSchema,
   type AuthenticatedGroup,
@@ -27,11 +31,8 @@ import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
 import { GroupParticipationCard } from "../GroupParticipationCard";
 import { groupContextNavigation } from "./group-context-navigation";
 
-const GroupSettingsForm = lazy(() =>
-  import("./GroupSettingsForm").then((module) => ({ default: module.GroupSettingsForm })),
-);
-const GroupCategoryRulesEditor = lazy(() =>
-  import("./GroupCategoryRulesEditor").then((module) => ({ default: module.GroupCategoryRulesEditor })),
+const GroupSettingsTabs = lazy(() =>
+  import("./GroupSettingsTabs").then((module) => ({ default: module.GroupSettingsTabs })),
 );
 const GroupMembers = lazy(() => import("./GroupMembers").then((module) => ({ default: module.GroupMembers })));
 const GroupLeadership = lazy(() => import("./GroupLeadership").then((module) => ({ default: module.GroupLeadership })));
@@ -48,20 +49,18 @@ const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => 
 
 const OVERVIEW_VIEW = "overview";
 
-/**
- * The group heads the workspace as a page header, not as a panel: the trail
- * leads back to the catalog, the name is the page's `<h2>`, the type and the
- * inactive state stand beside it as badges — the inactive one saying the word
- * as well as showing the tone — and the parent, when there is one, is the
- * header's single quiet sentence. The headline counts that used to share this
- * box moved to the overview's "About this group" panel, where they are
- * content rather than chrome.
- */
-function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
+/** The group owns the page title at its root and becomes navigation context inside a record. */
+function GroupContextHeader({ group, canManage }: { group: AuthenticatedGroup; canManage: boolean }) {
   return (
     <PageHeader
-      trail={[{ label: "Groups", href: usePortalHashLocation.hrefs("/groups") }, { label: group.name }]}
       title={group.name}
+      actions={
+        canManage ? (
+          <ButtonLink size="sm" href={usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}/settings`)}>
+            Group settings
+          </ButtonLink>
+        ) : undefined
+      }
       context={
         <>
           <Badge tone="neutral">{group.type.singularLabel}</Badge>
@@ -153,13 +152,31 @@ export function GroupWorkspace({
     return `/groups/${encodeURIComponent(groupId)}/${nextView}`;
   }
 
+  const trail = group
+    ? [
+        { label: "Groups", href: usePortalHashLocation.hrefs("/groups") },
+        { label: group.name, href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}`) },
+        ...(view !== OVERVIEW_VIEW
+          ? [
+              {
+                label: views.find((item) => item.key === view)?.label ?? view,
+                href: usePortalHashLocation.hrefs(viewPath(view)),
+              },
+            ]
+          : []),
+      ]
+    : [];
   return (
     <div class="pk pk-stack">
       {detail.loading && !group && <Spinner label="Loading group…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {group && (
-        <>
-          <GroupContextHeader group={group} />
+        <BreadcrumbScope
+          route={[groupId, view, resourceId, resourceTab, resourceDetailId].join("/")}
+          items={trail}
+          label="Group navigation"
+        >
+          <GroupContextHeader group={group} canManage={canManage} />
           <Tabs
             items={views.map((item) => ({ key: item.key, label: item.label }))}
             active={view}
@@ -169,10 +186,7 @@ export function GroupWorkspace({
           />
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
-              <>
-                {!canParticipate && Boolean(portalSession.value?.member) && (
-                  <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
-                )}
+              <div class={canParticipate || portalSession.value?.member ? "pk-record" : "pk-stack"}>
                 <GroupOverview
                   groupId={group.id}
                   description={group.description}
@@ -180,23 +194,35 @@ export function GroupWorkspace({
                   representedMemberCount={group.representedMemberCount}
                   childCount={group.childCount}
                 />
-                {canParticipate && (
-                  <p class="pk-small">
-                    You participate in this group. <Link href="/groups">Manage your participation</Link>
-                  </p>
+                {!canParticipate && Boolean(portalSession.value?.member) && (
+                  <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
                 )}
-              </>
-            )}
-            {view === "settings" && canManage && settingsGroup && (
-              <div class="pk-stack">
-                <GroupSettingsForm group={settingsGroup} onUpdated={detail.reload} />
-                <GroupCategoryRulesEditor groupId={group.id} onUpdated={detail.reload} />
+                {canParticipate && (
+                  <Panel>
+                    <PanelHeader title="Your participation" />
+                    <PanelBody class="pk-stack">
+                      <p>You participate in this group.</p>
+                      <Link href="/groups">Manage your participation</Link>
+                    </PanelBody>
+                  </Panel>
+                )}
               </div>
             )}
-            {view === "members" && (canManage || canParticipate) && (
-              <GroupMembers key={group.id} groupId={group.id} canManage={canManage} onChanged={detail.reload} />
+            {view === "settings" && canManage && settingsGroup && (
+              <GroupSettingsTabs group={settingsGroup} onUpdated={detail.reload} />
             )}
-            {view === "leadership" && canManage && <GroupLeadership key={group.id} groupId={group.id} />}
+            {view === "members" && (canManage || canParticipate) && (
+              <GroupMembers
+                key={group.id}
+                groupId={group.id}
+                canManage={canManage}
+                seatSegment={resourceId}
+                onChanged={detail.reload}
+              />
+            )}
+            {view === "leadership" && canManage && (
+              <GroupLeadership key={group.id} groupId={group.id} assignmentSegment={resourceId} />
+            )}
             {view === "events" && (
               <GroupEvents
                 key={`${group.id}:${resourceId ?? ""}`}
@@ -214,6 +240,7 @@ export function GroupWorkspace({
                 canManage={canManage}
                 seriesSegment={resourceId}
                 seriesTab={resourceTab}
+                seriesDetailId={resourceDetailId}
               />
             )}
             {view === "forms" && (
@@ -242,14 +269,17 @@ export function GroupWorkspace({
                 groupId={group.id}
                 canManage={canManage}
                 canParticipate={canParticipate}
+                listSegment={resourceId}
+                listTab={resourceTab}
               />
             )}
             {view === "audit" && canManage && <GroupAuditLog key={group.id} groupId={group.id} />}
           </Suspense>
+
           {!views.some((item) => item.key === view) && (
             <ErrorAlert error="This group section is not available to your current identity." />
           )}
-        </>
+        </BreadcrumbScope>
       )}
     </div>
   );

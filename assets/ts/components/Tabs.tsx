@@ -15,6 +15,8 @@
  */
 import { Link } from "wouter";
 
+import { useActiveTabVisibility } from "../ui/useActiveTabVisibility";
+
 import { TabList } from "../ui/TabList";
 // The navigating variant is rendered here rather than by `ui/Tabs` because it
 // has to be a wouter <Link>: the portal is hash-routed, and a plain <a href>
@@ -28,33 +30,42 @@ export interface TabItem {
   panelId?: string;
 }
 
-interface TabsProps {
+interface SharedTabsProps {
   items: TabItem[];
   active: string;
-  onChange: (key: string) => void;
   className?: string;
   idPrefix?: string;
   /** Names the set for assistive technology. */
   label?: string;
-  /**
-   * When set, tabs are real links to `hrefFor(key)`, so a tab position is
-   * shareable and back-button safe.
-   */
-  hrefFor?: (key: string) => string;
 }
 
+/** Routed tabs navigate themselves unless a caller supplies guarded navigation. */
+type TabsProps = SharedTabsProps &
+  (
+    | { hrefFor: (key: string) => string; onChange?: (key: string) => void }
+    | { hrefFor?: undefined; onChange: (key: string) => void }
+  );
+
 export function Tabs({ items, active, onChange, className, idPrefix, label = "Sections", hrefFor }: TabsProps) {
+  const listRef = useActiveTabVisibility(active);
   if (hrefFor) {
     return (
       <nav class={["pk-tabs", className].filter(Boolean).join(" ")} aria-label={label}>
-        <div class="pk-tabs__list">
+        <div class="pk-tabs__list" ref={listRef}>
           {items.map((item) => (
             <Link
               key={item.key}
               href={hrefFor(item.key)}
               class="pk-tabs__link"
               aria-current={item.key === active ? "page" : undefined}
-              onClick={() => onChange(item.key)}
+              onClick={(event: MouseEvent) => {
+                // Plain routed tabs let Link navigate. Editors may supply
+                // their own guarded navigation; modified clicks stay native.
+                if (!onChange) return;
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onChange(item.key);
+              }}
             >
               {item.label}
             </Link>

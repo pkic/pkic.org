@@ -16,33 +16,84 @@ export const linkUrlSchema = httpUrlSchema;
 /** Canonical maximum number of flexible profile links persisted per record. */
 export const MAX_LINKS = 15;
 
-/** Shared labels for well-known link hosts. Unknown hosts use their hostname. */
-const LINK_DOMAIN_LABELS: Record<string, string> = {
-  "linkedin.com": "LinkedIn",
-  "xing.com": "Xing",
-  "orcid.org": "ORCID",
-  "researchgate.net": "ResearchGate",
-  "scholar.google.com": "Google Scholar",
-  "academia.edu": "Academia.edu",
-  "semanticscholar.org": "Semantic Scholar",
-  "ssrn.com": "SSRN",
-  "papers.ssrn.com": "SSRN",
-  "arxiv.org": "arXiv",
-  "zenodo.org": "Zenodo",
-  "figshare.com": "Figshare",
-  "datatracker.ietf.org": "IETF Datatracker",
-  "ieee.org": "IEEE",
-  "dl.acm.org": "ACM Digital Library",
-  "github.com": "GitHub",
-  "gitlab.com": "GitLab",
-  "twitter.com": "X (Twitter)",
-  "x.com": "X (Twitter)",
-  "bsky.app": "Bluesky",
-  "youtube.com": "YouTube",
-  "facebook.com": "Facebook",
-  "instagram.com": "Instagram",
-  "en.wikipedia.org": "Wikipedia",
+/**
+ * The sites this system can name, and the two-character mark each is drawn
+ * with. One table, because the label and the mark answer the same question —
+ * "which site is this?" — and keeping them apart is how a host ends up
+ * labelled "YouTube" beside a generic outbound arrow (issue #13: no platform
+ * is special, so every recognized one has to be recognized everywhere).
+ *
+ * Keyed on the registrable host with `www.` stripped, so `www.linkedin.com`
+ * and `linkedin.com` are the same site. A host that is not here keeps its
+ * hostname as its label and the outbound arrow as its mark — the honest
+ * answer for somewhere the system knows nothing about, and the reason this
+ * table is reference data rather than an exhaustive enumeration.
+ *
+ * The mark is text rather than a glyph on purpose: an icon set would be
+ * another asset pipeline and a licensing question for marks that are two
+ * characters wide anyway.
+ */
+export interface LinkHost {
+  label: string;
+  mark: string;
+}
+
+const OUTBOUND_MARK = "↗";
+
+export const LINK_HOSTS: Readonly<Record<string, LinkHost>> = {
+  "linkedin.com": { label: "LinkedIn", mark: "in" },
+  "xing.com": { label: "Xing", mark: "xi" },
+  "orcid.org": { label: "ORCID", mark: "id" },
+  "researchgate.net": { label: "ResearchGate", mark: "rg" },
+  "scholar.google.com": { label: "Google Scholar", mark: "gs" },
+  "academia.edu": { label: "Academia.edu", mark: "ac" },
+  "semanticscholar.org": { label: "Semantic Scholar", mark: "s2" },
+  "ssrn.com": { label: "SSRN", mark: "ss" },
+  "papers.ssrn.com": { label: "SSRN", mark: "ss" },
+  "arxiv.org": { label: "arXiv", mark: "ar" },
+  "zenodo.org": { label: "Zenodo", mark: "ze" },
+  "figshare.com": { label: "Figshare", mark: "fs" },
+  "datatracker.ietf.org": { label: "IETF Datatracker", mark: "df" },
+  "ieee.org": { label: "IEEE", mark: "ie" },
+  "dl.acm.org": { label: "ACM Digital Library", mark: "dl" },
+  "github.com": { label: "GitHub", mark: "gh" },
+  "gitlab.com": { label: "GitLab", mark: "gl" },
+  "twitter.com": { label: "X (Twitter)", mark: "x" },
+  "x.com": { label: "X (Twitter)", mark: "x" },
+  "bsky.app": { label: "Bluesky", mark: "bs" },
+  "youtube.com": { label: "YouTube", mark: "yt" },
+  "facebook.com": { label: "Facebook", mark: "fb" },
+  "instagram.com": { label: "Instagram", mark: "ig" },
+  "mastodon.social": { label: "Mastodon", mark: "@" },
+  "en.wikipedia.org": { label: "Wikipedia", mark: "wp" },
 };
+
+/** A Mastodon instance announces itself in the path, not the host. */
+const MASTODON_PATH = /^\/@[^/]+\/?$/;
+
+/**
+ * What the system knows about the site a URL points at.
+ *
+ * A URL it cannot even parse is not a link to somewhere — it is a string, and
+ * the honest label for it is itself.
+ */
+function describeLinkHost(url: string): LinkHost {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { label: url, mark: OUTBOUND_MARK };
+  }
+  if (parsed.protocol === "mailto:") {
+    // The address is the name here; `mailto:` is scaffolding.
+    return { label: parsed.pathname, mark: "@" };
+  }
+  const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  const known = LINK_HOSTS[hostname];
+  if (known) return known;
+  if (MASTODON_PATH.test(parsed.pathname)) return { label: hostname, mark: "@" };
+  return { label: hostname, mark: OUTBOUND_MARK };
+}
 
 export const linksSchema = z
   .array(linkUrlSchema)
@@ -75,12 +126,12 @@ export function hasDuplicateLink(links: readonly string[], candidate: string): b
 
 /** Human-readable label shared by profile-link editors and public profile views. */
 export function getLinkLabel(url: string): string {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-    return LINK_DOMAIN_LABELS[hostname] ?? hostname;
-  } catch {
-    return url;
-  }
+  return describeLinkHost(url).label;
+}
+
+/** The two-character mark a link is drawn behind, from the same table. */
+export function getLinkMark(url: string): string {
+  return describeLinkHost(url).mark;
 }
 
 /**

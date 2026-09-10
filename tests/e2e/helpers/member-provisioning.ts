@@ -46,13 +46,14 @@ export async function jsonResponse(
 
 export async function createMember(
   page: Page,
+  options: { individual?: boolean } = {},
 ): Promise<{ email: string; userId: string; memberId: string; identityId: string }> {
   const identity = crypto.randomUUID();
   const email = `e2e-persona-${identity}@persona-${identity}.example.test`;
   const startSince = await capturedEmailCount();
   const start = await jsonResponse(page.request, "POST", "/api/v1/members/join/start", {
     email,
-    unaffiliatedAttestation: false,
+    unaffiliatedAttestation: options.individual ?? false,
   });
   expect(stringProperty(start, "status")).toBe("verification_sent");
 
@@ -68,8 +69,8 @@ export async function createMember(
   const application = await jsonResponse(page.request, "POST", "/api/v1/members/applications", {
     applicantEmail: email,
     applicantName: "E2E Persona Member",
-    membershipCategory: "A",
-    organizationName: `Persona Test Organization ${identity}`,
+    membershipCategory: options.individual ? "H5" : "A",
+    ...(options.individual ? {} : { organizationName: `Persona Test Organization ${identity}` }),
     joinToken: stringProperty(verified, "joinToken"),
     answers: {
       reason: "Real Worker/D1 portal persona coverage",

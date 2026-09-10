@@ -7,7 +7,7 @@ import { buildUserCatalogPageQuery, listGroupUsers } from "../functions/_lib/ser
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
-import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { ensureGroupMembershipCapacity, grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -50,6 +50,17 @@ describe("group user catalog", () => {
        VALUES (?, ?, ?, ?, datetime('now'), 'test', datetime('now'))`,
     )
       .bind(crypto.randomUUID(), targetId, "catalog-alias@example.test", "catalog-alias@example.test")
+      .run();
+    /*
+     * The picker offers the people this group can actually seat. Ada is given
+     * a real Member capacity; the unseatable user below has none, and used to
+     * be offered anyway — the manager picked them, filled in a title and two
+     * dates, and only then got `GROUP_CAPACITY_REQUIRED` back (#25).
+     */
+    await ensureGroupMembershipCapacity(env.DB, group.id, targetId);
+    const unseatableId = await insertUser(env.DB, `catalog-unseatable-${crypto.randomUUID()}@example.test`);
+    await env.DB.prepare("UPDATE users SET first_name = 'Grace', last_name = 'Hopper' WHERE id = ?")
+      .bind(unseatableId)
       .run();
     const inactiveId = await insertUser(env.DB, `catalog-inactive-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactiveId).run();
@@ -124,6 +135,17 @@ describe("group user catalog", () => {
       headers: { authorization: `Bearer ${managerToken}` },
     });
     expect(((await inactiveResponse.json()) as { users: unknown[] }).users).toEqual([]);
+
+    // Active, findable by search, and still not offered: this group cannot
+    // seat them, so the picker does not promise it can.
+    const unseatableResponse = await callApi(env, `/api/v1/groups/${group.id}/users?q=catalog-unseatable`, {
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    const unseatablePayload = userCatalogListResponseSchema.parse(await unseatableResponse.json());
+    expect(unseatablePayload.users).toEqual([]);
+    // The count statement carries the same filter as the page; a total the
+    // page cannot produce is its own bug.
+    expect(unseatablePayload.page.total).toBe(0);
     expect(
       (
         await callApi(env, `/api/v1/groups/${group.id}/user-catalog?q=catalog`, {

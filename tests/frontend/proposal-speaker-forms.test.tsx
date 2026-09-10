@@ -14,6 +14,7 @@ import {
   type ProposalSpeakersResponse,
 } from "../../assets/shared/schemas/proposal-speakers";
 import type { ProposalInternalComment } from "../../assets/shared/schemas/proposal-comments";
+import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
 import { buttonNamed, controlFor, groupNames, labelNames } from "./helpers/labelled-control";
 
 let container: HTMLElement | null = null;
@@ -159,6 +160,19 @@ describe("SpeakerFormCard", () => {
     expect(label.className).toContain("pk-check");
     expect(label.querySelector("input")).toBe(moderator);
     expect(label.querySelector(".pk-check__label")?.textContent).toBe("Moderator");
+  });
+
+  it("draws one radio for every role the contract knows", () => {
+    const root = mount(speakerCard({ defaultRole: "moderator" }));
+    const form = root.querySelector("form")!;
+
+    // The public speaker form and the two management role selects all read the
+    // same vocabulary, so a role added to the contract cannot reach one surface
+    // and miss another.
+    const offered = [...form.querySelectorAll<HTMLInputElement>('input[name="speaker.1.role"]')].map(
+      (radio) => radio.value,
+    );
+    expect(offered).toEqual([...PROPOSAL_SPEAKER_ROLES]);
   });
 
   it("offers removal as a button, and offers none when the card cannot be removed", () => {

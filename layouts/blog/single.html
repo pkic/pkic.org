@@ -77,43 +77,7 @@
               <p class="blog-sidebar-sponsors-intro">{{ i18n "sponsors" }}</p>
 
               {{/* Collect and tier general (non-event-specific) sponsors */}}
-              {{ $tiers := slice "Diamond" "Titanium" "Platinum" "Gold" "Silver" "Bronze" }}
-              {{ range $tiers }}
-                {{ $lvl     := . }}
-                {{ $inLevel := slice }}
-
-                {{ range hugo.Data.members }}
-                  {{ if eq (.sponsor.level | default "") $lvl }}
-                    {{ $inLevel = $inLevel | append . }}
-                  {{ end }}
-                {{ end }}
-                {{ range hugo.Data.sponsors }}
-                  {{ if eq (.sponsor.level | default "") $lvl }}
-                    {{ $inLevel = $inLevel | append . }}
-                  {{ end }}
-                {{ end }}
-
-                {{ if gt (len $inLevel) 0 }}
-                <div class="blog-sidebar-tier blog-sidebar-tier-{{ $lvl | lower }}">
-                  <span class="blog-sidebar-tier-label">{{ $lvl }}</span>
-                  <div class="blog-sidebar-tier-logos">
-                    {{ range shuffle $inLevel }}
-                      {{ $s   := . }}
-                      {{ $img := resources.GetMatch (printf "images/members/%s/%s.*" $s.id $s.id) }}
-                      {{ if $s.logo }}
-                        {{ $img = resources.GetMatch (printf "images/sponsors/%s" $s.logo) }}
-                      {{ end }}
-                      {{ with $img }}
-                      {{ $title := printf "%s — %s sponsor" $s.name $lvl }}
-                      <a href="{{ $s.website }}" target="_blank" rel="noopener noreferrer" title="{{ $title }}" class="blog-sidebar-sponsor-link">
-                        <img src="{{ $img.RelPermalink }}" alt="{{ $s.name }}" class="blog-sidebar-sponsor-logo blog-sidebar-sponsor-logo-{{ $lvl | lower }}" loading="lazy">
-                      </a>
-                      {{ end }}
-                    {{ end }}
-                  </div>
-                </div>
-                {{ end }}
-              {{ end }}
+              {{ partial "sponsors/wall-app.html" (dict "mode" "grid" "rows" true "height" 20 "maxHeight" 20 "maxWidth" 60 "class" "blog-sidebar-sponsor-logo") }}
 
               <div class="blog-sidebar-sponsors-footer">
                 <a href="/sponsors/" class="blog-sidebar-sponsors-all-link">View all sponsors →</a>

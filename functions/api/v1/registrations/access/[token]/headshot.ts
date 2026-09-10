@@ -81,7 +81,7 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
       },
     },
   );
-  const headshotUrl = publicUserHeadshotUrl(appOrigin, r2Key);
+  const headshotUrl = publicUserHeadshotUrl(appOrigin, user.id, r2Key);
   if (!headshotUrl) throw new Error("Generated headshot key is not publicly addressable");
 
   return json({ success: true, headshotUrl });

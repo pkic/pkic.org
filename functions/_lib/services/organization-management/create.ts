@@ -2,20 +2,32 @@ import type { OrganizationCreateInput } from "../../../../assets/shared/schemas/
 import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import { adminDatabaseUserId } from "../../auth/admin-identity";
 import { prepareAuditLog } from "../audit";
-import { buildProvisionOrganizationMembership } from "../membership/provisioning";
+import { nowIso } from "../../utils/time";
+import { buildProvisionOrganizationMembership, buildResolveOrganizationStatements } from "../membership/provisioning";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { authorizedOrganizationMutationDb } from "./authorization";
 import { getOrganization } from "./read-model";
 
 /**
- * Creates one organization aggregate through the same provisioner used by
- * YAML import and application approval.
+ * Creates one organization, and a membership for it only when asked.
  *
- * Initial identities are optional. Providing any activates them immediately
- * — skipping the invitation flow — so that path alone demands the
- * `identities:activate` permission (checked again here, inside the mutation
- * guard, so a mid-request revocation still rolls the batch back) and carries
- * the caller's activation reason into the audit log.
+ * Writing an organization down is not admitting a member. The consortium
+ * keeps records for organizations it is not in membership with — an
+ * attendee's employer, a sponsor, a company in conversation — and membership
+ * arrives by its own act: an application the organization signs up through,
+ * or an explicit grant. This used to provision a member aggregate every time,
+ * so every organization became a member the moment somebody recorded it.
+ *
+ * With a membership it is the same provisioner the YAML import and
+ * application approval use. Without one it stops at the organization row: no
+ * category, no standing, and nobody acting for it, because representatives
+ * and group seats are a membership's and it has none.
+ *
+ * Initial identities are optional and belong to the membership path. Providing
+ * any activates them immediately — skipping the invitation flow — so that path
+ * alone demands the `identities:activate` permission (checked again here,
+ * inside the mutation guard, so a mid-request revocation still rolls the batch
+ * back) and carries the caller's activation reason into the audit log.
  */
 export async function createOrganization(db: DatabaseLike, actor: UserBackedAuthAdmin, input: OrganizationCreateInput) {
   const activatesIdentities = input.identities.length > 0;
@@ -23,6 +35,28 @@ export async function createOrganization(db: DatabaseLike, actor: UserBackedAuth
     ? ["membership:write", "identities:activate"]
     : ["membership:write"];
   const authorizedDb = authorizedOrganizationMutationDb(db, actor, requiredPermissions);
+
+  if (!input.membershipCategory) {
+    const record = await buildResolveOrganizationStatements(
+      authorizedDb,
+      {
+        organizationName: input.name,
+        website: input.website,
+        description: input.description,
+        links: input.links,
+      },
+      nowIso(),
+    );
+    record.statements.push(
+      prepareAuditLog(authorizedDb, "admin", actor.id, "organization_created", "organization", record.organizationId, {
+        organizationName: input.name,
+        membershipCategory: null,
+      }),
+    );
+    await authorizedDb.batch(record.statements);
+    return getOrganization(db, record.organizationId);
+  }
+
   const provision = await buildProvisionOrganizationMembership(authorizedDb, {
     organizationName: input.name,
     website: input.website,

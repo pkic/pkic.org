@@ -21,6 +21,16 @@ export async function validateMailingListConfiguration(
 
 export function translateMailingListWriteError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
+  // The schema's retention trigger is the backstop under the delete use case's
+  // own checks. Reaching it means a dependency appeared between the check and
+  // the commit, so the refusal reads the same either way.
+  if (message.includes("must be archived, not deleted")) {
+    throw new AppError(
+      409,
+      "MAILING_LIST_HAS_SUBSCRIPTION_HISTORY",
+      "Someone's subscription choice is recorded on this list. Archive it instead of deleting it.",
+    );
+  }
   if (
     message.includes("uq_mailing_lists_primary_discussion") ||
     message.includes("UNIQUE constraint failed: mailing_lists.group_id")

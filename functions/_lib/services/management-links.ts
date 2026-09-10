@@ -37,7 +37,7 @@ export function buildManagementLink(appBaseUrl: string, link: ManagementLink): s
       return portalHashUrlWithQuery(appBaseUrl, "/auth/oauth", query).toString();
     }
     case "organization-content-reviews":
-      return portalHashUrl(appBaseUrl, "/system/organization-content-reviews").toString();
+      return portalHashUrl(appBaseUrl, "/settings/organization-content-reviews").toString();
     case "membership-application":
       return portalHashUrl(appBaseUrl, `/membership/applications/${encodeURIComponent(link.id)}`).toString();
     case "sponsorship-list":

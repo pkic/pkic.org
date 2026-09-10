@@ -8,25 +8,25 @@ import {
   groupVoteVisibilityUpdateInputSchema,
 } from "../../assets/shared/schemas/group-vote-management";
 import {
-  groupVoteProposalCreateSchema,
-  groupVoteProposalRejectSchema,
-} from "../../assets/shared/schemas/group-vote-proposals";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+  PUBLIC_DETAIL_LEVELS,
+  THRESHOLD_TYPES,
+  VOTE_ELECTORATE_MODES,
+  VOTE_TIE_BREAK_MODES,
+  VOTE_TYPES,
+  VOTE_VISIBILITIES,
+} from "../../assets/shared/schemas/votes";
 import { GroupVoteCreateForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteCreateForm";
 import {
   GroupVoteBallots,
   GroupVoteSettings,
 } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteManagementControls";
-import { GroupVoteProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
-import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
 // The `for`/`id` pair and a button's visible text are resolved by the
 // shared helpers rather than re-derived here: one definition of "the
 // control this label names" is what keeps every form test honest.
-import { buttonNamed, controlFor as labeledControl } from "./helpers/labelled-control";
+import { buttonNamed, controlFor as labeledControl, optionValues } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
-const PROPOSAL_ID = "d0000000-0000-4000-8000-000000000001";
 
 function voteSummary() {
   return {
@@ -70,32 +70,15 @@ function managedVote(): GroupVoteDetail {
   };
 }
 
-function proposal(capabilities: string[]) {
-  return {
-    id: PROPOSAL_ID,
-    title: "Architecture proposal",
-    description: "Adopt the architecture.",
-    voteType: "motion",
-    ownerGroupId: GROUP_ID,
-    ownerGroupName: "Architecture Committee",
-    proposedByUserId: "e0000000-0000-4000-8000-000000000001",
-    eligibleCategories: null,
-    proposedOpensAt: null,
-    proposedClosesAt: null,
-    status: "open_for_endorsement",
-    voteId: null,
-    rejectionReason: null,
-    endorsementCount: 1,
-    minEndorsersRequired: 2,
-    createdAt: "2026-08-01T00:00:00.000Z",
-    capabilities,
-  };
-}
-
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+/** What the select a label names actually offers. */
+function offeredBy(container: HTMLElement, label: string): string[] {
+  return optionValues(labeledControl<HTMLSelectElement>(container, label));
 }
 
 function setValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
@@ -117,13 +100,6 @@ function namedRegion(container: HTMLElement, name: string): HTMLElement | undefi
     const target = container.querySelector(`[id="${String(section.getAttribute("aria-labelledby"))}"]`);
     return target?.textContent?.trim() === name;
   }) as HTMLElement | undefined;
-}
-
-function confirmDialogButton(label: string): HTMLButtonElement {
-  if (!openConfirmation()) throw new Error("no confirm dialog is open");
-  const button = confirmationButton(label);
-  if (!button) throw new Error(`missing confirm dialog button: ${label}`);
-  return button;
 }
 
 afterEach(() => {
@@ -233,6 +209,47 @@ describe("selected-group vote management", () => {
       .filter((label) => label?.startsWith("Remove candidate"));
     expect(removeLabels).toEqual(["Remove candidate 1", "Remove candidate 2"]);
     expect(labeledControl<HTMLInputElement>(container, "Candidate 1 name")).not.toBeNull();
+  });
+
+  it("offers every value the shared vote vocabularies accept", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<GroupVoteCreateForm groupId={GROUP_ID} onCreated={async () => {}} />, container));
+
+    expect(offeredBy(container, "Type")).toEqual([...VOTE_TYPES]);
+    expect(offeredBy(container, "Electorate")).toEqual([...VOTE_ELECTORATE_MODES]);
+    expect(offeredBy(container, "Tied vote")).toEqual([...VOTE_TIE_BREAK_MODES]);
+
+    // The threshold offer is split by vote type, so neither select alone
+    // carries the whole vocabulary. What must hold is that no threshold the
+    // contract accepts is unreachable from the form — the shape issue #24
+    // reported — and that nothing outside the vocabulary is offered.
+    const deliberative = offeredBy(container, "Threshold");
+    const type = labeledControl<HTMLSelectElement>(container, "Type");
+    await act(() => {
+      type.value = "election";
+      type.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const election = offeredBy(container, "Threshold");
+
+    expect(new Set([...deliberative, ...election])).toEqual(new Set(THRESHOLD_TYPES));
+    for (const threshold of [...deliberative, ...election]) {
+      expect(THRESHOLD_TYPES).toContain(threshold);
+    }
+    // The bylaws' own split, as `validateVoteConfiguration` enforces it.
+    expect(deliberative).toEqual(["simple_majority", "supermajority"]);
+    expect(election).toEqual(["simple_majority", "successive_elimination"]);
+  });
+
+  it("offers every visibility and detail level the contract accepts", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(<GroupVoteSettings groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />, container),
+    );
+
+    expect(offeredBy(container, "Visibility")).toEqual([...VOTE_VISIBILITIES]);
+    expect(offeredBy(container, "Public result detail")).toEqual([...PUBLIC_DETAIL_LEVELS]);
   });
 
   it("updates visibility through the selected group contract", async () => {
@@ -345,253 +362,5 @@ describe("selected-group vote management", () => {
     expect(changed).not.toHaveBeenCalled();
     // A refused save must not discard what the manager just typed.
     expect(labeledControl<HTMLInputElement>(container, "Title").value).toBe("Revised architecture motion");
-  });
-
-  it("submits proposals directly in the selected group", async () => {
-    const requests: Array<{ path: string; method: string; body?: unknown }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init.method ?? "GET";
-        requests.push({ path: url.pathname, method, ...(init.body ? { body: JSON.parse(String(init.body)) } : {}) });
-        return method === "POST"
-          ? Response.json({ proposal: proposal(["view", "withdraw"]) })
-          : Response.json({ proposals: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(<GroupVoteProposals groupId={GROUP_ID} canParticipate />, container));
-    await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Propose a vote",
-        ) as HTMLButtonElement
-      ).click(),
-    );
-    // Resolved through the label's `for` and the control's `id`: the form no
-    // longer hand-writes ids, and the pair is what a reader actually gets.
-    await act(() => {
-      setValue(labeledControl(container, "Title"), "Architecture proposal");
-      setValue(labeledControl<HTMLTextAreaElement>(container, "Description"), "Adopt the architecture.");
-    });
-    await act(() => buttonNamed(container, "Submit proposal").click());
-    await settle();
-
-    const submission = requests.find((request) => request.method === "POST");
-    expect(submission?.path).toBe(`/api/v1/groups/${GROUP_ID}/vote-proposals`);
-    // Parsed through the shared request contract rather than compared to a
-    // literal, so the assertion fails if the payload stops being a valid one.
-    expect(groupVoteProposalCreateSchema.parse(submission?.body)).toMatchObject({
-      title: "Architecture proposal",
-      description: "Adopt the architecture.",
-      voteType: "motion",
-    });
-    expect(submission?.body).not.toHaveProperty("ownerGroupId");
-  });
-
-  it("shows only server-authorized proposal actions and approves through the group", async () => {
-    const requests: Array<{ path: string; method: string }> = [];
-    const managedProposal = proposal(["view", "approve", "reject"]);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init.method ?? "GET";
-        requests.push({ path: url.pathname, method });
-        if (method === "POST") return Response.json({ proposal: managedProposal, convertedVote: voteSummary() });
-        if (url.pathname.endsWith(`/${PROPOSAL_ID}`))
-          return Response.json({ proposal: managedProposal, endorserUserIds: [] });
-        return Response.json({
-          proposals: [managedProposal],
-          page: { limit: 50, offset: 0, total: 1, hasMore: false },
-        });
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() =>
-      render(
-        <>
-          <ConfirmDialogHost />
-          <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />
-        </>,
-        container,
-      ),
-    );
-    await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
-          (button) => button.textContent === "Show details for Architecture proposal",
-        ) as HTMLButtonElement
-      ).click(),
-    );
-    await settle();
-    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Endorse")).toBe(
-      false,
-    );
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Approve and create vote",
-        ) as HTMLButtonElement
-      ).click(),
-    );
-    await act(() => confirmDialogButton("Approve and create vote").click());
-    await settle();
-
-    expect(requests).toContainEqual({
-      path: `/api/v1/groups/${GROUP_ID}/vote-proposals/${PROPOSAL_ID}/approve`,
-      method: "POST",
-    });
-  });
-
-  it("does not withdraw a proposal when the confirmation is cancelled", async () => {
-    const requests: Array<{ path: string; method: string }> = [];
-    const managedProposal = proposal(["view", "withdraw"]);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init.method ?? "GET";
-        requests.push({ path: url.pathname, method });
-        if (url.pathname.endsWith(`/${PROPOSAL_ID}`))
-          return Response.json({ proposal: managedProposal, endorserUserIds: [] });
-        return Response.json({
-          proposals: [managedProposal],
-          page: { limit: 50, offset: 0, total: 1, hasMore: false },
-        });
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() =>
-      render(
-        <>
-          <ConfirmDialogHost />
-          <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />
-        </>,
-        container,
-      ),
-    );
-    await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
-          (button) => button.textContent === "Show details for Architecture proposal",
-        ) as HTMLButtonElement
-      ).click(),
-    );
-    await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button")).find(
-          (button) => button.textContent === "Withdraw proposal",
-        ) as HTMLButtonElement
-      ).click(),
-    );
-    await act(() => confirmDialogButton("Cancel").click());
-    await settle();
-
-    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
-  });
-
-  it("names the proposal list and the region an expanded proposal opens", async () => {
-    const managedProposal = proposal(["view", "reject"]);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        if (url.pathname.endsWith(`/${PROPOSAL_ID}`))
-          return Response.json({ proposal: managedProposal, endorserUserIds: [] });
-        return Response.json({
-          proposals: [managedProposal],
-          page: { limit: 50, offset: 0, total: 1, hasMore: false },
-        });
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />, container));
-    await settle();
-
-    // Four unnamed tables on a page are announced as four tables.
-    expect(container.querySelector("table caption")?.textContent).toBe("Vote proposals");
-
-    // The row itself opens the detail; its activation names the proposal.
-    const details = buttonNamed(container, "Show details for Architecture proposal");
-    await act(() => details.click());
-    await settle();
-
-    // The expanded detail is a region named after the proposal it belongs
-    // to, so it can be reached without depending on a styling class.
-    expect(namedRegion(container, managedProposal.title)).toBeTruthy();
-    expect(buttonNamed(container, "Hide details for Architecture proposal")).toBeTruthy();
-    // The rejection reason is a required, described control, not a bare box.
-    const reason = labeledControl<HTMLTextAreaElement>(container, "Rejection reason");
-    expect(reason.required).toBe(true);
-    expect(container.querySelector(`[id="${String(reason.getAttribute("aria-describedby"))}"]`)?.textContent).toContain(
-      "Sent to the proposer",
-    );
-  });
-
-  it("states a refused rejection as a sentence and sends the reason the contract defines", async () => {
-    const bodies: unknown[] = [];
-    const managedProposal = proposal(["view", "reject"]);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        if ((init.method ?? "GET") === "POST") {
-          bodies.push(JSON.parse(String(init.body)));
-          return Response.json({}, { status: 409 });
-        }
-        if (url.pathname.endsWith(`/${PROPOSAL_ID}`))
-          return Response.json({ proposal: managedProposal, endorserUserIds: [] });
-        return Response.json({
-          proposals: [managedProposal],
-          page: { limit: 50, offset: 0, total: 1, hasMore: false },
-        });
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} />, container));
-    await settle();
-    await act(() => buttonNamed(container, "Show details for Architecture proposal").click());
-    await settle();
-
-    // The control is refused until there is a reason to send.
-    expect(buttonNamed(container, "Reject proposal").disabled).toBe(true);
-    await act(() => {
-      setValue(labeledControl<HTMLTextAreaElement>(container, "Rejection reason"), "Outside this group's remit.");
-    });
-    await act(() => buttonNamed(container, "Reject proposal").click());
-    await settle();
-
-    expect(groupVoteProposalRejectSchema.parse(bodies[0])).toMatchObject({
-      reason: "Outside this group's remit.",
-    });
-    const alert = container.querySelector("[role='alert']");
-    expect(alert?.textContent).toContain("Someone else changed this at the same time.");
-    expect(alert?.textContent).not.toContain("HTTP 409");
   });
 });

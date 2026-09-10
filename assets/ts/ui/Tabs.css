@@ -33,6 +33,8 @@
     border: 0;
     font: inherit;
     display: inline-flex;
+    flex-shrink: 0;
+    white-space: nowrap;
     align-items: center;
     justify-content: center;
     padding: 0.5rem var(--pk-4);

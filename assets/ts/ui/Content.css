@@ -72,6 +72,38 @@
   }
 
   /*
+   * The same pairs, flowing across the width instead of down the left.
+   *
+   * A table cell that has been handed most of a wide screen's slack — the
+   * audit log's details column — showed a five-pair list as five short rows
+   * against its left edge, with the rest of the column empty. That is what
+   * issue #48 asked to balance. Flowing, the pairs fill the measure they were
+   * given and wrap only when they run out, so the row stays short enough to
+   * read across.
+   *
+   * The term keeps its own emphasis and the pair stays a `dt`/`dd` pair, so
+   * the relationship is still in the markup for anyone not reading the
+   * layout.
+   */
+  .pk-datalist--inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-1) var(--pk-3);
+    align-items: baseline;
+  }
+
+  .pk-datalist--inline > dt::after {
+    content: ":";
+  }
+
+  .pk-datalist--inline > dd {
+    margin: 0;
+    /* The pair travels together: a term at the end of one line with its value
+       at the start of the next is two facts a reader has to rejoin. */
+    margin-inline-end: var(--pk-2);
+  }
+
+  /*
    * Several lists on one surface share one term column: each list sizes its
    * own track otherwise, and three lists stacked in a panel put their values
    * on three different left edges. A surface sets the width once, on the

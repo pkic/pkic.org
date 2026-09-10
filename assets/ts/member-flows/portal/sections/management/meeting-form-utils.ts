@@ -1,23 +1,8 @@
-import {
-  dateTimeLocalToIso,
-  formatDateTimeLocal,
-  instantToDateTimeLocal,
-  zonedDateTimeParts,
-} from "../../../../../shared/timezone";
+import { formatDateTimeLocal, zonedDateTimeParts } from "../../../../../shared/timezone";
+import { browserTimeZone, isoDateTimeValue, localDateTimeValue } from "../../../../shared/ui";
 
-function browserTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-}
-
-/** Renders an instant as a date-time-local value in the meeting's IANA zone. */
-export function localDateTimeValue(value: string | Date, timeZone = browserTimeZone()): string {
-  return instantToDateTimeLocal(value, timeZone);
-}
-
-/** Converts a meeting-zone wall clock into an instant and rejects DST gaps. */
-export function isoDateTimeValue(value: string, timeZone = browserTimeZone()): string {
-  return dateTimeLocalToIso(value, timeZone);
-}
+/** A meeting names its own IANA zone and passes it to the shared codec. */
+export { isoDateTimeValue, localDateTimeValue };
 
 export function defaultFutureDate(days: number, hour = 23, minute = 59, timeZone = browserTimeZone()): string {
   const current = zonedDateTimeParts(new Date(), timeZone);

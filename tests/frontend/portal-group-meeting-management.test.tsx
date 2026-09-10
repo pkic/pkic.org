@@ -10,6 +10,7 @@ import {
 import { MeetingGuests } from "../../assets/ts/member-flows/portal/sections/management/MeetingGuests";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingSeriesSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { buttonNamed, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
 import { groupEventSeriesFixture } from "./helpers/meeting-series-fixture";
 
@@ -78,6 +79,8 @@ function guestOccurrence(overrides: Partial<EventOccurrence> = {}): EventOccurre
     guestCount: 0,
     joinConfirmedCount: 0,
     attendanceVerifiedCount: 0,
+    invitationsRound: 0,
+    invitationsSentAt: null,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-25T10:00:00.000Z",
     ...overrides,
@@ -132,6 +135,7 @@ describe("portal group meeting management", () => {
     );
     const onChanged = vi.fn(async () => {});
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={onChanged} />);
+    await beginRecordEdit(container, "Meeting series actions");
     expect(container.textContent).toContain("recurring schedule is locked");
     // Every control is inside a `Field`, which pairs label and control by
     // generated id, so each is resolved through that pair — the lookup then
@@ -144,6 +148,7 @@ describe("portal group meeting management", () => {
     const active = container.querySelector<HTMLInputElement>(`#meeting-series-active-${series.id}`)!;
     active.checked = false;
     void act(() => {
+      active.dispatchEvent(new Event("input", { bubbles: true }));
       active.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await act(async () => {
@@ -179,6 +184,8 @@ describe("portal group meeting management", () => {
       guestCount: 0,
       joinConfirmedCount: 0,
       attendanceVerifiedCount: 0,
+      invitationsRound: 0,
+      invitationsSentAt: null,
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-25T10:00:00.000Z",
     };
@@ -234,6 +241,8 @@ describe("portal group meeting management", () => {
       guestCount: 0,
       joinConfirmedCount: 0,
       attendanceVerifiedCount: 0,
+      invitationsRound: 0,
+      invitationsSentAt: null,
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-25T10:00:00.000Z",
     };
@@ -320,6 +329,7 @@ describe("portal group meeting management", () => {
     const seriesWide = controlFor(container, "Eligible for every occurrence in this series");
     seriesWide.checked = true;
     void act(() => {
+      seriesWide.dispatchEvent(new Event("input", { bubbles: true }));
       seriesWide.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(expiry.value).toBe("2026-09-01T13:00");
@@ -427,7 +437,7 @@ describe("portal group meeting management", () => {
     expect(controlFor(container, "Affiliation").required).toBe(false);
   });
 
-  it("draws the series' active switch as a real check block, and names the generate panel", () => {
+  it("draws the series' active switch as a real check block, and names the generate panel", async () => {
     const series = baseSeries();
     vi.stubGlobal(
       "fetch",
@@ -435,6 +445,7 @@ describe("portal group meeting management", () => {
     );
 
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+    await beginRecordEdit(container, "Meeting series actions");
 
     // All three parts, or the browser draws its own box in its own accent —
     // which no gate can see and which looks like a bug beside our controls.
@@ -468,6 +479,7 @@ describe("portal group meeting management", () => {
     );
 
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
+    await beginRecordEdit(container, "Meeting series actions");
     await typeInto(controlFor(container, "Meeting name"), "Renamed call");
     await act(async () => {
       container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

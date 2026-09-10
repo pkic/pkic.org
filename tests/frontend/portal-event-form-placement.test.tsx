@@ -5,7 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { EventFormPlacementEditor } from "../../assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { buttonNamed, chooseComboboxOption, controlFor, openCombobox } from "./helpers/labelled-control";
+import {
+  buttonNamed,
+  chooseComboboxOption,
+  controlFor,
+  openCombobox,
+  typeInto,
+  submitForm,
+} from "./helpers/labelled-control";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { nameForm } from "./helpers/form-editor";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -117,6 +125,46 @@ afterEach(() => {
 });
 
 describe("portal event form placement management", () => {
+  it("reads the saved window, discards edits, and reports invalid ordering before saving", async () => {
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        if (init.method === "PATCH") writes.push(JSON.parse(String(init.body)));
+        return json(eventForm("event_registration"));
+      }),
+    );
+    const container = mount(
+      <EventFormPlacementEditor
+        groupId={GROUP_ID}
+        eventId={EVENT_ID}
+        purpose="event_registration"
+        expectedUpdatedAt={NOW}
+        onRevision={() => undefined}
+      />,
+    );
+    await settle();
+    const window = container.querySelector<HTMLElement>('[aria-label="Submission window"]')!;
+    expect(window.textContent).toContain("No opening restriction");
+    expect(window.querySelector("input")).toBeNull();
+    await beginRecordEdit(window, "Submission window actions");
+    await typeInto(controlFor(window, "Opens"), "2027-06-10T10:00");
+    await act(async () => buttonNamed(window, "Cancel").click());
+    await beginRecordEdit(window, "Submission window actions");
+    expect(controlFor(window, "Opens").value).toBe("");
+    await typeInto(controlFor(window, "Opens"), "2027-06-10T10:00");
+    await typeInto(controlFor(window, "Closes"), "2027-06-10T09:00");
+    await submitForm(window);
+    expect(controlFor(window, "Closes").getAttribute("aria-invalid")).toBe("true");
+    expect(writes).toEqual([]);
+    await typeInto(controlFor(window, "Closes"), "2027-06-10T11:00");
+    await submitForm(window);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ expectedUpdatedAt: NOW });
+    expect(window.querySelector("input")).toBeNull();
+    expect(window.textContent).toContain("Submission window saved.");
+  });
+
   it("names the selector through a for/id pair and keeps its actions reachable while saving", async () => {
     vi.stubGlobal(
       "fetch",
@@ -143,6 +191,8 @@ describe("portal event form placement management", () => {
     await settle();
 
     // The selector is named by a real label, not by a placeholder option.
+    expect(container.querySelector('[role="combobox"]')).toBeNull();
+    await beginRecordEdit(container, "Proposal submission questions actions", "Change attached form");
     expect(controlFor(container, "Proposal submission questions").getAttribute("role")).toBe("combobox");
     // Each disclosure button says whether the thing it opens is open.
     const create = buttonNamed(container, "Create proposal form");
@@ -215,6 +265,9 @@ describe("portal event form placement management", () => {
     );
     await settle();
     await settle();
+    await beginRecordEdit(container, "Proposal submission questions actions", "Change attached form");
+    await settle();
+    await settle();
     // Both catalog forms plus the pick-nothing placeholder are listed.
     expect(await openCombobox(container, "Proposal submission questions")).toHaveLength(3);
     await chooseComboboxOption(container, "Proposal submission questions", "30000000-0000-4000-8000-000000000002");
@@ -270,6 +323,7 @@ describe("portal event form placement management", () => {
     expect(requests.some(({ path }) => path.endsWith("/registration-settings"))).toBe(false);
     expect(requests.some(({ path }) => path.startsWith("/api/v1/admin"))).toBe(false);
 
+    await beginRecordEdit(container, "Registration questions actions", "Change attached form");
     // Choosing the pick-nothing option is how a placement is cleared.
     await chooseComboboxOption(container, "Registration questions", "");
     await settle();
@@ -330,9 +384,11 @@ describe("portal event form placement management", () => {
     );
     await settle();
     expect(container.textContent).toContain("Proposal submission questions");
+    expect(container.querySelector('[role="combobox"]')).toBeNull();
+    await beginRecordEdit(container, "Proposal submission questions actions", "Change attached form");
     expect(controlFor(container, "Proposal submission questions").getAttribute("role")).toBe("combobox");
 
-    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
+    await act(async () => buttonNamed(container, "Create proposal form").click());
     await settle();
     // Located by the heading that names the panel, not by a framework class:
     // the name is the thing the surface actually promises a reader.

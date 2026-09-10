@@ -6,10 +6,10 @@ import {
 } from "../assets/shared/schemas/mailing-lists";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import {
-  archiveGroupMailingList,
   createGroupMailingList,
   updateGroupMailingList,
 } from "../functions/_lib/services/mailing-list-management/commands";
+import { transitionGroupMailingList } from "../functions/_lib/services/mailing-list-management/lifecycle";
 import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
 import { createGroup, updateGroup } from "../functions/_lib/services/groups";
 import {
@@ -139,11 +139,19 @@ describe("group mailing-list management routes", () => {
     expect(updated.status, await updated.clone().text()).toBe(200);
     expect(mailingListResponseSchema.parse(await updated.json()).mailingList.label).toBe("Renamed discussion");
 
-    const archived = await callApi(env, `/api/v1/groups/${group.id}/mailing-lists/${createdBody.mailingList.id}`, {
-      method: "DELETE",
-      headers: { authorization: `Bearer ${leaderToken}` },
-    });
+    // Archiving is a state the list moves into, not a deletion: it goes
+    // through the lifecycle endpoint and answers with the archived record.
+    const archived = await jsonRequest(
+      `/api/v1/groups/${group.id}/mailing-lists/${createdBody.mailingList.id}/transitions`,
+      "POST",
+      { transition: "archive" },
+      leaderToken,
+    );
     expect(archived.status, await archived.clone().text()).toBe(200);
+    expect(mailingListResponseSchema.parse(await archived.json()).mailingList).toMatchObject({
+      active: false,
+      archivedAt: expect.any(String),
+    });
     expect(
       await queryAll<{ active: number; group_id: string }>(
         env.DB,
@@ -469,6 +477,6 @@ describe("group mailing-list management routes", () => {
     expect(
       await queryAll<{ group_id: string }>(env.DB, "SELECT group_id FROM mailing_lists WHERE id = ?", [created.id]),
     ).toEqual([{ group_id: group.id }]);
-    await archiveGroupMailingList(env.DB, staff, group.id, created.id);
+    await transitionGroupMailingList(env.DB, staff, group.id, created.id, { transition: "archive" });
   });
 });

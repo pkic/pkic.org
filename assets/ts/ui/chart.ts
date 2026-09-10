@@ -23,6 +23,7 @@
  */
 
 import { escapeHtml as esc } from "../shared/ui";
+import { EVENT_REGISTRATION_STATUSES, type EventRegistrationStatus } from "../../shared/schemas/event-registrations";
 
 import "./Chart.css";
 
@@ -120,32 +121,56 @@ export function statusBars(byStatus: Record<string, number>, total: number): str
   );
 }
 
-const STATUS_ORDER = ["registered", "pending_email_confirmation", "cancelled"];
-const STATUS_COLORS: Record<string, string> = {
+/**
+ * The statuses the bar draws first, in the order it draws them.
+ *
+ * The list is the contract's, not a copy of it: a status added to
+ * `EVENT_REGISTRATION_STATUSES` gets a segment and a legend entry here without
+ * anybody remembering to add one, and the two `Record`s below are total, so it
+ * cannot get one without a colour and a word. A status the chart does not know
+ * still draws — `svgStatusSegmentBar` appends whatever the data carries — but
+ * it would draw grey and unnamed, which is the drift issue #24 reported in a
+ * different surface.
+ *
+ * The words are the chart's own: a legend has room for "Confirmed", not for
+ * "Pending confirmation".
+ */
+const STATUS_ORDER: readonly EventRegistrationStatus[] = EVENT_REGISTRATION_STATUSES;
+const STATUS_COLORS: Record<EventRegistrationStatus, string> = {
   registered: "var(--pk-ok)",
   pending_email_confirmation: "var(--pk-warn)",
   cancelled: "var(--pk-danger)",
 };
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Record<EventRegistrationStatus, string> = {
   registered: "Confirmed",
   pending_email_confirmation: "Pending",
   cancelled: "Cancelled",
 };
+
+/** The chart draws whatever the data carries, so an unknown status still gets a segment. */
+function statusColorFor(key: string): string {
+  return key in STATUS_COLORS ? STATUS_COLORS[key as EventRegistrationStatus] : NEUTRAL;
+}
+
+function statusLabelFor(key: string): string {
+  return key in STATUS_LABELS ? STATUS_LABELS[key as EventRegistrationStatus] : key;
+}
 
 export function svgStatusSegmentBar(byStatus: Record<string, number>, total: number, opts: ChartCaption): string {
   if (!total) return noData();
   const W = 460;
   const barH = 20;
   const radius = 4;
-  const sorted = [...STATUS_ORDER, ...Object.keys(byStatus).filter((key) => !STATUS_ORDER.includes(key))];
+  const known: readonly string[] = STATUS_ORDER;
+  const sorted = [...known, ...Object.keys(byStatus).filter((key) => !known.includes(key))];
   const items = sorted.map((key) => [key, byStatus[key] ?? 0] as [string, number]).filter(([, value]) => value > 0);
 
   let x = 0;
   let segments = "";
   items.forEach(([key, value], index) => {
     const segW = (value / total) * W;
-    const color = STATUS_COLORS[key] ?? NEUTRAL;
-    const label = STATUS_LABELS[key] ?? key;
+    const color = statusColorFor(key);
+    const label = statusLabelFor(key);
     const pct = Math.round((value / total) * 100);
     const isFirst = index === 0;
     const isLast = index === items.length - 1;
@@ -164,8 +189,8 @@ export function svgStatusSegmentBar(byStatus: Record<string, number>, total: num
     .map(([key, value]) => {
       const pct = Math.round((value / total) * 100);
       return legendSwatch(
-        STATUS_COLORS[key] ?? NEUTRAL,
-        `${STATUS_LABELS[key] ?? key}: `,
+        statusColorFor(key),
+        `${statusLabelFor(key)}: `,
         `<strong>${value}</strong> <span class="pk-muted">(${pct}%)</span>`,
       );
     })
@@ -175,7 +200,7 @@ export function svgStatusSegmentBar(byStatus: Record<string, number>, total: num
     opts.caption,
     "Status",
     ["Count", "Share"],
-    items.map(([key, value]) => [STATUS_LABELS[key] ?? key, [String(value), `${Math.round((value / total) * 100)}%`]]),
+    items.map(([key, value]) => [statusLabelFor(key), [String(value), `${Math.round((value / total) * 100)}%`]]),
   );
 
   return figure(

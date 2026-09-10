@@ -4,7 +4,10 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
-import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
+import {
+  groupMailingListCreateSchema,
+  mailingListLifecycleTransitionSchema,
+} from "../../assets/shared/schemas/mailing-lists";
 import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
@@ -188,6 +191,8 @@ describe("portal group mailing lists", () => {
         if (method === "PATCH") return json({ mailingList: list });
         if (method === "DELETE") return json({ success: true });
         if (url.pathname.endsWith("/grants")) return json({ grants: [], page });
+        if (url.pathname.endsWith("/subscribers")) return json({ subscribers: [], page: { ...page, total: 0 } });
+        if (url.pathname.endsWith(`/mailing-lists/${list.id}`)) return json({ mailingList: list });
         if (url.pathname === "/api/v1/groups") {
           return json({ groups: [], page });
         }
@@ -195,20 +200,24 @@ describe("portal group mailing lists", () => {
       }),
     );
 
-    const container = mount(
+    const listing = mount(
       <>
         <GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />
         <ConfirmDialogHost />
       </>,
     );
     await settle();
-    const button = (label: string) =>
-      Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === label);
-    expect(container.querySelector("form")).toBeNull();
-    await act(async () => {
-      button("Add mailing list")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    // Nothing is layered over the list to begin with: creating is a place
+    // with its own address, under the reserved `new` segment.
+    expect(listing.querySelector("form")).toBeNull();
 
+    const container = mount(
+      <>
+        <GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} listSegment="new" />
+        <ConfirmDialogHost />
+      </>,
+    );
+    await settle();
     const createForm = container.querySelector("form")!;
     const email = createForm.querySelector<HTMLInputElement>('input[type="email"]')!;
     const textInputs = createForm.querySelectorAll<HTMLInputElement>(
@@ -230,6 +239,7 @@ describe("portal group mailing lists", () => {
     const categoryA = createForm.querySelector<HTMLInputElement>("#group-mailing-list-create-auto-sync-categories-A")!;
     categoryA.checked = true;
     await act(async () => {
+      categoryA.dispatchEvent(new Event("input", { bubbles: true }));
       categoryA.dispatchEvent(new Event("change", { bubbles: true }));
     });
     const categoryH1 = createForm.querySelector<HTMLInputElement>(
@@ -237,6 +247,7 @@ describe("portal group mailing lists", () => {
     )!;
     categoryH1.checked = true;
     await act(async () => {
+      categoryH1.dispatchEvent(new Event("input", { bubbles: true }));
       categoryH1.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
@@ -261,27 +272,53 @@ describe("portal group mailing lists", () => {
     });
     expect(created?.body).not.toHaveProperty("groupId");
 
-    // The row itself opens the editor; its activation names the list.
-    expect(button("Manage Architecture discussion")).not.toBeUndefined();
+    /*
+     * Editing happens on the list's own record, which the table addresses
+     * rather than unfolds — so the edit is asserted on the record mount, and
+     * the row's own commands back on the listing.
+     */
+    const record = mount(
+      <>
+        <GroupMailingLists
+          groupId={GROUP_ID}
+          canManage
+          canParticipate={false}
+          listSegment={list.id}
+          listTab="settings"
+        />
+        <ConfirmDialogHost />
+      </>,
+    );
+    await settle();
+    await settle();
+    // The record stands alone: a manager reading one list is not also shown
+    // their own preferences for every other list.
+    expect(record.textContent).not.toContain("My mailing-list preferences");
+    expect(record.querySelector('input[name="label"]')).toBeNull();
     await act(async () => {
-      button("Manage Architecture discussion")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      Array.from(record.querySelectorAll<HTMLButtonElement>('section[aria-label="Delivery"] button'))
+        .find((candidate) => candidate.textContent?.trim() === "Edit")
+        ?.click();
     });
     await settle();
-    const saveButton = button("Save changes");
+    const saveButton = Array.from(record.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent?.trim() === "Save changes",
+    );
     expect(saveButton).not.toBeUndefined();
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
-    expect(requests.find(({ method }) => method === "PATCH")?.body).not.toHaveProperty("groupId");
+    const edited = requests.find(({ method }) => method === "PATCH");
+    expect(edited?.url.pathname).toBe(`/api/v1/groups/${GROUP_ID}/mailing-lists/${list.id}`);
+    expect(edited?.body).not.toHaveProperty("groupId");
 
     await settle();
-    // The row's remaining command lives behind its menu, whose trigger
-    // names the list.
-    expect(rowActionControlNames(container)).toEqual(["Actions for Architecture discussion"]);
-    await runRowAction(container, "Architecture discussion", "Archive");
+    // The row's commands live behind its menu, whose trigger names the list.
+    expect(rowActionControlNames(listing)).toEqual(["Actions for Architecture discussion"]);
+    await runRowAction(listing, "Architecture discussion", "Archive");
     await settle();
-    const archiveDialog = container.querySelector('[role="alertdialog"]');
+    const archiveDialog = listing.querySelector('[role="alertdialog"]');
     expect(archiveDialog).not.toBeNull();
     await act(async () => {
       Array.from(archiveDialog?.querySelectorAll("button") ?? [])
@@ -289,6 +326,11 @@ describe("portal group mailing lists", () => {
         ?.click();
     });
     await settle();
-    expect(requests.some(({ method }) => method === "DELETE")).toBe(true);
+    // Archiving is a state transition, not a deletion: the row's command
+    // sends the shared transition contract to the list's own endpoint.
+    const archived = requests.find(({ url }) => url.pathname.endsWith("/transitions"));
+    expect(archived?.url.pathname).toBe(`/api/v1/groups/${GROUP_ID}/mailing-lists/${list.id}/transitions`);
+    expect(mailingListLifecycleTransitionSchema.parse(archived?.body)).toEqual({ transition: "archive" });
+    expect(requests.some(({ method }) => method === "DELETE")).toBe(false);
   });
 });

@@ -381,10 +381,7 @@ describe("portal selected-group collections", () => {
     const back = Array.from(record.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "← Back to events",
     );
-    await act(async () => {
-      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events`);
+    expect(back).toBeUndefined();
 
     // The registrations URL resolves to the registrations tab.
     const registrationsView = mount(

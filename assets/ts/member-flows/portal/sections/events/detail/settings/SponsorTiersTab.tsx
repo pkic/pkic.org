@@ -1,146 +1,161 @@
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { getJson, putJson } from "../../../../../../shared/api-client";
-import { eventSponsorTiersResponseSchema } from "../../../../../../../shared/schemas/sponsorship-management";
+import {
+  eventSponsorTiersResponseSchema,
+  eventSponsorTiersReplaceSchema,
+} from "../../../../../../../shared/schemas/sponsorship-management";
 import { useEditorResource } from "../../../../../../hooks/useEditorResource";
-import { Alert, type AlertTone } from "../../../../../../ui/Alert";
+import { useContractForm } from "../../../../../../hooks/useContractForm";
+import { Alert } from "../../../../../../ui/Alert";
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
+import { DescriptionList } from "../../../../../../ui/DescriptionList";
+import { EditActions } from "../../../../../../ui/EditActions";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput } from "../../../../../../ui/TextControl";
-import { saveEditor } from "../../../../actions";
 import { SettingsEditor } from "./SettingsEditor";
 
-/**
- * The tone the save outcome is reported in.
- *
- * It used to be `text-success` for a tick and `text-warning` for everything
- * else, which made "Saving…" look like a problem and a real failure look like
- * the same mild caution. Each of the three outcomes gets the tone it actually
- * is, and the words say which it is either way.
- */
-function statusTone(status: string): AlertTone {
-  if (status.startsWith("✓")) return "ok";
-  if (status === "Saving…") return "info";
-  return "danger";
-}
-
 export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: boolean }) {
-  const tiersResource = useEditorResource(
-    async () => {
-      const data = await getJson(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema);
-      return data.tiers ?? [];
-    },
+  const resource = useEditorResource(
+    async () => (await getJson(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema)).tiers,
     [slug],
     [],
   );
-  const { value: tiers, setValue: setTiers, loading, error, reload } = tiersResource;
+  const { value: tiers, setValue: setTiers, loading, error, reload } = resource;
+  const [editing, setEditing] = useState(false);
+  const [savedTiers, setSavedTiers] = useState(tiers);
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("");
-
-  async function handleSave() {
-    await saveEditor({
-      setSaving,
-      setStatus: setSaveStatus,
-      request: () =>
-        putJson(
-          `/api/v1/events/${slug}/sponsors/tiers`,
-          { tiers: tiers.filter((tier) => tier.tierName.trim()) },
-          eventSponsorTiersResponseSchema,
-        ),
-      successMessage: "Sponsor tiers updated",
-      reload,
-    });
+  const [failure, setFailure] = useState("");
+  const [saved, setSaved] = useState(false);
+  const form = useContractForm(eventSponsorTiersReplaceSchema, { tiers });
+  useEffect(() => {
+    if (!editing && !loading) setSavedTiers(tiers);
+  }, [tiers, editing, loading]);
+  function reset() {
+    setTiers(savedTiers);
+    form.reset();
+    setFailure("");
+    setSaved(false);
   }
-
+  async function save(event: Event) {
+    event.preventDefault();
+    if (!canWrite || !editing || saving) return;
+    const checked = form.submit();
+    if (!checked.data) {
+      setFailure(checked.message);
+      return;
+    }
+    setSaving(true);
+    setFailure("");
+    try {
+      await putJson(`/api/v1/events/${slug}/sponsors/tiers`, checked.data, eventSponsorTiersResponseSchema);
+      await reload();
+      setEditing(false);
+      setSaved(true);
+    } catch (cause) {
+      setFailure(form.refuse(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
   return (
-    <SettingsEditor
-      loading={loading}
-      error={error}
-      description="Which sponsor tiers at this event get attendee-data access in the portal. Defaults to no tiers having access."
-      actions={
-        canWrite ? (
-          // `pk-push` fills the remaining space in the flex bar the editor
-          // lays out, which is what `ms-auto` was doing.
-          <Button
-            class="pk-push"
-            size="sm"
-            variant="primary"
-            loading={saving}
-            disabled={saving}
-            onClick={() => void handleSave()}
-          >
-            Save
-          </Button>
-        ) : undefined
-      }
-    >
-      <div class="pk pk-stack">
-        {saveStatus && <Alert tone={statusTone(saveStatus)}>{saveStatus}</Alert>}
-
-        {tiers.map((tier, index) => (
-          // Each row is a named group, so the two controls inside it do not
-          // have to repeat "tier 3" in their own names to be told apart. The
-          // name input used to have no label at all — only a placeholder,
-          // which disappears the moment anything is typed into it.
-          //
-          // `disabled` on the fieldset takes the whole row out of play in one
-          // attribute, including the controls rendered by a child component.
-          <fieldset class="pk-fieldset pk-field" key={`${tier.tierName}-${index}`} disabled={!canWrite}>
-            <legend class="pk-field__label">Tier {index + 1}</legend>
-            <div class="pk-cluster">
-              <Field label="Tier name">
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    placeholder="e.g. Leader"
-                    value={tier.tierName}
-                    onInput={(event) =>
-                      setTiers((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, tierName: (event.target as HTMLInputElement).value } : item,
-                        ),
-                      )
-                    }
-                  />
-                )}
-              </Field>
-              <Checkbox
-                checked={tier.hasAttendeeDataAccess}
-                onChange={(event) =>
-                  setTiers((current) =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? { ...item, hasAttendeeDataAccess: (event.target as HTMLInputElement).checked }
-                        : item,
-                    ),
-                  )
-                }
-                label="Attendee data access"
-              />
-              {canWrite && (
+    <form noValidate {...form.handlers} onSubmit={save}>
+      <SettingsEditor
+        loading={loading}
+        error={error}
+        description="Choose which sponsor tiers can access attendee data for this event."
+        actions={
+          canWrite ? (
+            <EditActions
+              label="Sponsor tier actions"
+              editing={editing}
+              saving={saving}
+              saveLabel="Save sponsor tiers"
+              onEdit={() => {
+                reset();
+                setEditing(true);
+              }}
+              onCancel={() => {
+                reset();
+                setEditing(false);
+              }}
+            />
+          ) : undefined
+        }
+      >
+        <div class="pk pk-stack">
+          {failure && <Alert tone="danger">{failure}</Alert>}
+          {saved && <Alert tone="ok">Sponsor tiers updated.</Alert>}
+          {editing ? (
+            <>
+              {tiers.map((tier, index) => (
+                <fieldset class="pk-fieldset pk-field" key={index} disabled={saving}>
+                  <legend class="pk-field__label">Tier {index + 1}</legend>
+                  <div class="pk-cluster">
+                    <Field label="Tier name" {...form.of(`tiers.${index}.tierName`)}>
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name={`tiers.${index}.tierName`}
+                          placeholder="e.g. Leader"
+                          value={tier.tierName}
+                          onInput={(event) =>
+                            setTiers((current) =>
+                              current.map((item, position) =>
+                                position === index ? { ...item, tierName: event.currentTarget.value } : item,
+                              ),
+                            )
+                          }
+                        />
+                      )}
+                    </Field>
+                    <Checkbox
+                      name={`tiers.${index}.hasAttendeeDataAccess`}
+                      checked={tier.hasAttendeeDataAccess}
+                      label="Attendee data access"
+                      onChange={(event) =>
+                        setTiers((current) =>
+                          current.map((item, position) =>
+                            position === index ? { ...item, hasAttendeeDataAccess: event.currentTarget.checked } : item,
+                          ),
+                        )
+                      }
+                    />
+                    <Button
+                      variant="danger-quiet"
+                      size="sm"
+                      aria-label={`Remove tier ${index + 1}`}
+                      onClick={() => setTiers((current) => current.filter((_, position) => position !== index))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </fieldset>
+              ))}
+              <div class="pk-cluster">
                 <Button
-                  variant="danger-quiet"
                   size="sm"
-                  aria-label={`Remove tier ${String(index + 1)}`}
-                  onClick={() => setTiers((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  disabled={saving}
+                  onClick={() => setTiers((current) => [...current, { tierName: "", hasAttendeeDataAccess: false }])}
                 >
-                  Remove
+                  + Add tier
                 </Button>
-              )}
-            </div>
-          </fieldset>
-        ))}
-        {canWrite && (
-          <div class="pk-cluster">
-            <Button
-              size="sm"
-              onClick={() => setTiers((current) => [...current, { tierName: "", hasAttendeeDataAccess: false }])}
-            >
-              + Add tier
-            </Button>
-          </div>
-        )}
-      </div>
-    </SettingsEditor>
+              </div>
+            </>
+          ) : tiers.length ? (
+            <DescriptionList
+              items={tiers.map((tier) => ({
+                term: tier.tierName,
+                value: tier.hasAttendeeDataAccess ? "Attendee data access enabled" : "No attendee data access",
+              }))}
+            />
+          ) : (
+            <p class="pk-muted">
+              No sponsor tiers have been configured. Attendee data access is disabled for every tier.
+            </p>
+          )}
+        </div>
+      </SettingsEditor>
+    </form>
   );
 }

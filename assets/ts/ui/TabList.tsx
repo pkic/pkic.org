@@ -15,7 +15,7 @@
  * that the browser then handled as navigation.
  */
 
-import { useRef } from "preact/hooks";
+import { useActiveTabVisibility } from "./useActiveTabVisibility";
 
 import "./Tabs.css";
 
@@ -38,7 +38,7 @@ export interface TabListProps {
 }
 
 export function TabList({ items, activeId, onSelect, label, idPrefix, class: className }: TabListProps) {
-  const listRef = useRef<HTMLDivElement>(null);
+  const listRef = useActiveTabVisibility(activeId);
   const classes = ["pk-tabs", className].filter(Boolean).join(" ");
 
   /**
@@ -79,8 +79,8 @@ export function TabList({ items, activeId, onSelect, label, idPrefix, class: cla
   }
 
   return (
-    <div ref={listRef} class={classes}>
-      <div class="pk-tabs__list" role="tablist" aria-label={label}>
+    <div class={classes}>
+      <div ref={listRef} class="pk-tabs__list" role="tablist" aria-label={label}>
         {items.map((item, index) => {
           const selected = item.id === activeId;
           return (

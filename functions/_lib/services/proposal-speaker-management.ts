@@ -74,7 +74,7 @@ export function toProposalSpeaker(
     speaker.headshot_r2_key?.startsWith("proposal-headshots/") && proposalId
       ? (proposalHeadshotUrl?.(speaker.user_id, speaker.headshot_updated_at) ??
         proposalSpeakerHeadshotUrl(appBaseUrl, proposalId, speaker.user_id, speaker.headshot_updated_at))
-      : publicUserHeadshotUrl(appBaseUrl, speaker.headshot_r2_key, speaker.headshot_updated_at);
+      : publicUserHeadshotUrl(appBaseUrl, speaker.user_id, speaker.headshot_r2_key, speaker.headshot_updated_at);
   return {
     userId: speaker.user_id,
     role: speaker.role,

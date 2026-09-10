@@ -3,7 +3,15 @@ import {
   groupVoteCreateInputSchema,
   groupVoteMutationResponseSchema,
 } from "../../../../../shared/schemas/group-vote-management";
-import { THRESHOLD_TYPES, VOTE_ELECTORATE_MODES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
+import {
+  THRESHOLD_TYPES,
+  thresholdTypeSchema,
+  VOTE_ELECTORATE_MODES,
+  VOTE_TIE_BREAK_MODES,
+  VOTE_TYPES,
+  type VoteTieBreakMode,
+  type VoteType,
+} from "../../../../../shared/schemas/votes";
 import { statusLabel } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postValidated } from "../../../../shared/api-client";
@@ -21,18 +29,49 @@ interface CandidateDraft {
 const MINIMUM_CANDIDATES = 2;
 const MAXIMUM_CANDIDATES = 50;
 
-function thresholdOptions(
-  voteType: (typeof VOTE_TYPES)[number],
-): { value: (typeof THRESHOLD_TYPES)[number]; label: string }[] {
-  return voteType === "election"
-    ? [
-        { value: "simple_majority", label: "Simple majority (two candidates)" },
-        { value: "successive_elimination", label: "Successive elimination" },
-      ]
-    : [
-        { value: "simple_majority", label: "Simple majority" },
-        { value: "supermajority", label: "Supermajority (two thirds)" },
-      ];
+type ThresholdType = (typeof THRESHOLD_TYPES)[number];
+
+const ELECTORATE_MODE_LABELS: Record<(typeof VOTE_ELECTORATE_MODES)[number], string> = {
+  per_member: "One ballot per Member",
+  per_person: "One ballot per person",
+};
+
+const TIE_BREAK_MODE_LABELS: Record<VoteTieBreakMode, string> = {
+  none: "Not approved (default)",
+  chair: "The chair's own ballot counts twice",
+};
+
+const THRESHOLD_TYPE_LABELS: Record<ThresholdType, string> = {
+  simple_majority: "Simple majority",
+  supermajority: "Supermajority (two thirds)",
+  successive_elimination: "Successive elimination",
+};
+
+/**
+ * An election's simple majority is a majority between two candidates, which is
+ * worth saying at the point where the threshold is chosen.
+ */
+const ELECTION_THRESHOLD_TYPE_LABELS: Record<ThresholdType, string> = {
+  ...THRESHOLD_TYPE_LABELS,
+  simple_majority: "Simple majority (two candidates)",
+};
+
+/**
+ * Neither list is typed out. `validateVoteConfiguration` refuses
+ * `supermajority` for an election and `successive_elimination` for anything
+ * else, so each offer is the shared vocabulary minus the one value that vote
+ * type cannot carry — and a fourth threshold would reach both selects.
+ */
+const ELECTION_THRESHOLD_TYPES = thresholdTypeSchema.exclude(["supermajority"]).options;
+const DELIBERATIVE_THRESHOLD_TYPES = thresholdTypeSchema.exclude(["successive_elimination"]).options;
+
+function thresholdOptions(voteType: VoteType): { value: ThresholdType; label: string }[] {
+  const election = voteType === "election";
+  const labels = election ? ELECTION_THRESHOLD_TYPE_LABELS : THRESHOLD_TYPE_LABELS;
+  return (election ? ELECTION_THRESHOLD_TYPES : DELIBERATIVE_THRESHOLD_TYPES).map((value) => ({
+    value,
+    label: labels[value],
+  }));
 }
 
 export function GroupVoteCreateForm({
@@ -47,12 +86,12 @@ export function GroupVoteCreateForm({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [voteType, setVoteType] = useState<(typeof VOTE_TYPES)[number]>("motion");
+  const [voteType, setVoteType] = useState<VoteType>("motion");
   const [electorateMode, setElectorateMode] = useState<(typeof VOTE_ELECTORATE_MODES)[number]>("per_member");
-  const [thresholdType, setThresholdType] = useState<(typeof THRESHOLD_TYPES)[number]>("simple_majority");
+  const [thresholdType, setThresholdType] = useState<ThresholdType>("simple_majority");
   const [opensAt, setOpensAt] = useState("");
   const [quorumPercent, setQuorumPercent] = useState("");
-  const [tieBreakMode, setTieBreakMode] = useState<"none" | "chair">("none");
+  const [tieBreakMode, setTieBreakMode] = useState<VoteTieBreakMode>("none");
   const [closesAt, setClosesAt] = useState("");
   const [candidates, setCandidates] = useState<CandidateDraft[]>([
     { name: "", bio: "" },
@@ -116,7 +155,7 @@ export function GroupVoteCreateForm({
   return (
     <form class="pk pk-stack" aria-label="Create vote" onSubmit={(event) => void submit(event)}>
       <Panel>
-        <PanelHeader title="Create vote" />
+        <PanelHeader title="Create vote" headingLevel={2} breadcrumb />
         <PanelBody class="pk-stack">
           <ErrorAlert error={error} />
           {/* One disabled fieldset takes every control out of play while the
@@ -155,7 +194,7 @@ export function GroupVoteCreateForm({
                     {...control}
                     value={voteType}
                     onChange={(event) => {
-                      const next = event.currentTarget.value as (typeof VOTE_TYPES)[number];
+                      const next = event.currentTarget.value as VoteType;
                       setVoteType(next);
                       setThresholdType(thresholdOptions(next)[0].value);
                     }}
@@ -177,8 +216,11 @@ export function GroupVoteCreateForm({
                       setElectorateMode(event.currentTarget.value as (typeof VOTE_ELECTORATE_MODES)[number])
                     }
                   >
-                    <option value="per_member">One ballot per Member</option>
-                    <option value="per_person">One ballot per person</option>
+                    {VOTE_ELECTORATE_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {ELECTORATE_MODE_LABELS[mode]}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>
@@ -187,9 +229,7 @@ export function GroupVoteCreateForm({
                   <Select
                     {...control}
                     value={thresholdType}
-                    onChange={(event) =>
-                      setThresholdType(event.currentTarget.value as (typeof THRESHOLD_TYPES)[number])
-                    }
+                    onChange={(event) => setThresholdType(event.currentTarget.value as ThresholdType)}
                   >
                     {thresholdOptions(voteType).map((option) => (
                       <option key={option.value} value={option.value}>
@@ -240,10 +280,13 @@ export function GroupVoteCreateForm({
                   <Select
                     {...control}
                     value={tieBreakMode}
-                    onChange={(event) => setTieBreakMode(event.currentTarget.value as "none" | "chair")}
+                    onChange={(event) => setTieBreakMode(event.currentTarget.value as VoteTieBreakMode)}
                   >
-                    <option value="none">Not approved (default)</option>
-                    <option value="chair">The chair's own ballot counts twice</option>
+                    {VOTE_TIE_BREAK_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {TIE_BREAK_MODE_LABELS[mode]}
+                      </option>
+                    ))}
                   </Select>
                 )}
               </Field>

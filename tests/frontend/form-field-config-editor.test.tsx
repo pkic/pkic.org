@@ -14,7 +14,7 @@ import { render, type ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
-import { formFieldRulesSchema } from "../../assets/shared/schemas/form-field-rules";
+import { formFieldRulesSchema, VISUALIZATIONS } from "../../assets/shared/schemas/form-field-rules";
 import {
   buildFieldValidation,
   FieldConfigEditor,
@@ -187,6 +187,16 @@ describe("form field config editor", () => {
     expect(root.querySelectorAll("input[id], select[id], textarea[id]")).toHaveLength(named);
   });
 
+  it("offers every presentation the rules contract accepts", () => {
+    const { root } = mountEditor(draft({ fieldType: "select" }));
+    openFold(root, "Key and reporting");
+
+    // The author's picker and the reader's picker take their values from the
+    // same schema, so a presentation added there appears in both at once.
+    const control = controlFor(root, "In the results summary") as HTMLSelectElement;
+    expect([...control.options].map((option) => option.value)).toEqual([...VISUALIZATIONS]);
+  });
+
   it("attaches guidance to the control it describes rather than to loose text", () => {
     const { root } = mountEditor(draft({ fieldType: "email" }));
     openFold(root, "Accepted values");
@@ -240,6 +250,7 @@ describe("form field config editor", () => {
 
     void act(() => {
       input!.checked = true;
+      input!.dispatchEvent(new Event("input", { bubbles: true }));
       input!.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(patches).toEqual([{ allowCustom: true }]);

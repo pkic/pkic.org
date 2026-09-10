@@ -7,6 +7,15 @@ categories:
 keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
 tags: [PKIC, PKIMM, Maturity model]
 
+authorProfiles:
+  - name: Roman Cinkais
+    organization: OmniTrust
+    role: SVP of Enterprise Products
+    website: https://omnitrust.com/
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/roman-cinkais
+    assetdirectory: images/members/omnitrust
 ---
 
 Recently the PKI Consortium established the [PKI Maturity Model Working Group](/wg/pkimm/) to build a PKI maturity model for evaluation, planning, and comparison between different PKI implementations.

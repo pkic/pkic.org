@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { buildSpeakerTemplateData, buildAttendeeCampaignRecipients } from "./template-data";
@@ -79,7 +80,7 @@ async function listAttendeeRecipients(
     db,
     `WITH ranked_recipients AS (
            SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
-                  u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+                  u.email, u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
                   r.status, r.attendance_type, r.custom_answers_json, r.form_placement_id,
                   ROW_NUMBER() OVER (
                     PARTITION BY lower(trim(u.email))
@@ -87,6 +88,7 @@ async function listAttendeeRecipients(
                   ) AS recipient_rank
            FROM registrations r
            JOIN users u ON u.id = r.user_id
+
            ${dayJoin}
            WHERE r.event_id = ?
              AND (? = 'all' OR r.status = ?)

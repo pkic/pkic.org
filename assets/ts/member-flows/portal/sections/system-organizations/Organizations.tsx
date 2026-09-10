@@ -1,3 +1,4 @@
+import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 import { useEffect } from "preact/hooks";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { usePortalHashLocation } from "../../hash-location";
@@ -42,6 +43,7 @@ export function Organizations({
   organizationSegment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const categories = useMembershipCategoryLabels(canRead && !organizationSegment);
 
   function openCreatePage(): void {
     navigate(`${ORGANIZATIONS_PATH}/${NEW_ORGANIZATION_SEGMENT}`);
@@ -97,10 +99,10 @@ export function Organizations({
       cell: (organization) =>
         organization.membershipCategory ? (
           <Badge tone="neutral" dot={false}>
-            {organization.membershipCategory}
+            {categories.label(organization.membershipCategory)}
           </Badge>
         ) : (
-          <em class="pk-muted">Not set</em>
+          <em class="pk-muted">Not a member</em>
         ),
       sort: { asc: "membership_category", desc: "-membership_category" },
     },

@@ -15,6 +15,7 @@ import {
 } from "../../../../../shared/schemas/event-series";
 import { RecurrenceEditor } from "../../../../components/RecurrenceEditor";
 import { TimeZoneSelect } from "../../../../components/TimeZoneSelect";
+import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { Field } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
 
@@ -32,13 +33,13 @@ export interface MeetingSeriesDraft {
   guestPolicy: EventGuestPolicy;
 }
 
-const ELIGIBILITY_LABELS: Record<EventMemberEligibility, string> = {
+export const ELIGIBILITY_LABELS: Record<EventMemberEligibility, string> = {
   owner_group: "Owning group",
   shared_groups: "Owning and explicitly shared groups",
   public: "Public",
 };
 
-const GUEST_LABELS: Record<EventGuestPolicy, string> = {
+export const GUEST_LABELS: Record<EventGuestPolicy, string> = {
   none: "Not allowed",
   occurrence_invitation: "Invite per occurrence",
   public_registration: "Public registration",
@@ -70,11 +71,13 @@ export function MeetingSeriesFields({
   draft,
   disabled = false,
   scheduleLocked = false,
+  fieldProps = {},
   onChange,
 }: {
   draft: MeetingSeriesDraft;
   disabled?: boolean;
   scheduleLocked?: boolean;
+  fieldProps?: Partial<Record<keyof MeetingSeriesDraft, FieldPresentation>>;
   onChange: (draft: MeetingSeriesDraft) => void;
 }) {
   const scheduleDisabled = disabled || scheduleLocked;
@@ -82,20 +85,22 @@ export function MeetingSeriesFields({
   return (
     <div class="pk pk-stack">
       <div class="pk-grid">
-        <Field label="Meeting name" required>
+        <Field {...fieldProps.name} label="Meeting name" required>
           {(control) => (
             <TextInput
               {...control}
+              name="eventName"
               value={draft.name}
               disabled={disabled}
               onInput={(event) => updateDraft(draft, onChange, "name", event.currentTarget.value)}
             />
           )}
         </Field>
-        <Field label="Event profile">
+        <Field {...fieldProps.profileKey} label="Event profile">
           {(control) => (
             <Select
               {...control}
+              name="profileKey"
               value={draft.profileKey}
               disabled={disabled}
               onChange={(event) =>
@@ -110,11 +115,12 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
-        <Field label="First occurrence" required>
+        <Field {...fieldProps.startsAt} label="First occurrence" required>
           {(control) => (
             <TextInput
               {...control}
               type="datetime-local"
+              name="startsAt"
               value={draft.startsAt}
               disabled={scheduleDisabled}
               onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
@@ -130,23 +136,25 @@ export function MeetingSeriesFields({
           referenceDate={draft.startsAt}
           onChange={(value) => updateDraft(draft, onChange, "recurrenceRule", value)}
         />
-        <Field label="Time zone" required>
+        <Field {...fieldProps.timezone} label="Time zone" required>
           {(control) => (
             <TimeZoneSelect
               {...control}
+              name="timezone"
               value={draft.timezone}
               disabled={scheduleDisabled}
               onChange={(value) => updateDraft(draft, onChange, "timezone", value)}
             />
           )}
         </Field>
-        <Field label="Duration (minutes)" required>
+        <Field {...fieldProps.durationMinutes} label="Duration (minutes)" required>
           {(control) => (
             <TextInput
               {...control}
               type="number"
               min={1}
               max={10080}
+              name="durationMinutes"
               value={draft.durationMinutes}
               disabled={scheduleDisabled}
               onInput={(event) => updateDraft(draft, onChange, "durationMinutes", Number(event.currentTarget.value))}
@@ -156,10 +164,11 @@ export function MeetingSeriesFields({
       </div>
 
       <div class="pk-grid">
-        <Field label="Registration">
+        <Field {...fieldProps.registrationPolicy} label="Registration">
           {(control) => (
             <Select
               {...control}
+              name="policy.registrationPolicy"
               value={draft.registrationPolicy}
               disabled={disabled}
               onChange={(event) =>
@@ -174,10 +183,11 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
-        <Field label="Visibility">
+        <Field {...fieldProps.visibility} label="Visibility">
           {(control) => (
             <Select
               {...control}
+              name="policy.visibility"
               value={draft.visibility}
               disabled={disabled}
               onChange={(event) =>
@@ -192,10 +202,11 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
-        <Field label="Attendee eligibility">
+        <Field {...fieldProps.memberEligibility} label="Attendee eligibility">
           {(control) => (
             <Select
               {...control}
+              name="policy.memberEligibility"
               value={draft.memberEligibility}
               disabled={disabled}
               onChange={(event) =>
@@ -210,10 +221,11 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
-        <Field label="External guests">
+        <Field {...fieldProps.guestPolicy} label="External guests">
           {(control) => (
             <Select
               {...control}
+              name="policy.guestPolicy"
               value={draft.guestPolicy}
               disabled={disabled}
               onChange={(event) =>
@@ -230,10 +242,11 @@ export function MeetingSeriesFields({
         </Field>
       </div>
 
-      <Field label="Location or public meeting page">
+      <Field {...fieldProps.location} label="Location or public meeting page">
         {(control) => (
           <TextInput
             {...control}
+            name="location"
             value={draft.location}
             disabled={disabled}
             onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}

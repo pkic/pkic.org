@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
+import { markdownContentSchema } from "./markdown-content";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
 export const CONTENT_REVIEW_STATUSES = ["pending", "approved", "rejected", "withdrawn"] as const;
@@ -49,7 +50,7 @@ export const organizationProfileContentFieldsSchema = organizationProfileSummary
 export const organizationEditableContentSchema = z.object({
   slogan: z.string().trim().max(300).nullable().optional(),
   description: z.string().trim().max(2000).nullable().optional(),
-  contentMarkdown: z.string().trim().max(20000).nullable().optional(),
+  contentMarkdown: markdownContentSchema(20000).nullable().optional(),
   website: httpUrlSchema.nullable().optional(),
   blogUrl: httpUrlSchema.nullable().optional(),
   blogFeedUrl: httpUrlSchema.nullable().optional(),

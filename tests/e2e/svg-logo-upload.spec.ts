@@ -8,6 +8,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { uploadThroughButton } from "./helpers/file-upload";
 
 const UPLOAD_SVG = Buffer.from(
   '<?xml version="1.0"?><!-- exported by Editor 9000 -->' +
@@ -31,8 +32,15 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   const createForm = page.getByRole("region", { name: "Add organization" });
   const organizationGroup = createForm.getByRole("group", { name: "Details", exact: true });
   await organizationGroup.getByLabel("Organization name").fill(organizationName);
-  await organizationGroup.getByLabel("Membership category").selectOption("F");
-  await organizationGroup.getByLabel("Member since").fill("2026-01-15");
+  /*
+   * Membership is its own act, so its terms only appear once the organization
+   * is said to be a member (#53): an organization is a record the consortium
+   * keeps, and it becomes a member by applying or by being granted one here.
+   */
+  const membershipGroup = createForm.getByRole("group", { name: "Membership", exact: true });
+  await membershipGroup.getByLabel("This organization is a consortium member").check();
+  await membershipGroup.getByLabel("Membership category").selectOption("F");
+  await membershipGroup.getByLabel("Member since").fill("2026-01-15");
   await createForm.getByRole("button", { name: "Add person", exact: true }).click();
   const firstPerson = createForm.getByRole("group", { name: "Person 1" });
   await firstPerson.getByLabel("Name").fill("Logo Representative");
@@ -56,8 +64,9 @@ test("staff upload an SVG logo through the UI and the served file is sanitized",
   // `LogoTile` is the whole affordance — the tile itself is the button, named
   // "Upload logo" until a logo exists (then "Change logo") — no panel wraps
   // it and no separate "Upload" button sits beside the picture.
-  await page.getByRole("button", { name: "Upload logo" }).click();
-  await page.locator('input[type="file"][accept="image/svg+xml"]').setInputFiles({
+  // Through the tile, not past it: the file goes to whichever input the
+  // click actually opened, so a button wired to nothing fails here (#28).
+  await uploadThroughButton(page, "Upload logo", {
     name: "logo.svg",
     mimeType: "image/svg+xml",
     buffer: UPLOAD_SVG,

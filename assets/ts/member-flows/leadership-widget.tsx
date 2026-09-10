@@ -9,10 +9,13 @@
  * here. Two views, chosen by the mount's `data-view` attribute:
  *   - "roster" (default) — current seats as a `.consortium-leaders` grid,
  *     leaders first with their leadership title, then a "Past positions"
- *     timeline of closed seats and closed leadership terms.
- *   - "leadership" — current leaders only, then the past-terms timeline.
- * The markup and classes are those of consortium-leadership.html and
- * person-card.html, so the pages look exactly as the static lists did.
+ *     grid of closed seats and closed leadership terms.
+ *   - "leadership" — current leaders only, then the past terms.
+ *
+ * Both grids draw the same card. A past position is the same fact as a
+ * sitting one with an end date on it, and giving it a vocabulary of its own
+ * meant every fix to the card — a square portrait, a marked profile link —
+ * had to be made twice and was not (#25).
  */
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -22,53 +25,11 @@ import {
   type PublicGroupRosterEntry,
 } from "../../shared/schemas/group-directory";
 import { getJson } from "../shared/api-client";
-import { formatMonthYear } from "../shared/ui";
-import {
-  PersonAvatar,
-  PersonLinks,
-  PublicPersonCard,
-  PublicPersonOrgLink,
-  type PublicPerson,
-} from "./components/public-person-card";
+import { PublicPersonCard } from "./components/public-person-card";
 
 const API_BASE_FALLBACK = "/api/v1";
 
 type View = "roster" | "leadership";
-
-function TimelineItem({ entry, color }: { entry: PublicGroupRosterEntry; color: string }) {
-  const person: PublicPerson = entry.person;
-  return (
-    <div class="person-tl-item">
-      <div class="person-tl-avatar-wrap">
-        <PersonAvatar
-          person={person}
-          color={color}
-          imageClass="person-tl-avatar"
-          initialsClass="person-tl-avatar person-tl-avatar--initials"
-        />
-      </div>
-      <div class="person-tl-info">
-        <span class="person-tl-name">{person.name}</span>
-        <span class="person-tl-role">{entry.title}</span>
-        <span class="person-tl-dates">
-          {formatMonthYear(entry.startsAt)}
-          {entry.endsAt && ` – ${formatMonthYear(entry.endsAt)}`}
-        </span>
-        {person.organizationName && (
-          <span class="person-tl-org">
-            <PublicPersonOrgLink person={person} className="person-tl-org-link">
-              {person.organizationName}
-            </PublicPersonOrgLink>
-          </span>
-        )}
-        {/* A past chair keeps their profile link, same as a sitting one: it was
-            missing here entirely, which issue #25 reports as "the LinkedIn url
-            is not displaying for past positions". */}
-        <PersonLinks person={person} />
-      </div>
-    </div>
-  );
-}
 
 /** Closed seats and closed terms as one timeline, most recently ended first. */
 function pastPositions(directory: GroupDirectoryResponse, view: View): PublicGroupRosterEntry[] {
@@ -120,10 +81,10 @@ export function GroupGovernanceWidget({
   return (
     <>
       {current.length > 0 && (
-        <div class="consortium-leaders">
-          {current.map((entry) => (
+        <div class="consortium-leaders" data-positions="current">
+          {current.map((entry, index) => (
             <PublicPersonCard
-              key={`${entry.person.name}:${entry.title}:${entry.startsAt}`}
+              key={`current-${index}`}
               person={entry.person}
               role={entry.title}
               color={color}
@@ -135,12 +96,27 @@ export function GroupGovernanceWidget({
       {past.length > 0 && (
         <div class="consortium-past-leadership">
           <h4 class="consortium-past-heading">Past positions</h4>
-          <div class="consortium-past-timeline">
-            {past.map((entry) => (
-              <TimelineItem
-                key={`${entry.person.name}:${entry.title}:${entry.startsAt}:${entry.endsAt ?? ""}`}
-                entry={entry}
+          {/*
+            The same grid and the same card the sitting members get. A past
+            position had its own one-line vocabulary — a small avatar, a role
+            pill, the dates run together — which is what issue #25 means by
+            "the content does not render to a tile like the active board
+            members", and which is where the oval portrait and the missing
+            profile link lived. It also had to be kept in step with the card
+            by hand, and was not. The grey ring and the closed term are the
+            whole difference now.
+          */}
+          <div class="consortium-leaders" data-positions="past">
+            {past.map((entry, index) => (
+              <PublicPersonCard
+                // By position: two people the system cannot name would
+                // otherwise collide on the same key and render as one.
+                key={`past-${index}`}
+                person={entry.person}
+                role={entry.title}
                 color={color}
+                from={entry.startsAt}
+                till={entry.endsAt}
               />
             ))}
           </div>

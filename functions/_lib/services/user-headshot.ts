@@ -6,6 +6,7 @@ import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
 import { storedRasterImageResponse } from "./image-response";
+import { profileImageBucketName, requireProfileImageBucket } from "./profile-image-storage";
 import {
   prepareStorageDeletion,
   processStorageDeletionForKey,
@@ -58,23 +59,48 @@ export function privateUserHeadshotResponse(bucket: R2Bucket, key: string): Prom
   });
 }
 
-export function publicUserHeadshotPath(storageKey: string | null): string | null {
+/**
+ * The file a stored headshot key names — its last segment, and the part that
+ * changes whenever the photograph does.
+ *
+ * A key must carry a prefix: a bare filename names no owner and is not
+ * addressable.
+ */
+export function userHeadshotKeyFile(storageKey: string | null): string | null {
   if (!storageKey) return null;
   const segments = storageKey.split("/").filter(Boolean);
-  if (segments[0] === "headshots") segments.shift();
   if (segments.length < 2) return null;
+  return segments[segments.length - 1];
+}
 
-  const [userId, ...fileSegments] = segments;
-  const encodedFile = fileSegments.map((segment) => encodeURIComponent(segment)).join("/");
-  return `/api/v1/users/${encodeURIComponent(userId)}/headshots/${encodedFile}`;
+/**
+ * The public address of a user's current headshot.
+ *
+ * The owner comes from the row, never from the key. A self-service or staff
+ * upload writes `headshots/<userId>/<file>`, but the member migration writes
+ * `member-photos/<orgSlug>/<file>` for a portrait it carried over from the
+ * repository (scripts/migrate-members/individuals.mjs). Reading the id out of
+ * the key turned those into `/api/v1/users/member-photos/headshots/…`, an
+ * address for a user that does not exist — which is why a migrated portrait
+ * appeared on the public members page and nowhere in the portal (issue #28).
+ *
+ * The file segment is what makes a replaced or removed headshot's address stop
+ * resolving, and it doubles as the cache key: `currentUserHeadshotResponse`
+ * serves only the key the row holds right now.
+ */
+export function publicUserHeadshotPath(userId: string, storageKey: string | null): string | null {
+  const file = userHeadshotKeyFile(storageKey);
+  if (!file) return null;
+  return `/api/v1/users/${encodeURIComponent(userId)}/headshots/${encodeURIComponent(file)}`;
 }
 
 export function publicUserHeadshotUrl(
   appBaseUrl: string,
+  userId: string,
   storageKey: string | null,
   updatedAt?: string | null,
 ): string | null {
-  const path = publicUserHeadshotPath(storageKey);
+  const path = publicUserHeadshotPath(userId, storageKey);
   if (!path) return null;
   const url = new URL(path, appBaseUrl);
   if (updatedAt) url.searchParams.set("v", updatedAt);
@@ -103,10 +129,14 @@ export async function getUserHeadshotPointer(db: DatabaseLike, userId: string): 
   return (await getUserHeadshotRecord(db, userId)).headshot_r2_key;
 }
 
-export async function userHeadshotResponse(db: DatabaseLike, bucket: R2Bucket, userId: string) {
+export async function userHeadshotResponse(
+  db: DatabaseLike,
+  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">,
+  userId: string,
+) {
   const user = await getUserHeadshotRecord(db, userId);
   if (!user.headshot_r2_key) throw new AppError(404, "NOT_FOUND", "No headshot on file");
-  return privateUserHeadshotResponse(bucket, user.headshot_r2_key);
+  return privateUserHeadshotResponse(requireProfileImageBucket(env, user.headshot_r2_key), user.headshot_r2_key);
 }
 
 async function headshotConflictError(db: DatabaseLike, userId: string): Promise<AppError> {
@@ -166,7 +196,12 @@ export async function replaceUserHeadshot(
           prepareBadgeRenderJobsForUser(context.db, context.userId, at),
           ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
         ];
-        const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
+        const deletionStatement = prepareStorageDeletion(
+          context.db,
+          context.previousKey,
+          at,
+          profileImageBucketName(context.previousKey),
+        );
         if (deletionStatement) statements.push(deletionStatement);
         return statements;
       },
@@ -205,7 +240,12 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
     prepareBadgeRenderJobsForUser(context.db, context.userId, at),
     ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
   ];
-  const deletionStatement = prepareStorageDeletion(context.db, context.previousKey, at);
+  const deletionStatement = prepareStorageDeletion(
+    context.db,
+    context.previousKey,
+    at,
+    profileImageBucketName(context.previousKey),
+  );
   if (deletionStatement) statements.push(deletionStatement);
   let updateResult;
   try {
@@ -223,10 +263,10 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
 
 export function removePreviousHeadshot(
   db: DatabaseLike,
-  env: Pick<Env, "SPEAKER_UPLOADS_BUCKET">,
+  env: Pick<Env, "SPEAKER_UPLOADS_BUCKET" | "ASSETS_BUCKET">,
   previousKey: string | null,
 ): Promise<boolean> {
-  return processStorageDeletionForKey(db, env, previousKey);
+  return processStorageDeletionForKey(db, env, previousKey, profileImageBucketName(previousKey));
 }
 
 /** Opportunistically processes durable object deletion after the D1 commit. */
@@ -311,21 +351,33 @@ export function removeUserHeadshotForRequest(
   return commitUserHeadshotRemoval({ db, env, origin: resolveAppBaseUrl(env, request), ...payload }, waitUntil);
 }
 
+/**
+ * Serves the headshot the user's row points at right now, addressed by the
+ * file that key names.
+ *
+ * The stored key is read rather than rebuilt from the URL. Rebuilding assumed
+ * every key looked like `headshots/<userId>/<file>`, so a key from any other
+ * writer — the member migration's `member-photos/<orgSlug>/<file>` — could
+ * never be served at all. Comparing the file segment keeps what the rebuild
+ * was for: a replaced or removed photograph's address stops resolving at once,
+ * because the row no longer names that file.
+ */
 export async function currentUserHeadshotResponse(
   db: DatabaseLike,
-  bucket: R2Bucket,
+  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">,
   userId: string,
-  requestedKey: string,
+  requestedFile: string,
 ): Promise<Response> {
   const current = await first<{ headshot_r2_key: string | null }>(
     db,
     "SELECT headshot_r2_key FROM users WHERE id = ?",
     [userId],
   );
-  if (current?.headshot_r2_key !== requestedKey) {
+  const storedKey = current?.headshot_r2_key ?? null;
+  if (!storedKey || userHeadshotKeyFile(storedKey) !== requestedFile) {
     throw new AppError(404, "NOT_FOUND", "Headshot not found");
   }
-  return storedRasterImageResponse(bucket, requestedKey, {
+  return storedRasterImageResponse(requireProfileImageBucket(env, storedKey), storedKey, {
     notFoundCode: "NOT_FOUND",
     notFoundMessage: "Headshot not found",
     cacheControl: "public, max-age=300, s-maxage=300, must-revalidate",

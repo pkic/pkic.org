@@ -1,9 +1,11 @@
 import { useRef, useState } from "preact/hooks";
 import {
   effectiveMailingListSubscriptionsResponseSchema,
+  MAILING_LIST_PREFERENCE_SELECTIONS,
   mailingListPreferenceMutationResponseSchema,
   type EffectiveMailingListSubscription,
   type MailingListPreferenceMutationInput,
+  type MailingListPreferenceSelection,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { statusLabel } from "../../../../components/Badge";
@@ -11,6 +13,13 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select } from "../../../../ui/TextControl";
 import { putJson } from "../../../../shared/api-client";
+
+/** `inherit` is named for what it does here rather than for the absent row it stands for. */
+const PREFERENCE_LABELS: Record<MailingListPreferenceSelection, string> = {
+  inherit: "Use group default",
+  subscribed: "Subscribed",
+  unsubscribed: "Unsubscribed",
+};
 
 function SubscriptionPreference({
   subscription,
@@ -33,9 +42,11 @@ function SubscriptionPreference({
         onChange((event.currentTarget as HTMLSelectElement).value as MailingListPreferenceMutationInput["preference"])
       }
     >
-      <option value="inherit">Use group default</option>
-      <option value="subscribed">Subscribed</option>
-      <option value="unsubscribed">Unsubscribed</option>
+      {MAILING_LIST_PREFERENCE_SELECTIONS.map((preference) => (
+        <option key={preference} value={preference}>
+          {PREFERENCE_LABELS[preference]}
+        </option>
+      ))}
     </Select>
   );
 }

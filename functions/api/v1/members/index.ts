@@ -32,8 +32,14 @@ import { requirePermission } from "../../../_lib/auth/permissions";
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
 /**
- * One endpoint, two projections, chosen by what the caller may see — the same
- * capability-shaped union `/api/v1/groups/:groupId/memberships` uses.
+ * One endpoint, two projections, chosen by what the caller asked for — not by
+ * who the caller happens to be.
+ *
+ * It used to switch on whether the reader held `membership:read`, so a public
+ * page changed shape when a staff member looked at it: the directory asked
+ * for members and got rows carrying no `slug`, `logoUrl` or `website`, could
+ * not read them, and showed nothing. That is #11, #13 and #25, and it never
+ * reproduced unauthenticated, which is why every existing test missed it.
  *
  * Either way a row is one membership: an organization or an individual, never
  * one per representative, because an organization's representatives inherit
@@ -44,7 +50,9 @@ const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-rev
  * cookie, which is exactly the request that reaches it.
  */
 export const MembersGet = openApiRoute(membersListRouteSchema, async (c: any, data) => {
-  const staff = await optionalMembershipReader(c);
+  // `staff` widens the projection for a caller that may see more; it never
+  // narrows what a public surface asked for.
+  const staff = data.query.view === "staff" ? await optionalMembershipReader(c) : null;
   if (staff) {
     const { members, total } = await listStaffMembers(staff.db, data.query);
     return json(

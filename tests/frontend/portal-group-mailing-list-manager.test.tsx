@@ -14,7 +14,19 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupMailingListCreateSchema, type MailingList } from "../../assets/shared/schemas/mailing-lists";
 import { GroupMailingListManager } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingListManager";
+
+/*
+ * The surface addresses its own create page, so it reads the portal's location
+ * hook. The hook is wouter's, which is React's under preact/compat and has no
+ * dispatcher in a bare mount — the same mock every other surface test that
+ * navigates uses.
+ */
+const navigate = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["", navigate],
+}));
 import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { rowActionControlNames, rowMenuTrigger } from "./helpers/row-actions";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const PAGE = { limit: 50, offset: 0, total: 1, hasMore: false };
@@ -105,15 +117,18 @@ describe("group mailing-list management surface", () => {
     expect(status?.className).toContain("pk-badge--dot");
   });
 
-  it("keeps the create form behind the toolbar's action and wires its labels to its controls", async () => {
+  it("puts the create form on its own page and wires its labels to its controls", async () => {
     stubApi([archivedList]);
-    const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
+    // Nothing is layered over the list to begin with.
+    const list = mount(<GroupMailingListManager groupId={GROUP_ID} />);
     await settle();
+    expect(list.querySelector("form")).toBeNull();
 
-    expect(container.querySelector("form")).toBeNull();
-    await act(() => {
-      buttonNamed(container, "Add mailing list").click();
-    });
+    // Creating is a place with its own address, reached under the reserved
+    // `new` segment rather than by unfolding a panel above the table.
+    const container = mount(<GroupMailingListManager groupId={GROUP_ID} listSegment="new" />);
+    await settle();
+    expect(container.querySelector("table")).toBeNull();
 
     const form = container.querySelector("form")!;
     expect(form.textContent).toContain("New group mailing list");
@@ -121,17 +136,19 @@ describe("group mailing-list management surface", () => {
     // fails exactly when the labelling breaks.
     expect(controlFor(form, "Email").type).toBe("email");
     expect(controlFor(form, "Label").required).toBe(true);
-    expect(controlFor(form, "Ownership").value).toBe("This group");
-    expect(controlFor(form, "Ownership").readOnly).toBe(true);
+    /*
+     * Ownership is stated rather than offered. It was a text input carrying
+     * `readOnly`, which reads as a field a reader may type in and cannot —
+     * part of what #50 called a messy page.
+     */
+    expect(form.querySelector("input[readonly]")).toBeNull();
+    expect(form.textContent).toContain("Owned by this group");
   });
 
   it("posts the shared create contract and derives ownership from the route", async () => {
     const calls = stubApi([archivedList]);
-    const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
+    const container = mount(<GroupMailingListManager groupId={GROUP_ID} listSegment="new" />);
     await settle();
-    await act(() => {
-      buttonNamed(container, "Add mailing list").click();
-    });
 
     const form = container.querySelector("form")!;
     await typeInto(controlFor(form, "Email"), "consultation@lists.example.test");
@@ -152,11 +169,8 @@ describe("group mailing-list management surface", () => {
 
   it("announces a refused create through an alert and leaves the form open to correct", async () => {
     stubApi([archivedList], () => json({ message: "Conflict" }, 409));
-    const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
+    const container = mount(<GroupMailingListManager groupId={GROUP_ID} listSegment="new" />);
     await settle();
-    await act(() => {
-      buttonNamed(container, "Add mailing list").click();
-    });
 
     const form = container.querySelector("form")!;
     await typeInto(controlFor(form, "Email"), "consultation@lists.example.test");
@@ -172,23 +186,38 @@ describe("group mailing-list management surface", () => {
     expect(controlFor(container.querySelector("form")!, "Label").value).toBe("Consultation list");
   });
 
-  it("opens one row's editor as a named detail region and reports it as expanded", async () => {
-    stubApi([archivedList], () => json({ grants: [], page: PAGE }));
+  it("opens a list's own page from its row instead of unfolding it in the table", async () => {
+    stubApi([archivedList]);
     const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
     await settle();
 
-    // The row itself opens the editor; its activation names the list, and
-    // once open the same control reads as the way back out.
-    const manage = buttonNamed(container, "Manage Architecture discussion");
+    // Activating the row navigates: a list is a record with an address, so
+    // nothing unfolds between the table's rows.
     await act(() => {
-      manage.click();
+      buttonNamed(container, "Open Architecture discussion").click();
     });
     await settle();
 
-    expect(buttonNamed(container, "Close management for Architecture discussion")).toBeTruthy();
-    const detail = container.querySelector(".pk-table__detail");
-    expect(detail?.textContent).toContain(`Manage ${archivedList.label}`);
-    // The editor opens on the row's own values rather than a blank draft.
-    expect(controlFor(detail!, "Email").value).toBe(archivedList.email);
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/mailing-lists/${archivedList.id}`);
+    expect(container.querySelector(".pk-table__detail")).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+  });
+
+  it("offers restore rather than archive on an archived list, and always offers delete", async () => {
+    stubApi([archivedList]);
+    const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
+    await settle();
+
+    // The command that does not apply is absent rather than shown disabled:
+    // the list is out of service, so the move it offers is back into service.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Architecture discussion"]);
+    await act(() => {
+      rowMenuTrigger(container, archivedList.label)?.click();
+    });
+    await settle();
+    expect([...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).toEqual([
+      "Restore",
+      "Delete",
+    ]);
   });
 });

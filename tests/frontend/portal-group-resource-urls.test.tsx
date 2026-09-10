@@ -166,12 +166,7 @@ describe("URL-addressed group sub-resources", () => {
     const back = Array.from(record.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
       button.textContent?.includes("All forms"),
     );
-    expect(back).toBeTruthy();
-    await act(async () => {
-      back?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/forms`);
+    expect(back).toBeUndefined();
   });
 
   it("opens a form placement from its URL-addressed initial placement and reports a failed detail fetch", async () => {

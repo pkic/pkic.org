@@ -11,6 +11,7 @@ export interface EnumSelectProps<Value extends string> extends FieldControlProps
   onChange: (value: Value) => void;
   options: ReadonlyArray<EnumSelectOption<Value>>;
   disabled?: boolean;
+  name?: string;
 }
 
 /**

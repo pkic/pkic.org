@@ -114,7 +114,7 @@ describe("membership-application edit form", () => {
       "Category",
       "Organization",
       "Role / Job title",
-      "LinkedIn",
+      "Professional profile",
       "Organization website",
       "About yourself",
       "About organization",

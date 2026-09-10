@@ -111,7 +111,9 @@ describe("portal group seat history", () => {
   it("lists former seats with their service dates and edits a seat through the canonical update route", async () => {
     const requests = stubFetch((url, method) => {
       if (method === "PATCH") return json(mutation);
-      const former = url.searchParams.get("active") === "false";
+      // The editor reads its own seat by id; the roster reads a page of them.
+      const one = url.searchParams.get("membershipId") === SEAT_ID;
+      const former = one || url.searchParams.get("active") === "false";
       return json({
         memberships: former ? [seat({})] : [],
         page: { limit: 25, offset: 0, total: former ? 1 : 0, hasMore: false },
@@ -134,26 +136,35 @@ describe("portal group seat history", () => {
     await act(async () => trigger.click());
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
     expect(items).toEqual(["Edit seat"]);
-    await act(async () => (container.querySelector('[role="menuitem"]') as HTMLButtonElement).click());
 
-    const title = controlFor(container, "Seat title");
-    expect(title.value).toBe("Treasurer");
-    setValue(title, "");
-    setValue(controlFor(container, "Member until"), "");
-    await act(async () => button(container, "Save seat").click());
+    /*
+     * Editing a seat is a page of its own, at the seat's own address, and it
+     * loads its subject from there rather than being handed it by the row —
+     * so opening it cold shows the same seat, which is what makes the address
+     * worth having.
+     */
+    const editor = mount(
+      <GroupMembers groupId={GROUP_ID} canManage seatSegment={SEAT_ID} onChanged={async () => {}} />,
+    );
+    await settle();
+    expect(editor.querySelector("table")).toBeNull();
+
+    expect(editor.textContent).not.toContain("Seat title");
+    expect(editor.querySelector('a[href$="/leadership"]')?.textContent).toBe("Leadership");
+    setValue(controlFor(editor, "Member until"), "");
+    await act(async () => button(editor, "Save seat").click());
     await settle();
 
     const request = requests.find(
       ({ url, method }) => method === "PATCH" && url.pathname === `/api/v1/groups/${GROUP_ID}/memberships/${SEAT_ID}`,
     );
     expect(groupMembershipUpdateSchema.parse(request?.body)).toEqual({
-      title: null,
       joinedAt: "2022-06-01T00:00:00.000Z",
       leftAt: null,
     });
   });
 
-  it("records a former seat with its title and service interval in one add", async () => {
+  it("records a former service interval without a competing title", async () => {
     const requests = stubFetch((url, method) => {
       if (url.pathname === `/api/v1/groups/${GROUP_ID}/users`) {
         return json({
@@ -172,10 +183,10 @@ describe("portal group seat history", () => {
       if (method === "POST") return json(mutation);
       return json({ memberships: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
     });
-    const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={async () => {}} />);
+    // Adding is a page of its own, under the reserved `add` segment.
+    const container = mount(<GroupMembers groupId={GROUP_ID} canManage seatSegment="add" onChanged={async () => {}} />);
     await settle();
 
-    await act(async () => button(container, "Add person").click());
     const picker = container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
     setValue(picker, "past@example.test");
     await act(async () => {
@@ -187,13 +198,14 @@ describe("portal group seat history", () => {
     )!;
     await act(async () => result.click());
 
-    setValue(controlFor(container, "Seat title"), "Board Chair");
+    expect(container.textContent).not.toContain("Seat title");
     setValue(controlFor(container, "Member since"), "2022-06-01");
-    const former = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
-    former.checked = true;
-    void act(() => {
-      former.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    /*
+     * The end date is a plain optional field now, not something a checkbox
+     * has to unhide first (#34). Filling it is what makes this a former
+     * seat — including what the submit button then offers to do.
+     */
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
     setValue(controlFor(container, "Member until"), "2025-02-01");
     await act(async () => button(container, "Record former seat").click());
     await settle();
@@ -203,7 +215,6 @@ describe("portal group seat history", () => {
     );
     expect(groupMemberAddBodySchema.parse(request?.body)).toEqual({
       capacitySelection: { mode: "all_eligible", confirmed: true },
-      title: "Board Chair",
       joinedAt: "2022-06-01T00:00:00.000Z",
       leftAt: "2025-02-01T00:00:00.000Z",
     });

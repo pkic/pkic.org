@@ -11,7 +11,9 @@ import {
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
-import { Button } from "../../../../ui/Button";
+import { EditActions } from "../../../../ui/EditActions";
+import { DescriptionList } from "../../../../ui/DescriptionList";
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { getJson, putJson } from "../../../../shared/api-client";
@@ -36,9 +38,12 @@ export function EventRegistrationSettingsEditor({
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registration-settings`;
   const [settings, setSettings] = useState<RegistrationSettings | null>(null);
   const [registrationPolicy, setRegistrationPolicy] = useState<EventRegistrationPolicy>("no_registration");
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const form = useContractForm(groupEventRegistrationSettingsUpdateSchema, { expectedUpdatedAt, registrationPolicy });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,18 +63,22 @@ export function EventRegistrationSettingsEditor({
     void load();
   }, [load]);
 
-  async function saveSettings(): Promise<void> {
+  async function saveSettings(event: Event): Promise<void> {
+    event.preventDefault();
+    if (!editing || saving) return;
+    const checked = form.submit();
+    if (!checked.data) return setError(checked.message);
     setSaving(true);
     setError(null);
     try {
-      const input = groupEventRegistrationSettingsUpdateSchema.parse({ expectedUpdatedAt, registrationPolicy });
-      const response = await putJson(base, input, groupEventRegistrationSettingsResponseSchema);
+      const response = await putJson(base, checked.data, groupEventRegistrationSettingsResponseSchema);
       setSettings(response);
       setRegistrationPolicy(response.registrationPolicy);
       onRevision(response.eventUpdatedAt);
+      setEditing(false);
       toast("Registration settings saved", "success");
     } catch (cause) {
-      const message = (cause as Error).message;
+      const message = form.refuse(cause);
       setError(message);
       toast(message, "error");
     } finally {
@@ -83,36 +92,57 @@ export function EventRegistrationSettingsEditor({
 
   return (
     <div class="pk pk-stack pk-stack--loose">
-      <div class="pk-stack">
-        {/* The sentence is the policy control's guidance, so it hangs off the
-            control through aria-describedby rather than sitting above it as
-            prose a screen reader never connects to the choice. */}
-        <Field
-          label="Registration policy"
-          help="Enable registration after configuring at least one required attendee term. Custom registration questions are optional."
-        >
-          {(control) => (
-            <Select
-              {...control}
-              value={registrationPolicy}
-              disabled={saving}
-              onChange={(event) => setRegistrationPolicy(event.currentTarget.value as EventRegistrationPolicy)}
-            >
-              {EVENT_REGISTRATION_POLICIES.map((policy) => (
-                <option key={policy} value={policy}>
-                  {EVENT_REGISTRATION_POLICY_LABELS[policy]}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-        <div class="pk-cluster">
-          <Button variant="primary" size="sm" loading={saving} onClick={() => void saveSettings()}>
-            {saving ? "Saving…" : "Save registration settings"}
-          </Button>
+      <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void saveSettings(event)}>
+        <div class="pk-cluster pk-cluster--between">
+          <h6>Registration policy</h6>
+          <EditActions
+            label="Registration policy actions"
+            editing={editing}
+            saving={saving}
+            saveLabel="Save registration settings"
+            onEdit={() => {
+              form.reset();
+              setError(null);
+              setRegistrationPolicy(settings.registrationPolicy);
+              setEditing(true);
+            }}
+            onCancel={() => {
+              form.reset();
+              setError(null);
+              setRegistrationPolicy(settings.registrationPolicy);
+              setEditing(false);
+            }}
+          />
         </div>
+        {editing ? (
+          <Field
+            label="Registration policy"
+            {...form.of("registrationPolicy")}
+            help="Enable registration after configuring at least one required attendee term. Custom registration questions are optional."
+          >
+            {(control) => (
+              <Select
+                {...control}
+                name="registrationPolicy"
+                value={registrationPolicy}
+                disabled={saving}
+                onChange={(event) => setRegistrationPolicy(event.currentTarget.value as EventRegistrationPolicy)}
+              >
+                {EVENT_REGISTRATION_POLICIES.map((policy) => (
+                  <option key={policy} value={policy}>
+                    {EVENT_REGISTRATION_POLICY_LABELS[policy]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        ) : (
+          <DescriptionList
+            items={[{ term: "Policy", value: EVENT_REGISTRATION_POLICY_LABELS[settings.registrationPolicy] }]}
+          />
+        )}
         {error && <ErrorAlert error={error} />}
-      </div>
+      </form>
       {/* The rule that used to separate the two halves is gone: the parent's
           gap says the same thing without a border on an inner element. */}
       {showFormConfiguration && (

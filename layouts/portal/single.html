@@ -7,7 +7,12 @@
 {{ $login := .Params.login | default dict }}
 {{ $facts := slice }}
 {{ range partial "site-stats.html" . }}
-  {{ $facts = $facts | append (dict "value" .value "label" (lower .label)) }}
+  {{/* `dict` writes every key it is given, so a figure with nothing to count
+       would carry an explicit null into the JSON. Only the ones that count
+       something say so. */}}
+  {{ $fact := dict "value" .value "label" (lower .label) }}
+  {{ with .memberCount }}{{ $fact = merge $fact (dict "memberCount" .) }}{{ end }}
+  {{ $facts = $facts | append $fact }}
 {{ end }}
 {{ with $login.facts }}{{ $facts = $facts | append . }}{{ end }}
 {{/*

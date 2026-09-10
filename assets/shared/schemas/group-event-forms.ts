@@ -3,8 +3,10 @@ import { jsonErrorResponse, utcInstantSchema } from "./api-common";
 import {
   addDuplicateFormFieldIssues,
   eventFormsPurposeSchema,
+  addPlacementIssues,
   formDefinitionCreateBaseSchema,
   formPlacementSchema,
+  formSubmissionWindowShape,
 } from "./forms";
 import { eventConfigurationRevisionSchema } from "./event-configuration";
 import { groupEventParamsSchema } from "./group-events";
@@ -41,6 +43,27 @@ export const groupEventFormCreateSchema = eventConfigurationRevisionSchema.exten
     .superRefine(addDuplicateFormFieldIssues),
 });
 
+/**
+ * The window an event's form accepts responses in (#38).
+ *
+ * A window belongs to the PLACEMENT, not the definition: the same reusable
+ * form can be placed in two events that open and close on different days, so
+ * a window on the definition would be one event overwriting another's dates.
+ *
+ * Both ends are optional and either may be cleared: a registration form with
+ * no opening time accepts responses from now, and one with no closing time
+ * stays open until somebody closes it. The shared placement rules refuse a
+ * close that is not after its open.
+ *
+ * It carries the event revision for the same reason the selection above does:
+ * two people configuring one event's registration must not silently overwrite
+ * each other.
+ */
+export const groupEventFormPlacementUpdateSchema = eventConfigurationRevisionSchema
+  .extend(formSubmissionWindowShape)
+  .superRefine(addPlacementIssues);
+export type GroupEventFormPlacementUpdateInput = z.infer<typeof groupEventFormPlacementUpdateSchema>;
+
 export const groupEventFormParamsSchema = groupEventParamsSchema.extend({ purpose: eventFormsPurposeSchema });
 export const GROUP_EVENT_FORMS_SORT_COLUMNS = ["key", "title", "updated_at"] as const;
 export const groupEventFormsQuerySchema = listQuerySchema(GROUP_EVENT_FORMS_SORT_COLUMNS);
@@ -72,6 +95,29 @@ export const groupEventFormGetRouteSchema = {
     "403": jsonErrorResponse("Event management access is required."),
     "404": jsonErrorResponse("The event is not available through this group."),
     "409": jsonErrorResponse("Meeting events must be configured through their meeting series."),
+  },
+};
+
+export const groupEventFormPlacementPatchRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Set the submission window for a managed group event's form",
+  description:
+    "Updates when the placed form accepts responses, and whether it is accepting them at all. Instants are stored in UTC; a surface converts to and from the reader's zone.",
+  request: {
+    params: groupEventFormParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupEventFormPlacementUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "The event revision and the updated placement.",
+      content: { "application/json": { schema: groupEventFormResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("No form is placed for this event flow."),
+    "409": jsonErrorResponse("The event configuration changed concurrently."),
+    "422": jsonErrorResponse("The closing time is not after the opening time."),
   },
 };
 
