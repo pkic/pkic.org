@@ -342,9 +342,6 @@ data:
       bio: |
         Zsolt Makádi brings over 20 years of PKI expertise, specializing in certificate lifecycle management (CLM) system development and smart card infrastructure deployment.
 
-    - name: Tim Lozier
-      title: Head of Marketing, PKI Solutions
-
     - name: Mark Cooper
       title: President and Founder, PKI Solutions
       bio: |
@@ -1148,7 +1145,6 @@ data:
 
               Attendees will leave with a vendor-neutral framework they can immediately apply to reduce unnecessary spending, avoid premature implementation decisions, and build a foundation for long-term cryptographic agility.
             speakers:
-              - Tim Lozier
               - Mark Cooper
             locations:
               - room_d
