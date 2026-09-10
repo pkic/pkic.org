@@ -6,7 +6,7 @@ website: https://facti.com.br
 organizationDomains:
   - facti.com.br
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Facti is a Brazilian nonprofit foundation that promotes research, innovation, and capacity building in information and communication technologies, with expertise in software engineering, artificial intelligence, cybersecurity, post-quantum cryptography, and other emerging technologies.
 
 # membership
 memberSince: 2026-09-09
@@ -42,8 +42,8 @@ careers:
 social:
   x: 
   facebook: 
-  instagram: 
-  linkedin: 
+  instagram: https://www.instagram.com/factioficial
+  linkedin: https://www.linkedin.com/company/facti---fundacao-de-apoio-a-capacitacao-em-tecnologia-da-informacao/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
