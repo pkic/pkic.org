@@ -100,9 +100,13 @@ data:
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and the Vice Chair of the PKI Consortium.
 
     - name: Sven Rajala
-      title: Vice Chair, PQC Working Group, PKI Consortium and International PKI Man of Mystery, Keyfactor
+      title: Vice Chair, PQC Working Group, PKI Consortium and Deputy PKI Officer, Keyfactor
       bio: |
-        Sven is an award-winning cybersecurity consultant with over 18 years of experience in PKI, automation of PKI and signing solutions, and containerized deployments, currently International PKI Man of Mystery at Keyfactor. His career has spanned both the private sector and federal government, helping organizations design, modernize, and secure their digital trust infrastructure. Recognized for his subject matter expertise in PKI and DevSecOps, he serves as Vice Chair of the PKI Consortium's Post-Quantum Cryptography (PQC) Working Group and hosts The Key Master series by Keyfactor on the Keyfactor Developers YouTube channel.
+        Sven is an award-winning cybersecurity consultant with over 19+ years of experience in PKI, automation of PKI and signing solutions, and containerized deployments. Sven’s career spans both the private sector and federal government, where he has helped organizations design, modernize, and secure their digital trust infrastructure.
+        
+        Recognized for his subject matter expertise in PKI and DevSecOps, he is often invited to lead client discussions, presentations, and technical seminars on EJBCA, PKI architectures, and automation best practices.
+        
+        Sven also hosts The Key Master series by Keyfactor, featured on the Keyfactor Developers YouTube channel, where he shares insights and interviews to help the PKI community deepen its technical knowledge.
       social:
         linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
         github: https://github.com/svenska-primekey
