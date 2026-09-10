@@ -1504,16 +1504,19 @@ data:
 
       - time: "16:15"
         sessions:
-          - title: Collaborative Efforts to Support Migration to PQC
+#          - title: Collaborative Efforts to Support Migration to PQC
+#            description: |
+#              A panel discussion that shares examples of how over 55 different organizations have collaborated within the NCCoE Migration to PQC project, using cryptographic visibility to support risk management decisions for migration actions, and performing demonstrations using PQC for interoperability and benchmarking to inform PKI system owners on starting to use PQC algorithms.
+#
+#              A panel of NCCoE collaborators who have been working on implementing PQC algorithms in PKI systems (such as the US Government PIV card). Moderator to be announced.
+#            track: Panel discussion
+#            speakers:
+#              - Bruno Couillard
+#              - Ted Shorter
+#              - Evgeny Gervis
+          - title: To be announced
             description: |
-              A panel discussion that shares examples of how over 55 different organizations have collaborated within the NCCoE Migration to PQC project, using cryptographic visibility to support risk management decisions for migration actions, and performing demonstrations using PQC for interoperability and benchmarking to inform PKI system owners on starting to use PQC algorithms.
-
-              A panel of NCCoE collaborators who have been working on implementing PQC algorithms in PKI systems (such as the US Government PIV card). Moderator to be announced.
-            track: Panel discussion
-            speakers:
-              - Bruno Couillard
-              - Ted Shorter
-              - Evgeny Gervis
+              Session details will be announced soon.
             locations:
               - plenary
 
