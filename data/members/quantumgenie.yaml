@@ -61,6 +61,7 @@ representatives:
 
 # Long-form content (markdown)
 # Sources: https://quantumgenie.ai/ and https://aws.amazon.com/marketplace/pp/prodview-3v23v3rwhli54
+# Relationship products: https://quantumgenie.ai/blog/cbom-causal-map-post-quantum-migration
 # Featured video: https://www.youtube.com/watch?v=La3JG17G_Zs
 content: |
   QuantumGenie helps organizations inventory cryptographic assets across source code, cloud infrastructure, certificates, keys, networks, and endpoints. CipherScan generates a Cryptographic Bill of Materials (CBOM) to support cryptographic risk assessment and migration planning.
