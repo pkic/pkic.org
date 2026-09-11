@@ -89,9 +89,12 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
     var open = function () {
       clearTimeout(closeTimer);
       var r = trigger.getBoundingClientRect();
+      var viewportGutter = 8;
       panel.style.top = (r.bottom + 4) + 'px';
-      panel.style.left = r.left + 'px';
       panel.removeAttribute('hidden');
+      var panelWidth = panel.getBoundingClientRect().width;
+      var maxLeft = window.innerWidth - panelWidth - viewportGutter;
+      panel.style.left = Math.max(viewportGutter, Math.min(r.left, maxLeft)) + 'px';
       btn.setAttribute('aria-expanded', 'true');
     };
 

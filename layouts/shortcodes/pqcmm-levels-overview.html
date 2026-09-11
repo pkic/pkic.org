@@ -1,0 +1,31 @@
+{{- $model := partial "pqcmm/model-data.html" (dict "page" .Page) -}}
+{{- $colors := slice "none" "gray" "green" "blue" "violet" "purple" -}}
+<div class="maturity-staircase" role="list" aria-label="PQCMM maturity levels">
+  {{- range $level := $model.data.levels }}
+  {{- $color := index $colors $level.number -}}
+  <div class="maturity-step maturity-step--{{ $color }}" role="listitem">
+    <a href="{{ $level.sourcePage }}" class="maturity-step-bar" aria-label="Level {{ $level.number }}: {{ $level.name }}">
+      <span class="maturity-step-number" aria-hidden="true">{{ $level.number }}</span>
+      <span class="maturity-step-name">{{ $level.name }}</span>
+    </a>
+    <p class="maturity-step-summary">{{ $level.summary }}</p>
+    <a href="{{ $level.sourcePage }}" class="maturity-step-cta" aria-label="Details for level {{ $level.number }}">Details →</a>
+  </div>
+  {{- end }}
+</div>
+
+<div class="table-responsive">
+  <table>
+    <thead>
+      <tr><th scope="col">Level</th><th scope="col">Summary</th></tr>
+    </thead>
+    <tbody>
+      {{- range $level := $model.data.levels }}
+      <tr>
+        <td><a href="{{ $level.sourcePage }}">{{ $level.number }} — {{ $level.name }}</a></td>
+        <td>{{ $level.summary }}</td>
+      </tr>
+      {{- end }}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,9 @@
+repository: pkic/pqcmm
+releaseTag: v1.0.1
+modelVersion: 1.0.1
+profileVersion: 1.0.0
+digests:
+  model: 24405aaeffb5e1a0ced67690ed3c2f2016d3971d38616c846b9fe3582a68f8b9
+  modelSchema: 9e325966946391a6739150ffaaab2a6717d675a8ce5de97a9aeb988047001e71
+  profile: 19f75912027a484eab826965e4449c464be1c1857cb460bed412bf0da2a4c61c
+  profileSchema: 44eac7de729a044b95f64c32411b1066a4611e8d384e7eafe313fac7fcd73aa6
