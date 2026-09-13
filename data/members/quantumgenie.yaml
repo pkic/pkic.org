@@ -1,12 +1,14 @@
 id: quantumgenie
 name: QuantumGenie, Inc.
-slogan:
+# Source: https://quantumgenie.ai/
+slogan: Cryptographic discovery, attribution, remediation, and monitoring
 website: https://quantumgenie.ai
 # Business domains for email
 organizationDomains:
   - quantumgenie.ai
 # Short description, longer content can be placed in `content/members/`
-description: QuantumGenie helps enterprises find and fix weak encryption before attackers or future quantum computers can exploit it — discovery, attribution, remediation, and continuous monitoring on one AI security world model.
+# Source: https://quantumgenie.ai/ and https://aws.amazon.com/marketplace/pp/prodview-3v23v3rwhli54
+description: QuantumGenie provides cryptographic discovery, attribution, remediation, and continuous monitoring to support enterprise crypto-agility and post-quantum readiness.
 
 # membership
 memberSince: 2026-08-21
@@ -42,7 +44,8 @@ social:
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/quantumgenie/
-  youtube: 
+  # Source: https://www.youtube.com/@QuantumGenieInc
+  youtube: https://www.youtube.com/@QuantumGenieInc
 
 # Here you can list those who represent or have represented the member.
 #
@@ -57,4 +60,17 @@ representatives:
     description: Srijan is the Founder at QuantumGenie, Inc. and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
+# Sources: https://quantumgenie.ai/ and https://aws.amazon.com/marketplace/pp/prodview-3v23v3rwhli54
+# Relationship products: https://quantumgenie.ai/blog/cbom-causal-map-post-quantum-migration
+# Featured video: https://www.youtube.com/watch?v=La3JG17G_Zs
 content: |
+  QuantumGenie helps organizations inventory cryptographic assets across source code, cloud infrastructure, certificates, keys, networks, and endpoints. CipherScan generates a Cryptographic Bill of Materials (CBOM) to support cryptographic risk assessment and migration planning.
+
+  The Causal Security Engine attributes findings to applications, owners, and dependencies. CipherNova prepares remediation candidates and pull-request artifacts for engineering review, while CipherEdge provides endpoint monitoring and network visibility through packet capture and SPAN-port traffic.
+
+  The Relationship Explorer and Security World Model connect cryptographic findings with applications, identities, and infrastructure to help teams assess dependencies and prioritize remediation.
+
+  ## Featured video
+
+  {{< youtube La3JG17G_Zs >}}
+
