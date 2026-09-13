@@ -133,7 +133,7 @@ export function ProposalDetailPage({
   }, [activeTab, data?.access.canReview]);
 
   if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error && !data) return <ErrorAlert error={error} />;
   if (!data) return null;
 
   const { proposal, access, form, minReviewsRequired, sessionTypes } = data;
@@ -236,6 +236,7 @@ export function ProposalDetailPage({
 
   return (
     <div class="pk pk-stack">
+      {error && <ErrorAlert error={error} />}
       {!parentNavigation && (
         <Button size="sm" onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}>
           ← Back

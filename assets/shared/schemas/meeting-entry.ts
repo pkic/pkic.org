@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 /**
  * Meeting-entry contracts: the occurrence-owned landing, intentional join
  * confirmation, and the mailbox verification that turns an invited guest into
@@ -108,6 +109,7 @@ export const meetingJoinConfirmRouteSchema = {
 };
 
 export const meetingInvitationVerificationCreateRouteSchema = {
+  ...protectsPublicAction("meeting_verification", "events:manage"),
   ...publicOperation(),
   tags: ["Meetings"],
   summary: "Start browser-bound verification for an invited meeting guest",

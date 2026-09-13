@@ -12,6 +12,7 @@ import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
 import { issueMemberJoinApplicationToken, verifyMemberJoinVerificationToken } from "./capabilities";
+import { findExistingJoinMember } from "./existing-member";
 
 interface ClaimedMemberRow {
   member_id: string;
@@ -47,6 +48,10 @@ export async function verifyMemberJoin(
     }
 > {
   const capability = await verifyMemberJoinVerificationToken(input.signingSecret, input.token);
+  // A valid mailbox proof can show sign-in guidance even if a previous visit
+  // already consumed the join link. It must never mint another session.
+  if (await findExistingJoinMember(db, capability.email)) return { status: "already_member" };
+
   if (
     await first<{ id: string }>(db, "SELECT id FROM audit_log WHERE idempotency_key = ?", [
       `membership_join_link_consumed:${capability.capabilityId}`,

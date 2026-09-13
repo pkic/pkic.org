@@ -28,6 +28,29 @@ beforeEach(async () => {
 });
 
 describe("organization identity API", () => {
+  it("lists imported organization identities with the directory's exact query", async () => {
+    const organizationId = await insertOrganization(env.DB, "Imported organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const userId = await insertUser(env.DB, "imported-roster@example.test");
+    const identityId = await addRepresentative(env.DB, memberId, userId);
+    await env.DB.prepare(
+      "UPDATE identities SET source = 'migration', invited_at = '2026-09-01 12:34:56', started_at = '2026-09-01 12:34:56', created_at = '2026-09-01 12:34:56', updated_at = '2026-09-01 12:34:56' WHERE id = ?",
+    )
+      .bind(identityId)
+      .run();
+    await assignRepresentativeRole(env.DB, memberId, userId, REPRESENTATIVE_ROLE_IDS.primaryContact);
+    const token = await createMemberSession(env.DB, userId, "imported-roster-contact", undefined, identityId);
+    const response = await jsonRequest(
+      `/api/v1/organizations/${organizationId}/identities?limit=25&offset=0&sort=user_name`,
+      token,
+      "GET",
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      identities: [{ id: identityId, invitedAt: "2026-09-01T12:34:56.000Z", startedAt: "2026-09-01T12:34:56.000Z" }],
+    });
+  });
+
   it("lets an active organization contact invite, list, update, and end an exact identity", async () => {
     const organizationId = await insertOrganization(env.DB, "Representation API Org");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");

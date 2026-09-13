@@ -143,7 +143,10 @@ export function PublicPersonCard({
           <span class={`person-card-role-arc${past ? " person-card-role-arc--past" : ""}`}>{role}</span>
         </div>
         <div class="person-card-body">
-          <span class="person-card-name">{person.name}</span>
+          <div class="pk-cluster pk-stack--snug">
+            <span class="person-card-name">{person.name}</span>
+            <PersonLinks person={person} />
+          </div>
           {/*
             The line under the name says what this person is, not where they
             work: their own job title, or — when the profile carries none —
@@ -154,14 +157,6 @@ export function PublicPersonCard({
           */}
           {(person.jobTitle || role) && <div class="person-card-jobtitle">{person.jobTitle ?? role}</div>}
           <OrganizationBlock person={person} />
-          {/*
-            A profile link is another fact about the person, so it reads with
-            the others rather than beside their name. On the name's own line it
-            pushed the name sideways in a row that could not wrap, so a card
-            with a link and a card without one no longer lined up — which is
-            what #13 came back as "socials are messed up for the chairs".
-          */}
-          <PersonLinks person={person} />
         </div>
       </div>
       {tenure && (

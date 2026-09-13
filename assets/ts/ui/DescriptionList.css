@@ -9,6 +9,11 @@
  */
 
 @layer components {
+  .pk-datalist--status {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+  }
+
   /*
    * The smaller of the two densities. Sidebars and cards were pairing the list
    * with a separate small-text class to get this; a modifier on the block keeps

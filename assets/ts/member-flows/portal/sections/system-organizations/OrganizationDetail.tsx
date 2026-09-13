@@ -1,3 +1,5 @@
+import { RefreshNotice } from "../../../../components/RefreshNotice";
+import { useData } from "../../../../hooks/useData";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * One organization's record, read like an account page in a CRM.
@@ -11,12 +13,11 @@ import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCate
  * replaces split the same three lists into tabs and made "who represents
  * this organization" a second step.
  */
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import {
   organizationDetailResponseSchema,
   organizationManagementUpdateSchema,
-  type OrganizationDetail as OrganizationDetailModel,
 } from "../../../../../shared/schemas/organization-management";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert, friendlyErrorMessage } from "../../../../components/ErrorAlert";
@@ -57,10 +58,21 @@ export function OrganizationDetail({
   canManageIdentities: boolean;
   canReadSponsorships: boolean;
 }) {
-  const [organization, setOrganization] = useState<OrganizationDetailModel | null>(null);
+  const {
+    data: organization,
+    loading,
+    error,
+    updatedAt,
+    reload: load,
+  } = useData(async () => {
+    if (!canRead) return null;
+    const response = await getJson(
+      `/api/v1/organizations/${encodeURIComponent(organizationId)}`,
+      organizationDetailResponseSchema,
+    );
+    return response.organization;
+  }, [canRead, organizationId]);
   const categories = useMembershipCategoryLabels(Boolean(organization?.membershipCategory));
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // Editing is the page's mode, not a card's: one draft, one Save, and every
   // card keeps its layout while its values become inputs.
   const [draft, setDraft] = useState<OrganizationDraft | null>(null);
@@ -73,32 +85,11 @@ export function OrganizationDetail({
     draft && organization ? payloadFromDraft(draft, organization.updatedAt) : {},
   );
 
-  const load = useCallback(async () => {
-    if (!canRead) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getJson(
-        `/api/v1/organizations/${encodeURIComponent(organizationId)}`,
-        organizationDetailResponseSchema,
-      );
-      setOrganization(response.organization);
-    } catch (caught) {
-      setError((caught as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [canRead, organizationId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   if (!canRead) {
     return <ErrorAlert error="Organization details require the organizations:read permission." />;
   }
   if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error && !organization) return <ErrorAlert error={error} />;
   if (!organization) return null;
 
   const count = organization.activeIdentityCount;
@@ -155,6 +146,7 @@ export function OrganizationDetail({
 
   return (
     <section class="pk pk-stack" aria-label={organization.name}>
+      {error && <RefreshNotice error={error} updatedAt={updatedAt} />}
       {/*
         The same two controls the contact record opens with: a trail, which is
         navigation, and then the subject itself. `PageHeader` names a place in

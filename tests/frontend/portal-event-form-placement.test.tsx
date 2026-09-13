@@ -231,7 +231,7 @@ describe("portal event form placement management", () => {
 
     const alert = container.querySelector("[role='alert']");
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
     // No selector is drawn for a placement that was never read.
     expect(container.querySelector('[role="combobox"]')).toBeNull();
   });

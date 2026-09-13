@@ -73,7 +73,7 @@ INSERT INTO organizations (
   ${sqlString(randomUUID())}, ${sqlString(name)}, ${sqlString(normalizedOrgName)}, NULL, ${toSqlNullableText(urlSlug)},
   ${toSqlNullableText(doc.description)}, ${toSqlNullableText(doc.website)}, ${toSqlNullableText(contentMarkdown)}, ${toSqlNullableText(doc.slogan)}, ${toSqlNullableText(logoR2Key)}, ${linksJson ? sqlString(linksJson) : "NULL"},
   ${toSqlNullableText(blog.url)}, ${toSqlNullableText(blog.feed)}, ${toSqlNullableText(press.url)}, ${toSqlNullableText(press.feed)}, ${toSqlNullableText(careers.url)},
-  datetime('now'), datetime('now')
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 )
 ON CONFLICT(normalized_name) DO UPDATE SET
   name = excluded.name,
@@ -91,7 +91,7 @@ ON CONFLICT(normalized_name) DO UPDATE SET
   press_url = excluded.press_url,
   press_feed_url = excluded.press_feed_url,
   careers_url = excluded.careers_url,
-  updated_at = datetime('now');
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 `;
 
   return { statement, normalizedOrgName };
@@ -107,7 +107,7 @@ export function buildOrganizationDomainStatements(normalizedOrgName, domains) {
     statements.push(`
 INSERT OR IGNORE INTO organization_domain_claims
   (id, organization_id, application_id, domain, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, o.id, NULL, ${sqlString(trimmed)}, datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, o.id, NULL, ${sqlString(trimmed)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM organizations o WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 `);
   }
@@ -129,13 +129,13 @@ export function buildOrganizationMemberAggregateStatements(normalizedOrgName, ca
   const statements = [
     `
 INSERT OR IGNORE INTO members (id, member_type, organization_id, status, member_since, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'organization', o.id, 'active', ${toSqlNullableText(memberSince)}, datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, 'organization', o.id, 'active', ${toSqlNullableText(memberSince)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM organizations o WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 `,
     // Never clobber a `member_since` staff may have hand-set — only fill
     // in when it's still unset (e.g. a rerun after the YAML gained the key).
     `
-UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = datetime('now')
+UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE organization_id = (SELECT id FROM organizations WHERE normalized_name = ${sqlString(normalizedOrgName)})
   AND member_since IS NULL;
 `,
@@ -143,7 +143,7 @@ WHERE organization_id = (SELECT id FROM organizations WHERE normalized_name = ${
   if (categoryCode) {
     statements.push(`
 INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, created_at, updated_at)
-SELECT m.id, ${sqlString(categoryCode)}, datetime('now'), datetime('now')
+SELECT m.id, ${sqlString(categoryCode)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM members m JOIN organizations o ON o.id = m.organization_id
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 `);
@@ -172,7 +172,7 @@ INSERT INTO identities
    source, show_on_organization_profile, invited_at, started_at, created_at, updated_at)
 SELECT ${sqlString(randomUUID())}, u.id, o.id, NULL,
        ${toSqlNullableText(jobTitle)}, ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
-       'migration', ${showOnOrgProfile ? 1 : 0}, datetime('now'), datetime('now'), datetime('now'), datetime('now')
+       'migration', ${showOnOrgProfile ? 1 : 0}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM organizations o
 JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
@@ -183,7 +183,7 @@ DO UPDATE SET
   job_title = COALESCE(identities.job_title, excluded.job_title),
   biography = COALESCE(identities.biography, excluded.biography),
   links_json = COALESCE(identities.links_json, excluded.links_json),
-  updated_at = datetime('now');
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 `;
 }
 
@@ -200,7 +200,7 @@ INSERT OR IGNORE INTO user_roles
   (id, user_id, role_id, context_type, context_id, identity_id,
    granted_by_user_id, single_holder_per_context, created_at)
 SELECT ${sqlString(randomUUID())}, u.id, ${sqlString(roleId)}, 'organization', m.id,
-       identity.id, NULL, 1, datetime('now')
+       identity.id, NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM members m
 JOIN organizations o ON o.id = m.organization_id
 JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
@@ -233,7 +233,7 @@ INSERT INTO users (
   ${toSqlNullableText(firstName)}, ${toSqlNullableText(lastName)}, ${toSqlNullableText(jobTitle)},
   ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
   ${toSqlNullableText(headshotR2Key)},
-  'user', 1, datetime('now'), datetime('now')
+  'user', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 )
 ON CONFLICT(normalized_email) DO UPDATE SET
   first_name = COALESCE(users.first_name, excluded.first_name),
@@ -241,7 +241,7 @@ ON CONFLICT(normalized_email) DO UPDATE SET
   job_title = COALESCE(users.job_title, excluded.job_title),
   biography = COALESCE(users.biography, excluded.biography),
   links_json = COALESCE(users.links_json, excluded.links_json),
-  updated_at = datetime('now'),
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   -- 'headshots/...' keys are hand-uploaded via the admin self-service headshot
   -- endpoint (SPEAKER_UPLOADS_BUCKET) and must never be clobbered by a rerun.
   -- Anything else (NULL, or a previous 'member-photos/...' migration key) is
@@ -285,11 +285,11 @@ export function buildIndividualMemberAggregateStatements(
   const statements = [
     `
 INSERT OR IGNORE INTO members (id, member_type, user_id, status, member_since, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'individual', u.id, 'active', ${toSqlNullableText(memberSince)}, datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, 'individual', u.id, 'active', ${toSqlNullableText(memberSince)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM users u WHERE u.normalized_email = ${sqlString(normalizedEmail)};
 `,
     `
-UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = datetime('now')
+UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedEmail)})
   AND member_since IS NULL;
 `,
@@ -297,7 +297,7 @@ WHERE user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(norma
   if (categoryCode) {
     statements.push(`
 INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, created_at, updated_at)
-SELECT m.id, ${sqlString(categoryCode)}, datetime('now'), datetime('now')
+SELECT m.id, ${sqlString(categoryCode)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM members m JOIN users u ON u.id = m.user_id
 WHERE u.normalized_email = ${sqlString(normalizedEmail)};
 `);
@@ -307,7 +307,7 @@ INSERT INTO identities
    source, show_on_organization_profile, invited_at, started_at, created_at, updated_at)
 SELECT ${sqlString(randomUUID())}, u.id, NULL, NULL, NULL,
        ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
-       'migration', 0, datetime('now'), datetime('now'), datetime('now'), datetime('now')
+       'migration', 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   FROM users u
   JOIN members member ON member.user_id = u.id AND member.member_type = 'individual'
   JOIN member_category_assignments category ON category.member_id = member.id
@@ -319,7 +319,7 @@ ON CONFLICT(user_id)
 DO UPDATE SET
   biography = COALESCE(identities.biography, excluded.biography),
   links_json = COALESCE(identities.links_json, excluded.links_json),
-  updated_at = datetime('now');
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 `);
   }
   return statements;
@@ -337,7 +337,7 @@ export function buildConsortiumSponsorshipStatements(normalizedOrgName, level, s
   return [
     `
 INSERT INTO sponsorships (id, sponsor_type, organization_id, tier, pipeline_stage, start_date, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'consortium', o.id, ${sqlString(level)}, 'active', ${toSqlNullableText(startDate)}, datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, 'consortium', o.id, ${sqlString(level)}, 'active', ${toSqlNullableText(startDate)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM organizations o
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
   AND NOT EXISTS (SELECT 1 FROM sponsorships s WHERE s.organization_id = o.id AND s.sponsor_type = 'consortium');
@@ -346,7 +346,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
 UPDATE organizations
 SET sponsor_tier = COALESCE(sponsor_tier, ${sqlString(level)}),
     sponsor_start_date = COALESCE(sponsor_start_date, ${toSqlNullableText(startDate)}),
-    updated_at = datetime('now')
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE normalized_name = ${sqlString(normalizedOrgName)};
 `,
   ];
@@ -355,7 +355,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)};
 function buildEventUpsertStatement(alias) {
   return `
 INSERT INTO events (id, slug, name, timezone, starts_at, ends_at, created_at, updated_at)
-VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, datetime('now'), datetime('now'))
+VALUES (${sqlString(randomUUID())}, ${sqlString(alias.slug)}, ${sqlString(alias.name)}, ${sqlString(alias.timezone)}, ${toSqlNullableText(alias.startsAt)}, ${toSqlNullableText(alias.endsAt)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 ON CONFLICT(slug) DO NOTHING;
 `;
 }
@@ -366,7 +366,7 @@ export function buildEventSponsorshipStatements(normalizedOrgName, alias, tier) 
     buildEventUpsertStatement(alias),
     `
 INSERT INTO sponsorships (id, sponsor_type, organization_id, event_id, tier, pipeline_stage, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'event', o.id, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, 'event', o.id, e.id, ${sqlString(tier)}, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM organizations o, events e
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
   AND e.slug = ${sqlString(alias.slug)}
@@ -381,7 +381,7 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
 export function buildNonMemberConsortiumSponsorshipStatement(sponsorName, website, logoR2Key, level) {
   return `
 INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, tier, pipeline_stage, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'consortium', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, ${sqlString(level)}, 'active', datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, 'consortium', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, ${sqlString(level)}, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE NOT EXISTS (
   SELECT 1 FROM sponsorships WHERE sponsor_type = 'consortium' AND organization_id IS NULL AND non_member_name = ${sqlString(sponsorName)}
 );
@@ -394,7 +394,7 @@ export function buildNonMemberEventSponsorshipStatements(sponsorName, website, l
     buildEventUpsertStatement(alias),
     `
 INSERT INTO sponsorships (id, sponsor_type, non_member_name, non_member_website, non_member_logo_r2_key, event_id, tier, pipeline_stage, created_at, updated_at)
-SELECT ${sqlString(randomUUID())}, 'event', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, e.id, ${sqlString(tier)}, 'active', datetime('now'), datetime('now')
+SELECT ${sqlString(randomUUID())}, 'event', ${sqlString(sponsorName)}, ${toSqlNullableText(website)}, ${toSqlNullableText(logoR2Key)}, e.id, ${sqlString(tier)}, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM events e
 WHERE e.slug = ${sqlString(alias.slug)}
   AND NOT EXISTS (
@@ -416,7 +416,7 @@ INSERT OR IGNORE INTO group_memberships
    joined_at, left_at, created_at, updated_at)
 SELECT lower(hex(randomblob(16))), group_row.id, capacity.user_id,
        capacity.identity_id, capacity.member_id, 'migration', NULL,
-       datetime('now'), NULL, datetime('now'), datetime('now')
+       strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   FROM active_user_capacities capacity
   JOIN groups group_row
     ON group_row.slug = ${sqlString(groupSlug)}

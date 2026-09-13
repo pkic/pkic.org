@@ -1,3 +1,4 @@
+import { Badge } from "../../../ui/Badge";
 import { useEffect, useState } from "preact/hooks";
 import { myNotificationPreferencesSchema, myNotificationPreferencesUpdateSchema } from "../../../../shared/schemas/me";
 import { ErrorAlert } from "../../../components/ErrorAlert";
@@ -94,9 +95,10 @@ export function NotificationPreferencesCard() {
               </div>
             ) : (
               <DescriptionList
+                layout="status"
                 items={(Object.keys(LABELS) as Array<keyof NotificationPreferences>).map((key) => ({
                   term: LABELS[key],
-                  value: preferences[key] ? "On" : "Off",
+                  value: <Badge tone={preferences[key] ? "ok" : "neutral"}>{preferences[key] ? "On" : "Off"}</Badge>,
                 }))}
               />
             ))}

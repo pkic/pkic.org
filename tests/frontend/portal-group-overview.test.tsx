@@ -165,7 +165,7 @@ describe("GroupOverview", () => {
     // different statement from "we could not find out". The danger tone
     // carries role="alert", so the failure announces itself.
     const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("Votes are unavailable");
+    expect(alert?.textContent).toContain("We could not reach online services.");
     expect(container.querySelector('ul[aria-label="Open votes"]')).toBeNull();
     expect(container.textContent).not.toContain("Upcoming events");
   });

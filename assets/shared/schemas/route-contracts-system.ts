@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { apiStatusSchema } from "./availability";
 import { publicOperation } from "./route-contract";
 
 export const apiRootGetRouteSchema = {
@@ -11,12 +11,7 @@ export const apiRootGetRouteSchema = {
       description: "API status metadata.",
       content: {
         "application/json": {
-          schema: z.object({
-            name: z.string(),
-            version: z.string(),
-            docs: z.string(),
-            status: z.literal("ok"),
-          }),
+          schema: apiStatusSchema,
         },
       },
     },

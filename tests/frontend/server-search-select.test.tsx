@@ -472,6 +472,7 @@ describe("ServerSearchSelect", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("503");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
+    expect(alert?.textContent).not.toContain("HTTP 503");
   });
 });

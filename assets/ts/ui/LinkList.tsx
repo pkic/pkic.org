@@ -1,20 +1,4 @@
-/**
- * A subject's own links, each behind a small mark.
- *
- * A profile's links are a set of destinations, not a paragraph: the reader is
- * scanning for one of them, and the mark is what makes that scan quick. The
- * mark and the label both come from `LINK_HOSTS` — the shared reference data,
- * not a table this component keeps — so a site added once is recognized
- * everywhere, and no surface can decide on its own that one platform deserves
- * a treatment the rest do not get. That was issue #13 in both directions:
- * LinkedIn with a badge and everything else as a raw address.
- *
- * The words beside the mark name the site — "LinkedIn", "GitHub", or the bare
- * host for somewhere the table has no name for — rather than printing the
- * address. A profile link is read as "where", not as a string to transcribe,
- * and a long one wrapped over three lines is what issue #13 objected to. The
- * address stays reachable as the link's tooltip and in the status bar.
- */
+import socialIcons from "../../shared/social-icons.json";
 import { getLinkLabel, getLinkMark } from "../../shared/schemas/links";
 import "./LinkList.css";
 
@@ -47,28 +31,41 @@ export function LinkList({ links, ownerName, label }: LinkListProps) {
 
   return (
     <ul class="pk-link-list" aria-label={label}>
-      {links.map((link) => (
-        <li key={link}>
-          <a
-            class="pk-link-list__link"
-            href={link}
-            rel="noreferrer noopener"
-            target="_blank"
-            title={link}
-            aria-label={ownerName ? `${ownerName} on ${getLinkLabel(link)} ${NEW_TAB}` : undefined}
-          >
-            {/* Decoration: the site's name beside it is the accessible name,
-                and "in" announced before it would only be noise. */}
-            <span class="pk-link-list__mark" aria-hidden="true">
-              {getLinkMark(link)}
-            </span>
-            <span class="pk-link-list__label">{getLinkLabel(link)}</span>
-            {/* Dropped from the announcement when `ownerName` supplies the
+      {links.map((link) => {
+        const paths = socialIcons[getLinkMark(link) as keyof typeof socialIcons];
+        return (
+          <li key={link}>
+            <a
+              class={`pk-link-list__link${paths ? " pk-link-list__link--icon" : ""}`}
+              href={link}
+              rel="noreferrer noopener"
+              target="_blank"
+              title={link}
+              aria-label={ownerName ? `${ownerName} on ${getLinkLabel(link)} ${NEW_TAB}` : undefined}
+            >
+              <svg
+                class="pk-link-list__mark"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+                focusable="false"
+              >
+                {paths ? (
+                  paths.map((d) => <path key={d} d={d} />)
+                ) : (
+                  <path d="M9 2h5v5h-1V3.7L7.4 9.3l-.7-.7L12.3 3H9zM3 3h4v1H3v9h9V9h1v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+                )}
+              </svg>
+              <span class={`pk-link-list__label${paths ? " pk-sr-only" : ""}`}>{getLinkLabel(link)}</span>
+              {/* Dropped from the announcement when `ownerName` supplies the
                 whole accessible name, which is why that branch says it too. */}
-            <span class="pk-sr-only"> {NEW_TAB}</span>
-          </a>
-        </li>
-      ))}
+              <span class="pk-sr-only"> {NEW_TAB}</span>
+            </a>
+          </li>
+        );
+      })}
     </ul>
   );
 }

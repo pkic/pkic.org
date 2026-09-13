@@ -1,3 +1,4 @@
+import { getAvailability } from "../availability";
 import { all, first, run } from "../db/queries";
 import { buildD1JsonMembershipFilter } from "../db/json-membership";
 import { AppError } from "../errors";
@@ -247,6 +248,7 @@ async function processOutboxRow(
   row: OutboxRow,
   context: OutboxProcessingContext,
 ): Promise<boolean> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
   // Honour send_after — sleep until the scheduled time before sending.
   const sendAfterMs = new Date(row.send_after).getTime() - Date.now();
   if (sendAfterMs > 0) {
@@ -257,6 +259,7 @@ async function processOutboxRow(
   // scheduled/admin/direct processors may therefore select the same queued
   // row. Claim it with a guarded write before contacting SendGrid so only one
   // invocation owns the external side effect.
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
   const processingToken = await claimOutboxForSending(db, row.id);
   if (!processingToken) return false;
 
@@ -374,6 +377,7 @@ async function processOutboxRow(
 }
 
 export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return;
   const row = await first<OutboxRow>(db, `SELECT ${OUTBOX_ROW_COLUMNS} FROM email_outbox WHERE id = ?`, [outboxId]);
   if (!row) {
     throw new AppError(404, "OUTBOX_NOT_FOUND", "Outbox message not found");
@@ -416,6 +420,7 @@ export async function processPendingOutbox(
   env: Env,
   limit = 20,
 ): Promise<{ processed: number; failed: number }> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal") return { processed: 0, failed: 0 };
   await quarantineExpiredOutboxLeases(db, limit);
   const rows = await all<OutboxRow>(db, EMAIL_OUTBOX_DUE_QUERY, [nowIso(), limit]);
 
@@ -455,6 +460,8 @@ export async function processSelectedOutbox(
   env: Env,
   ids: string[],
 ): Promise<{ processed: number; failed: number; skipped: number }> {
+  if (getAvailability(env, Date.now(), "email").mode !== "normal")
+    return { processed: 0, failed: 0, skipped: ids.length };
   if (!ids.length) {
     return { processed: 0, failed: 0, skipped: 0 };
   }

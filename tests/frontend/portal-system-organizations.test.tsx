@@ -347,7 +347,7 @@ describe("portal System Organizations", () => {
 
     const alert = container.querySelector("[role='alert']");
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
   });
 
   it("shows organization mutations only for their exact permissions", async () => {

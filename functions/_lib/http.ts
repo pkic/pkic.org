@@ -1,3 +1,4 @@
+import { dependencyFailure } from "./dependency-failure";
 import { isAppError } from "./errors";
 
 export function json(data: unknown, status = 200, headers?: HeadersInit): Response {
@@ -81,8 +82,9 @@ export function markSensitive(context: { data?: Record<string, unknown> }): void
 }
 
 export function handleError(error: unknown): Response {
+  error = dependencyFailure(error) ?? error;
   if (isAppError(error)) {
-    return json(
+    return jsonNoStore(
       {
         error: {
           code: error.code,

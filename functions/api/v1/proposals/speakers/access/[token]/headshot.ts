@@ -1,10 +1,11 @@
+import { requireProfileImageBucket } from "../../../../../../_lib/services/profile-image-storage";
 import { OpenAPIRoute } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import { requireInternalSecret } from "../../../../../../_lib/request";
 import { getSpeakerByManageToken } from "../../../../../../_lib/services/proposals";
-import { privateUserHeadshotResponse, requireUserHeadshotBucket } from "../../../../../../_lib/services/user-headshot";
+import { privateUserHeadshotResponse } from "../../../../../../_lib/services/user-headshot";
 import {
   removeProposalSpeakerSelfHeadshot,
   uploadProposalSpeakerSelfHeadshot,
@@ -28,7 +29,7 @@ async function onGet(c: AdminContext, token: string): Promise<Response> {
   if (!user.headshot_r2_key) {
     return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
   }
-  return privateUserHeadshotResponse(requireUserHeadshotBucket(c.env), user.headshot_r2_key);
+  return privateUserHeadshotResponse(requireProfileImageBucket(c.env, user.headshot_r2_key), user.headshot_r2_key);
 }
 
 async function onPut(c: AdminContext, token: string): Promise<Response> {

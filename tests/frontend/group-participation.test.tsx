@@ -314,6 +314,8 @@ describe("generic group participation card", () => {
 
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Stop participating in Architecture Group on behalf of Organization A?");
+    expect(dialog?.textContent).toContain("Other representatives keep their own participation");
+    expect(dialog?.textContent).not.toContain("Organization A loses");
 
     void act(() => dialogButton(container, "Stop participating").click());
     await settle();
@@ -550,7 +552,7 @@ describe("staff groups collection", () => {
 
     const alert = container.querySelector("[role='alert']");
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
   });
 
   it("says the catalog is empty in an announced region rather than a muted line", async () => {

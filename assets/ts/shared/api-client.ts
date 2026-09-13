@@ -1,3 +1,6 @@
+import { AVAILABILITY_ERROR_CODE } from "../../shared/schemas/availability";
+import { publishAvailability, serviceAvailability } from "./availability-state";
+import { TURNSTILE_TOKEN_HEADER, turnstileChallengeSchema } from "../../shared/schemas/abuse-protection";
 import { z } from "zod";
 import { apiErrorPayloadSchema, type ApiErrorPayload } from "../../shared/schemas/api-common";
 
@@ -17,12 +20,29 @@ export class ApiClientError extends Error {
   }
 }
 
+function connectionError(): ApiClientError {
+  return new ApiClientError(
+    {
+      error: {
+        code: "NETWORK_UNAVAILABLE",
+        message:
+          "We could not reach online services. Keep this page open and check your connection. If you were saving a change, check whether it completed before trying again.",
+      },
+    },
+    0,
+  );
+}
+
 async function parseJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
     return undefined;
   }
-  return response.json().catch(() => undefined);
+  return response.json().catch((error: unknown) => {
+    if (error instanceof Error && ["AbortError", "TimeoutError", "TypeError"].includes(error.name))
+      throw connectionError();
+    return undefined;
+  });
 }
 
 export interface JsonRequestInit extends RequestInit {
@@ -67,26 +87,59 @@ export async function requestJson<Schema extends z.ZodType>(
   init?: JsonRequestInit,
 ): Promise<z.output<Schema>> {
   const { mapError, ...requestInit } = init ?? {};
+  const known = serviceAvailability.value;
+  const path = new URL(url, typeof window === "undefined" ? "https://app.test" : window.location.href).pathname;
+  if (known && known.mode !== "normal" && path.startsWith("/api/") && path !== "/api/v1/" && path !== "/api/v1") {
+    throw new ApiClientError({ error: { code: AVAILABILITY_ERROR_CODE, message: known.message, details: known } }, 503);
+  }
   const headers = new Headers(requestInit.headers);
   if (!headers.has("content-type") && typeof requestInit.body === "string") {
     headers.set("content-type", "application/json");
   }
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    ...requestInit,
-    headers,
-  });
+  const send = async () => {
+    try {
+      const timeout = AbortSignal.timeout(30_000);
+      const signal = requestInit.signal ? AbortSignal.any([requestInit.signal, timeout]) : timeout;
+      return await fetch(url, { credentials: "same-origin", ...requestInit, headers, signal });
+    } catch (error) {
+      if (requestInit.signal?.aborted) throw error;
+      throw connectionError();
+    }
+  };
+  let response = await send();
 
-  const body = await parseJson(response);
+  let body = await parseJson(response);
+  const refusal = apiErrorPayloadSchema.safeParse(body);
+  if (
+    response.status === 403 &&
+    refusal.success &&
+    refusal.data.error.code === "TURNSTILE_REQUIRED" &&
+    typeof window !== "undefined" &&
+    new URL(url, window.location.href).origin === window.location.origin &&
+    typeof requestInit.body === "string" &&
+    !headers.has(TURNSTILE_TOKEN_HEADER)
+  ) {
+    const challenge = turnstileChallengeSchema.parse(refusal.data.error.details);
+    const { requestTurnstileToken } = await import("./turnstile");
+    const token = await requestTurnstileToken(challenge, requestInit.signal);
+    headers.set(TURNSTILE_TOKEN_HEADER, token);
+    // The server's challenge refusal guarantees the handler has not run. Retry once only.
+    response = await send();
+    body = await parseJson(response);
+  }
   if (!response.ok) {
     const fallback: ApiErrorPayload = {
       error: {
         code: "HTTP_ERROR",
-        message: `HTTP ${response.status}`,
+        message: [502, 503, 504].includes(response.status)
+          ? "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again."
+          : `HTTP ${response.status}`,
       },
     };
     const parsed = apiErrorPayloadSchema.safeParse(body);
     const payload = parsed.success ? parsed.data : fallback;
+    if (response.status === 503 && payload.error.code === AVAILABILITY_ERROR_CODE)
+      publishAvailability(payload.error.details);
     if (response.status === 401) {
       unauthorizedHandler?.(response.status);
     }

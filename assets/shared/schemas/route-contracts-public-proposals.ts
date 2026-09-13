@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 import { eventSlugParamsSchema, proposalAccessSpeakerParamsSchema, successResponseSchema } from "./api-common";
 import {
   coSpeakerInviteResponseSchema,
@@ -27,6 +28,7 @@ const genericAcceptedResponse = jsonResponse(
 );
 
 export const eventProposalCreateRouteSchema = {
+  ...protectsPublicAction("proposal_submission", "proposals:manage"),
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Submit an event proposal",
@@ -44,6 +46,7 @@ export const eventProposalCreateRouteSchema = {
 };
 
 export const proposalResendSpeakerManageLinkRouteSchema = {
+  ...protectsPublicAction("speaker_access", "email:manage"),
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Resend speaker management link",
@@ -61,6 +64,7 @@ export const proposalResendSpeakerManageLinkRouteSchema = {
 };
 
 export const proposalResendManageLinkRouteSchema = {
+  ...protectsPublicAction("proposal_access", "email:manage"),
   ...publicOperation(),
   tags: ["Proposals"],
   summary: "Resend proposer management link",
@@ -77,6 +81,7 @@ export const proposalResendManageLinkRouteSchema = {
 };
 
 export const inviteResendLinkRouteSchema = {
+  ...protectsPublicAction("invite_access", "email:manage"),
   ...publicOperation(),
   tags: ["Invites"],
   summary: "Resend pending invitation links",

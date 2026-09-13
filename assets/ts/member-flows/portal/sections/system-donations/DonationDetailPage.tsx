@@ -88,7 +88,7 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
   }
 
   if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error && !data) return <ErrorAlert error={error} />;
 
   const d = data!.donation;
   const gross = formatDonationAmount(d.gross_amount, d.currency);
@@ -109,6 +109,7 @@ function DonationDetailView({ donationId, canSync }: { donationId: string; canSy
 
   return (
     <div class="pk pk-stack">
+      {error && <ErrorAlert error={error} />}
       {/* The donor heads the page, with the donation's standing and amount
           beside the name and the record's commands on the right; the trail
           replaces the back button that used to stand in for it. */}

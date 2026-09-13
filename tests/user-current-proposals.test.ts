@@ -64,6 +64,20 @@ function getAs(token: string, path: string): Promise<Response> {
 beforeEach(resetDb);
 
 describe("GET /api/v1/users/current/proposals", () => {
+  it("keeps legacy timestamps from breaking the participation list", async () => {
+    const email = "legacy-participation@example.test";
+    const { userId } = await insertIndividualMember(env.DB, "H6", email);
+    const token = await createMemberSession(env.DB, userId, "legacy-participation-token");
+    const eventId = await insertEvent();
+    const id = await insertProposal(eventId, userId, { updatedAt: "2026-09-01 12:34:56" });
+    const earlier = await insertProposal(eventId, userId, { updatedAt: "2026-09-01T10:00:00.000Z" });
+    const response = await getAs(token, "/api/v1/users/current/proposals");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = currentUserProposalsListResponseSchema.parse(await response.json());
+    expect(body.proposals.map((proposal) => proposal.id)).toEqual([id, earlier]);
+    expect(body.proposals[0]).toMatchObject({ id, updatedAt: "2026-09-01T12:34:56.000Z" });
+  });
+
   it("rejects an unauthenticated caller", async () => {
     expect((await callApi(env, "/api/v1/users/current/proposals")).status).toBe(401);
   });

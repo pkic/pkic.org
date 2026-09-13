@@ -176,7 +176,10 @@ function readUint16LE(bytes: Uint8Array, offset: number): number {
  * Parses the dimensions carried by every accepted raster format and rejects
  * malformed or excessively large images before a decoder sees their pixels.
  */
-export function validateRasterImage(input: ArrayBuffer | Uint8Array): RasterImageValidationResult {
+export function validateRasterImage(
+  input: ArrayBuffer | Uint8Array,
+  limits = { maxDimension: MAX_RASTER_IMAGE_DIMENSION, maxPixels: MAX_RASTER_IMAGE_PIXELS },
+): RasterImageValidationResult {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   const format = detectImageFormat(bytes);
   if (!format) return { ok: false, reason: "invalid" };
@@ -189,9 +192,9 @@ export function validateRasterImage(input: ArrayBuffer | Uint8Array): RasterImag
         : parseWebpDimensions(bytes);
   if (!dimensions) return { ok: false, reason: "invalid" };
   if (
-    dimensions.width > MAX_RASTER_IMAGE_DIMENSION ||
-    dimensions.height > MAX_RASTER_IMAGE_DIMENSION ||
-    dimensions.width * dimensions.height > MAX_RASTER_IMAGE_PIXELS
+    dimensions.width > limits.maxDimension ||
+    dimensions.height > limits.maxDimension ||
+    dimensions.width * dimensions.height > limits.maxPixels
   ) {
     return { ok: false, reason: "dimensions" };
   }

@@ -156,7 +156,7 @@ describe("public member detail page", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
     expect(container.querySelector("h1")).toBeNull();
   });
 

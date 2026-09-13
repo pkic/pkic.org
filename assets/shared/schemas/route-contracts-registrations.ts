@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 import { eventSlugParamsSchema, registrationManageTokenParamsSchema, successResponseSchema } from "./api-common";
 import {
   okResponseSchema,
@@ -18,6 +19,7 @@ import { jsonResponse, requiredJsonBody } from "./openapi";
 import { publicOperation } from "./route-contract";
 
 export const registrationResendManageLinkRouteSchema = {
+  ...protectsPublicAction("registration_access", "email:manage"),
   ...publicOperation(),
   tags: ["Registrations"],
   summary: "Resend registration management link",
@@ -39,6 +41,7 @@ export const registrationResendManageLinkRouteSchema = {
 };
 
 export const eventRegistrationCreateRouteSchema = {
+  ...protectsPublicAction("event_registration", "events:manage"),
   ...publicOperation(),
   tags: ["Registrations"],
   summary: "Register for an event",
@@ -57,6 +60,7 @@ export const eventRegistrationCreateRouteSchema = {
 };
 
 export const registrationResendConfirmationRouteSchema = {
+  ...protectsPublicAction("registration_confirmation", "email:manage"),
   ...publicOperation(),
   tags: ["Registrations"],
   summary: "Resend registration confirmation email",

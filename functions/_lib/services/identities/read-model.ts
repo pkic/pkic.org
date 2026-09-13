@@ -1,3 +1,4 @@
+import { persistedUtcInstant } from "../../utils/time";
 import {
   actingIdentitySchema,
   type ActingIdentity,
@@ -72,14 +73,14 @@ function mapIdentity(row: IdentityReadRow): ActingIdentity {
     source: row.source,
     state: identityState(row),
     showOnOrganizationProfile: row.show_on_organization_profile === 1,
-    invitedAt: row.invited_at,
-    startedAt: row.started_at,
-    endedAt: row.ended_at,
-    blockedAt: row.blocked_at,
+    invitedAt: persistedUtcInstant(row.invited_at),
+    startedAt: persistedUtcInstant(row.started_at),
+    endedAt: persistedUtcInstant(row.ended_at),
+    blockedAt: persistedUtcInstant(row.blocked_at),
     blockedByUserId: row.blocked_by_user_id,
     predecessorIdentityId: row.predecessor_identity_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: persistedUtcInstant(row.created_at),
+    updatedAt: persistedUtcInstant(row.updated_at),
   });
 }
 

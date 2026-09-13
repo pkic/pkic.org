@@ -140,7 +140,7 @@ export function RegistrationDetailPage({
   }
 
   if (loading) return <Spinner label="Loading this registration…" />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error && !reg) return <ErrorAlert error={error} />;
   if (!reg) return null;
 
   const shareUrl = reg.referral_code ? `${window.location.origin}/r/${reg.referral_code}` : null;
@@ -152,6 +152,7 @@ export function RegistrationDetailPage({
 
   return (
     <div class="pk pk-stack">
+      {error && <ErrorAlert error={error} />}
       {!parentNavigation && (
         <Button size="sm" onClick={() => (onBack ? onBack() : navigate(eventRegistrationsViewPath(slug)))}>
           ← Back

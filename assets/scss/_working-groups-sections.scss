@@ -642,3 +642,26 @@
 }
 
 // ─── WG leadership panel ────────────────────────────────────────────────────
+
+// The introduction and leadership are two complementary columns, not a card grid.
+.wg-intro-layout {
+  > :first-child {
+    line-height: 1.65;
+  }
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-6);
+  align-items: start;
+
+  @media (min-width: 60rem) {
+    grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr);
+  }
+}
+
+.wg-page-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pk-4);
+}

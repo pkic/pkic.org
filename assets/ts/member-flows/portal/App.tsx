@@ -1,3 +1,4 @@
+import { Button } from "../../ui/Button";
 /**
  * Portal root — gates on identity authentication, then loads member profile
  * data only when the session advertises member capacity. Staff-only users can
@@ -43,18 +44,22 @@ export function App() {
   const isMcpAuthorization = portalHashPath(window.location.hash) === "/auth/oauth";
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   async function loadPortalSession(): Promise<boolean> {
+    setSessionError(null);
     try {
       const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
       savePortalSession(session);
       if (session.member) {
         saveProfile(await getJson("/api/v1/users/current", myProfileSchema));
       } else {
         clearMemberProfile();
       }
-    } catch {
-      clearUserSession();
+    } catch (error) {
+      if (error instanceof ApiClientError && [401, 403].includes(error.status)) clearUserSession();
+      else setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
     }
 
     finishAuthCheck();
@@ -112,12 +117,23 @@ export function App() {
     return <VerifyingOverlay />;
   }
 
+  const sessionNotice = sessionError ? (
+    <Alert tone="warn" title="Could not check sign-in">
+      <p>{sessionError}</p>
+      <Button variant="secondary" onClick={() => void loadPortalSession()}>
+        Check sign-in again
+      </Button>
+    </Alert>
+  ) : null;
+  if (sessionError && !isAuthed.value) return <div class="pk pk-stack">{sessionNotice}</div>;
+
   if (isAuthed.value) {
     const meetingDestination = meetingEntryReturnUrl(window.location.hash);
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     return (
       <>
-        <PortalShell />
+        {sessionNotice}
+        <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
         <ConfirmDialogHost />
       </>
     );

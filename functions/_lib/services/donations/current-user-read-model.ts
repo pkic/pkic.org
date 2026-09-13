@@ -22,6 +22,7 @@ import {
 import type { OffsetPageQuery } from "../../db/pagination";
 import { queryPage } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
+import { persistedUtcInstant } from "../../utils/time";
 
 interface CurrentUserDonationRow {
   id: string;
@@ -39,7 +40,7 @@ function toCurrentUserDonation(row: CurrentUserDonationRow): CurrentUserDonation
     currency: row.currency,
     status: row.status,
     source: row.source,
-    createdAt: row.created_at,
+    createdAt: persistedUtcInstant(row.created_at),
   });
 }
 
@@ -53,7 +54,7 @@ export function buildCurrentUserDonationsPageQuery(
           FROM donations
           WHERE email = (SELECT normalized_email FROM users WHERE id = ? AND email_verified_at IS NOT NULL)`,
     bindings: [userId],
-    orderBy: "ORDER BY created_at DESC, id ASC",
+    orderBy: "ORDER BY strftime('%Y-%m-%dT%H:%M:%fZ', created_at) DESC, id ASC",
     limit: query.limit,
     offset: query.offset,
   };

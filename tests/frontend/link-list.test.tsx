@@ -80,7 +80,8 @@ describe("LinkList", () => {
     const labels = [...root.querySelectorAll(".pk-link-list__label")].map((node) => node.textContent);
     expect(labels).toEqual(["LinkedIn", "X (Twitter)", "YouTube", "Facebook"]);
     // Four links, four marks: no platform renders as a bare address.
-    expect(root.querySelectorAll(".pk-link-list__mark")).toHaveLength(4);
+    expect(root.querySelectorAll("svg.pk-link-list__mark path")).toHaveLength(4);
+    expect(root.querySelectorAll(".pk-link-list__label.pk-sr-only")).toHaveLength(4);
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>("a")) {
       expect(anchor.textContent).not.toContain("https://");
       expect(anchor.getAttribute("rel")).toContain("noopener");

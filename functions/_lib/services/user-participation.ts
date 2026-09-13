@@ -1,3 +1,4 @@
+import { persistedUtcInstant } from "../utils/time";
 import { seatLeadershipJoinSql } from "./groups/seat-leadership";
 /**
  * What a person has taken part in: the groups they sit in, how reliably they
@@ -57,7 +58,7 @@ export async function getUserParticipation(db: DatabaseLike, userId: string): Pr
     db
       .prepare(
         `WITH current_seats AS (
-           SELECT membership.group_id, membership.user_id, membership.joined_at, leadership.title, leadership.role_rank
+           SELECT membership.group_id, membership.user_id, strftime('%Y-%m-%dT%H:%M:%fZ', membership.joined_at) AS joined_at, leadership.title, leadership.role_rank
              FROM group_memberships membership ${seatLeadershipJoinSql("membership", "user")}
             WHERE membership.user_id = ? AND membership.left_at IS NULL
          ), current_groups AS (
@@ -110,10 +111,10 @@ export async function getUserParticipation(db: DatabaseLike, userId: string): Pr
       },
     },
     title: row.title,
-    joinedAt: row.joined_at,
+    joinedAt: persistedUtcInstant(row.joined_at),
     attended: row.attended,
     held: row.held,
-    lastAttendedAt: row.last_attended_at,
+    lastAttendedAt: persistedUtcInstant(row.last_attended_at),
   }));
 
   const events = batchRows<EventCountRow>(eventsResult)[0]?.event_count ?? 0;

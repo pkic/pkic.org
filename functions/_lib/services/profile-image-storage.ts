@@ -4,7 +4,7 @@ import type { StorageBucketName } from "./storage-deletion-outbox";
 
 /** Uploads and migrated portraits share pointers, but live in different R2 buckets. */
 export function profileImageBucketName(key: string | null): StorageBucketName {
-  return key?.startsWith("headshots/") ? "speaker_uploads" : "assets";
+  return key?.startsWith("headshots/") || key?.startsWith("proposal-headshots/") ? "speaker_uploads" : "assets";
 }
 
 export function requireProfileImageBucket(

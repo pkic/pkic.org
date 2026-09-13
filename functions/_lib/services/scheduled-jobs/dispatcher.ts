@@ -1,3 +1,4 @@
+import { getAvailability } from "../../availability";
 import { all, run } from "../../db/queries";
 import { logInfo } from "../../logging";
 import type { DatabaseLike, Env, StatementLike } from "../../types";
@@ -157,6 +158,7 @@ export async function dispatchScheduledJobs(
   definitions: readonly ScheduledJobDefinition[],
   options: { maxJobsPerPass: number; d1QueryBudget: number },
 ): Promise<{ reaped: number; ran: number; failed: number }> {
+  if (getAvailability(env, Date.now(), "background").mode !== "normal") return { reaped: 0, ran: 0, failed: 0 };
   const byKey = new Map(definitions.map((definition) => [definition.key, definition]));
   const reaped = await reapAbandonedRuns(env.DB);
   const runnable = await selectRunnableJobs(env.DB, options.maxJobsPerPass);
@@ -164,6 +166,7 @@ export async function dispatchScheduledJobs(
   let ran = 0;
   let failed = 0;
   for (const row of runnable) {
+    if (getAvailability(env, Date.now(), "background").mode !== "normal") break;
     const definition = byKey.get(row.job_key);
     if (!definition) continue;
     const token = await claimJob(env.DB, row.job_key, definition.leaseSeconds);

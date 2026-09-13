@@ -107,6 +107,35 @@ describe("the public address of a stored headshot", () => {
     expect(response.headers.get("content-type")).toBe("image/jpeg");
   });
 
+  it("serves the dimensions of the imported Sven portrait without relaxing upload limits", async () => {
+    const key = "member-photos/keyfactor/sven-rajala.jpg";
+    const { userId } = await seedUserWithHeadshot("large-imported-portrait@example.test", key);
+    const assets = new StoredObjects();
+    assets.put(key, validJpegBytes(3024, 4032));
+    expect((await fetchHeadshot(userId, "sven-rajala.jpg", new StoredObjects(), assets)).status).toBe(200);
+    assets.put(key, validJpegBytes(8192, 4096));
+    expect((await fetchHeadshot(userId, "sven-rajala.jpg", new StoredObjects(), assets)).status).toBe(404);
+    const uploadKey = `headshots/${userId}/large.jpg`;
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(uploadKey, userId).run();
+    const uploads = new StoredObjects();
+    uploads.put(uploadKey, validJpegBytes(3024, 4032));
+    expect((await fetchHeadshot(userId, "large.jpg", uploads)).status).toBe(404);
+  });
+
+  it("serves larger retained camera originals while bounding their bytes", async () => {
+    const key = "member-photos/example/original.jpg";
+    const { userId } = await seedUserWithHeadshot("camera-original@example.test", key);
+    const assets = new StoredObjects();
+    assets.put(key, validJpegBytes(5911, 3842));
+    expect((await fetchHeadshot(userId, "original.jpg", new StoredObjects(), assets)).status).toBe(200);
+    const original = new Uint8Array(5_455_770);
+    original.set(validJpegBytes(2400, 3600));
+    assets.put(key, original);
+    expect((await fetchHeadshot(userId, "original.jpg", new StoredObjects(), assets)).status).toBe(200);
+    assets.put(key, new Uint8Array(10 * 1024 * 1024 + 1));
+    expect((await fetchHeadshot(userId, "original.jpg", new StoredObjects(), assets)).status).toBe(404);
+  });
+
   it("serves an uploaded portrait at the address the record publishes for it", async () => {
     const uploadedKey = "headshots/placeholder/stored.jpg";
     const { userId } = await seedUserWithHeadshot("uploaded-portrait@example.test", uploadedKey);

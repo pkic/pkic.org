@@ -199,7 +199,9 @@ describe("portal landing", () => {
 
     const events = panelNamed(container, "Upcoming events");
     const alert = events.querySelector('[role="alert"]');
-    expect(alert?.textContent).toBe("The service is temporarily unavailable. Try again in a moment.");
+    expect(alert?.textContent).toBe(
+      "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again.",
+    );
     // The failure replaces the empty state; the panel must not claim both.
     expect(events.textContent).not.toContain("No upcoming events right now.");
   });

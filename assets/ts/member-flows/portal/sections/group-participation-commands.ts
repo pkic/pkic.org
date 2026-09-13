@@ -99,7 +99,12 @@ export async function joinGroupOnBehalf(group: SelfGroup): Promise<boolean> {
 export async function leaveGroupAsCapacity(group: SelfGroup, memberId: string, label: string): Promise<boolean> {
   const confirmed = await confirmAction({
     title: `Stop participating in ${group.name} on behalf of ${label}?`,
-    consequences: [`${label} loses this group's access`, `You can rejoin ${group.name} on their behalf later`],
+    consequences: [
+      `You stop participating on behalf of ${label}`,
+      "Other representatives keep their own participation",
+      "If you are the only participating representative, this affiliation will no longer be represented in the group",
+      `You can rejoin ${group.name} later`,
+    ],
     confirmLabel: "Stop participating",
     tone: "danger",
   });
@@ -111,7 +116,11 @@ export async function leaveGroupAsCapacity(group: SelfGroup, memberId: string, l
 export async function leaveGroupEntirely(group: SelfGroup): Promise<boolean> {
   const confirmed = await confirmAction({
     title: `Leave ${group.name} for every affiliation?`,
-    consequences: ["Every affiliation loses this group's access", `You can rejoin ${group.name} later`],
+    consequences: [
+      "You stop participating through all your affiliations",
+      "Other representatives keep their own participation",
+      `You can rejoin ${group.name} later`,
+    ],
     confirmLabel: "Leave group",
     tone: "danger",
   });

@@ -54,7 +54,9 @@ async function callAdmin(
   return { response, bucket };
 }
 
-async function seedProposalSpeaker(eventId: string): Promise<{ proposalId: string; userId: string }> {
+async function seedProposalSpeaker(
+  eventId: string,
+): Promise<{ proposalId: string; userId: string; proposerToken: string; speakerToken: string }> {
   const userId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
@@ -67,15 +69,75 @@ async function seedProposalSpeaker(eventId: string): Promise<{ proposalId: strin
     proposerUserId: userId,
     proposalType: "talk",
     title: "Scoped headshot",
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
     abstract: "A proposal used to verify scoped administrator headshots.",
   });
-  await addProposalSpeaker(env.DB, { proposalId: proposal.proposal.id, userId, role: "proposer" });
-  return { proposalId: proposal.proposal.id, userId };
+  const speaker = await addProposalSpeaker(env.DB, {
+    proposalId: proposal.proposal.id,
+    userId,
+    role: "proposer",
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
+  });
+  return {
+    proposalId: proposal.proposal.id,
+    userId,
+    proposerToken: proposal.manageToken,
+    speakerToken: speaker.manageToken,
+  };
 }
 
 describe("admin proposal speaker headshots", () => {
   beforeEach(async () => resetDb());
   afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["admin", "proposer", "speaker"] as const)(
+    "serves inherited imported portraits and scoped overrides to the %s",
+    async (actor) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+      const { proposalId, userId, proposerToken, speakerToken } = await seedProposalSpeaker(eventId);
+      const adminToken = await createAdminSession(env.DB, adminId, "admin-imported-headshot");
+      const assets = new FakeUploadsBucket();
+      const uploads = new FakeUploadsBucket();
+      const importedKey = "member-photos/example/speaker.jpg";
+      const scopedKey = `proposal-headshots/${proposalId}/${userId}/override.jpg`;
+      await assets.put(importedKey, validJpegBytes().buffer);
+      await uploads.put(scopedKey, validPngBytes().buffer, { httpMetadata: { contentType: "image/png" } });
+      await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?").bind(importedKey, userId).run();
+      const pathname =
+        actor === "admin"
+          ? `/api/v1/proposals/${proposalId}/speakers/${userId}/headshot`
+          : actor === "proposer"
+            ? `/api/v1/proposals/access/${encodeURIComponent(proposerToken)}/speakers/${userId}/headshot`
+            : `/api/v1/proposals/speakers/access/${encodeURIComponent(speakerToken)}/headshot`;
+      const read = () =>
+        app.fetch(
+          new Request(`https://app.test${pathname}`, {
+            headers: actor === "admin" ? { authorization: `Bearer ${adminToken}` } : {},
+          }),
+          { ...env, ASSETS_BUCKET: assets, SPEAKER_UPLOADS_BUCKET: uploads } as any,
+          { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+        );
+      const inherited = await read();
+      expect(inherited.status).toBe(200);
+      expect(inherited.headers.get("content-type")).toBe("image/jpeg");
+      expect(inherited.headers.get("cache-control")).toContain("no-store");
+      expect(new Uint8Array(await inherited.arrayBuffer())).toEqual(new Uint8Array(validJpegBytes()));
+      await env.DB.prepare(
+        "UPDATE proposal_speakers SET headshot_override_set = 1, headshot_r2_key = ? WHERE proposal_id = ? AND user_id = ?",
+      )
+        .bind(scopedKey, proposalId, userId)
+        .run();
+      const overridden = await read();
+      expect(overridden.status).toBe(200);
+      expect(overridden.headers.get("content-type")).toBe("image/png");
+      expect(new Uint8Array(await overridden.arrayBuffer())).toEqual(new Uint8Array(validPngBytes()));
+      await env.DB.prepare("UPDATE proposal_speakers SET headshot_r2_key = NULL WHERE proposal_id = ? AND user_id = ?")
+        .bind(proposalId, userId)
+        .run();
+      expect((await read()).status).toBe(404);
+    },
+  );
 
   it("uploads only to the proposal speaker override and returns a working cache-busted URL", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

@@ -1,3 +1,4 @@
+import { RefreshNotice } from "./RefreshNotice";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState, type MutableRef } from "preact/hooks";
 import type { z } from "zod";
@@ -233,9 +234,13 @@ export function ApiDataTable<T, Response = unknown>({
 
       {bulkBar}
 
-      {collection.error ? (
-        <ErrorAlert error={collection.error} />
-      ) : (
+      {collection.error &&
+        (collection.data ? (
+          <RefreshNotice error={collection.error} updatedAt={collection.updatedAt} />
+        ) : (
+          <ErrorAlert error={collection.error} />
+        ))}
+      {(!collection.error || collection.data) && (
         <>
           {/* While the page loads the table stays mounted and shows skeleton
               rows under its real headers — the columns keep their widths and
@@ -245,8 +250,8 @@ export function ApiDataTable<T, Response = unknown>({
             caption={caption}
             showCaption={showCaption}
             columns={columns}
-            data={collection.loading ? [] : rows}
-            loading={collection.loading}
+            data={rows}
+            loading={collection.loading && !collection.data}
             empty={empty}
             rowKey={rowKey}
             rowAction={rowAction}

@@ -178,7 +178,7 @@ describe("consultation response form", () => {
     await settle();
 
     const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
     expect(alert?.textContent).not.toContain("HTTP 503");
   });
 });

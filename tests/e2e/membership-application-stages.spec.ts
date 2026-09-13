@@ -48,6 +48,22 @@ test("staff walk an application through every review stage in the portal and app
 
   await signInToPortal(page, e2eAdminEmail("portal-application-stages"));
   await openApplicationDetail(page, email, "pending");
+  const panes = page.locator(".pk-split").first();
+  await expect(panes).toBeVisible();
+  const sizing = await panes.evaluate((element) => {
+    const columns = [...element.children].map((child) => child.getBoundingClientRect());
+    const parent = element.getBoundingClientRect();
+    return {
+      parentWidth: parent.width,
+      widths: columns.map((column) => column.width),
+      right: Math.max(...columns.map((column) => column.right)),
+      parentRight: parent.right,
+    };
+  });
+  expect(sizing.right).toBeCloseTo(sizing.parentRight, 0);
+  expect(sizing.widths[0]).toBeGreaterThanOrEqual(Math.min(350, sizing.parentWidth));
+  expect(sizing.widths[1]).toBeGreaterThanOrEqual(Math.min(635, sizing.parentWidth));
+  await page.screenshot({ path: "/Volumes/ScanDisk/mac-caches/tmp/pkic-application-layout.png" });
   await expect(stageBadge(page, name).filter({ hasText: "Pending" })).toBeVisible();
 
   // The workflow is not a straight line: an application can be parked while
@@ -193,4 +209,21 @@ test("staff email the applicant and record an internal note through the Communic
   await expect(card.getByRole("cell", { name: "Internal note" })).toBeVisible();
   await expect(card.getByText(noteBody, { exact: true })).toBeVisible();
   expect(await capturedEmailCount()).toBe(notesSince);
+  await expect
+    .poll(() => card.locator(".pk-table__scroll").evaluate((element) => element.scrollWidth - element.clientWidth))
+    .toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 1504, height: 1044 });
+  const columns = await page.locator(".pk-split").evaluate((element) =>
+    [...element.children].map((child) => ({
+      x: child.getBoundingClientRect().x,
+      width: child.getBoundingClientRect().width,
+    })),
+  );
+  expect(columns[1].x).toBeGreaterThan(columns[0].x);
+  expect(columns[1].width).toBeGreaterThan(columns[0].width);
+  expect(
+    await card.locator(".pk-table__scroll").evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBeLessThanOrEqual(1);
+  await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
+  await page.screenshot({ path: "/Volumes/ScanDisk/mac-caches/tmp/pkic-application-populated.png" });
 });

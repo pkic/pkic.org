@@ -178,11 +178,27 @@
     align-items: start;
   }
 
-  @media (min-width: 64rem) {
-    .pk-split {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    }
+  .pk-split {
+    grid-template-columns: repeat(auto-fit, minmax(min(30rem, 100%), 1fr));
   }
+
+  /* A compact record summary beside a wider working pane. Both retain a
+     usable measure; they stack based on available container width. */
+  .pk-split--aside {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .pk-split--aside > :first-child {
+    flex: 1 1 22rem;
+    min-width: 0;
+  }
+
+  .pk-split--aside > :last-child {
+    flex: 2 1 40rem;
+    min-width: 0;
+  }
+
 
   /*
    * A record page: the record itself takes the width, a supporting column

@@ -1,3 +1,7 @@
+import { consumeRsvpEmails, enqueueRsvpEmail, usesRsvpEmailQueue } from "./_lib/services/calendar-rsvp-email-queue";
+import { withDependencyHandling } from "./_lib/dependency-bindings";
+import { handleError } from "./_lib/http";
+import { availabilityResponse, getAvailability } from "./_lib/availability";
 import { Hono } from "hono";
 import { fromHono, getReDocUI, getSwaggerUI } from "chanfana";
 import { logError, logInfo } from "./_lib/logging";
@@ -22,6 +26,7 @@ const DOCS_PATH = "/api/v1/docs";
 const REDOC_PATH = "/api/v1/redocs";
 
 const app = new Hono<{ Bindings: Env }>();
+app.onError((error) => handleError(error));
 export const openapi = fromHono(app, {
   openapi_url: null,
   docs_url: null,
@@ -99,12 +104,35 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    return await fetchWithMcp(request, env, ctx);
+    const paused = await availabilityResponse(request, env);
+    if (paused) return paused;
+    try {
+      return await fetchWithMcp(request, withDependencyHandling(env), ctx);
+    } catch (error) {
+      return handleError(error);
+    }
   },
-  email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): void {
-    ctx.waitUntil(processIncomingEmail(message, env));
+  async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
+    await consumeRsvpEmails(batch, withDependencyHandling(env));
+  },
+  async email(message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext): Promise<void> {
+    if (usesRsvpEmailQueue(env)) {
+      await enqueueRsvpEmail(message, withDependencyHandling(env));
+      return;
+    }
+    if (getAvailability(env, Date.now(), "email").mode !== "normal") {
+      if (env.PAUSED_EMAIL_FORWARD_TO) await message.forward(env.PAUSED_EMAIL_FORWARD_TO);
+      else
+        message.setReject(
+          "Online RSVP processing is paused. Your response was not recorded. Please contact the meeting organizer or resend after service resumes.",
+        );
+      return;
+    }
+    // Inbound acceptance must wait for processing; waitUntil could acknowledge mail before D1 succeeds.
+    await processIncomingEmail(message, withDependencyHandling(env));
   },
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
-    ctx.waitUntil(runScheduledJob(controller, env));
+    if (getAvailability(env, Date.now(), "background").mode === "normal")
+      ctx.waitUntil(runScheduledJob(controller, withDependencyHandling(env)));
   },
 };

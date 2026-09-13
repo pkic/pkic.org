@@ -222,6 +222,16 @@ afterEach(() => {
 });
 
 describe("removing your own headshot from your own user record", () => {
+  it("does not request staff-only participation history in the member view", async () => {
+    profile.value = memberProfile(HEADSHOT_URL);
+    stubEndpoints(HEADSHOT_URL, () => json({ success: true }));
+    renderRecord();
+    await settle();
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some((url) => /\/participation\//.test(url))).toBe(false);
+    expect(container.querySelector('[aria-label="Participation"]')).toBeNull();
+  });
+
   it("deletes through the current-user endpoint and drops the photo from the stored profile", async () => {
     const requests = stubEndpoints(HEADSHOT_URL, (method) =>
       method === "DELETE" ? json({ success: true }) : json(memberProfile(null)),

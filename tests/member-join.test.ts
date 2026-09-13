@@ -165,8 +165,9 @@ describe("verified-email-first membership join", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
 
     const replay = await verifyJoin(testEnv, token);
-    expect(replay.status).toBe(409);
-    await expect(replay.json()).resolves.toMatchObject({ error: { code: "MEMBER_JOIN_LINK_USED" } });
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ status: "already_member" });
+    expect(replay.headers.get("set-cookie")).toBeNull();
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
   });
 

@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 /** Neutral user identity authentication contracts used by every human UI. */
 import { z } from "zod";
 import { authMemberSchema } from "./member-auth";
@@ -61,6 +62,7 @@ export const userAuthEstablishedResponseSchema = requireCapacity(
 );
 
 export const userAuthRequestRouteSchema = {
+  ...protectsPublicAction("login_email", "email:manage"),
   ...publicOperation(),
   tags: ["Authentication"],
   summary: "Request a user sign-in link",

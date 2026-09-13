@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
 import { eventIdSchema, normalizedEmailSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
@@ -21,6 +22,7 @@ export const sponsorCapacitySchema = z.object({
 export type SponsorCapacity = z.infer<typeof sponsorCapacitySchema>;
 
 export const sponsorAccessLinkCreateRouteSchema = {
+  ...protectsPublicAction("sponsor_access", "sponsorships:write"),
   tags: ["Sponsors"],
   summary: "Request a sponsor access link",
   description:

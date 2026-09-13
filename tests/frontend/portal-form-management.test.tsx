@@ -338,7 +338,9 @@ describe("portal form management", () => {
     await settle();
 
     const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toBe("The service is temporarily unavailable. Try again in a moment.");
+    expect(alert?.textContent).toBe(
+      "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again.",
+    );
     // The transport phrasing never reaches the reader, and nothing pretends
     // the form loaded.
     expect(container.textContent).not.toContain("HTTP 503");

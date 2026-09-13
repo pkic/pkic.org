@@ -1,3 +1,4 @@
+import { canRetainData } from "../shared/request-failure";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { PageInfo } from "../../shared/schemas/pagination";
@@ -88,13 +89,15 @@ export function useServerCollection<T>({
   params = {},
   responseSchema,
   load,
-}: ServerCollectionOptions<T>): ServerCollectionState<T> & { reload: () => Promise<void> } {
+}: ServerCollectionOptions<T>): ServerCollectionState<T> & { reload: () => Promise<void>; updatedAt: string | null } {
   const requestGate = useRef<ReturnType<typeof createLatestRequestGate> | null>(null);
   requestGate.current ??= createLatestRequestGate();
   const reloadWaiters = useRef<Array<() => void>>([]);
   const [reloadSequence, setReloadSequence] = useState(0);
   const [state, setState] = useState<ServerCollectionState<T>>({ data: null, loading: true, error: null });
   const url = buildServerCollectionUrl(endpoint, params);
+  const dataUrl = useRef(url);
+  const updatedAt = useRef<string | null>(null);
 
   const reload = useCallback(
     () =>
@@ -111,18 +114,26 @@ export function useServerCollection<T>({
 
   useEffect(() => {
     const request = requestGate.current!.start();
-    setState((current) => ({ ...current, loading: true, error: null }));
+    const sameResource = dataUrl.current === url;
+    if (!sameResource) updatedAt.current = null;
+    dataUrl.current = url;
+    setState((current) => ({ data: sameResource ? current.data : null, loading: true, error: null }));
 
     void load(url, request.signal, responseSchema)
       .then((data) => {
         if (request.isCurrent()) {
+          updatedAt.current = new Date().toISOString();
           setState({ data, loading: false, error: null });
           settleReloads();
         }
       })
       .catch((cause: unknown) => {
         if (!request.isCurrent()) return;
-        setState({ data: null, loading: false, error: cause instanceof Error ? cause : new Error("Request failed") });
+        setState((current) => ({
+          data: canRetainData(cause) ? current.data : null,
+          loading: false,
+          error: cause instanceof Error ? cause : new Error("Request failed"),
+        }));
         settleReloads();
       });
 
@@ -138,7 +149,11 @@ export function useServerCollection<T>({
     [],
   );
 
-  return { ...state, reload };
+  return {
+    ...(dataUrl.current === url ? state : { data: null, loading: true, error: null }),
+    reload,
+    updatedAt: dataUrl.current === url && state.data !== null ? updatedAt.current : null,
+  };
 }
 
 export interface AppendablePageResponse {
@@ -226,7 +241,7 @@ export function useAppendableServerCollection<T extends AppendablePageResponse>(
           .catch((cause: unknown) => {
             if (!request.isCurrent()) return;
             setState((current) => ({
-              data: append ? current.data : null,
+              data: canRetainData(cause) ? current.data : null,
               loading: false,
               loadingMore: false,
               error: cause instanceof Error ? cause : new Error("Request failed"),

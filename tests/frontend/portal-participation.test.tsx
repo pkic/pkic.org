@@ -212,7 +212,9 @@ describe("portal participation record", () => {
 
     const proposals = panelNamed(container, "Event proposals");
     const alert = proposals.querySelector('[role="alert"]');
-    expect(alert?.textContent).toBe("The service is temporarily unavailable. Try again in a moment.");
+    expect(alert?.textContent).toBe(
+      "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again.",
+    );
     // The raw transport phrasing never reaches the reader.
     expect(proposals.textContent).not.toContain("HTTP 503");
     // One failed panel does not take the rest of the record down with it.

@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
 import { normalizedEmailSchema } from "./api-common";
 import { authMemberSchema } from "./member-auth";
@@ -31,9 +32,11 @@ export const memberJoinVerifyResponseSchema = z.discriminatedUnion("status", [
     member: authMemberSchema,
   }),
   z.object({ status: z.literal("support_required") }),
+  z.object({ status: z.literal("already_member") }),
 ]);
 
 export const memberJoinStartRouteSchema = {
+  ...protectsPublicAction("membership_join", "membership:write"),
   ...publicOperation(),
   tags: ["Members"],
   summary: "Start a verified membership join flow",

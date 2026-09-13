@@ -1,3 +1,4 @@
+import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
 import { SUPPORTED_CURRENCY_CODES } from "../constants/currencies";
 import { stripeCheckoutSessionIdSchema } from "./stripe";
@@ -46,6 +47,7 @@ export const donationCheckoutEmbeddedResponseSchema = z.object({
 });
 
 export const donationCheckoutPostRouteSchema = {
+  ...protectsPublicAction("donation_checkout", "donations:sync"),
   tags: ["Donations"],
   summary: "Create a donation checkout session",
   request: {

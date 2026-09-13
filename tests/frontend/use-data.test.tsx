@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { useData } from "../../assets/ts/hooks/useData";
 
 interface Deferred<T> {
@@ -104,5 +105,45 @@ describe("useData request ordering", () => {
     expect(latest.data).toBe("latest");
     expect(latest.error).toBeNull();
     expect(latest.loading).toBe(false);
+  });
+  it("retains same-resource data during a temporary failure but clears it on access refusal or resource change", async () => {
+    const requests: Deferred<string>[] = [];
+    const fetcher = () => {
+      const request = deferred<string>();
+      requests.push(request);
+      return request.promise;
+    };
+    let latest!: State;
+    const container = document.createElement("div");
+    mounted.push(container);
+    const show = (resourceId: string) =>
+      act(() => render(h(Harness, { resourceId, fetcher, onState: (state) => (latest = state) }), container));
+    await show("first");
+    requests[0].resolve("Authorized cached view");
+    await act(flush);
+    let reloading = latest.reload();
+    await act(flush);
+    expect(latest.data).toBe("Authorized cached view");
+    expect(latest.loading).toBe(false);
+    expect(latest.refreshing).toBe(true);
+    requests[1].reject(
+      new ApiClientError({ error: { code: "DEPENDENCY_UNAVAILABLE", message: "Temporarily unavailable" } }, 503),
+    );
+    await act(async () => {
+      await reloading;
+    });
+    expect(latest.data).toBe("Authorized cached view");
+    expect(latest.error).toBe("Temporarily unavailable");
+    reloading = latest.reload();
+    requests[2].reject(new ApiClientError({ error: { code: "FORBIDDEN", message: "Access removed" } }, 403));
+    await act(async () => {
+      await reloading;
+    });
+    expect(latest.data).toBeNull();
+    await show("second");
+    expect(latest.data).toBeNull();
+    requests[3].resolve("Second resource");
+    await act(flush);
+    expect(latest.data).toBe("Second resource");
   });
 });

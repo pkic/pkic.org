@@ -39,6 +39,11 @@ test("a member explicitly edits every notification preference and it persists ac
     await page.getByRole("menuitem", { name: "Edit settings" }).click();
   }
   await expect(panel.locator("input")).toHaveCount(0);
+  for (const badge of await panel.locator(".pk-badge").all()) {
+    expect(await badge.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    expect((await badge.boundingBox())?.width).toBeGreaterThan(35);
+  }
+  await page.screenshot({ path: "/Volumes/ScanDisk/mac-caches/tmp/pkic-notification-settings.png" });
   await editPreferences();
   await panel.getByRole("checkbox", { name: preferences[0], exact: true }).uncheck();
   await panel.getByRole("button", { name: "Cancel", exact: true }).click();

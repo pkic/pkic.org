@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { useData } from "../../../../../hooks/useData";
+import { useState, useRef } from "preact/hooks";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { getJson, patchJson } from "../../../../../shared/api-client";
@@ -35,38 +36,22 @@ export function SponsorshipDetail({
   canWrite: boolean;
   onChanged?: () => void;
 }) {
-  const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [nextStage, setNextStage] = useState<SponsorshipPipelineStage>("contacted");
   const [stageNote, setStageNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [advancing, setAdvancing] = useState(false);
-  const detailRequestIdRef = useRef(0);
   const historyRef = useRef<ApiTableActions | null>(null);
 
-  const load = useCallback(async () => {
-    const requestId = ++detailRequestIdRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const detailData = await getJson(`/api/v1/sponsors/${encodeURIComponent(id)}`, sponsorshipResponseSchema);
-      if (requestId !== detailRequestIdRef.current) return;
-      setSponsorship(detailData.sponsorship);
-    } catch (e) {
-      if (requestId === detailRequestIdRef.current) setError((e as Error).message);
-    } finally {
-      if (requestId === detailRequestIdRef.current) setLoading(false);
-    }
+  const {
+    data: sponsorship,
+    loading,
+    error,
+    reload: load,
+  } = useData(async () => {
+    const response = await getJson(`/api/v1/sponsors/${encodeURIComponent(id)}`, sponsorshipResponseSchema);
+    return response.sponsorship;
   }, [id]);
-
-  useEffect(() => {
-    void load();
-    return () => {
-      detailRequestIdRef.current += 1;
-    };
-  }, [load]);
 
   async function moveStage() {
     setBusy(true);
@@ -91,7 +76,7 @@ export function SponsorshipDetail({
   }
 
   if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error && !sponsorship) return <ErrorAlert error={error} />;
   if (!sponsorship) return null;
 
   const title = sponsorTitle(sponsorship);
@@ -128,6 +113,7 @@ export function SponsorshipDetail({
     // form here is closed until asked for: a reader who opened a sponsorship
     // to look at it is not handed three forms to fill in.
     <section class="pk pk-stack" aria-label={title}>
+      {error && <ErrorAlert error={error} />}
       <PageHeader
         trail={[{ label: "Sponsors", href: usePortalHashLocation.hrefs("/sponsors") }, { label: title }]}
         title={title}

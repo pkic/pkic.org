@@ -16,23 +16,7 @@ export const linkUrlSchema = httpUrlSchema;
 /** Canonical maximum number of flexible profile links persisted per record. */
 export const MAX_LINKS = 15;
 
-/**
- * The sites this system can name, and the two-character mark each is drawn
- * with. One table, because the label and the mark answer the same question —
- * "which site is this?" — and keeping them apart is how a host ends up
- * labelled "YouTube" beside a generic outbound arrow (issue #13: no platform
- * is special, so every recognized one has to be recognized everywhere).
- *
- * Keyed on the registrable host with `www.` stripped, so `www.linkedin.com`
- * and `linkedin.com` are the same site. A host that is not here keeps its
- * hostname as its label and the outbound arrow as its mark — the honest
- * answer for somewhere the system knows nothing about, and the reason this
- * table is reference data rather than an exhaustive enumeration.
- *
- * The mark is text rather than a glyph on purpose: an icon set would be
- * another asset pipeline and a licensing question for marks that are two
- * characters wide anyway.
- */
+/** Canonical site labels and stable mark identifiers; social icon artwork is shared with Hugo. */
 export interface LinkHost {
   label: string;
   mark: string;

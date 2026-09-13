@@ -1,3 +1,4 @@
+import { serviceAvailability, publishAvailability } from "../../assets/ts/shared/availability-state";
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -19,6 +20,7 @@ import { eventInviteBulkResponseSchema } from "../../assets/shared/schemas/event
 describe("shared API client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    serviceAvailability.value = null;
     setUnauthorizedHandler(null);
     setErrorPayloadInterceptor(null);
   });
@@ -303,5 +305,24 @@ describe("shared API client", () => {
         }),
       ).rejects.toMatchObject({ message: "Upload failed" });
     });
+  });
+  it("reports a connection failure without retrying a potentially completed write", async () => {
+    const fetcher = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(postJson("/api/v1/test", {}, successResponseSchema)).rejects.toMatchObject({
+      status: 0,
+      code: "NETWORK_UNAVAILABLE",
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it("continues loading static JSON while online API operations are paused", async () => {
+    publishAvailability({ mode: "maintenance", message: "Paused", endsAt: null });
+    const fetcher = vi.fn(async () => Response.json({ success: true }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(requestJson("/reference-data.json", successResponseSchema)).resolves.toEqual({ success: true });
+    await expect(requestJson("/api/v1/users", successResponseSchema)).rejects.toMatchObject({ status: 503 });
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });

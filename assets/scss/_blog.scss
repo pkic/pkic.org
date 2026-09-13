@@ -714,6 +714,7 @@
 // Logo images — tier-specific max-dimensions so Diamond trumps Bronze
 .blog-sidebar-sponsor-logo {
   display: block;
+  height: clamp(18px, calc(8px * var(--sponsor-weight, 1)), 44px);
   width: auto;
   object-fit: contain;
   filter: grayscale(0.15);

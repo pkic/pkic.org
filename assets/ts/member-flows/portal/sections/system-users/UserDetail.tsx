@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { RefreshNotice } from "../../../../components/RefreshNotice";
+import { useData } from "../../../../hooks/useData";
+import { useEffect, useState } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { getJson } from "../../../../shared/api-client";
@@ -18,7 +20,6 @@ import { UserProfileEditor } from "./UserProfileEditor";
 import { CURRENT_USER_API, SelfProfilePanel } from "./SelfProfilePanel";
 import { profile as profileSignal, saveProfile } from "../../state";
 import { myProfileSchema } from "../../../../../shared/schemas/me";
-import type { UserDetail as UserDetailModel } from "./model";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { usePortalHashLocation } from "../../hash-location";
 import { Alert } from "../../../../ui/Alert";
@@ -84,9 +85,6 @@ export function UserDetail({
   /** Who is reading, so the record knows when its subject is them. */
   viewerUserId?: string;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<UserDetailModel | null>(null);
   // Participation is its own resource: it is the expensive half of the record
   // and answers a different question from the detail, so it loads separately
   // and the rest of the page does not wait on it.
@@ -104,25 +102,18 @@ export function UserDetail({
    */
   const isSelf = viewerUserId !== undefined && viewerUserId === userId;
   const canRead = permissions.canRead || isSelf;
-  const selfProfile = isSelf ? profileSignal.value : null;
-
-  const load = useCallback(async () => {
-    if (!canRead) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getJson(`/api/v1/users/${encodeURIComponent(userId)}`, userDetailResponseSchema);
-      setUser(data.user);
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setLoading(false);
-    }
+  const {
+    data: user,
+    loading,
+    error,
+    updatedAt,
+    reload: load,
+  } = useData(async () => {
+    if (!canRead) return null;
+    const response = await getJson(`/api/v1/users/${encodeURIComponent(userId)}`, userDetailResponseSchema);
+    return response.user;
   }, [canRead, userId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const selfProfile = isSelf ? profileSignal.value : null;
 
   useEffect(() => {
     if (!canRead) return;
@@ -157,7 +148,7 @@ export function UserDetail({
     return <ErrorAlert error="You need Users read permission to open a user record." />;
   }
   if (loading) return <Spinner label="Loading user…" />;
-  if (error) return <ErrorAlert error={error} />;
+  if (error && !user) return <ErrorAlert error={error} />;
   if (!user) return null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
@@ -270,6 +261,7 @@ export function UserDetail({
 
   return (
     <div class="pk pk-stack">
+      {error && <RefreshNotice error={error} updatedAt={updatedAt} />}
       {/*
         A record about a person opens with the person, not with a page title.
         `PageHeader` names a place in the portal; `ProfileHeader` names the
@@ -441,7 +433,7 @@ export function UserDetail({
             summarizedIdentityId={identity?.identityId}
           />
 
-          <UserParticipationHistory userId={user.id} canRead={canRead} />
+          {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
 
           {/*
             Who edits this record, and as what. Its subject edits it as

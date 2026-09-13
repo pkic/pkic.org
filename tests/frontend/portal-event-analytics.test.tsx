@@ -268,7 +268,9 @@ describe("System Analytics Registrations on the design system", () => {
     await settle();
 
     const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toBe("The service is temporarily unavailable. Try again in a moment.");
+    expect(alert?.textContent).toBe(
+      "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again.",
+    );
     expect(container.querySelector("table")).toBeNull();
   });
 

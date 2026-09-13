@@ -78,6 +78,37 @@ function getAs(token: string, path: string): Promise<Response> {
 beforeEach(resetDb);
 
 describe("GET /api/v1/users/current/registrations", () => {
+  it("keeps legacy timestamps from breaking the participation list", async () => {
+    const email = "legacy-participation@example.test";
+    const { userId } = await insertIndividualMember(env.DB, "H6", email);
+    const token = await createMemberSession(env.DB, userId, "legacy-participation-token");
+    const eventId = await insertEvent({ startsAt: "2027-06-01 08:00:00", endsAt: "2027-06-01 18:00:00" });
+    const id = await insertRegistration(eventId, userId);
+    await env.DB.prepare("UPDATE registrations SET created_at = '2026-09-01 12:34:56' WHERE id = ?").bind(id).run();
+    const earlierEvent = await insertEvent({
+      startsAt: "2027-06-01T07:00:00.000Z",
+      endsAt: "2027-06-01T18:00:00.000Z",
+    });
+    const earlier = await insertRegistration(earlierEvent, userId);
+    const response = await getAs(token, "/api/v1/users/current/registrations");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = currentUserRegistrationsListResponseSchema.parse(await response.json());
+    expect(body.registrations.map((registration) => registration.id)).toEqual([earlier, id]);
+    expect(body.registrations[1]).toMatchObject({
+      id,
+      createdAt: "2026-09-01T12:34:56.000Z",
+      event: { startsAt: "2027-06-01T08:00:00.000Z", endsAt: "2027-06-01T18:00:00.000Z" },
+    });
+    const filteredResponse = await getAs(
+      token,
+      "/api/v1/users/current/registrations?from=2027-06-01T07%3A30%3A00.000Z&to=2027-06-01T08%3A00%3A00.000Z",
+    );
+    expect(filteredResponse.status).toBe(200);
+    const filtered = currentUserRegistrationsListResponseSchema.parse(await filteredResponse.json());
+    expect(filtered.registrations.map((registration) => registration.id)).toEqual([id]);
+    expect(filtered.page.total).toBe(1);
+  });
+
   it("rejects an unauthenticated caller", async () => {
     expect((await callApi(env, "/api/v1/users/current/registrations")).status).toBe(401);
   });

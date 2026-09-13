@@ -1,3 +1,5 @@
+import { utcInstantSchema } from "../../../assets/shared/schemas/api-common";
+
 export function nowIso(): string {
   return new Date().toISOString();
 }
@@ -27,4 +29,13 @@ export function isPast(iso: string): boolean {
  */
 export function calendarDateOf(value: string): string {
   return value.slice(0, 10);
+}
+
+/** Serialize legacy SQLite UTC instants at the read boundary, without loosening the API contract. */
+export function persistedUtcInstant(value: string): string;
+export function persistedUtcInstant(value: string | null): string | null;
+export function persistedUtcInstant(value: string | null): string | null {
+  if (value === null) return null;
+  const sqlite = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z?$/.exec(value);
+  return utcInstantSchema.parse(sqlite ? `${sqlite[1]}T${sqlite[2]}.${(sqlite[3] ?? "").padEnd(3, "0")}Z` : value);
 }

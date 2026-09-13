@@ -208,16 +208,32 @@ $sponsors-tier-heights: (
   }
 }
 
-.sponsors-list {
-  a {
+.sponsors-list,
+.sponsors-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--pk-5) var(--pk-6);
+  min-width: 0;
+
+  .sponsor-link {
+    display: flex;
+    justify-content: center;
+    max-width: 100%;
+    min-width: 0;
     text-decoration: none;
   }
 
   .sponsor-logo {
-    margin: 20px;
-    margin-right: 30px;
-    margin-left: 30px;
+    display: block;
+    max-width: unquote("min(100%, var(--sponsor-logo-max-width, 100%))");
+    object-fit: contain;
   }
+}
+
+.sponsors-list > div {
+  width: 100%;
 }
 
 @for $weight from 0 through 8 {
@@ -235,7 +251,8 @@ $sponsors-tier-heights: (
 }
 
 .sponsor-grid-max-width-60 {
-  max-width: calc(60px * var(--sponsor-weight, 1));
+  --sponsor-logo-max-width: calc(60px * var(--sponsor-weight, 1));
+  max-width: unquote("min(100%, var(--sponsor-logo-max-width))");
 }
 
 // The strip's own label, when a caller supplies none of its own. Its width,

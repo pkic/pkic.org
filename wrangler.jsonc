@@ -94,6 +94,15 @@
         },
       ],
       "vars": {
+        // Set true only after provisioning TURNSTILE_SITE_KEY, TURNSTILE_HOSTNAMES
+        // (exact frontend hostnames), and the TURNSTILE_SECRET Worker secret.
+        // Keep preview and production configuration separate. False disables the gate.
+        "TURNSTILE_ENABLED": "false",
+        // Emergency mode never expires. Planned windows require both UTC instants.
+        "SERVICE_MODE": "normal",
+        "RSVP_EMAIL_QUEUE_ENABLED": "false",
+        // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
+        "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "APP_BASE_URL": "https://pkic.org",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
@@ -213,6 +222,15 @@
         },
       ],
       "vars": {
+        // Set true only after provisioning TURNSTILE_SITE_KEY, TURNSTILE_HOSTNAMES
+        // (exact frontend hostnames), and the TURNSTILE_SECRET Worker secret.
+        // Keep preview and production configuration separate. False disables the gate.
+        "TURNSTILE_ENABLED": "false",
+        // Emergency mode never expires. Planned windows require both UTC instants.
+        "SERVICE_MODE": "normal",
+        "RSVP_EMAIL_QUEUE_ENABLED": "false",
+        // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
+        "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
@@ -301,7 +319,20 @@
           "migrations_dir": "migrations",
         },
       ],
+      "queues": {
+        "producers": [{ "binding": "RSVP_EMAIL_QUEUE", "queue": "pkic-rsvp-email-local" }],
+        "consumers": [
+          {
+            "queue": "pkic-rsvp-email-local",
+            "max_batch_size": 5,
+            "max_retries": 100,
+            "retry_delay": 3600,
+            "dead_letter_queue": "pkic-rsvp-email-dead-local",
+          },
+        ],
+      },
       "r2_buckets": [
+        { "binding": "RSVP_EMAIL_BUCKET", "bucket_name": "pkic-rsvp-email-local" },
         {
           "binding": "ASSETS_BUCKET",
           "bucket_name": "pkic-assets",
@@ -336,6 +367,15 @@
         },
       ],
       "vars": {
+        // Set true only after provisioning TURNSTILE_SITE_KEY, TURNSTILE_HOSTNAMES
+        // (exact frontend hostnames), and the TURNSTILE_SECRET Worker secret.
+        // Keep preview and production configuration separate. False disables the gate.
+        "TURNSTILE_ENABLED": "false",
+        // Emergency mode never expires. Planned windows require both UTC instants.
+        "SERVICE_MODE": "normal",
+        "RSVP_EMAIL_QUEUE_ENABLED": "false",
+        // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
+        "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",

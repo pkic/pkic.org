@@ -37,6 +37,7 @@ export interface DescriptionListProps {
    * decision inside the component instead of beside it.
    */
   density?: "default" | "compact";
+  layout?: "default" | "status";
 }
 
 /**
@@ -48,8 +49,14 @@ function isAbsent(value: ComponentChildren): boolean {
   return value === undefined || value === null || value === "" || value === false;
 }
 
-export function DescriptionList({ items, density = "default" }: DescriptionListProps) {
-  const classes = ["pk-datalist", density === "compact" ? "pk-datalist--compact" : null].filter(Boolean).join(" ");
+export function DescriptionList({ items, density = "default", layout = "default" }: DescriptionListProps) {
+  const classes = [
+    "pk-datalist",
+    density === "compact" ? "pk-datalist--compact" : null,
+    layout === "status" ? "pk-datalist--status" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <dl class={classes}>

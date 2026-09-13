@@ -1,3 +1,4 @@
+import { requireProfileImageBucket } from "../../../../../../../_lib/services/profile-image-storage";
 import { OpenAPIRoute } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
@@ -37,7 +38,10 @@ async function onGet(c: AdminContext, params: HeadshotParams): Promise<Response>
   if (!speaker.headshot_r2_key) {
     return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
   }
-  return privateUserHeadshotResponse(requireUserHeadshotBucket(c.env), speaker.headshot_r2_key);
+  return privateUserHeadshotResponse(
+    requireProfileImageBucket(c.env, speaker.headshot_r2_key),
+    speaker.headshot_r2_key,
+  );
 }
 
 async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response> {

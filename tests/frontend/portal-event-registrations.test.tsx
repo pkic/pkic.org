@@ -299,7 +299,7 @@ describe("event registrations list", () => {
 
     const alert = page.querySelector("[role='alert']");
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
   });
 
   it("names the tab set, so it is not one of several anonymous 'Sections' strips", async () => {

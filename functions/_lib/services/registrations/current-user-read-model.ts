@@ -21,6 +21,7 @@ import {
 import type { OffsetPageQuery } from "../../db/pagination";
 import { queryPage } from "../../db/pagination";
 import type { DatabaseLike } from "../../types";
+import { persistedUtcInstant } from "../../utils/time";
 
 interface CurrentUserRegistrationRow {
   id: string;
@@ -43,14 +44,14 @@ function toCurrentUserRegistration(row: CurrentUserRegistrationRow): CurrentUser
       id: row.event_id,
       slug: row.event_slug,
       name: row.event_name,
-      startsAt: row.event_starts_at,
-      endsAt: row.event_ends_at,
+      startsAt: persistedUtcInstant(row.event_starts_at),
+      endsAt: persistedUtcInstant(row.event_ends_at),
       timezone: row.event_timezone,
     },
     status: row.status,
     attendanceType: row.attendance_type,
     waitlisted: Boolean(row.waitlisted),
-    createdAt: row.created_at,
+    createdAt: persistedUtcInstant(row.created_at),
   });
 }
 
@@ -62,11 +63,11 @@ export function buildCurrentUserRegistrationsPageQuery(
   const conditions = ["r.user_id = ?"];
   const bindings: unknown[] = [userId];
   if (query.from) {
-    conditions.push("e.starts_at >= ?");
+    conditions.push("strftime('%Y-%m-%dT%H:%M:%fZ', e.starts_at) >= ?");
     bindings.push(query.from);
   }
   if (query.to) {
-    conditions.push("e.starts_at <= ?");
+    conditions.push("strftime('%Y-%m-%dT%H:%M:%fZ', e.starts_at) <= ?");
     bindings.push(query.to);
   }
   return {
@@ -85,7 +86,7 @@ export function buildCurrentUserRegistrationsPageQuery(
     // events.starts_at is nullable; SQLite sorts NULLs first in ASC order,
     // which surfaces dateless events ahead of scheduled ones. Acceptable —
     // every event a registration can exist for has been at least drafted.
-    orderBy: "ORDER BY e.starts_at ASC, r.id ASC",
+    orderBy: "ORDER BY strftime('%Y-%m-%dT%H:%M:%fZ', e.starts_at) ASC, r.id ASC",
     limit: query.limit,
     offset: query.offset,
   };

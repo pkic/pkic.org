@@ -33,6 +33,7 @@ import {
 import type { OffsetPageQuery } from "../db/pagination";
 import { queryPage } from "../db/pagination";
 import type { DatabaseLike } from "../types";
+import { persistedUtcInstant } from "../utils/time";
 
 interface CurrentUserProposalRow {
   id: string;
@@ -52,7 +53,7 @@ function toCurrentUserProposal(row: CurrentUserProposalRow): CurrentUserProposal
     title: row.title,
     status: row.status,
     role: row.role,
-    updatedAt: row.updated_at,
+    updatedAt: persistedUtcInstant(row.updated_at),
   });
 }
 
@@ -73,7 +74,7 @@ export function buildCurrentUserProposalsPageQuery(
                    WHERE ps.proposal_id = sp.id AND ps.user_id = ?
                 )`,
     bindings: [userId, userId, userId],
-    orderBy: "ORDER BY sp.updated_at DESC, sp.id ASC",
+    orderBy: "ORDER BY strftime('%Y-%m-%dT%H:%M:%fZ', sp.updated_at) DESC, sp.id ASC",
     limit: query.limit,
     offset: query.offset,
   };

@@ -1,3 +1,4 @@
+import type { QueuedRsvpEmail } from "../../assets/shared/schemas/calendar-rsvp-email-queue";
 import type { RateLimitBinding } from "./rate-limit";
 
 export interface D1StatementResult<T = Record<string, unknown>> {
@@ -50,6 +51,23 @@ export type R2BucketLike = R2Bucket;
 
 export interface Env {
   DB: DatabaseLike;
+  SERVICE_MODE?: "normal" | "maintenance" | "emergency" | string;
+  /** Versioned deployment snapshot: evaluated without D1 or a provider status feed. */
+  MAINTENANCE_SCHEDULE?: string;
+  MAINTENANCE_STARTS_AT?: string;
+  MAINTENANCE_ENDS_AT?: string;
+  /** Existing Cloudflare-verified mailbox for preserving mail while automation is paused. */
+  PAUSED_EMAIL_FORWARD_TO?: string;
+  RSVP_EMAIL_QUEUE_ENABLED?: string;
+  RSVP_EMAIL_QUEUE?: Queue<QueuedRsvpEmail>;
+  /** Dedicated private bucket; MIME payloads must never share a public assets namespace. */
+  RSVP_EMAIL_BUCKET?: R2Bucket;
+  /** Explicit deployment switch. Missing/false keeps Turnstile disabled. */
+  TURNSTILE_ENABLED?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET?: string;
+  /** Exact frontend hostnames; never include local hosts in production. */
+  TURNSTILE_HOSTNAMES?: string;
   /** Static assets binding served from the `public` directory in Workers mode. */
   ASSETS?: StaticAssetsBinding;
   /** Static assets binding used by local `wrangler dev` preview environments. */

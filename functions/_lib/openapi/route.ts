@@ -1,3 +1,6 @@
+import { enforcePublicAction } from "../abuse-protection";
+import type { PublicActionPolicy } from "../../../assets/shared/schemas/abuse-protection";
+import type { AdminContext } from "../db/context";
 import {
   ApiException,
   coerceInputs,
@@ -157,6 +160,10 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
         }
         throw error;
       }
+      const policy = (schema as OpenAPIRouteSchema & { "x-pkic-abuse-protection"?: PublicActionPolicy })[
+        "x-pkic-abuse-protection"
+      ];
+      if (policy) await enforcePublicAction(context as AdminContext, policy);
       return handle(context, data);
     }
   };

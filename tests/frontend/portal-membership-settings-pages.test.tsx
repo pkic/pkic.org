@@ -308,7 +308,9 @@ describe("membership application form page", () => {
 
     const region = page.querySelector<HTMLElement>('section[aria-label="Membership application form"]');
     expect(region).not.toBeNull();
-    expect(region!.querySelector('[role="alert"]')?.textContent).toContain("The service is temporarily unavailable.");
+    expect(region!.querySelector('[role="alert"]')?.textContent).toContain(
+      "Online services are temporarily unavailable.",
+    );
     expect(page.querySelector("h2")?.textContent).toBe("Membership application form");
   });
 });

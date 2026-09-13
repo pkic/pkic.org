@@ -2138,6 +2138,18 @@ No further speaker action is required.',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
+    lower(hex(randomblob(16))), 'membership_join_existing_member', 1,
+    'You already have PKI Consortium member access',
+    'You already have PKI Consortium member access with this email address. You do not need to submit another membership application.
+
+[Sign in to the member portal]({{loginUrl}})
+
+Enter the same email address on the sign-in page and we will send you a secure sign-in link. If you have set up a passkey, you can use that instead.
+
+If you did not request to join, you can safely ignore this email. Your membership has not changed.',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+  ),
+  (
     lower(hex(randomblob(16))), 'membership_join_verify', 1,
     'Verify your email address to join the PKI Consortium',
     'Use the secure, short-lived link below to verify your email address and continue joining the PKI Consortium.

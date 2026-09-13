@@ -12,6 +12,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 
 import { userParticipationSchema } from "../assets/shared/schemas/user-participation";
+import { callApi } from "./helpers/app";
+import { createAdminSession } from "./helpers/auth";
 import { getUserParticipation } from "../functions/_lib/services/user-participation";
 import { resetDb } from "./helpers/reset-db";
 import {
@@ -101,6 +103,23 @@ async function joinGroup(
 
 describe("user participation read model", () => {
   beforeEach(resetDb);
+
+  it("serves participation for an imported SQLite-timestamp membership", async () => {
+    const member = await insertOrgRepresentative(env.DB, { email: "imported-participation@example.test" });
+    const groupId = await insertGroup("Imported membership", "imported-membership");
+    await joinGroup(groupId, member, "2026-09-01 12:34:56");
+    const seriesId = await insertSeriesForGroup(groupId, "imported-times");
+    await insertOccurrence(seriesId, "2026-09-01T10:00:00.000Z");
+    await insertOccurrence(seriesId, "2026-09-01T14:00:00.000Z");
+    const token = await createAdminSession(env.DB, member.userId, "imported-participation-admin");
+    const response = await callApi(env, `/api/v1/users/${member.userId}/participation`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({
+      participation: { groups: [{ joinedAt: "2026-09-01T12:34:56.000Z", held: 1 }] },
+    });
+  });
 
   it("uses leadership titles on the user's record and counts a group once across capacities", async () => {
     const member = await insertOrgRepresentative(env.DB, { email: "leadership-reader@example.test" });

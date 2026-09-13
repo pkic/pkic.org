@@ -107,3 +107,28 @@ describe("ApiDataTable createAction", () => {
     expect(button?.disabled).toBe(true);
   });
 });
+
+it("keeps loaded rows visible after a transient refresh failure and clears them after access refusal", async () => {
+  stubList();
+  const container = mount(table());
+  await settle();
+  expect(container.textContent).toContain("Row one");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 503 })),
+  );
+  const refresh = Array.from(container.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === "Refresh",
+  )!;
+  await act(() => refresh.click());
+  await settle();
+  expect(container.textContent).toContain("Row one");
+  expect(container.textContent).toContain("temporarily unavailable");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 403 })),
+  );
+  await act(() => refresh.click());
+  await settle();
+  expect(container.textContent).not.toContain("Row one");
+});

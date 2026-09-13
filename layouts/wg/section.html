@@ -186,7 +186,7 @@
 {{ if or .Params.intro .Content }}
 <section class="pk-section" id="wg-about">
   <div class="pk-container pk-stack">
-    <div class="pk-grid">
+    <div class="wg-intro-layout">
       <div>
         {{ with .Params.intro }}
           <p>{{ . | markdownify }}</p>

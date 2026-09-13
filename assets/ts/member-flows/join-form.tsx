@@ -318,6 +318,7 @@ async function main(): Promise<void> {
   const applicationForm = root.querySelector<HTMLFormElement>("[data-join-application-form]");
   const pendingSection = root.querySelector<HTMLElement>("[data-join-verification-pending]");
   const accessSection = root.querySelector<HTMLElement>("[data-join-organization-access]");
+  const existingMemberSection = root.querySelector<HTMLElement>("[data-join-already-member]");
   const supportSection = root.querySelector<HTMLElement>("[data-join-support-required]");
   const pendingEmail = root.querySelector<HTMLElement>("[data-join-pending-email]");
   const verifiedEmail = root.querySelector<HTMLElement>("[data-verified-application-email]");
@@ -332,7 +333,8 @@ async function main(): Promise<void> {
     !applicationForm ||
     !pendingSection ||
     !accessSection ||
-    !supportSection
+    !supportSection ||
+    !existingMemberSection
   )
     return;
 
@@ -360,7 +362,14 @@ async function main(): Promise<void> {
   };
 
   const showSection = (section: HTMLElement) => {
-    for (const candidate of [startSection, pendingSection, accessSection, supportSection, applicationForm]) {
+    for (const candidate of [
+      startSection,
+      pendingSection,
+      accessSection,
+      existingMemberSection,
+      supportSection,
+      applicationForm,
+    ]) {
       candidate.hidden = candidate !== section;
     }
     section.focus();
@@ -503,6 +512,8 @@ async function main(): Promise<void> {
       if (result.status === "application_ready") {
         applicationContext = result;
         await loadApplication(result);
+      } else if (result.status === "already_member") {
+        showSection(existingMemberSection);
       } else if (result.status === "organization_access_ready") {
         showSection(accessSection);
       } else {

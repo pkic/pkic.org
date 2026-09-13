@@ -273,7 +273,7 @@ describe("portal sponsor management", () => {
 
     const alert = container.querySelector("[role='alert']");
     expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("The service is temporarily unavailable.");
+    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
     // Nothing pretends to be a table the reader could act on.
     expect(container.querySelector("table")).toBeNull();
   });
