@@ -1,0 +1,23 @@
+{{- /* Display name for an agenda location.
+
+    Uses the location's own `name` from the event data when present, so an event
+    can call a room what the attendees call it ("Red hall" rather than
+    "Plenary"). Falls back to the key, underscores replaced and first letter
+    capitalised, which is what every event relied on before `name` existed.
+
+    Call with a dict: {"locations": $data.locations, "key": $location}
+*/ -}}
+{{- $key := .key -}}
+{{- $name := "" -}}
+{{- with .locations -}}
+    {{- with index . $key -}}
+        {{- with .name -}}
+            {{- $name = . -}}
+        {{- end -}}
+    {{- end -}}
+{{- end -}}
+{{- if $name -}}
+    {{- $name -}}
+{{- else -}}
+    {{- strings.FirstUpper (replace $key "_" " ") -}}
+{{- end -}}

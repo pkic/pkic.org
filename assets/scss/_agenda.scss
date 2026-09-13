@@ -272,6 +272,12 @@
 
 .session-card {
   background-color: #fff;
+  // Fills its grid area (grid-row: N / span rowSpan), so the card's outer
+  // box height correctly represents the session's real duration — a 60-min
+  // panel reads taller than a 15-min lightning talk next to it. See
+  // .session-content below for how the text itself avoids stretching to
+  // match, which is what actually caused the duration badge to land on
+  // top of the last line of text.
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -287,24 +293,39 @@
   margin-bottom: 1rem;
 }
 
-.session-content,
 .mobile-session-content {
-  padding: 0.65rem 1rem 1.6rem;
+  padding: 0.65rem 1rem 0.5rem;
 }
 
 .session-content {
-  max-height: 350px;
+  // .session-title and .session-speakers live outside this element (see
+  // agenda.html) as flex-shrink:0 siblings and always render in full — a
+  // title or speaker list should never be part of what gets truncated. This
+  // element (the abstract only) shares whatever room .session-card's fixed
+  // height (a deterministic function of real elapsed minutes) leaves after
+  // them. flex-shrink:1 + overflow:hidden let it clip naturally to exactly
+  // that remaining space with no hand-tuned max — but min-height guarantees
+  // a first couple of lines of the abstract are always visible, even on the
+  // shortest slots, rather than letting it shrink away to nothing.
+  // .is-clamped (JS) + the fade below only kick in when it's genuinely
+  // truncated, and .session-duration's margin-top:auto sits it at the
+  // card's true bottom either way, never on top of text.
+  padding: 0 1rem 0.5rem;
+  flex: 0 1 auto;
+  min-height: 60px;
   overflow: hidden;
   position: relative;
-  transition: max-height 0.3s;
 }
 
 .session-content.expanded {
-  max-height: none;
+  flex: 0 0 auto;
   overflow: visible;
 }
 
-.session-content::after {
+// Only fade the bottom row when the text is actually clipped. .is-clamped is
+// set by JS (scrollHeight > clientHeight) after layout settles — a card
+// whose text fits at its natural size should never fade its last line.
+.session-content.is-clamped::after {
   content: "";
   position: absolute;
   left: 0;
@@ -324,10 +345,6 @@
   display: none;
 }
 
-.session-content {
-  height: 100%;
-}
-
 .session-title {
   font-size: 1.1rem;
   font-weight: 700;
@@ -335,6 +352,22 @@
   margin-bottom: 0.75rem;
   color: var(--location-text-color, #212529);
   flex-shrink: 0;
+}
+
+// Desktop only: .session-title is a direct child of .session-card here (see
+// agenda.html), a sibling of .session-content rather than nested inside it,
+// so it carries its own top/side padding to match — and critically is never
+// inside the clamped/faded element, so a very short card (e.g. a 5-min slot)
+// never renders its title through the fade-out gradient. On mobile the title
+// stays nested inside .mobile-session-content, which already has padding.
+.session-card > .session-title {
+  padding: 0.65rem 1rem 0;
+}
+
+// Desktop only, same reasoning as .session-title above: speakers are a
+// direct child of .session-card, always fully shown, never clamped/faded.
+.session-card > .session-speakers {
+  padding: 0 1rem;
 }
 
 .session-speakers,
@@ -427,9 +460,14 @@
 }
 
 .session-duration {
-  position: absolute;
-  bottom: 0.45rem;
-  left: 0.65rem;
+  // Still a normal-flow flex child (never absolutely positioned over the
+  // text — that's what caused it to land on top of the last line before),
+  // but margin-top: auto pushes it to the bottom of the card, consuming any
+  // slack space left after .session-content instead of sitting right under
+  // short text. If content grows to fill the card there's no slack left and
+  // it simply sits right after — it can never overlap.
+  flex-shrink: 0;
+  margin-top: auto;
   display: flex;
   align-items: center;
   gap: 0.2rem;
@@ -438,6 +476,7 @@
   color: #b0b7c0;
   pointer-events: none;
   line-height: 1;
+  padding: 0 1rem 0.65rem;
 }
 
 // Ensure buttons stay above gradients
