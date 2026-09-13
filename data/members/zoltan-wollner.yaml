@@ -1,12 +1,12 @@
 id: zoltan-wollner
 name: Zoltan Wollner
 slogan:
-website: 
+website:
 # Business domains for email
 organizationDomains:
   - sunrise.ch
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Zoltan is the Cybersecurity/Cyberdefense Director and participates at the PKI Consortium.
 
 # membership
 memberSince: 2026-09-09
@@ -23,29 +23,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/zoltan-wollner
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -57,7 +57,7 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/zoltan-wollner
-    description: Zoltan is the Cybersecurity/Cyberdefense Director at Zoltan Wollner and represents the organization at the PKI Consortium.
+    description: Over the last 20 years, I have implemented and integrated PKI systems from manufacturing to embedded development environments. From the automotive industry to the energy distribution industry's ICS sector. I also extended product manufacturing with PKI systems. I was also responsible for effectively integrating HSMs at the microcontroller level. IT PKI system is the basic, or should be the basic, for every enterprise, and I also have real-world experience.
 
 # Long-form content (markdown)
 content: |
