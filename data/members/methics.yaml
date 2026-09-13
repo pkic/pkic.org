@@ -6,7 +6,7 @@ website: https://www.methics.fi/
 organizationDomains:
   - methics.fi
 # Short description, longer content can be placed in `content/members/`
-description: Methics provides software products for mobile signature solutions to operators and application providers. Methics offers carrier grade products to answer the needs in the area of end user authentication - now and in the future.
+description: Methics provides software products for mobile signature solutions to operators and application providers. Methics offers carrier grade products to answer the needs in the area of end user authentication now and in the future.
 
 # membership
 memberSince: 2026-09-09
@@ -29,23 +29,23 @@ blog:
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://www.methics.fi/about-us/careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
