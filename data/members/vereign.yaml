@@ -22,27 +22,27 @@ sponsor:
 blog:
   url: https://vereign.com/de/blog/
   feed: https://vereign.com/de/feed/
-  language: en_US
+  language: de
 
 # Press Releases
 press:
   url: https://vereign.com/de/press/
-  feed: 
-  language: en_US
+  feed:
+  language: de
 
 # Careers
 careers:
   url: https://vereign.com/de/careers/
-  feed: 
-  language: en_US
+  feed:
+  language: de
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/vereign/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
