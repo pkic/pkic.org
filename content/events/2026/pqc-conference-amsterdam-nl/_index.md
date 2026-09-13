@@ -757,21 +757,15 @@ data:
         sessions:
           - title: "The Board Factor: What Makes PQC Programs Succeed or Stall"
             description: |
-              Most PQC programs are structurally set up to fail. Not for lack of standards or technology, but because the complexity of organizational systems is beyond what their programs are designed to control.
-
-              Post-quantum cryptography migration is more than a technology upgrade. It is a multi-year enterprise transformation that cuts across business lines, processes, vendors, data, contracts, procurement, risk appetite, funding, operating models, and executive accountability. These are not technology variables. Yet many organizations are still treating it as a technical remediation exercise. That is a mistake.
-
-              Digital trust is a critical business asset. And the cryptographic infrastructure that supports it is a highly distributed, deeply embedded, complex digital estate with dependencies that span every system, every process, and every layer of the technology stack. In this way, parallels can be made to data governance: fifteen years of CDO mandate cycles rife with failure, trying to govern something that is everywhere, essential, and owned by no one. PQC has a hard 3 to 7-year deadline. We simply cannot afford to make the same mistakes. This is not only a cryptography problem. It is a complex systems problem.
-
-              PQC programs face nearly every structural condition that predicts failure: a long-time horizon, ambiguous impact timing, no single natural owner, deep technical complexity, unclear business prioritization, complex and unmapped dependencies, limited cryptographic literacy, budget uncertainty, and a strategic portfolio process that favours near-term value creation over invisible long-term risk reduction. Add to this a fundamental accountability problem: the executive leaders responsible for taking action today may not be the same as those who face the consequences tomorrow. The usual forcing functions for urgency, ownership, and escalation are weak. In the absence of authoritative action, the cryptographic estate is heading for the same governance failure mode we saw with enterprise data: granular, everywhere, essential, owned by no one, and left in the hands of IT.
-
-              Ashby's Law for complex systems is clear: a system will defeat any controller that underestimates its complexity. Operational budgets, decision rights, and risk acceptance are distributed throughout the system; only the board holds authority over all three.
-
-              The session opens with two questions put directly to attendees: (1) why will your PQC program succeed when so many enterprise-scale programs fail, and (2) who is accountable for its success (or failure)? Participants respond in writing. Many will struggle, exposing the real issue: not whether PQC matters, but whether organizations understand the conditions required to succeed, and who should be held accountable if they don't.
-
-              Drawing on systems theory principles and over 30 years designing, delivering, and remediating large-scale transformations and operating models, this session examines why PQC migration is structurally harder than most organizations currently understand. It shows why cryptographic inventory, technical standards, vendor readiness, and migration planning are necessary but insufficient, and why board engagement is the single most determining factor in a program's success. The session closes by returning to the same two questions, this time providing concrete, practice-tested moves to establish who is ultimately accountable for PQC program success and to secure the board engagement needed to make sure yours does.
-
-              The issues that will stall many PQC programs are visible and navigable. Can you engage your board effectively to overcome them?
+              Cryptographic resilience requires multi-year enterprise transformation, not a technical remediation exercise. Yet many organizations still treat it as one. That is a mistake.
+               
+              Digital trust depends on a cryptographic estate that is everywhere, used by everyone, yet owned by no one. Its closest organizational parallel is not in technology. It’s data. And that parallel is not reassuring. Data management and governance programs are decades old and rife with failure. Meanwhile, PQC has a hard three- to eight-year deadline.
+               
+              Like early data initiatives, PQC programs meet nearly every condition for failure: a long-time horizon, lack of business ownership, deep technical complexity, unmapped dependencies, low enterprise literacy, and budget cycles that reward near-term value over invisible risk reduction. Compounding these challenges, uncertain impact timelines mean that those responsible for acting on PQC today may be the ones to suffer tomorrow’s consequences, weakening urgency, ownership, and escalation.
+               
+              Enterprise transformation is ultimately a complex systems problem. Ashby’s Law of Requisite Variety is clear: the system will defeat any controller that lacks the capacity to manage its complexity. That controller is your PQC program.
+               
+              Drawing on systems theory, modern data governance principles, and more than 30 years of experience leading complex enterprise transformations, this session demonstrates why inventories, standards, and vendor readiness are necessary but insufficient, and why early board engagement is a determining factor in PQC program success. Participants will leave with a concrete, practice-tested framework for establishing cryptographic governance and securing sustained board engagement.
             speakers:
               - Louise Davey
             locations:
