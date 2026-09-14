@@ -5,6 +5,7 @@ title: "Assessing a Product (PQCMM)"
 description: A complete guide for vendors to assess their products against the PQC Maturity Model and demonstrate readiness to customers.
 summary: Use the PQCMM to evaluate your products and services internally, engage third-party assessors, or seek PKIC Certification to prove your maturity to the market.
 weight: 30
+fullwidth: true
 ---
 
 ## Proving Post-Quantum Readiness to the Market
@@ -20,6 +21,14 @@ The model supports three progressive validation methods depending on your market
 * [**Self-Assessment**](/wg/pqc/pqcmm/assessment/self-assessment/) — An internal gap analysis (often the starting point) used to structure your roadmap and answer baseline supplier questionnaires. Start with a self-assessment to identify gaps against [Level 1](/wg/pqc/pqcmm/levels/1-initial/) through [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) criteria.
 * [**Third-Party Assessment**](/wg/pqc/pqcmm/assessment/third-party/) — An objective, evidence-backed evaluation by an independent assessor. Recommended for material suppliers to large enterprises.
 * [**PKI Consortium Certification**](/wg/pqc/pqcmm/assessment/certification/) — Authoritative recognition reviewed by the PKI Consortium. Required for critical infrastructure, government applications, and high-assurance trust ecosystems.
+
+## Self-Assessment Tool
+
+Use the offline-capable assessment below to evaluate one product or service against PQCMM Version {{< pqcmm-version >}}. Assessment data and uploaded evidence stay in your browser. You can export a portable JSON assessment package or generate a PDF report that embeds the machine-readable assessment and its evidence files.
+
+{{< pqcmm-assessment version="previews/pr-169" >}}
+
+Read the [self-assessment guidance](/wg/pqc/pqcmm/assessment/self-assessment/) before sharing a result. A browser-generated report remains a self-assessment even when an executive later signs it; independent assessment and PKI Consortium certification require their separate review workflows.
 
 ### Resources
 

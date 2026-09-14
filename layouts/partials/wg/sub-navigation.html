@@ -199,13 +199,7 @@
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $treePage }}
-  {{ if $isPkimm }}
-  {{- $delVersioned := false -}}
-  {{- range $pkimmVersions -}}{{- if strings.HasPrefix $delURL .path -}}{{- $delVersioned = true -}}{{- end -}}{{- end -}}
-  {{- if $delVersioned }}
-  {{ partial "wg/pkimm-version-switcher.html" $.Page }}
-  {{- end }}
-  {{ end }}
+  {{ partial "wg/model-version-switcher-for-path.html" (dict "page" $.Page "path" $delURL) }}
 </div>
     {{- end -}}
   {{- end -}}
@@ -227,12 +221,12 @@
     <aside class="wg-sidebar-wrap wg-{{ $wg.Params.wgID | lower }}" id="wg-sidebar-wrap">
       {{ partial "wg/sidebar.html" $.Page }}
     </aside>
-    <div class="wg-main-content" data-pagefind-body>
+    <div class="wg-main-content" data-pagefind-body{{ with $.Page.Params.sourceEditURL }} data-edit-url="{{ . }}"{{ end }}>
       {{ .Content }}
     </div>
   </div>
   {{- else }}
-  <div class="wg-prose" data-pagefind-body>
+  <div class="wg-prose" data-pagefind-body{{ with $.Page.Params.sourceEditURL }} data-edit-url="{{ . }}"{{ end }}>
     {{ .Content }}
   </div>
   {{- end }}

@@ -13,18 +13,5 @@
 </button>
 <nav class="wg-sidebar" aria-label="Section navigation">
   {{- partial "wg/sidebar-tree.html" . -}}
-  {{- $wg := "" -}}
-  {{- range .Ancestors -}}
-    {{- if and (not $wg) .Params.wgID -}}
-      {{- $wg = . -}}
-    {{- end -}}
-  {{- end -}}
-  {{- if and $wg (eq ($wg.Params.wgID | upper) "PKIMM") -}}
-  {{- $pv := index hugo.Data "pkimm-versions" -}}
-  {{- $onVersion := false -}}
-  {{- if and $pv $pv.versions -}}{{- range $pv.versions -}}{{- if strings.HasPrefix $.RelPermalink .path -}}{{- $onVersion = true -}}{{- end -}}{{- end -}}{{- end -}}
-  {{- if $onVersion -}}
-  {{ partial "wg/pkimm-version-switcher.html" . }}
-  {{- end -}}
-  {{- end -}}
+  {{- partial "wg/model-version-switcher-for-path.html" (dict "page" .) -}}
 </nav>
