@@ -55,7 +55,7 @@ representatives:
     role: Researcher
     social:
       x:
-      linkedin: https://www.linkedin.com/in/anton-sokolov-exe/
+      linkedin:
     description: Anton is the Researcher at Tyche Institute and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
