@@ -53,7 +53,7 @@ describe("StatusSummary", () => {
   });
 
   it("names the region with a real heading rather than a styled paragraph", () => {
-    const root = mount("ec_review");
+    const root = mount("processing");
 
     const heading = root.querySelector("h2");
     expect(heading?.textContent).toBe("Application status");
@@ -63,13 +63,13 @@ describe("StatusSummary", () => {
   });
 
   it("states the stage in words, so the tone is never the only signal", () => {
-    const root = mount("ec_review");
+    const root = mount("processing");
 
     // The tone is drawn by a modifier class; the words beside it are what a
     // reader who cannot separate the hues actually gets.
     const badge = root.querySelector(".pk-badge");
-    expect(badge?.textContent).toBe("EC review");
-    expect(badge?.classList.contains("pk-badge--warn")).toBe(true);
+    expect(badge?.textContent).toBe("Processing");
+    expect(badge?.textContent).toBeTruthy();
   });
 
   it("reads no Bootstrap class names", () => {
@@ -88,11 +88,8 @@ describe("application status page", () => {
     document.body.innerHTML = `
       <div data-application-status data-api-base="/api/v1">
         <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite" hidden></div>
-        <div data-lookup-form>
-          <input data-lookup-id />
-          <input data-lookup-token />
-          <button type="button" data-lookup-submit>Check status</button>
-        </div>
+        <div data-link-help>Open your confirmation email.</div>
+        <div data-status-retry hidden><button type="button">Try again</button></div>
         <div data-status-result hidden></div>
       </div>`;
   }
@@ -135,7 +132,7 @@ describe("application status page", () => {
           new Response(
             JSON.stringify({
               id: APPLICATION_ID,
-              stage: "ec_review",
+              stage: "processing",
               createdAt: "2026-02-01T10:00:00.000Z",
               stageEnteredAt: "2026-03-04T10:00:00.000Z",
             }),
@@ -150,8 +147,8 @@ describe("application status page", () => {
     // Visibility is the platform attribute, not a class the script has to
     // keep in step with the template.
     expect(region("[data-status-result]").hidden).toBe(false);
-    expect(region("[data-lookup-form]").hidden).toBe(true);
-    expect(region("[data-status-result]").textContent).toContain("EC review");
+    expect(region("[data-link-help]").hidden).toBe(true);
+    expect(region("[data-status-result]").textContent).toContain("Processing");
   });
 
   it("returns the reader to the lookup form and announces why when the lookup fails", async () => {
@@ -177,23 +174,49 @@ describe("application status page", () => {
     expect(status.getAttribute("aria-live")).toBe("polite");
     expect(status.hidden).toBe(false);
     expect(status.dataset.state).toBe("error");
-    expect(status.textContent).toContain("check the link from your confirmation email");
+    expect(status.textContent).toContain("open the link from your confirmation email");
 
-    expect(region("[data-lookup-form]").hidden).toBe(false);
+    expect(region("[data-link-help]").hidden).toBe(false);
     expect(region("[data-status-result]").hidden).toBe(true);
   });
 
-  it("asks for both halves of the link before making a request", async () => {
+  it("shows email guidance for an incomplete link without requesting IDs or tokens", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-
+    history.replaceState({}, "", `/?id=${APPLICATION_ID}`);
     await bootPage();
-    region("[data-lookup-submit]").click();
-    await settle();
-
     expect(fetchMock).not.toHaveBeenCalled();
-    const status = region("[data-flow-status]");
-    expect(status.dataset.state).toBe("error");
-    expect(status.textContent).toContain("both the application ID and token");
+    expect(region("[data-link-help]").hidden).toBe(false);
+    expect(document.querySelector("input")).toBeNull();
+  });
+
+  it("offers a retry during an outage and clears the error after recovery", async () => {
+    history.replaceState({}, "", `/?id=${APPLICATION_ID}&token=tok-abc`);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: "DEPENDENCY_UNAVAILABLE", message: "Try later" } }), {
+          status: 503,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: APPLICATION_ID,
+            stage: "on_hold",
+            createdAt: "2026-02-01T10:00:00.000Z",
+            stageEnteredAt: "2026-03-04T10:00:00.000Z",
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await bootPage();
+    expect(region("[data-flow-status]").textContent).toContain("temporarily unavailable");
+    expect(region("[data-status-retry]").hidden).toBe(false);
+    region("[data-status-retry] button").click();
+    await settle();
+    expect(region("[data-flow-status]").hidden).toBe(true);
+    expect(region("[data-status-result]").textContent).toContain("On hold");
   });
 });

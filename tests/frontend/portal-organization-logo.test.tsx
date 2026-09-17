@@ -98,7 +98,7 @@ describe("OrganizationLogo", () => {
 
     expect(root.querySelector("button")?.getAttribute("aria-label")).toBe("Change logo");
     expect(root.querySelector("img")?.getAttribute("alt")).toBe("Example Corp logo");
-    expect([...root.querySelectorAll("button")].map((button) => button.textContent)).toContain("Remove");
+    expect([...root.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toContain("Remove");
   });
 
   it("reports an upload failure to the reader instead of silently keeping the old logo", async () => {

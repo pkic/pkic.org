@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import type { ProposalInternalComment } from "../../../shared/schemas/proposal-comments";
 import { EmptyState } from "../EmptyState";
@@ -6,7 +7,7 @@ import { formatDateTime } from "../../shared/ui";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
-import { Textarea } from "../../ui/TextControl";
+import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
 
 /** Shared private committee discussion panel; its caller supplies the authorized command. */
 export function ProposalInternalCommentsPanel({
@@ -28,6 +29,14 @@ export function ProposalInternalCommentsPanel({
   onAddComment: (event: Event) => Promise<void>;
   onLoadMoreComments: () => Promise<void>;
 }) {
+  // The editor is uncontrolled: when the draft is cleared from outside —
+  // a comment was added — it is remounted with the empty draft.
+  const [draftGeneration, setDraftGeneration] = useState(0);
+  const previousDraft = useRef(commentDraft);
+  useEffect(() => {
+    if (previousDraft.current !== "" && commentDraft === "") setDraftGeneration((generation) => generation + 1);
+    previousDraft.current = commentDraft;
+  }, [commentDraft]);
   return (
     <div class="pk">
       <Panel aria-label="Internal comments">
@@ -37,14 +46,16 @@ export function ProposalInternalCommentsPanel({
             {/* The textarea carried only a placeholder before, which is not a
                 name: it disappears the moment anything is typed, and a reader
                 arriving at the control heard "edit text" and nothing else. */}
-            <Field label="Add a comment" help="Private to the program committee · Markdown supported">
+            <Field label="Add a comment" help="Private to the program committee">
               {(control) => (
-                <Textarea
+                <MarkdownEditor
+                  key={draftGeneration}
                   {...control}
-                  rows={3}
-                  value={commentDraft}
-                  onInput={(event) => onCommentDraftChange((event.target as HTMLTextAreaElement).value)}
-                  placeholder="Add a private committee comment…"
+                  variant="compact"
+                  name="comment"
+                  label="Add a comment"
+                  initialValue={commentDraft}
+                  onChange={onCommentDraftChange}
                 />
               )}
             </Field>

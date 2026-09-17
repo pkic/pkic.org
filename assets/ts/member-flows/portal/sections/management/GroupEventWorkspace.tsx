@@ -1,41 +1,47 @@
-import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 /**
- * URL-addressed dashboard for one group-managed event. Replaces the events
- * table when an event is selected: a subject header and
- * capability-filtered tabs, each rendering the same child components the
- * event previously stacked into one long detail row.
+ * URL-addressed record page for one group-managed event.
+ *
+ * The event is a record inside the group workspace: its own header under the
+ * group's, capability-filtered tabs, and inside two of those tabs — the
+ * registrations and the proposals — records of its own, each a routed page
+ * with its own address. Nothing opens between the rows of a list.
  */
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
+import {
+  EVENT_PROFILE_LABELS,
+  EVENT_REGISTRATION_POLICY_LABELS,
+  EVENT_SOURCE_MODE_LABELS,
+  EVENT_VISIBILITY_LABELS,
+} from "../../../../../shared/schemas/event-series";
 import { Badge } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Tabs, type TabItem } from "../../../../components/Tabs";
-import { Button, ButtonLink } from "../../../../ui/Button";
-import { ProfileHeader } from "../../../../ui/ProfileHeader";
+import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
+import { ButtonLink } from "../../../../ui/Button";
+import { DescriptionList } from "../../../../ui/DescriptionList";
 import { LinkList } from "../../../../ui/LinkList";
-import { Panel, PanelBody } from "../../../../ui/Panel";
+import { Menu } from "../../../../ui/Menu";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { formatEventWhen } from "../../ui";
 import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
 import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
-import { RegistrationDetailPage } from "../events/detail/RegistrationDetailPage";
-import { GroupEventCommunications } from "./GroupEventCommunications";
+import { GroupEventCommunications, NEW_CAMPAIGN_SEGMENT } from "./GroupEventCommunications";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventInvitations } from "./GroupEventInvitations";
 import { GroupEventProposals } from "./GroupEventProposals";
 import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
+import { GroupEventRegistrationRecord } from "./GroupEventRegistrationRecord";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
-// `pk-datalist` on the overview metadata is defined in Content.css, which ships
-// in a lazy chunk rather than in the entry stylesheet.
+// `pk-datalist-aligned` and `pk-mono` ship in Content.css, a lazy chunk
+// rather than the entry stylesheet.
 import "../../../../ui/Content.css";
-
-function label(value: string): string {
-  return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
-}
 
 function isStandaloneEvent(event: Pick<GroupEvent, "seriesId" | "profileKey">): boolean {
   return event.seriesId === null && event.profileKey !== "meeting" && event.profileKey !== "board_meeting";
@@ -77,19 +83,31 @@ export function visibleEventWorkspaceTabs(event: GroupEvent): TabItem[] {
   }));
 }
 
+/** The invitation audiences, each a routed sub-view of the Invitations tab. */
+const INVITATION_AUDIENCES = [
+  { key: "attendees", label: "Attendees", inviteType: "attendee" as const },
+  { key: "speakers", label: "Speakers", inviteType: "speaker" as const },
+] as const;
+
 export function GroupEventWorkspace({
   event,
   groupId,
   tab,
   detailId,
+  detailTab,
+  detailSegment,
   onUpdated,
 }: {
   event: GroupEvent;
   groupId: string;
   /** The URL-addressed tab segment, if any. Undefined selects the default tab. */
   tab?: string;
-  /** A URL-addressed resource inside the tab: a registration or proposal id, or a promoters sub-tab. */
+  /** A URL-addressed resource inside the tab: a registration or proposal id, an invitation audience, or a promoters sub-tab. */
   detailId?: string;
+  /** The facet of that resource: a proposal's own tab, or the composer page under an invitation audience. */
+  detailTab?: string;
+  /** A page under that facet: the co-speaker invitation under a proposal's Speakers. */
+  detailSegment?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
   const [, navigate] = usePortalHashLocation();
@@ -106,6 +124,7 @@ export function GroupEventWorkspace({
   const activeTab = isKnownTab && tab !== undefined ? tab : (visibleTabs[0]?.key ?? GROUP_EVENT_OVERVIEW_TAB);
   const showUnavailable = isKnownTab && !isVisibleTab;
   const activeTabLabel = EVENT_WORKSPACE_TABS.find((item) => item.key === activeTab)?.label ?? activeTab;
+  const standalone = isStandaloneEvent(event);
 
   function tabPath(nextTab: string): string {
     const base = `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`;
@@ -116,6 +135,21 @@ export function GroupEventWorkspace({
     navigate(tabPath(nextTab));
   }
 
+  // The audiences this identity may invite. Attendees need event management;
+  // speakers need the proposal program's finalize authority.
+  const invitationAudiences = INVITATION_AUDIENCES.filter((audience) =>
+    audience.inviteType === "attendee" ? canManage : canFinalizeProposals,
+  );
+  // `…/invitations` is the first audience; `…/invitations/speakers` the second.
+  // Under either, `new` opens the composer page.
+  const invitationAudience =
+    invitationAudiences.find((audience) => audience.key === detailId) ?? invitationAudiences[0];
+  const invitationSegment = detailId === "new" ? "new" : detailTab;
+  const invitationPath = (key: string) =>
+    key === invitationAudiences[0]?.key ? tabPath("invitations") : `${tabPath("invitations")}/${key}`;
+
+  const recordOpen = detailId !== undefined && (activeTab === "registrations" || activeTab === "proposals");
+
   return (
     <BreadcrumbBranch
       items={[
@@ -124,16 +158,29 @@ export function GroupEventWorkspace({
       ]}
     >
       <section class="pk pk-stack" aria-label={`${event.name} workspace`}>
-        {!(detailId && (activeTab === "registrations" || activeTab === "proposals")) && (
+        {/* A record inside the event — a registration, a proposal — carries
+            its own header, so the event's steps aside and the tab row alone
+            says where in the event the reader is. */}
+        {!recordOpen && (
           <ProfileHeader
             headingLevel={3}
             title={event.name}
+            context={
+              <Badge
+                status={event.profileKey ?? "event"}
+                label={EVENT_PROFILE_LABELS[event.profileKey ?? "conference"]}
+              />
+            }
             lede={
               <>
                 {formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}
                 {event.location ? ` · ${event.location}` : ""}
               </>
             }
+            facts={[
+              EVENT_REGISTRATION_POLICY_LABELS[event.registrationPolicy],
+              EVENT_VISIBILITY_LABELS[event.visibility],
+            ]}
           />
         )}
 
@@ -150,127 +197,195 @@ export function GroupEventWorkspace({
         ) : (
           <section aria-label={`${activeTabLabel} — ${event.name}`} class="pk-stack">
             {activeTab === GROUP_EVENT_OVERVIEW_TAB && (
-              <>
-                <dl class="pk-datalist pk-small">
-                  <dt>When</dt>
-                  <dd>{formatEventWhen(event.nextOccurrenceAt ?? event.startsAt, event.timezone, event.location)}</dd>
-                  {event.endsAt && (
-                    <>
-                      <dt>Ends</dt>
-                      {/* The same formatter as "When": one page must not show
-                        the start in the event's zone and the end in the
-                        viewer's. */}
-                      <dd>{formatEventWhen(event.endsAt, event.timezone, event.location)}</dd>
-                    </>
+              <div class="pk-record">
+                <div class="pk-stack">
+                  <Panel aria-label="Schedule">
+                    <PanelHeader title="Schedule" />
+                    <PanelBody>
+                      <DescriptionList
+                        items={[
+                          { term: "Starts", value: formatEventWhen(event.startsAt, event.timezone, event.location) },
+                          /* The same formatter as "Starts": one page must not show
+                             the start in the event's zone and the end in the
+                             viewer's. */
+                          { term: "Ends", value: formatEventWhen(event.endsAt, event.timezone, event.location) },
+                          { term: "Time zone", value: event.timezone },
+                          { term: "Location", value: event.location },
+                        ]}
+                      />
+                    </PanelBody>
+                  </Panel>
+                  {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
+                </div>
+                <aside class="pk-stack pk-datalist-aligned">
+                  <Panel aria-label="Event facts">
+                    <PanelHeader title="Event" />
+                    <PanelBody>
+                      <DescriptionList
+                        density="compact"
+                        items={[
+                          { term: "Profile", value: EVENT_PROFILE_LABELS[event.profileKey ?? "conference"] },
+                          { term: "Registration", value: EVENT_REGISTRATION_POLICY_LABELS[event.registrationPolicy] },
+                          { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
+                          {
+                            term: "Source",
+                            value: event.sourceMode ? EVENT_SOURCE_MODE_LABELS[event.sourceMode] : undefined,
+                          },
+                          { term: "Slug", value: <span class="pk-mono">{event.slug}</span> },
+                        ]}
+                      />
+                    </PanelBody>
+                  </Panel>
+                  {/* Absent rather than empty when the event has stated no
+                      links: a titled panel with nothing in it claims a fact
+                      the record does not have. */}
+                  {event.links.length > 0 && (
+                    <Panel aria-label="Event links">
+                      <PanelHeader title="Links" />
+                      <PanelBody>
+                        <LinkList links={event.links} label="Event links" />
+                      </PanelBody>
+                    </Panel>
                   )}
-                  <dt>Profile</dt>
-                  <dd>
-                    <Badge status={event.profileKey ?? "event"} />
-                  </dd>
-                  <dt>Registration</dt>
-                  <dd>{label(event.registrationPolicy)}</dd>
-                  {event.location && (
-                    <>
-                      <dt>Location</dt>
-                      <dd>{event.location}</dd>
-                    </>
-                  )}
-                </dl>
-
-                {event.links.length > 0 && (
-                  <div class="pk-stack pk-stack--tight">
-                    <h3 class="pk-small pk-strong">Event links</h3>
-                    {/* The shared marked list rather than a second hand-rolled
-                      one: this took the label from the shared table already
-                      and then drew it its own way, which is how two surfaces
-                      end up disagreeing about what a link looks like. */}
-                    <LinkList links={event.links} label="Event links" />
-                  </div>
-                )}
-
-                {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
-              </>
+                </aside>
+              </div>
             )}
 
             {activeTab === "registrations" &&
               (detailId ? (
-                <RegistrationDetailPage slug={event.slug} regId={detailId} parentNavigation />
+                <GroupEventRegistrationRecord
+                  key={detailId}
+                  groupId={groupId}
+                  eventId={event.id}
+                  registrationId={detailId}
+                  canVip={canManage}
+                />
               ) : (
-                <GroupEventRegistrations groupId={groupId} eventId={event.id} canVip={canManage} />
+                <GroupEventRegistrations groupId={groupId} eventId={event.id} />
               ))}
 
             {activeTab === "proposals" &&
               (detailId ? (
-                <ProposalDetailPage slug={event.slug} proposalId={detailId} parentNavigation />
-              ) : (
-                <GroupEventProposals
-                  groupId={groupId}
-                  eventId={event.id}
-                  eventSlug={event.slug}
-                  proposalPathFor={(proposalId) => `${tabPath("proposals")}/${encodeURIComponent(proposalId)}`}
+                <ProposalDetailPage
+                  key={detailId}
+                  slug={event.slug}
+                  proposalId={detailId}
+                  tab={detailTab}
+                  segment={detailSegment}
+                  tabHref={(key) =>
+                    `${tabPath("proposals")}/${encodeURIComponent(detailId)}${key === "submission" ? "" : `/${key}`}`
+                  }
+                  parentNavigation
                 />
+              ) : (
+                <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
               ))}
 
-            {activeTab === "invitations" && (
+            {activeTab === "invitations" && invitationAudience && (
               <>
-                {canManage && <GroupEventInvitations groupId={groupId} event={event} />}
-                {canFinalizeProposals && <GroupEventInvitations groupId={groupId} event={event} inviteType="speaker" />}
+                {invitationAudiences.length > 1 && invitationSegment !== "new" && (
+                  <Tabs
+                    label="Invitation audiences"
+                    items={invitationAudiences.map(({ key, label }) => ({ key, label }))}
+                    active={invitationAudience.key}
+                    hrefFor={invitationPath}
+                  />
+                )}
+                <GroupEventInvitations
+                  key={invitationAudience.key}
+                  groupId={groupId}
+                  event={event}
+                  inviteType={invitationAudience.inviteType}
+                  segment={invitationSegment}
+                  listPath={invitationPath(invitationAudience.key)}
+                />
               </>
             )}
 
-            {activeTab === "communications" && <GroupEventCommunications groupId={groupId} eventId={event.id} />}
+            {activeTab === "communications" && (
+              // `…/communications/new` composes for attendees;
+              // `…/communications/speakers/new` for speakers.
+              <GroupEventCommunications
+                groupId={groupId}
+                eventId={event.id}
+                audience={detailId === NEW_CAMPAIGN_SEGMENT ? undefined : detailId}
+                composing={detailId === NEW_CAMPAIGN_SEGMENT || detailTab === NEW_CAMPAIGN_SEGMENT}
+                audienceHref={(audience) =>
+                  audience === "attendees" ? tabPath("communications") : `${tabPath("communications")}/${audience}`
+                }
+              />
+            )}
 
-            {activeTab === "team" && <Team slug={event.slug} />}
+            {activeTab === "team" && <Team slug={event.slug} teamSegment={detailId} teamPath={tabPath("team")} />}
 
-            {activeTab === "promoters" && <Promoters slug={event.slug} subTab={detailId} />}
+            {activeTab === "promoters" && (
+              <Promoters slug={event.slug} subTab={detailId} basePath={tabPath("promoters")} />
+            )}
 
-            {activeTab === "stats" && <EventStats slug={event.slug} />}
+            {activeTab === "stats" && <EventStats slug={event.slug} section={detailId} basePath={tabPath("stats")} />}
 
             {activeTab === "settings" && (
               <>
-                {!event.seriesId && <GroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />}
+                {/* The record's own facts, edited where they are read: one
+                    Edit in the panel's header turns them into the form, and
+                    Save or Cancel puts the facts back. An event that belongs
+                    to a meeting series is edited through the series. */}
+                <Panel aria-label={editing ? "Edit event" : "Event details"}>
+                  <PanelHeader title={editing ? "Edit event" : "Event details"}>
+                    {!editing && standalone && (
+                      <Menu
+                        label="Event actions"
+                        align="end"
+                        items={[{ id: "edit", label: "Edit event", onSelect: () => setEditing(true) }]}
+                      />
+                    )}
+                    {/* Going to the meeting series is navigation, not an
+                        action, so it stays an anchor and borrows the button's
+                        appearance rather than its element. */}
+                    {event.seriesId && (
+                      <ButtonLink size="sm" href={`#/groups/${encodeURIComponent(groupId)}/meetings`}>
+                        Manage meeting series
+                      </ButtonLink>
+                    )}
+                  </PanelHeader>
+                  <PanelBody>
+                    {editing ? (
+                      <GroupEventEditor
+                        groupId={groupId}
+                        event={event}
+                        onSaved={async () => {
+                          setEditing(false);
+                          await onUpdated?.();
+                        }}
+                        onCancel={() => setEditing(false)}
+                      />
+                    ) : (
+                      <DescriptionList
+                        items={[
+                          { term: "Name", value: event.name },
+                          { term: "Slug", value: <span class="pk-mono">{event.slug}</span> },
+                          { term: "Profile", value: EVENT_PROFILE_LABELS[event.profileKey ?? "conference"] },
+                          { term: "Starts", value: formatEventWhen(event.startsAt, event.timezone, event.location) },
+                          { term: "Ends", value: formatEventWhen(event.endsAt, event.timezone, event.location) },
+                          { term: "Time zone", value: event.timezone },
+                          { term: "Location", value: event.location },
+                          { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
+                          {
+                            term: "Peer invitation limit",
+                            value: event.inviteLimitAttendee != null ? String(event.inviteLimitAttendee) : undefined,
+                          },
+                          {
+                            term: "Links",
+                            value:
+                              event.links.length > 0 ? <LinkList links={event.links} label="Event links" /> : undefined,
+                          },
+                        ]}
+                      />
+                    )}
+                  </PanelBody>
+                </Panel>
 
-                {/* The separating rule the Bootstrap version drew with a
-                  `border-top` is the panel's own edge here, and the panel is
-                  only drawn when it has something in it: an event that is
-                  neither standalone nor part of a series offers neither
-                  control, and an empty rule across the page said nothing. */}
-                {(isStandaloneEvent(event) || event.seriesId !== null) && (
-                  <Panel>
-                    <PanelBody class="pk-stack">
-                      {isStandaloneEvent(event) && editing ? (
-                        <>
-                          <h3>Edit event</h3>
-                          <GroupEventEditor
-                            groupId={groupId}
-                            event={event}
-                            onSaved={async () => {
-                              setEditing(false);
-                              await onUpdated?.();
-                            }}
-                            onCancel={() => setEditing(false)}
-                          />
-                        </>
-                      ) : (
-                        <div class="pk-cluster">
-                          {isStandaloneEvent(event) && (
-                            <Button variant="primary" size="sm" onClick={() => setEditing(true)}>
-                              Edit event
-                            </Button>
-                          )}
-                          {/* Going to the meeting series is navigation, not an
-                            action, so it stays an anchor and borrows the
-                            button's appearance rather than its element. */}
-                          {event.seriesId && (
-                            <ButtonLink size="sm" href={`#/groups/${encodeURIComponent(groupId)}/meetings`}>
-                              Manage meeting series
-                            </ButtonLink>
-                          )}
-                        </div>
-                      )}
-                    </PanelBody>
-                  </Panel>
-                )}
+                {!event.seriesId && <GroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />}
 
                 {event.ownerGroupId === groupId && (
                   <ResourceSharingEditor

@@ -19,10 +19,22 @@
 {{- if and (not $isWG) (eq $.Page.Params.sectionNav true) -}}
 
 {{/* ── Find nav root and sub-sections ───────────────────────────────── */}}
+{{/* The root is the top of the `sectionNav` cascade — the event page — not
+     the reader's current section. Anchored at the current section, opening
+     an event's Sponsors page swapped the event's tabs for the sponsors
+     section's own children, which put its "Thank you" landing page in the
+     menu and dropped Overview, Agenda and the rest (#112). */}}
 {{- $navRoot  := $.Page.CurrentSection -}}
+{{- range seq 8 -}}
+  {{- with $navRoot.Parent -}}
+    {{- if and (ne .Kind "home") (eq .Params.sectionNav true) -}}
+      {{- $navRoot = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- $subPages := slice -}}
 {{- range $navRoot.Sections -}}
-  {{- if ne .Params.robots "noindex" -}}
+  {{- if and (ne .Params.robots "noindex") (ne .Params.noindex true) -}}
     {{- $subPages = $subPages | append . -}}
   {{- end -}}
 {{- end -}}
@@ -33,7 +45,7 @@
   {{- if and $parent (ne $parent.Kind "home") -}}
     {{- $parentSubs := slice -}}
     {{- range $parent.Sections -}}
-      {{- if ne .Params.robots "noindex" -}}
+      {{- if and (ne .Params.robots "noindex") (ne .Params.noindex true) -}}
         {{- $parentSubs = $parentSubs | append . -}}
       {{- end -}}
     {{- end -}}

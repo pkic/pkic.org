@@ -1,3 +1,4 @@
+import { resolveEventFrontendRoutes } from "../event-presentation";
 import {
   EVENT_LIST_SORT_COLUMNS,
   EVENT_MANAGEMENT_LIST_SORT_COLUMNS,
@@ -41,8 +42,12 @@ const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.ti
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
   event.visibility, event.settings_json, event.links_json, event.base_path`;
 
+function eventLocation(settingsJson: string): string | null {
+  const value = parseJsonSafe<Record<string, unknown>>(settingsJson, {}).location;
+  return typeof value === "string" ? value : null;
+}
+
 function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null): EventAudienceDetail {
-  const settings = parseJsonSafe<Record<string, unknown>>(row.settings_json, {});
   return eventAudienceDetailSchema.parse({
     id: row.id,
     slug: row.slug,
@@ -54,10 +59,14 @@ function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null
     registrationPolicy: normalizeEventRegistrationPolicy(row.registration_mode),
     visibility: row.visibility,
     accessLevel: row.visibility === "public" ? "public" : "participant",
-    location: typeof settings.location === "string" ? settings.location : null,
+    location: eventLocation(row.settings_json),
     links: parseLinksJson(row.links_json),
     basePath: row.base_path,
     viewer,
+    registrationPath:
+      row.base_path && ["open", "invite_or_open", "public", "optional"].includes(row.registration_mode)
+        ? resolveEventFrontendRoutes(row).registrationPath
+        : null,
   });
 }
 
@@ -138,9 +147,10 @@ export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceV
 const EVENT_MANAGEMENT_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.source_mode, event.registration_mode,
   event.visibility, event.invite_limit_attendee, event.owner_group_id, owner_group.name AS owner_group_name,
-  event.source_path, event.base_path, event.updated_at`;
+  event.source_path, event.base_path, event.settings_json, event.updated_at`;
 
 interface EventManagementRow {
+  settings_json: string;
   id: string;
   slug: string;
   name: string;
@@ -271,6 +281,7 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
       ownerGroupName: row.owner_group_name,
       sourcePath: row.source_path,
       basePath: row.base_path,
+      location: eventLocation(row.settings_json),
       totalRegistrations: statsByEvent.get(row.id)?.total_registrations ?? 0,
       confirmedRegistrations: statsByEvent.get(row.id)?.confirmed_registrations ?? 0,
       pendingInvites: statsByEvent.get(row.id)?.pending_invites ?? 0,

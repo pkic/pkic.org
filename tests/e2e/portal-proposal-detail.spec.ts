@@ -7,6 +7,7 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
+import { proposalDecisionPreviewResponseSchema } from "../../assets/shared/schemas/proposal-decisions";
 import { definitionFor } from "./helpers/definition-list";
 import { tab } from "./helpers/tabs";
 
@@ -29,7 +30,20 @@ const adminSessionResponse = userAuthSessionResponseSchema.parse({
   },
 });
 
-test("renders the portal proposal detail workflow with submission answers and operator actions", async ({ page }) => {
+test("renders the portal proposal detail workflow with submission answers and operator actions", async ({
+  page,
+}, testInfo) => {
+  await page.route(/\/api\/v1\/$/, (route) =>
+    route.fulfill({
+      json: {
+        name: "PKIC",
+        version: "1",
+        docs: "/api/v1/docs",
+        status: "ok",
+        availability: { mode: "normal", message: "", endsAt: null, windows: [] },
+      },
+    }),
+  );
   const proposalId = "11111111111111111111111111111111";
   const proposerUserId = "22222222222222222222222222222222";
   const formId = "33333333333333333333333333333333";
@@ -488,7 +502,8 @@ test("renders the portal proposal detail workflow with submission answers and op
   // Submission tab is active by default — check abstract card + answer table
   const abstractCard = page.getByRole("heading", { name: "Abstract" }).locator("../..");
   await expect(abstractCard).toBeVisible();
-  await abstractCard.getByRole("button", { name: "Edit" }).click();
+  await abstractCard.getByRole("button", { name: "Abstract actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await abstractCard.getByRole("textbox").fill("A corrected accepted abstract for the published program.");
   await abstractCard.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("A corrected accepted abstract for the published program.")).toBeVisible();
@@ -504,9 +519,37 @@ test("renders the portal proposal detail workflow with submission answers and op
   await expect(page.getByText("Sam Speaker").first()).toBeVisible();
 
   // Review quorum shown in stat cards (always visible)
-  await expect(page.getByText("1 / 2 required").first()).toBeVisible();
+  await expect(page.getByText("1 of 2 required").first()).toBeVisible();
 
   await expect(page.getByText("Newest committee note")).toBeVisible();
+  const formatting = page
+    .getByRole("region", { name: "Internal comments" })
+    .getByRole("group", { name: "Text formatting" });
+  for (const width of [1440, 768, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(formatting.getByRole("button", { name: "Bold", exact: true })).toBeVisible();
+    await expect(formatting.getByRole("button", { name: "Italic", exact: true })).toBeVisible();
+    await expect
+      .poll(() =>
+        formatting.evaluate((bar) => {
+          const buttons = [...bar.querySelectorAll("button")].filter((button) => button.offsetWidth > 0);
+          return new Set(
+            buttons.map((button) => {
+              const bounds = button.getBoundingClientRect();
+              return Math.round(bounds.top + bounds.height / 2);
+            }),
+          ).size;
+        }),
+      )
+      .toBe(1);
+    const more = formatting.getByRole("button", { name: "More formatting" });
+    if (await more.isVisible()) {
+      await more.click();
+      const menu = page.getByRole("menu", { name: "More formatting" });
+      await expect(menu.locator(".pk-menu__item-icon").first()).toBeVisible();
+      await page.keyboard.press("Escape");
+    }
+  }
   await page.getByRole("button", { name: "Load more comments" }).click();
   await expect(page.getByText("Older committee note")).toBeVisible();
   await expect(page.getByRole("button", { name: "Load more comments" })).toHaveCount(0);
@@ -517,7 +560,8 @@ test("renders the portal proposal detail workflow with submission answers and op
   await expect(page.getByText("Reviews are read-only after a proposal decision.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit Review" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Open proposer manage page" }).click();
+  await page.getByRole("button", { name: "Proposal actions" }).click();
+  await page.getByRole("menuitem", { name: "Open proposer manage page" }).click();
   await expect
     .poll(async () => page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? []))
     .toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
@@ -552,18 +596,74 @@ test("renders the portal proposal detail workflow with submission answers and op
   expect(adminUpload?.body).toEqual(pdfBody);
 
   await tab(page, "Decision").click();
+  await page.getByRole("button", { name: "Change decision", exact: true }).click();
+  const decision = page.getByLabel("Decision", { exact: true });
+  await decision.selectOption("accepted");
+  await expect(decision).toHaveValue("accepted");
+  await expect(decision).not.toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByRole("button", { name: "Preview emails", exact: true })).toBeEnabled();
+  await page.route(`**/api/v1/proposals/${proposalId}/decisions/previews`, (route) =>
+    route.fulfill({
+      json: proposalDecisionPreviewResponseSchema.parse({
+        success: true,
+        recipientCount: 3,
+        emailCount: 3,
+        layoutMissing: false,
+        missingTemplateKeys: [],
+        messages: ["Alex", "Jordan", "Taylor"].map((name) => ({
+          id: `decision-${name.toLowerCase()}`,
+          templateKey: "proposal_decision",
+          recipientEmail: `${name.toLowerCase()}@example.test`,
+          recipientLabel: `${name} Example`,
+          subject: "Your proposal about accessible forms was accepted",
+          html: "<h1>Proposal accepted</h1><p>Alex, your session on accessible forms for organizations and users has been accepted.</p>",
+          text: "Alex, your session on accessible forms for organizations and users has been accepted.",
+          templateMissing: false,
+        })),
+      }),
+    }),
+  );
+  await page.getByRole("button", { name: "Preview emails", exact: true }).click();
+  const preview = page.getByTitle("Decision email preview", { exact: true });
+  await expect(preview).toHaveCount(1);
+  await expect(preview.first()).toBeVisible();
+  await expect(preview.first()).toHaveAttribute("sandbox", "");
+  for (const width of [1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const name of ["Alex", "Jordan", "Taylor"]) {
+      await page
+        .getByRole("button", { name: `Decision email ${name} Example ${name.toLowerCase()}@example.test`, exact: true })
+        .click();
+      await preview.scrollIntoViewIfNeeded();
+      const dimensions = await preview.evaluate((frame) => {
+        const body = frame.closest(".pk-panel__body")!;
+        const style = getComputedStyle(body);
+        return {
+          frame: frame.getBoundingClientRect().width,
+          available: body.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+        };
+      });
+      expect(Math.abs(dimensions.frame - dimensions.available)).toBeLessThanOrEqual(2);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`decision-preview-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   // The required marker is no longer part of the label's own words — it is the
   // control's `required` and a "(required)" the label carries for a screen
   // reader — so the field is named by its name and its requirement asserted.
   const speakerComment = page.getByLabel("Comment to speakers");
-  await expect(speakerComment).toHaveAttribute("required", "");
+  await expect(speakerComment).toHaveAttribute("aria-required", "true");
   await speakerComment.fill("The speaker is unavailable for the scheduled session.");
   await page.getByLabel("I understand that every speaker linked to this proposal will be notified.").check();
   await page.getByRole("button", { name: "Cancel accepted session" }).click();
   await expect(page.getByText("Session canceled", { exact: true })).toBeVisible();
   await expect(page.getByText("The speaker is unavailable for the scheduled session.")).toBeVisible();
 
-  expect(consoleErrors).toEqual([]);
+  // Chromium reports the script restriction when loading the sandboxed srcdoc.
+  // Assert that exact diagnostic; any unrelated console error still fails.
+  expect(consoleErrors).toEqual([
+    "Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
+  ]);
 });
 
 test("offers event presentation archives only with proposal read access", async ({ page }) => {

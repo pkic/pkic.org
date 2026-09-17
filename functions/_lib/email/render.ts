@@ -16,6 +16,7 @@ export const EMAIL_SUBJECT_RENDER_MAX_CHARS = 8_192;
 const EMAIL_TEMPLATE_RENDER_MAX_DEPTH = 32;
 
 interface TemplateRenderBudget {
+  markdown?: boolean;
   maxChars: number;
   maxExpansions: number;
   maxWorkChars: number;
@@ -447,7 +448,12 @@ function compileSimpleTemplateWithBudget(
       if (value === null || value === undefined) {
         return match[0]; // Leave unresolved placeholders as-is
       }
-      return String(value);
+      const text = String(value);
+      if (!budget.markdown || !text.includes("\n")) return text;
+      const lineStart = result.lastIndexOf("\n", match.index - 1) + 1;
+      const prefix = result.slice(lineStart, match.index);
+      // Continue template-authored quote nesting across every interpolated line.
+      return /^(?: {0,3}>[ \t]*)+$/.test(prefix) ? text.replace(/\r?\n/g, `\n${prefix}`) : text;
     },
     budget,
   );
@@ -527,6 +533,7 @@ export async function renderEmail(
   baseUrl = "https://pkic.org",
 ): Promise<{ html: string; text: string }> {
   const budget = createTemplateRenderBudget();
+  budget.markdown = contentType === "markdown";
   // Keep application links environment-specific while serving static branding
   // from a publicly reachable origin when a developer email uses localhost.
   const brandBaseUrl = resolveEmailBrandBaseUrl(baseUrl);

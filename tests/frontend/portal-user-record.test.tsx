@@ -10,6 +10,9 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { menuItemNamed } from "./helpers/row-actions";
 import { afterEach, describe, expect, it, vi } from "vitest";
+// The record routes the identity grant under itself, so it reads the hash
+// location; the mock keeps the router out of the test.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 import {
   UserDetail as UserDetailView,
   type UserPermissions,

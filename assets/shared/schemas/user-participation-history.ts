@@ -73,6 +73,7 @@ export const userEventParticipationSchema = participationHistoryEntrySchema.exte
   eventId: eventIdSchema,
   eventSlug: z.string(),
   eventName: trimmedString(1, 180),
+  location: z.string().nullable().optional(),
   /**
    * The active roles held at this event, in vocabulary order. One row per
    * event, not per role: somebody who spoke and also organized took part in

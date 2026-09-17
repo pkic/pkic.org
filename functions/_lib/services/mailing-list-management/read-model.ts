@@ -31,8 +31,8 @@ export function buildMailingListsPageQuery(
   } else if (options.groupId) {
     conditions.push("mailing_lists.group_id = ?");
     bindings.push(options.groupId);
-  } else {
-    throw new Error("A group or accessible resource set is required for mailing-list pages");
+  } else if (!options.requiredAuthorization) {
+    throw new Error("A group, accessible resource set, or explicit authorization is required for mailing-list pages");
   }
   const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
   if (search) {

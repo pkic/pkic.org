@@ -1,6 +1,5 @@
 import { useState } from "preact/hooks";
 import {
-  orgTiedMembershipCategorySchema,
   organizationCreateResponseSchema,
   organizationCreateSchema,
 } from "../../../../../shared/schemas/organization-management";
@@ -15,16 +14,15 @@ import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { FormSection } from "../../../../ui/FormSection";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 interface PersonDraft {
   name: string;
   email: string;
   jobTitle: string;
 }
-
-const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
 
 const MAX_PEOPLE = 10;
 
@@ -59,7 +57,7 @@ export function OrganizationCreateForm({
    * one, not by being written down (#53).
    */
   const [isMember, setIsMember] = useState(false);
-  const [membershipCategory, setMembershipCategory] = useState(ORG_TIED_MEMBERSHIP_CATEGORIES[0]);
+  const [membershipCategory, setMembershipCategory] = useState("");
   const [memberSince, setMemberSince] = useState(() => new Date().toISOString().slice(0, 10));
   const [people, setPeople] = useState<PersonDraft[]>([]);
   const categories = useMembershipCategoryCatalog();
@@ -149,11 +147,13 @@ export function OrganizationCreateForm({
                     for a sentence and showed the first forty characters of it. */}
                 <Field label="Description" {...form.of("description")}>
                   {(control) => (
-                    <Textarea
+                    <MarkdownEditor
+                      variant="compact"
                       {...control}
-                      rows={3}
-                      value={description}
-                      onInput={(event) => setDescription((event.target as HTMLTextAreaElement).value)}
+                      name="description"
+                      label="Description"
+                      initialValue={description}
+                      onChange={setDescription}
                     />
                   )}
                 </Field>
@@ -192,11 +192,14 @@ export function OrganizationCreateForm({
                           one, the way the individual grant form already does
                           (#53); the code stays, because that is what the
                           bylaws and the rest of the portal address. */}
-                          {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
-                            <option key={category} value={category}>
-                              {categoryLabel(category)}
-                            </option>
-                          ))}
+                          <option value="">Choose a membership category</option>
+                          {categories
+                            .filter((entry) => !entry.isIndividual)
+                            .map(({ code: category }) => (
+                              <option key={category} value={category}>
+                                {categoryLabel(category)}
+                              </option>
+                            ))}
                         </Select>
                       )}
                     </Field>

@@ -22,6 +22,7 @@ import "../../../../ui/Content.css";
 // lazy chunk: a surface that writes the class name pulls the sheet in itself.
 import "../../../../ui/Table.css";
 import { patchJson } from "../../../../shared/api-client";
+import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
 import { fmtDate, toast } from "../../ui";
 import { usePortalHashLocation } from "../../hash-location";
@@ -133,7 +134,17 @@ export function MembersList({
           // the one thing here of unbounded length, so the leftover width on a
           // wide screen belongs to it rather than to a fixed vocabulary.
           header: "Member",
-          cell: (member) => <strong class="adm-cell-name">{member.name}</strong>,
+          // The row leads with the member's mark — the organization's logo,
+          // square, or the person's portrait, round — and initials while
+          // there is none, as the users and organizations directories do.
+          cell: (member) => (
+            <PersonCell
+              name={member.name}
+              avatarSrc={member.imageUrl ?? undefined}
+              shape={member.memberType === "organization" ? "square" : "round"}
+              size="sm"
+            />
+          ),
           width: "primary",
           sort: { asc: "name", desc: "-name" },
         },

@@ -3,7 +3,7 @@ import type { EmailMessageType } from "../../../../assets/shared/schemas/email-t
 import type { CampaignAudienceFilter, CampaignRecipient } from "./types";
 
 export async function computeCampaignDigest(payload: {
-  templateKey: string | undefined;
+  templateKey?: string;
   subjectOverride?: string | null;
   customText?: string | null;
   bodyContent?: string | null;
@@ -11,7 +11,8 @@ export async function computeCampaignDigest(payload: {
   sendMode: "personal" | "bcc_batch";
   batchSize: number;
   filter: CampaignAudienceFilter;
-  recipients: CampaignRecipient[];
+  recipients?: CampaignRecipient[];
+  snapshotId?: string;
 }): Promise<string> {
   const canonical = {
     templateKey: payload.templateKey,
@@ -22,7 +23,8 @@ export async function computeCampaignDigest(payload: {
     sendMode: payload.sendMode,
     batchSize: payload.batchSize,
     filter: payload.filter,
-    recipients: payload.recipients.map((recipient) => recipient.email),
+    recipients: payload.recipients?.map((recipient) => recipient.email),
+    snapshotId: payload.snapshotId,
   };
   return sha256Hex(JSON.stringify(canonical));
 }

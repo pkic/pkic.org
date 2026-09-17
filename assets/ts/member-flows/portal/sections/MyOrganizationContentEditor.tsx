@@ -201,12 +201,13 @@ function ContentEditForm({
       </Field>
       <Field label="Description" {...validation.of("description")}>
         {(control) => (
-          <Textarea
+          <MarkdownEditor
+            variant="compact"
             {...control}
-            rows={3}
             name="description"
-            value={form.description}
-            onInput={(e) => setField("description", (e.target as HTMLTextAreaElement).value)}
+            label="Description"
+            initialValue={form.description}
+            onChange={(value) => setField("description", value)}
             disabled={saving}
           />
         )}

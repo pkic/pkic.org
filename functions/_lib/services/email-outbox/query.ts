@@ -11,6 +11,12 @@ import type { DatabaseLike } from "../../types";
 import type { EmailMessageType } from "../../../../assets/shared/schemas/api-common";
 import type { EmailOutboxQuery, EmailOutboxStatus } from "../../../../assets/shared/schemas/email-outbox";
 
+export const EMAIL_OUTBOX_SELECT = `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
+  o.template_key, o.template_version, o.recipient_email, o.subject, o.payload_json,
+  o.message_type, o.provider, o.provider_message_id, o.status, o.attempts, o.send_after,
+  o.last_error, o.created_at, o.updated_at, o.sent_at
+  FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id`;
+
 export interface OutboxListRow {
   id: string;
   event_id: string | null;
@@ -130,13 +136,7 @@ export function buildEmailOutboxQueryStatements(query: EmailOutboxQuery, now: st
   );
   return {
     page: {
-      sql: `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
-                 o.template_key, o.template_version, o.recipient_email, o.subject, o.payload_json,
-                 o.message_type, o.provider, o.provider_message_id, o.status, o.attempts, o.send_after,
-                 o.last_error, o.created_at, o.updated_at, o.sent_at
-          FROM email_outbox o
-          LEFT JOIN events e ON e.id = o.event_id
-          ${where}`,
+      sql: `${EMAIL_OUTBOX_SELECT}           ${where}`,
       bindings,
       orderBy,
       limit: query.limit,

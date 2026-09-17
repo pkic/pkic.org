@@ -4,7 +4,7 @@
  * The picture when there is one, the name's initials when there is not. For
  * someone who may change it, the tile itself is the control: hovering or
  * focusing it says "Change photo", activating it opens the file chooser, and
- * a quiet Remove appears beside it. No panel header, no button standing open
+ * a small corner button removes it. No panel header, no button standing open
  * next to the picture.
  *
  * It was called `LogoTile` and served organizations only, while a person's
@@ -14,8 +14,8 @@
  * already written; it was only ever named after one of the two things it is
  * for. Both now use it, and the noun and the shape are the caller's.
  */
-import { useId, useRef } from "preact/hooks";
-import { Button } from "../ui/Button";
+import { useId, useRef, useState } from "preact/hooks";
+import { AvatarStanding, type AvatarStatus } from "../ui/Avatar";
 import { monogramFrom } from "../shared/initials";
 import { useLogoCommands, type LogoManagerProps } from "./LogoManager";
 import "./PictureTile.css";
@@ -23,6 +23,8 @@ import "./PictureTile.css";
 export interface PictureTileProps extends Omit<LogoManagerProps, "hint" | "uploadLabel"> {
   /** The name whose initials stand in while there is no picture. */
   name: string;
+  /** Standing surrounds the picture only, excluding editor actions. */
+  status?: AvatarStatus;
   /** Whether the reader may change the picture. Read-only viewers get the tile alone. */
   canChange: boolean;
   /**
@@ -52,16 +54,19 @@ export interface PictureTileProps extends Omit<LogoManagerProps, "hint" | "uploa
 
 export function PictureTile(props: PictureTileProps) {
   const hintId = useId();
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const hasPicture = Boolean(props.imageUrl && props.imageUrl !== failedUrl);
   const { busy, attempt, upload, remove } = useLogoCommands({ ...props, noun: props.noun });
   const inputRef = useRef<HTMLInputElement>(null);
   const noun = props.noun ?? "logo";
   const label = props.imageUrl ? `Change ${noun}` : `Upload ${noun}`;
 
-  const picture = props.imageUrl ? (
+  const picture = hasPicture ? (
     <img
       class={props.shape === "round" ? "portal-picture-tile-portrait" : "pk-picture-tile__img"}
-      src={props.imageUrl}
+      src={props.imageUrl ?? undefined}
       alt={props.alt}
+      onError={() => setFailedUrl(props.imageUrl)}
     />
   ) : (
     <span class="pk-picture-tile__initials" aria-hidden="true">
@@ -73,33 +78,38 @@ export function PictureTile(props: PictureTileProps) {
     (props.size === "mark" ? " pk-picture-tile--mark" : "") +
     (props.shape === "round" ? " pk-picture-tile--round" : "");
 
+  const withStanding = (picture: preact.ComponentChildren) =>
+    props.status ? <AvatarStanding status={props.status}>{picture}</AvatarStanding> : picture;
+
   if (!props.canChange) {
-    return (
+    return withStanding(
       <div
         class={`pk pk-picture-tile${sizing}`}
         role="img"
-        aria-label={props.imageUrl ? props.alt : `${props.name} has no ${noun}`}
+        aria-label={hasPicture ? props.alt : `${props.name} has no ${noun}`}
       >
         {picture}
-      </div>
+      </div>,
     );
   }
 
   return (
     <div class={`pk pk-picture-tile pk-picture-tile--editable${sizing}`}>
-      <button
-        type="button"
-        class="pk-picture-tile__control"
-        aria-label={label}
-        aria-describedby={props.hint ? hintId : undefined}
-        disabled={busy}
-        onClick={() => inputRef.current?.click()}
-      >
-        {picture}
-        <span class="pk-picture-tile__veil" aria-hidden="true">
-          {busy ? "Uploading…" : label}
-        </span>
-      </button>
+      {withStanding(
+        <button
+          type="button"
+          class="pk-picture-tile__control"
+          aria-label={label}
+          aria-describedby={props.hint ? hintId : undefined}
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {picture}
+          <span class="pk-picture-tile__veil" aria-hidden="true">
+            {busy ? "Uploading…" : label}
+          </span>
+        </button>,
+      )}
       <input
         key={attempt}
         ref={inputRef}
@@ -121,11 +131,16 @@ export function PictureTile(props: PictureTileProps) {
         </span>
       )}
       {props.imageUrl && (
-        <div class="pk-picture-tile__actions">
-          <Button variant="danger-quiet" size="sm" loading={busy} onClick={() => void remove()}>
-            {props.removeLabel}
-          </Button>
-        </div>
+        <button
+          type="button"
+          class="pk-picture-tile__remove"
+          aria-label={props.removeLabel}
+          title={props.removeLabel}
+          disabled={busy}
+          onClick={() => void remove()}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
       )}
     </div>
   );

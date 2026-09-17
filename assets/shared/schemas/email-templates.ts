@@ -18,7 +18,12 @@ export type { EmailContentType, EmailMessageType };
  * are that query's own aggregate SELECT-list aliases (grouped by
  * `template_key`), not raw `email_template_versions` columns.
  */
-export const EMAIL_TEMPLATES_SORT_COLUMNS = ["template_key", "active_version", "version_count"] as const;
+export const EMAIL_TEMPLATES_SORT_COLUMNS = [
+  "template_key",
+  "active_version",
+  "version_count",
+  "last_changed_at",
+] as const;
 
 const emailTemplateReadAuthorizationResponses = {
   "401": { description: "Staff authentication required." },
@@ -30,15 +35,31 @@ const emailTemplateWriteAuthorizationResponses = {
   "403": { description: "Email-template write permission required." },
 } as const;
 
+const emailTemplateManageAuthorizationResponses = {
+  "401": { description: "Staff authentication required." },
+  "403": { description: "Email-template manage permission required." },
+} as const;
+
 export const emailTemplatesSortValueSchema = sortColumnSchema(EMAIL_TEMPLATES_SORT_COLUMNS);
 
 // ── Template list ────────────────────────────────────────────────────────
+
+/**
+ * A template's one lifecycle word: the state of the version in use, or —
+ * with none in use — "draft" while something is still being written and
+ * "archived" once every version has been retired (#98, #99).
+ */
+export const emailTemplateStatusSchema = z.enum(["active", "draft", "archived"]);
+export type EmailTemplateStatus = z.infer<typeof emailTemplateStatusSchema>;
 
 export const emailTemplateSummarySchema = z.object({
   template_key: z.string(),
   active_version: z.number().nullable(),
   version_count: z.number(),
   draft_count: z.number(),
+  status: emailTemplateStatusSchema,
+  /** When the template last changed: its newest version's creation instant (#115). */
+  last_changed_at: z.string(),
 });
 export type EmailTemplateSummary = z.infer<typeof emailTemplateSummarySchema>;
 
@@ -81,6 +102,9 @@ export const emailTemplateVersionSchema = z.object({
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
   contentType: emailContentTypeSchema.optional(),
   messageType: emailMessageTypeSchema.optional(),
+  /** The sender this template's messages carry; absent, the environment's configured sender (#106). */
+  fromEmail: z.string().trim().toLowerCase().email("Enter a valid sender address").max(254).optional(),
+  fromName: z.string().trim().min(1).max(120).optional(),
 });
 export type EmailTemplateVersionInput = z.infer<typeof emailTemplateVersionSchema>;
 
@@ -212,6 +236,8 @@ export const emailTemplateVersionRowSchema = z.object({
   created_by_user_id: z.string().nullable(),
   created_at: z.string(),
   message_type: emailMessageTypeSchema,
+  from_email: z.string().nullable(),
+  from_name: z.string().nullable(),
 });
 export const emailTemplateVersionCreateResponseSchema = successResponseSchema.extend({
   version: emailTemplateVersionRowSchema,
@@ -295,5 +321,43 @@ export const emailTemplateActivateRouteSchema = {
     ...emailTemplateWriteAuthorizationResponses,
     "404": { description: "Template or version not found." },
     "409": { description: "Template state or authorization changed during activation." },
+  },
+};
+
+export const emailTemplateArchiveRouteSchema = {
+  tags: ["Email templates"],
+  summary: "Archive an email template",
+  "x-pkic-auth": { required: true, scopes: ["email-templates:manage"] },
+  description:
+    "Retires every version of a template. Messages queued for its key fail to render until a version is activated again.",
+  request: { params: emailTemplateKeyParamsSchema },
+  responses: {
+    "200": {
+      description: "Template archived.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "400": { description: "Invalid template key." },
+    ...emailTemplateManageAuthorizationResponses,
+    "404": { description: "Template not found." },
+    "409": { description: "Template state or authorization changed during archiving." },
+  },
+};
+
+export const emailTemplateDeleteRouteSchema = {
+  tags: ["Email templates"],
+  summary: "Delete an email template",
+  "x-pkic-auth": { required: true, scopes: ["email-templates:manage"] },
+  description:
+    "Removes a template and every version of it. Refused while a version is active or a queued message still names the key; archive it first.",
+  request: { params: emailTemplateKeyParamsSchema },
+  responses: {
+    "200": {
+      description: "Template deleted.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "400": { description: "Invalid template key." },
+    ...emailTemplateManageAuthorizationResponses,
+    "404": { description: "Template not found." },
+    "409": { description: "The template is still in use." },
   },
 };

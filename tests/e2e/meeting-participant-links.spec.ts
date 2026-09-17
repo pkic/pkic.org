@@ -12,6 +12,7 @@
  *
  * @covers event.3.10
  */
+import type { EventOccurrence } from "../../assets/shared/schemas/event-series";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
@@ -31,7 +32,6 @@ for (const broadcast of [false, true]) {
     const unique = `${String(Date.now())}-${String(test.info().workerIndex)}`;
     const eventName = `E2E participant links ${unique}`;
     const startsAt = new Date(Date.now() + 3_600_000).toISOString();
-    const endsAt = new Date(Date.now() + 7_200_000).toISOString();
 
     /*
      * A member of the consortium, seated in the meeting's group. Created here
@@ -41,7 +41,7 @@ for (const broadcast of [false, true]) {
      */
     const participantEmail = `participant-${unique}@participant-${unique}.test`;
     const created = await page.evaluate(
-      async ({ groupId, eventName, unique, startsAt, endsAt, participantEmail, broadcast }) => {
+      async ({ groupId, eventName, unique, startsAt, participantEmail, broadcast }) => {
         async function post(path: string, body: unknown) {
           const response = await fetch(path, {
             method: "POST",
@@ -87,13 +87,24 @@ for (const broadcast of [false, true]) {
         if (!series.body.series) return { stage: "series", ...series };
 
         const seriesId = series.body.series.id as string;
-        const occurrence = await post(`/api/v1/groups/${groupId}/meetings/series/${seriesId}/occurrences`, {
-          startsAt,
-          endsAt,
-          providerJoinUrl: broadcast
-            ? "https://www.youtube.com/live/jfKfPfyJRdk"
-            : `https://meet.example.test/${unique}`,
+        const occurrencePath = `/api/v1/groups/${groupId}/meetings/series/${seriesId}/occurrences`;
+        const generatedResponse = await fetch(occurrencePath, { credentials: "same-origin" });
+        const generated = ((await generatedResponse.json()) as { occurrences: EventOccurrence[] }).occurrences[0];
+        const configured = await fetch(`${occurrencePath}/${generated.id}`, {
+          method: "PATCH",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            expectedUpdatedAt: generated.updatedAt,
+            providerJoinUrl: broadcast
+              ? "https://www.youtube.com/live/jfKfPfyJRdk"
+              : `https://meet.example.test/${unique}`,
+          }),
         });
+        const occurrence = {
+          status: configured.status,
+          body: (await configured.json()) as { occurrence?: EventOccurrence },
+        };
         if (!occurrence.body.occurrence) return { stage: "occurrence", ...occurrence };
 
         return {
@@ -105,21 +116,18 @@ for (const broadcast of [false, true]) {
           occurrenceId: occurrence.body.occurrence.id as string,
         };
       },
-      { groupId: GROUP_ID, eventName, unique, startsAt, endsAt, participantEmail, broadcast },
+      { groupId: GROUP_ID, eventName, unique, startsAt, participantEmail, broadcast },
     );
     expect(created.stage, JSON.stringify(created.body)).toBe("ready");
     const occurrenceId = created.occurrenceId!;
 
     // The manager sends the round from the meeting itself, where they set it
-    // up: the occurrence's management detail opens in place on its row, which
-    // is how every list in the portal opens a record.
+    // up, through the occurrence's own routed record page.
     await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${created.seriesId!}/settings`);
-    const settingsForm = page
-      .locator("form")
-      .filter({ has: page.getByRole("button", { name: "Meeting series actions" }) });
+    const settingsForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Meeting actions" }) });
     await expect(settingsForm.locator("input")).toHaveCount(0);
     async function editSeries() {
-      await page.getByRole("button", { name: "Meeting series actions" }).click();
+      await page.getByRole("button", { name: "Meeting actions" }).click();
       await page.getByRole("menuitem", { name: "Edit settings" }).click();
     }
     await editSeries();
@@ -151,20 +159,37 @@ for (const broadcast of [false, true]) {
     await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${created.seriesId!}/occurrences`);
     const row = page.getByRole("row").filter({ hasText: "Scheduled" }).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
-    // One action, so it is the row's own button rather than a menu behind it.
-    await row.getByRole("button", { name: /^Manage the occurrence starting / }).click();
-    const occurrence = page.getByRole("region", { name: `Occurrence of ${eventName}` });
-    await expect(occurrence).toBeVisible({ timeout: 15_000 });
-    await expect(occurrence.getByText("No join links have been sent for this meeting yet.")).toBeVisible();
+    await row.getByRole("button", { name: /^Actions for / }).click();
+    const downloadReady = page.waitForEvent("download");
+    await page.getByRole("menuitem", { name: "Download calendar" }).click();
+    const download = await downloadReady;
+    expect(download.suggestedFilename()).toContain("e2e-participant-links");
+    await expect(row.getByRole("checkbox")).toBeVisible();
+    // The row opens the occurrence's own page (#126) — a record with its
+    // commands in its menu — never an expansion under the row.
+    await row.getByRole("link", { name: /^Open the occurrence starting / }).click();
+    await expect(page).toHaveURL(new RegExp(`/meetings/${created.seriesId!}/occurrences/${occurrenceId}$`));
+    await expect(page.getByText("No join links have been sent for this meeting yet")).toBeVisible({
+      timeout: 15_000,
+    });
+    // Nothing opens in edit mode: the settings are read until asked for.
+    await expect(page.getByRole("form", { name: "Edit occurrence" })).toHaveCount(0);
 
     const since = await capturedEmailCount();
-    await occurrence.getByRole("button", { name: "Send join links" }).click();
+    await page.getByRole("button", { name: "Occurrence actions" }).click();
+    await page.getByRole("menuitem", { name: "Send join links…" }).click();
     await acceptConfirmDialog(page, "Send join links");
     await expect(page.locator(".my-toast", { hasText: /Join links queued for \d+ participants?/ })).toBeVisible();
-    // The panel says which round went out, so a manager deciding whether to
+    // The header says which round went out, so a manager deciding whether to
     // remind can see it without opening the audit log.
-    await expect(occurrence.getByText(/^Round 1 went out /)).toBeVisible({ timeout: 15_000 });
-    await expect(occurrence.getByRole("button", { name: "Send join links again" })).toBeVisible();
+    await expect(page.getByText(/^Round 1 went out /)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Occurrence actions" }).click();
+    await expect(page.getByRole("menuitem", { name: "Send join links again…" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    // Who was invited, and that their calendar has not answered yet, is a
+    // facet of the record.
+    await page.getByRole("link", { name: "Invitations" }).click();
+    await expect(page.getByRole("row").filter({ hasText: participantEmail })).toContainText("No answer");
 
     // The reused local server has no scheduled outbox drain. Process the bounded
     // synthetic backlog left by earlier journeys, as the scheduler does in preview.
@@ -253,6 +278,49 @@ for (const broadcast of [false, true]) {
       }
     } finally {
       await forwarded.close();
+    }
+    await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${created.seriesId!}/occurrences`);
+    const cancelRow = page.getByRole("row").filter({ hasText: "Scheduled" }).first();
+    await cancelRow.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Cancel selected…" }).click();
+    await acceptConfirmDialog(page, "Cancel selected meetings");
+    await expect(page.getByRole("row").filter({ hasText: "Cancelled" })).toHaveCount(1);
+    if (!broadcast) {
+      const calendarName = `Forms review ${unique}`;
+      const beforeCreation = await capturedEmailCount();
+      await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/new`);
+      await expect(page.getByText(/Occurrences are generated automatically through year-end/)).toBeVisible();
+      await page.getByRole("button", { name: "Create meeting", exact: true }).click();
+      await expect(page.getByLabel("Meeting name")).toHaveAttribute("aria-invalid", "true");
+      await page.getByLabel("Meeting name").fill(calendarName);
+      const createdCalendar = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/groups/${GROUP_ID}/meetings/series`) && response.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Create meeting", exact: true }).click();
+      const response = await createdCalendar;
+      expect(response.status()).toBe(201);
+      const { series } = await response.json();
+      await expect(page).toHaveURL(new RegExp(`/meetings/${series.id}$`));
+      const invitation = await waitForCapturedEmail(participantEmail, calendarName, {
+        since: beforeCreation,
+        timeoutMs: 30_000,
+      });
+      const attachments = invitation.payload.attachments as Array<{ filename: string; content: string }>;
+      const calendars = attachments.filter((attachment) => attachment.filename.endsWith(".ics"));
+      expect(calendars).toHaveLength(1);
+      const calendar = Buffer.from(calendars[0].content, "base64").toString("utf8");
+      expect(calendar).toContain(`UID:${series.id}@pkic.org`);
+      expect(calendar).toContain("METHOD:REQUEST");
+      expect(calendar).toContain("RRULE:");
+      expect(calendar).toContain("BEGIN:VTIMEZONE");
+      expect(calendar).toContain("RSVP=TRUE");
+      expect(extractEmailUrl(invitation, `/meetings/${series.id}`)).toContain(
+        `/portal/#/groups/${GROUP_ID}/meetings/${series.id}`,
+      );
+      await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${series.id}/occurrences`);
+      await expect(page.getByRole("row").filter({ hasText: "Scheduled" }).first()).toBeVisible();
+      await page.screenshot({ path: test.info().outputPath("automatic-meeting-calendar.png"), fullPage: true });
     }
   });
 }

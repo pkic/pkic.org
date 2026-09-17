@@ -3,7 +3,8 @@ import { friendlyErrorMessage } from "../../../../components/ErrorAlert";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 /** Application-answer keys editable via PATCH /api/v1/members/applications/:id (Fix 3). */
 export interface ApplicationEditFormValue {
@@ -132,33 +133,43 @@ export function ApplicationEditForm({
           </Field>
         </div>
 
+        {/* Prose answers take the shared Markdown editor (#114). */}
         <Field label="About yourself">
           {(control) => (
-            <Textarea
+            <MarkdownEditor
+              variant="compact"
               {...control}
-              rows={3}
-              value={form.aboutYourself}
-              onInput={(e) => onChange((f) => ({ ...f, aboutYourself: (e.target as HTMLTextAreaElement).value }))}
+              name="aboutYourself"
+              label="About yourself"
+              initialValue={form.aboutYourself}
+              disabled={disabled}
+              onChange={(value) => onChange((f) => ({ ...f, aboutYourself: value }))}
             />
           )}
         </Field>
         <Field label="About organization">
           {(control) => (
-            <Textarea
+            <MarkdownEditor
+              variant="compact"
               {...control}
-              rows={3}
-              value={form.aboutOrganization}
-              onInput={(e) => onChange((f) => ({ ...f, aboutOrganization: (e.target as HTMLTextAreaElement).value }))}
+              name="aboutOrganization"
+              label="About organization"
+              initialValue={form.aboutOrganization}
+              disabled={disabled}
+              onChange={(value) => onChange((f) => ({ ...f, aboutOrganization: value }))}
             />
           )}
         </Field>
         <Field label="Reason for joining">
           {(control) => (
-            <Textarea
+            <MarkdownEditor
+              variant="compact"
               {...control}
-              rows={3}
-              value={form.reason}
-              onInput={(e) => onChange((f) => ({ ...f, reason: (e.target as HTMLTextAreaElement).value }))}
+              name="reason"
+              label="Reason for joining"
+              initialValue={form.reason}
+              disabled={disabled}
+              onChange={(value) => onChange((f) => ({ ...f, reason: value }))}
             />
           )}
         </Field>

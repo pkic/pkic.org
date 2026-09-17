@@ -6,11 +6,14 @@ import { ApiDataTable, type ApiTableActions } from "../../../../../components/Ap
 import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
 import { Button } from "../../../../../ui/Button";
+import { PersonCell } from "../../../../../ui/PersonCell";
 import { postJson } from "../../../../../shared/api-client";
-import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
+import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
+import { RegistrationDayStates } from "../../../../../components/event-registrations/RegistrationDayStates";
+import { RegistrationTotals } from "../../../../../components/event-registrations/RegistrationTotals";
 import { EventFormResponses } from "./Forms";
 import {
   EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS,
@@ -80,37 +83,26 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
     window.location.href = eventRegistrationExportsPath(slug);
   }
 
-  const pendingConfirmation = stats?.byStatus?.pending_email_confirmation ?? 0;
-  const total = stats ? Object.values(stats.byStatus).reduce((s, v) => s + v, 0) : 0;
-  const attendanceTypes = new Set([
-    ...Object.keys(ATTENDANCE_TYPE_LABELS).filter((type) => type !== "not_attending"),
-    ...Object.keys(stats?.attendanceStatusByType ?? {}),
-  ]);
-  const attendanceStatuses = [...attendanceTypes].map((type) => ({
-    type,
-    label: attendanceTypeLabel(type).toLowerCase(),
-    accepted: stats?.attendanceStatusByType?.[type]?.accepted ?? 0,
-    waitlisted: stats?.attendanceStatusByType?.[type]?.waitlisted ?? 0,
-  }));
-  const accepted = attendanceStatuses.reduce((sum, item) => sum + item.accepted, 0);
-  const waitlisted = attendanceStatuses.reduce((sum, item) => sum + item.waitlisted, 0);
-  const bouncedCount = stats?.bouncedCount ?? 0;
   const columns: Array<Column<Registration>> = [
     {
-      header: "Name / Email",
+      // The same face-then-name cell every roster uses (#90).
+      header: "Attendee",
       cell: (r) => (
-        <>
-          <strong class="adm-cell-name">{r.display_name ?? r.user_email ?? "—"}</strong>
-          {r.display_name && r.user_email && (
-            <>
-              <br />
-              <span class="pk-small">{r.user_email}</span>
-            </>
-          )}
-        </>
+        <PersonCell
+          name={r.display_name ?? r.user_email ?? "—"}
+          email={r.display_name && r.user_email ? r.user_email : undefined}
+          avatarSrc={r.headshot_url ?? undefined}
+          size="sm"
+        />
       ),
+      width: "primary",
       sort: { asc: "display_name", desc: "-display_name" },
     },
+    // Who they represent and what they do, as the account states it (#119).
+    // The title is there for the reader who wants it, hidden by default so
+    // the row keeps its width for the days.
+    { header: "Organization", cell: (r) => r.organization_name ?? "—", className: "pk-small" },
+    { header: "Job title", cell: (r) => r.job_title ?? "—", className: "pk-small", defaultHidden: true },
     {
       header: "Status",
       cell: (r) => <Badge status={r.status} />,
@@ -155,9 +147,20 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
       },
     },
     {
+      // Day by day: the whole-registration type is a derivation that reads a
+      // registration with one confirmed and two waitlisted days as plainly
+      // "in-person". The filter narrows to those still waiting for a seat.
       header: "Attendance",
-      cell: (r) => (r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—"),
+      cell: (r) => <RegistrationDayStates days={r.days} attendanceType={r.attendance_type} />,
       sort: { asc: "attendance_type", desc: "-attendance_type" },
+      filter: {
+        param: "waitlisted",
+        options: [
+          { value: "", label: "All attendance" },
+          { value: "true", label: "On a day waitlist" },
+          { value: "false", label: "Not waitlisted" },
+        ],
+      },
     },
     ...(attendanceChangeFilter
       ? [
@@ -204,12 +207,6 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
           },
         ]
       : []),
-    {
-      header: "Day waitlist",
-      cell: (r) =>
-        r.dayWaitlistSummary ??
-        (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—"),
-    },
     ...(!attendanceChangeFilter
       ? [
           {
@@ -278,53 +275,9 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
     },
   ];
 
-  /*
-   * The tinted numbers are gone rather than translated. Each one already sits
-   * beside the word that says what it counts — "accepted", "waitlisted",
-   * "pending", "bounced" — so the colour was a second copy of a signal a
-   * reader who cannot separate the hues never received in the first place.
-   * This is the same call `EventStats` made when its two amber stat values
-   * became a sentence.
-   */
   return (
     <div class="pk pk-stack">
-      {stats && (
-        <div class="adm-mini-stats" role="group" aria-label="Registration totals">
-          <span class="adm-mini-stat">
-            <strong>{accepted}</strong> accepted
-          </span>
-          {waitlisted > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{waitlisted}</strong> waitlisted
-            </span>
-          )}
-          {pendingConfirmation > 0 && (
-            <span class="adm-mini-stat">
-              <strong>{pendingConfirmation}</strong> pending
-            </span>
-          )}
-          <span class="adm-mini-stat">
-            <strong>{total}</strong> total
-          </span>
-          <span class="adm-mini-stat-sep" aria-hidden="true" />
-          {attendanceStatuses
-            .filter(({ accepted, waitlisted }) => accepted + waitlisted > 0)
-            .map(({ type, label, accepted, waitlisted }) => (
-              <span key={type} class="adm-mini-stat">
-                <strong>{accepted}</strong> {label}
-                {waitlisted > 0 && <span> (+{waitlisted} waitlisted)</span>}
-              </span>
-            ))}
-          {bouncedCount > 0 && (
-            <>
-              <span class="adm-mini-stat-sep" aria-hidden="true" />
-              <span class="adm-mini-stat">
-                <strong>{bouncedCount}</strong> bounced
-              </span>
-            </>
-          )}
-        </div>
-      )}
+      {stats && <RegistrationTotals stats={stats} />}
       <ApiDataTable
         caption="Event registrations"
         endpoint={eventRegistrationsPath(slug)}
@@ -344,7 +297,6 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
                 attendance dashboard's links as much as from here. */}
             <FilterSelect
               ariaLabel="Attendance changes"
-              className="adm-filter-select"
               value={attendanceChangeFilter}
               options={[
                 { value: "", label: "All attendance activity" },

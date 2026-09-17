@@ -7,6 +7,7 @@
  * event, reserve an organization domain, enqueue the confirmation, and
  * write the audit record in one D1 transaction.
  */
+import { requireCategoryWorkflow, prepareMembershipWorkflowPin } from "../workflows/pinning";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { AppError } from "../../../errors";
 import { prepareAuditLog } from "../../audit";
@@ -23,16 +24,12 @@ import { nowIso } from "../../../utils/time";
 import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
 import { getOrganizationDomainClaim, prepareClaimDomainForApplication } from "../organization-domain-claims";
-import {
-  MEMBERSHIP_CATEGORIES,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-} from "../../../../../assets/shared/schemas/membership-categories";
+import { requireMembershipCategory } from "../categories";
+import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 import { normalizeOrgName } from "../../../../../assets/shared/organization-name";
 import { first } from "../../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../../db/authorization-guard";
-
-export { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
 export function emailDomain(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "";
@@ -90,7 +87,7 @@ export interface CreateMemberApplicationInput {
 export interface CreateMemberApplicationResult {
   id: string;
   manageToken: string;
-  stage: "pending";
+  stage: "submitted";
   outboxId: string;
 }
 
@@ -123,6 +120,15 @@ export async function createMemberApplication(
   db: DatabaseLike,
   input: CreateMemberApplicationInput,
 ): Promise<CreateMemberApplicationResult> {
+  const category = await requireMembershipCategory(db, input.membershipCategory);
+  const workflow = await requireCategoryWorkflow(db, category);
+  const isIndividual = category.isIndividual;
+  const applicantPolicy = membershipApplicantPolicySchema(category).safeParse({
+    applicantEmail: input.applicantEmail,
+    organizationName: input.organizationName ?? undefined,
+  });
+  if (!applicantPolicy.success)
+    throw new AppError(422, "VALIDATION_ERROR", "Check the category requirements", applicantPolicy.error.flatten());
   const form = await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY);
   if (!form) {
     throw new AppError(503, "APPLICATION_FORM_UNAVAILABLE", "The membership application form is unavailable");
@@ -145,7 +151,6 @@ export async function createMemberApplication(
   );
   const manageToken = randomToken(24);
   const manageTokenHash = await sha256Hex(manageToken);
-  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
   if (isIndividual !== (input.applicantKind === "individual")) {
     throw new AppError(
       422,
@@ -184,7 +189,7 @@ export async function createMemberApplication(
            (id, applicant_user_id, applicant_email, applicant_name, organization_name, organization_domain,
             membership_category, form_submission_id, join_capability_id, stage, stage_entered_at,
             manage_token_hash, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -203,6 +208,8 @@ export async function createMemberApplication(
       ),
   ];
 
+  statements.push(...prepareMembershipWorkflowPin(db, id, category, workflow, 1, now));
+
   if (organizationDomain) {
     statements.push(prepareClaimDomainForApplication(db, organizationDomain, id, now));
   }
@@ -212,7 +219,7 @@ export async function createMemberApplication(
       .prepare(
         `INSERT INTO member_application_events
            (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, NULL, 'pending', NULL, 'Application submitted', ?)`,
+         VALUES (?, ?, NULL, 'submitted', NULL, 'Application submitted', ?)`,
       )
       .bind(uuid(), id, now),
   );
@@ -251,12 +258,12 @@ export async function createMemberApplication(
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,
-        "MEMBER_JOIN_IDENTITY_CHANGED",
-        "The verified account email changed before the application was submitted",
+        "MEMBER_JOIN_CONTEXT_CHANGED",
+        "Your verified identity or the category policy changed. Reload the application form and retry.",
       );
     }
     return translateDomainClaimConflict(db, organizationDomain, id, error);
   }
 
-  return { id, manageToken, stage: "pending", outboxId: confirmation.id };
+  return { id, manageToken, stage: "submitted", outboxId: confirmation.id };
 }

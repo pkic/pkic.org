@@ -166,7 +166,7 @@ export function EventFormPlacementEditor({
   return (
     <div class="pk pk-stack pk-stack--snug">
       <div class="pk-cluster pk-cluster--between">
-        <h6>{title}</h6>
+        <h4>{title}</h4>
         {!choosing && (
           <Menu
             label={`${title} actions`}

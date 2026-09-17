@@ -119,6 +119,20 @@ function mount(node: ComponentChildren): HTMLElement {
   return container;
 }
 
+/**
+ * Confirms the resend dialog. Resending asks for its deadline in a dialog of
+ * its own, so the deadline belongs to that one resend rather than to a field
+ * on the page that silently applied to whichever row was resent next.
+ */
+async function confirmResend(container: HTMLElement): Promise<void> {
+  const dialog = container.querySelector<HTMLDialogElement>("dialog");
+  const confirm = [...(dialog?.querySelectorAll("button") ?? [])].find(
+    (button) => button.textContent?.trim() === "Resend invitation",
+  );
+  if (!confirm) throw new Error("the resend dialog did not open");
+  await act(async () => confirm.click());
+}
+
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -181,7 +195,7 @@ describe("portal event invitations", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} />
+        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} listPath="/x" />
       </>,
     );
     await settle();
@@ -221,6 +235,7 @@ describe("portal event invitations", () => {
     // Two actions, so this row collapses into its menu; the helper finds it
     // there without the test having to know that.
     await runRowAction(container, "Ada Lovelace", "Resend invitation");
+    await confirmResend(container);
     // The outcome is announced after the list has been reloaded, so the
     // sentence and the row it describes arrive together — one tick for the
     // action, one for the reload behind it.
@@ -264,7 +279,7 @@ describe("portal event invitations", () => {
       }),
     );
 
-    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
+    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} listPath="/x" />);
     await settle();
     // Revoke is not authorized here, so resend is the row's only action —
     // still behind the row's menu, whose trigger names the invitee so a page
@@ -272,6 +287,7 @@ describe("portal event invitations", () => {
     expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
 
     await runRowAction(container, "Ada Lovelace", "Resend invitation");
+    await confirmResend(container);
     await settle();
     expect(resend).toBe(true);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Invitation is no longer pending.");
@@ -306,7 +322,8 @@ describe("portal event invitations", () => {
       }),
     );
 
-    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
+    // Composing is its own page under the list, reached by "Invite attendees".
+    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} listPath="/x" segment="new" />);
     await settle();
     const composer = container.querySelector('[aria-label="Send attendee invitations"]')!;
     expect(composer.querySelector('input[aria-label="attendee 1 first name"]')).not.toBeNull();
@@ -381,7 +398,15 @@ describe("portal event invitations", () => {
       }),
     );
 
-    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} inviteType="speaker" />);
+    const container = mount(
+      <GroupEventInvitations
+        groupId={GROUP_ID}
+        event={EVENT}
+        inviteType="speaker"
+        listPath="/x/speakers"
+        segment="new"
+      />,
+    );
     await settle();
     const composer = container.querySelector('[aria-label="Send speaker invitations"]')!;
     const textarea = composer.querySelector<HTMLTextAreaElement>("textarea")!;
@@ -470,30 +495,19 @@ describe("portal event invitations", () => {
   it("names the resend deadline, status filter and panel of each invitation set apart", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(response([]))),
+      vi.fn(async (input: RequestInfo | URL) =>
+        urlOf(input).pathname.endsWith("/speakers")
+          ? json({ invites: [speakerInvite()], page: { limit: 50, offset: 0, total: 1, hasMore: false } })
+          : json(response()),
+      ),
     );
     const container = mount(
       <>
-        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} />
-        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} inviteType="speaker" />
+        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} listPath="/x" />
+        <GroupEventInvitations groupId={GROUP_ID} event={EVENT} inviteType="speaker" listPath="/x/speakers" />
       </>,
     );
     await settle();
-
-    const attendee = controlFor(container, "Attendee resend deadline");
-    const speaker = controlFor(container, "Speaker resend deadline");
-    expect(attendee.type).toBe("datetime-local");
-    expect(speaker.type).toBe("datetime-local");
-    expect(attendee.id).not.toBe(speaker.id);
-    expect(attendee).not.toBe(speaker);
-
-    // The help sentence is announced with the control rather than floating
-    // beside it, so the deadline's rule reaches a screen reader.
-    const describedBy = attendee.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain(
-      "cannot be later than the event end",
-    );
 
     // Each set's status filter is in its own table's Status column, and each
     // table is named after its set — so the two menus, which share a name,
@@ -506,10 +520,33 @@ describe("portal event invitations", () => {
       "Speaker invitations",
     ]);
     expect(container.querySelectorAll("select")).toHaveLength(0);
-
     expect(
       Array.from(container.querySelectorAll("section[aria-label]")).map((s) => s.getAttribute("aria-label")),
     ).toContain("Speaker invitations");
+
+    // Resending asks for its deadline in a dialog named for the set it
+    // belongs to, with the rule announced with the control rather than
+    // floating beside it. The page carries no standing deadline field.
+    expect(container.querySelector('input[type="datetime-local"]')).toBeNull();
+    const [attendeeList, speakerList] = Array.from(container.querySelectorAll<HTMLElement>("section.pk-table-list"));
+    await runRowAction(attendeeList, "Ada Lovelace", "Resend invitation");
+    const attendee = controlFor(container, "Attendee resend deadline");
+    expect(attendee.type).toBe("datetime-local");
+    const describedBy = attendee.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain(
+      "cannot be later than the event end",
+    );
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>("dialog button")]
+        .find((button) => button.textContent?.trim() === "Cancel")
+        ?.click();
+    });
+
+    await runRowAction(speakerList, "Ada Lovelace", "Resend invitation");
+    const speaker = controlFor(container, "Speaker resend deadline");
+    expect(speaker.type).toBe("datetime-local");
+    expect(speaker).not.toBe(attendee);
   });
 
   it("offers every invitation status the list contract accepts", async () => {
@@ -517,7 +554,7 @@ describe("portal event invitations", () => {
       "fetch",
       vi.fn(async () => json(response([]))),
     );
-    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} />);
+    const container = mount(<GroupEventInvitations groupId={GROUP_ID} event={EVENT} listPath="/x" />);
     await settle();
 
     // "All statuses" is the filter's own way of saying "no filter" and is not

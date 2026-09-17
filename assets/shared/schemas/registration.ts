@@ -181,6 +181,10 @@ export const dayWaitlistItemSchema = z.object({
 
 export const registrationDayAttendanceResponseItemSchema = dayAttendanceItemSchema.extend({
   label: z.string().nullable(),
+  /** When the day was first held on this registration; absent where a builder has no row to read. */
+  heldSince: z.string().optional(),
+  /** When the day's attendance last changed. */
+  changedAt: z.string().optional(),
 });
 
 export const registrationDayStateSchema = z.object({

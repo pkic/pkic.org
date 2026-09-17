@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { unstable_splitSqlQuery } from "wrangler";
 import {
   sqlString,
   toSqlNullableText,
@@ -7,7 +8,8 @@ import {
   buildOrganizationMemberAggregateStatements,
   buildActingIdentityStatement,
   buildRepresentativeRoleGrantStatement,
-  buildUpsertUserStatement,
+  buildUpsertUserStatements,
+  ownerUserIdForEmail,
   buildIndividualMemberAggregateStatements,
   buildGroupMembershipStatement,
   buildLinksJson,
@@ -125,9 +127,19 @@ describe("buildActingIdentityStatement / buildRepresentativeRoleGrantStatement",
   });
 });
 
-describe("buildUpsertUserStatement", () => {
-  it("normalizes the email and returns it alongside the statement", () => {
-    const { statement, normalizedEmail } = buildUpsertUserStatement({
+describe("ownerUserIdForEmail", () => {
+  it("resolves the address through primary and alternate account addresses, skipping closed accounts", () => {
+    const resolver = ownerUserIdForEmail("alice@acme.example");
+    expect(resolver).toContain("FROM users live");
+    expect(resolver).toContain("FROM user_emails alternate");
+    expect(resolver.match(/pii_redacted_at IS NULL AND \w+\.merged_into_user_id IS NULL/g)).toHaveLength(2);
+    expect(resolver).toContain(sqlString("alice@acme.example"));
+  });
+});
+
+describe("buildUpsertUserStatements", () => {
+  it("normalizes the email and returns it alongside the statements", () => {
+    const { statements, normalizedEmail } = buildUpsertUserStatements({
       email: "Alice@Acme.Example",
       firstName: "Alice",
       lastName: "Anderson",
@@ -137,11 +149,52 @@ describe("buildUpsertUserStatement", () => {
       headshotR2Key: null,
     });
     expect(normalizedEmail).toBe("alice@acme.example");
-    expect(statement).toContain("INSERT INTO users");
-    expect(statement).toContain(sqlString(normalizedEmail));
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain("INSERT INTO users");
+    expect(statements[0]).toContain(sqlString(normalizedEmail));
+    expect(statements[1]).toContain("UPDATE users SET");
   });
 
-  it("ends the statement with the CASE...END clause, not a trailing comma after END", () => {
+  it("creates an account only for an address no account has reserved, and never upserts onto the reservation", () => {
+    // `trg_users_primary_email_reservation_insert` (consolidated migration
+    // 0035) fires before SQLite detects an ON CONFLICT target, so an upsert
+    // on an address another account holds — as an alternate address, or as
+    // an unconfirmed pending email change — aborts the whole import file
+    // with EMAIL_TAKEN. The insert has to be guarded instead.
+    const [createAccount] = buildUpsertUserStatements({
+      email: "alice@acme.example",
+      firstName: null,
+      lastName: null,
+      jobTitle: null,
+      biography: null,
+      linksJson: null,
+      headshotR2Key: null,
+    }).statements;
+    expect(createAccount).not.toContain("ON CONFLICT");
+    expect(createAccount).toContain(
+      `SELECT 1 FROM users WHERE normalized_email = ${sqlString("alice@acme.example")} OR pending_email = ${sqlString("alice@acme.example")}`,
+    );
+    expect(createAccount).toContain(
+      `SELECT 1 FROM user_emails WHERE normalized_email = ${sqlString("alice@acme.example")}`,
+    );
+  });
+
+  it("fills profile gaps on the live account that owns the address, without clobbering hand-set values", () => {
+    const [, fillProfileGaps] = buildUpsertUserStatements({
+      email: "alice@acme.example",
+      firstName: "Alice",
+      lastName: null,
+      jobTitle: null,
+      biography: null,
+      linksJson: null,
+      headshotR2Key: "member-photos/alice.png",
+    }).statements;
+    expect(fillProfileGaps).toContain("first_name = COALESCE(first_name, 'Alice')");
+    expect(fillProfileGaps).toContain("WHEN headshot_r2_key LIKE 'headshots/%' THEN headshot_r2_key");
+    expect(fillProfileGaps).toContain(`WHERE id = ${ownerUserIdForEmail("alice@acme.example")}`);
+  });
+
+  it("stays one statement per statement under wrangler's own SQL splitter", () => {
     // Regression test: wrangler's local `d1 execute` SQL statement splitter
     // (unstable_splitSqlQuery) only recognizes a CASE block as closed when
     // END is immediately followed by ";" or whitespace. "END," (comma, no
@@ -149,9 +202,9 @@ describe("buildUpsertUserStatement", () => {
     // every later statement in the file into this one until EOF, eventually
     // failing with D1's 100KB per-statement SQLITE_TOOBIG limit once enough
     // real data has accumulated (confirmed against wrangler's own splitter
-    // and against the real 419-org dataset, 2026-08-17). The CASE clause
-    // must stay the last clause in the SET list, ending in "END;".
-    const { statement } = buildUpsertUserStatement({
+    // and against the real 419-org dataset, 2026-08-17). Assert against the
+    // splitter itself rather than the shape of the last clause.
+    const { statements } = buildUpsertUserStatements({
       email: "alice@acme.example",
       firstName: null,
       lastName: null,
@@ -160,7 +213,10 @@ describe("buildUpsertUserStatement", () => {
       linksJson: null,
       headshotR2Key: null,
     });
-    expect(statement.trim()).toMatch(/END;$/);
+    const trailing = "INSERT INTO organizations (id, name, normalized_name) VALUES ('o', 'O', 'o');";
+    const split = unstable_splitSqlQuery([...statements, trailing].join("\n")) as string[];
+    expect(split).toHaveLength(3);
+    expect(split[2]).toContain("INSERT INTO organizations");
   });
 });
 
@@ -168,7 +224,7 @@ describe("buildIndividualMemberAggregateStatements", () => {
   it("creates an individual-typed aggregate keyed off the user row", () => {
     const statements = buildIndividualMemberAggregateStatements("bob@members.invalid", "H5", null);
     expect(statements[0]).toContain("'individual'");
-    expect(statements[0]).toContain("FROM users u WHERE u.normalized_email");
+    expect(statements[0]).toContain(`FROM users u WHERE u.id = ${ownerUserIdForEmail("bob@members.invalid")}`);
     expect(statements).toHaveLength(4);
     expect(statements[3]).toContain("INSERT INTO identities");
     expect(statements[3]).toContain("organization_id IS NULL");
@@ -176,6 +232,12 @@ describe("buildIndividualMemberAggregateStatements", () => {
 });
 
 describe("buildGroupMembershipStatement", () => {
+  it("targets governance groups explicitly without treating the CA roster as a board", () => {
+    expect(buildGroupMembershipStatement("board", "alex@example.test", "board")).toContain(
+      "group_row.type_key = 'board'",
+    );
+    expect(buildGroupMembershipStatement("ca", "alex@example.test")).toContain("group_row.type_key = 'working_group'");
+  });
   it("uses the canonical capacity projection and final group schema", () => {
     const statement = buildGroupMembershipStatement("ca", "alice@acme.example");
     expect(statement).toContain("active_user_capacities");

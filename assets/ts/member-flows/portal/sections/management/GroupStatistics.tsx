@@ -90,7 +90,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
     setQuery(checked.data);
   }
 
-  if (!stats.data && stats.loading) return <Spinner label="Loading group statistics…" />;
+  if (!stats.data && stats.loading) return <Spinner label="Loading group analytics…" />;
 
   const noActivity =
     stats.data?.activity.people.actionCount === 0 &&
@@ -104,7 +104,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
       <Panel aria-label="Reporting window">
         <PanelHeader title="Reporting window" />
         <PanelBody class="pk-stack">
-          <form noValidate class="pk-stack" aria-label="Statistics window" onSubmit={applyWindow} {...form.handlers}>
+          <form noValidate class="pk-stack" aria-label="Analytics window" onSubmit={applyWindow} {...form.handlers}>
             <div class="pk-grid pk-grid--tight">
               <Field label="Count people who" {...form.of("scope")}>
                 {(control) => (
@@ -174,7 +174,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                   ? "Active participation now."
                   : "Participation overlapping the selected window."}
               </p>
-              <div class="pk-grid pk-grid--tight">
+              <div class="pk-stat-row">
                 <StatCard label="People" value={String(stats.data.participation.people.count)} note="Distinct people" />
                 <StatCard
                   label="Memberships"
@@ -191,7 +191,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
               <p class="pk-small">
                 {formatWindowBoundary(stats.data.window.from)} to {formatWindowBoundary(stats.data.window.to)}
               </p>
-              <div class="pk-grid pk-grid--tight">
+              <div class="pk-stat-row">
                 <StatCard
                   label="Active people"
                   value={String(stats.data.activity.people.actorCount)}

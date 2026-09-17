@@ -1,3 +1,4 @@
+import { GroupMailingSync } from "./GroupMailingSync";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useRef, useState } from "preact/hooks";
 import {
@@ -163,6 +164,7 @@ export function GroupMailingListManager({
     // so no second heading restates it above the table.
     <div class="pk pk-stack">
       {error && <ErrorAlert error={error} />}
+      <GroupMailingSync key={groupId} groupId={groupId} />
       <ApiDataTable
         caption="Managed mailing lists"
         actionsRef={actions}

@@ -1,3 +1,4 @@
+import { Menu } from "../../../../../ui/Menu";
 import { BreadcrumbBranch } from "../../../../../ui/BreadcrumbScope";
 import { ProfileHeader } from "../../../../../ui/ProfileHeader";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
@@ -7,7 +8,6 @@ import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { Alert } from "../../../../../ui/Alert";
 import { Badge } from "../../../../../ui/Badge";
-import { Button } from "../../../../../ui/Button";
 import { Chip } from "../../../../../ui/Chip";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { PersonCell } from "../../../../../ui/PersonCell";
@@ -94,9 +94,11 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
               canGrant &&
               !role.isSystemRole &&
               !editing && (
-                <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
-                  Edit
-                </Button>
+                <Menu
+                  label="Role actions"
+                  align="end"
+                  items={[{ id: "edit", label: "Edit", onSelect: () => setEditing(true) }]}
+                />
               )
             }
           />

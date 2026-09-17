@@ -12,7 +12,7 @@ import {
   eventEmailCampaignSpeakerStatusFilterSchema,
 } from "../../assets/shared/schemas/event-email-campaigns";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
-import { controlFor, labelNames, optionValues } from "./helpers/labelled-control";
+import { controlFor, labelNames, optionValues, typeMarkdown } from "./helpers/labelled-control";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -130,7 +130,7 @@ function stubCampaignFetch(routes: { previews: () => Response; campaigns?: () =>
 /** Fills subject and body, then renders a preview. */
 async function composeAndPreview(container: HTMLElement): Promise<void> {
   await inputText(controlFor(container, "Subject"), "Working group update");
-  await inputText(controlFor<HTMLTextAreaElement>(container, "Message"), "Hello {{firstName}}");
+  await typeMarkdown(container, "Message", "Hello {{firstName}}");
   await clickButton(container, "Preview Email");
   await settle();
 }
@@ -200,6 +200,9 @@ describe("event email campaign UI", () => {
     const label = confirmation.closest("label")!;
     expect(label.classList.contains("pk-check")).toBe(true);
     expect(label.querySelector(".pk-check__label")?.textContent).toContain("confirm sending");
+    const actions = label.parentElement!;
+    expect([...actions.querySelectorAll("button")].some((button) => button.textContent === "Send Email")).toBe(true);
+    expect(frame.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // Every control the surface owns is named through its own label, and each
     // label resolves to its control — the lookup fails exactly when the
@@ -219,6 +222,21 @@ describe("event email campaign UI", () => {
     for (const name of names) controlFor(container, name);
     expect(controlFor<HTMLTextAreaElement>(container, "Message").tagName).toBe("TEXTAREA");
     expect(controlFor(container, "Template").getAttribute("role")).toBe("combobox");
+  });
+
+  it("inserts a template variable at the source caret and invalidates the previous confirmation", async () => {
+    stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
+    await composeAndPreview(container);
+    await act(async () => confirmationBox(container)!.click());
+    const source = controlFor<HTMLTextAreaElement>(container, "Message");
+    source.setSelectionRange(6, source.value.length);
+    await clickButton(container, "firstName");
+    expect(source.value).toBe("Hello {{firstName}}");
+    await typeMarkdown(container, "Message", "Revised message for all attendees");
+    expect(confirmationBox(container)).toBeNull();
+    const send = [...container.querySelectorAll("button")].find((button) => button.textContent === "Send Email")!;
+    expect(send.disabled).toBe(true);
   });
 
   it("reports a failed preview and keeps the send gate closed", async () => {

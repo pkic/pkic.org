@@ -14,12 +14,13 @@ import { Button } from "../../ui/Button";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
-import { Select, Textarea } from "../../ui/TextControl";
+import { Select } from "../../ui/TextControl";
 import { Tabs } from "../Tabs";
 import { Markdown } from "../Markdown";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import type { ToastType } from "../../shared/ui";
 import "../../ui/Content.css";
+import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
 
 type ProposalDecisionInput = z.infer<typeof finalizeProposalSchema>;
 type ProposalDecisionRecord = Pick<
@@ -223,20 +224,17 @@ export function ProposalDecisionPanel({
                 <Field
                   label="Note to applicant"
                   required={decisionStatus === "needs-work"}
-                  help="Sent in the decision email · Markdown supported"
+                  help="Sent in the decision email"
                   {...form.of("decisionNote")}
                 >
                   {(c) => (
-                    <Textarea
+                    <MarkdownEditor
                       {...c}
+                      variant="compact"
                       name="decisionNote"
-                      value={decisionNote}
-                      onInput={(event) => setDecisionNote((event.target as HTMLTextAreaElement).value)}
-                      placeholder={
-                        decisionStatus === "needs-work"
-                          ? "Describe the changes or clarifications needed…"
-                          : "Optional feedback for the proposer…"
-                      }
+                      label="Note to applicant"
+                      initialValue={decisionNote}
+                      onChange={setDecisionNote}
                     />
                   )}
                 </Field>
@@ -278,7 +276,7 @@ export function ProposalDecisionPanel({
                           until the templates are configured.
                         </Alert>
                       )}
-                      <div class="pk-grid">
+                      <div class="pk-stack">
                         <div>
                           <div class="pk-small pk-muted">Outgoing emails</div>
                           <div class="pk-stack pk-stack--tight">

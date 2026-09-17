@@ -8,10 +8,11 @@ import {
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 
 import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { optionLabel, type GroupSettingsDraft } from "./group-settings-draft";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 export function GroupSettingsFields({
   draft,
@@ -43,12 +44,13 @@ export function GroupSettingsFields({
 
       <Field {...fields("description")} label="Description">
         {(control) => (
-          <Textarea
+          <MarkdownEditor
+            variant="compact"
             {...control}
             name="description"
-            rows={4}
-            value={draft.description}
-            onInput={(event) => setField("description", (event.target as HTMLTextAreaElement).value)}
+            label="Description"
+            initialValue={draft.description}
+            onChange={(value) => setField("description", value)}
           />
         )}
       </Field>

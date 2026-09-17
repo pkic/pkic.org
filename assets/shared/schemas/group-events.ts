@@ -51,6 +51,8 @@ import {
   eventRegistrationAttendanceDetailResponseSchema,
   eventRegistrationSelectedDayAdmitSchema,
   eventRegistrationDayAttendanceChangeSchema,
+  eventRegistrationManagerUpdateSchema,
+  eventRegistrationManagerUpdateResponseSchema,
   eventRegistrationDayAttendanceResponseSchema,
 } from "./event-registration-detail";
 import { requiresSession } from "./route-contract";
@@ -58,6 +60,7 @@ import { requiresSession } from "./route-contract";
 export const GROUP_EVENTS_SORT_COLUMNS = ["name", "starts_at", "next_occurrence_at", "created_at"] as const;
 
 export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLUMNS).extend({
+  collection: z.enum(["events", "unscheduled_meetings"]).optional(),
   profileKey: eventProfileKeySchema.optional(),
   registrationPolicy: eventRegistrationPolicySchema.optional(),
   sourceMode: eventSourceModeSchema.optional(),
@@ -478,6 +481,28 @@ export const groupEventRegistrationDayAttendancePatchRouteSchema = {
     "403": jsonErrorResponse("Event attendance-management access is required."),
     "404": jsonErrorResponse("The event, registration, or event day was not found."),
     "409": jsonErrorResponse("The requested attendance transition conflicts with capacity or current state."),
+  },
+};
+
+export const groupEventRegistrationManagerUpdateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Cancel one group event attendee's registration",
+  description:
+    "Ends the registration as a whole: held days are released, day waitlist rows are removed and the attendee is notified. Requires the event manage capability.",
+  request: {
+    params: groupEventRegistrationParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventRegistrationManagerUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Registration cancelled.",
+      content: { "application/json": { schema: eventRegistrationManagerUpdateResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event or registration was not found."),
+    "409": jsonErrorResponse("The registration is already cancelled."),
   },
 };
 

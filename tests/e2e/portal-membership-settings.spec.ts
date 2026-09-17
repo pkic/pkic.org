@@ -9,6 +9,8 @@ import {
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { extractEmailUrl, capturedEmailCount, waitForCapturedEmail } from "./helpers/sendgrid";
 import { openMembershipVerificationLink } from "./helpers/member-join";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { runRowAction } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 
 const SETTINGS_API = "/api/v1/membership/settings";
@@ -78,27 +80,36 @@ test("a permitted staff identity reads and updates membership settings through t
 
   await page.goto("/portal/#/settings/membership-categories");
   await expect(page.getByRole("heading", { name: "Membership categories" })).toBeVisible();
-  const categoryForm = page.getByRole("region", { name: "Category H8", exact: true });
+  // The catalog is a list (#122): one row per category, and editing one is a
+  // page of its own at the category's address, reached from the row's menu.
+  // The row is found by the record link it carries — the whole row opens the
+  // edit page — since the code cell's accessible name includes that link.
+  const categoryRow = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Edit category H8" }) });
+  await expect(categoryRow).toHaveCount(1);
+  await expect(page.locator("form")).toHaveCount(0);
   async function editCategory() {
-    await categoryForm.getByRole("button", { name: "Category H8 actions" }).click();
-    await page.getByRole("menuitem", { name: "Edit settings" }).click();
+    await runRowAction(page, categoryRow, "Edit…");
+    await expect(page).toHaveURL(/#\/settings\/membership-categories\/H8$/);
+    await expect(page.getByRole("form", { name: "Edit category H8" })).toBeVisible();
   }
-  await expect(categoryForm.locator("input")).toHaveCount(0);
   await editCategory();
-  const categoryLabel = categoryForm.getByLabel("Label");
+  const categoryLabel = page.getByLabel("Label");
   const updatedLabel = `${await categoryLabel.inputValue()} (E2E)`;
   const categoryResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${CATEGORIES_API}/H8` && response.request().method() === "PATCH",
   );
   await categoryLabel.fill(updatedLabel);
-  await categoryForm.getByRole("button", { name: "Save category H8" }).click();
+  await page.getByRole("button", { name: "Save category H8" }).click();
   expect((await categoryResponse).status()).toBe(200);
   await expect(page.getByText("Category H8 saved", { exact: true })).toBeVisible();
-  await expect(categoryLabel).toHaveCount(0);
+  // Saving returns to the list, which shows the new label in the row.
+  await expect(page).toHaveURL(/#\/settings\/membership-categories$/);
+  await expect(categoryRow.getByRole("cell", { name: updatedLabel })).toBeVisible();
   await editCategory();
   await expect(categoryLabel).toHaveValue(updatedLabel);
-  await categoryForm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page).toHaveURL(/#\/settings\/membership-categories$/);
 
   expect(membershipRequests).toEqual(
     expect.arrayContaining([
@@ -115,10 +126,32 @@ test("a permitted staff identity reads and updates membership settings through t
   await page.goto("/portal/#/settings/application-workflow");
   await editWorkflow();
   await expect(page.getByLabel("Consultation window (days)")).toHaveValue(updatedWindow);
-  await page.goto("/portal/#/settings/membership-categories");
-  await editCategory();
-  await expect(categoryForm.getByLabel("Label")).toHaveValue(updatedLabel);
+  await page.goto("/portal/#/settings/membership-categories/H8");
+  await expect(page.getByLabel("Label")).toHaveValue(updatedLabel);
   expect(removedAdminRequests).toEqual([]);
+});
+
+test("creates organization and individual categories and removes unused categories", async ({ page }) => {
+  await signInToPortal(page, e2eAdminEmail("portal-membership-settings"));
+  await page.goto("/portal/#/settings/membership-categories");
+  for (const [code, holder, label] of [
+    ["EXAMPLE_ORG", "organization", "Example organizations"],
+    ["EXAMPLE_USER", "individual", "Example individual users"],
+  ]) {
+    await page.getByRole("button", { name: "New category", exact: true }).click();
+    await expect(page.getByRole("form", { name: "Create membership category" })).toBeVisible();
+    await page.getByLabel("Code").fill(code);
+    await page.getByLabel("Held by", { exact: true }).selectOption(holder);
+    await page.getByLabel("Label").fill(label);
+    await page.getByRole("button", { name: "Create category", exact: true }).click();
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name: `Edit category ${code}`, exact: true }) });
+    await expect(row.getByRole("cell", { name: label, exact: true })).toBeVisible();
+    await runRowAction(page, row, "Delete…");
+    await acceptConfirmDialog(page, "Delete category");
+    await expect(row).toHaveCount(0);
+  }
 });
 
 test("publishes membership application form edits to the public join flow", async ({ page }) => {

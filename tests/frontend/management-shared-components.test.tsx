@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
+vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
+  useMembershipCategoryCatalog: () => exampleMembershipCategories,
+}));
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";

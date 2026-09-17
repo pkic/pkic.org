@@ -26,6 +26,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { buildMigration } from "../../scripts/migrate-members-yaml-to-d1.mjs";
+import {
+  EMAIL_RESERVATION_QUERY,
+  findEmailReservationConflicts,
+} from "../../scripts/migrate-members/email-reservations.mjs";
+
+import { placeholderPreflightQuery } from "../../scripts/migrate-members/placeholder-email.mjs";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 
@@ -35,7 +41,7 @@ function writeFixtureRosterCsv(filePath: string, rows: string[][]): void {
     "Email,Nickname,Col3,Col4,Col5,Col6,Year,Month,Day,Hour,Minute,Second",
     ...rows.map((fields) => fields.join(",")),
   ];
-  fs.writeFileSync(filePath, `${lines.join("\n")}\n`, "utf8");
+  fs.writeFileSync(filePath, `\uFEFF${lines.join("\r\n").replaceAll(",", "\t")}\r\n`, "utf16le");
 }
 
 function createImporterFixture(tmpDirs: string[]) {
@@ -147,6 +153,7 @@ memberType: H5
 
     const { sql, report } = buildMigration({
       uploadLogos: false,
+      rosterTimeZone: "Europe/Tallinn",
       membersDir,
       csvDir,
       sponsorsYamlPath,
@@ -163,6 +170,13 @@ memberType: H5
 
     runWrangler(["d1", "migrations", "apply", "DB", "--env", "local", "--local", "--persist-to", persistTo]);
 
+    queryD1(
+      persistTo,
+      `INSERT INTO events (id, slug, name, timezone, created_at, updated_at)
+      VALUES ('10000000-0000-4000-8000-000000000081', 'pqc-conference-amsterdam-nl', 'PQC conference', 'Europe/Amsterdam',
+      '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    );
+
     // The assertion that matters: this must not throw. A schema mismatch
     // (e.g. a dropped social_* column or organizations.membership_category
     // reintroduced by a regression) surfaces here as a non-zero exit from
@@ -171,6 +185,14 @@ memberType: H5
     expect(() =>
       runWrangler(["d1", "execute", "DB", "--env", "local", "--local", "--persist-to", persistTo, "--file", sqlFile]),
     ).not.toThrow();
+
+    expect(
+      queryD1(
+        persistTo,
+        `SELECT g.slug, e.profile_key FROM events e JOIN groups g ON g.id = e.owner_group_id
+      WHERE e.slug = 'pqc-conference-amsterdam-nl'`,
+      ),
+    ).toEqual([{ slug: "pqc", profile_key: "conference" }]);
 
     const orgs = queryD1(persistTo, "SELECT id, normalized_name, links_json FROM organizations");
     expect(orgs).toHaveLength(1);
@@ -220,6 +242,53 @@ memberType: H5
     expect(sentinelUser).toHaveLength(1);
 
     expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
+
+    // Approved reconciliation upgrades the existing placeholder in place and
+    // adds an organization user whose email cannot be discovered by domain.
+    const manualMappingPath = path.join(csvDir, "manual-mapping.csv");
+    fs.writeFileSync(
+      manualMappingPath,
+      [
+        "source_file,organization,representative_name,current_or_placeholder_email,confirmed_email,corrected_domains,decision,notes",
+        "acme.yaml,Acme Corp,Alice Anderson,,alice@acme.example,,confirmed,",
+        "acme.yaml,Acme Corp,Charlie User,,charlie@users.example,,confirmed,",
+        "bob.yaml,N/A (individual member),Bob Individual,unmatched-bob@members.invalid,bob@users.example,,confirmed,",
+      ].join("\n"),
+    );
+    const before = queryD1(
+      persistTo,
+      "SELECT id FROM users WHERE normalized_email = 'unmatched-bob@members.invalid'",
+    )[0]!.id;
+    const mapped = buildMigration({
+      uploadLogos: false,
+      rosterTimeZone: "Europe/Tallinn",
+      membersDir,
+      csvDir,
+      sponsorsYamlPath,
+      manualMappingPath,
+    });
+    expect(mapped.report.totals.sentinelIndividuals).toBe(0);
+    expect(mapped.report.manualMappings).toHaveLength(3);
+    expect(queryD1(persistTo, placeholderPreflightQuery(mapped.placeholderMappings)!)).toEqual([]);
+    fs.writeFileSync(sqlFile, mapped.sql);
+    const applyMapped = () =>
+      runWrangler(["d1", "execute", "DB", "--env", "local", "--local", "--persist-to", persistTo, "--file", sqlFile]);
+    applyMapped();
+    const snapshot = () =>
+      queryD1(
+        persistTo,
+        `SELECT u.id, u.normalized_email, i.id AS identity_id, m.id AS member_id
+      FROM users u JOIN identities i ON i.user_id = u.id
+      LEFT JOIN members m ON m.user_id = u.id
+      ORDER BY u.normalized_email`,
+      );
+    const first = snapshot();
+    expect(first.find((row) => row.normalized_email === "bob@users.example")!.id).toBe(before);
+    expect(first.some((row) => row.normalized_email === "charlie@users.example")).toBe(true);
+    expect(first.some((row) => String(row.normalized_email).endsWith("@members.invalid"))).toBe(false);
+    applyMapped();
+    expect(snapshot()).toEqual(first);
+    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
   });
 
   it("rejects the entire import — no SQL generated at all — when any record has a missing or unknown category", () => {
@@ -240,11 +309,119 @@ memberType: H5
     expect(() =>
       buildMigration({
         uploadLogos: false,
+        rosterTimeZone: "Europe/Tallinn",
         membersDir,
         csvDir,
         sponsorsYamlPath,
       }),
     ).toThrowError(/Category preflight failed: 1 record\(s\) rejected\. No SQL was generated\./);
+  });
+
+  it("imports the rest of the directory when an address is reserved elsewhere, and attaches an alternate address to its owner", () => {
+    // A production database reserves addresses the member directory also
+    // lists: an unconfirmed pending email change claims one without owning
+    // it, and an alternate address owns one on an account whose login is a
+    // different address. `trg_users_primary_email_reservation_insert` aborts
+    // an upsert across either claim, which failed the whole import file with
+    // EMAIL_TAKEN (SQLITE_CONSTRAINT_TRIGGER) — one reserved address must
+    // cost one reported record, never the migration.
+    const { fixtureRoot, membersDir, csvDir, sponsorsYamlPath } = createImporterFixture(tmpDirs);
+
+    fs.writeFileSync(
+      path.join(membersDir, "acme.yaml"),
+      `id: acme
+name: Acme Corp
+memberType: A
+organizationDomains:
+  - acme.example
+representatives:
+  - name: Alice Anderson
+    role: CEO
+  - name: Carol Contact
+    role: COO
+`,
+      "utf8",
+    );
+
+    const alice = ["alice@acme.example", "Alice", "x", "x", "x", "x", "2023", "01", "15", "10", "00", "00"];
+    const carol = ["carol@acme.example", "Carol", "x", "x", "x", "x", "2023", "01", "16", "10", "00", "00"];
+    writeFixtureRosters(csvDir, [alice, carol]);
+
+    const { sql, importedEmails } = buildMigration({
+      uploadLogos: false,
+      rosterTimeZone: "Europe/Tallinn",
+      membersDir,
+      csvDir,
+      sponsorsYamlPath,
+    });
+    const sqlFile = path.join(fixtureRoot, "import.sql");
+    fs.writeFileSync(sqlFile, sql, "utf8");
+
+    const persistTo = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-importer-d1-reservations-"));
+    tmpDirs.push(persistTo);
+    runWrangler(["d1", "migrations", "apply", "DB", "--env", "local", "--local", "--persist-to", persistTo]);
+
+    // alice@acme.example: claimed by another account's in-flight email change.
+    // carol@acme.example: already an alternate address of a live account
+    // whose login address is a different one.
+    queryD1(
+      persistTo,
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at, pending_email)
+       VALUES ('20000000-0000-4000-8000-000000000001', 'old@example.org', 'old@example.org', 'user', 1,
+               '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'alice@acme.example')`,
+    );
+    queryD1(
+      persistTo,
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES ('20000000-0000-4000-8000-000000000002', 'carol@other.example', 'carol@other.example', 'user', 1,
+               '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    );
+    queryD1(
+      persistTo,
+      `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
+       VALUES ('20000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000002',
+               'carol@acme.example', 'carol@acme.example', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    );
+
+    expect(() =>
+      runWrangler(["d1", "execute", "DB", "--env", "local", "--local", "--persist-to", persistTo, "--file", sqlFile]),
+    ).not.toThrow();
+
+    // The reserved address stays reserved: no second account claims it, and
+    // the account holding it keeps its own login address.
+    expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'alice@acme.example'")).toEqual([]);
+    expect(
+      queryD1(persistTo, "SELECT pending_email FROM users WHERE id = '20000000-0000-4000-8000-000000000001'"),
+    ).toEqual([{ pending_email: "alice@acme.example" }]);
+
+    // The alternate address belongs to a person who already has an account,
+    // so the organization identity and role attach to that account instead
+    // of to a duplicate one.
+    expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'carol@acme.example'")).toEqual([]);
+    expect(
+      queryD1(
+        persistTo,
+        `SELECT i.user_id AS user_id, i.job_title FROM identities i
+           JOIN users u ON u.id = i.user_id
+          WHERE i.organization_id IS NOT NULL`,
+      ),
+    ).toEqual([{ user_id: "20000000-0000-4000-8000-000000000002", job_title: "COO" }]);
+    // Carol is the second representative, so she holds the secondary
+    // contact role; the primary contact grant belongs to Alice and stays
+    // ungranted along with her account.
+    expect(queryD1(persistTo, `SELECT role_id, user_id FROM user_roles WHERE context_type = 'organization'`)).toEqual([
+      { role_id: "role-secondary_contact", user_id: "20000000-0000-4000-8000-000000000002" },
+    ]);
+
+    // The organization itself imported, so one reserved address cost one
+    // representative, not the batch.
+    expect(queryD1(persistTo, "SELECT normalized_name FROM organizations")).toEqual([{ normalized_name: "acme corp" }]);
+
+    // And the address that got no account is reported, by address and holder.
+    expect(findEmailReservationConflicts(importedEmails, queryD1(persistTo, EMAIL_RESERVATION_QUERY))).toEqual([
+      { email: "alice@acme.example", reservedBy: "old@example.org", reason: "pending_email_change" },
+    ]);
+    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
   });
 
   it("is idempotent: running the generated SQL twice against the same D1 produces identical row counts and identities", () => {
@@ -313,14 +490,21 @@ sponsor:
       "00",
     ];
     writeFixtureRosters(csvDir, [alice, carol], new Map([["ca", [alice, unresolved]]]));
+    writeFixtureRosterCsv(path.join(csvDir, "board.csv"), [carol]);
+    writeFixtureRosterCsv(path.join(csvDir, "ec.csv"), [alice, unresolved]);
 
     const { sql, report } = buildMigration({
       uploadLogos: false,
+      rosterTimeZone: "Europe/Tallinn",
       membersDir,
       csvDir,
       sponsorsYamlPath,
     });
-    expect(report.wgOnlyRosterUsers).toContainEqual({ email: "unresolved@example.test", workingGroups: ["ca"] });
+    expect(report.groupOnlyRosterUsers).toContainEqual({
+      email: "unresolved@example.test",
+      groups: ["ca", "executive-council"],
+    });
+    expect(report.missingOptionalRosters).toEqual([]);
     expect(report.nonMemberSponsorships).toEqual({ created: 1, unmatchedEvents: [] });
     expect(sql).toContain("INSERT OR IGNORE INTO group_memberships");
     expect(sql).not.toMatch(/\bworking_group_members\b/);
@@ -355,7 +539,7 @@ sponsor:
         ),
         groupMemberships: queryD1(
           persistTo,
-          "SELECT id, group_id, user_id, member_id, source FROM group_memberships ORDER BY id",
+          "SELECT id, group_id, user_id, member_id, source, joined_at FROM group_memberships ORDER BY id",
         ),
       };
     }
@@ -372,18 +556,31 @@ sponsor:
     expect(first.roles.length).toBeGreaterThanOrEqual(2); // primary + secondary contact
     expect(first.sponsorships).toHaveLength(3); // member consortium + member event + non-member event
     expect(first.sponsorships.some((row) => String(row.tier).toLowerCase() === "none")).toBe(false);
-    expect(first.groupMemberships).toHaveLength(1);
-    expect(first.groupMemberships[0]).toMatchObject({ source: "migration" });
-    const enrolledIdentity = first.identities.find(
-      (identity) => identity.user_id === first.groupMemberships[0]!.user_id,
-    );
+    // One membership from the working-group roster; the rest are the
+    // automatic enrollments the portal would have written as each capacity
+    // was created — the community group's category rules seat every member.
+    const rosterMemberships = first.groupMemberships.filter((row) => row.source === "migration");
+    expect(
+      rosterMemberships.every(
+        (row) => String(row.joined_at).startsWith("2023-01-") && String(row.joined_at).endsWith("T08:00:00.000Z"),
+      ),
+    ).toBe(true);
+    expect(rosterMemberships).toHaveLength(3);
+    expect(
+      queryD1(
+        persistTo,
+        "SELECT g.slug FROM group_memberships gm JOIN groups g ON g.id = gm.group_id WHERE gm.source = 'migration' ORDER BY g.slug",
+      ),
+    ).toEqual([{ slug: "board" }, { slug: "ca" }, { slug: "executive-council" }]);
+    expect(first.groupMemberships.filter((row) => row.source === "automatic_policy").length).toBeGreaterThan(0);
+    const enrolledIdentity = first.identities.find((identity) => identity.user_id === rosterMemberships[0]!.user_id);
     expect(enrolledIdentity).toBeDefined();
     expect(
       queryD1(
         persistTo,
         `SELECT member_id FROM identity_member_capacities WHERE identity_id = '${String(enrolledIdentity!.id)}'`,
       )[0]!.member_id,
-    ).toBe(first.groupMemberships[0]!.member_id);
+    ).toBe(rosterMemberships[0]!.member_id);
     expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'unresolved@example.test'")).toHaveLength(
       1,
     );

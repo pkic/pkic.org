@@ -1,3 +1,4 @@
+import { openColumnFilterMenu } from "./helpers/column-menu";
 // @vitest-environment jsdom
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
@@ -313,10 +314,7 @@ describe("canonical offset pagination", () => {
     // The summary reaches the Status column's filter menu as counts.
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Status column options"]');
     expect(trigger).not.toBeNull();
-    await act(async () => {
-      trigger!.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    openColumnFilterMenu(container, "Status");
     const all = [...container.querySelectorAll('[role="menuitemradio"]')].find((item) =>
       item.textContent?.includes("All"),
     );

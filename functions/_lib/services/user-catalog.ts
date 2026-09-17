@@ -3,6 +3,7 @@ import {
   userCatalogListResponseSchema,
   type UserCatalogListQuery,
 } from "../../../assets/shared/schemas/user-catalog";
+import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
@@ -31,9 +32,17 @@ interface UserCatalogRow {
  *   `GROUP_CAPACITY_REQUIRED`, once a manager had already chosen a title and
  *   two dates (#25).
  */
-export function buildUserCatalogPageQuery(query: UserCatalogListQuery, seatableInGroupId?: string): OffsetPageQuery {
-  const conditions = ["u.active = 1"];
+export function buildUserCatalogPageQuery(
+  query: UserCatalogListQuery,
+  seatableInGroupId?: string,
+  eligibility?: AuthorizationEvidence,
+): OffsetPageQuery {
+  const conditions = ["u.active = 1", "u.pii_redacted_at IS NULL", "u.merged_into_user_id IS NULL"];
   const bindings: unknown[] = [];
+  if (eligibility) {
+    conditions.push(`EXISTS (${eligibility.sql})`);
+    bindings.push(...eligibility.bindings);
+  }
   if (query.q) {
     const search = buildUserIdentitySearchFilter(query.q);
     conditions.push(search.sql);
@@ -69,8 +78,14 @@ export function serializeUserCatalogPage(query: UserCatalogListQuery, rows: User
 }
 
 /** Data-minimized active-user read model for permission-assignment selectors. */
-export async function listUserCatalog(db: DatabaseLike, query: UserCatalogListQuery) {
-  const [pageResult, countResult] = await db.batch(buildOffsetPageStatements(db, buildUserCatalogPageQuery(query)));
+export async function listUserCatalog(
+  db: DatabaseLike,
+  query: UserCatalogListQuery,
+  eligibility?: AuthorizationEvidence,
+) {
+  const [pageResult, countResult] = await db.batch(
+    buildOffsetPageStatements(db, buildUserCatalogPageQuery(query, undefined, eligibility)),
+  );
   const { rows, total } = decodeOffsetPageResults<UserCatalogRow>(pageResult, countResult);
   return serializeUserCatalogPage(query, rows, total);
 }

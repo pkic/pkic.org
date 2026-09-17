@@ -106,6 +106,8 @@ export function GroupWorkspace({
   resourceId,
   resourceTab,
   resourceDetailId,
+  resourceDetailTab,
+  resourceDetailSegment,
 }: {
   groupId: string;
   view?: string;
@@ -114,6 +116,10 @@ export function GroupWorkspace({
   resourceTab?: string;
   /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
   resourceDetailId?: string;
+  /** A fourth URL segment: the facet of that resource — a proposal's own tab. */
+  resourceDetailTab?: string;
+  /** A fifth URL segment: a page under that facet, such as the co-speaker invitation under a proposal's Speakers. */
+  resourceDetailSegment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const detail = useData(
@@ -128,12 +134,22 @@ export function GroupWorkspace({
   const arrivedBySlug = loaded !== undefined && loaded.id !== groupId && loaded.slug === groupId;
   useEffect(() => {
     if (!loaded || !arrivedBySlug) return;
-    const rest = [view, resourceId, resourceTab, resourceDetailId]
+    const rest = [view, resourceId, resourceTab, resourceDetailId, resourceDetailTab, resourceDetailSegment]
       .filter((segment): segment is string => Boolean(segment))
       .map(encodeURIComponent)
       .join("/");
     navigate(`/groups/${encodeURIComponent(loaded.id)}${rest ? `/${rest}` : ""}`);
-  }, [loaded, arrivedBySlug, view, resourceId, resourceTab, resourceDetailId, navigate]);
+  }, [
+    loaded,
+    arrivedBySlug,
+    view,
+    resourceId,
+    resourceTab,
+    resourceDetailId,
+    resourceDetailTab,
+    resourceDetailSegment,
+    navigate,
+  ]);
   // While a different group loads, useData still holds the previous group's
   // data; rendering it would leave the old workspace on screen with no
   // feedback. Treat it as absent so the switch shows a spinner immediately.
@@ -172,7 +188,15 @@ export function GroupWorkspace({
       {detail.error && <ErrorAlert error={detail.error} />}
       {group && (
         <BreadcrumbScope
-          route={[groupId, view, resourceId, resourceTab, resourceDetailId].join("/")}
+          route={[
+            groupId,
+            view,
+            resourceId,
+            resourceTab,
+            resourceDetailId,
+            resourceDetailTab,
+            resourceDetailSegment,
+          ].join("/")}
           items={trail}
           label="Group navigation"
         >
@@ -231,6 +255,8 @@ export function GroupWorkspace({
                 initialEventId={resourceId}
                 initialEventTab={resourceTab}
                 initialEventDetailId={resourceDetailId}
+                initialEventDetailTab={resourceDetailTab}
+                initialEventDetailSegment={resourceDetailSegment}
               />
             )}
             {view === "meetings" && (
@@ -241,6 +267,7 @@ export function GroupWorkspace({
                 seriesSegment={resourceId}
                 seriesTab={resourceTab}
                 seriesDetailId={resourceDetailId}
+                seriesDetailTab={resourceDetailTab}
               />
             )}
             {view === "forms" && (

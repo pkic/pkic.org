@@ -133,7 +133,7 @@ async function settle(): Promise<void> {
 function removeButton(): HTMLButtonElement | null {
   return (
     [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent?.trim() === "Remove photo",
+      (button) => button.getAttribute("aria-label") === "Remove photo",
     ) ?? null
   );
 }
@@ -230,6 +230,21 @@ describe("removing your own headshot from your own user record", () => {
     const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
     expect(urls.some((url) => /\/participation\//.test(url))).toBe(false);
     expect(container.querySelector('[aria-label="Participation"]')).toBeNull();
+  });
+
+  it("shows initials when a stored photo cannot load and still allows its removal", async () => {
+    profile.value = memberProfile(HEADSHOT_URL);
+    stubEndpoints(HEADSHOT_URL, () => json({ success: true }));
+    renderRecord();
+    await settle();
+    const image = container.querySelector<HTMLImageElement>(".pk-picture-tile img");
+    expect(image).not.toBeNull();
+    await act(async () => {
+      image!.dispatchEvent(new Event("error"));
+    });
+    expect(container.querySelector(".pk-picture-tile img")).toBeNull();
+    expect(container.querySelector(".pk-picture-tile__initials")?.textContent).toBeTruthy();
+    expect(removeButton()).not.toBeNull();
   });
 
   it("deletes through the current-user endpoint and drops the photo from the stored profile", async () => {

@@ -5,6 +5,7 @@ import { userCatalogItemSchema } from "../../shared/schemas/user-catalog";
 import { buildServerCollectionUrl, createLatestRequestGate } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
 import { Alert } from "../ui/Alert";
+import type { FieldControlProps } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { usePopupPlacement } from "../ui/popup-placement";
 // The results float over whatever follows the picker, so they borrow the
@@ -30,6 +31,9 @@ const userPickerListResponseSchema = paginatedResponseSchema("users", userPicker
 export interface PickedUser {
   id: string;
   email: string;
+  /** What the catalog knew the person as, so a form can prefill a name it also has to ask for. */
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 /** Debounced, bounded server search for selecting an existing user. */
@@ -39,12 +43,16 @@ export function UserPicker({
   disabled,
   placeholder = "Search by email or name…",
   endpoint = "/api/v1/users",
+  inputProps,
+  emptyMessage = "No matching users found.",
 }: {
   value: PickedUser | null;
   onChange: (user: PickedUser | null) => void;
   disabled?: boolean;
   placeholder?: string;
   endpoint?: string;
+  inputProps?: FieldControlProps & { name?: string };
+  emptyMessage?: string;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserCatalogItem[]>([]);
@@ -84,11 +92,19 @@ export function UserPicker({
   }
 
   useEffect(() => cancelPendingSearch, []);
+  const previousValue = useRef(value);
+  useEffect(() => {
+    if (previousValue.current && !value) setQuery("");
+    previousValue.current = value;
+  }, [value]);
 
   function handleInput(next: string): void {
     setQuery(next);
     setError(null);
-    if (value) onChange(null);
+    if (value) {
+      previousValue.current = null;
+      onChange(null);
+    }
     cancelPendingSearch();
     const term = next.trim();
     if (!term) {
@@ -119,26 +135,32 @@ export function UserPicker({
 
   function pick(user: UserCatalogItem): void {
     cancelPendingSearch();
-    onChange({ id: user.id, email: user.email });
+    onChange({ id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name });
     setQuery(user.email);
+    anchorRef.current?.querySelector("input")?.focus();
     setOpen(false);
     setResults([]);
   }
 
   return (
-    <div class="pk-stack pk-stack--tight">
+    <div
+      class="pk-stack pk-stack--tight"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <div ref={anchorRef}>
         <TextInput
+          {...inputProps}
           type="text"
           placeholder={placeholder}
           /* Every call site puts its own heading beside this control, but none
              of them can point a `for` at an id they do not own, so the field
              carried no accessible name at all. This one names it. */
-          aria-label="Search for a user"
+          aria-label={inputProps?.id ? undefined : "Search for a user"}
           value={value ? value.email : query}
           onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
           onFocus={() => results.length > 0 && setOpen(true)}
-          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
           disabled={disabled}
           autocomplete="off"
           aria-autocomplete="list"
@@ -180,6 +202,11 @@ export function UserPicker({
             </button>
           ))}
         </div>
+      )}
+      {open && results.length === 0 && (
+        <p class="pk-small" role="status">
+          {emptyMessage}
+        </p>
       )}
       {error && <Alert tone="danger">{error}</Alert>}
     </div>

@@ -67,6 +67,35 @@ describe("scheduler API", () => {
     }
   });
 
+  it("edits a schedule with live permission and a stale-interval guard", async () => {
+    const token = await staffWith(["schedulerOperator"]);
+    const jobs = schedulerJobsListResponseSchema.parse(await (await call(token, "/api/v1/scheduler/jobs")).json());
+    const job = jobs.jobs.find((item) => item.jobKey === "retention")!;
+    const path = "/api/v1/scheduler/jobs/retention/schedule";
+    const init = {
+      method: "PATCH",
+      body: JSON.stringify({ intervalSeconds: 120, expectedIntervalSeconds: job.intervalSeconds }),
+    };
+    expect((await call(null, path, init)).status).toBe(401);
+    const reader = await staffWith([onlyPersona("scheduler:read")]);
+    expect((await call(reader, path, init)).status).toBe(403);
+    expect((await call(token, path, init)).status).toBe(200);
+    expect((await call(token, path, init)).status).toBe(409);
+    expect(
+      (
+        await call(token, path, {
+          method: "PATCH",
+          body: JSON.stringify({ intervalSeconds: 0, expectedIntervalSeconds: 120 }),
+        })
+      ).status,
+    ).toBe(400);
+    const updated = schedulerJobsListResponseSchema
+      .parse(await (await call(token, "/api/v1/scheduler/jobs")).json())
+      .jobs.find((item) => item.jobKey === "retention")!;
+    expect(updated.intervalSeconds).toBe(120);
+    expect(updated.nextRunAt).toBe(job.nextRunAt);
+  });
+
   it("lists the registry for scheduler:read and reports lease and success state", async () => {
     const token = await staffWith([onlyPersona("scheduler:read")]);
     const response = await call(token, "/api/v1/scheduler/jobs");

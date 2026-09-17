@@ -53,18 +53,18 @@ describe("shared frontend response contracts", () => {
     expect(
       memberApplicationCreateResponseSchema.parse({
         applicationId: "00000000-0000-4000-8000-000000000002",
-        stage: "pending",
+        stage: "submitted",
         manageToken: "a-token-with-enough-entropy",
       }).stage,
-    ).toBe("pending");
+    ).toBe("submitted");
     expect(
       memberApplicationStatusResponseSchema.parse({
         id: "00000000-0000-4000-8000-000000000002",
-        stage: "in_review",
+        stage: "processing",
         stageEnteredAt: "2026-01-01T00:00:00Z",
         createdAt: "2026-01-01T00:00:00Z",
       }).stage,
-    ).toBe("in_review");
+    ).toBe("processing");
     expect(() => memberApplicationStatusResponseSchema.parse({ id: "bad", stage: "unknown" })).toThrow();
   });
 });

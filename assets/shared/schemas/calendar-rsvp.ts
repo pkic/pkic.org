@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizedEmailSchema } from "./api-common";
+import { normalizedEmailSchema, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 
 const calendarRsvpSourceSchema = z.object({
@@ -16,6 +16,7 @@ export const calendarRsvpIngestSchema = z.union([
   }),
   calendarRsvpSourceSchema.extend({
     uid: z.string().trim().min(1).max(500),
+    recurrenceId: utcInstantSchema.optional(),
     partstat: z.enum(["ACCEPTED", "DECLINED", "TENTATIVE"]),
     attendeeEmail: normalizedEmailSchema,
   }),
@@ -26,6 +27,7 @@ export const calendarRsvpStatusSchema = z.enum(["accepted", "declined", "tentati
 /** Shared persistence contract used by webhook and Cloudflare Email ingestion. */
 export const calendarRsvpEventInputSchema = z.object({
   registrationId: databaseIdSchema,
+  recurrenceId: utcInstantSchema.optional(),
   /** Trusted day identity derived from a signed inbound address or calendar UID. */
   eventDayDate: z.iso.date().nullable().optional(),
   icsUid: z.string().trim().min(1).max(500),

@@ -1,3 +1,4 @@
+import { completeSyntheticMembershipReview } from "./member-provisioning";
 import { expect, type Page } from "@playwright/test";
 import { verifyMembershipJoinEmail } from "./member-join";
 
@@ -91,13 +92,14 @@ export async function submitMembershipApplication(
 /**
  * Opens one application's detail view from the Membership list, narrowed to
  * a stage through the Stage column's menu. The menu names stages the way the
- * badge does ("EC review" for `ec_review`), so the key is matched as words,
+ * badge does ("On hold" for `on_hold`), so the key is matched as words,
  * case-insensitively, rather than through an option value.
  */
 export async function openApplicationDetail(page: Page, email: string, stage: string): Promise<void> {
   await page.goto("/portal/#/membership/applications");
   await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
   await page.getByRole("button", { name: "Stage column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: new RegExp(`^${stage.replace(/_/g, " ")}$`, "i") }).click();
   const row = page.locator("tr").filter({ hasText: email });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -183,32 +185,9 @@ export async function approveMemberThroughReview(
     unaffiliatedAttestation: options.unaffiliatedAttestation,
   });
 
-  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
-    const status = await page.evaluate(
-      async ({ applicationId, toStage }) => {
-        const response = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ toStage }),
-        });
-        return response.status;
-      },
-      { applicationId: application.applicationId, toStage },
-    );
-    expect(status, `stage transition to ${toStage}`).toBe(200);
-  }
+  const approved = await completeSyntheticMembershipReview(page.request, application.applicationId);
 
-  const approved = await page.evaluate(async (applicationId) => {
-    const response = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
-    return { status: response.status, body: (await response.json()) as { userId: string } };
-  }, application.applicationId);
-  expect(approved.status, JSON.stringify(approved.body)).toBe(200);
-
-  return { email: options.email, userId: approved.body.userId, applicationId: application.applicationId };
+  return { email: options.email, userId: approved.userId, applicationId: application.applicationId };
 }
 
 /** The exact approved identities the signed-in person may currently act through. */

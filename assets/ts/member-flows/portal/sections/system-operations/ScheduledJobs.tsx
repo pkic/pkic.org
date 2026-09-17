@@ -6,6 +6,8 @@
  * the pause form arrives as the row's own detail row instead of being nested
  * inside the actions cell, where it inherited that cell's end alignment.
  */
+import { ScheduledJobScheduleDialog } from "./ScheduledJobScheduleDialog";
+import { Panel } from "../../../../ui/Panel";
 import { useEffect, useState } from "preact/hooks";
 import {
   schedulerJobRunResponseSchema,
@@ -18,12 +20,12 @@ import {
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
 import type { MenuItem } from "../../../../ui/Menu";
 import { RowActions } from "../../../../ui/RowActions";
 import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
+import { Dialog } from "../../../../ui/Dialog";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Textarea } from "../../../../ui/TextControl";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
@@ -110,6 +112,7 @@ interface JobControls {
   busyJob: string | null;
   onRun: (job: ScheduledJobResource) => void;
   onResume: (job: ScheduledJobResource) => void;
+  onEditSchedule: (job: ScheduledJobResource) => void;
   onStartPause: (job: ScheduledJobResource) => void;
 }
 
@@ -130,6 +133,12 @@ function JobActions({ job, controls }: { job: ScheduledJobResource; controls: Jo
     });
   }
   if (job.capabilities.manageState) {
+    actions.push({
+      id: "schedule",
+      label: "Edit schedule",
+      onSelect: () => controls.onEditSchedule(job),
+      disabled: isBusy || isRunning,
+    });
     actions.push(
       isPaused
         ? { id: "resume", label: "Resume", onSelect: () => controls.onResume(job), disabled: isBusy }
@@ -139,7 +148,13 @@ function JobActions({ job, controls }: { job: ScheduledJobResource; controls: Jo
   return <RowActions subject={titleFromKey(job.jobKey)} actions={actions} />;
 }
 
-function PauseForm({
+/**
+ * The reason a job is paused, asked for in a dialog (#126). It used to
+ * unfold as a form under the job's row — the inline expansion no list in the
+ * portal uses any more. The dialog's confirm submits the form inside it, so
+ * the reason is refused by the endpoint's own contract as it is typed.
+ */
+function PauseDialog({
   job,
   busy,
   reason,
@@ -159,9 +174,9 @@ function PauseForm({
   // what the reason shows as it is typed and what Confirm may send.
   const form = useContractForm(schedulerJobStateUpdateSchema, { state: "paused", reason });
   const [error, setError] = useState("");
+  const title = titleFromKey(job.jobKey);
 
-  async function confirm(event: Event) {
-    event.preventDefault();
+  async function confirm() {
     setError("");
     const checked = form.submit();
     if (!checked.data) {
@@ -177,45 +192,51 @@ function PauseForm({
   }
 
   return (
-    <form
-      noValidate
-      class="pk-stack pk-stack--snug"
-      aria-label={`Pause ${titleFromKey(job.jobKey)}`}
-      {...form.handlers}
-      onSubmit={(event) => void confirm(event)}
+    <Dialog
+      open
+      title={`Pause ${title}?`}
+      description="Pausing prevents future claims; a run already in progress finishes."
+      confirmLabel={busy ? "Pausing…" : "Confirm pause"}
+      confirmDisabled={busy}
+      onConfirm={() => void confirm()}
+      onCancel={onCancel}
     >
-      <Field
-        label="Pause reason"
-        required
-        help="Recorded with the pause and shown beside the job until it resumes."
-        {...form.of("reason")}
+      <form
+        noValidate
+        class="pk-stack pk-stack--snug"
+        aria-label={`Pause ${title}`}
+        {...form.handlers}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void confirm();
+        }}
       >
-        {(control) => (
-          <Textarea
-            {...control}
-            name="reason"
-            rows={2}
-            maxLength={500}
-            value={reason}
-            disabled={busy}
-            onInput={(event) => onReason((event.target as HTMLTextAreaElement).value)}
-          />
-        )}
-      </Field>
-      {error && <Alert tone="danger">{error}</Alert>}
-      <div class="pk-cluster pk-cluster--end">
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" variant="primary" disabled={busy}>
-          Confirm pause
-        </Button>
-      </div>
-    </form>
+        <Field
+          label="Pause reason"
+          required
+          help="Recorded with the pause and shown beside the job until it resumes."
+          {...form.of("reason")}
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              name="reason"
+              rows={2}
+              maxLength={500}
+              value={reason}
+              disabled={busy}
+              onInput={(event) => onReason((event.target as HTMLTextAreaElement).value)}
+            />
+          )}
+        </Field>
+        {error && <Alert tone="danger">{error}</Alert>}
+      </form>
+    </Dialog>
   );
 }
 
 export function ScheduledJobs() {
+  const [scheduleJob, setScheduleJob] = useState<ScheduledJobResource | null>(null);
   const [jobs, setJobs] = useState<ScheduledJobResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -296,6 +317,7 @@ export function ScheduledJobs() {
     busyJob,
     onRun: (job) => void runNow(job),
     onResume: (job) => void resume(job),
+    onEditSchedule: setScheduleJob,
     onStartPause: (job) => {
       setPauseJob(job.jobKey);
       setPauseReason("");
@@ -316,9 +338,31 @@ export function ScheduledJobs() {
     },
   ];
 
+  const pausing = pauseJob ? jobs.find((job) => job.jobKey === pauseJob) : undefined;
+
   return (
     <div class="pk pk-stack pk-stack--snug">
       <PageHeader title="Scheduled jobs" />
+      {scheduleJob && (
+        <ScheduledJobScheduleDialog
+          job={scheduleJob}
+          onCancel={() => setScheduleJob(null)}
+          onSaved={(job) => {
+            replaceJob(job);
+            setScheduleJob(null);
+          }}
+        />
+      )}
+      {pausing && (
+        <PauseDialog
+          job={pausing}
+          busy={busyJob === pausing.jobKey}
+          reason={pauseReason}
+          onReason={setPauseReason}
+          onCancel={() => setPauseJob(null)}
+          onConfirm={(update) => updateState(pausing, update)}
+        />
+      )}
       <p class="pk-small">
         Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
       </p>
@@ -327,31 +371,21 @@ export function ScheduledJobs() {
           {error}
         </Alert>
       ) : (
-        <DataTable
-          caption="Scheduled jobs"
-          columns={columns}
-          rows={jobs}
-          rowKey={(job) => job.jobKey}
-          loading={loading}
-          empty={
-            <EmptyState
-              title="No scheduled jobs are configured."
-              body="A job appears here once the dispatcher registers it."
-            />
-          }
-          detailRow={(job) =>
-            pauseJob === job.jobKey ? (
-              <PauseForm
-                job={job}
-                busy={busyJob === job.jobKey}
-                reason={pauseReason}
-                onReason={setPauseReason}
-                onCancel={() => setPauseJob(null)}
-                onConfirm={(update) => updateState(job, update)}
+        <Panel>
+          <DataTable
+            caption="Scheduled jobs"
+            columns={columns}
+            rows={jobs}
+            rowKey={(job) => job.jobKey}
+            loading={loading}
+            empty={
+              <EmptyState
+                title="No scheduled jobs are configured."
+                body="A job appears here once the dispatcher registers it."
               />
-            ) : null
-          }
-        />
+            }
+          />
+        </Panel>
       )}
     </div>
   );

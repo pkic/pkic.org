@@ -81,6 +81,7 @@ function stubApi(
       const url = new URL(href, location.origin);
       const method = init.method ?? "GET";
       calls.push({ url, method, body: typeof init.body === "string" ? JSON.parse(init.body) : undefined });
+      if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled: true, revision: 0 } });
       if (method === "GET") return json({ mailingLists: lists, page: { ...PAGE, total: lists.length } });
       return write(url, method);
     }),
@@ -122,7 +123,7 @@ describe("group mailing-list management surface", () => {
     // Nothing is layered over the list to begin with.
     const list = mount(<GroupMailingListManager groupId={GROUP_ID} />);
     await settle();
-    expect(list.querySelector("form")).toBeNull();
+    expect(list.querySelector('input[type="email"]')).toBeNull();
 
     // Creating is a place with its own address, reached under the reserved
     // `new` segment rather than by unfolding a panel above the table.
@@ -200,7 +201,7 @@ describe("group mailing-list management surface", () => {
 
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/mailing-lists/${archivedList.id}`);
     expect(container.querySelector(".pk-table__detail")).toBeNull();
-    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector('input[type="email"]')).toBeNull();
   });
 
   it("offers restore rather than archive on an archived list, and always offers delete", async () => {

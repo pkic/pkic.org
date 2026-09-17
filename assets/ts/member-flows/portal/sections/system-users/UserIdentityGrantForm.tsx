@@ -1,3 +1,4 @@
+import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * Granting a person a new acting capacity.
@@ -12,24 +13,26 @@ import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCate
  * both a record and a form in one file.
  */
 import { useState } from "preact/hooks";
+import type { z } from "zod";
 import {
-  MEMBERSHIP_CATEGORIES,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   individualMembershipGrantSchema,
   memberCapacityMutationResponseSchema,
 } from "../../../../../shared/schemas/membership-management";
 import {
-  organizationDetailResponseSchema,
   organizationsListResponseSchema,
   type OrganizationSummary,
 } from "../../../../../shared/schemas/organization-management";
+import type { ServerCatalog } from "../../../../shared/server-catalog";
+import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { organizationIdentityCreateRequestSchema } from "../../../../../shared/schemas/route-contracts-identities";
 import { useContractForm } from "../../../../hooks/useContractForm";
-import { getJson, postJson } from "../../../../shared/api-client";
+import { postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { Alert } from "../../../../ui/Alert";
-import { Button } from "../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { usePortalHashLocation } from "../../hash-location";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
@@ -37,27 +40,46 @@ import type { UserDetail } from "./model";
 
 const GRANT_MODE_ORG_TIED = "__org_tied__";
 
+/**
+ * The organizations a person can be tied to, searched and paged on the
+ * server. The list summary already carries the membership category, so
+ * picking one needs no second request for the record (#96).
+ */
+const organizationCatalog: ServerCatalog<OrganizationSummary, z.infer<typeof organizationsListResponseSchema>> = {
+  endpoint: "/api/v1/organizations",
+  responseSchema: organizationsListResponseSchema,
+  resolveItems: (response) => response.organizations,
+  resolvePage: (response) => response.page,
+  itemKey: (organization) => organization.id,
+  itemLabel: (organization) => organization.name,
+  sort: "name",
+};
+
+/**
+ * Adding an identity to a person: a page of its own under the record, never a
+ * form unfolding inside the Affiliations panel (#107). The way back is the
+ * record's own address.
+ */
 export function UserIdentityGrantForm({
   user,
   canActivate,
   onGranted,
-  onCancel,
+  cancelHref,
 }: {
   user: UserDetail;
   canActivate: boolean;
   onGranted: () => void;
-  onCancel: () => void;
+  /** The record this page sits under. */
+  cancelHref: string;
 }) {
   const categories = useMembershipCategoryLabels();
+  const catalog = useMembershipCategoryCatalog();
   const [mode, setMode] = useState<string>(GRANT_MODE_ORG_TIED);
-  const [orgQuery, setOrgQuery] = useState("");
-  const [orgResults, setOrgResults] = useState<OrganizationSummary[]>([]);
-  const [selectedOrgId, setSelectedOrgId] = useState("");
-  const [selectedOrgCategory, setSelectedOrgCategory] = useState<string | null | undefined>(undefined);
+  const [selectedOrg, setSelectedOrg] = useState<OrganizationSummary | null>(null);
   const [activationReason, setActivationReason] = useState("");
   const [activateImmediately, setActivateImmediately] = useState(false);
-  const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const selectedOrgId = selectedOrg?.id ?? "";
   // A whole-form failure — an API refusal that names no field — reaches the
   // reader as an Alert; a refusal that names a field is shown on that field.
   const [error, setError] = useState("");
@@ -86,33 +108,6 @@ export function UserIdentityGrantForm({
   // The reason is `activationReason` on a grant and `activation.reason` on an
   // invitation; the contract reports the latter under its top-level key.
   const reasonField = isIndividual ? "activationReason" : "activation";
-
-  async function searchOrgs() {
-    setSearching(true);
-    try {
-      const data = await getJson(
-        `/api/v1/organizations?limit=10${orgQuery.trim() ? `&q=${encodeURIComponent(orgQuery.trim())}` : ""}`,
-        organizationsListResponseSchema,
-      );
-      setOrgResults(data.organizations);
-    } catch (searchError) {
-      toast((searchError as Error).message, "error");
-    } finally {
-      setSearching(false);
-    }
-  }
-
-  async function pickOrg(orgId: string) {
-    setSelectedOrgId(orgId);
-    setSelectedOrgCategory(undefined);
-    if (!orgId) return;
-    try {
-      const data = await getJson(`/api/v1/organizations/${orgId}`, organizationDetailResponseSchema);
-      setSelectedOrgCategory(data.organization.membershipCategory);
-    } catch (pickError) {
-      toast((pickError as Error).message, "error");
-    }
-  }
 
   async function handleSubmit(event: Event) {
     event.preventDefault();
@@ -153,118 +148,104 @@ export function UserIdentityGrantForm({
     }
   }
 
-  const organizationHelp =
-    selectedOrgId && selectedOrgCategory !== undefined
-      ? selectedOrgCategory
-        ? categories.label(selectedOrgCategory)
-        : "This organization is not a consortium member."
-      : undefined;
+  // The category comes with the organization: it is stated under the picker
+  // rather than asked for in a select that then says it is set elsewhere.
+  const organizationHelp = selectedOrg
+    ? selectedOrg.membershipCategory
+      ? categories.label(selectedOrg.membershipCategory)
+      : "This organization is not a consortium member."
+    : "Search by name; the membership category follows the organization.";
 
   return (
-    <form noValidate class="pk-stack pk-stack--snug" {...form.handlers} onSubmit={(event) => void handleSubmit(event)}>
-      <div class="pk-grid pk-grid--tight">
-        <Field label="Category" {...form.of("membershipCategory")}>
-          {(control) => (
-            <Select
-              {...control}
-              name="membershipCategory"
-              value={mode}
-              onChange={(event) => setMode((event.target as HTMLSelectElement).value)}
-            >
-              <option value={GRANT_MODE_ORG_TIED}>Organization-tied (set by org)</option>
-              {mayGrantIndividual &&
-                MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
-                  (category) => (
-                    <option key={category} value={category}>
-                      {categories.label(category)}
-                    </option>
-                  ),
-                )}
-            </Select>
-          )}
-        </Field>
-
-        {!isIndividual && (
-          <>
-            <div class="pk-stack pk-stack--tight">
-              <Field label="Find organization">
+    <Panel aria-label="Add identity">
+      <PanelHeader title="Add identity" breadcrumb />
+      <PanelBody>
+        <form
+          noValidate
+          class="pk-stack pk-stack--snug"
+          {...form.handlers}
+          onSubmit={(event) => void handleSubmit(event)}
+        >
+          <div class="pk-grid pk-grid--tight">
+            {/* Only a person with no capacity at all can be given an individual
+            one; everyone else is tied to an organization, and the category
+            select — which then only said "set by the organization" — has
+            nothing to ask (#96). */}
+            {mayGrantIndividual && (
+              <Field label="Category" {...form.of("membershipCategory")}>
                 {(control) => (
-                  <TextInput
+                  <Select
                     {...control}
-                    value={orgQuery}
-                    onInput={(event) => setOrgQuery(event.currentTarget.value)}
-                    // Enter searches rather than submitting the grant, which
-                    // would otherwise fire before any organization is listed.
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
-                      event.preventDefault();
-                      void searchOrgs();
-                    }}
-                    placeholder="Organization name"
+                    name="membershipCategory"
+                    value={mode}
+                    onChange={(event) => setMode((event.target as HTMLSelectElement).value)}
+                  >
+                    <option value={GRANT_MODE_ORG_TIED}>Organization-tied (set by org)</option>
+                    {catalog
+                      .filter((category) => category.isIndividual)
+                      .map(({ code: category }) => (
+                        <option key={category} value={category}>
+                          {categories.label(category)}
+                        </option>
+                      ))}
+                  </Select>
+                )}
+              </Field>
+            )}
+
+            {!isIndividual && (
+              <Field label="Organization" help={organizationHelp} {...form.of("organizationId")}>
+                {(control) => (
+                  <ServerSearchSelect
+                    {...control}
+                    catalog={organizationCatalog}
+                    searchLabel="Organization"
+                    value={selectedOrgId || null}
+                    selectedLabel={selectedOrg?.name}
+                    placeholder="Search organizations…"
+                    allowEmpty
+                    onChange={setSelectedOrg}
                   />
                 )}
               </Field>
-              <div class="pk-cluster">
-                <Button size="sm" loading={searching} onClick={() => void searchOrgs()}>
-                  Search
-                </Button>
-              </div>
-            </div>
+            )}
 
-            <Field label="Organization" help={organizationHelp} {...form.of("organizationId")}>
-              {(control) => (
-                <Select
-                  {...control}
-                  name="organizationId"
-                  value={selectedOrgId}
-                  onChange={(event) => void pickOrg((event.target as HTMLSelectElement).value)}
-                >
-                  <option value="">— Pick —</option>
-                  {orgResults.map((organization) => (
-                    <option key={organization.id} value={organization.id}>
-                      {organization.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </>
-        )}
-
-        {!isIndividual && canActivate && (
-          <Checkbox
-            id="identity-activate-immediately"
-            checked={activateImmediately}
-            onChange={(event) => setActivateImmediately(event.currentTarget.checked)}
-            label="Activate immediately"
-            hint="Requires identities:activate. Otherwise the user must accept the invitation."
-          />
-        )}
-
-        {needsReason && (
-          <Field label="Activation reason" required {...form.of(reasonField)}>
-            {(control) => (
-              <TextInput
-                {...control}
-                name={reasonField}
-                value={activationReason}
-                onInput={(event) => setActivationReason(event.currentTarget.value)}
+            {!isIndividual && canActivate && (
+              <Checkbox
+                id="identity-activate-immediately"
+                checked={activateImmediately}
+                onChange={(event) => setActivateImmediately(event.currentTarget.checked)}
+                label="Activate immediately"
+                hint="Requires identities:activate. Otherwise the user must accept the invitation."
               />
             )}
-          </Field>
-        )}
-      </div>
 
-      {error && <Alert tone="danger">{error}</Alert>}
+            {needsReason && (
+              <Field label="Activation reason" required {...form.of(reasonField)}>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name={reasonField}
+                    value={activationReason}
+                    onInput={(event) => setActivationReason(event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+            )}
+          </div>
 
-      <div class="pk-cluster">
-        <Button type="submit" variant="primary" size="sm" loading={saving}>
-          Grant
-        </Button>
-        <Button variant="ghost" size="sm" disabled={saving} onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+          {error && <Alert tone="danger">{error}</Alert>}
+
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" size="sm" loading={saving}>
+              Grant
+            </Button>
+            <ButtonLink variant="ghost" size="sm" href={usePortalHashLocation.hrefs(cancelHref)}>
+              Cancel
+            </ButtonLink>
+          </div>
+        </form>
+      </PanelBody>
+    </Panel>
   );
 }

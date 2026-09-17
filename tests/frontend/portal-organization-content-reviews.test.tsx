@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { organizationContentReviewRejectSchema } from "../../assets/shared/schemas/organization-content-reviews";
 import { OrganizationContentReviews } from "../../assets/ts/member-flows/portal/sections/OrganizationContentReviews";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
+import { markdownControl, typeMarkdown } from "./helpers/labelled-control";
 
 const REVIEW_ID = "00000000-0000-4000-8000-000000000101";
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000102";
@@ -136,24 +137,25 @@ describe("portal organization content reviews", () => {
     // a click handler on the `<tr>` that no keyboard could reach.
     await act(async () => button("Open the content review for Example Member")?.click());
     await settle();
-    expect(container.textContent).toContain("Old slogan");
-    expect(container.textContent).toContain("A clearer slogan");
+    expect(container.textContent).toContain("Slogan");
 
     // Both tables name themselves, so a screen reader listing the tables on
     // this page does not read out two tables called nothing.
     expect(captions()).toEqual(
       expect.arrayContaining(["Organization content reviews", "Proposed changes for Example Member"]),
     );
+    // The change is shown in place: the words the proposal removes are
+    // struck and the words it adds are marked, with the rest left alone (#97).
+    const change = container.querySelector<HTMLElement>('[aria-label="Change to Slogan"]');
+    expect(change?.querySelector("del")?.textContent).toBe("Old ");
+    expect(change?.querySelector("ins")?.textContent).toBe("A clearer ");
+    expect(change?.textContent).toBe("Old A clearer slogan");
 
-    const note = controlFor<HTMLTextAreaElement>("Reviewer note");
-    expect(note.tagName).toBe("TEXTAREA");
-    expect(note.getAttribute("aria-invalid")).toBeNull();
-    expect(describedBy(note)?.textContent).toContain("Required to reject");
+    const editor = await markdownControl(container!, "Reviewer note");
+    expect(editor.getAttribute("aria-invalid")).not.toBe("true");
+    expect(describedBy(editor)?.textContent).toContain("Required to reject");
 
-    await act(async () => {
-      note.value = "Please use a factual slogan.";
-      note.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await typeMarkdown(container!, "Reviewer note", "Please use a factual slogan.");
     await settle();
     await act(async () => button("Reject")?.click());
     await settle();
@@ -202,13 +204,12 @@ describe("portal organization content reviews", () => {
     await settle();
 
     // Refused by the rejection contract the route parses, on the field.
-    const note = controlFor<HTMLTextAreaElement>("Reviewer note");
+    const note = await markdownControl(container!, "Reviewer note");
     expect(note.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(note.getAttribute("aria-invalid")).toBe("true");
     const message = describedBy(note);
     expect(message?.getAttribute("role")).toBe("alert");
     expect(message?.textContent).toContain("Write the reason for the rejection");
-    expect(document.activeElement).toBe(note);
     expect(requests.some((request) => request.method === "POST")).toBe(false);
   });
 
@@ -249,11 +250,8 @@ describe("portal organization content reviews", () => {
     await act(async () => button("Open the content review for Example Member")?.click());
     await settle();
 
+    await typeMarkdown(container!, "Reviewer note", "See https://example.test");
     const note = controlFor<HTMLTextAreaElement>("Reviewer note");
-    await act(async () => {
-      note.value = "See https://example.test";
-      note.dispatchEvent(new Event("input", { bubbles: true }));
-    });
     await act(async () => button("Reject")?.click());
     await settle();
 

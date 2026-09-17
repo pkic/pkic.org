@@ -268,6 +268,52 @@ describe("admin user membership capacities", () => {
     });
   });
 
+  it("writes an individual capacity's own profile and leaves untouched fields alone", async () => {
+    const actorId = await insertUser(env.DB, "profile-admin@example.test");
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    const target = await insertIndividualMember(env.DB, "H6", "profile-target@example.test");
+    await env.DB.prepare("UPDATE identities SET links_json = '[\"https://kept.example/\"]' WHERE id = ?")
+      .bind(target.identityId)
+      .run();
+    const actor: UserBackedAuthAdmin = {
+      identityType: "user",
+      id: actorId,
+      email: "profile-admin@example.test",
+      role: "admin",
+    };
+
+    await updateMembershipCapacity(env.DB, actor, target.identityId, {
+      profile: { biography: "Independent researcher in applied cryptography." },
+    });
+
+    const row = await env.DB.prepare("SELECT biography, links_json FROM identities WHERE id = ?")
+      .bind(target.identityId)
+      .first<{ biography: string | null; links_json: string | null }>();
+    expect(row).toEqual({
+      biography: "Independent researcher in applied cryptography.",
+      links_json: JSON.stringify(["https://kept.example/"]),
+    });
+  });
+
+  it("refuses to write a representative's profile through the capacity route", async () => {
+    const actorId = await insertUser(env.DB, "representative-profile-admin@example.test");
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    const representedUserId = await insertUser(env.DB, "representative-profile-target@example.test");
+    const organizationId = await insertOrganization(env.DB, "Representative Profile Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const identityId = await addRepresentative(env.DB, memberId, representedUserId);
+    const actor: UserBackedAuthAdmin = {
+      identityType: "user",
+      id: actorId,
+      email: "representative-profile-admin@example.test",
+      role: "admin",
+    };
+
+    await expect(
+      updateMembershipCapacity(env.DB, actor, identityId, { profile: { biography: "Not through here" } }),
+    ).rejects.toMatchObject({ status: 422, code: "IDENTITY_PROFILE_MANAGED_BY_ORGANIZATION" });
+  });
+
   it("returns the organization aggregate category and status for a representative update", async () => {
     const actorId = await insertUser(env.DB, "representative-response-admin@example.test");
     await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();

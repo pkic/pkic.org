@@ -1,12 +1,8 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
-import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
-import {
-  isIndividualMembershipCategory,
-  type MembershipCategoryCatalogEntry,
-} from "../../../../../shared/schemas/membership-categories";
+import { type MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import { asString } from "./helpers";
 import { ApplicationEditForm, type ApplicationEditFormValue } from "./ApplicationEditForm";
@@ -17,9 +13,10 @@ import { ApplicationEditForm, type ApplicationEditFormValue } from "./Applicatio
 import "../../../../ui/Content.css";
 
 /**
- * Read-only application summary, with an in-place edit toggle for
- * correcting applicant-submitted data (typos etc.) without transitioning
- * the stage — mirrors Users.tsx's UserDetailView edit-toggle pattern.
+ * Read-only application summary. Editing — correcting applicant-submitted
+ * data without transitioning the stage — is a command in the record's own
+ * actions menu (#109); the record tells the card when it is editing and the
+ * card shows the editor in place of the summary, never by default.
  *
  * The summary is a description list. It was a two-column `<table>` with no
  * caption, which is announced as an unnamed grid sitting among the other
@@ -28,12 +25,16 @@ import "../../../../ui/Content.css";
 export function ApplicationOverviewCard({
   detail,
   categories,
-  canWrite,
+  editing = false,
+  onEditingChange,
   onSave,
 }: {
   detail: MembershipApplicationDetail;
   categories: readonly MembershipCategoryCatalogEntry[];
-  canWrite: boolean;
+  /** Whether the record has asked for the editor; the card never opens it on its own. */
+  editing?: boolean;
+  /** The record's way of learning that the editor closed — saved or cancelled. */
+  onEditingChange?: (editing: boolean) => void;
   onSave: (edits: {
     applicantName: string;
     applicantEmail: string;
@@ -47,12 +48,18 @@ export function ApplicationOverviewCard({
     reason: string | null;
   }) => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [editForm, setEditForm] = useState<ApplicationEditFormValue | null>(null);
 
-  function startEditing() {
+  function setEditing(next: boolean) {
+    onEditingChange?.(next);
+  }
+
+  // The draft is built from the record the moment the editor is asked for,
+  // so it always starts from what is on screen.
+  useEffect(() => {
+    if (!editing) return;
     const answers = detail.answers;
     setEditForm({
       applicantName: detail.applicantName,
@@ -67,15 +74,16 @@ export function ApplicationOverviewCard({
       reason: asString(answers.reason),
     });
     setEditError("");
-    setEditing(true);
-  }
+    // Only the opening matters: the record is what the draft is read from.
+  }, [editing]);
 
   async function saveEdit() {
     if (!editForm) return;
     setEditSaving(true);
     setEditError("");
     try {
-      const isIndividual = isIndividualMembershipCategory(editForm.membershipCategory);
+      const isIndividual =
+        categories.find((category) => category.code === editForm.membershipCategory)?.isIndividual === true;
       await onSave({
         applicantName: editForm.applicantName,
         applicantEmail: editForm.applicantEmail,
@@ -99,23 +107,7 @@ export function ApplicationOverviewCard({
   return (
     <div class="pk">
       <Panel aria-label="Application">
-        <PanelHeader title="Application">
-          {canWrite &&
-            !editing &&
-            /*
-             * The category list is what the edit form's one required choice is
-             * built from, so without it there is nothing to edit into. The
-             * surface used to render a disabled button and say nothing, which
-             * reads as "broken" rather than "waiting"; the sentence says which.
-             */
-            (categories.length === 0 ? (
-              <span class="pk-small">Editing needs the membership categories, which are not available.</span>
-            ) : (
-              <Button size="sm" variant="primary" onClick={startEditing}>
-                Edit
-              </Button>
-            ))}
-        </PanelHeader>
+        <PanelHeader title="Application" />
         <PanelBody>
           {!editing ? (
             <dl class="pk-datalist pk-small">
@@ -153,16 +145,22 @@ export function ApplicationOverviewCard({
             </dl>
           ) : (
             editForm && (
-              <ApplicationEditForm
-                form={editForm}
-                categories={categories}
-                onChange={(updater) => setEditForm((f) => (f ? updater(f) : f))}
-                disabled={editSaving}
-                error={editError}
-                onSave={() => void saveEdit()}
-                onCancel={() => setEditing(false)}
-                saving={editSaving}
-              />
+              <>
+                <p class="pk-small">
+                  Corrections cannot reuse completed reviews or existing payment checkouts. If review evidence exists,
+                  first preview a restart under “Restart or change workflow.” The application category remains fixed.
+                </p>
+                <ApplicationEditForm
+                  form={editForm}
+                  categories={categories}
+                  onChange={(updater) => setEditForm((f) => (f ? updater(f) : f))}
+                  disabled={editSaving}
+                  error={editError}
+                  onSave={() => void saveEdit()}
+                  onCancel={() => setEditing(false)}
+                  saving={editSaving}
+                />
+              </>
             )
           )}
         </PanelBody>

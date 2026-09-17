@@ -1,8 +1,20 @@
+import { eventAnalyticsFixture as analytics } from "../helpers/event-analytics";
 // @vitest-environment jsdom
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventStats } from "../../assets/ts/member-flows/portal/sections/events/detail/EventStats";
+
+// The page's sections are routed tabs, so it reads the portal's location hook
+// and renders wouter links — neither of which has a dispatcher in a bare mount.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 import type { EventAnalyticsResponse } from "../../assets/shared/schemas/event-analytics";
 
 const SLUG = "pqc-2026";
@@ -21,89 +33,6 @@ async function settle(): Promise<void> {
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-}
-
-/** A response shaped exactly like the canonical analytics contract. */
-function analytics(overrides: Partial<EventAnalyticsResponse> = {}): EventAnalyticsResponse {
-  return {
-    event: { id: "pqc-2026", slug: SLUG, name: "PQC 2026" },
-    registrations: {
-      byStatus: { registered: 9, pending_email_confirmation: 2 },
-      byAttendanceType: { in_person: 6, virtual: 5 },
-      attendanceStatusByType: {
-        in_person: { accepted: 4, waitlisted: 2 },
-        virtual: { accepted: 3, waitlisted: 0 },
-      },
-      byStatusAndType: [{ status: "registered", attendance_type: "in_person", count: 6 }],
-      sponsorConsent: { granted: 3, notGranted: 1 },
-      total: 11,
-      growthByDay: [
-        { date: "2026-03-01", attendance_type: "in_person", count: 4 },
-        { date: "2026-03-02", attendance_type: "virtual", count: 3 },
-      ],
-    },
-    waitlistByEventDay: [
-      {
-        day_date: "2026-06-01",
-        label: "Day one",
-        sort_order: 1,
-        status: "waiting",
-        priority_lane: "general",
-        count: 5,
-      },
-      {
-        day_date: "2026-06-01",
-        label: "Day one",
-        sort_order: 1,
-        status: "offered",
-        priority_lane: "general",
-        count: 2,
-      },
-    ],
-    waitlistTotals: { total: 7, byStatus: { waiting: 5, offered: 2, accepted: 1 }, byPriorityLane: { general: 7 } },
-    attendanceChanges: {
-      totalChanges: 0,
-      changedRegistrations: 0,
-      dayChanges: 0,
-      changedAttendees: 0,
-      leftInPersonAttendees: 0,
-      leftInPersonDayChanges: 0,
-      joinedInPersonAttendees: 0,
-      joinedInPersonDayChanges: 0,
-      byTransition: [],
-      byDay: [],
-      recent: [],
-    },
-    registrationsByEventDay: [
-      {
-        day_date: "2026-06-01",
-        label: "Day one",
-        sort_order: 1,
-        attendance_type: "in_person",
-        attendance_status: "accepted",
-        count: 4,
-      },
-      {
-        day_date: "2026-06-01",
-        label: "Day one",
-        sort_order: 1,
-        attendance_type: "in_person",
-        attendance_status: "waitlisted",
-        count: 2,
-      },
-    ],
-    invites: {
-      attendee: {
-        byStatus: { sent: 8, accepted: 5, declined: 1 },
-        total: 14,
-        declineReasons: [{ reason_code: "schedule_conflict", count: 1, unsubscribed: 0 }],
-      },
-      speaker: { byStatus: { sent: 2 }, total: 2, declineReasons: [] },
-    },
-    proposals: { byStatus: { submitted: 4 }, total: 4 },
-    rsvp: { total: 3, byStatus: { accepted: 2, declined: 1 }, byProvider: { google: 3 }, actionsTaken: { added: 3 } },
-    ...overrides,
-  };
 }
 
 /** The same contract with nothing recorded yet — the surface's empty path. */
@@ -193,9 +122,29 @@ describe("portal event statistics", () => {
       ]),
     );
 
-    // Every table names itself, so the five on this surface stay tellable apart.
+    // The page is sectioned (#118): the overview carries the figures, and the
+    // tables live in their own sections, each reached by a routed tab.
+    const tabs = [...container.querySelectorAll('[aria-label="Analytics sections"] a')].map((tab) =>
+      tab.textContent?.trim(),
+    );
+    expect(tabs).toEqual(["Overview", "Attendance", "Registrations", "Invitations", "Calendar"]);
+    expect([...container.querySelectorAll("caption")].map((node) => node.textContent)).not.toContain(
+      "Attendee invites by status",
+    );
+  });
+
+  it("keeps every table in a named section of its own, each table named", async () => {
+    stubAnalyticsFetch(() => jsonResponse(analytics()));
+
+    mount(<EventStats slug={SLUG} section="registrations" />);
+    await settle();
+    expect([...container.querySelectorAll("caption")].map((node) => node.textContent)).toContain(
+      "Open waitlist by event day",
+    );
+
+    mount(<EventStats slug={SLUG} section="invitations" />);
+    await settle();
     const captions = [...container.querySelectorAll("caption")].map((node) => node.textContent);
-    expect(captions).toContain("Open waitlist by event day");
     expect(captions).toContain("Attendee invites by status");
     expect(captions).toContain("Speaker invites by status");
   });
@@ -249,7 +198,8 @@ describe("portal event statistics", () => {
   it("shows an empty state instead of an unlabelled chart when nothing is recorded", async () => {
     stubAnalyticsFetch(() => jsonResponse(emptyAnalytics()));
 
-    mount(<EventStats slug={SLUG} />);
+    // The growth chart lives in the Registrations section (#118).
+    mount(<EventStats slug={SLUG} section="registrations" />);
     await settle();
 
     // Scoped to the growth panel: the page renders several empty states when

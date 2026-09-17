@@ -1,3 +1,4 @@
+import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../functions/router";
@@ -98,7 +99,7 @@ async function fixture(options: { memberGroup?: "owner" | "shared" } = {}) {
     location: "Online",
     providerType: "external_url",
   });
-  const occurrence = await createSeriesOccurrence(
+  const occurrence = await configureMeetingOccurrence(
     env.DB,
     admin,
     GROUP_ID,

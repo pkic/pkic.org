@@ -13,7 +13,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { sponsorshipEventsListResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
 import { SponsorshipDetail } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail";
-import { buttonNamed, controlFor, groupNames, namedGroup, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, markdownControl, namedGroup, typeInto } from "./helpers/labelled-control";
 
 const SPONSORSHIP_ID = "000000000000000000000000000000aa";
 
@@ -95,6 +95,22 @@ async function detail(id = SPONSORSHIP_ID): Promise<HTMLElement> {
 }
 
 /** The history table's own panel, which names itself after the list it holds. */
+/** Chooses `label` from the record's `…` menu, the only place its commands live. */
+async function openCommand(container: HTMLElement, label: string): Promise<void> {
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('button[aria-label="Sponsorship actions"]')!.click();
+    await flush();
+  });
+  const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  if (!item) throw new Error(`the record's menu offers no "${label}"`);
+  await act(async () => {
+    item.click();
+    await flush();
+  });
+}
+
 function historyPanel(container: HTMLElement): HTMLElement {
   const panel = container.querySelector<HTMLElement>('section[aria-label="Pipeline history"]');
   if (!panel) throw new Error("the pipeline history table was not rendered");
@@ -254,12 +270,9 @@ describe("sponsorship pipeline history", () => {
     const container = await detail();
     const before = requested.filter((request) => request.endsWith("/events")).length;
 
+    await openCommand(container, "Move stage…");
     await act(async () => {
       buttonNamed(container, "Move stage").click();
-      await flush();
-    });
-    await act(async () => {
-      buttonNamed(container, "Move").click();
       await flush();
     });
     await act(flush);
@@ -298,11 +311,12 @@ describe("sponsorship record forms", () => {
     // Both forms are closed until asked for: a reader who opened the record
     // to look at it is shown its facts, not three forms.
     expect(container.querySelector("form")).toBeNull();
-    await act(async () => {
-      buttonNamed(container, "Edit").click();
-      buttonNamed(container, "Move stage").click();
-      await flush();
-    });
+    // No buttons on the cards: both commands live in the record's `…` menu
+    // (#116), and the stage move opens as a dialog.
+    expect([...container.querySelectorAll(".pk-panel button")].map((b) => b.textContent?.trim())).not.toContain("Edit");
+    await openCommand(container, "Edit record…");
+    await openCommand(container, "Move stage…");
+    await act(flush);
     // The tier catalog is fetched by the edit form once it mounts, so its
     // options land a tick after the form does.
     await act(flush);
@@ -319,12 +333,13 @@ describe("sponsorship record forms", () => {
       ["Renewal date", "INPUT"],
       ["Contact name", "INPUT"],
       ["Contact email", "INPUT"],
-      ["Notes", "TEXTAREA"],
       ["Move to stage", "SELECT"],
       ["Note (optional)", "INPUT"],
     ] as const) {
       expect(controlFor(container, label).tagName).toBe(tag);
     }
+    // The notes are the shared Markdown editor (#114).
+    expect((await markdownControl(container, "Notes")).closest(".pk-markdown-editor")).not.toBeNull();
     // The catalog, plus the empty choice for a sponsorship with no tier yet.
     expect([...controlFor(container, "Tier").querySelectorAll("option")].map((option) => option.value)).toEqual([
       "",
@@ -346,8 +361,8 @@ describe("sponsorship record forms", () => {
     expect(groupNames(container)).toEqual(["Assigned staff"]);
     expect([...container.querySelectorAll("form")].map((form) => form.getAttribute("aria-label"))).toEqual([
       "Edit sponsorship record",
-      "Move pipeline stage",
     ]);
+    expect(container.querySelector("dialog")?.textContent).toContain("Move stage");
   });
 
   it("reports a failed stage move without losing the note the reader typed", async () => {
@@ -367,13 +382,10 @@ describe("sponsorship record forms", () => {
     );
     const container = await detail();
 
-    await act(async () => {
-      buttonNamed(container, "Move stage").click();
-      await flush();
-    });
+    await openCommand(container, "Move stage…");
     await typeInto(controlFor(container, "Note (optional)"), "Waiting on signature");
 
-    const advance = buttonNamed(container, "Move");
+    const advance = buttonNamed(container, "Move stage");
     await act(async () => {
       advance.click();
       await flush();

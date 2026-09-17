@@ -1,5 +1,7 @@
+import { createExecutionContext } from "cloudflare:test";
+import app from "../functions/router";
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { processIncomingEmail, type IncomingRsvpEmail } from "../functions/_lib/services/calendar-rsvp-email-ingest";
 import { recordCalendarRsvpEvent } from "../functions/_lib/services/calendar-rsvp";
 import { generateSignedRsvpAddress, verifySignedRsvpAddressFull } from "../functions/_lib/email/rsvp";
@@ -85,6 +87,52 @@ describe("incoming RSVP email persistence", () => {
     );
 
     expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(1);
+  });
+
+  it("propagates an awaited D1 failure and records a later SMTP retry only once", async () => {
+    const { registrationId } = await seedRsvpRegistration(env.DB);
+    const to = await generateSignedRsvpAddress(registrationId, secret, rsvpEmail);
+    const raw = rawEmail("Accepted: PQC 2026", "smtp-retry@example.test");
+    const message = () => ({
+      ...incomingEmail("alice@example.com", to, raw),
+      setReject: vi.fn(),
+      forward: vi.fn(),
+      reply: vi.fn(),
+      headers: new Headers(),
+    });
+    const context = createExecutionContext();
+    const waitUntil = vi.spyOn(context, "waitUntil");
+    const failed = message();
+    await expect(
+      app.email(
+        failed,
+        {
+          ...testEnv(),
+          DB: {
+            prepare: () => {
+              throw new Error("D1_ERROR: Network connection lost.");
+            },
+            batch: vi.fn(),
+          },
+        },
+        context,
+      ),
+    ).rejects.toThrow("D1_ERROR: Network connection lost.");
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(failed.setReject).not.toHaveBeenCalled();
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(0);
+    await app.email(message(), testEnv(), createExecutionContext());
+    await app.email(message(), testEnv(), createExecutionContext());
+    expect(await queryAll(env.DB, "SELECT id FROM calendar_rsvp_events")).toHaveLength(1);
+  });
+
+  it("defers processing when signing configuration is missing instead of acknowledging the message", async () => {
+    await expect(
+      processIncomingEmail(
+        incomingEmail("alice@example.com", rsvpEmail, rawEmail("Accepted: PQC 2026", "missing-secret@example.test")),
+        { ...testEnv(), INTERNAL_SIGNING_SECRET: undefined },
+      ),
+    ).rejects.toMatchObject({ code: "EMAIL_SIGNING_NOT_CONFIGURED" });
   });
 
   it("rejects a tampered RSVP address capability", async () => {

@@ -3,6 +3,7 @@ declare module "cloudflare:test" {
   export const SELF: {
     fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   };
+  export function waitOnExecutionContext(context: ExecutionContext): Promise<void>;
   export function createExecutionContext(): ExecutionContext;
   export function applyD1Migrations(db: D1Database, migrationsPath?: string): Promise<void>;
 }

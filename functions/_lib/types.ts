@@ -1,4 +1,3 @@
-import type { QueuedRsvpEmail } from "../../assets/shared/schemas/calendar-rsvp-email-queue";
 import type { RateLimitBinding } from "./rate-limit";
 
 export interface D1StatementResult<T = Record<string, unknown>> {
@@ -56,12 +55,6 @@ export interface Env {
   MAINTENANCE_SCHEDULE?: string;
   MAINTENANCE_STARTS_AT?: string;
   MAINTENANCE_ENDS_AT?: string;
-  /** Existing Cloudflare-verified mailbox for preserving mail while automation is paused. */
-  PAUSED_EMAIL_FORWARD_TO?: string;
-  RSVP_EMAIL_QUEUE_ENABLED?: string;
-  RSVP_EMAIL_QUEUE?: Queue<QueuedRsvpEmail>;
-  /** Dedicated private bucket; MIME payloads must never share a public assets namespace. */
-  RSVP_EMAIL_BUCKET?: R2Bucket;
   /** Explicit deployment switch. Missing/false keeps Turnstile disabled. */
   TURNSTILE_ENABLED?: string;
   TURNSTILE_SITE_KEY?: string;
@@ -120,15 +113,13 @@ export interface Env {
   SCHEDULED_DUE_WORK_MAX_MS?: string;
   /** Maximum D1 statements issued by one scheduled Worker invocation. */
   SCHEDULED_D1_QUERY_BUDGET?: string;
-  SCHEDULED_CONSULTATION_BATCH_LIMIT?: string;
   SCHEDULED_ON_HOLD_REMINDER_LIMIT?: string;
-  SCHEDULED_EC_AUTO_APPROVE_LIMIT?: string;
   SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT?: string;
   SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_DUE_WORK_LIMIT?: string;
   SCHEDULED_VOTE_NOTIFICATION_LIMIT?: string;
+  SCHEDULED_MEETING_INVITATION_LIMIT?: string;
   /** Maximum distinct recipients resolved for a synchronous event campaign. */
-  EVENT_CAMPAIGN_MAX_RECIPIENTS?: string;
   CSV_EXPORT_MAX_ROWS?: string;
   CSV_EXPORT_MAX_BYTES?: string;
   APPLICATION_DOCUMENT_MAX_BYTES?: string;
@@ -156,10 +147,13 @@ export interface Env {
   ADMIN_API_KEY?: string;
   /** Stripe secret key for creating Checkout Sessions (donation flow). */
   STRIPE_SECRET_KEY?: string;
+  STRIPE_API_BASE?: string;
   /** Stripe publishable key returned to the client for Embedded Checkout. */
   STRIPE_PUBLISHABLE_KEY?: string;
   /** Stripe webhook signing secret for verifying checkout.session.completed events. */
   STRIPE_WEBHOOK_SECRET?: string;
+  /** Signing secret for the separately configured membership-fee webhook endpoint. */
+  MEMBERSHIP_STRIPE_WEBHOOK_SECRET?: string;
   /**
    * Seconds to delay sending the registration-confirmed email so the OG badge has
    * time to render and can be attached. Defaults to 90 in production. Set to 0 in

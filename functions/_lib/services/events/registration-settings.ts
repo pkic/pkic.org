@@ -1,7 +1,4 @@
-import {
-  eventRegistrationPolicySchema,
-  type EventRegistrationPolicy,
-} from "../../../../assets/shared/schemas/event-series";
+import type { EventRegistrationPolicy } from "../../../../assets/shared/schemas/event-series";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -13,6 +10,7 @@ import {
   type EventResourceManagementContext,
 } from "../event-series/management";
 import { EVENT_COLUMNS, type EventRecord } from "../events";
+import { normalizeEventRegistrationPolicy } from "./detail";
 import { nowIso } from "../../utils/time";
 
 type ConfigurableEvent = EventRecord & { updated_at: string };
@@ -88,7 +86,11 @@ export async function getGroupEventRegistrationSettings(
   const { event } = await configurableEvent(db, actor, groupIdOrSlug, eventId);
   return {
     eventUpdatedAt: event.updated_at,
-    registrationPolicy: eventRegistrationPolicySchema.parse(event.registration_mode),
+    // A migrated event still carries a legacy mode — `invite_or_open`,
+    // `open`, `invite_only` — that the policy vocabulary has since replaced.
+    // The same normalization the event detail applies, so the settings panel
+    // reads the event the detail already showed instead of failing on it.
+    registrationPolicy: normalizeEventRegistrationPolicy(event.registration_mode),
   };
 }
 

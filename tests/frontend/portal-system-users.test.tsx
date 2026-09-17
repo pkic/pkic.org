@@ -153,7 +153,9 @@ describe("portal System Users profile permissions", () => {
       expect(label.querySelector("span.pk-check__label")).not.toBeNull();
     }
     expect(choiceNamed(container, "Active").checked).toBe(true);
-    expect(choiceNamed(container, "Executive Council member").checked).toBe(false);
+    // Council membership is the Executive Council group's roster, not a
+    // checkbox on the account (#104).
+    expect(container.textContent).not.toContain("Executive Council member");
   });
 
   it("refuses a malformed address at the field, sends nothing, and clears once it is fixed", async () => {

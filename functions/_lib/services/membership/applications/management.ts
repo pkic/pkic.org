@@ -1,9 +1,12 @@
+import { prepareApplicationEditEvidenceGuard } from "./edit-evidence";
+import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
+import { isAuthorizationGuardFailure } from "../../../db/authorization-guard";
+import { getRequestedApplicationGroups } from "./queries";
+import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
 /**
  * Staff listing/detail queries for member_applications. This management view
- * needs every stage
- * (not just active ones) plus the staff-only communications/notes/
- * concerns/EC-decision timelines the applicant-facing status endpoint never
- * returns.
+ * includes every lifecycle state and staff-only communications and notes.
+ * Review evidence is exposed through the dedicated workflow review service.
  */
 import { all, first } from "../../../db/queries";
 import { queryPage } from "../../../db/pagination";
@@ -13,12 +16,12 @@ import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
-import { emailDomain, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./create";
+import { emailDomain } from "./create";
+import { requireMembershipCategory } from "../categories";
 import {
   getApplicationAnswers,
   getMemberApplicationById,
   listApplicationCommunications,
-  listApplicationConcerns,
   type MemberApplicationRow,
 } from "./queries";
 import {
@@ -35,7 +38,6 @@ import {
   prepareClaimDomainForApplication,
   prepareReleaseApplicationDomainClaim,
 } from "../organization-domain-claims";
-import { listEcDecisions } from "../../ec-review";
 import {
   MEMBERSHIP_APPLICATIONS_SORT_COLUMNS,
   membershipApplicationDetailSchema,
@@ -71,11 +73,13 @@ type MembershipApplicationSummaryRow = Pick<
 
 type MembershipApplicationManagementSummaryRow = MembershipApplicationSummaryRow & {
   membership_category_label: string;
+  current_requirement: string | null;
 };
 
 function toSummary(
   row: MembershipApplicationSummaryRow,
   membershipCategoryLabel: string,
+  currentRequirement: string | null = null,
 ): MembershipApplicationSummary {
   return membershipApplicationSummarySchema.parse({
     id: row.id,
@@ -84,6 +88,7 @@ function toSummary(
     organizationName: row.organization_name,
     membershipCategory: row.membership_category,
     membershipCategoryLabel,
+    currentRequirement,
     stage: row.stage,
     onHoldSubtype: row.on_hold_subtype,
     assignedToUserId: row.assigned_to_user_id,
@@ -126,9 +131,14 @@ export async function listMembershipApplications(
     sql: `SELECT ma.id, ma.applicant_email, ma.applicant_name, ma.organization_name,
                    ma.membership_category, mc.label AS membership_category_label,
                    ma.stage, ma.on_hold_subtype, ma.assigned_to_user_id,
-                   ma.created_at, ma.updated_at
+                   ma.created_at, ma.updated_at,
+                   CASE WHEN ma.stage IN ('submitted', 'processing', 'on_hold')
+                     THEN json_extract(version.definition_json, '$.steps[' || workflow.current_position || '].label')
+                     ELSE NULL END AS current_requirement
             FROM member_applications ma
-            JOIN membership_categories mc ON mc.code = ma.membership_category ${where}`,
+            JOIN membership_categories mc ON mc.code = ma.membership_category
+            LEFT JOIN membership_application_workflows workflow ON workflow.application_id = ma.id AND workflow.superseded_at IS NULL
+            LEFT JOIN membership_workflow_versions version ON version.id = workflow.version_id ${where}`,
     bindings: values,
     orderBy,
     limit: params.limit,
@@ -136,7 +146,7 @@ export async function listMembershipApplications(
   });
 
   return {
-    applications: rows.map((row) => toSummary(row, row.membership_category_label)),
+    applications: rows.map((row) => toSummary(row, row.membership_category_label, row.current_requirement)),
     total,
   };
 }
@@ -159,11 +169,7 @@ export async function getMembershipApplicationDetail(
   }
 
   const answers = await getApplicationAnswers(db, application.form_submission_id);
-  const requestedWorkingGroups = answers.working_groups ?? answers.workingGroups;
-  const requestedSlugs = Array.isArray(requestedWorkingGroups)
-    ? [...new Set(requestedWorkingGroups.filter((value): value is string => typeof value === "string"))].slice(0, 200)
-    : [];
-  const [category, eventRows, communications, concerns, ecDecisions, requestedWorkingGroupRows] = await Promise.all([
+  const [category, eventRows, communications, requestedWorkingGroupRows] = await Promise.all([
     first<{ label: string }>(db, "SELECT label FROM membership_categories WHERE code = ?", [
       application.membership_category,
     ]),
@@ -173,29 +179,14 @@ export async function getMembershipApplicationDetail(
       [applicationId],
     ),
     listApplicationCommunications(db, applicationId),
-    listApplicationConcerns(db, applicationId),
-    listEcDecisions(db, applicationId),
-    requestedSlugs.length > 0
-      ? all<{ slug: string; name: string }>(
-          db,
-          `SELECT slug, name
-             FROM groups
-            WHERE type_key = 'working_group'
-              AND slug IN (SELECT value FROM json_each(?))`,
-          [JSON.stringify(requestedSlugs)],
-        )
-      : Promise.resolve([]),
+    getRequestedApplicationGroups(db, answers),
   ]);
-  const requestedWorkingGroupNames = new Map(requestedWorkingGroupRows.map((row) => [row.slug, row.name]));
 
   return membershipApplicationDetailSchema.parse({
     ...toSummary(application, category?.label ?? application.membership_category),
     stageEnteredAt: application.stage_entered_at,
     answers,
-    requestedWorkingGroups: requestedSlugs.map((slug) => ({
-      slug,
-      name: requestedWorkingGroupNames.get(slug) ?? slug,
-    })),
+    requestedWorkingGroups: requestedWorkingGroupRows,
     events: eventRows.map((row) => ({
       fromStage: row.from_stage,
       toStage: row.to_stage,
@@ -212,21 +203,6 @@ export async function getMembershipApplicationDetail(
       body: row.body,
       templateKey: row.template_key,
       emailOutboxId: row.email_outbox_id,
-      createdAt: row.created_at,
-    })),
-    concerns: concerns.map((row) => ({
-      id: row.id,
-      applicationId: row.application_id,
-      submittedByUserId: row.submitted_by_user_id,
-      concernText: row.concern_text,
-      createdAt: row.created_at,
-    })),
-    ecDecisions: ecDecisions.map((row) => ({
-      id: row.id,
-      applicationId: row.application_id,
-      ecMemberUserId: row.ec_member_user_id,
-      decision: row.decision,
-      reason: row.reason,
       createdAt: row.created_at,
     })),
   });
@@ -292,7 +268,12 @@ export async function updateMembershipApplication(
   }
 
   const nextMembershipCategory = input.membershipCategory ?? application.membership_category;
-  const nextIsIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(nextMembershipCategory);
+  const nextCategory = await requireMembershipCategory(db, nextMembershipCategory);
+  const nextIsIndividual = nextCategory.isIndividual;
+  const currentCategory =
+    nextMembershipCategory === application.membership_category
+      ? nextCategory
+      : await requireMembershipCategory(db, application.membership_category);
   const nextOrganizationName = nextIsIndividual
     ? null
     : input.organizationName === undefined
@@ -308,6 +289,12 @@ export async function updateMembershipApplication(
   }
 
   const nextApplicantEmail = input.applicantEmail ?? application.applicant_email;
+  const policy = membershipApplicantPolicySchema(nextCategory).safeParse({
+    applicantEmail: nextApplicantEmail,
+    organizationName: nextOrganizationName ?? undefined,
+  });
+  if (!policy.success)
+    throw new AppError(422, "VALIDATION_ERROR", "Check the application details", policy.error.flatten());
   if (input.applicantEmail !== undefined && input.applicantEmail !== application.applicant_email) {
     setClauses.push("applicant_email = ?");
     values.push(input.applicantEmail);
@@ -342,7 +329,7 @@ export async function updateMembershipApplication(
     values.push(nextOrganizationName);
     changedFields.push("organizationName");
   } else if (
-    nextIsIndividual !== INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(application.membership_category) &&
+    nextIsIndividual !== currentCategory.isIndividual &&
     nextIsIndividual &&
     application.organization_name !== null
   ) {
@@ -408,6 +395,14 @@ export async function updateMembershipApplication(
     return getMembershipApplicationDetail(db, applicationId);
   }
 
+  dependentStatements.push(
+    ...(await prepareApplicationEditEvidenceGuard(
+      db,
+      application,
+      nextMembershipCategory !== application.membership_category,
+    )),
+  );
+  dependentStatements.push(preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]));
   setClauses.push("updated_at = ?");
   values.push(now);
   values.push(applicationId, application.transition_revision);
@@ -453,6 +448,12 @@ export async function updateMembershipApplication(
       ...dependentStatements,
     ]);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(
+        409,
+        "APPLICATION_CHANGED",
+        "The application's review or your permission changed. Reload before editing.",
+      );
     if (isFormSubmissionContextConflict(error)) {
       throw formSubmissionContextChangedError();
     }

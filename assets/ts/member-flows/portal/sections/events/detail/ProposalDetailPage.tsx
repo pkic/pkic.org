@@ -1,27 +1,46 @@
-import { BreadcrumbBranch } from "../../../../../ui/BreadcrumbScope";
-import { PageHeader } from "../../../../../ui/PageHeader";
-import { useState, useEffect } from "preact/hooks";
-import { useHashQueryParam } from "../../../../../hooks/useHashQueryParam";
+/**
+ * One proposal's own page.
+ *
+ * A record with facets: the header says what the proposal is and where it
+ * stands, its commands sit behind one actions menu, one tab row switches
+ * between its facets — the submission, the speakers, the reviews, the
+ * presentation, the audit log, the decision — and the committee's standing
+ * and private notes keep the column beside whichever facet is open. Inside a
+ * group event each facet is a URL segment; on the standalone event route the
+ * same page switches its panels in place.
+ *
+ * The version this replaces opened with a band of four stat cards restating
+ * the header, squeezed the tab row into half the width beside a sidebar of
+ * eight block buttons, and kept the open facet in a hash query parameter no
+ * link could carry.
+ */
+import { useEffect, useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../../hash-location";
 import { Badge } from "../../../../../components/Badge";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { Spinner } from "../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
-import { Tabs } from "../../../../../components/Tabs";
+import { Tabs, type TabItem } from "../../../../../components/Tabs";
 import { getJson, patchJson, postJson } from "../../../../../shared/api-client";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../../components/forms/FormResponseViews";
 import { AuditLogSection } from "./proposal-detail/AuditLogSection";
 import { PresentationVersionsTab } from "./proposal-detail/PresentationVersionsTab";
-import { ProposalSidebar } from "./proposal-detail/ProposalSidebar";
+import { ProposalStanding } from "./proposal-detail/ProposalStanding";
 import { ProposalReviewsTab } from "./proposal-detail/ProposalReviewsTab";
+import {
+  proposalActions,
+  type ProposalFlagAction,
+  type ProposalReminderKind,
+} from "./proposal-detail/proposal-actions";
 import { proposalSpeakerEndpoints } from "./proposal-detail/proposal-api";
 import {
   isProposalDecidableStatus,
   proposalFlagResponseSchema,
 } from "../../../../../../shared/schemas/proposal-status";
 import { proposalPatchResponseSchema } from "../../../../../../shared/schemas/proposal-management";
+import { proposalSpeakerRemindersResponseSchema } from "../../../../../../shared/schemas/proposal-speakers";
 import { useProposalSubresources } from "./proposal-detail/useProposalSubresources";
 import type { DetailTab, ProposalResponse } from "./proposal-detail/model";
 import { eventProposalDetailResponseSchema } from "../../../../../../shared/schemas/event-proposals";
@@ -30,18 +49,28 @@ import { ProposalDecisionPanel } from "./proposal-detail/ProposalDecisionPanel";
 import { ProposalCancellationPanel } from "./proposal-detail/ProposalCancellationPanel";
 import { proposalResourcePath } from "./proposal-detail/proposal-api";
 import { ProposalSpeakersPanel } from "../../../../../components/proposals/ProposalSpeakersPanel";
+import { ProposalCoSpeakerInviteForm } from "../../../../../components/proposals/ProposalCoSpeakerInviteForm";
+import { ProposalInternalCommentsPanel } from "../../../../../components/proposals/ProposalInternalCommentsPanel";
 import { Alert } from "../../../../../ui/Alert";
-import { Button } from "../../../../../ui/Button";
+import { BreadcrumbBranch } from "../../../../../ui/BreadcrumbScope";
+import { Button, ButtonLink } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
+import { Menu } from "../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
-import { StatCard } from "../../../../../ui/StatCard";
-import { Textarea } from "../../../../../ui/TextControl";
-// `pk-mono` and `pk-answer-pre` are written here as class names rather than
-// reached through a component, so this module has to pull their stylesheet
-// into its own chunk.
+import { ProfileHeader } from "../../../../../ui/ProfileHeader";
+import { eventProposalsViewPath } from "./proposal-paths";
+// `pk-answer-pre` is written here as a class name rather than reached through
+// a component, so this module has to pull its stylesheet into its own chunk.
 import "../../../../../ui/Content.css";
+import { MarkdownEditor } from "../../../../../components/markdown-editor/MarkdownInput";
+import { Markdown } from "../../../../../components/Markdown";
 
 const DETAIL_TABS: DetailTab[] = ["submission", "speakers", "reviews", "presentation", "audit-log", "decision"];
+const DEFAULT_TAB: DetailTab = "submission";
+
+function isDetailTab(value: string | undefined): value is DetailTab {
+  return value !== undefined && (DETAIL_TABS as string[]).includes(value);
+}
 
 /**
  * The reader-facing label for a stored vocabulary value. Bootstrap's
@@ -53,25 +82,31 @@ function vocabularyLabel(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 export function ProposalDetailPage({
   slug,
   proposalId,
-  contextLabel,
-  onBack,
+  tab,
+  segment,
+  tabHref,
   parentNavigation = false,
 }: {
   slug: string;
   proposalId: string;
-  contextLabel?: string | null;
-  onBack?: () => void;
+  /** The URL-addressed facet, when the caller routes the facets. Unrecognized or unavailable selects Submission. */
+  tab?: string;
+  /** The segment below a facet: `"new"` under Speakers opens the invitation page. */
+  segment?: string;
+  /** Where each facet lives. Without it the tabs switch panels in place. */
+  tabHref?: (key: DetailTab) => string;
+  /** Inside a workspace whose breadcrumb this page extends; otherwise the page offers its own way back. */
   parentNavigation?: boolean;
 }) {
   const [, navigate] = usePortalHashLocation();
-  const [rawTab, setRawTab] = useHashQueryParam("proposalTab", "submission");
-  const activeTab: DetailTab = (DETAIL_TABS as string[]).includes(rawTab) ? (rawTab as DetailTab) : "submission";
-  const setActiveTab = (next: DetailTab) => setRawTab(next);
+  // The open facet is the URL's when the facets are routed, and local state
+  // otherwise; either way an unavailable facet falls back below.
+  const [localTab, setLocalTab] = useState<DetailTab>(DEFAULT_TAB);
+  const requestedTab: DetailTab = tabHref ? (isDetailTab(tab) ? tab : DEFAULT_TAB) : localTab;
+  const [commandError, setCommandError] = useState<string | null>(null);
 
   const { data, loading, error, reload } = useData<ProposalResponse>(
     async () => getJson(proposalResourcePath(proposalId), eventProposalDetailResponseSchema),
@@ -115,23 +150,6 @@ export function ProposalDetailPage({
     }
   }, [data]);
 
-  useEffect(() => {
-    if (
-      activeTab === "decision" &&
-      data?.proposal &&
-      !data.proposal.decision_status &&
-      !isProposalDecidableStatus(data.proposal.status)
-    ) {
-      setActiveTab("submission");
-    }
-  }, [activeTab, data?.proposal]);
-
-  useEffect(() => {
-    if (data && !data.access.canReview && (activeTab === "reviews" || activeTab === "audit-log")) {
-      setActiveTab("submission");
-    }
-  }, [activeTab, data?.access.canReview]);
-
   if (loading) return <Spinner />;
   if (error && !data) return <ErrorAlert error={error} />;
   if (!data) return null;
@@ -152,28 +170,47 @@ export function ProposalDetailPage({
     "needs-work": reviewSummary.needsWorkCount,
     reject: reviewSummary.rejectCount,
   };
+  const showDecision =
+    (access.canFinalize && (proposalDecidable || Boolean(proposal.decision_status))) ||
+    (access.canCancelAcceptedProposal && proposal.status === "accepted") ||
+    proposal.status === "canceled";
 
-  const tabItems = [
+  const tabItems: Array<TabItem & { key: DetailTab }> = [
     { key: "submission", label: "Submission" },
     { key: "speakers", label: "Speakers" },
-    ...(access.canReview ? [{ key: "reviews", label: `Reviews (${loadingSub ? "…" : reviewCount})` }] : []),
+    ...(access.canReview
+      ? [{ key: "reviews" as const, label: `Reviews (${loadingSub ? "…" : String(reviewCount)})` }]
+      : []),
     ...(canManagePresentation
       ? [
           {
-            key: "presentation",
-            label: `Presentation${loadingSub ? "" : versions.length > 0 ? ` (${versions.length})` : ""}`,
+            key: "presentation" as const,
+            label: `Presentation${loadingSub ? "" : versions.length > 0 ? ` (${String(versions.length)})` : ""}`,
           },
         ]
       : []),
-    ...(access.canReview ? [{ key: "audit-log", label: "Audit Log" }] : []),
-    ...((access.canFinalize && (proposalDecidable || proposal.decision_status)) ||
-    (access.canCancelAcceptedProposal && proposal.status === "accepted") ||
-    proposal.status === "canceled"
-      ? [{ key: "decision", label: "Decision" }]
-      : []),
+    ...(access.canReview ? [{ key: "audit-log" as const, label: "Audit log" }] : []),
+    ...(showDecision ? [{ key: "decision" as const, label: "Decision" }] : []),
   ];
+  // A facet the identity cannot see, or one the proposal no longer has, is
+  // not an error: the page opens on the submission instead.
+  const activeTab: DetailTab = tabItems.some((item) => item.key === requestedTab) ? requestedTab : DEFAULT_TAB;
 
-  async function handleFlag(action: "spam" | "duplicate" | "delete") {
+  function openTab(key: string): void {
+    if (!isDetailTab(key)) return;
+    if (tabHref) navigate(tabHref(key));
+    else setLocalTab(key);
+  }
+
+  // Inviting is a page under the Speakers facet, so it needs an address: an
+  // operator on a routed page gets the link, one on a panel-switching page
+  // does not.
+  const speakersPath = tabHref ? tabHref("speakers") : null;
+  const invitePath = speakersPath && access.canFinalize ? `${speakersPath}/new` : null;
+  const inviting = activeTab === "speakers" && segment === "new" && invitePath !== null;
+  const [rosterRevision, setRosterRevision] = useState(0);
+
+  async function handleFlag(action: ProposalFlagAction) {
     const verb = action === "delete" ? "Delete" : action === "spam" ? "Mark as spam" : "Mark as duplicate";
     const consequence =
       action === "delete"
@@ -187,16 +224,18 @@ export function ProposalDetailPage({
       }))
     )
       return;
+    setCommandError(null);
     try {
       await postJson(proposalResourcePath(proposalId, "moderations"), { action }, proposalFlagResponseSchema);
       toast(`Proposal ${action === "delete" ? "deleted" : `marked as ${action}`}`, "success");
       void reload();
     } catch (err) {
-      toast((err as Error).message, "error");
+      setCommandError((err as Error).message);
     }
   }
 
   async function handleOpenManage() {
+    setCommandError(null);
     try {
       const { manageUrl } = await postJson(
         proposalResourcePath(proposalId, "access-links"),
@@ -205,7 +244,35 @@ export function ProposalDetailPage({
       );
       window.open(manageUrl, "_blank", "noopener");
     } catch (e) {
-      toast((e as Error).message, "error");
+      setCommandError((e as Error).message);
+    }
+  }
+
+  async function handleCopyProposerEmail() {
+    try {
+      await navigator.clipboard.writeText(proposal.proposer_email);
+      toast("Proposer email copied", "success");
+    } catch {
+      setCommandError("Could not copy the proposer's address. Select it in the header and copy it manually.");
+    }
+  }
+
+  async function handleRemind(kind: ProposalReminderKind) {
+    // A failed reminder is stated on the page rather than only in a toast, so
+    // the operator can still read why it failed after the toast has gone.
+    setCommandError(null);
+    try {
+      const response = await postJson(
+        proposalResourcePath(proposalId, "speakers/reminders"),
+        { kind },
+        proposalSpeakerRemindersResponseSchema,
+      );
+      toast(
+        `${kind === "profile" ? "Profile" : "Presentation"} reminder sent to ${String(response.queued)} speaker(s)`,
+        "success",
+      );
+    } catch (caught) {
+      setCommandError((caught as Error).message);
     }
   }
 
@@ -234,17 +301,29 @@ export function ProposalDetailPage({
     }
   }
 
-  return (
-    <div class="pk pk-stack">
+  const actions = proposalActions({
+    proposal,
+    access,
+    proposalRequiresPresentation,
+    onOpenManage: () => void handleOpenManage(),
+    onCopyProposerEmail: () => void handleCopyProposerEmail(),
+    onRemind: (kind) => void handleRemind(kind),
+    onFlag: (action) => void handleFlag(action),
+  });
+
+  const page = (
+    <section class="pk pk-stack" aria-label={`Proposal: ${proposal.title}`}>
       {error && <ErrorAlert error={error} />}
       {!parentNavigation && (
-        <Button size="sm" onClick={() => (onBack ? onBack() : navigate(`/events/${slug}/proposals`))}>
-          ← Back
-        </Button>
+        // The page's way back, when no breadcrumb carries it.
+        <div class="pk-cluster">
+          <ButtonLink variant="link" size="sm" href={usePortalHashLocation.hrefs(eventProposalsViewPath(slug))}>
+            ← All proposals
+          </ButtonLink>
+        </div>
       )}
-      {parentNavigation && <BreadcrumbBranch items={[{ label: proposal.title }]} />}
-      <PageHeader
-        eyebrow={contextLabel ?? "Proposal"}
+      <ProfileHeader
+        headingLevel={3}
         title={proposal.title}
         context={
           <>
@@ -252,88 +331,63 @@ export function ProposalDetailPage({
             {proposal.decision_status && <Badge status={proposal.decision_status} />}
           </>
         }
-        description={
-          <>
-            {proposer} · {fmt(proposal.submitted_at)}
-          </>
-        }
-        actions={
-          <Button size="sm" onClick={() => void reload()}>
-            ↺ Refresh
-          </Button>
-        }
+        lede={`${vocabularyLabel(proposal.proposal_type)} · proposed by ${proposer}`}
+        facts={[
+          <a key="email" href={`mailto:${proposal.proposer_email}`}>
+            {proposal.proposer_email}
+          </a>,
+          `Submitted ${fmt(proposal.submitted_at)}`,
+        ]}
+        actions={actions.length > 0 ? <Menu label="Proposal actions" align="end" items={actions} /> : undefined}
+      />
+      {commandError && <Alert tone="danger">{commandError}</Alert>}
+
+      {/* Named for what it switches: the group workspace's own strip sits on
+          the same page, with an "Audit log" tab of its own. */}
+      <Tabs
+        items={tabItems}
+        active={activeTab}
+        label="Proposal sections"
+        {...(tabHref ? { hrefFor: (key: string) => tabHref(isDetailTab(key) ? key : DEFAULT_TAB) } : {})}
+        onChange={openTab}
       />
 
-      {/* ── Stat cards ── */}
-      <Panel>
-        <PanelBody>
-          <div class="pk-grid pk-grid--tight">
-            <StatCard label="Proposer" value={proposer} note={proposal.proposer_email} />
-            <StatCard
-              label="Type"
-              value={vocabularyLabel(proposal.proposal_type)}
-              note={`Submitted ${fmt(proposal.submitted_at)}`}
-            />
-            {/* The quorum verdict is a word, not a colour: StatCard's tinted
-                note variants say "trending up", which is not what a met
-                quorum means. */}
-            <StatCard
-              label="Reviews"
-              value={`${loadingSub ? "…" : reviewCount} / ${minReviewsRequired} required`}
-              note={quorumMet ? "Quorum met" : "Quorum not met"}
-            />
-            <StatCard
-              label="Decision"
-              value={proposal.decision_status ? vocabularyLabel(proposal.decision_status) : "Pending"}
-              note={
-                proposal.decision_decided_at ? `Recorded ${fmt(proposal.decision_decided_at)}` : "No final decision yet"
-              }
-            />
-          </div>
-        </PanelBody>
-      </Panel>
-
-      {/* ── Two-column layout ── */}
-      <div class="pk-grid pk-grid--roomy">
-        {/* Main content */}
+      {/* The open facet takes the width; the committee's standing and its
+          private notes keep the column beside it whichever facet is open. */}
+      <div class="pk-record">
         <div class="pk-stack">
-          {/* Named for what it switches. The default "Sections" collides with
-              the group workspace's own "<group> sections" strip on the same
-              page — and its "Audit log" entry — leaving two tab strips a
-              reader cannot tell apart. */}
-          <Tabs
-            items={tabItems}
-            active={activeTab}
-            label="Proposal sections"
-            onChange={(key) => setActiveTab(key as DetailTab)}
-          />
-
-          {/* ── Submission tab ── */}
           {activeTab === "submission" && (
             <Panel>
               <PanelHeader title="Abstract">
                 {canEditAbstract && !editingAbstract && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setAbstractDraft(proposal.abstract);
-                      setEditingAbstract(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
+                  <Menu
+                    label="Abstract actions"
+                    align="end"
+                    items={[
+                      {
+                        id: "edit",
+                        label: "Edit",
+                        onSelect: () => {
+                          setAbstractDraft(proposal.abstract);
+                          setEditingAbstract(true);
+                        },
+                      },
+                    ]}
+                  />
                 )}
               </PanelHeader>
               <PanelBody>
                 {editingAbstract ? (
                   <form class="pk-stack" onSubmit={(e) => void handleSaveAbstract(e)}>
-                    <Field label="Abstract">
+                    <Field label="Abstract" help="Markdown is supported.">
                       {(control) => (
-                        <Textarea
+                        <MarkdownEditor
+                          variant="compact"
                           {...control}
-                          rows={8}
-                          value={abstractDraft}
-                          onInput={(e) => setAbstractDraft((e.target as HTMLTextAreaElement).value)}
+                          name="abstract"
+                          label="Abstract"
+                          initialValue={abstractDraft}
+                          onChange={setAbstractDraft}
                         />
                       )}
                     </Field>
@@ -346,8 +400,10 @@ export function ProposalDetailPage({
                       </Button>
                     </div>
                   </form>
+                ) : proposal.abstract ? (
+                  <Markdown markdown={proposal.abstract} />
                 ) : (
-                  <p class="pk-answer-pre">{proposal.abstract || "—"}</p>
+                  <p class="pk-muted">—</p>
                 )}
               </PanelBody>
 
@@ -355,7 +411,7 @@ export function ProposalDetailPage({
                 <>
                   <PanelHeader
                     headingLevel={4}
-                    title={form?.title ? `Submission Answers — ${form.title}` : "Submission Answers"}
+                    title={form?.title ? `Submission answers — ${form.title}` : "Submission answers"}
                   />
                   <PanelBody>
                     <FormAnswerTable answers={proposal.details} fields={form?.fields} />
@@ -365,9 +421,20 @@ export function ProposalDetailPage({
             </Panel>
           )}
 
-          {/* ── Speakers tab ── */}
           {activeTab === "speakers" &&
-            (access.canRead ? (
+            (inviting && speakersPath ? (
+              <ProposalCoSpeakerInviteForm
+                endpoint={proposalResourcePath(proposalId, "speakers")}
+                event={data.event}
+                notify={toast}
+                cancelHref={usePortalHashLocation.hrefs(speakersPath)}
+                onInvited={async () => {
+                  setRosterRevision((revision) => revision + 1);
+                  await reload();
+                  navigate(speakersPath);
+                }}
+              />
+            ) : access.canRead ? (
               <ProposalSpeakersPanel
                 endpoint={proposalResourcePath(proposalId)}
                 proposalId={proposalId}
@@ -377,14 +444,13 @@ export function ProposalDetailPage({
                 onReload={reload}
                 notify={toast}
                 endpoints={proposalSpeakerEndpoints()}
-                inviteEndpoint={proposalResourcePath(proposalId, "speakers")}
-                inviteWindow={data.event}
+                invitePath={invitePath ? usePortalHashLocation.hrefs(invitePath) : undefined}
+                refreshKey={rosterRevision}
               />
             ) : (
               <Alert tone="info">Speaker access requires proposal read permission.</Alert>
             ))}
 
-          {/* ── Presentation tab ── */}
           {activeTab === "presentation" && (
             <PresentationVersionsTab
               proposalId={proposalId}
@@ -398,7 +464,6 @@ export function ProposalDetailPage({
             />
           )}
 
-          {/* ── Reviews tab ── */}
           {activeTab === "reviews" && (
             <ProposalReviewsTab
               proposalId={proposalId}
@@ -416,17 +481,15 @@ export function ProposalDetailPage({
             />
           )}
 
-          {/* ── Audit log tab ── */}
           {activeTab === "audit-log" && (
             <Panel>
-              <PanelHeader title="Audit Log" />
+              <PanelHeader title="Audit log" />
               <PanelBody>
                 <AuditLogSection proposalId={proposalId} enabled={access.canReview} />
               </PanelBody>
             </Panel>
           )}
 
-          {/* ── Decision and accepted-session cancellation ── */}
           {activeTab === "decision" && (
             <>
               {access.canFinalize && (proposalDecidable || proposal.decision_status) && (
@@ -449,29 +512,32 @@ export function ProposalDetailPage({
           )}
         </div>
 
-        <ProposalSidebar
-          proposal={proposal}
-          proposalId={proposalId}
-          access={access}
-          proposalRequiresPresentation={proposalRequiresPresentation}
-          loading={loadingSub}
-          reviewCount={reviewCount}
-          minReviewsRequired={minReviewsRequired}
-          quorumMet={quorumMet}
-          averageScore={reviewSummary.averageScore}
-          recommendationCounts={recommendationCounts}
-          commentDraft={commentDraft}
-          savingComment={savingComment}
-          comments={comments}
-          commentsPage={commentPage}
-          loadingMoreComments={loadingMoreComments}
-          onCommentDraftChange={setCommentDraft}
-          onAddComment={handleComment}
-          onLoadMoreComments={handleLoadMoreComments}
-          onOpenManage={handleOpenManage}
-          onFlag={handleFlag}
-        />
+        <aside class="pk-stack pk-datalist-aligned">
+          <ProposalStanding
+            proposal={proposal}
+            loading={loadingSub}
+            reviewCount={reviewCount}
+            minReviewsRequired={minReviewsRequired}
+            quorumMet={quorumMet}
+            averageScore={reviewSummary.averageScore}
+            recommendationCounts={recommendationCounts}
+          />
+          {access.canReview && (
+            <ProposalInternalCommentsPanel
+              commentDraft={commentDraft}
+              savingComment={savingComment}
+              comments={comments}
+              commentsPage={commentPage}
+              loadingMoreComments={loadingMoreComments}
+              onCommentDraftChange={setCommentDraft}
+              onAddComment={handleComment}
+              onLoadMoreComments={handleLoadMoreComments}
+            />
+          )}
+        </aside>
       </div>
-    </div>
+    </section>
   );
+
+  return parentNavigation ? <BreadcrumbBranch items={[{ label: proposal.title }]}>{page}</BreadcrumbBranch> : page;
 }

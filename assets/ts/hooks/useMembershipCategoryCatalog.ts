@@ -1,37 +1,31 @@
-/**
- * The staff membership-category catalog: codes with their configured labels,
- * ordering, and whether each is an individual or an organization category.
- *
- * `useMembershipCategoryLabels` answers the member-facing question — what does
- * this code say in words — from the public application-form endpoint. Staff
- * surfaces need the rest of the entry as well (display order, the
- * individual/organization split), which is the `membership:read` catalog. Two
- * surfaces already wanted it, so the fetch and its cache live here rather than
- * once per section.
- */
+/** Shared public category catalog for membership forms, group policy, and labels. */
 import { useEffect, useState } from "preact/hooks";
-import {
-  membershipCategoryCatalogResponseSchema,
-  type MembershipCategoryCatalogEntry,
-} from "../../shared/schemas/membership-categories";
+import { type MembershipCategoryCatalogEntry } from "../../shared/schemas/membership-categories";
 import { getJson } from "../shared/api-client";
+import { memberApplicationFormResponseSchema } from "../../shared/schemas/member-applications";
 
 let cached: readonly MembershipCategoryCatalogEntry[] | null = null;
 let pending: Promise<readonly MembershipCategoryCatalogEntry[]> | null = null;
+
+export function invalidateMembershipCategoryCatalog() {
+  cached = null;
+  pending = null;
+}
 
 /**
  * The catalog, or an empty list until it arrives. A surface never blocks on
  * it: every caller falls back to the bare code, which is the durable key.
  */
-export function useMembershipCategoryCatalog(): readonly MembershipCategoryCatalogEntry[] {
+export function useMembershipCategoryCatalog(enabled = true): readonly MembershipCategoryCatalogEntry[] {
   const [categories, setCategories] = useState<readonly MembershipCategoryCatalogEntry[]>(cached ?? []);
 
   useEffect(() => {
+    if (!enabled) return;
     if (cached) {
       setCategories(cached);
       return;
     }
-    pending ??= getJson("/api/v1/membership/categories", membershipCategoryCatalogResponseSchema).then(
+    pending ??= getJson("/api/v1/members/applications/form", memberApplicationFormResponseSchema).then(
       (response) => {
         cached = response.categories;
         return cached;
@@ -49,7 +43,7 @@ export function useMembershipCategoryCatalog(): readonly MembershipCategoryCatal
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return categories;
 }

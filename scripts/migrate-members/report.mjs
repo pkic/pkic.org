@@ -3,6 +3,7 @@
  * walking YAML records) into the human-readable Markdown summary. No SQL,
  * no reconciliation logic — just formatting already-decided data.
  */
+import { RESERVATION_REASONS } from "./email-reservations.mjs";
 
 /** Full detail (not just a name) for a representative dropped from the
  * import — used in the report so staff completing them via the Interim
@@ -27,8 +28,11 @@ export function renderMarkdownReport(report) {
   const lines = [];
   lines.push(`# Member migration report (${report.generatedAt})`);
   lines.push("");
+  lines.push("This report describes generated SQL, not proof that it has been applied to a database.");
+  lines.push("");
+  lines.push(`- Organizations to upsert: ${report.totals.organizations ?? "not recorded"}`);
   lines.push(`- YAML files processed: ${report.totals.yamlFiles}`);
-  lines.push(`- Organizations/individuals with at least one domain-matched email: ${report.totals.matchedOrgs}`);
+  lines.push(`- Organizations/individuals with a roster match or confirmed manual email: ${report.totals.matchedOrgs}`);
   lines.push(
     `- Org-less individuals created with a placeholder email (needs a real email attached via Users → Edit): ${report.totals.sentinelIndividuals}`,
   );
@@ -37,7 +41,7 @@ export function renderMarkdownReport(report) {
   );
   lines.push(`- Bare roster users (no attributable YAML org): ${report.bareRosterUsers.length}`);
   lines.push(
-    `- WG-only roster users (subscribed to a WG list but absent from pkic.csv): ${report.wgOnlyRosterUsers.length}`,
+    `- Group-only roster users (subscribed to a group list but absent from pkic.csv): ${report.groupOnlyRosterUsers.length}`,
   );
   lines.push(`- Missing membership category (\`memberType\` blank in YAML): ${report.totals.missingCategory.length}`);
   lines.push(
@@ -53,9 +57,20 @@ export function renderMarkdownReport(report) {
     `- Invalid links dropped (failed canonical URL/protocol validation, or a duplicate — see linksSchema): ${report.invalidLinks.length}`,
   );
   lines.push("");
-  lines.push("## Working group roster membership counts");
-  for (const [slug, count] of Object.entries(report.workingGroupCounts)) {
+  lines.push("## Manual mapping decisions");
+  if (!report.manualMappings?.length) lines.push("No manual mapping file supplied.");
+  for (const row of report.manualMappings ?? []) {
+    lines.push(
+      `- **${row.name}** (\`${row.file}\`) — ${row.decision}${row.email ? `: ${row.email}` : ""}${row.decision === "unresolved" ? "; no identity guessed" : ""}`,
+    );
+  }
+  lines.push("");
+  lines.push("## Group roster membership counts");
+  for (const [slug, count] of Object.entries(report.groupRosterCounts)) {
     lines.push(`- ${slug}: ${count}`);
+  }
+  for (const filename of report.missingOptionalRosters) {
+    lines.push(`- Missing optional roster: ${filename}. No memberships generated from this source.`);
   }
   lines.push("");
   lines.push("## Unmatched — finish via canonical `POST /api/v1/members` membership provisioning");
@@ -89,15 +104,15 @@ export function renderMarkdownReport(report) {
   }
   lines.push("");
   lines.push(
-    "## Bare roster users (no YAML organization match) — working groups shown are where staff can look to reconcile identity manually",
+    "## Bare roster users (no YAML organization match) — groups shown are where staff can look to reconcile identity manually",
   );
-  for (const { email, workingGroups } of report.bareRosterUsers) {
-    lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : " — no WG membership"}`);
+  for (const { email, groups } of report.bareRosterUsers) {
+    lines.push(`- ${email}${groups.length ? ` — Groups: ${groups.join(", ")}` : " — no group membership"}`);
   }
   lines.push("");
-  lines.push("## WG-only roster users (not in pkic.csv at all)");
-  for (const { email, workingGroups } of report.wgOnlyRosterUsers) {
-    lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : ""}`);
+  lines.push("## Group-only roster users (not in pkic.csv at all)");
+  for (const { email, groups } of report.groupOnlyRosterUsers) {
+    lines.push(`- ${email}${groups.length ? ` — Groups: ${groups.join(", ")}` : ""}`);
   }
   lines.push("");
   lines.push("## Event sponsorships with an unrecognized event name — add an EVENT_NAME_ALIASES entry in the script");
@@ -110,6 +125,21 @@ export function renderMarkdownReport(report) {
   );
   for (const item of report.nonMemberSponsorships.unmatchedEvents) {
     lines.push(`- **${item.name}** — \`${item.eventName}\` (tier ${item.tier})`);
+  }
+  lines.push("");
+  lines.push("## Addresses reserved elsewhere — settle the reservation, then rerun the importer");
+  if (report.emailReservationConflicts === null || report.emailReservationConflicts === undefined) {
+    lines.push("Not checked: no SQL was applied to a database in this run.");
+  } else if (report.emailReservationConflicts.length === 0) {
+    lines.push("None: every imported address belongs to a live account.");
+  } else {
+    lines.push(
+      "One address is one reservation across primary, alternate, and pending account addresses. These member addresses were already claimed, so no member account was created for them. The importer is idempotent — rerun it once the reservation is settled.",
+    );
+    for (const conflict of report.emailReservationConflicts) {
+      const reason = RESERVATION_REASONS[conflict.reason] ?? conflict.reason;
+      lines.push(`- \`${conflict.email}\` — ${reason}${conflict.reservedBy ? ` (\`${conflict.reservedBy}\`)` : ""}`);
+    }
   }
   lines.push("");
   lines.push("## Invalid links dropped — fix the source YAML and rerun");

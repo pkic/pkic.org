@@ -5,7 +5,7 @@ import {
   groupEventRegistrationSettingsUpdateSchema,
 } from "../../../../../shared/schemas/group-events";
 import {
-  EVENT_REGISTRATION_POLICIES,
+  STANDALONE_EVENT_REGISTRATION_POLICIES,
   EVENT_REGISTRATION_POLICY_LABELS,
   type EventRegistrationPolicy,
 } from "../../../../../shared/schemas/event-series";
@@ -94,7 +94,7 @@ export function EventRegistrationSettingsEditor({
     <div class="pk pk-stack pk-stack--loose">
       <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void saveSettings(event)}>
         <div class="pk-cluster pk-cluster--between">
-          <h6>Registration policy</h6>
+          <h4>Registration policy</h4>
           <EditActions
             label="Registration policy actions"
             editing={editing}
@@ -128,7 +128,7 @@ export function EventRegistrationSettingsEditor({
                 disabled={saving}
                 onChange={(event) => setRegistrationPolicy(event.currentTarget.value as EventRegistrationPolicy)}
               >
-                {EVENT_REGISTRATION_POLICIES.map((policy) => (
+                {STANDALONE_EVENT_REGISTRATION_POLICIES.map((policy) => (
                   <option key={policy} value={policy}>
                     {EVENT_REGISTRATION_POLICY_LABELS[policy]}
                   </option>

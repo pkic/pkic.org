@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SystemAuditLog } from "../../assets/ts/member-flows/portal/sections/SystemAuditLog";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 
 let container: HTMLElement | null = null;
 
@@ -35,6 +36,13 @@ describe("portal system audit log", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
+        if (url.pathname.endsWith("/filters")) {
+          const value = url.searchParams.get("field") === "action" ? "catalog_reconciled" : "custom_interest";
+          return json({
+            options: [{ value, label: value.replace(/_/g, " ") }],
+            page: { limit: 50, offset: 0, total: 1, hasMore: false },
+          });
+        }
         requests.push(url);
         return json({
           entries: [
@@ -73,38 +81,33 @@ describe("portal system audit log", () => {
     expect(requests[0]?.pathname.startsWith("/api/v1/admin/")).toBe(false);
     expect(requests[0]?.pathname.startsWith("/api/v1/system/audit-log")).toBe(false);
 
-    // The filters share the toolbar row, so — like the FilterSelects beside
-    // them on every other list — each carries its accessible name in
-    // `aria-label`. Resolving the control through that name fails exactly
-    // when the labelling is broken, which is the part worth asserting.
-    const filterByName = (name: string): HTMLInputElement => {
-      const match = container!.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`);
-      if (!match) throw new Error(`no filter is named "${name}"`);
-      return match;
-    };
-    const entityType = filterByName("Entity type");
-    const actorType = filterByName("Actor type");
-    const action = filterByName("Action");
-    const form = entityType.form;
-    expect(form).not.toBeNull();
-    expect(form?.getAttribute("aria-label")).toBe("Audit log filters");
-
     // The table names itself, so a page carrying several is not announced as
     // several tables all called "table".
     expect(container.querySelector("table caption")?.textContent).toBe("System audit log");
 
-    entityType.value = "custom_interest";
-    actorType.value = "automation";
-    action.value = "catalog_reconciled";
-    await act(async () => {
-      form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    await settle();
+    // The filters are the columns' own (#123): no loose inputs and no
+    // Apply/Clear pair in the toolbar — the toolbar holds the search alone.
+    expect(container.querySelector('form[aria-label="Audit log filters"]')).toBeNull();
+    expect([...container.querySelectorAll("button")].map((control) => control.textContent?.trim())).not.toContain(
+      "Apply",
+    );
 
-    expect(requests).toHaveLength(2);
-    expect(requests[1]?.searchParams.get("entityType")).toBe("custom_interest");
-    expect(requests[1]?.searchParams.get("actorType")).toBe("automation");
-    expect(requests[1]?.searchParams.get("action")).toBe("catalog_reconciled");
+    // Who acted is a closed vocabulary, offered as choices.
+    expect(columnFilterOptions(container, "Actor")).toEqual(["All actors", "Admin", "Member", "User", "System"]);
+    await chooseColumnFilter(container, "Actor", "System");
+    await settle();
+    expect(columnFilterSummary(container, "Actor")).toBe("System");
+    expect(requests.at(-1)?.searchParams.get("actorType")).toBe("system");
+
+    // Choices come from the server, including values absent from the loaded rows.
+    await chooseColumnFilter(container, "Entity", "custom interest");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("entityType")).toBe("custom_interest");
+    expect(requests.at(-1)?.searchParams.get("actorType")).toBe("system");
+    await chooseColumnFilter(container, "Action", "catalog reconciled");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("action")).toBe("catalog_reconciled");
+    expect(requests.at(-1)?.searchParams.get("entityType")).toBe("custom_interest");
   });
 
   it("announces a failed load as an alert rather than an empty table", async () => {

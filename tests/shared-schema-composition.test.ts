@@ -125,6 +125,8 @@ describe("canonical shared schema composition", () => {
           created_by_user_id: SECOND_ID,
           created_at: "2026-08-21T12:00:00Z",
           message_type: "transactional",
+          from_email: null,
+          from_name: null,
         },
       }).version.version,
     ).toBe(1);
@@ -182,6 +184,9 @@ describe("canonical shared schema composition", () => {
       ...recordContext,
       id: ID,
       user_id: SECOND_ID,
+      headshot_url: null,
+      organization_name: null,
+      job_title: null,
       status: "registered",
       attendance_type: "in_person",
       source_type: "direct",
@@ -189,8 +194,7 @@ describe("canonical shared schema composition", () => {
       has_bounced: false,
       sponsor_consent: true,
       custom_answers_json: null,
-      dayWaitlistSummary: null,
-      dayWaitlistCount: 0,
+      days: [],
       attendanceChangeHistory: [],
       lastAttendanceChange: null,
     });

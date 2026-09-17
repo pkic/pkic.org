@@ -1,8 +1,8 @@
+import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createGroupEventSeries,
-  createSeriesOccurrence,
   generateGroupSeriesIcs,
   getGroupEventSeries,
   materializeSeriesOccurrences,
@@ -62,7 +62,7 @@ async function createMeetingFixture() {
     providerType: "external_url",
   });
   const endsAt = new Date(Date.now() + 7_200_000).toISOString();
-  const occurrence = await createSeriesOccurrence(
+  const occurrence = await configureMeetingOccurrence(
     env.DB,
     admin,
     GROUP_ID,
@@ -133,7 +133,7 @@ describe("group-owned event series", () => {
       through: "2027-10-06T08:00:00.000Z",
       maxOccurrences: 10,
     });
-    expect(result).toMatchObject({ created: 1, existing: 0 });
+    expect(result).toMatchObject({ created: 0, existing: 1 });
     const starts = await queryAll<{ starts_at: string }>(
       env.DB,
       "SELECT starts_at FROM event_occurrences WHERE series_id = ? ORDER BY starts_at",
@@ -167,7 +167,7 @@ describe("group-owned event series", () => {
     expect(first).toMatchObject({ created: 3, existing: 0 });
     const starts = await queryAll<{ starts_at: string }>(
       env.DB,
-      "SELECT starts_at FROM event_occurrences WHERE series_id = ? ORDER BY starts_at",
+      "SELECT starts_at FROM event_occurrences WHERE series_id = ? AND starts_at <= '2026-04-07T07:00:00.000Z' ORDER BY starts_at",
       [series.id],
     );
     expect(starts.map((row) => row.starts_at)).toEqual([
@@ -211,12 +211,12 @@ describe("group-owned event series", () => {
       series.id,
       "https://pkic.example.test",
     );
-    expect(calendar).toContain("BEGIN:VCALENDAR");
-    expect(calendar).toContain(`UID:${occurrence.id}@pkic.org`);
-    expect(calendar.replace(/\r\n /g, "")).toContain(
-      `URL:https://pkic.example.test/meetings/join/?occurrence=${occurrence.id}`,
+    expect(calendar.content).toContain("BEGIN:VCALENDAR");
+    expect(calendar.content).toContain(`UID:${series.id}@pkic.org`);
+    expect(calendar.content.replace(/\r\n /g, "")).toContain(
+      `URL:https://pkic.example.test/portal/#/groups/${GROUP_ID}/meetings/${series.id}`,
     );
-    expect(calendar).not.toContain("secret-room");
+    expect(calendar.content).not.toContain("secret-room");
   });
 
   it("accepts only HTTPS provider destinations and never copies them into audit details", async () => {
@@ -314,7 +314,7 @@ describe("group-owned event series", () => {
       durationMinutes: 60,
       providerType: "external_url",
     });
-    const occurrence = await createSeriesOccurrence(
+    const occurrence = await configureMeetingOccurrence(
       env.DB,
       admin,
       GROUP_ID,

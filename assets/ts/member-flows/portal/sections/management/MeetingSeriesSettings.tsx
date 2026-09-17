@@ -1,7 +1,6 @@
+import { MEETING_CALENDAR_HELP } from "../../../../../shared/meeting-calendar-policy";
 import { useEffect, useState } from "preact/hooks";
 import {
-  eventSeriesMaterializeResponseSchema,
-  eventSeriesMaterializeSchema,
   eventSeriesResponseSchema,
   eventSeriesUpdateSchema,
   type GroupEventSeries,
@@ -10,15 +9,11 @@ import {
   EVENT_VISIBILITY_LABELS,
 } from "../../../../../shared/schemas/event-series";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
-import { Field } from "../../../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { TextInput } from "../../../../ui/TextControl";
-import { patchJson, postJson } from "../../../../shared/api-client";
+import { PanelHeader } from "../../../../ui/Panel";
+import { patchJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { MeetingSeriesFields, ELIGIBILITY_LABELS, GUEST_LABELS } from "./MeetingSeriesFields";
-import { defaultFutureDate, isoDateTimeValue } from "./meeting-form-utils";
 import { draftFromSeries, seriesChanges } from "./meeting-series-draft";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { EditActions } from "../../../../ui/EditActions";
@@ -40,10 +35,8 @@ export function MeetingSeriesSettings({
 }) {
   const [draft, setDraft] = useState(() => draftFromSeries(series));
   const [active, setActive] = useState(series.active);
-  const [through, setThrough] = useState(() => defaultFutureDate(180, 23, 59, series.timezone));
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [materializing, setMaterializing] = useState(false);
   const [error, setError] = useState("");
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}`;
 
@@ -90,36 +83,15 @@ export function MeetingSeriesSettings({
     }
   }
 
-  async function materialize(): Promise<void> {
-    setMaterializing(true);
-    setError("");
-    try {
-      const input = eventSeriesMaterializeSchema.parse({
-        through: isoDateTimeValue(through, series.timezone),
-        maxOccurrences: 200,
-      });
-      const result = await postJson(`${base}/materialize`, input, eventSeriesMaterializeResponseSchema);
-      toast(`${result.created} occurrence${result.created === 1 ? "" : "s"} created`, "success");
-      await onChanged();
-    } catch (caught) {
-      const message = (caught as Error).message;
-      setError(message);
-      toast(message, "error");
-    } finally {
-      setMaterializing(false);
-    }
-  }
-
   const recurrence = matchRecurrenceShape(series.recurrenceRule);
   const activeId = `meeting-series-active-${series.id}`;
-  const generateHeadingId = `meeting-series-generate-${series.id}`;
 
   return (
     <div class="pk pk-stack">
       <form class="pk-stack" noValidate {...form.handlers} onSubmit={(event) => void save(event)}>
         <PanelHeader title="Series settings" headingLevel={3}>
           <EditActions
-            label="Meeting series actions"
+            label="Meeting actions"
             editing={editing}
             saving={saving}
             saveLabel="Save series"
@@ -189,32 +161,7 @@ export function MeetingSeriesSettings({
         )}
         {error && <ErrorAlert error={error} />}
       </form>
-      {/* The rule the Bootstrap version drew with `border-top` is the panel's
-          own edge, and the padding that followed it is the panel body's. */}
-      <Panel aria-labelledby={generateHeadingId}>
-        <PanelBody class="pk-stack pk-stack--snug">
-          {/* The heading stays an h6 rather than moving to PanelHeader's h3:
-              this editor already sits under the shell's h4 section title and a
-              series' own h5, and a panel that jumped back to h3 would read as
-              a sibling of the page rather than a part of this form. */}
-          <h6 id={generateHeadingId}>Generate recurring occurrences</h6>
-          <Field label="Generate through">
-            {(control) => (
-              <TextInput
-                {...control}
-                type="datetime-local"
-                value={through}
-                onInput={(e) => setThrough(e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <div class="pk-cluster">
-            <Button variant="secondary" size="sm" loading={materializing} onClick={() => void materialize()}>
-              {materializing ? "Generating…" : "Generate occurrences"}
-            </Button>
-          </div>
-        </PanelBody>
-      </Panel>
+      {!editing && <p class="pk-muted">{MEETING_CALENDAR_HELP}</p>}
     </div>
   );
 }

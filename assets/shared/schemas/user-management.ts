@@ -40,7 +40,6 @@ export const userUpdateSchema = z
     firstName: z.string().trim().max(80).nullable().optional(),
     lastName: z.string().trim().max(120).nullable().optional(),
     preferredName: z.string().trim().max(80).nullable().optional(),
-    isEcMember: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "At least one field must be provided",

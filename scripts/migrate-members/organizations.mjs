@@ -51,7 +51,10 @@ function upsertSponsorshipsForOrg(ctx, { normalizedOrgName, doc, filename, name 
   });
 }
 
-export function processOrganizationRecord(ctx, { filename, slug, doc, name, memberType, domains, reps, candidates }) {
+export function processOrganizationRecord(
+  ctx,
+  { filename, slug, doc, name, memberType, domains, reps, candidates, mappings = [] },
+) {
   const onInvalidLink = (url) => ctx.report.invalidLinks.push({ file: filename, name, url });
 
   let logoR2Key = null;
@@ -70,6 +73,7 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
     onInvalidLink,
   });
   ctx.statements.push(organizationStatement);
+  ctx.report.totals.organizations += 1;
   ctx.statements.push(...buildOrganizationDomainStatements(normalizedOrgName, domains));
   ctx.statements.push(
     ...buildOrganizationMemberAggregateStatements(normalizedOrgName, memberType || null, doc.memberSince),
@@ -91,7 +95,9 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
   const assignment = matchRepsToCandidates(reps, candidates); // parallel to reps: candidate index or null
   const unpairedReps = reps.filter((_, i) => assignment[i] === null);
 
-  if (reps.length > 1 && candidates.length > 1) {
+  const automaticReps = reps.filter((rep) => !rep.confirmedEmail);
+  const remainingCandidates = candidates.length - (reps.length - automaticReps.length);
+  if ((mappings.length ? automaticReps.length > 0 : reps.length > 1) && remainingCandidates > 1) {
     ctx.report.totals.ambiguousPairing.push({
       file: filename,
       name,
@@ -172,7 +178,7 @@ export function processOrganizationRecord(ctx, { filename, slug, doc, name, memb
     });
     ctx.claimedEmails.add(normalizedEmail);
     ctx.statements.push(buildActingIdentityStatement(normalizedOrgName, normalizedEmail, false));
-    contactEmails.push(normalizedEmail);
+    if (!mappings.length) contactEmails.push(normalizedEmail);
   }
 
   if (contactEmails[0])

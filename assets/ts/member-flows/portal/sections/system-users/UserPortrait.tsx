@@ -25,11 +25,13 @@ import { confirmHeadshotUsage } from "../../../../shared/headshot/controller";
 import { ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { myHeadshotDeleteResponseSchema, myHeadshotUploadResponseSchema } from "../../../../../shared/schemas/me";
+import type { AvatarStatus } from "../../../../ui/Avatar";
 import { PictureTile } from "../../../../components/PictureTile";
 import { toast } from "../../ui";
 import { CURRENT_USER_API } from "./SelfProfilePanel";
 
 export function UserPortrait({
+  status,
   userId,
   displayName,
   headshotUrl,
@@ -37,6 +39,7 @@ export function UserPortrait({
   canEdit,
   onChanged,
 }: {
+  status?: AvatarStatus;
   userId: string;
   displayName: string;
   headshotUrl: string | null;
@@ -46,6 +49,7 @@ export function UserPortrait({
 }) {
   return (
     <PictureTile
+      status={status}
       name={displayName}
       noun="photo"
       shape="round"

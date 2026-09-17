@@ -45,6 +45,28 @@
     object-fit: cover;
   }
 
+  /*
+   * An organization's mark. A logo is a drawing with edges of its own, so it
+   * is fitted inside the tile with a margin rather than cropped to fill it
+   * the way a portrait is, and the tile sits on the page's white so a wordmark
+   * on a transparent ground stays legible.
+   */
+  .pk-avatar--square {
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+  }
+
+  .pk-avatar--square .pk-avatar__img {
+    object-fit: contain;
+    padding: 12%;
+    box-sizing: border-box;
+  }
+
+  .pk-avatar--square .pk-avatar__initials {
+    color: var(--pk-ink-muted);
+  }
+
   .pk-avatar__initials {
     /*
      * The letters are a proportion of the circle, not of the text around it.
@@ -91,6 +113,8 @@
   }
 
   .pk-avatar-standing__label {
+    position: relative;
+    z-index: 1;
     /* Pulled up over the ring's foot, and allowed to be wider than the
        portrait — "Board member" is longer than any avatar is round. */
     margin-block-start: -0.6rem;

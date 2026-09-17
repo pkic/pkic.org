@@ -49,9 +49,13 @@
  *     has a missing, unknown, or kind-incompatible membership category —
  *     see scripts/migrate-members/categories.mjs
  *
+ * An explicit --manual-mapping file can resolve unmatched accounts and
+ * override automatic representative pairing; unresolved decisions stay in
+ * the report and former representatives are excluded from assignment.
+ *
  * What this script deliberately does NOT do:
- *   - create `organizations`/`users`/`identities` rows for
- *     org-tied representatives with no domain-matched email at all — see the
+ *   - infer accounts for org-tied representatives with no domain-matched
+ *     email or confirmed manual mapping — see the
  *     "unmatched" report section; these are finished one at a time via the
  *     canonical membership provisioning (`POST /api/v1/members`). (Org-less
  *     individuals in the same situation *do* get a row now, via the
@@ -59,6 +63,16 @@
  *     individual's own YAML file **is** their whole record, where an
  *     org-tied representative's record is meaningless without knowing which
  *     real person at the organization it belongs to.)
+ *   - create an account for an address another account already reserved —
+ *     as an unconfirmed pending email change, or as the address of a
+ *     redacted/merged account. One address is one reservation across the
+ *     whole namespace (consolidated migration 0035), so the generated SQL
+ *     creates an account only for an unclaimed address and attaches
+ *     identities, memberships and roles to whichever live account owns the
+ *     address, including through an alternate address. Reserved addresses
+ *     are listed per address in the report's "Addresses reserved elsewhere"
+ *     section after the SQL is applied; settling the reservation and
+ *     rerunning the importer completes them.
  *
  * This is the thin orchestration entry point (scripts/AGENTS.md): CLI
  * parsing lives in scripts/migrate-members/cli.mjs; the actual
@@ -89,7 +103,8 @@
  *   --production   --env production --remote (database pkic-db)
  *
  * Other flags:
- *   --persist-to <path>          forwarded to `wrangler d1 execute`
+ *   --manual-mapping <path>      approved reconciliation CSV (optional)
+ *   --state <path>               local D1/R2 state (alias: --persist-to)
  *   --dry-run                    skip execution; only write the .sql + report
  *   --skip-logos                  don't upload logos/photos to R2 (on by default)
  *   --logo-bucket <name>          R2 bucket for logo uploads (default: pkic-assets)
@@ -99,10 +114,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { placeholderPreflightQuery } from "./migrate-members/placeholder-email.mjs";
 import { parseArgs, ENVS } from "./migrate-members/cli.mjs";
 import { buildMigration } from "./migrate-members/build-migration.mjs";
 import { renderMarkdownReport } from "./migrate-members/report.mjs";
-import { runWranglerD1, uploadLogosToR2 } from "./migrate-members/r2-adapter.mjs";
+import { queryWranglerD1, runWranglerD1, uploadLogosToR2 } from "./migrate-members/r2-adapter.mjs";
+import { EMAIL_RESERVATION_QUERY, findEmailReservationConflicts } from "./migrate-members/email-reservations.mjs";
 
 export { buildMigration };
 
@@ -110,8 +127,11 @@ const ROOT = process.cwd();
 
 async function main() {
   const cli = parseArgs(process.argv.slice(2), ROOT);
-  const { sql, report, logoUploads } = buildMigration({
+  if (cli.env === "local") console.log(`Local D1/R2 state: ${cli.persistTo ?? path.join(ROOT, ".wrangler/state")}`);
+  const { sql, report, logoUploads, importedEmails, placeholderMappings } = buildMigration({
     uploadLogos: cli.uploadLogos,
+    rosterTimeZone: cli.rosterTimeZone,
+    manualMappingPath: cli.manualMappingPath,
   });
 
   fs.mkdirSync(cli.outDir, { recursive: true });
@@ -119,10 +139,13 @@ async function main() {
   const sqlOutPath = path.join(cli.outDir, `member-migration-${timestamp}.sql`);
   const jsonOutPath = path.join(cli.outDir, `member-migration-report-${timestamp}.json`);
   const mdOutPath = path.join(cli.outDir, `member-migration-report-${timestamp}.md`);
+  const writeReport = () => {
+    fs.writeFileSync(jsonOutPath, JSON.stringify(report, null, 2), "utf8");
+    fs.writeFileSync(mdOutPath, renderMarkdownReport(report), "utf8");
+  };
 
   fs.writeFileSync(sqlOutPath, sql, "utf8");
-  fs.writeFileSync(jsonOutPath, JSON.stringify(report, null, 2), "utf8");
-  fs.writeFileSync(mdOutPath, renderMarkdownReport(report), "utf8");
+  writeReport();
 
   console.log(`Wrote SQL to ${sqlOutPath}`);
   console.log(`Wrote report to ${mdOutPath} (${jsonOutPath})`);
@@ -130,12 +153,50 @@ async function main() {
     `${report.totals.matchedOrgs} matched, ${report.totals.sentinelIndividuals} individuals created with a placeholder email, ${report.totals.unmatched.length} unmatched, ${report.bareRosterUsers.length} bare roster users`,
   );
 
+  if (report.manualMappings.length) {
+    const count = (decision) => report.manualMappings.filter((row) => row.decision === decision).length;
+    console.log(
+      `Manual mappings: ${count("confirmed")} confirmed, ${count("unresolved")} unresolved (not paired), ${count("no_longer_representative")} former representatives excluded.`,
+    );
+  }
+
+  if (report.rosterUsers > 0 && report.totals.organizations > 0 && report.totals.matchedOrgs === 0) {
+    throw new Error(
+      "No roster addresses matched any member domain. Review CSV headers, encoding, and unchanged email domains before applying this SQL. Nothing was applied or uploaded.",
+    );
+  }
+
   if (cli.dryRun) {
     console.log("--dry-run: skipping wrangler execution and logo upload.");
     return;
   }
 
+  const preflight = placeholderPreflightQuery(placeholderMappings);
+  if (preflight) {
+    const conflicts = queryWranglerD1(ROOT, ENVS[cli.env], cli, preflight);
+    if (conflicts.length) {
+      throw new Error(
+        `Manual mapping preflight found ${conflicts.length} placeholder account conflicts. Nothing was applied. ${conflicts.map((row) => `${row.placeholder}: ${row.reason}`).join("; ")}`,
+      );
+    }
+  }
   runWranglerD1(ROOT, ENVS[cli.env], cli, sql);
+  console.log(`Member SQL applied to ${cli.env}${cli.persistTo ? ` at ${path.resolve(cli.persistTo)}` : ""}.`);
+
+  // An address another account already reserved gets no member account, by
+  // design — see migrate-members/email-reservations.mjs. Report those now,
+  // against the database that was just written, so a reserved address is a
+  // named follow-up instead of a member who quietly never arrived.
+  report.emailReservationConflicts = findEmailReservationConflicts(
+    importedEmails,
+    queryWranglerD1(ROOT, ENVS[cli.env], cli, EMAIL_RESERVATION_QUERY),
+  );
+  writeReport();
+  if (report.emailReservationConflicts.length > 0) {
+    console.log(
+      `${report.emailReservationConflicts.length} member addresses are reserved by another account and received no member account. See "Addresses reserved elsewhere" in ${mdOutPath}.`,
+    );
+  }
 
   if (cli.uploadLogos && logoUploads.length > 0) {
     console.log(

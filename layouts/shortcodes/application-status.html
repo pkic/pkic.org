@@ -9,39 +9,12 @@
 <div class="pk pk-stack" data-application-status data-module="member-flows/application-status-page" data-api-base="/api/v1">
   <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
 
-  <div data-lookup-form class="pk-form">
-    {{/* Guidance for both controls, so it is a described-by target rather than
-         a `pk-field__help` — that class belongs to one field and takes its
-         color from that field's state. */}}
-    <p id="lookupHelp" class="pk-muted pk-small">
-      Enter the application ID and token from your confirmation email to check your application's status.
-    </p>
-    {{/* Each control sits in `pk-field__control`: that wrapper is what the
-         state mark is positioned against, so an input outside it has nowhere
-         to draw the tick, the caution or the cross. */}}
-    <div class="pk-grid">
-      <div class="pk-field">
-        <label class="pk-field__label" for="lookup-application-id">Application ID</label>
-        <div class="pk-field__control">
-          <input
-            id="lookup-application-id"
-            type="text"
-            class="pk-input"
-            aria-describedby="lookupHelp"
-            data-lookup-id
-          />
-        </div>
-      </div>
-      <div class="pk-field">
-        <label class="pk-field__label" for="lookup-token">Token</label>
-        <div class="pk-field__control">
-          <input id="lookup-token" type="text" class="pk-input" aria-describedby="lookupHelp" data-lookup-token />
-        </div>
-      </div>
-    </div>
-    <div class="pk-cluster">
-      <button type="button" class="pk-btn pk-btn--primary" data-lookup-submit>Check status</button>
-    </div>
+  <div data-link-help class="pk-stack pk-stack--snug">
+    <p>Open the status link in your membership application confirmation or update email. It includes everything needed to view your application securely.</p>
+    <p>If an older update email has an incomplete link, use your original confirmation email. If you cannot find it, <a href="mailto:{{ site.Params.email }}">contact us for help</a>.</p>
+  </div>
+  <div class="pk-cluster" data-status-retry hidden>
+    <button type="button" class="pk-btn pk-btn--primary">Try again</button>
   </div>
 
   <div data-status-result hidden>

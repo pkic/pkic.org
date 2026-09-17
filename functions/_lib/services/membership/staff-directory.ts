@@ -17,6 +17,8 @@ import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
+import { organizationLogoUrl } from "../organization-content/fields";
+import { publicUserHeadshotPath } from "../user-headshot";
 
 interface StaffMemberRow {
   id: string;
@@ -24,6 +26,8 @@ interface StaffMemberRow {
   organization_id: string | null;
   user_id: string | null;
   org_name: string | null;
+  org_logo_r2_key: string | null;
+  headshot_r2_key: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
@@ -45,6 +49,14 @@ function mapStaffMember(row: StaffMemberRow): StaffMemberSummary {
     name: row.org_name ?? (personName || row.email) ?? "Unnamed member",
     organizationId: row.organization_id,
     userId: row.user_id,
+    imageUrl:
+      row.member_type === "organization"
+        ? row.organization_id
+          ? organizationLogoUrl(row.organization_id, row.org_logo_r2_key)
+          : null
+        : row.user_id
+          ? publicUserHeadshotPath(row.user_id, row.headshot_r2_key)
+          : null,
     membershipCategory: row.category_code as StaffMemberSummary["membershipCategory"],
     membershipCategoryLabel: row.category_label,
     status: row.status as StaffMemberSummary["status"],
@@ -115,6 +127,7 @@ export async function listStaffMembers(
   const { rows, total } = await queryPage<StaffMemberRow>(db, {
     source: {
       selectSql: `SELECT m.id, m.member_type, m.organization_id, m.user_id, o.name AS org_name,
+              o.logo_r2_key AS org_logo_r2_key, u.headshot_r2_key,
               u.first_name, u.last_name, u.email, mca.category_code, mc.label AS category_label, m.status,
               ${REPRESENTATIVE_COUNT} AS representative_count,
               COALESCE(m.member_since, m.created_at) AS member_since`,

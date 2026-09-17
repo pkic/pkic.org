@@ -14,8 +14,10 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emailContentTypeSchema, emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
 import { emailTemplateCreateSchema, emailTemplateVersionSchema } from "../../assets/shared/schemas/email-templates";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { menuItemNamed, openRowMenu, rowMenuTrigger } from "./helpers/row-actions";
 import { EmailTemplates } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplates";
-import { optionValues, submitForm } from "./helpers/labelled-control";
+import { optionValues, submitForm, markdownControl } from "./helpers/labelled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -31,6 +33,8 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  const bodyLabel = container && fieldLabels(container).find((label) => label.textContent?.startsWith("Body"));
+  if (bodyLabel && !byId(container!, bodyLabel.htmlFor)) await markdownControl(container!, "Body");
 }
 
 function mount(node: ComponentChild): HTMLDivElement {
@@ -114,6 +118,8 @@ describe("portal email templates", () => {
               created_by_user_id: "user-1",
               created_at: "2026-08-28T12:00:00.000Z",
               message_type: "transactional",
+              from_email: null,
+              from_name: null,
             },
           });
         }
@@ -192,6 +198,8 @@ describe("portal email templates", () => {
       created_by_user_id: "user-1",
       created_at: "2026-08-28T12:00:00.000Z",
       message_type: "transactional",
+      from_email: null,
+      from_name: null,
     } as const;
     vi.stubGlobal(
       "fetch",
@@ -398,7 +406,14 @@ describe("portal email templates", () => {
         if (url.pathname === "/api/v1/email/templates") {
           return json({
             templates: [
-              { template_key: "registration_confirm_email", active_version: 1, version_count: 1, draft_count: 2 },
+              {
+                template_key: "registration_confirm_email",
+                active_version: 1,
+                version_count: 3,
+                draft_count: 2,
+                status: "active",
+                last_changed_at: "2026-08-27T12:00:00.000Z",
+              },
             ],
             page: { limit: 50, offset: 0, total: 1, hasMore: false },
           });
@@ -419,6 +434,8 @@ describe("portal email templates", () => {
                 created_by_user_id: "user-1",
                 created_at: "2026-08-27T12:00:00.000Z",
                 message_type: "transactional",
+                from_email: null,
+                from_name: null,
               },
             ],
             page: { limit: 1, offset: 0, total: 1, hasMore: false },
@@ -434,8 +451,14 @@ describe("portal email templates", () => {
     // The list is a named table rather than one of four anonymous ones.
     expect(container!.querySelector("caption")?.textContent).toContain("Email templates");
     expect(container!.textContent).toContain("registration_confirm_email");
-    // A pending draft says so in words; the tone alone would not.
-    expect(container!.textContent).toContain("draft pending");
+    // One status word per template; the pending drafts are a count beside
+    // the active version rather than a second badge (#98), and the columns
+    // run key, status, active, last changed (#115).
+    expect(container!.textContent).toContain("2 drafts");
+    expect(
+      [...container!.querySelectorAll("thead th")].map((th) => th.textContent?.replace(/[↑↓↕]/g, "").trim()),
+    ).toEqual(["Template Key", "Status", "Active", "Last changed"]);
+    expect(container!.querySelectorAll(".pk-badge, [class*='badge']").length).toBeLessThanOrEqual(1);
 
     const viewButton = [...container!.querySelectorAll("button")].find((candidate) =>
       candidate.textContent?.includes("View"),
@@ -448,10 +471,106 @@ describe("portal email templates", () => {
     await settle();
 
     expect(requests.every((url) => url.pathname.startsWith("/api/v1/email/templates"))).toBe(true);
-    expect(labelled<HTMLTextAreaElement>(container!, "Body").readOnly).toBe(true);
+    expect(labelled<HTMLTextAreaElement>(container!, "Body").disabled).toBe(true);
     expect(fieldLabels(container!).some((label) => label.textContent?.startsWith("Preview data"))).toBe(false);
     expect(container!.textContent).not.toContain("Render Preview");
     expect(container!.textContent).not.toContain("Save as Draft");
     expect(container!.textContent).not.toContain("Activate");
+  });
+
+  it("offers archive and delete from the row's menu only to a manager, and each only when it applies", async () => {
+    const requests: Array<{ url: URL; method: string }> = [];
+    const templates = [
+      {
+        template_key: "live_template",
+        active_version: 2,
+        version_count: 2,
+        draft_count: 0,
+        status: "active",
+        last_changed_at: "2026-08-27T12:00:00.000Z",
+      },
+      {
+        template_key: "retired_template",
+        active_version: null,
+        version_count: 1,
+        draft_count: 0,
+        status: "archived",
+        last_changed_at: "2026-08-20T12:00:00.000Z",
+      },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push({ url, method: init?.method ?? "GET" });
+        if (url.pathname === "/api/v1/email/templates") {
+          return json({ templates, page: { limit: 50, offset: 0, total: 2, hasMore: false } });
+        }
+        return json({ success: true });
+      }),
+    );
+
+    mount(
+      <>
+        <ConfirmDialogHost />
+        <EmailTemplates canWrite canManage />
+      </>,
+    );
+    await settle();
+
+    // A live template can be archived but not deleted; a retired one the
+    // other way round.
+    const menuItems = (subject: string) =>
+      [
+        ...container!.querySelectorAll<HTMLButtonElement>(
+          `[role="menu"][aria-label="Actions for ${subject}"] [role="menuitem"]`,
+        ),
+      ].map((item) => item.textContent);
+    await openRowMenu(container!, "retired_template");
+    expect(menuItems("retired_template")).toEqual(["Delete template"]);
+    await act(async () => rowMenuTrigger(container!, "retired_template")!.click());
+    await openRowMenu(container!, "live_template");
+    expect(menuItems("live_template")).toEqual(["Archive template"]);
+
+    // Archiving is confirmed first, then goes to the canonical route.
+    await act(async () => menuItemNamed(container!, "Archive template")!.click());
+    await settle();
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain("Archive live_template?");
+    const confirm = [...(dialog?.querySelectorAll("button") ?? [])].find(
+      (candidate) => candidate.textContent?.trim() === "Archive template",
+    );
+    await act(async () => confirm!.click());
+    await settle();
+    expect(
+      requests.some(({ url, method }) => method === "POST" && url.pathname.endsWith("/live_template/archive")),
+    ).toBe(true);
+  });
+
+  it("keeps lifecycle commands away from a writer without the manage permission", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          templates: [
+            {
+              template_key: "live_template",
+              active_version: 2,
+              version_count: 2,
+              draft_count: 0,
+              status: "active",
+              last_changed_at: "2026-08-27T12:00:00.000Z",
+            },
+          ],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+    mount(<EmailTemplates canWrite />);
+    await settle();
+    expect(container!.querySelector('button[aria-label="Actions for live_template"]')).toBeNull();
   });
 });

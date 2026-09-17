@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { executiveCouncilSeatSql } from "../auth/executive-council";
 import { userUpdateSchema } from "../../../assets/shared/schemas/user-management";
 import { all, first } from "../db/queries";
 import { hasPermission, requirePermission } from "../auth/permissions";
@@ -109,7 +110,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   const user = await first<UserUpdateRow>(
     db,
     `SELECT id, email, first_name, last_name, preferred_name,
-            role, active, is_ec_member, pii_redacted_at,
+            role, active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member, pii_redacted_at,
             merged_into_user_id, pending_email, pending_email_change_registration_id, updated_at
      FROM users WHERE id = ?`,
     [userId],
@@ -147,7 +148,9 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     }
   }
   const active = input.active ?? Boolean(user.active);
-  const isEcMember = input.isEcMember ?? Boolean(user.is_ec_member);
+  // Council membership is the Executive Council group's roster, read here
+  // only to report it back; it is not a field of the account (#104).
+  const isEcMember = Boolean(user.is_ec_member);
   const patch = profilePatch(input);
   const profileFields = changedProfileFields(user, patch);
   const changedFields = [
@@ -155,7 +158,6 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     ...profileFields,
     ...(input.role !== undefined && role !== user.role ? ["role"] : []),
     ...(input.active !== undefined && active !== Boolean(user.active) ? ["active"] : []),
-    ...(input.isEcMember !== undefined && isEcMember !== Boolean(user.is_ec_member) ? ["isEcMember"] : []),
   ];
   if (changedFields.length === 0) {
     return { id: user.id, email, role, active, isEcMember };
@@ -194,7 +196,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     db
       .prepare(
         `UPDATE users
-         SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?,
+         SET email = ?, normalized_email = ?, role = ?, active = ?,
              pending_email = CASE WHEN ? = 1 THEN NULL ELSE pending_email END,
              pending_email_expires_at = CASE WHEN ? = 1 THEN NULL ELSE pending_email_expires_at END,
              pending_email_change_registration_id = CASE
@@ -210,7 +212,6 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
         normalizeEmail(email),
         role,
         active ? 1 : 0,
-        isEcMember ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
@@ -222,9 +223,6 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
       changedFields,
       ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),
       ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
-      ...(isEcMember !== Boolean(user.is_ec_member)
-        ? { isEcMember: { from: Boolean(user.is_ec_member), to: isEcMember } }
-        : {}),
     }),
   );
   if (Object.keys(patch).length > 0) statements.push(prepareUserProfileStatement(db, user.id, patch));

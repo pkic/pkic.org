@@ -17,10 +17,13 @@ import { ApplicationsList } from "./ApplicationsList";
 
 export function MembershipApplications({
   initialApplicationId = null,
+  initialTab,
   canWrite,
   canApprove,
 }: {
   initialApplicationId?: string | null;
+  /** The record's URL-addressed facet. */
+  initialTab?: string;
   canWrite: boolean;
   canApprove: boolean;
 }) {
@@ -34,6 +37,7 @@ export function MembershipApplications({
         categories={categories}
         canWrite={canWrite}
         canApprove={canApprove}
+        tab={initialTab}
       />
     );
   }

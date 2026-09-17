@@ -134,6 +134,11 @@ export const staffMemberSummarySchema = z.object({
   organizationId: z.string().nullable(),
   /** The person, for an individual member; null for an organization. */
   userId: z.string().nullable(),
+  /**
+   * The member's mark: the organization's logo, or the person's headshot.
+   * Null while there is none, and the row shows initials instead.
+   */
+  imageUrl: httpOrSameOriginUrlSchema.nullable(),
   membershipCategory: membershipCategorySchema,
   /** The category's configured label, resolved where the category lives. */
   membershipCategoryLabel: z.string(),

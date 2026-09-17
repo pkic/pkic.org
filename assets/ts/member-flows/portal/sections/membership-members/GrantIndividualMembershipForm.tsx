@@ -1,6 +1,5 @@
 import { useState } from "preact/hooks";
 import {
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST,
   individualMembershipGrantSchema,
   memberCapacityMutationResponseSchema,
 } from "../../../../../shared/schemas/membership-management";
@@ -40,7 +39,8 @@ export function GrantIndividualMembershipForm({
   onCancel: () => void;
 }) {
   const [user, setUser] = useState<PickedUser | null>(null);
-  const [membershipCategory, setMembershipCategory] = useState<string>(INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST[0]);
+  const [selectedCategory, setMembershipCategory] = useState("");
+  const membershipCategory = selectedCategory || categories.find((category) => category.isIndividual)?.code || "";
   const [activationReason, setActivationReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -117,11 +117,13 @@ export function GrantIndividualMembershipForm({
                       value={membershipCategory}
                       onChange={(event) => setMembershipCategory((event.target as HTMLSelectElement).value)}
                     >
-                      {INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST.map((code) => (
-                        <option key={code} value={code}>
-                          {labelFor(code)}
-                        </option>
-                      ))}
+                      {categories
+                        .filter((category) => category.isIndividual)
+                        .map(({ code }) => (
+                          <option key={code} value={code}>
+                            {labelFor(code)}
+                          </option>
+                        ))}
                     </Select>
                   )}
                 </Field>

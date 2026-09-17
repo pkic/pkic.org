@@ -284,29 +284,6 @@ $adm-danger: #dc3545;
     padding: 0;
   }
 
-  // ── Mini stats (inline compact stat badges) ─────────────────────────────────
-
-  .adm-mini-stats {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem 0.75rem;
-    font-size: 0.82rem;
-    color: $adm-muted;
-  }
-
-  .adm-mini-stat strong {
-    font-size: 0.95rem;
-    color: #212529;
-    margin-right: 0.15rem;
-  }
-
-  .adm-mini-stat-sep {
-    width: 1px;
-    height: 1rem;
-    background: $adm-border;
-  }
-
   // ── Bar charts ──────────────────────────────────────────────────────────────
 
   .adm-email-batch-limit {
@@ -752,9 +729,6 @@ $adm-danger: #dc3545;
 
   // ── Common utility classes ──────────────────────────────────────────────────
 
-  .adm-filter-select {
-    width: auto;
-  }
   .adm-pre-wrap {
     white-space: pre-wrap;
   }
@@ -779,9 +753,6 @@ $adm-danger: #dc3545;
   }
   .adm-cell-sub-email {
     font-size: 0.72rem;
-  }
-  .adm-cell-name {
-    font-size: 0.85rem;
   }
   .adm-flex-1 {
     flex: 1;

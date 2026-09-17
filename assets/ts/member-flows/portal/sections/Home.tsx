@@ -1,3 +1,4 @@
+import { eventDestination } from "./events/event-destination";
 /**
  * The sign-in landing: the identity's consortium this week. Participation
  * comes first — things to vote on, answer, review, and attend — followed by
@@ -196,7 +197,7 @@ function EventsPanel() {
           {rows.map((event) => {
             const relative = formatRelativeDays(event.startsAt);
             const viewer = "viewer" in event ? event.viewer : null;
-            const basePath = "basePath" in event ? event.basePath : null;
+            const basePath = eventDestination(event);
             return (
               <li key={event.id} class="pk-stack pk-stack--tight">
                 <div class="pk-cluster">

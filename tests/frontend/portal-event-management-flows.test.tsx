@@ -7,7 +7,7 @@ import { cleanup, GROUP_ID, json, mount, responseEvent, settle } from "./helpers
 import { groupEventCreateSchema, groupEventSettingsUpdateSchema } from "../../assets/shared/schemas/group-events";
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { controlFor, submitForm, typeInto } from "./helpers/labelled-control";
 import { nameForm } from "./helpers/form-editor";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -177,7 +177,7 @@ describe("portal event management flows", () => {
 
     const container = mount(<GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" />);
     await settle();
-    expect(container.textContent).toContain("Registration setup");
+    expect(container.textContent).toContain("Terms and conditions");
     await beginRecordEdit(container, "Event terms actions", "Edit terms");
     expect(
       Array.from(container.querySelectorAll<HTMLInputElement>("input")).some(
@@ -222,16 +222,17 @@ describe("portal event management flows", () => {
       },
     });
 
-    // Opening the editor swaps the button for a heading that names the form
-    // beside it, so the form is announced as "Edit event" rather than as an
-    // unlabelled group of controls in the middle of the settings tab.
-    await act(async () => buttonNamed(container, "Edit event").click());
+    // The event's facts are edited where they are read: Edit is the details
+    // panel's own command, and the panel's heading becomes "Edit event" so the
+    // form is announced by name rather than as an unlabelled group of controls.
+    await beginRecordEdit(container, "Event actions", "Edit event");
     await settle();
     const heading = Array.from(container.querySelectorAll("h1, h2, h3, h4, h5, h6")).find(
       (candidate) => candidate.textContent === "Edit event",
     );
     expect(heading).toBeDefined();
-    const editor = heading!.parentElement!;
+    // The panel the heading titles is the region the form lives in.
+    const editor = heading!.closest("section")!;
     expect(editor.querySelector("form")).not.toBeNull();
     expect(controlFor(editor, "Peer invitation limit").value).toBe(String(responseEvent.inviteLimitAttendee));
     // The slug is fixed once the event exists, and the control says so itself

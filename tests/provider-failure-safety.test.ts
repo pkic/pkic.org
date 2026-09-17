@@ -94,6 +94,22 @@ describe("bounded provider failure handling", () => {
     expect(logOutput(errorLog)).not.toContain(PROVIDER_BODY_SENTINEL);
   });
 
+  it.each([
+    ["sk_live_synthetic", "http://127.0.0.1:1234"],
+    ["sk_test_synthetic", "https://example.test"],
+    ["sk_test_synthetic", "http://api.stripe.com"],
+  ])("refuses redirecting Stripe credentials to an unapproved API origin", async (key, apiBase) => {
+    const fetcher = vi.fn();
+    await expect(
+      createStripeCheckoutSession(key, new URLSearchParams(), {
+        apiBase,
+        idempotencyKey: "synthetic",
+        fetcher,
+      }),
+    ).rejects.toMatchObject({ code: "STRIPE_CONFIGURATION_INVALID" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("uses structured bounded metadata for Stripe checkout failures", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const response = new Response(PROVIDER_BODY_SENTINEL, { status: 402 });

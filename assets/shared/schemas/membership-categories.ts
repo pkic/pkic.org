@@ -1,15 +1,8 @@
-/**
- * Membership category vocabulary — the single source of truth for the
- * fixed A-G/H1-H8 category-code vocabulary and structural individual/org-less
- * policy. Editable labels, descriptions, ordering, and voting rights live in
- * D1. Previously independently declared in membership provisioning,
- * membership applications (both the shared schema and the service), and
- * organization management derived its org-tied filter from
- * yet another copy — flagged in PR #1 review as a DRY violation across API
- * and service layers.
- */
+/** Shared contracts for the D1-managed membership category catalog. */
 import { z } from "zod";
+import { databaseIdSchema } from "./identifiers.ts";
 
+/** Baseline categories used by legacy membership imports and seed fixtures. */
 export const MEMBERSHIP_CATEGORIES = [
   "A",
   "B",
@@ -27,25 +20,32 @@ export const MEMBERSHIP_CATEGORIES = [
   "H7",
   "H8",
 ] as const;
-export const membershipCategorySchema = z.enum(MEMBERSHIP_CATEGORIES);
+export const membershipCategorySchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[A-Z][A-Z0-9_-]{0,31}$/,
+    "Use an uppercase category code of up to 32 letters, digits, underscores, or hyphens",
+  );
 export type MembershipCategory = z.infer<typeof membershipCategorySchema>;
 
 /**
- * A bounded, unique selection from the fixed category vocabulary. Reused by
+ * A bounded, unique selection from the configured category catalog. Reused by
  * every API that stores category filters so duplicate values cannot leak into
  * D1 JSON and create subtly different request/response contracts. It retains
  * caller order because that can be meaningful in a presentation context.
  */
+export const MEMBERSHIP_CATEGORY_CATALOG_LIMIT = 200;
+
 export const membershipCategorySelectionSchema = z
   .array(membershipCategorySchema)
-  .max(MEMBERSHIP_CATEGORIES.length)
+  .max(MEMBERSHIP_CATEGORY_CATALOG_LIMIT)
   .refine((categories) => new Set(categories).size === categories.length, {
     message: "Membership categories must not contain duplicates",
   });
 
 export const MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH = 300;
 export const MEMBERSHIP_CATEGORY_DESCRIPTION_MAX_LENGTH = 2000;
-
 const membershipCategoryLabelSchema = z.string().trim().min(1).max(MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH);
 const membershipCategoryDescriptionSchema = z
   .string()
@@ -60,14 +60,17 @@ export const membershipCategoryCatalogEntrySchema = z.object({
   description: membershipCategoryDescriptionSchema,
   displayOrder: z.number().int().nonnegative(),
   isIndividual: z.boolean(),
+  requiresUniversityEmail: z.boolean().default(false),
   isVoting: z.boolean(),
+  active: z.boolean().default(true),
+  workflowVersionId: databaseIdSchema.nullable().default(null),
   revision: z.number().int().nonnegative(),
   updatedAt: z.string(),
 });
 export type MembershipCategoryCatalogEntry = z.infer<typeof membershipCategoryCatalogEntrySchema>;
 
 export const membershipCategoryCatalogResponseSchema = z.object({
-  categories: z.array(membershipCategoryCatalogEntrySchema),
+  categories: z.array(membershipCategoryCatalogEntrySchema).max(MEMBERSHIP_CATEGORY_CATALOG_LIMIT),
 });
 
 export const membershipCategoryCatalogRouteSchema = {
@@ -85,12 +88,19 @@ export const membershipCategoryCatalogRouteSchema = {
 };
 
 export const membershipCategoryParamsSchema = z.object({ categoryCode: membershipCategorySchema });
-export const membershipCategoryMutableSchema = membershipCategoryCatalogEntrySchema.pick({
-  label: true,
-  description: true,
-  displayOrder: true,
-  isVoting: true,
-});
+export const membershipCategoryMutableSchema = membershipCategoryCatalogEntrySchema
+  .pick({
+    label: true,
+    description: true,
+    displayOrder: true,
+    isVoting: true,
+    active: true,
+    workflowVersionId: true,
+  })
+  .extend({
+    active: membershipCategoryCatalogEntrySchema.shape.active.unwrap(),
+    workflowVersionId: membershipCategoryCatalogEntrySchema.shape.workflowVersionId.unwrap(),
+  });
 export const membershipCategoryUpdateSchema = membershipCategoryMutableSchema
   .partial()
   .extend({ expectedRevision: z.number().int().nonnegative() })
@@ -99,6 +109,16 @@ export const membershipCategoryUpdateSchema = membershipCategoryMutableSchema
   });
 export type MembershipCategoryUpdate = z.infer<typeof membershipCategoryUpdateSchema>;
 export const membershipCategoryResponseSchema = z.object({ category: membershipCategoryCatalogEntrySchema });
+
+export const membershipCategoryCreateSchema = membershipCategoryCatalogEntrySchema
+  .omit({ revision: true, updatedAt: true })
+  .refine((category) => !category.requiresUniversityEmail || category.isIndividual, {
+    path: ["requiresUniversityEmail"],
+    message: "University email requirements apply to individual categories",
+  });
+export type MembershipCategoryCreate = z.infer<typeof membershipCategoryCreateSchema>;
+export const membershipCategoryDeleteSchema = z.object({ expectedRevision: z.number().int().nonnegative() });
+export const membershipCategoryDeleteResponseSchema = z.object({ deleted: z.literal(true) });
 
 export const membershipCategoryUpdateRouteSchema = {
   tags: ["Membership"],
@@ -117,19 +137,11 @@ export const membershipCategoryUpdateRouteSchema = {
   },
 };
 
-/** Individual (org-less) membership categories — "NULL for individual categories H5/H6/H7" rule. */
+/** Individual categories in legacy source records; live policy comes from the D1 catalog. */
 export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set<string>(["H5", "H6", "H7"]);
 
 export function isIndividualMembershipCategory(category: string): boolean {
   return INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category);
-}
-
-/** Individual academic category that must use an institutional address. */
-export const UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORIES = ["H5"] as const;
-const UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORY_SET = new Set<string>(UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORIES);
-
-export function requiresUniversityEmail(category: string): boolean {
-  return UNIVERSITY_EMAIL_MEMBERSHIP_CATEGORY_SET.has(category);
 }
 
 /** members.status (migration 0000, deployed/immutable CHECK constraint — mirrored here, not duplicated ad hoc, per PR #1 review §1.3). */

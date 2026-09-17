@@ -1,3 +1,4 @@
+import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render } from "preact";
 import { Alert } from "../ui/Alert";
 import { getJson, patchJson } from "../shared/api-client";
@@ -9,7 +10,7 @@ import { withLoadingButton } from "../shared/form/submit";
 import { setStatus } from "./boot";
 import { wireTokenHeadshotSection } from "./registration-manage-headshot";
 import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
-import { formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
+import { readField, formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
 import {
   speakerSelfServiceReadResponseSchema,
@@ -202,6 +203,7 @@ async function main(): Promise<void> {
   if (organizationField) organizationField.value = data.profile.organizationName ?? "";
   if (jobTitleField) jobTitleField.value = data.profile.jobTitle ?? "";
   if (bioField) bioField.value = data.profile.biography ?? "";
+  await mountMarkdownField(bioField ?? null, "Biography", speakerProfilePatchSchema.shape.biography);
   if (linksContainer) {
     linksWidget = renderProfileLinks(linksContainer, "links", { max: 10 });
     linksWidget.setLinks(normalizeProfileLinks(data.profile.links));
@@ -218,7 +220,7 @@ async function main(): Promise<void> {
             lastName: lastNameField?.value.trim() || null,
             organizationName: organizationField?.value.trim() || null,
             jobTitle: jobTitleField?.value.trim() || null,
-            biography: bioField?.value.trim() || "",
+            biography: readField(profileForm!, "biography"),
             links: linksWidget?.getLinks() ?? [],
           }),
           successResponseSchema,

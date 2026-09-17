@@ -6,7 +6,6 @@ import {
   type StaffMemberSummary,
 } from "../../../../../shared/schemas/members-directory";
 import {
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   MEMBER_STATUSES,
   type MembershipCategoryCatalogEntry,
 } from "../../../../../shared/schemas/membership-categories";
@@ -107,9 +106,7 @@ export function MemberEditForm({
     }
   }
 
-  const offered = categories.filter(
-    (entry) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(entry.code) === (member?.memberType === "individual"),
-  );
+  const offered = categories.filter((entry) => entry.isIndividual === (member?.memberType === "individual"));
 
   return (
     <div class="pk pk-stack">

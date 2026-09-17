@@ -150,3 +150,52 @@ export async function chooseComboboxOption(root: ParentNode, label: string, key:
     await Promise.resolve();
   });
 }
+
+/**
+ * The Markdown editor's control for the field reading `label`, once the
+ * lazily loaded editor is on the page: the visual canvas, or the source
+ * textarea while the source view is open.
+ */
+export async function markdownControl(root: ParentNode, label: string): Promise<HTMLElement> {
+  // The editor is a lazy chunk; its first import in a run is the slow one,
+  // so the wait is bounded by time rather than by a count of ticks.
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      const control = controlFor<HTMLElement>(root, label);
+      if (control.closest(".pk-markdown-editor")) return control;
+    } catch {
+      // The label points at nothing until the editor chunk has loaded.
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+  }
+  throw new Error(`the Markdown editor for "${label}" never appeared`);
+}
+
+/** The Markdown the editor for `label` currently holds. */
+export async function markdownValue(root: ParentNode, label: string): Promise<string> {
+  const control = await markdownControl(root, label);
+  const input = control.closest(".pk-markdown-editor")?.querySelector<HTMLInputElement>('input[type="hidden"]');
+  if (!input) throw new Error(`the Markdown editor for "${label}" carries no value`);
+  return input.value;
+}
+
+/**
+ * Types Markdown into the editor for `label` the way a keyboard user can
+ * without a pointer: through its source view, which is a plain textarea,
+ * reached by the bar's "Markdown source" button (a glyph, named for
+ * assistive technology).
+ */
+export async function typeMarkdown(root: ParentNode, label: string, value: string): Promise<void> {
+  let control = await markdownControl(root, label);
+  if (control.tagName !== "TEXTAREA") {
+    const editor = control.closest<HTMLElement>(".pk-markdown-editor")!;
+    const sourceView = editor.querySelector<HTMLButtonElement>('button[aria-label="Markdown source"]');
+    if (!sourceView) throw new Error(`the Markdown editor for "${label}" offers no source view`);
+    await act(async () => sourceView.click());
+    control = await markdownControl(root, label);
+  }
+  await typeInto(control, value);
+}

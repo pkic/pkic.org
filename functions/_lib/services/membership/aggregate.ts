@@ -7,10 +7,8 @@
  * representatives inherit its category and standing, so changing either
  * through one of them is refused there and belongs here.
  */
-import {
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  type MemberUpdateInput,
-} from "../../../../assets/shared/schemas/members-directory";
+import { type MemberUpdateInput } from "../../../../assets/shared/schemas/members-directory";
+import { assertCategoryCompatible, prepareMembershipCategoryGuard } from "./categories";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
@@ -55,16 +53,7 @@ export async function updateMemberAggregate(
 ) {
   const member = await requireMemberAggregate(db, memberId);
   if (input.membershipCategory !== undefined) {
-    const isIndividualCategory = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
-    if (isIndividualCategory !== (member.member_type === "individual")) {
-      throw new AppError(
-        422,
-        "MEMBERSHIP_CATEGORY_KIND_MISMATCH",
-        member.member_type === "individual"
-          ? "An individual membership takes one of the individual categories"
-          : "An organization's membership takes one of the organization categories",
-      );
-    }
+    await assertCategoryCompatible(db, input.membershipCategory, member.member_type === "individual");
   }
 
   const at = nowIso();
@@ -72,6 +61,7 @@ export async function updateMemberAggregate(
   const statements: StatementLike[] = [];
   if (input.membershipCategory !== undefined) {
     statements.push(
+      prepareMembershipCategoryGuard(authorizedDb, input.membershipCategory, member.member_type === "individual"),
       authorizedDb
         .prepare("UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?")
         .bind(input.membershipCategory, at, memberId),

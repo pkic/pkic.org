@@ -17,6 +17,7 @@ import {
   Home,
   Members,
   MembershipApplications,
+  WorkflowReviewPage,
   MyApplications,
   MyOrganization,
   OrganizationDetail,
@@ -99,9 +100,19 @@ export function PortalShell() {
             )}
             {access.hasEventWorkspace && (
               <Route
-                path="/events/:slug/proposals/detail/:proposalId"
-                component={({ params }: { params: { slug: string; proposalId: string } }) => (
-                  <LazyEventWorkspace view="proposal" slug={params.slug} resourceId={params.proposalId} />
+                path="/events/:slug/proposals/detail/:proposalId/:tab?/:segment?"
+                component={({
+                  params,
+                }: {
+                  params: { slug: string; proposalId: string; tab?: string; segment?: string };
+                }) => (
+                  <LazyEventWorkspace
+                    view="proposal"
+                    slug={params.slug}
+                    resourceId={params.proposalId}
+                    tab={params.tab}
+                    segment={params.segment}
+                  />
                 )}
               />
             )}
@@ -300,13 +311,22 @@ export function PortalShell() {
                 )}
               />
             )}
+            <Route
+              path="/membership/applications/:applicationId/review"
+              component={({ params }: { params: { applicationId: string } }) => (
+                <SectionWrapper>
+                  <WorkflowReviewPage applicationId={params.applicationId} />
+                </SectionWrapper>
+              )}
+            />
             {access.hasMembershipQueue && (
               <Route
-                path="/membership/applications/:applicationId?"
-                component={({ params }: { params: { applicationId?: string } }) => (
+                path="/membership/applications/:applicationId?/:tab?"
+                component={({ params }: { params: { applicationId?: string; tab?: string } }) => (
                   <SectionWrapper>
                     <MembershipApplications
                       initialApplicationId={params.applicationId}
+                      initialTab={params.tab}
                       canWrite={portalHasGlobalPermission(session, "membership:write")}
                       canApprove={portalHasGlobalPermission(session, "membership:approve")}
                     />
@@ -316,11 +336,13 @@ export function PortalShell() {
             )}
             {access.hasUserRecords && (
               <Route
-                path="/users/:userId?"
-                component={({ params }: { params: { userId?: string } }) => (
+                path="/users/:userId?/:section?/:segment?"
+                component={({ params }: { params: { userId?: string; section?: string; segment?: string } }) => (
                   <SectionWrapper>
                     <Users
                       userId={params.userId}
+                      section={params.section}
+                      segment={params.segment}
                       viewerUserId={session?.identity.id}
                       permissions={{
                         canRead: portalHasGlobalPermission(session, "users:read"),
@@ -477,7 +499,8 @@ export function PortalShell() {
                 path="/groups/:groupId/*?"
                 component={({ params }: { params: { groupId: string; "*"?: string } }) => {
                   const segments = (params["*"] ?? "").split("/").filter(Boolean).map(decodeURIComponent);
-                  const [view, resourceId, resourceTab, resourceDetailId] = segments;
+                  const [view, resourceId, resourceTab, resourceDetailId, resourceDetailTab, resourceDetailSegment] =
+                    segments;
                   return (
                     <SectionWrapper>
                       <GroupWorkspace
@@ -486,6 +509,8 @@ export function PortalShell() {
                         resourceId={resourceId}
                         resourceTab={resourceTab}
                         resourceDetailId={resourceDetailId}
+                        resourceDetailTab={resourceDetailTab}
+                        resourceDetailSegment={resourceDetailSegment}
                       />
                     </SectionWrapper>
                   );

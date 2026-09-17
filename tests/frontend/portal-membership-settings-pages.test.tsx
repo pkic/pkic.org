@@ -15,12 +15,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { membershipApplicationFormDefinitionUpdateSchema } from "../../assets/shared/schemas/membership-application-form";
 import { membershipCategoryUpdateSchema } from "../../assets/shared/schemas/membership-categories";
 import { membershipSettingsUpdateSchema } from "../../assets/shared/schemas/membership-settings";
-import { ApplicationWorkflow } from "../../assets/ts/member-flows/portal/sections/membership-settings/ApplicationWorkflow";
+import { ApplicationHoldSettings } from "../../assets/ts/member-flows/portal/sections/membership-settings/ApplicationHoldSettings";
 import { MembershipApplicationForm } from "../../assets/ts/member-flows/portal/sections/membership-settings/MembershipApplicationForm";
 import { MembershipCategories } from "../../assets/ts/member-flows/portal/sections/membership-settings/MembershipCategories";
 import { beginRecordEdit } from "./helpers/record-edit";
 import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 import { openQuestion } from "./helpers/form-editor";
+import { rowMenuTrigger } from "./helpers/row-actions";
+
+// The categories page routes its edit page through the portal's location
+// hook, which has no dispatcher in a bare mount.
+const navigate = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => ["/settings/membership-categories", navigate],
+}));
 
 const NOW = "2026-08-27T12:00:00.000Z";
 const SETTINGS_API = "/api/v1/membership/settings";
@@ -28,8 +36,6 @@ const CATEGORIES_API = "/api/v1/membership/categories";
 const FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
 
 const settings = {
-  consultationWindowDays: 7,
-  ecReviewWindowDays: 7,
   onHoldResponseDeadlineDays: 7,
   consultationEmailRecipients: "consultation@example.test",
   ecEmailRecipients: "ec@example.test",
@@ -138,6 +144,7 @@ async function settle(): Promise<void> {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  navigate.mockReset();
   if (container) {
     void act(() => render(null, container!));
     container.remove();
@@ -145,14 +152,14 @@ afterEach(() => {
   }
 });
 
-describe("application workflow page", () => {
+describe("applicant reminder settings", () => {
   it("heads itself and reads only the settings it shows", async () => {
     const requests = stubApi((url) => (url.pathname === SETTINGS_API ? json(settings) : null));
 
-    const page = mount(<ApplicationWorkflow canWrite />);
+    const page = mount(<ApplicationHoldSettings canWrite />);
     await settle();
 
-    expect(page.querySelector("h2")?.textContent).toBe("Application workflow");
+    expect(page.querySelector("h2")?.textContent).toBe("Applicant reminders");
     // The categories and the application form are other pages, so this one
     // does not fetch them to render its own form.
     expect(requests.map((request) => request.path)).toEqual([SETTINGS_API]);
@@ -169,7 +176,7 @@ describe("application workflow page", () => {
       return json(settings);
     });
 
-    const page = mount(<ApplicationWorkflow canWrite />);
+    const page = mount(<ApplicationHoldSettings canWrite />);
     await settle();
     await beginRecordEdit(page, "Workflow settings actions");
     await act(async () => buttonNamed(page, "Save workflow settings").click());
@@ -186,15 +193,15 @@ describe("application workflow page", () => {
   it("labels every control it renders, and the deadline fields state their own bounds", async () => {
     stubApi((url) => (url.pathname === SETTINGS_API ? json(settings) : null));
 
-    const page = mount(<ApplicationWorkflow canWrite />);
+    const page = mount(<ApplicationHoldSettings canWrite />);
     await settle();
 
     await beginRecordEdit(page, "Workflow settings actions");
-    const window = controlFor(page, "Consultation window (days)");
-    expect(page.querySelector(`label[for="${window.id}"]`)?.textContent).toContain("Consultation window (days)");
+    const window = controlFor(page, "On-hold response deadline (days)");
+    expect(page.querySelector(`label[for="${window.id}"]`)?.textContent).toContain("On-hold response deadline (days)");
     const describedBy = window.getAttribute("aria-describedby");
     expect(describedBy).not.toBeNull();
-    expect(page.querySelector(`#${describedBy!}`)?.textContent).toBe("Between 1 and 60 days.");
+    expect(page.querySelector(`#${describedBy!}`)?.textContent).toBe("Between 1 and 90 days.");
 
     // A checkbox needs all three parts, or it renders as an operating-system
     // default control.
@@ -208,7 +215,7 @@ describe("application workflow page", () => {
   it("renders read-only without mutation controls", async () => {
     stubApi((url) => (url.pathname === SETTINGS_API ? json(settings) : null));
 
-    const page = mount(<ApplicationWorkflow canWrite={false} />);
+    const page = mount(<ApplicationHoldSettings canWrite={false} />);
     await settle();
 
     expect(page.querySelectorAll("button")).toHaveLength(0);
@@ -220,12 +227,12 @@ describe("application workflow page", () => {
   it("reports a failed load through the shared error alert, under a heading that still says where you are", async () => {
     stubApi(() => new Response(null, { status: 500 }));
 
-    const page = mount(<ApplicationWorkflow canWrite />);
+    const page = mount(<ApplicationHoldSettings canWrite />);
     await settle();
 
     expect(page.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side.");
     // The page still names itself; a failure is content, not a blank screen.
-    expect(page.querySelector("h2")?.textContent).toBe("Application workflow");
+    expect(page.querySelector("h2")?.textContent).toBe("Applicant reminders");
     expect(page.querySelectorAll("form")).toHaveLength(0);
   });
 });
@@ -316,7 +323,7 @@ describe("membership application form page", () => {
 });
 
 describe("membership categories page", () => {
-  it("heads itself and reads only the catalog", async () => {
+  it("heads itself and lists the catalog as a table, reading only the catalog", async () => {
     const requests = stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
 
     const page = mount(<MembershipCategories canWrite />);
@@ -324,8 +331,34 @@ describe("membership categories page", () => {
 
     expect(page.querySelector("h2")?.textContent).toBe("Membership categories");
     expect(requests.map((request) => request.path)).toEqual([CATEGORIES_API]);
-    expect(page.textContent).toContain(`${category.label} (H1)`);
-    expect(page.textContent).toContain("Organization");
+    // One row per category in the design system's table (#122), not a panel
+    // per category with a form folded inside it.
+    expect(page.querySelector("table caption")?.textContent).toBe("Membership categories");
+    const headers = [...page.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim());
+    expect(headers).toEqual(expect.arrayContaining(["Code", "Category", "Held by", "Voting", "Order", "Description"]));
+    const row = page.querySelector("tbody tr");
+    expect(row?.textContent).toContain("H1");
+    expect(row?.textContent).toContain(category.label);
+    expect(row?.textContent).toContain("Organization");
+    expect(row?.textContent).toContain("Non-voting");
+    expect(page.querySelectorAll("form")).toHaveLength(0);
+  });
+
+  it("opens a category's edit page from its row, at the category's own address", async () => {
+    stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
+
+    const page = mount(<MembershipCategories canWrite />);
+    await settle();
+
+    const trigger = rowMenuTrigger(page, "category H1");
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+    const edit = [...page.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "Edit…",
+    );
+    expect(edit).toBeDefined();
+    await act(async () => edit!.click());
+    expect(navigate).toHaveBeenCalledWith("/settings/membership-categories/H1");
   });
 
   it("sends a revision-guarded category update through the canonical membership route", async () => {
@@ -337,9 +370,11 @@ describe("membership categories page", () => {
       return null;
     });
 
-    const page = mount(<MembershipCategories canWrite />);
+    const page = mount(<MembershipCategories canWrite categoryCode="H1" />);
     await settle();
-    await beginRecordEdit(page, "Category H1 actions");
+    // The edit page heads itself with the category, under the list's trail.
+    expect(page.querySelector("h2")?.textContent).toBe(`${category.label} (H1)`);
+    expect(page.querySelector('nav[aria-label="Breadcrumb"]')?.textContent).toContain("Membership categories");
     await typeInto(controlFor(page, "Label"), "Government PKI participants");
     await act(async () => buttonNamed(page, "Save category H1").click());
     await settle();
@@ -349,30 +384,24 @@ describe("membership categories page", () => {
     expect(membershipCategoryUpdateSchema.parse(write?.body)).toEqual({
       expectedRevision: 4,
       label: "Government PKI participants",
+      active: true,
+      workflowVersionId: null,
       description: "Existing description",
       displayOrder: 80,
       isVoting: false,
     });
     expect(requests.every((request) => request.path.startsWith("/api/v1/membership/"))).toBe(true);
+    // Saving returns to the list.
+    expect(navigate).toHaveBeenCalledWith("/settings/membership-categories");
   });
 
-  it("says where a new membership category comes from, since it cannot come from here", async () => {
+  it("offers category creation and explains holder types and deletion limits", async () => {
     stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
-
     const page = mount(<MembershipCategories canWrite />);
     await settle();
-
-    /*
-     * Issue #16 was somebody looking for the "add a category" control and
-     * finding neither one nor an explanation. The page used to say the codes
-     * "cannot be changed here", which answers where not to look without
-     * saying whether the thing is possible at all — so the question came to
-     * the tracker instead.
-     */
-    expect(page.textContent).toContain("follows from the bylaws");
-    expect(page.textContent).toContain("ships with a release");
-    // And it still says what staff genuinely own on this page.
-    expect(page.textContent).toContain("voting rights");
+    expect(page.textContent).toContain("organizations and individual users");
+    expect(page.textContent).toContain("already in use cannot be deleted");
+    expect([...page.querySelectorAll("button")].some((button) => button.textContent === "New category")).toBe(true);
   });
 
   it("renders the catalog read-only without mutation controls", async () => {
@@ -381,10 +410,37 @@ describe("membership categories page", () => {
     const page = mount(<MembershipCategories canWrite={false} />);
     await settle();
 
-    expect(page.querySelectorAll("button")).toHaveLength(0);
-    expect([...page.querySelectorAll("input, textarea")].every((field) => (field as HTMLInputElement).disabled)).toBe(
-      true,
+    // No row commands and nothing to open: the table's own column menus are
+    // the only controls left.
+    expect(rowMenuTrigger(page, "category H1")).toBeNull();
+    expect(page.querySelectorAll("tbody a")).toHaveLength(0);
+    expect(page.querySelectorAll("form")).toHaveLength(0);
+  });
+
+  it("shows a category's settings read-only, with nothing to save", async () => {
+    stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
+
+    const page = mount(<MembershipCategories canWrite={false} categoryCode="H1" />);
+    await settle();
+
+    expect(
+      [...page.querySelectorAll("input, textarea")].every((field) => (field as HTMLInputElement).matches(":disabled")),
+    ).toBe(true);
+    expect([...page.querySelectorAll("button")].some((control) => /save|cancel/i.test(control.textContent ?? ""))).toBe(
+      false,
     );
+  });
+
+  it("says when the address names no category, with a way back to the list", async () => {
+    stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
+
+    const page = mount(<MembershipCategories canWrite categoryCode="ZZ" />);
+    await settle();
+
+    expect(page.textContent).toContain("There is no membership category with the code ZZ.");
+    expect(page.querySelectorAll("form")).toHaveLength(0);
+    await act(async () => buttonNamed(page, "Back to membership categories").click());
+    expect(navigate).toHaveBeenCalledWith("/settings/membership-categories");
   });
 
   it("reports a failed load through the shared error alert", async () => {

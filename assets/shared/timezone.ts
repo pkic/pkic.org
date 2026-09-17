@@ -47,6 +47,11 @@ function wallClockEpoch(value: ZonedDateTimeParts): number {
   return Date.UTC(value.year, value.month - 1, value.day, value.hour, value.minute, value.second);
 }
 
+/** The IANA offset at an instant, for serializing calendar timezone observances. */
+export function zonedUtcOffsetSeconds(value: Date, timeZone: string): number {
+  return (wallClockEpoch(zonedDateTimeParts(value, timeZone)) - Math.floor(value.getTime() / 1000) * 1000) / 1000;
+}
+
 function sameWallClock(left: ZonedDateTimeParts, right: ZonedDateTimeParts): boolean {
   return (
     left.year === right.year &&

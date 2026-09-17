@@ -4,6 +4,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
@@ -161,31 +162,46 @@ test("a selected-group manager changes one attendee day through portal routes", 
 
   const attendeeRow = detail.getByRole("row").filter({ hasText: attendeeEmail });
   await expect(attendeeRow).toBeVisible();
-  await attendeeRow.getByRole("button", { name: "Manage attendance" }).click();
-  const attendance = page.getByRole("region", { name: "Attendance for E2E Attendee" });
+  // The list says, per day, what the attendee holds — never the raw token.
+  await expect(attendeeRow.getByText("In-person", { exact: false })).toBeVisible();
+  // A registration is a routed record: the row is a link to its own page.
+  await openRow(attendeeRow, "Open registration for E2E Attendee");
+  await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events/${event.id}/registrations/[^/]+$`));
+  const attendance = page.getByRole("region", { name: "Registration for E2E Attendee" });
   await expect(attendance).toBeVisible();
-  await expect(attendance.getByLabel("Attendance for 2027-07-10")).toHaveValue("in_person");
+  await expect(attendance.getByRole("heading", { name: "E2E Attendee", exact: true })).toBeVisible();
   // The waitlist state is read from the day's own row rather than from
   // anywhere in the panel, and it is the badge's word — the raw status token
   // is no longer what the cell renders.
   const attendanceDay = attendance.getByRole("row").filter({ hasText: "2027-07-10" });
+  // The attendance cell speaks the event's own option label.
+  await expect(attendanceDay.getByText("In person", { exact: true })).toBeVisible();
   await expect(attendanceDay.getByText("—", { exact: true })).toBeVisible();
 
-  await attendance.getByRole("button", { name: "Return to waitlist" }).click();
+  // Every change to a day is a command in the day's own menu, and each asks
+  // before it acts; nothing stands open on the page (#113).
+  async function dayCommand(label: string, confirmLabel: string) {
+    await attendanceDay.getByRole("button", { name: "Actions for E2E Saturday" }).click();
+    await page.getByRole("menuitem", { name: label }).click();
+    await acceptConfirmDialog(page, confirmLabel);
+  }
+  await dayCommand("Return to waitlist…", "Return to waitlist");
   await expect(attendanceDay.getByText("Waiting", { exact: true })).toBeVisible();
-  // Several live regions share the page — the selection counter, the panel's
-  // own outcome alert, the toast — so each assertion names the one it means.
-  await expect(page.getByRole("status").filter({ hasText: "updated" })).toBeVisible();
+  // Several live regions share the page — the panel's own outcome alert, the
+  // toast — so each assertion names the one it means.
+  await expect(page.getByRole("status").filter({ hasText: "returned to the waitlist" })).toBeVisible();
 
-  await attendance.getByLabel("Admit day").check();
-  await attendance.getByRole("button", { name: "Admit selected days" }).click();
+  await dayCommand("Admit from waitlist…", "Admit from waitlist");
   await expect(attendanceDay.getByText("Accepted", { exact: true })).toBeVisible();
-  await expect(attendance.getByLabel("Attendance for 2027-07-10")).toHaveValue("in_person");
+  await expect(attendanceDay.getByText("In person", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "admitted" })).toBeVisible();
 
-  const vipOverride = attendance.getByRole("region", { name: "Reasoned VIP admission override" });
-  await expect(vipOverride).toContainText("Requires the effective event manage capability");
-  await vipOverride.getByLabel("E2E Saturday — 2027-07-10").check();
+  // Admitting beyond capacity is the day's command too; it names the day and
+  // asks for its reason in a dialog rather than a form under the table.
+  await attendanceDay.getByRole("button", { name: "Actions for E2E Saturday" }).click();
+  await page.getByRole("menuitem", { name: "Admit beyond capacity…" }).click();
+  const vipOverride = page.getByRole("dialog", { name: "Admit beyond capacity" });
+  await expect(vipOverride).toContainText("E2E Saturday");
   await vipOverride.getByLabel("Required reason").fill("E2E invited consortium guest");
   const vipResponse = page.waitForResponse(
     (response) =>

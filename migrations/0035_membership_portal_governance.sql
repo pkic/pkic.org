@@ -33,6 +33,8 @@ CREATE TABLE membership_categories (
   description  TEXT,
   display_order INTEGER NOT NULL,
   is_voting     INTEGER NOT NULL DEFAULT 0 CHECK (is_voting IN (0, 1)),
+  is_individual INTEGER NOT NULL DEFAULT 0 CHECK (is_individual IN (0, 1)),
+  requires_university_email INTEGER NOT NULL DEFAULT 0 CHECK (requires_university_email IN (0, 1)),
   -- configurable consortium and group voting rights; D1 is the policy source
   revision      INTEGER NOT NULL DEFAULT 0,
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -56,6 +58,9 @@ VALUES
   ('H6', 'Unaffiliated independent PKI or cryptography consultants', 'For qualified consultants who are not affiliated with any organization.', 130, 0),
   ('H7', 'Unaffiliated independent PKI or cryptography researchers', 'For qualified researchers who are not affiliated with any organization.', 140, 0),
   ('H8', 'Private PKI operators', 'Organizations operating a private PKI governed by formal policies and practices.', 150, 0);
+
+UPDATE membership_categories SET is_individual = 1 WHERE code IN ('H5', 'H6', 'H7');
+UPDATE membership_categories SET requires_university_email = 1 WHERE code = 'H5';
 
 -- Engagement is part of several aggregate transactions. Retried or concurrent
 -- requests must not award the same domain action more than once. A nullable
@@ -100,6 +105,9 @@ CREATE INDEX idx_audit_log_scope
 
 CREATE INDEX idx_audit_log_created_at
   ON audit_log(created_at DESC, id);
+
+CREATE INDEX idx_audit_log_action
+  ON audit_log(action);
 
 -- Domain retries must not enqueue duplicate external side effects. Callers
 -- that can identify a one-shot notification provide this nullable key and a
@@ -644,7 +652,7 @@ SELECT
     ELSE 'inactive'
   END AS status,
   COUNT(*) AS source_count,
-  SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_source_count
+  SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END ) AS active_source_count
 FROM event_participant_role_sources
 GROUP BY event_id, user_id, role, subrole;
 
@@ -2364,7 +2372,7 @@ WHEN NOT EXISTS (
      NEW.organization_id IS NULL
      AND member.user_id = NEW.user_id
      AND member.member_type = 'individual'
-     AND category.category_code IN ('H5', 'H6', 'H7')
+     AND EXISTS (SELECT 1 FROM membership_categories catalog WHERE catalog.code = category.category_code AND catalog.is_individual = 1)
    )
 )
 BEGIN
@@ -2918,6 +2926,7 @@ INSERT INTO role_permissions (id, role_id, permission, created_at) VALUES
   (lower(hex(randomblob(16))), 'role-admin', 'groups:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email-templates:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  (lower(hex(randomblob(16))), 'role-admin', 'email-templates:manage', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'forms:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'forms:write', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   (lower(hex(randomblob(16))), 'role-admin', 'email:read', strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -3398,6 +3407,34 @@ CREATE TABLE membership_settings (
 
 INSERT INTO membership_settings (id, updated_at) VALUES ('default', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
+-- ── Email template sender ──────────────────────────────────────────
+-- A template may name its own sender. Left empty, a message goes out from
+-- the environment's configured address and name, as every message did
+-- before (issue 106).
+ALTER TABLE email_template_versions ADD COLUMN from_email TEXT;
+ALTER TABLE email_template_versions ADD COLUMN from_name TEXT;
+
+-- The message staff write to an applicant from the application record goes
+-- out through a template of its own, so its shell, greeting and sign-off are
+-- managed with the other application emails rather than hard-coded (issue
+-- 108). The subject is left to the message staff type; the template carries
+-- the body around it.
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status,
+   created_by_user_id, created_at, message_type)
+VALUES
+  (
+    lower(hex(randomblob(16))), 'application_request_information', 1,
+    NULL,
+    'Hi {{applicantName}},
+
+{{requestDetails}}
+
+You can reply to this email directly. Kind regards,
+The PKI Consortium',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+  );
+
 -- ── Email templates ────────────────────────────────────────────────
 -- 14 net-new templates wired to a trigger in this stage, plus
 -- existing-member-claim (seeded for schema completeness but not wired
@@ -3723,14 +3760,14 @@ INSERT INTO identities (
 )
 SELECT 'identity-' || member.id, member.user_id, NULL, NULL, NULL,
        user.biography, user.links_json, 'migration', 0, member.created_at,
-       CASE WHEN member.status = 'pending' THEN NULL ELSE member.created_at END,
-       CASE WHEN member.status IN ('inactive', 'lapsed') THEN member.updated_at ELSE NULL END,
+       CASE WHEN member.status = 'pending' THEN NULL ELSE member.created_at END ,
+       CASE WHEN member.status IN ('inactive', 'lapsed') THEN member.updated_at ELSE NULL END ,
        NULL, NULL, NULL, member.created_at, member.updated_at
   FROM members member
   JOIN users user ON user.id = member.user_id
   JOIN member_category_assignments category ON category.member_id = member.id
  WHERE member.member_type = 'individual'
-   AND category.category_code IN ('H5', 'H6', 'H7');
+   AND EXISTS (SELECT 1 FROM membership_categories catalog WHERE catalog.code = category.category_code AND catalog.is_individual = 1);
 
 -- An email is one global reservation whether it is primary, secondary, or
 -- pending verification. Application checks provide useful 409 responses;
@@ -4166,14 +4203,14 @@ SELECT lower(hex(randomblob(16))), 'consortium', s.organization_id, s.sponsorshi
          WHEN 'active' THEN 'active'
          WHEN 'pending' THEN 'new_inquiry'
          ELSE 'lapsed'
-       END,
+       END ,
        NULL,
        CASE WHEN s.data_json IS NOT NULL THEN
          json_object(
            'legacySponsorData',
            CASE WHEN json_valid(s.data_json) THEN json(s.data_json) ELSE s.data_json END
          )
-       ELSE NULL END,
+       ELSE NULL END ,
        s.created_at, s.updated_at
 FROM sponsors s
 WHERE NOT EXISTS (
@@ -4193,25 +4230,25 @@ INSERT INTO sponsorships
   (id, sponsor_type, organization_id, non_member_name, event_id, tier, pipeline_stage, start_date, notes,
    created_at, updated_at)
 SELECT lower(hex(randomblob(16))), 'event', s.organization_id,
-       CASE WHEN s.organization_id IS NULL THEN 'Legacy sponsor #' || se.sponsor_id ELSE NULL END,
+       CASE WHEN s.organization_id IS NULL THEN 'Legacy sponsor #' || se.sponsor_id ELSE NULL END ,
        se.event_id, se.sponsorship_level,
        CASE se.status
          WHEN 'active' THEN 'active'
          WHEN 'pending' THEN 'payment_pending'
          ELSE 'lapsed'
-       END,
+       END ,
        NULL,
        CASE
          WHEN s.data_json IS NOT NULL OR se.sponsorship_subject IS NOT NULL OR se.data_json IS NOT NULL THEN
            json_object(
              'legacySponsorData',
-             CASE WHEN json_valid(s.data_json) THEN json(s.data_json) ELSE s.data_json END,
+             CASE WHEN json_valid(s.data_json) THEN json(s.data_json) ELSE s.data_json END ,
              'legacySponsorshipSubject', se.sponsorship_subject,
              'legacyEventData',
              CASE WHEN json_valid(se.data_json) THEN json(se.data_json) ELSE se.data_json END
            )
          ELSE NULL
-       END,
+       END ,
        se.created_at, se.updated_at
 FROM sponsor_events se
 JOIN sponsors s ON s.id = se.sponsor_id
@@ -4467,6 +4504,9 @@ CREATE TABLE event_series (
   provider_type      TEXT,
   provider_data_json TEXT,
   active             INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+  calendar_revision  INTEGER NOT NULL DEFAULT 1,
+  calendar_through   TEXT,
+  calendar_checked_at TEXT,
   created_at         TEXT NOT NULL,
   updated_at         TEXT NOT NULL,
   FOREIGN KEY(event_id) REFERENCES events(id)
@@ -4479,6 +4519,7 @@ CREATE TABLE event_occurrences (
   id                         TEXT NOT NULL PRIMARY KEY,
   series_id                  TEXT NOT NULL,
   starts_at                  TEXT NOT NULL,
+  recurrence_id              TEXT,
   ends_at                    TEXT NOT NULL,
   status                     TEXT NOT NULL DEFAULT 'scheduled',
   -- allowed: scheduled | cancelled | completed
@@ -4492,9 +4533,16 @@ CREATE TABLE event_occurrences (
   invitations_round          INTEGER NOT NULL DEFAULT 0
                                CHECK (invitations_round >= 0),
   invitations_sent_at        TEXT,
+  -- The iCalendar SEQUENCE invited calendars hold for this occurrence. Every
+  -- invitation carries the occurrence as a calendar entry; the number is
+  -- bumped each time the occurrence is re-sent because it moved or was
+  -- called off, which is what tells a calendar the later entry supersedes
+  -- the one it has.
+  calendar_sequence          INTEGER NOT NULL DEFAULT 0,
   created_at                 TEXT NOT NULL,
   updated_at                 TEXT NOT NULL,
   UNIQUE (series_id, starts_at),
+  UNIQUE (series_id, recurrence_id),
   UNIQUE (id, series_id),
   FOREIGN KEY(series_id) REFERENCES event_series(id),
   CHECK (ends_at > starts_at)
@@ -4506,6 +4554,30 @@ CREATE INDEX idx_event_occurrences_series_status_start
   ON event_occurrences(series_id, status, starts_at, id);
 CREATE INDEX idx_event_occurrences_upcoming
   ON event_occurrences(status, starts_at, id);
+
+-- What an invited calendar answered about an occurrence. The invitation is
+-- an iTIP REQUEST with the consortium's signed RSVP address as organizer, so
+-- the accept or decline the calendar sends back is captured against the
+-- occurrence the way a conference registration's is. One row per
+-- (occurrence, attendee) holds the latest answer; a repeated delivery of the
+-- same reply changes nothing.
+CREATE TABLE event_occurrence_rsvps (
+  id                TEXT NOT NULL PRIMARY KEY,
+  occurrence_id     TEXT NOT NULL,
+  attendee_email    TEXT NOT NULL,
+  user_id           TEXT,
+  response_status   TEXT NOT NULL CHECK (response_status IN ('accepted', 'declined', 'tentative', 'bounced')),
+  provider          TEXT NOT NULL,
+  source_message_id TEXT,
+  received_at       TEXT NOT NULL,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL,
+  UNIQUE (occurrence_id, attendee_email),
+  FOREIGN KEY(occurrence_id) REFERENCES event_occurrences(id)
+);
+
+CREATE INDEX idx_event_occurrence_rsvps_occurrence_status
+  ON event_occurrence_rsvps(occurrence_id, response_status);
 
 CREATE TABLE event_occurrence_guests (
   id                 TEXT NOT NULL PRIMARY KEY,
@@ -4707,6 +4779,26 @@ For your protection, opening the invitation starts a separate verification step.
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (
+    lower(hex(randomblob(16))), 'meeting-series-invitation', 1,
+    '{{#if cancelled}}Canceled{{else}}{{#if isUpdate}}Meeting updated{{else}}Meeting calendar{{/if}}{{/if}}: {{eventName}}',
+    'Hi {{recipientName}},
+
+{{#if cancelled}}Your invitation to {{eventName}} has been canceled. The attached calendar cancellation removes the recurring invitation.{{else}}{{#if isUpdate}}The schedule for **{{eventName}}** has changed. Replace the previous calendar entry with the attached update.
+
+The next scheduled meeting starts at {{startsAt}} and lasts {{durationMinutes}} minutes. The series uses {{timezone}}{{#if location}} and meets at {{location}}{{/if}}.
+
+{{#each changedOccurrences}}
+- {{#if cancelled}}**Canceled:** {{startsAt}}.{{else}}{{#if moved}}**Rescheduled:** {{startsAt}} (original slot: {{originalStartsAt}}).{{else}}**Updated:** {{startsAt}}.{{/if}} Ends {{endsAt}}{{#if location}}, at {{location}}{{/if}}.{{/if}}
+{{/each}}
+
+{{else}}Your recurring calendar for {{eventName}} is attached.{{/if}} Accept or decline it in your calendar application; your response is recorded for the meeting. You can also respond to an individual occurrence.
+
+Occurrences are scheduled through year-end. Starting October 1, the calendar extends through the following year. Changes, cancellations, and extra dates arrive as updates to this same calendar.{{/if}}
+
+[Open the meeting]({{joinUrl}}) to see the schedule and join an occurrence. Sign in with the address that received this invitation.',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+  ),
+  (
     lower(hex(randomblob(16))), 'meeting-participant-invitation', 1,
     '{{eventName}}: your link for {{startsAt}}',
     'Hi {{recipientName}},
@@ -4730,6 +4822,40 @@ Enter this code in the same browser where you opened the meeting invitation:
 {{verificationCode}}
 
 This code expires at {{expiresAt}}. If you did not request it, you may ignore this email.',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+  ),
+  -- What a participant is told when a meeting they were invited to moves or
+  -- is called off. Both carry the calendar update that makes the change land
+  -- on the recipient's calendar without them doing anything.
+  (
+    lower(hex(randomblob(16))), 'meeting-occurrence-updated', 1,
+    'Updated: {{eventName}} on {{startsAt}}',
+    'Hi {{recipientName}},
+
+{{#if restored}}**Meeting restored:** {{eventName}} is scheduled again.{{else}}**Meeting updated:** {{eventName}}.{{/if}}
+
+{{#if timeChanged}}- **Previous time:** {{previousStartsAt}} to {{previousEndsAt}}.
+- **New time:** {{startsAt}} to {{endsAt}}.{{else}}- **Time:** {{startsAt}} to {{endsAt}}.{{/if}}
+{{#if locationChanged}}- **Previous location:** {{#if previousLocation}}{{previousLocation}}{{else}}Not specified{{/if}}.
+- **New location:** {{#if location}}{{location}}{{else}}Not specified{{/if}}.{{else}}{{#if location}}- **Location:** {{location}}.{{/if}}{{/if}}
+
+The calendar entry attached to this message replaces the one you were sent before; accepting it updates your calendar.
+
+[Join the meeting]({{joinUrl}})
+
+This link is yours. It opens in the portal, where signing in records that you
+attended and reveals the meeting destination — so it will not work for anybody
+else, and passing it on only sends them to their own sign-in.',
+    'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+  ),
+  (
+    lower(hex(randomblob(16))), 'meeting-occurrence-cancelled', 1,
+    'Cancelled: {{eventName}} on {{startsAt}}',
+    'Hi {{recipientName}},
+
+{{eventName}} on {{startsAt}} has been cancelled.
+
+The calendar entry attached to this message removes it from your calendar. {{#if seriesCancelled}}The entire meeting series has been canceled, including all upcoming occurrences.{{else}}Only this occurrence is canceled; other occurrences remain scheduled.{{/if}}',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   );
 
@@ -5119,7 +5245,7 @@ SELECT
   strftime('%Y-%m-%dT%H:%M:%fZ','now'),
   strftime('%Y-%m-%dT%H:%M:%fZ','now'),
   id,
-  CASE WHEN type_key = 'board' THEN 'board_meeting' ELSE 'meeting' END,
+  CASE WHEN type_key = 'board' THEN 'board_meeting' ELSE 'meeting' END ,
   'portal'
 FROM groups
 WHERE slug IN ('all-members', 'pqc', 'cbom', 'cm', 'tcwg', 'ca', 'pkimm');
@@ -6024,6 +6150,26 @@ When this identity is active, actions taken in that capacity are attributed to {
   'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
 );
 
+-- Profile reminders must never reuse the acceptance notification. A baseline
+-- makes delivery safe before optional template seeding or customization.
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type, r2_object_key,
+   checksum_sha256, status, created_by_user_id, created_at, message_type)
+VALUES (
+  lower(hex(randomblob(16))), 'speaker_profile_reminder', 1,
+  'Please review your speaker profile — {{eventName}}',
+  '{{#if eq proposalDecisionStatus "accepted"}}Your session **{{proposalTitle}}** has been accepted for **{{eventName}}**. Please review your speaker profile so we can prepare the program.{{else}}
+{{#if eq proposalDecisionStatus "waitlisted"}}Your proposal **{{proposalTitle}}** is on the waitlist for **{{eventName}}**. Please review your speaker profile while we check program availability. This reminder does not confirm a place in the program.{{else}}
+{{#if eq proposalDecisionStatus "needs-work"}}Updates are requested for your proposal **{{proposalTitle}}** for **{{eventName}}**. Please address the committee''s feedback and review your speaker profile. The proposal has not been accepted.{{else}}Your proposal **{{proposalTitle}}** is awaiting a decision for **{{eventName}}**. Please review your speaker profile to help the committee assess the submission. This reminder is not an acceptance.{{/if}}
+{{/if}}
+{{/if}}
+
+{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please check that your biography and headshot are up to date.{{/if}}
+
+[Review my speaker profile]({{profileUrl}})',
+  'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+);
+
 -- Email rendering has one canonical active version per template. Normalize any
 -- branch-local duplicate active rows before enforcing the invariant; this is an
 -- in-place status correction and does not rebuild the table.
@@ -6112,14 +6258,14 @@ CREATE INDEX idx_scheduled_jobs_paused
 INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
   ('due_work',                  900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('on_hold_due_work',          900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('ec_auto_approve',           900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('google_groups_sync',        900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('sponsorship_due_work',    86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('votes_due_work',            900, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('retention',               86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('consultation_batch',      86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('ec_review_batch',         86400, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-  ('working_group_chair_digest', 604800, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+  ('working_group_chair_digest', 604800, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  -- Reconciles one recurring calendar per group member, including schedule
+  -- revisions, membership changes, and October renewal through the next year.
+  ('meeting_invitations',       60, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 -- ── Google Groups observed membership ────────────────────────────────────
 --
@@ -6472,3 +6618,248 @@ CREATE TABLE member_news_articles (
 CREATE INDEX idx_member_news_articles_date ON member_news_articles(published_at DESC, organization_id, url);
 INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at)
 VALUES ('member_news_refresh', 300, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+
+-- Reviewed campaign audiences are materialized in D1; bounded scheduler passes
+-- populate the durable outbox without a per-request audience ceiling.
+CREATE TABLE event_email_campaigns (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  input_json TEXT NOT NULL,
+  app_base_url TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  status TEXT NOT NULL,
+  recipient_count INTEGER NOT NULL DEFAULT 0,
+  cursor_email TEXT NOT NULL DEFAULT '',
+  processed_count INTEGER NOT NULL DEFAULT 0,
+  queued_recipients INTEGER NOT NULL DEFAULT 0,
+  queued_batches INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_event_email_campaigns_pending ON event_email_campaigns(status, updated_at, id);
+CREATE INDEX idx_event_email_campaigns_expiry ON event_email_campaigns(status, expires_at);
+CREATE TABLE event_email_campaign_recipients (
+  campaign_id TEXT NOT NULL REFERENCES event_email_campaigns(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  PRIMARY KEY (campaign_id, email)
+);
+INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at)
+VALUES ('event_email_campaigns', 60, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- One durable calendar subscription per meeting and invited address.
+CREATE TABLE event_series_calendar_deliveries (
+  series_id TEXT NOT NULL REFERENCES event_series(id) ON DELETE CASCADE,
+  recipient_email TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  recipient_name TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  sequence INTEGER NOT NULL,
+  cancelled INTEGER NOT NULL DEFAULT 0,
+  sent_at TEXT NOT NULL,
+  PRIMARY KEY (series_id, recipient_email)
+);
+CREATE TABLE event_series_rsvps (
+  series_id TEXT NOT NULL REFERENCES event_series(id) ON DELETE CASCADE,
+  attendee_email TEXT NOT NULL,
+  response_status TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  source_message_id TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  PRIMARY KEY (series_id, attendee_email)
+);
+CREATE INDEX idx_event_series_calendar_checked ON event_series(active, calendar_checked_at, id);
+CREATE VIEW meeting_occurrence_invitations AS
+  SELECT occurrence.id AS occurrence_id, delivery.user_id, delivery.recipient_email,
+         delivery.recipient_name, delivery.sent_at
+    FROM event_occurrences occurrence
+    JOIN event_series_calendar_deliveries delivery ON delivery.series_id = occurrence.series_id
+   WHERE delivery.cancelled = 0
+  UNION ALL
+  SELECT occurrence.id, invited.recipient_user_id, invited.recipient_email,
+         COALESCE(json_extract(invited.payload_json, '$.recipientName'), invited.recipient_email), invited.created_at
+    FROM event_occurrences occurrence JOIN email_outbox invited
+      ON instr(invited.idempotency_key, 'meeting-participant-invitation:' || occurrence.id || ':') = 1;
+
+-- Section: Versioned membership workflows and evidence (issue 84)
+-- Published definitions are immutable; drafts change through revision guards.
+CREATE TABLE membership_workflows (
+  id TEXT NOT NULL PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE membership_workflow_versions (
+  id TEXT NOT NULL PRIMARY KEY,
+  workflow_id TEXT NOT NULL REFERENCES membership_workflows(id),
+  version INTEGER NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 0,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  definition_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  published_at TEXT,
+  published_by_user_id TEXT REFERENCES users(id),
+  UNIQUE(workflow_id, version)
+);
+CREATE INDEX idx_membership_workflow_versions_catalog ON membership_workflow_versions(status, name, id);
+CREATE TRIGGER membership_workflow_versions_published_update
+BEFORE UPDATE ON membership_workflow_versions WHEN OLD.published_at IS NOT NULL
+BEGIN SELECT RAISE(ABORT, 'PUBLISHED_MEMBERSHIP_WORKFLOW_IMMUTABLE'); END;
+CREATE TRIGGER membership_workflow_versions_published_delete
+BEFORE DELETE ON membership_workflow_versions WHEN OLD.published_at IS NOT NULL
+BEGIN SELECT RAISE(ABORT, 'PUBLISHED_MEMBERSHIP_WORKFLOW_IMMUTABLE'); END;
+
+ALTER TABLE membership_categories ADD COLUMN retired_at TEXT;
+ALTER TABLE membership_categories ADD COLUMN workflow_version_id TEXT REFERENCES membership_workflow_versions(id);
+
+-- One execution per application. Version changes require an explicit preview
+-- and a new generation; the old generation retains its evidence and fees.
+CREATE TABLE membership_application_workflows (
+  application_id TEXT NOT NULL REFERENCES member_applications(id),
+  generation INTEGER NOT NULL,
+  version_id TEXT NOT NULL REFERENCES membership_workflow_versions(id),
+  category_code TEXT NOT NULL REFERENCES membership_categories(code),
+  category_revision INTEGER NOT NULL,
+  current_position INTEGER NOT NULL DEFAULT 0,
+  revision INTEGER NOT NULL DEFAULT 0,
+  next_evaluation_at TEXT,
+  created_at TEXT NOT NULL,
+  superseded_at TEXT,
+  PRIMARY KEY(application_id, generation)
+);
+CREATE UNIQUE INDEX uq_membership_application_workflows_current
+ON membership_application_workflows(application_id) WHERE superseded_at IS NULL;
+CREATE INDEX idx_membership_application_workflows_due
+ON membership_application_workflows(next_evaluation_at, application_id) WHERE superseded_at IS NULL;
+CREATE TABLE membership_application_steps (
+  application_id TEXT NOT NULL,
+  generation INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  step_id TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'waiting',
+  notice_outbox_id TEXT REFERENCES email_outbox(id),
+  opened_at TEXT,
+  deadline_at TEXT,
+  completed_at TEXT,
+  completed_by_user_id TEXT REFERENCES users(id),
+  completion_reason TEXT,
+  PRIMARY KEY(application_id, generation, position),
+  FOREIGN KEY(application_id, generation) REFERENCES membership_application_workflows(application_id, generation)
+);
+CREATE TABLE membership_application_objections (
+  id TEXT NOT NULL PRIMARY KEY,
+  application_id TEXT NOT NULL,
+  generation INTEGER NOT NULL,
+  step_position INTEGER NOT NULL,
+  author_user_id TEXT REFERENCES users(id),
+  recorded_by_user_id TEXT REFERENCES users(id),
+  body TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'unresolved',
+  resolution_reason TEXT,
+  resolved_by_user_id TEXT REFERENCES users(id),
+  resolved_at TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(application_id, generation, step_position) REFERENCES membership_application_steps(application_id, generation, position)
+);
+CREATE INDEX idx_membership_application_objections_open
+ON membership_application_objections(application_id, state, step_position);
+CREATE TABLE membership_fee_intents (
+  id TEXT NOT NULL PRIMARY KEY,
+  application_id TEXT NOT NULL,
+  generation INTEGER NOT NULL,
+  step_position INTEGER NOT NULL,
+  category_code TEXT NOT NULL REFERENCES membership_categories(code),
+  version_id TEXT NOT NULL REFERENCES membership_workflow_versions(id),
+  fee_reference TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  deadline_at TEXT NOT NULL,
+  checkout_session_id TEXT UNIQUE,
+  checkout_url TEXT,
+  payment_intent_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  paid_at TEXT,
+  handling_required INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(application_id, generation, step_position),
+  FOREIGN KEY(application_id, generation, step_position) REFERENCES membership_application_steps(application_id, generation, position)
+);
+-- Durable provider-effect owner; the fee id is also the Stripe idempotency key.
+CREATE TABLE membership_fee_checkout_outbox (
+  fee_id TEXT NOT NULL PRIMARY KEY REFERENCES membership_fee_intents(id),
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT NOT NULL,
+  lease_token TEXT,
+  lease_expires_at TEXT,
+  completed_at TEXT,
+  last_error TEXT
+);
+CREATE INDEX idx_membership_fee_checkout_outbox_due ON membership_fee_checkout_outbox(next_attempt_at)
+WHERE completed_at IS NULL;
+CREATE TABLE membership_fee_events (
+  provider_event_id TEXT NOT NULL PRIMARY KEY,
+  fee_id TEXT NOT NULL REFERENCES membership_fee_intents(id),
+  event_type TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- The current policy remains free of fees. Future fee workflows require publication.
+INSERT INTO membership_workflows (id, created_at)
+VALUES ('00000000000040008000000000000083', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+INSERT INTO membership_workflow_versions
+(id, workflow_id, version, revision, name, status, definition_json, created_at, published_at)
+VALUES ('00000000000040008000000000000084', '00000000000040008000000000000083', 1, 0,
+'Standard membership', 'published', '{"name":"Standard membership","policyReference":"PKI Consortium bylaws: admission of members","steps":[{"id":"00000000000040008000000000000085","label":"Staff review","kind":"staff_review","instructions":"Staff review the application form, organization information, and representative authority.","reviewerGroupId":null},{"id":"00000000000040008000000000000086","label":"Member consultation","kind":"consensus","instructions":"Active voting members have seven days after notice is sent to raise an objection.","audience":{"kind":"active_voting_members"},"destination":{"kind":"external","email":"consultation@lists.pkic.org"},"durationDays":7,"objectionHandling":"hold_for_resolution"},{"id":"00000000000040008000000000000087","label":"Executive Council review","kind":"consensus","instructions":"The Executive Council has seven days after notice is sent to raise an objection.","audience":{"kind":"executive_council"},"destination":{"kind":"external","email":"ec@lists.pkic.org"},"durationDays":7,"objectionHandling":"hold_for_resolution"}]}',
+strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+UPDATE membership_categories SET workflow_version_id = '00000000000040008000000000000084';
+
+INSERT OR IGNORE INTO email_template_versions
+  (id, template_key, version, subject_template, body, content_type, r2_object_key, checksum_sha256, status, created_by_user_id, created_at, message_type)
+VALUES (
+  lower(hex(randomblob(16))), 'membership-workflow-review', 1,
+  '{{stepLabel}}: {{applicationName}}',
+  '# {{stepLabel}}
+
+Please review the membership application from **{{applicationName}}**, submitted by {{applicantName}}.
+
+{{instructions}}
+
+Eligible reviewers have {{durationDays}} days after this notice is sent to respond. The review page shows the exact deadline and current requirements.
+
+{{#each objections}}
+> **{{author}}:** {{body}}
+
+{{/each}}
+[Read the application and respond]({{reviewUrl}})
+
+Receiving this notice does not grant review permission. Sign in with your own account; eligibility is checked when you respond.',
+  'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
+);
+
+-- Checkout sessions expire before some membership deadlines. Keep every
+-- attempt associated with its fee so delayed callbacks remain attributable.
+CREATE TABLE membership_fee_checkouts (
+  request_params TEXT,
+  id TEXT NOT NULL PRIMARY KEY,
+  fee_id TEXT NOT NULL REFERENCES membership_fee_intents(id),
+  provider_session_id TEXT UNIQUE,
+  checkout_url TEXT,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX idx_membership_fee_checkouts_fee ON membership_fee_checkouts(fee_id, created_at, id);
+
+INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
+  ('membership_workflows', 60, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('membership_fee_checkouts', 60, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- Group owners may pause provider synchronization without losing subscription intent.
+CREATE TABLE group_mailing_sync_settings (
+  group_id TEXT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  revision INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);

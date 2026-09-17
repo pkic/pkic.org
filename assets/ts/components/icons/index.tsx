@@ -11,7 +11,7 @@
  * belongs to the parent — `pk-btn` and `pk-cluster` are both flex with a
  * `gap` — so a margin here would be a second, disagreeing decision.
  */
-import type { JSX } from "preact";
+import type { ComponentChildren, JSX } from "preact";
 
 type SvgProps = Omit<JSX.SVGAttributes<SVGSVGElement>, "xmlns" | "viewBox" | "fill">;
 
@@ -328,6 +328,150 @@ export function IconCalendarCheck(props: SvgProps) {
       {...props}
     >
       <path d="M4 .5a.5.5 0 0 0-1 0V1H2a2 2 0 0 0-2 2v1h16V3a2 2 0 0 0-2-2h-1V.5a.5.5 0 0 0-1 0V1H4zM16 14V5H0v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2m-5.146-5.146-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 0 1 .708-.708L7.5 10.793l2.646-2.647a.5.5 0 0 1 .708.708" />
+    </svg>
+  );
+}
+
+// ── Text formatting ─────────────────────────────────────────────────────────
+//
+// The Markdown editor's toolbar (issue 114): one glyph per command, drawn as
+// strokes on the same 16px grid, so a row of twelve takes the room a row of
+// four words took. Each is decorative — the button around it carries the
+// command's name — and inherits the button's ink.
+
+function StrokeIcon({ children, ...props }: SvgProps & { children: ComponentChildren }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function IconHeading(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M4 3v10M12 3v10M4 8h8" />
+    </StrokeIcon>
+  );
+}
+
+export function IconBold(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M5 3h4.25a2.5 2.5 0 0 1 0 5H5zM5 8h5a2.5 2.5 0 0 1 0 5H5z" />
+    </StrokeIcon>
+  );
+}
+
+export function IconItalic(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M7 3h5M4 13h5M10 3l-4 10" />
+    </StrokeIcon>
+  );
+}
+
+export function IconQuote(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M3 3v10M7 5h6M7 8h6M7 11h4" />
+    </StrokeIcon>
+  );
+}
+
+export function IconCode(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M6 4 2 8l4 4M10 4l4 4-4 4" />
+    </StrokeIcon>
+  );
+}
+
+export function IconBulletList(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M6.5 4h7M6.5 8h7M6.5 12h7" />
+      <circle cx="3" cy="4" r="1" fill="currentColor" stroke="none" />
+      <circle cx="3" cy="8" r="1" fill="currentColor" stroke="none" />
+      <circle cx="3" cy="12" r="1" fill="currentColor" stroke="none" />
+    </StrokeIcon>
+  );
+}
+
+export function IconNumberedList(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M7 4h7M7 8h7M7 12h7" />
+      <path d="M2.2 3.2 3.4 2.5v4M2.2 8.6a1.2 1.2 0 1 1 2.1.8L2.2 11.5h2.4" stroke-width="1.2" />
+    </StrokeIcon>
+  );
+}
+
+export function IconUndo(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M3 6h7a3 3 0 0 1 0 6H6M5.5 3.5 3 6l2.5 2.5" />
+    </StrokeIcon>
+  );
+}
+
+export function IconRedo(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M13 6H6a3 3 0 0 0 0 6h4M10.5 3.5 13 6l-2.5 2.5" />
+    </StrokeIcon>
+  );
+}
+
+/** The Markdown source view: the document behind the canvas. */
+export function IconSource(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <path d="M4 2h5.5L13 5.5V14H4zM9.5 2v3.5H13M6 8.5h4M6 11h4" />
+    </StrokeIcon>
+  );
+}
+
+export function IconBraces() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      aria-hidden="true"
+    >
+      <path d="M8 3H6v6l-3 3 3 3v6h2M16 3h2v6l3 3-3 3v6h-2" />
+    </svg>
+  );
+}
+export function IconLayers() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      aria-hidden="true"
+    >
+      <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
     </svg>
   );
 }

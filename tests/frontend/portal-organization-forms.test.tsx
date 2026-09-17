@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
+vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
+  useMembershipCategoryCatalog: () => exampleMembershipCategories,
+}));
 /**
  * The organization create and profile forms.
  *
@@ -32,6 +36,7 @@ import {
   OrganizationMembershipCard,
 } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
+import { markdownControl } from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
 
@@ -439,7 +444,7 @@ describe("portal organization profile", () => {
     expect(controlFor(container, "Member since").type).toBe("date");
     expect(controlFor<HTMLSelectElement>(container, "Category").tagName).toBe("SELECT");
     expect(controlFor<HTMLSelectElement>(container, "Primary contact").tagName).toBe("SELECT");
-    expect(controlFor<HTMLTextAreaElement>(container, "Description").tagName).toBe("TEXTAREA");
+    expect((await markdownControl(container, "Description")).closest(".pk-markdown-editor")).not.toBeNull();
 
     await typeInto(controlFor(container, "Slogan"), "Trust, verified");
     await typeInto(controlFor(container, "Blog"), "https://example.test/blog");

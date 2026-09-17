@@ -33,7 +33,7 @@ export function prepareGroupEventRegistrationGuard(
               ON registration_group.id = ? AND registration_group.active = 1
            WHERE event.id = ?
              AND event.owner_group_id IS NOT NULL
-             AND event.registration_mode <> 'no_registration'
+             AND event.registration_mode NOT IN ('no_registration', 'automatic')
              AND EXISTS (
                SELECT 1
                  FROM group_memberships membership

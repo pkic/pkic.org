@@ -27,7 +27,10 @@ const CATEGORIES: MembershipCategoryCatalogEntry[] = [
     description: null,
     displayOrder: 60,
     isIndividual: false,
+    requiresUniversityEmail: false,
     isVoting: true,
+    active: true,
+    workflowVersionId: null,
     revision: 0,
     updatedAt: NOW,
   },
@@ -41,7 +44,8 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     organizationName: "Example Organization",
     membershipCategory: "F",
     membershipCategoryLabel: "General Member",
-    stage: "ec_review",
+    currentRequirement: "Review the application form",
+    stage: "processing",
     onHoldSubtype: null,
     assignedToUserId: null,
     createdAt: NOW,
@@ -51,10 +55,8 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     requestedWorkingGroups: [],
     events: [],
     communications: [],
-    concerns: [],
-    ecDecisions: [],
     ...overrides,
-  } as MembershipApplicationDetail;
+  };
 }
 
 let container: HTMLElement | null = null;
@@ -98,7 +100,6 @@ function mountCard(props: Partial<Parameters<typeof ApplicationOverviewCard>[0]>
     <ApplicationOverviewCard
       detail={detail()}
       categories={CATEGORIES}
-      canWrite
       onSave={vi.fn(async () => undefined)}
       {...props}
     />,
@@ -136,7 +137,7 @@ describe("membership application overview card", () => {
     expect(valueOf(page, "Category").textContent).toContain("(F)");
     // The stage is a pill whose word says the stage, so the tone is not the
     // only thing carrying it.
-    expect(valueOf(page, "Stage").textContent).toBe("EC review");
+    expect(valueOf(page, "Stage").textContent).toBe("Processing");
 
     // It is a list, not a grid: as an unnamed table it was announced as one.
     expect(page.querySelector("table")).toBeNull();
@@ -160,41 +161,37 @@ describe("membership application overview card", () => {
     expect(valueOf(page, "On-hold reason").textContent).toBe("request_information");
   });
 
-  it("offers no edit control to a reader without write access", () => {
-    const page = mountCard({ canWrite: false });
+  it("carries no edit control of its own: editing is the record's command, never open by default", () => {
+    const page = mountCard();
 
     expect(buttonNames(page)).not.toContain("Edit");
+    expect(page.querySelector("dl")).not.toBeNull();
   });
 
-  it("explains why editing is unavailable instead of offering a dead control", () => {
-    const page = mountCard({ categories: [] });
-
-    expect(buttonNames(page)).not.toContain("Edit");
-    expect(page.textContent).toContain("Editing needs the membership categories, which are not available.");
-  });
-
-  it("swaps the summary for the editor and back again without saving", async () => {
+  it("shows the editor when the record asks for it and hands cancelling back without saving", async () => {
     const onSave = vi.fn(async () => undefined);
-    const page = mountCard({ onSave });
+    const onEditingChange = vi.fn();
+    const page = mountCard({ onSave, editing: true, onEditingChange });
+    await settle();
 
-    await act(() => buttonNamed(page, "Edit").click());
     expect(page.querySelector("dl")).toBeNull();
     expect(labelNames(page)).toContain("Applicant name");
     expect(controlFor(page, "Applicant name").value).toBe("Example Applicant");
 
     await act(() => buttonNamed(page, "Cancel").click());
     expect(onSave).not.toHaveBeenCalled();
-    expect(valueOf(page, "Applicant name").textContent).toBe("Example Applicant");
+    expect(onEditingChange).toHaveBeenCalledWith(false);
   });
 
   it("keeps the editor open and announces the refusal when the save is rejected", async () => {
     const page = mountCard({
+      editing: true,
       onSave: vi.fn(async () => {
         throw new Error("HTTP 403");
       }),
     });
+    await settle();
 
-    await act(() => buttonNamed(page, "Edit").click());
     await typeInto(controlFor(page, "Applicant name"), "Corrected Applicant");
     await act(async () => {
       page.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

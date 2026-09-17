@@ -1,44 +1,32 @@
-import { useState } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { formatDateTime } from "../../../shared/ui";
 import { DetailsSummary } from "../../../components/DetailsSummary";
 import { EntityLink } from "../../../components/EntityLink";
-import { auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
-import { Button } from "../../../ui/Button";
+import { USER_BACKED_AUDIT_ACTOR_TYPES, auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
 import { PageHeader } from "../../../ui/PageHeader";
-import { TextInput } from "../../../ui/TextControl";
 import { portalEntityHref } from "../entity-links";
 import "../../../ui/Content.css";
+import { useColumnFilterOptions } from "../../../hooks/useColumnFilterOptions";
 
-interface AuditFilters {
-  entityType: string;
-  actorType: string;
-  action: string;
-}
+/**
+ * Who can act: the user-backed kinds the contract names, and the system
+ * itself. A closed vocabulary, so the column offers it as choices; the entity
+ * type and action choices come from bounded, paged audit-log queries.
+ */
+const ACTOR_TYPE_OPTIONS = [
+  { value: "", label: "All actors" },
+  ...USER_BACKED_AUDIT_ACTOR_TYPES.map((actorType) => ({ value: actorType, label: actorLabel(actorType) })),
+  { value: "system", label: "System" },
+];
 
-const EMPTY_FILTERS: AuditFilters = { entityType: "", actorType: "", action: "" };
-
-function AuditFilterInput({
-  name,
-  label,
-  placeholder,
-}: {
-  name: keyof AuditFilters;
-  label: string;
-  placeholder: string;
-}) {
-  return (
-    // The filters share the toolbar's one row, so — like every FilterSelect
-    // beside them across the portal — each keeps its name in `aria-label`
-    // rather than growing a stacked visible label of its own.
-    <TextInput name={name} type="search" aria-label={label} placeholder={placeholder} class="portal-audit-filter" />
-  );
+function actorLabel(actorType: string): string {
+  return actorType.charAt(0).toUpperCase() + actorType.slice(1);
 }
 
 export function SystemAuditLog() {
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-
+  const actionFilter = useColumnFilterOptions("/api/v1/audit-log/filters", "action", "All actions");
+  const entityFilter = useColumnFilterOptions("/api/v1/audit-log/filters", "entityType", "All entity types");
   return (
     // Its own page under Settings, so it heads itself; the tab strip that
     // used to name it has gone with the hub it belonged to.
@@ -53,45 +41,6 @@ export function SystemAuditLog() {
         resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="action, entity, details…"
-        params={{
-          ...(filters.entityType && { entityType: filters.entityType }),
-          ...(filters.actorType && { actorType: filters.actorType }),
-          ...(filters.action && { action: filters.action }),
-        }}
-        toolbar={({ resetPage }) => (
-          <form
-            class="pk-cluster"
-            aria-label="Audit log filters"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              setFilters({
-                entityType: String(data.get("entityType") ?? "").trim(),
-                actorType: String(data.get("actorType") ?? "").trim(),
-                action: String(data.get("action") ?? "").trim(),
-              });
-              resetPage();
-            }}
-          >
-            <AuditFilterInput name="entityType" label="Entity type" placeholder="Entity type" />
-            <AuditFilterInput name="actorType" label="Actor type" placeholder="Actor type" />
-            <AuditFilterInput name="action" label="Action" placeholder="Action" />
-            <Button type="submit" variant="secondary">
-              Apply
-            </Button>
-            <Button
-              type="reset"
-              variant="link"
-              size="sm"
-              onClick={() => {
-                setFilters(EMPTY_FILTERS);
-                resetPage();
-              }}
-            >
-              Clear
-            </Button>
-          </form>
-        )}
         columns={[
           {
             // A timestamp has a bounded length; the column says so instead of
@@ -124,18 +73,25 @@ export function SystemAuditLog() {
             ),
             className: "pk-small",
             sort: { asc: "actor", desc: "-actor" },
+            // The filters are the columns' own, as on every other list: the
+            // page used to grow three loose inputs and an Apply/Clear pair in
+            // the toolbar, a second filter vocabulary beside the one the
+            // table already has.
+            filter: { param: "actorType", options: ACTOR_TYPE_OPTIONS },
           },
           {
             header: "Action",
             cell: (entry) => <code class="pk-small">{entry.action}</code>,
             width: "fit",
             sort: { asc: "action", desc: "-action" },
+            filter: actionFilter,
           },
           {
             header: "Entity",
             cell: (entry) => <Badge status={entry.entity_type} label={entry.entity_type} />,
             width: "fit",
             sort: { asc: "entity_type", desc: "-entity_type" },
+            filter: entityFilter,
           },
           {
             header: "Entity ID",

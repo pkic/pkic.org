@@ -1,22 +1,24 @@
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
 import { buildPersonalCampaignTemplateData } from "./event-email-campaign/template-data";
 import { chunkRecipients } from "./event-email-campaign/batching";
 import { findBroadcastOnlyTemplateRefs } from "./event-email-campaign/broadcast-safety";
-import type { EventEmailCampaignInput, PreparedEventEmailCampaign } from "./event-email-campaign/types";
+import type { EventEmailCampaignInput, CampaignDeliveryPage } from "./event-email-campaign/types";
 
-/** Builds and atomically queues every outbox row for a validated campaign. */
-export async function queueEventEmailCampaign(
+/** Builds a bounded outbox page for the campaign use case to commit with its cursor. */
+export async function prepareEventEmailCampaignPage(
   db: DatabaseLike,
   event: EventRecord,
   appBaseUrl: string,
   input: EventEmailCampaignInput,
-  campaign: PreparedEventEmailCampaign,
-): Promise<{ queuedRecipients: number; queuedBatches: number }> {
+  campaign: CampaignDeliveryPage,
+  campaignId: string,
+  condition: { sql: string; bindings: unknown[] },
+): Promise<{ queuedRecipients: number; queuedBatches: number; statements: StatementLike[] }> {
   const { template, messageType, recipients } = campaign;
   const templateKey = input.bodyContent
     ? input.templateKey || DIRECT_EMAIL_TEMPLATE_KEY
@@ -51,6 +53,8 @@ export async function queueEventEmailCampaign(
             ).manageUrl
           : undefined;
       rows.push({
+        outboxId: `${campaignId}:${recipient.email}`,
+        idempotencyKey: `event-campaign:${campaignId}:${recipient.email}`,
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
@@ -74,6 +78,8 @@ export async function queueEventEmailCampaign(
       const to = chunk[0];
       if (!to) continue;
       rows.push({
+        outboxId: `${campaignId}:${to.email}`,
+        idempotencyKey: `event-campaign:${campaignId}:${to.email}`,
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,
@@ -95,7 +101,8 @@ export async function queueEventEmailCampaign(
     }
   }
 
-  const statements = prepareBulkQueueEmailChunkStatements(db, rows).map((chunk) => chunk.statement);
-  if (statements.length > 0) await db.batch(statements);
-  return { queuedRecipients, queuedBatches };
+  const statements = prepareBulkQueueEmailChunkStatements(db, rows, undefined, condition).map(
+    (chunk) => chunk.statement,
+  );
+  return { queuedRecipients, queuedBatches, statements };
 }

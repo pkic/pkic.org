@@ -77,6 +77,10 @@
     gap: var(--pk-gap, var(--pk-3));
   }
 
+  .pk-cluster--nowrap {
+    flex-wrap: nowrap;
+  }
+
   /*
    * A form column.
    *
@@ -142,6 +146,20 @@
   }
 
   /*
+   * Content cards: the row divides its width among the cards it holds — one
+   * card takes the row, two take half each, three a third — and wraps at
+   * three across. `auto-fill` would keep empty tracks for one or two cards
+   * and squeeze five onto one line; `auto-fit` with a third of the row as
+   * the floor does neither (issue 111).
+   */
+  .pk-grid--cards {
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(max(16rem, calc((100% - 2 * var(--pk-gap, var(--pk-4))) / 3)), 100%), 1fr)
+    );
+  }
+
+  /*
    * A row of small figures that stays a row.
    *
    * `pk-grid` sizes tracks from a minimum and folds to one column when the
@@ -155,6 +173,23 @@
   .pk-figure-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--pk-gap, var(--pk-3));
+  }
+
+  /*
+   * A row of stat cards that uses the width it has.
+   *
+   * `pk-grid` is `auto-fill`: it lays as many minimum-width tracks as fit
+   * and leaves the spare ones empty, which is right for a gallery of cards
+   * and wrong for five figures — they took five of eight tracks and the
+   * right third of the panel was dead (issue 110). `auto-fit` collapses the
+   * tracks nothing occupies, so the cards divide the row between them: five
+   * take a fifth each, eight wrap at the minimum. The minimum is a figure's
+   * width, not a card's, so the row stays a row on a laptop.
+   */
+  .pk-stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--pk-stat-min, 9.5rem), 100%), 1fr));
     gap: var(--pk-gap, var(--pk-3));
   }
 
@@ -198,7 +233,6 @@
     flex: 2 1 40rem;
     min-width: 0;
   }
-
 
   /*
    * A record page: the record itself takes the width, a supporting column

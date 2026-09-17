@@ -1,36 +1,113 @@
 @layer components {
+  /*
+   * A small card for one figure.
+   *
+   * At rest it is a quiet tile: a sunk ground and a hairline, so a row of
+   * them reads as a summary rather than as loose numbers on the panel, and
+   * so it sits inside a panel or on the canvas without a second frame. A
+   * card with a tone borrows the Badge's exact treatment — soft ground, a
+   * dot beside the label, the tone's ink on the figure — so the figure and
+   * the badge for the same state are recognisably the same colour, and a
+   * figure that is only a count carries no colour at all (issue 110).
+   */
   .pk-stat-card {
+    --tone: var(--pk-ink-muted);
+    --tone-ink: var(--pk-ink);
+    --tone-soft: var(--pk-surface-sunk);
+    --tone-line: var(--pk-line-soft);
     display: flex;
     flex-direction: column;
+    gap: var(--pk-1);
+    min-width: 0;
+    padding: var(--pk-3) var(--pk-4);
+    border: 1px solid var(--tone-line);
+    border-radius: var(--pk-radius);
+    background: var(--tone-soft);
+  }
+
+  .pk-stat-card--ok,
+  .pk-stat-card--warn,
+  .pk-stat-card--danger,
+  .pk-stat-card--info,
+  .pk-stat-card--accent {
+    --tone-line: color-mix(in srgb, var(--tone) 25%, transparent);
+  }
+
+  .pk-stat-card--ok {
+    --tone: var(--pk-ok);
+    --tone-ink: var(--pk-ok-ink);
+    --tone-soft: var(--pk-ok-soft);
+  }
+  .pk-stat-card--warn {
+    --tone: var(--pk-warn);
+    --tone-ink: var(--pk-warn-ink);
+    --tone-soft: var(--pk-warn-soft);
+  }
+  .pk-stat-card--danger {
+    --tone: var(--pk-danger);
+    --tone-ink: var(--pk-danger-ink);
+    --tone-soft: var(--pk-danger-soft);
+  }
+  .pk-stat-card--info {
+    --tone: var(--pk-info);
+    --tone-ink: var(--pk-info-ink);
+    --tone-soft: var(--pk-info-soft);
+  }
+  .pk-stat-card--accent {
+    --tone: var(--pk-accent);
+    --tone-ink: var(--pk-accent-ink);
+    --tone-soft: var(--pk-accent-soft);
+  }
+  /* `neutral` is the tone for "a state that is nothing to act on" — a count
+     of zero waitlisted — and looks like the untoned card on purpose. */
+  .pk-stat-card--neutral {
+    --tone: var(--pk-ink-muted);
+    --tone-ink: var(--pk-ink-muted);
   }
 
   .pk-stat-card__label {
+    min-width: 0;
     font-size: var(--pk-text-2xs);
     font-weight: 600;
     letter-spacing: var(--pk-tracking-label);
+    line-height: 1.3;
     color: var(--pk-ink-muted);
     text-transform: uppercase;
-    margin-bottom: var(--pk-2);
+    /* A long label wraps to a second line; it is never cut short, since the
+       label is what says what the figure counts. */
+    overflow-wrap: anywhere;
+  }
+
+  /* The Badge's dot, on the label of a card that has a state to report. */
+  .pk-stat-card--ok .pk-stat-card__label::before,
+  .pk-stat-card--warn .pk-stat-card__label::before,
+  .pk-stat-card--danger .pk-stat-card__label::before,
+  .pk-stat-card--info .pk-stat-card__label::before,
+  .pk-stat-card--accent .pk-stat-card__label::before,
+  .pk-stat-card--neutral .pk-stat-card__label::before {
+    content: "";
+    display: inline-block;
+    width: 0.375rem;
+    height: 0.375rem;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+    border-radius: 50%;
+    background: var(--tone);
   }
 
   .pk-stat-card__value {
-    font-size: var(--pk-text-3xl);
-    font-weight: 900;
+    font-size: var(--pk-text-2xl);
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
-    color: var(--pk-ink);
-    line-height: 1.2;
-    margin-bottom: var(--pk-2);
-  }
-
-  @media (max-width: 30rem) {
-    .pk-stat-card__value {
-      font-size: var(--pk-text-2xl);
-    }
+    letter-spacing: -0.01em;
+    color: var(--tone-ink);
+    line-height: 1.15;
   }
 
   .pk-stat-card__note {
     font-size: var(--pk-text-xs);
     line-height: 1.35;
+    color: var(--pk-ink-muted);
   }
 
   .pk-stat-card__note--up {
@@ -67,7 +144,7 @@
   }
 
   .pk-stat-card--link:hover {
-    border-color: var(--pk-accent);
+    border-color: var(--tone);
   }
 
   .pk-stat-card--link:focus-within {
@@ -101,20 +178,20 @@
   .pk-stat-card--compact {
     flex-direction: column-reverse;
     justify-content: flex-end;
+    align-items: center;
+    gap: 0;
+    padding: var(--pk-3);
     text-align: center;
   }
 
   .pk-stat-card--compact .pk-stat-card__value {
     font-size: var(--pk-text-xl);
-    font-weight: 700;
     line-height: 1.1;
-    margin-bottom: 0;
   }
 
   .pk-stat-card--compact .pk-stat-card__label {
     /* Sentence case, not the dashboard's tracked-out caps: at this size the
        letter-spacing is what makes three tiles look like a busy row. */
-    margin-bottom: 0;
     font-size: var(--pk-text-xs);
     font-weight: 400;
     letter-spacing: normal;

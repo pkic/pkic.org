@@ -128,4 +128,40 @@ describe("standalone event views redirect to the owning group", () => {
     // renders inside the section) rather than a redirect.
     expect(container.querySelector(".portal-section")).not.toBeNull();
   });
+  it("shows the current viewer's registration without requesting management-only data", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              event: {
+                id: EVENT_ID,
+                slug: "summit",
+                name: "Summit",
+                timezone: "UTC",
+                startsAt: null,
+                endsAt: null,
+                profileKey: "conference",
+                registrationPolicy: "public",
+                visibility: "public",
+                accessLevel: "participant",
+                location: "Amsterdam",
+                links: [],
+                basePath: "/events/summit/",
+                viewer: { registrationStatus: "registered", attendanceType: "in_person", waitlisted: false, days: [] },
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    await act(() => render(<EventWorkspace view="detail" slug="summit" />, container));
+    await settle();
+    expect(container.textContent).toContain("Your registration");
+    expect(container.textContent).toContain("Registered");
+    expect(container.textContent).toContain("Amsterdam");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).toEqual(["/api/v1/events/summit"]);
+  });
 });

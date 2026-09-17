@@ -370,7 +370,7 @@ describe("admin proposal endpoints", () => {
 
     const archivedResponse = await callAdminProposalsList(
       adminToken,
-      "/api/v1/events/pqc-2026/proposals?archived=true",
+      "/api/v1/events/pqc-2026/proposals?status=archived",
     );
     expect(archivedResponse.status).toBe(200);
     const archived = eventProposalsResponseSchema.parse(await archivedResponse.json());

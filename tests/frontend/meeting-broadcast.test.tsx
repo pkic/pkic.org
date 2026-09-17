@@ -99,6 +99,9 @@ describe("authenticated broadcast entry", () => {
     expect(container.querySelector("iframe")).toBeNull();
     await act(async () => {
       container.querySelector<HTMLButtonElement>("button")!.click();
+      // Let the mocked entry request resolve before act flushes the new viewer
+      // and its focus listener; observing the iframe alone does not flush effects.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await vi.waitFor(() =>
       expect(container.querySelector("iframe")?.src).toBe("https://www.youtube.com/embed/jfKfPfyJRdk"),

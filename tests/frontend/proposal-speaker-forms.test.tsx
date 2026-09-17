@@ -15,7 +15,7 @@ import {
 } from "../../assets/shared/schemas/proposal-speakers";
 import type { ProposalInternalComment } from "../../assets/shared/schemas/proposal-comments";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
-import { buttonNamed, controlFor, groupNames, labelNames } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, labelNames, markdownControl } from "./helpers/labelled-control";
 
 let container: HTMLElement | null = null;
 
@@ -74,7 +74,7 @@ function speakerCard(overrides: Partial<Parameters<typeof SpeakerFormCard>[0]> =
 }
 
 describe("SpeakerFormCard", () => {
-  it("names every control through its own for/id pair and every group by a legend", () => {
+  it("names every control through its own for/id pair and every group by a legend", async () => {
     const root = mount(speakerCard());
     const form = root.querySelector("form")!;
 
@@ -94,7 +94,8 @@ describe("SpeakerFormCard", () => {
     // Resolved through the pair itself, so the lookup fails exactly when the
     // accessibility contract is broken rather than when the markup is restyled.
     expect(controlFor(form, "First name").getAttribute("name")).toBe("speaker.1.firstName");
-    expect(controlFor<HTMLTextAreaElement>(form, "Bio").tagName.toLowerCase()).toBe("textarea");
+    // The bio is the shared Markdown editor (#114), reached through the same pair.
+    expect((await markdownControl(form, "Bio")).closest(".pk-markdown-editor")).not.toBeNull();
     expect(controlFor(form, "Email").type).toBe("email");
     // The visible "Role" and "Profile links" text used to be <label>s pointing
     // at no control at all; they are group names now, which is what a reader
@@ -102,14 +103,14 @@ describe("SpeakerFormCard", () => {
     expect(groupNames(form)).toEqual(["Role", "Profile links (optional)"]);
   });
 
-  it("names the card as a region so one speaker can be told from the next", () => {
+  it("names the card as a region so one speaker can be told from the next", async () => {
     const root = mount(speakerCard({ title: "You — as a speaker", idPrefix: "pspk" }));
 
     expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("You — as a speaker");
     expect(root.querySelector("h4")?.textContent).toBe("You — as a speaker");
   });
 
-  it("points each control at its help and error text before either says anything", () => {
+  it("points each control at its help and error text before either says anything", async () => {
     const root = mount(speakerCard());
     const form = root.querySelector("form")!;
 
@@ -126,7 +127,7 @@ describe("SpeakerFormCard", () => {
     expect(slot.getAttribute("data-field-error")).toBe("speakers.1.email");
   });
 
-  it("routes a rejected field to the slot its own control describes", () => {
+  it("routes a rejected field to the slot its own control describes", async () => {
     const root = mount(speakerCard());
     const form = root.querySelector("form")!;
 
@@ -145,7 +146,7 @@ describe("SpeakerFormCard", () => {
     expect(form.querySelector('[data-field-error="speakers.1.firstName"]')?.textContent).toBe("");
   });
 
-  it("draws each role as a real radio rather than an operating-system default", () => {
+  it("draws each role as a real radio rather than an operating-system default", async () => {
     const root = mount(speakerCard({ defaultRole: "moderator" }));
     const form = root.querySelector("form")!;
 
@@ -162,7 +163,7 @@ describe("SpeakerFormCard", () => {
     expect(label.querySelector(".pk-check__label")?.textContent).toBe("Moderator");
   });
 
-  it("draws one radio for every role the contract knows", () => {
+  it("draws one radio for every role the contract knows", async () => {
     const root = mount(speakerCard({ defaultRole: "moderator" }));
     const form = root.querySelector("form")!;
 
@@ -175,7 +176,7 @@ describe("SpeakerFormCard", () => {
     expect(offered).toEqual([...PROPOSAL_SPEAKER_ROLES]);
   });
 
-  it("offers removal as a button, and offers none when the card cannot be removed", () => {
+  it("offers removal as a button, and offers none when the card cannot be removed", async () => {
     const onRemove = vi.fn();
     const root = mount(speakerCard({ onRemove }));
 
@@ -189,7 +190,7 @@ describe("SpeakerFormCard", () => {
     expect(() => buttonNamed(fixed, "Remove")).toThrow();
   });
 
-  it("omits the role group entirely when the caller collects no role", () => {
+  it("omits the role group entirely when the caller collects no role", async () => {
     const root = mount(
       speakerCard({
         fields: {
@@ -308,10 +309,10 @@ describe("ProposalSpeakersPanel", () => {
     expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Proposal speakers");
     const status = root.querySelector('[role="status"]');
     expect(status?.textContent).toContain("No speakers assigned yet");
-    expect(root.textContent).toContain("0 assigned");
+    expect(root.textContent).toContain("0 speakers");
   });
 
-  it("reloads the roster from a real button rather than a clickable heading", async () => {
+  it("reads the roster again when the page says something outside it changed the roster", async () => {
     const urls: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -321,16 +322,39 @@ describe("ProposalSpeakersPanel", () => {
       }),
     );
 
-    const root = mount(speakersPanel());
+    const root = mount(speakersPanel({ refreshKey: 1 }));
     await settle();
     expect(urls).toEqual(["/api/v1/proposals/proposal-1/speakers"]);
-    expect(root.textContent).toContain("1 assigned");
+    expect(root.textContent).toContain("1 speaker");
+    // No refresh button: the roster is not something a reader reloads by
+    // hand. An invitation accepted elsewhere bumps the key and it reads again.
+    expect([...root.querySelectorAll("button")].some((button) => button.textContent?.includes("Refresh"))).toBe(false);
 
-    const refresh = [...root.querySelectorAll("button")].find((button) => button.textContent?.includes("Refresh"))!;
-    expect(refresh.tagName.toLowerCase()).toBe("button");
-    await act(() => refresh.click());
+    await act(() => render(speakersPanel({ refreshKey: 2 }), root));
     await settle();
     expect(urls).toHaveLength(2);
+  });
+
+  it("offers the invitation as a link to its own page only to an operator who may finalize", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(roster([rosterSpeaker()]))),
+    );
+
+    const reader = mount(speakersPanel({ invitePath: "/x/speakers/new" }));
+    await settle();
+    expect(reader.querySelector('a[href="/x/speakers/new"]')).toBeNull();
+    void act(() => render(null, reader));
+    reader.remove();
+
+    const operator = mount(
+      speakersPanel({ access: { canReview: true, canFinalize: true }, invitePath: "/x/speakers/new" }),
+    );
+    await settle();
+    const invite = operator.querySelector('a[href="/x/speakers/new"]');
+    expect(invite?.textContent).toBe("Invite co-speaker");
+    // The form itself is not on the roster: nothing here asks for an address.
+    expect(operator.querySelector("form")).toBeNull();
   });
 });
 
@@ -368,15 +392,15 @@ function commentsPanel(overrides: Partial<Parameters<typeof ProposalInternalComm
 }
 
 describe("ProposalInternalCommentsPanel", () => {
-  it("gives the comment box a name and describes what happens to what is typed", () => {
+  it("gives the comment box a name and describes what happens to what is typed", async () => {
     const root = mount(commentsPanel());
 
     expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Internal comments");
     expect(labelNames(root)).toEqual(["Add a comment"]);
-    const box = controlFor<HTMLTextAreaElement>(root, "Add a comment");
-    expect(box.tagName.toLowerCase()).toBe("textarea");
+    const box = await markdownControl(root, "Add a comment");
+    expect(box.getAttribute("role")).toBe("textbox");
     const describedBy = box.getAttribute("aria-describedby")!;
-    expect(root.querySelector(`#${describedBy}`)?.textContent).toContain("Markdown supported");
+    expect(root.querySelector(`#${describedBy}`)?.textContent).toContain("Private to the program committee");
   });
 
   it("refuses to post a draft that is only whitespace", async () => {

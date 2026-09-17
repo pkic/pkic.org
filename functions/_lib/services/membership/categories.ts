@@ -1,21 +1,11 @@
-/**
- * The managed membership category catalog (PR #1 review §1.5). The
- * canonical A-G/H1-H8 code vocabulary and structural individual policy live
- * in assets/shared/schemas/membership-categories.ts (isomorphic — the same
- * source the frontend and API contracts use). Editable presentation and
- * voting policy live in D1; this module owns the
- * category/aggregate-type compatibility policy built on top of it, plus a
- * read model for the `membership_categories` reference table (migration
- * 0035) for any caller that needs the DB-backed catalog directly rather
- * than duplicating configuration in code.
- */
+/** D1 category catalog and membership holder compatibility policy. */
 import { all, first } from "../../db/queries";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import {
-  MEMBERSHIP_CATEGORIES,
-  isIndividualMembershipCategory,
+  MEMBERSHIP_CATEGORY_CATALOG_LIMIT,
   membershipCategoryCatalogEntrySchema,
   type MembershipCategoryCatalogEntry,
   type MembershipCategoryUpdate,
@@ -24,30 +14,36 @@ import type { AuthAdmin, DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
 
-/**
- * Category/aggregate-type compatibility, enforced once here rather than
- * left to whichever caller happens to remember to check it (PR #1 review:
- * individual-only categories were previously accepted for organization
- * aggregates and vice versa, with tests deliberately exercising the
- * invalid combinations). Uses the canonical shared vocabulary
- * (membership-categories.ts) rather than a DB round-trip — its parity with
- * the `membership_categories` reference table is itself covered by
- * tests/membership-aggregate.test.ts.
- */
-export function assertCategoryCompatible(categoryCode: string, wantsIndividual: boolean): void {
-  if (!(MEMBERSHIP_CATEGORIES as readonly string[]).includes(categoryCode)) {
-    throw new AppError(422, "INVALID_MEMBERSHIP_CATEGORY", `Unknown membership category: ${categoryCode}`);
-  }
-  const isIndividual = isIndividualMembershipCategory(categoryCode);
-  if (isIndividual !== wantsIndividual) {
+/** Resolve configured policy before preparing a membership change. */
+export async function requireMembershipCategory(
+  db: DatabaseLike,
+  categoryCode: string,
+): Promise<MembershipCategoryCatalogEntry> {
+  const category = await getMembershipCategory(db, categoryCode);
+  if (!category) throw new AppError(422, "INVALID_MEMBERSHIP_CATEGORY", `Unknown membership category: ${categoryCode}`);
+  return category;
+}
+
+export async function assertCategoryCompatible(
+  db: DatabaseLike,
+  categoryCode: string,
+  wantsIndividual: boolean,
+): Promise<void> {
+  const category = await requireMembershipCategory(db, categoryCode);
+  if (category.isIndividual !== wantsIndividual) {
     throw new AppError(
       422,
       "MEMBERSHIP_CATEGORY_TYPE_MISMATCH",
-      wantsIndividual
-        ? `Category ${categoryCode} is not an individual (org-less) membership category`
-        : `Category ${categoryCode} is an individual (org-less) membership category and cannot be assigned to an organization`,
+      wantsIndividual ? "Choose a category for an individual user" : "Choose a category for an organization",
     );
   }
+}
+
+export function prepareMembershipCategoryGuard(db: DatabaseLike, categoryCode: string, wantsIndividual: boolean) {
+  return prepareAuthorizationGuard(db, {
+    sql: "SELECT 1 FROM membership_categories WHERE code = ? AND is_individual = ?",
+    bindings: [categoryCode, wantsIndividual ? 1 : 0],
+  });
 }
 
 interface MembershipCategoryRow {
@@ -56,11 +52,16 @@ interface MembershipCategoryRow {
   description: string | null;
   display_order: number;
   is_voting: number;
+  is_individual: number;
+  requires_university_email: number;
+  retired_at: string | null;
+  workflow_version_id: string | null;
   revision: number;
   updated_at: string;
 }
 
-const MEMBERSHIP_CATEGORY_COLUMNS = "code, label, description, display_order, is_voting, revision, updated_at";
+const MEMBERSHIP_CATEGORY_COLUMNS =
+  "code, label, description, display_order, is_voting, is_individual, requires_university_email, retired_at, workflow_version_id, revision, updated_at";
 
 function toMembershipCategory(row: MembershipCategoryRow): MembershipCategoryCatalogEntry {
   return membershipCategoryCatalogEntrySchema.parse({
@@ -68,20 +69,28 @@ function toMembershipCategory(row: MembershipCategoryRow): MembershipCategoryCat
     label: row.label,
     description: row.description,
     displayOrder: row.display_order,
-    isIndividual: isIndividualMembershipCategory(row.code),
+    isIndividual: row.is_individual === 1,
+    requiresUniversityEmail: row.requires_university_email === 1,
     isVoting: row.is_voting === 1,
+    active: row.retired_at === null,
+    workflowVersionId: row.workflow_version_id,
     revision: row.revision,
     updatedAt: row.updated_at,
   });
 }
 
 /** The DB-backed category reference table (consolidated migration 0035) — kept in parity with the shared TS vocabulary above by tests/membership-aggregate.test.ts. */
-export async function listMembershipCategories(db: DatabaseLike): Promise<MembershipCategoryCatalogEntry[]> {
+export async function listMembershipCategories(
+  db: DatabaseLike,
+  availableForApplication = false,
+): Promise<MembershipCategoryCatalogEntry[]> {
   const rows = await all<MembershipCategoryRow>(
     db,
     `SELECT ${MEMBERSHIP_CATEGORY_COLUMNS}
        FROM membership_categories
-      ORDER BY display_order, code`,
+       ${availableForApplication ? "WHERE retired_at IS NULL AND EXISTS (SELECT 1 FROM membership_workflow_versions version WHERE version.id = membership_categories.workflow_version_id AND version.published_at IS NOT NULL)" : ""}
+      ORDER BY display_order, code LIMIT ?`,
+    [MEMBERSHIP_CATEGORY_CATALOG_LIMIT],
   );
   return rows.map(toMembershipCategory);
 }
@@ -128,15 +137,22 @@ export function votingMembershipCategoryExistsSql(categoryCodeReference: string)
  * Bind user id first and member id second. It covers both an individual
  * membership owned by the user and an active organizational representation.
  */
-export const ACTIVE_VOTING_MEMBER_CAPACITY_SELECT = `
+export function activeVotingMemberCapacitySelect(memberIdExpression = "?", userIdExpression = "?"): string {
+  if (memberIdExpression !== "?" && !SAFE_SQL_COLUMN_REFERENCE.test(memberIdExpression))
+    throw new Error("Voting capacity requires a trusted column reference");
+  if (userIdExpression !== "?" && !SAFE_SQL_COLUMN_REFERENCE.test(userIdExpression))
+    throw new Error("Voting capacity requires a trusted user column reference");
+  return `
   SELECT 1
     FROM members active_voting_member
     JOIN users active_voting_user
-      ON active_voting_user.id = ?
+      ON active_voting_user.id = ${userIdExpression}
      AND active_voting_user.active = 1
+     AND active_voting_user.pii_redacted_at IS NULL
+     AND active_voting_user.merged_into_user_id IS NULL
     JOIN member_category_assignments active_voting_category
       ON active_voting_category.member_id = active_voting_member.id
-   WHERE active_voting_member.id = ?
+   WHERE active_voting_member.id = ${memberIdExpression}
      AND active_voting_member.status = 'active'
      AND ${votingMembershipCategoryExistsSql("active_voting_category.category_code")}
      AND (
@@ -154,6 +170,9 @@ export const ACTIVE_VOTING_MEMBER_CAPACITY_SELECT = `
        )
      )
    LIMIT 1`;
+}
+
+export const ACTIVE_VOTING_MEMBER_CAPACITY_SELECT = activeVotingMemberCapacitySelect();
 
 export async function isActiveVotingMemberCapacity(
   db: DatabaseLike,
@@ -181,15 +200,26 @@ export async function updateMembershipCategory(
     description: updates.description === undefined ? current.description : updates.description,
     displayOrder: updates.displayOrder ?? current.displayOrder,
     isVoting: updates.isVoting ?? current.isVoting,
+    active: updates.active ?? current.active,
+    workflowVersionId: updates.workflowVersionId === undefined ? current.workflowVersionId : updates.workflowVersionId,
   };
   const { expectedRevision: _expectedRevision, ...changes } = updates;
   try {
     await db.batch([
       preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]),
+      ...(next.workflowVersionId
+        ? [
+            prepareAuthorizationGuard(db, {
+              sql: "SELECT 1 FROM membership_workflow_versions WHERE id = ? AND published_at IS NOT NULL",
+              bindings: [next.workflowVersionId],
+            }),
+          ]
+        : []),
       db
         .prepare(
           `UPDATE membership_categories
               SET label = ?, description = ?, display_order = ?, is_voting = ?,
+                  retired_at = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(retired_at, ?) END, workflow_version_id = ?,
                   revision = revision + 1, updated_at = ?
             WHERE code = ? AND revision = ?`,
         )
@@ -198,6 +228,9 @@ export async function updateMembershipCategory(
           next.description,
           next.displayOrder,
           next.isVoting ? 1 : 0,
+          next.active ? 1 : 0,
+          now,
+          next.workflowVersionId,
           now,
           categoryCode,
           updates.expectedRevision,

@@ -20,18 +20,23 @@ import { deleteJson, getJson, postJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
+import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Textarea } from "../../../../ui/TextControl";
 import { fmtDate } from "../../ui";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
+import { Markdown } from "../../../../components/Markdown";
 
-function GroupVoteProposalDetail({
+export function GroupVoteProposalDetail({
   groupId,
   proposal,
   onChanged,
+  onWithdrawn,
 }: {
   groupId: string;
   proposal: GroupVoteProposal;
   onChanged: () => Promise<void>;
+  /** The proposal is gone; the page it was on has nothing left to show. */
+  onWithdrawn?: () => void;
 }) {
   const headingId = useId();
   const [, navigate] = usePortalHashLocation();
@@ -72,7 +77,10 @@ function GroupVoteProposalDetail({
       }))
     )
       return;
-    await action(() => deleteJson(base, groupVoteProposalMutationResponseSchema));
+    await action(
+      () => deleteJson(base, groupVoteProposalMutationResponseSchema),
+      () => onWithdrawn?.(),
+    );
   }
 
   async function approve(): Promise<void> {
@@ -100,7 +108,7 @@ function GroupVoteProposalDetail({
     <Panel class="pk" aria-labelledby={headingId}>
       <PanelHeader id={headingId} title={current.title} />
       <PanelBody class="pk-stack">
-        <p>{current.description}</p>
+        <Markdown markdown={current.description} />
         <p class="pk-small">
           {current.endorsementCount} of {current.minEndorsersRequired} required endorsements
         </p>
@@ -166,12 +174,13 @@ function GroupVoteProposalDetail({
             <fieldset class="pk-fieldset" disabled={busy}>
               <Field label="Rejection reason" required help="Sent to the proposer with the decision.">
                 {(control) => (
-                  <Textarea
+                  <MarkdownEditor
+                    variant="compact"
                     {...control}
-                    rows={2}
-                    maxLength={1000}
-                    value={reason}
-                    onInput={(event) => setReason(event.currentTarget.value)}
+                    name="reason"
+                    label="Rejection reason"
+                    initialValue={reason}
+                    onChange={setReason}
                   />
                 )}
               </Field>
@@ -188,23 +197,64 @@ function GroupVoteProposalDetail({
   );
 }
 
+/**
+ * A proposal's own page (#126): the record under the list, never an
+ * expansion between the rows. It reads the proposal by id so a copied URL
+ * opens what the row did, and its commands are the proposal's own.
+ */
+export function GroupVoteProposalRecord({
+  groupId,
+  proposalId,
+  listPath,
+}: {
+  groupId: string;
+  proposalId: string;
+  /** The proposals list, the way back. */
+  listPath: string;
+}) {
+  const [, navigate] = usePortalHashLocation();
+  const base = `/api/v1/groups/${encodeURIComponent(groupId)}/vote-proposals/${encodeURIComponent(proposalId)}`;
+  const detail = useData(() => getJson(base, groupVoteProposalDetailResponseSchema), [base]);
+  const proposal = detail.data?.proposal;
+
+  return (
+    <div class="pk pk-stack">
+      <PageHeader
+        trail={[{ label: "Proposals", href: usePortalHashLocation.hrefs(listPath) }]}
+        eyebrow="Vote proposal"
+        title={proposal?.title ?? "Proposal"}
+        context={proposal ? <Badge status={proposal.status} /> : undefined}
+      />
+      {detail.loading && !proposal && <Spinner label="Loading the proposal…" />}
+      {detail.error && <ErrorAlert error={detail.error} />}
+      {proposal && (
+        <GroupVoteProposalDetail
+          groupId={groupId}
+          proposal={proposal}
+          onChanged={async () => {
+            await detail.reload();
+          }}
+          onWithdrawn={() => navigate(listPath)}
+        />
+      )}
+    </div>
+  );
+}
+
 export function GroupVoteProposals({
   groupId,
   canParticipate,
   onPropose,
+  recordPath,
 }: {
   groupId: string;
   canParticipate: boolean;
   /** Proposing is a page of its own; this is where the list sends the reader. */
   onPropose: () => void;
+  /** Where a proposal's own page lives. */
+  recordPath: (proposalId: string) => string;
 }) {
   const actions = useRef<ApiTableActions | null>(null);
-  const [selectedProposal, setSelectedProposal] = useState<GroupVoteProposal | null>(null);
-
-  async function reload(): Promise<void> {
-    setSelectedProposal(null);
-    await actions.current?.reload();
-  }
 
   return (
     <div class="pk pk-stack">
@@ -283,21 +333,12 @@ export function GroupVoteProposals({
           )
         }
         rowKey={(proposal) => proposal.id}
-        // Activating a row opens its detail in place — the same rule as
-        // every other list. The "Details" button column this replaces left
-        // the row itself inert.
+        // Activating a row opens the proposal's own page (#126): a record
+        // with commands, never an expansion between the rows.
         rowAction={(proposal) => ({
-          label:
-            selectedProposal?.id === proposal.id
-              ? `Hide details for ${proposal.title}`
-              : `Show details for ${proposal.title}`,
-          onSelect: () => setSelectedProposal((current) => (current?.id === proposal.id ? null : proposal)),
+          label: `Open ${proposal.title}`,
+          href: usePortalHashLocation.hrefs(recordPath(proposal.id)),
         })}
-        detailRow={(proposal) =>
-          selectedProposal?.id === proposal.id ? (
-            <GroupVoteProposalDetail groupId={groupId} proposal={selectedProposal} onChanged={reload} />
-          ) : null
-        }
       />
     </div>
   );

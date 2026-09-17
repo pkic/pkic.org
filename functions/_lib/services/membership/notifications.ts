@@ -18,49 +18,6 @@ import type { queueEmail } from "../../email/outbox";
 
 export type EmailDraft = Parameters<typeof queueEmail>[1];
 
-function maskEmail(email: string): string {
-  const [, domain] = email.split("@");
-  return domain ? `***@${domain}` : "***";
-}
-
-export function buildConsultationBatchEmail(params: {
-  recipientEmail: string;
-  applications: Array<{ applicantEmail: string; organizationName: string; membershipCategory: string }>;
-}): EmailDraft {
-  return {
-    templateKey: "consultation-batch",
-    recipientEmail: params.recipientEmail,
-    messageType: "transactional",
-    subject: `PKI Consortium member consultation — ${params.applications.length} application(s)`,
-    data: {
-      applicationCount: params.applications.length,
-      applications: params.applications.map((a) => ({
-        maskedEmail: maskEmail(a.applicantEmail),
-        organizationName: a.organizationName,
-        membershipCategory: a.membershipCategory,
-      })),
-    },
-  };
-}
-
-export function buildEcReviewBatchEmail(params: {
-  recipientEmail: string;
-  ecReviewWindowDays: number;
-  applications: Array<{ organizationName: string; membershipCategory: string; reviewUrl: string }>;
-}): EmailDraft {
-  return {
-    templateKey: "ec-review-batch",
-    recipientEmail: params.recipientEmail,
-    messageType: "transactional",
-    subject: `PKI Consortium EC review — ${params.applications.length} application(s)`,
-    data: {
-      applicationCount: params.applications.length,
-      ecReviewWindowDays: params.ecReviewWindowDays,
-      applications: params.applications,
-    },
-  };
-}
-
 export function buildApplicationClosedNoResponseEmail(params: {
   recipientEmail: string;
   applicantName: string;

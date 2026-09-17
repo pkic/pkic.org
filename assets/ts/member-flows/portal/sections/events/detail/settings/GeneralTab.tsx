@@ -9,7 +9,7 @@ import {
   eventManagementDetailResponseSchema,
 } from "../../../../../../../shared/schemas/event-management";
 import {
-  EVENT_REGISTRATION_POLICIES,
+  STANDALONE_EVENT_REGISTRATION_POLICIES,
   EVENT_REGISTRATION_POLICY_LABELS,
   EVENT_VISIBILITIES,
   EVENT_VISIBILITY_LABELS,
@@ -407,7 +407,7 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
                         {/* The policies and their words both come from the
                             contract, the way the visibility field above
                             already reads them. */}
-                        {EVENT_REGISTRATION_POLICIES.map((policy) => (
+                        {STANDALONE_EVENT_REGISTRATION_POLICIES.map((policy) => (
                           <option key={policy} value={policy}>
                             {EVENT_REGISTRATION_POLICY_LABELS[policy]}
                           </option>

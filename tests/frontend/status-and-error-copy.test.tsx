@@ -32,7 +32,7 @@ afterEach(() => {
 
 describe("canonical status registry", () => {
   it("labels machine statuses as sentences", () => {
-    expect(statusLabel("ec_review")).toBe("EC review");
+    expect(statusLabel("on_hold")).toBe("On hold");
     expect(statusLabel("pending_review")).toBe("Pending review");
     expect(statusLabel("under_review")).toBe("Under review");
     expect(statusLabel("scheduled")).toBe("Scheduled");
@@ -40,14 +40,14 @@ describe("canonical status registry", () => {
 
   it("colors every registered status and falls back to neutral", () => {
     expect(statusTone("approved")).toBe("ok");
-    expect(statusTone("ec_review")).toBe("warn");
+    expect(statusTone("on_hold")).toBe("warn");
     expect(statusTone("closed")).toBe("neutral");
     expect(statusTone("something_unknown")).toBe("neutral");
   });
 
   it("renders the label through Badge", () => {
-    const container = mount(<Badge status="ec_review" />);
-    expect(container.textContent).toBe("EC review");
+    const container = mount(<Badge status="on_hold" />);
+    expect(container.textContent).toBe("On hold");
   });
 });
 

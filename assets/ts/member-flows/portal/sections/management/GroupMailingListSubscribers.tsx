@@ -5,6 +5,7 @@ import {
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
 import { Badge } from "../../../../ui/Badge";
+import { PersonCell } from "../../../../ui/PersonCell";
 
 /** The person, named the way the rest of the portal names people: their name, with the address under it. */
 function personName(subscriber: MailingListSubscriber): string {
@@ -47,11 +48,13 @@ export function GroupMailingListSubscribers({ groupId, listId }: { groupId: stri
         {
           header: "Person",
           cell: (subscriber) => (
-            <div class="pk-stack pk-stack--tight">
-              <span class="pk-strong">{personName(subscriber)}</span>
-              <span class="pk-small pk-break">{subscriber.user.email}</span>
-            </div>
+            <PersonCell
+              name={personName(subscriber)}
+              email={personName(subscriber) === subscriber.user.email ? undefined : subscriber.user.email}
+              size="sm"
+            />
           ),
+          width: "primary",
           sort: { asc: "last_name", desc: "-last_name" },
         },
         {

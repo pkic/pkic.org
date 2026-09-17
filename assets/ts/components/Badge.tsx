@@ -3,7 +3,7 @@ import { Badge as ToneBadge, type BadgeTone } from "../ui/Badge";
 /**
  * The product's status vocabulary, mapped onto the design system's six tones.
  *
- * This is deliberately NOT in the design system. "ec_review" and
+ * This is deliberately NOT in the design system. "on_hold" and
  * "budget_exhausted" are this product's words; a Badge that knew them would
  * be a Badge that could not be reused. The system owns the six tones and how
  * they look; this owns which of our statuses mean what.
@@ -98,10 +98,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   // membership application stages
   received: "neutral",
   screening: "info",
-  in_review: "info",
   on_hold: "warn",
-  in_consultation: "info",
-  ec_review: "warn",
   board_review: "warn",
   approved: "ok",
   onboarding: "info",
@@ -137,10 +134,7 @@ const STATUS_LABEL: Record<string, string> = {
   rsvp_declined: "RSVP declined",
   rsvp_tentative: "RSVP tentative",
   delivery_unknown: "Delivery unknown",
-  in_review: "In review",
   on_hold: "On hold",
-  in_consultation: "In consultation",
-  ec_review: "EC review",
   board_review: "Board review",
   pending_review: "Pending review",
   new_inquiry: "New inquiry",

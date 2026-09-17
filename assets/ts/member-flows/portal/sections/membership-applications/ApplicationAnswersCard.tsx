@@ -7,6 +7,7 @@ import { asBool, asString, asStringArray, externalLink, toHttpUrl } from "./help
 // stylesheet into its own chunk. Without the import the markup renders
 // unstyled and nothing complains.
 import "../../../../ui/Content.css";
+import { Markdown } from "../../../../components/Markdown";
 
 /**
  * An answer the applicant left blank.
@@ -36,7 +37,11 @@ function NotProvided() {
  * is a grid over `dl > dt` and `dl > dd` — a wrapper between them takes both
  * out of the grid.
  */
-export function ApplicationAnswersCard({ detail }: { detail: MembershipApplicationDetail }) {
+export function ApplicationAnswersCard({
+  detail,
+}: {
+  detail: Pick<MembershipApplicationDetail, "answers" | "requestedWorkingGroups">;
+}) {
   const linkedin = asString(detail.answers.linkedin);
   const website = asString(detail.answers.organization_website);
   const agreements = asStringArray(detail.answers.legalAgreements);
@@ -61,13 +66,31 @@ export function ApplicationAnswersCard({ detail }: { detail: MembershipApplicati
             <dd>{website ? externalLink(website) : <NotProvided />}</dd>
 
             <dt>About yourself</dt>
-            <dd>{asString(detail.answers.about_yourself) || <NotProvided />}</dd>
+            <dd>
+              {asString(detail.answers.about_yourself) ? (
+                <Markdown markdown={asString(detail.answers.about_yourself)} />
+              ) : (
+                <NotProvided />
+              )}
+            </dd>
 
             <dt>About organization</dt>
-            <dd>{asString(detail.answers.about_organization) || <NotProvided />}</dd>
+            <dd>
+              {asString(detail.answers.about_organization) ? (
+                <Markdown markdown={asString(detail.answers.about_organization)} />
+              ) : (
+                <NotProvided />
+              )}
+            </dd>
 
             <dt>Reason for joining</dt>
-            <dd>{asString(detail.answers.reason) || <NotProvided />}</dd>
+            <dd>
+              {asString(detail.answers.reason) ? (
+                <Markdown markdown={asString(detail.answers.reason)} />
+              ) : (
+                <NotProvided />
+              )}
+            </dd>
 
             <dt>Contribution type</dt>
             <dd>{asString(detail.answers.contributionType) || <NotProvided />}</dd>
@@ -95,7 +118,9 @@ export function ApplicationAnswersCard({ detail }: { detail: MembershipApplicati
             <dd>{agreements.length > 0 ? agreements.join(", ") : <NotProvided />}</dd>
 
             <dt>Warranted authority</dt>
-            <dd>{asBool(detail.answers.warrantedAuthority) ? "Yes" : "No"}</dd>
+            {/* The join form posts the box as `warranted_authority`; older
+                answers carried the camel-cased key (#109). */}
+            <dd>{asBool(detail.answers.warranted_authority ?? detail.answers.warrantedAuthority) ? "Yes" : "No"}</dd>
           </dl>
         </PanelBody>
       </Panel>

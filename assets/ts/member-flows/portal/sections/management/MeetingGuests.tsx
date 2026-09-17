@@ -13,6 +13,7 @@ import { confirmAction } from "../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
+import { PersonCell } from "../../../../ui/PersonCell";
 import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
@@ -199,12 +200,8 @@ export function MeetingGuests({
         columns={[
           {
             header: "Guest",
-            cell: (guest) => (
-              <div class="pk-stack pk-stack--tight">
-                <span class="pk-strong">{guest.name}</span>
-                <span class="pk-small">{guest.email}</span>
-              </div>
-            ),
+            cell: (guest) => <PersonCell name={guest.name} email={guest.email} size="sm" />,
+            width: "primary",
             sort: { asc: "name", desc: "-name" },
           },
           { header: "Affiliation", cell: (guest) => guest.affiliation ?? "—" },

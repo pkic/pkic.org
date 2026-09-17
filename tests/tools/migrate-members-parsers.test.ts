@@ -56,7 +56,43 @@ describe("loadRosterCsv / loadMemberYamlFiles", () => {
 
     const roster = loadRosterCsv(file);
     expect([...roster.keys()]).toEqual(["alice@example.com"]);
-    expect(roster.get("alice@example.com")).toEqual({ joinSortKey: "2023-0001-0015-0010-0000-0000" });
+    expect(roster.get("alice@example.com")).toMatchObject({
+      joinSortKey: "2023-0001-0015-0010-0000-0000",
+      joinDate: { year: 2023, month: 1, day: 15, hour: 10, minute: 0, second: 0 },
+    });
+  });
+
+  it.each(["utf8", "utf16le"] as const)("reads tab-separated %s exports without contaminating domains", (encoding) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-roster-encoding-"));
+    tmpDirs.push(dir);
+    const file = path.join(dir, "roster.csv");
+    fs.writeFileSync(
+      file,
+      '\uFEFFMembers for group fixture\r\nDisplay name\tEmail address\tYear\r\n"Alice, Example"\tAlice@Example.org\t2025\r\n',
+      encoding,
+    );
+    expect([...loadRosterCsv(file).keys()]).toEqual(["alice@example.org"]);
+  });
+
+  it("reads a header-only first line and quoted multiline names", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-roster-header-"));
+    tmpDirs.push(dir);
+    const file = path.join(dir, "roster.csv");
+    fs.writeFileSync(file, 'Name;Email\n"Alice\nExample";alice@example.org\n');
+    expect([...loadRosterCsv(file).keys()]).toEqual(["alice@example.org"]);
+    fs.writeFileSync(file, "not a roster");
+    expect(() => loadRosterCsv(file)).toThrow("Missing Email header");
+  });
+
+  it("allows explicitly empty optional rosters but rejects an empty main roster", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pkic-empty-roster-"));
+    tmpDirs.push(dir);
+    const file = path.join(dir, "empty.csv");
+    fs.writeFileSync(file, "");
+    expect(loadRosterCsv(file, { allowEmpty: true }).size).toBe(0);
+    expect(() => loadRosterCsv(file)).toThrow("Missing Email header");
+    fs.writeFileSync(file, "unexpected contents");
+    expect(() => loadRosterCsv(file, { allowEmpty: true })).toThrow("Missing Email header");
   });
 
   it("loads every .yaml/.yml file in the directory, deriving slug from the filename", () => {

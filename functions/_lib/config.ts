@@ -144,15 +144,10 @@ export function getConfig(env: Env, request?: Request) {
     // and platform/runtime behavior rather than attempting to infer this
     // from row counts or HTTP subrequests.
     scheduledD1QueryBudget,
-    scheduledConsultationBatchLimit: Math.min(
-      1_000,
-      Math.max(1, parseIntOrDefault(env.SCHEDULED_CONSULTATION_BATCH_LIMIT, 100)),
-    ),
     scheduledOnHoldReminderLimit: Math.min(
       500,
       Math.max(0, parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100)),
     ),
-    scheduledEcAutoApproveLimit: Math.min(25, Math.max(0, parseIntOrDefault(env.SCHEDULED_EC_AUTO_APPROVE_LIMIT, 25))),
     scheduledGoogleGroupsSyncLimit: Math.min(
       25,
       Math.max(0, parseIntOrDefault(env.SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT, 25)),
@@ -163,9 +158,9 @@ export function getConfig(env: Env, request?: Request) {
       500,
       Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100)),
     ),
-    eventCampaignMaxRecipients: Math.min(
-      10_000,
-      Math.max(1, parseIntOrDefault(env.EVENT_CAMPAIGN_MAX_RECIPIENTS, 2_000)),
+    scheduledMeetingInvitationLimit: Math.min(
+      5_000,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_MEETING_INVITATION_LIMIT, 500)),
     ),
     sendgridApiBase: env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send",
   };

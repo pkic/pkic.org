@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
+vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
+  useMembershipCategoryCatalog: () => exampleMembershipCategories,
+}));
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -222,7 +226,7 @@ describe("shared mailing-list form model", () => {
      * rendering blank.
      */
     expect(checks.slice(0, MEMBERSHIP_CATEGORIES.length).map((check) => check.textContent)).toEqual([
-      ...MEMBERSHIP_CATEGORIES,
+      ...exampleMembershipCategories.map(({ code, label }) => `${label} (${code})`),
     ]);
     expect(checks.slice(-2).map((check) => check.textContent)).toEqual([
       "Active",

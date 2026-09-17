@@ -7,7 +7,12 @@
      for exactly this `col-md-4 … d-md-block collapse` pattern when
      layouts/events/list.html migrated. No `.pk` root: the page body is
      authored markdown still styled by the legacy sheet. */}}
-{{- $container := cond (default false .Params.fullwidth) "pk-container pk-container--wide" "pk-container" -}}
+{{/* Event pages are laid out in columns — a programme beside a venue, a
+     sponsor grid — and at the reading measure those columns compacted and
+     left the sides of a wide screen empty (#111). The wide measure is the
+     default; `fullwidth: false` opts a text-only page back to the reading
+     column. */}}
+{{- $container := cond (eq .Params.fullwidth false) "pk-container" "pk-container pk-container--wide" -}}
 {{- if $.Page.FirstSection.Param "sideMenu" -}}
 <div class="{{ $container }} pk-section events-page-layout">
     <nav id="sidebarMenu" class="events-page-menu" aria-label="Section navigation">

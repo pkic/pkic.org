@@ -10,6 +10,7 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { groupEventSeriesFixture } from "./helpers/meeting-series-fixture";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
 import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 
@@ -74,13 +75,13 @@ describe("scheduling a group meeting series", () => {
 
     // The form is a named region, so it is reachable and identifiable, and
     // its heading is the next rung below the workspace's own.
-    const form = container.querySelector('[aria-label="Schedule a recurring meeting"]');
+    const form = container.querySelector('[aria-label="Schedule a meeting"]');
     expect(form).not.toBeNull();
-    expect(form?.querySelector("h2")?.textContent).toBe("Schedule a recurring meeting");
+    expect(form?.querySelector("h2")?.textContent).toBe("Schedule a meeting");
 
     await typeInto(controlFor(container, "Meeting name"), "Architecture call");
     await act(async () => {
-      buttonNamed(container, "Create meeting series").click();
+      buttonNamed(container, "Create meeting").click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await settle();
@@ -91,5 +92,54 @@ describe("scheduling a group meeting series", () => {
     expect(alert?.textContent).not.toContain("HTTP 409");
     // The form stays open on failure, so the typed name is not thrown away.
     expect(controlFor<HTMLInputElement>(container, "Meeting name").value).toBe("Architecture call");
+  });
+  it("prefills an imported draft and submits its existing event identity", async () => {
+    const eventId = "70000000-0000-4000-8000-000000000005";
+    let submitted: Record<string, unknown> | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init: RequestInit = {}) => {
+        if (init.method === "POST") {
+          submitted = JSON.parse(String(init.body));
+          return json({ series: groupEventSeriesFixture(GROUP_ID) });
+        }
+        return json({
+          event: {
+            id: eventId,
+            ownerGroupId: GROUP_ID,
+            seriesId: null,
+            slug: "meeting-pqc",
+            basePath: null,
+            name: "PQC working group meeting",
+            timezone: "Europe/Amsterdam",
+            startsAt: null,
+            endsAt: null,
+            profileKey: "meeting",
+            sourceMode: "portal",
+            registrationPolicy: "no_registration",
+            visibility: "group_members",
+            inviteLimitAttendee: 0,
+            location: null,
+            links: [],
+            nextOccurrenceAt: null,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            proposalAccess: null,
+            capabilities: ["view", "manage"],
+          },
+        });
+      }),
+    );
+    const container = mount(<GroupMeetings groupId={GROUP_ID} canManage seriesSegment="new" seriesTab={eventId} />);
+    await settle();
+    expect(controlFor<HTMLInputElement>(container, "Meeting name").value).toBe("PQC working group meeting");
+    await act(async () => {
+      buttonNamed(container, "Create meeting").click();
+    });
+    await settle();
+    expect(submitted).toMatchObject({
+      existingEventId: eventId,
+      eventSlug: "meeting-pqc",
+      timezone: "Europe/Amsterdam",
+    });
   });
 });

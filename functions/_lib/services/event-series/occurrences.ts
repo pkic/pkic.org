@@ -1,3 +1,5 @@
+import { meetingRecurrenceId } from "../../../../assets/shared/meeting-calendar-policy";
+import { prepareCalendarRevision } from "./calendar-schedule";
 import type { z } from "zod";
 import {
   EVENT_OCCURRENCE_SORT_COLUMNS,
@@ -26,6 +28,11 @@ import {
   type LiveGroupResourceContextAccess,
 } from "../resource-grants";
 import { commitEventResourceManagementBatch } from "./management";
+import {
+  prepareOccurrenceChangeNotifications,
+  type OccurrenceChange,
+  type OccurrenceNotificationOptions,
+} from "./occurrence-notifications";
 import { sealProviderJoinUrl } from "./provider-url";
 import { type EventOccurrenceRow, toEventOccurrence } from "./record";
 import { getGroupEventSeries, getManagedGroupEventSeries } from "./series";
@@ -53,6 +60,21 @@ const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrenc
     WHERE confirmation.occurrence_id = occurrence.id
       AND confirmation.attendance_verified_at IS NOT NULL) AS attendance_verified_count,
   occurrence.invitations_round, occurrence.invitations_sent_at,
+  (SELECT COUNT(DISTINCT invited.recipient_email) FROM meeting_occurrence_invitations invited
+    WHERE invited.occurrence_id = occurrence.id) AS invited_count,
+  (SELECT COUNT(DISTINCT invited.recipient_email) FROM meeting_occurrence_invitations invited
+    LEFT JOIN event_occurrence_rsvps rsvp ON rsvp.occurrence_id = occurrence.id AND rsvp.attendee_email = invited.recipient_email
+    LEFT JOIN event_series_rsvps series_rsvp ON series_rsvp.series_id = occurrence.series_id AND series_rsvp.attendee_email = invited.recipient_email
+    WHERE invited.occurrence_id = occurrence.id AND COALESCE(rsvp.response_status, series_rsvp.response_status) = 'accepted') AS rsvp_accepted_count,
+  (SELECT COUNT(DISTINCT invited.recipient_email) FROM meeting_occurrence_invitations invited
+    LEFT JOIN event_occurrence_rsvps rsvp ON rsvp.occurrence_id = occurrence.id AND rsvp.attendee_email = invited.recipient_email
+    LEFT JOIN event_series_rsvps series_rsvp ON series_rsvp.series_id = occurrence.series_id AND series_rsvp.attendee_email = invited.recipient_email
+    WHERE invited.occurrence_id = occurrence.id AND COALESCE(rsvp.response_status, series_rsvp.response_status) = 'declined') AS rsvp_declined_count,
+  (SELECT COUNT(DISTINCT invited.recipient_email) FROM meeting_occurrence_invitations invited
+    LEFT JOIN event_occurrence_rsvps rsvp ON rsvp.occurrence_id = occurrence.id AND rsvp.attendee_email = invited.recipient_email
+    LEFT JOIN event_series_rsvps series_rsvp ON series_rsvp.series_id = occurrence.series_id AND series_rsvp.attendee_email = invited.recipient_email
+    WHERE invited.occurrence_id = occurrence.id AND COALESCE(rsvp.response_status, series_rsvp.response_status) = 'tentative') AS rsvp_tentative_count,
+  occurrence.calendar_sequence,
   occurrence.created_at, occurrence.updated_at`;
 const OCCURRENCE_FROM = `FROM event_occurrences occurrence
   JOIN event_series series ON series.id = occurrence.series_id
@@ -81,6 +103,33 @@ export async function getSeriesOccurrence(
   );
   if (!row) throw new AppError(404, "EVENT_OCCURRENCE_NOT_FOUND", "Meeting occurrence not found in this series");
   return { series, occurrence: toEventOccurrence(row) };
+}
+
+/**
+ * One occurrence as a viewer sees it: the same access rule as the list, so a
+ * copied URL opens exactly the record the row did.
+ */
+export async function getAccessibleSeriesOccurrence(
+  db: DatabaseLike,
+  viewer: GroupResourceViewer,
+  groupIdOrSlug: string,
+  seriesId: string,
+  occurrenceId: string,
+) {
+  const access = liveGroupResourceContextAccess(viewer, groupIdOrSlug);
+  const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupIdOrSlug, access, "view");
+  const row = await first<EventOccurrenceRow>(
+    db,
+    `WITH ${accessibleEvents.sql}
+     ${OCCURRENCE_SELECT} ${OCCURRENCE_FROM}
+     JOIN accessible_resource accessible ON accessible.resource_id = event.id
+     CROSS JOIN group_access
+     WHERE occurrence.id = ? AND occurrence.series_id = ?
+       AND (group_access.manager_access = 1 OR series.active = 1)`,
+    [...accessibleEvents.bindings, occurrenceId, seriesId],
+  );
+  if (!row) throw new AppError(404, "EVENT_OCCURRENCE_NOT_FOUND", "Meeting occurrence not found in this series");
+  return toEventOccurrence(row);
 }
 
 export async function getManagedSeriesOccurrence(
@@ -186,11 +235,21 @@ export async function createSeriesOccurrence(
       db
         .prepare(
           `INSERT INTO event_occurrences
-             (id, series_id, starts_at, ends_at, status, location_override,
+             (id, series_id, starts_at, recurrence_id, ends_at, status, location_override,
               provider_join_url_ciphertext, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)`,
         )
-        .bind(id, seriesId, input.startsAt, input.endsAt, input.locationOverride ?? null, ciphertext, now, now),
+        .bind(
+          id,
+          seriesId,
+          input.startsAt,
+          meetingRecurrenceId(input.startsAt),
+          input.endsAt,
+          input.locationOverride ?? null,
+          ciphertext,
+          now,
+          now,
+        ),
       prepareScopedAuditLogAfterOneChange(
         db,
         { type: "group", id: context.groupId },
@@ -209,10 +268,19 @@ export async function createSeriesOccurrence(
              updated_at = ? WHERE id = ?`,
         )
         .bind(seriesId, seriesId, now, series.eventId),
+      ...prepareCalendarRevision(db, seriesId),
     ]);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
+    }
+    if (
+      error instanceof Error &&
+      /UNIQUE constraint failed: event_occurrences\.series_id, event_occurrences\.(starts_at|recurrence_id)/.test(
+        error.message,
+      )
+    ) {
+      throw new AppError(409, "EVENT_OCCURRENCE_EXISTS", "An occurrence already exists at this calendar time");
     }
     throw error;
   }
@@ -227,6 +295,8 @@ export async function updateSeriesOccurrence(
   occurrenceId: string,
   input: OccurrenceUpdateInput,
   encryptionSecret: string,
+  /** Where the change is announced from; without it the invited are not told. */
+  notify?: OccurrenceNotificationOptions,
 ) {
   const current = await getManagedSeriesOccurrence(db, actor, groupIdOrSlug, seriesId, occurrenceId);
   if (current.occurrence.updatedAt !== input.expectedUpdatedAt) {
@@ -237,6 +307,48 @@ export async function updateSeriesOccurrence(
   if (endsAt <= startsAt) {
     throw new AppError(422, "EVENT_OCCURRENCE_RANGE_INVALID", "Occurrence must end after it starts");
   }
+  const status = input.status ?? current.occurrence.status;
+  const location =
+    input.locationOverride !== undefined
+      ? (input.locationOverride ?? current.series.location)
+      : current.occurrence.location;
+  /*
+   * What the invited are told, if anything. A meeting that moves, or is
+   * called off, or is put back on after being called off, reaches every
+   * calendar that holds it; a change of provider link or a completion does
+   * not, since neither changes what the calendar shows.
+   */
+  const change: OccurrenceChange | null =
+    status === "cancelled" && current.occurrence.status !== "cancelled"
+      ? "cancelled"
+      : status === "scheduled" &&
+          (current.occurrence.status !== "scheduled" ||
+            startsAt !== current.occurrence.startsAt ||
+            endsAt !== current.occurrence.endsAt ||
+            location !== current.occurrence.location)
+        ? "updated"
+        : null;
+  const notifications =
+    change && notify
+      ? await prepareOccurrenceChangeNotifications(
+          db,
+          {
+            occurrenceId,
+            eventId: current.series.eventId,
+            eventName: current.series.eventName,
+            startsAt,
+            endsAt,
+            location,
+            sequence: current.occurrence.calendarSequence + 1,
+            previousStartsAt: current.occurrence.startsAt,
+            previousEndsAt: current.occurrence.endsAt,
+            previousLocation: current.occurrence.location,
+            restored: current.occurrence.status === "cancelled",
+          },
+          change,
+          notify,
+        )
+      : [];
   const ciphertext = input.providerJoinUrl
     ? await sealProviderJoinUrl(input.providerJoinUrl, encryptionSecret)
     : input.providerJoinUrl === null
@@ -254,9 +366,10 @@ export async function updateSeriesOccurrence(
     await commitEventResourceManagementBatch(db, actor, current.context, "manage", [
       db
         .prepare(
-          `UPDATE event_occurrences SET starts_at = ?, ends_at = ?, status = COALESCE(?, status),
+          `UPDATE event_occurrences SET recurrence_id = COALESCE(recurrence_id, starts_at), starts_at = ?, ends_at = ?, status = COALESCE(?, status),
              location_override = CASE WHEN ? = 1 THEN ? ELSE location_override END,
              provider_join_url_ciphertext = CASE WHEN ? = 1 THEN ? ELSE provider_join_url_ciphertext END,
+             calendar_sequence = calendar_sequence + ?,
              updated_at = ? WHERE id = ? AND series_id = ? AND updated_at = ?`,
         )
         .bind(
@@ -267,6 +380,7 @@ export async function updateSeriesOccurrence(
           input.locationOverride ?? null,
           ciphertext !== undefined ? 1 : 0,
           ciphertext ?? null,
+          change ? 1 : 0,
           now,
           occurrenceId,
           seriesId,
@@ -290,6 +404,8 @@ export async function updateSeriesOccurrence(
              updated_at = ? WHERE id = ?`,
         )
         .bind(seriesId, seriesId, now, current.series.eventId),
+      ...notifications,
+      ...(change ? prepareCalendarRevision(db, seriesId) : []),
     ]);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {

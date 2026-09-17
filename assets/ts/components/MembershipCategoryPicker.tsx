@@ -1,4 +1,4 @@
-import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../shared/schemas/membership-categories";
+import { type MembershipCategory } from "../../shared/schemas/membership-categories";
 import { Checkbox } from "../ui/Checkbox";
 import { useMembershipCategoryCatalog } from "../hooks/useMembershipCategoryCatalog";
 // `pk-field__label` and `pk-field__help` are written here as class names
@@ -7,9 +7,8 @@ import { useMembershipCategoryCatalog } from "../hooks/useMembershipCategoryCata
 import "../ui/Field.css";
 
 /**
- * Checkbox picker over the fixed membership-category vocabulary
- * (`MEMBERSHIP_CATEGORIES`). Replaces free-text comma-separated category
- * fields so a caller cannot type a code outside the shared vocabulary.
+ * Checkbox picker over the configured membership category catalog.
+ * Choices follow the catalog order and labels used by application forms.
  *
  * An empty selection is a meaningful value — "every category" — for
  * consumers such as mailing-list auto-sync filters. Keep that semantic
@@ -37,10 +36,11 @@ export function MembershipCategoryPicker({
    * The codes carry no meaning on their own. "A" is not a thing a reader
    * choosing categories can weigh, and a row of thirteen bare letters is what
    * #50 and #53 both objected to. The words come from the configured
-   * catalogue, so a category renamed there is renamed here, and a code the
-   * catalogue has not answered for yet keeps its letter rather than waiting.
+   * catalog, so a category renamed there is renamed here, and a code the
+   * catalog has not answered for yet keeps its letter rather than waiting.
    */
   const catalog = useMembershipCategoryCatalog();
+  const categoryCodes = catalog.map((category) => category.code);
   const labelFor = (category: MembershipCategory): string => {
     const entry = catalog.find((candidate) => candidate.code === category);
     return entry ? `${entry.label} (${category})` : category;
@@ -49,8 +49,8 @@ export function MembershipCategoryPicker({
   function toggle(category: MembershipCategory, checked: boolean): void {
     if (checked === selectedSet.has(category)) return;
     const next = checked
-      ? MEMBERSHIP_CATEGORIES.filter((candidate) => selectedSet.has(candidate) || candidate === category)
-      : MEMBERSHIP_CATEGORIES.filter((candidate) => selectedSet.has(candidate) && candidate !== category);
+      ? categoryCodes.filter((candidate) => selectedSet.has(candidate) || candidate === category)
+      : categoryCodes.filter((candidate) => selectedSet.has(candidate) && candidate !== category);
     onChange(next);
   }
 
@@ -67,7 +67,7 @@ export function MembershipCategoryPicker({
           across a wide screen are a paragraph of checkboxes nobody can scan.
           The grid keeps them in aligned columns at whatever width there is. */}
       <div class="pk-grid pk-grid--tight">
-        {MEMBERSHIP_CATEGORIES.map((category) => {
+        {categoryCodes.map((category) => {
           const id = `${idPrefix}-${category}`;
           return (
             <Checkbox

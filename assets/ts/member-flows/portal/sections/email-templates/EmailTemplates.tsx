@@ -1,18 +1,22 @@
-import { useState, useEffect } from "preact/hooks";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
+import type { MenuItem } from "../../../../ui/Menu";
+import { RowActions } from "../../../../ui/RowActions";
 import { useContractForm, type FieldPresentation } from "../../../../hooks/useContractForm";
 import { Alert } from "../../../../ui/Alert";
-import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
-import { getJson, postJson } from "../../../../shared/api-client";
-import { toast } from "../../ui";
-import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
+import { deleteJson, getJson, postJson } from "../../../../shared/api-client";
+import { fmt, toast } from "../../ui";
+import type { EmailTemplateSummary, EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
+import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import {
   emailTemplateCreateSchema,
   emailTemplatesListResponseSchema,
@@ -222,17 +226,28 @@ function CreateTemplate({
             </Field>
 
             <Field label="Body" required {...form.of("content")}>
-              {(control) => (
-                <Textarea
-                  {...control}
-                  name="content"
-                  class="pk-mono"
-                  rows={12}
-                  value={body}
-                  placeholder="Template body content…"
-                  onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-                />
-              )}
+              {(control) =>
+                contentType === "markdown" ? (
+                  <MarkdownEditor
+                    {...control}
+                    name="content"
+                    label="Body"
+                    initialValue={body}
+                    initialMode="source"
+                    onChange={setBody}
+                  />
+                ) : (
+                  <Textarea
+                    {...control}
+                    name="content"
+                    class="pk-mono"
+                    rows={12}
+                    value={body}
+                    placeholder="Template body content…"
+                    onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+                  />
+                )
+              }
             </Field>
 
             {error && <Alert tone="danger">{error}</Alert>}
@@ -288,8 +303,82 @@ function EmailTemplateCreateOnly() {
 
 type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
 
-export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean; canWrite: boolean }) {
+export function EmailTemplates({
+  canRead = true,
+  canWrite,
+  canManage = false,
+}: {
+  canRead?: boolean;
+  canWrite: boolean;
+  /** May archive and delete templates (`email-templates:manage`). */
+  canManage?: boolean;
+}) {
   const [view, setView] = useState<TemplatesView>("list");
+  const tableActions = useRef<ApiTableActions | null>(null);
+
+  async function archiveTemplate(templateKey: string) {
+    const confirmed = await confirmAction({
+      title: `Archive ${templateKey}?`,
+      body: "Every version is retired.",
+      consequences: [
+        "Messages queued for this key fail to render until a version is activated again.",
+        "The versions stay on record and can be activated later.",
+      ],
+      confirmLabel: "Archive template",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    try {
+      await postJson(`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/archive`, {}, successResponseSchema);
+      toast(`${templateKey} archived`, "success");
+      await tableActions.current?.reload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  }
+
+  async function deleteTemplate(templateKey: string) {
+    const confirmed = await confirmAction({
+      title: `Delete ${templateKey}?`,
+      body: "The template and every version of it are removed.",
+      consequences: [
+        "This cannot be undone.",
+        "Code that sends with this key will fail until a template exists again.",
+      ],
+      confirmLabel: "Delete template",
+      tone: "danger",
+      typedConfirmation: templateKey,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteJson(`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}`, successResponseSchema);
+      toast(`${templateKey} deleted`, "success");
+      await tableActions.current?.reload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  }
+
+  // Archive while anything is live; delete once nothing is. The command that
+  // does not apply is absent rather than shown disabled.
+  function rowActions(template: EmailTemplateSummary): MenuItem[] {
+    return [
+      ...(template.status !== "archived"
+        ? [{ id: "archive", label: "Archive template", onSelect: () => void archiveTemplate(template.template_key) }]
+        : []),
+      ...(template.status !== "active"
+        ? [
+            {
+              id: "delete",
+              label: "Delete template",
+              danger: true,
+              separatorBefore: template.status !== "archived",
+              onSelect: () => void deleteTemplate(template.template_key),
+            },
+          ]
+        : []),
+    ];
+  }
 
   async function openEditor(key: string) {
     try {
@@ -340,6 +429,7 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
         resolve={(data) => data.templates}
         resolvePage={(data) => data.page}
         paginate
+        actionsRef={tableActions}
         searchPlaceholder="Search template key…"
         createAction={canWrite ? { label: "New template", onSelect: () => setView("create") } : undefined}
         columns={[
@@ -347,34 +437,52 @@ export function EmailTemplates({ canRead = true, canWrite }: { canRead?: boolean
             header: "Template Key",
             cell: (t) => t.template_key,
             className: "pk-mono pk-small",
+            width: "primary",
             sort: { asc: "template_key", desc: "-template_key" },
           },
           {
+            // One word: the server states the template's lifecycle (#98). A
+            // pending draft is noted under the active version rather than as
+            // a second status.
+            header: "Status",
+            cell: (t) => <Badge status={t.status} />,
+            width: "fit",
+          },
+          {
             header: "Active",
-            cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
-            className: "pk-mono",
+            cell: (t) => (
+              <span class="pk-mono">
+                {t.active_version != null ? `v${t.active_version}` : "—"}
+                {t.draft_count > 0 && (
+                  <span class="pk-small pk-muted">
+                    {" "}
+                    · {t.draft_count} {t.draft_count === 1 ? "draft" : "drafts"}
+                  </span>
+                )}
+              </span>
+            ),
             width: "fit",
             sort: { asc: "active_version", desc: "-active_version" },
           },
           {
-            header: "Status",
-            cell: (t) => {
-              const hasActive = t.active_version != null;
-              return (
-                <div class="pk-cluster">
-                  <Badge status={hasActive ? "active" : "draft"} />
-                  {hasActive && t.draft_count > 0 && <ToneBadge tone="warn">draft pending</ToneBadge>}
-                </div>
-              );
-            },
-          },
-          {
-            header: "Versions",
-            cell: (t) => t.version_count,
-            className: "pk-mono",
+            // When the template last changed, so a modified one is found at
+            // a glance (#115).
+            header: "Last changed",
+            cell: (t) => fmt(t.last_changed_at),
+            className: "pk-small",
             width: "fit",
-            sort: { asc: "version_count", desc: "-version_count", defaultDirection: "desc" },
+            sort: { asc: "last_changed_at", desc: "-last_changed_at", defaultDirection: "desc" },
           },
+          ...(canManage
+            ? [
+                {
+                  header: "",
+                  className: "pk-end",
+                  width: "fit" as const,
+                  cell: (t: EmailTemplateSummary) => <RowActions subject={t.template_key} actions={rowActions(t)} />,
+                },
+              ]
+            : []),
         ]}
         empty={
           canWrite ? <EmptyState title="No templates yet" body="Create a template to get started." /> : "No templates"

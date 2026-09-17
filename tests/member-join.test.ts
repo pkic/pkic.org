@@ -307,7 +307,7 @@ describe("verified-email-first membership join", () => {
     };
     const first = await postJson(testEnv, "/api/v1/members/applications", payload);
     expect(first.status).toBe(201);
-    expect(memberApplicationCreateResponseSchema.parse(await first.json()).stage).toBe("pending");
+    expect(memberApplicationCreateResponseSchema.parse(await first.json()).stage).toBe("submitted");
 
     const replay = await postJson(testEnv, "/api/v1/members/applications", payload);
     expect(replay.status).toBe(409);
@@ -367,7 +367,7 @@ describe("verified-email-first membership join", () => {
         applicantKind: "organization",
         applicantUserId: userId,
       }),
-    ).rejects.toMatchObject({ status: 409, code: "MEMBER_JOIN_IDENTITY_CHANGED" });
+    ).rejects.toMatchObject({ status: 409, code: "MEMBER_JOIN_CONTEXT_CHANGED" });
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toEqual([]);
     expect(await queryAll(testEnv.DB, "SELECT id FROM form_submissions")).toEqual([]);
   });

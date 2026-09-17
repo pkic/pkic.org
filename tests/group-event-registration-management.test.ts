@@ -312,6 +312,43 @@ describe("group event attendee management", () => {
     expect(accepted).toEqual({ status: "accepted" });
   });
 
+  it("cancels a registration from the record with event manage, once, and tells the attendee", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId } = await seedAttendees(event.id);
+    const endpoint = `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}`;
+
+    // Attendance management alone may move days, not end the registration.
+    const refused = await request(fixture.granteeLeaderToken, endpoint, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "cancel" }),
+    });
+    expect(refused.status).toBe(403);
+
+    const cancelled = await request(fixture.ownerLeaderToken, endpoint, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "cancel" }),
+    });
+    expect(cancelled.status, await cancelled.clone().text()).toBe(200);
+    const body = (await cancelled.json()) as { registration: { status: string } };
+    expect(body.registration.status).toBe("cancelled");
+    expect(
+      await env.DB.prepare("SELECT status, cancelled_at FROM registrations WHERE id = ?").bind(registrationId).first(),
+    ).toMatchObject({ status: "cancelled" });
+    // The status is what ends the registration: its day rows stay on record,
+    // as they do for a self-service cancellation, so a restore knows the days.
+    const notice = await env.DB.prepare(
+      "SELECT subject FROM email_outbox WHERE template_key = 'registration_updated' ORDER BY created_at DESC LIMIT 1",
+    ).first<{ subject: string }>();
+    expect(notice?.subject).toContain("cancelled");
+
+    const again = await request(fixture.ownerLeaderToken, endpoint, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "cancel" }),
+    });
+    expect(again.status).toBe(409);
+  });
+
   it("does not let attendance management restore a cancelled registration", async () => {
     const fixture = await createFixture();
     const event = await createEvent(fixture);

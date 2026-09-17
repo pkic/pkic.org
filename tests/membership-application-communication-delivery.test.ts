@@ -91,7 +91,7 @@ describe("membership application communication delivery", () => {
       applicantName: APPLICANT_NAME,
       organizationName: "Example Organization",
       membershipCategory: "F",
-      stage: "pending",
+      stage: "submitted",
     });
   });
 

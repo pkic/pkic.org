@@ -34,7 +34,7 @@ function labelize(value: string): string {
 /** The motion tally, one card per choice the server counted. */
 function CountGrid({ counts }: { counts: Record<string, number> }) {
   return (
-    <div class="pk-grid pk-grid--tight">
+    <div class="pk-stat-row">
       {Object.entries(counts).map(([key, value]) => (
         <StatCard key={key} label={labelize(key)} value={String(value)} />
       ))}
@@ -87,7 +87,7 @@ export function GroupVoteStatistics({ groupId, voteId }: { groupId: string; vote
     [groupId, voteId],
   );
 
-  if (!statistics.data && statistics.loading) return <Spinner label="Loading vote statistics…" />;
+  if (!statistics.data && statistics.loading) return <Spinner label="Loading vote analytics…" />;
   if (statistics.error) return <ErrorAlert error={statistics.error} />;
   if (!statistics.data) return null;
 
@@ -96,8 +96,8 @@ export function GroupVoteStatistics({ groupId, voteId }: { groupId: string; vote
     <div class="pk">
       {/* A panel is a section, so it needs its own name to be announced as a
           region rather than an anonymous group of numbers. */}
-      <Panel aria-label="Vote statistics">
-        <PanelHeader title="Vote statistics">
+      <Panel aria-label="Vote analytics">
+        <PanelHeader title="Vote analytics">
           <Badge tone="neutral">Counts by {labelize(participation.unit)}</Badge>
         </PanelHeader>
         <PanelBody class="pk-stack">
@@ -105,7 +105,7 @@ export function GroupVoteStatistics({ groupId, voteId }: { groupId: string; vote
             Round {statistics.data.round} · {labelize(statistics.data.status)} ·{" "}
             {labelize(statistics.data.electorateMode)}
           </p>
-          <div class="pk-grid pk-grid--tight">
+          <div class="pk-stat-row">
             <StatCard label="Currently eligible" value={String(participation.currentEligible)} />
             <StatCard label="Currently eligible and cast" value={String(participation.currentEligibleCast)} />
             <StatCard label="Currently eligible and not cast" value={String(participation.currentEligibleNotCast)} />

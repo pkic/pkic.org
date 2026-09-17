@@ -53,7 +53,6 @@ export function withDependencyHandling(env: Env): Env {
   return {
     ...env,
     DB: resilientDatabase(env.DB),
-    ...(env.RSVP_EMAIL_BUCKET ? { RSVP_EMAIL_BUCKET: resilientBucket(env.RSVP_EMAIL_BUCKET) } : {}),
     ...(env.ASSETS_BUCKET ? { ASSETS_BUCKET: resilientBucket(env.ASSETS_BUCKET) } : {}),
     ...(env.SPEAKER_UPLOADS_BUCKET ? { SPEAKER_UPLOADS_BUCKET: resilientBucket(env.SPEAKER_UPLOADS_BUCKET) } : {}),
   };

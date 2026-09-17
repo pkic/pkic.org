@@ -1,3 +1,4 @@
+import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
 /**
  * application-stage-machine.test.ts
  *
@@ -40,8 +41,9 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
         ? (overrides.organization_domain as string | null)
         : (applicantEmail.split("@")[1] ?? null),
     membershipCategory: (overrides.membership_category as string) ?? "F",
-    stage: (overrides.stage as string) ?? "pending",
+    stage: (overrides.stage as string) ?? "submitted",
   });
+  await pinReviewedStaffWorkflow(env.DB, id, (overrides.membership_category as string) ?? "F", false);
   return { id };
 }
 
@@ -57,16 +59,16 @@ describe("Application stage machine, communications, notes", () => {
     adminToken = await createAdminSession(env.DB, adminId, "app-stage-admin-token");
   });
 
-  it("transitions pending -> in_review and records a member_application_events row", async () => {
+  it("transitions submitted -> declined and records a member_application_events row", async () => {
     const { id } = await createApplication();
     const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "declined" }),
     });
     expect(response.status).toBe(200);
 
     const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
-    expect(rows[0].stage).toBe("in_review");
+    expect(rows[0].stage).toBe("declined");
 
     const events = await queryAll<{ actor_user_id: string | null }>(
       env.DB,
@@ -80,7 +82,7 @@ describe("Application stage machine, communications, notes", () => {
     const { id } = await createApplication();
     const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "declined" }),
     });
 
     expect(response.status).toBe(403);
@@ -107,11 +109,11 @@ describe("Application stage machine, communications, notes", () => {
     const [first, second] = await Promise.all([
       call(adminToken, `/api/v1/members/applications/${id}/stage`, {
         method: "PATCH",
-        body: JSON.stringify({ toStage: "in_review" }),
+        body: JSON.stringify({ toStage: "declined" }),
       }),
       call(adminToken, `/api/v1/members/applications/${id}/stage`, {
         method: "PATCH",
-        body: JSON.stringify({ toStage: "in_review" }),
+        body: JSON.stringify({ toStage: "declined" }),
       }),
     ]);
 
@@ -119,29 +121,29 @@ describe("Application stage machine, communications, notes", () => {
     expect(statuses).toEqual([200, 409]);
 
     const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
-    expect(rows[0].stage).toBe("in_review");
+    expect(rows[0].stage).toBe("declined");
 
     const events = await queryAll(env.DB, "SELECT * FROM member_application_events WHERE application_id = ?", id);
     expect(events).toHaveLength(1);
   });
 
-  it("rejects an invalid transition (pending -> ec_review)", async () => {
+  it("rejects an invalid transition (submitted -> approved)", async () => {
     const { id } = await createApplication();
     const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "ec_review" }),
+      body: JSON.stringify({ toStage: "approved" }),
     });
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(400);
   });
 
   it("requires a valid on_hold subtype when moving to on_hold, and queues the matching email", async () => {
-    const { id } = await createApplication({ stage: "in_review" });
+    const { id } = await createApplication({ stage: "processing" });
 
     const missingSubtype = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
       body: JSON.stringify({ toStage: "on_hold" }),
     });
-    expect(missingSubtype.status).toBe(422);
+    expect(missingSubtype.status).toBe(400);
 
     const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
@@ -165,7 +167,7 @@ describe("Application stage machine, communications, notes", () => {
   });
 
   it("rolls back the transition, event, and audit when its outbox insert fails", async () => {
-    const { id } = await createApplication({ stage: "in_review" });
+    const { id } = await createApplication({ stage: "processing" });
     await env.DB.prepare(
       `CREATE TRIGGER fail_stage_email
        BEFORE INSERT ON email_outbox
@@ -187,7 +189,7 @@ describe("Application stage machine, communications, notes", () => {
         "SELECT stage FROM member_applications WHERE id = ?",
         id,
       );
-      expect(application).toEqual({ stage: "in_review" });
+      expect(application).toEqual({ stage: "processing" });
       expect(
         await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
       ).toHaveLength(0);
@@ -203,7 +205,7 @@ describe("Application stage machine, communications, notes", () => {
     }
   });
 
-  it("supports the on_hold -> in_review back-transition and clears on_hold_subtype", async () => {
+  it("supports the on_hold -> processing back-transition and clears on_hold_subtype", async () => {
     const { id } = await createApplication({ stage: "on_hold" });
     await env.DB.prepare("UPDATE member_applications SET on_hold_subtype = 'request_authority' WHERE id = ?")
       .bind(id)
@@ -211,7 +213,7 @@ describe("Application stage machine, communications, notes", () => {
 
     const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "processing" }),
     });
     expect(response.status).toBe(200);
 
@@ -220,7 +222,7 @@ describe("Application stage machine, communications, notes", () => {
       "SELECT stage, on_hold_subtype FROM member_applications WHERE id = ?",
       id,
     );
-    expect(rows[0].stage).toBe("in_review");
+    expect(rows[0].stage).toBe("processing");
     expect(rows[0].on_hold_subtype).toBeNull();
   });
 
@@ -228,7 +230,7 @@ describe("Application stage machine, communications, notes", () => {
     const { id } = await createApplication({ stage: "declined" });
     const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "processing" }),
     });
     expect(response.status).toBe(409);
   });
@@ -321,7 +323,11 @@ describe("Application stage machine, communications, notes", () => {
     const { id } = await createApplication();
     await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({
+        toStage: "on_hold",
+        onHoldSubtype: "request_information",
+        note: "Please supply the document.",
+      }),
     });
     await call(adminToken, `/api/v1/members/applications/${id}/notes`, {
       method: "POST",
@@ -395,13 +401,13 @@ describe("Application stage machine, communications, notes", () => {
   });
 
   it("GET list filters by stage", async () => {
-    await createApplication({ stage: "pending" });
+    await createApplication({ stage: "submitted" });
     const { id: reviewId } = await createApplication({
-      stage: "in_review",
+      stage: "processing",
       applicant_email: "second@second.test",
     });
 
-    const response = await call(adminToken, "/api/v1/members/applications?stage=in_review");
+    const response = await call(adminToken, "/api/v1/members/applications?stage=processing");
     expect(response.status).toBe(200);
     const body = (await response.json()) as { applications: Array<{ id: string }> };
     expect(body.applications).toHaveLength(1);
@@ -421,7 +427,7 @@ describe("Application stage machine, communications, notes", () => {
 
     const response = await call(staffToken, `/api/v1/members/applications/${id}/stage`, {
       method: "PATCH",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "processing" }),
     });
     expect(response.status).toBe(401);
   });

@@ -1,3 +1,4 @@
+import { googleGroupsSyncEnabledSql } from "./group-policy";
 import { all, first, run } from "../../db/queries";
 import { createDurableJobLease } from "../../jobs/lease";
 import { requestJobWake } from "../scheduled-jobs/dispatcher";
@@ -28,7 +29,7 @@ export const GOOGLE_GROUPS_DUE_QUERY = `
      AND desired.google_group_email = current_row.google_group_email
      AND desired.generation = current_row.generation
      AND desired.desired_action = current_row.action
-   WHERE current_row.status = 'pending' AND current_row.next_attempt_at <= ?
+   WHERE current_row.status = 'pending' AND current_row.next_attempt_at <= ? AND ${googleGroupsSyncEnabledSql("current_row.google_group_email")}
   UNION ALL
   SELECT ${QUEUE_COLUMNS}, current_row.lease_expires_at AS due_at, current_row.rowid AS queue_order
     FROM google_groups_sync_queue current_row
@@ -37,7 +38,7 @@ export const GOOGLE_GROUPS_DUE_QUERY = `
      AND desired.google_group_email = current_row.google_group_email
      AND desired.generation = current_row.generation
      AND desired.desired_action = current_row.action
-   WHERE current_row.status = 'processing' AND current_row.lease_expires_at <= ?
+   WHERE current_row.status = 'processing' AND current_row.lease_expires_at <= ? AND ${googleGroupsSyncEnabledSql("current_row.google_group_email")}
   ORDER BY due_at, queue_order
   LIMIT ?`;
 

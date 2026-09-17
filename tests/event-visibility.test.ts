@@ -284,7 +284,11 @@ describe("event audience viewer state", () => {
     expect(list.events[0]).toMatchObject({ slug: "public-event", basePath: "/events/public-event/", viewer: null });
 
     const detail = await requestAudienceDetail("/api/v1/events/public-event");
-    expect(detail).toMatchObject({ basePath: "/events/public-event/", viewer: null });
+    expect(detail).toMatchObject({
+      basePath: "/events/public-event/",
+      viewer: null,
+      registrationPath: "/events/public-event/register/",
+    });
 
     let prepareCalls = 0;
     const underlyingDb = env.DB as unknown as DatabaseLike;

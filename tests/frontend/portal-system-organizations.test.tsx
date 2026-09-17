@@ -305,7 +305,7 @@ describe("portal System Organizations", () => {
     expect(rowLink?.textContent).toBe("Open Example Organization");
   });
 
-  it("says an absent category and an absent contact in words, not in a red or grey tint", async () => {
+  it("says an absent contact in words, not in a grey tint, and carries no membership column", async () => {
     const organization = { ...detail().organization, membershipCategory: null, primaryContactName: null };
     vi.stubGlobal(
       "fetch",
@@ -323,8 +323,19 @@ describe("portal System Organizations", () => {
     await settle();
 
     const row = container.querySelector("tbody tr");
-    expect(row?.textContent).toContain("Not a member");
     expect(row?.textContent).toContain("None");
+    // The directory lists organizations, not memberships: not every
+    // organization is a member, and the ones that are appear under
+    // Membership with their category. So the column is gone, not "Not a
+    // member" in a softer tint (#121).
+    const headers = [...container.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim());
+    expect(headers).not.toContain("Category");
+    expect(row?.textContent).not.toContain("Not a member");
+    // The row leads with the organization's mark — initials while there is
+    // no logo — in the square an organization's mark takes.
+    const mark = row?.querySelector(".pk-avatar");
+    expect(mark?.classList.contains("pk-avatar--square")).toBe(true);
+    expect(mark?.textContent).not.toBe("");
     // Neither absence is carried by a colour class any more.
     expect(row?.querySelector("[class*='text-danger']")).toBeNull();
     expect(row?.querySelector("[class*='fst-italic']")).toBeNull();

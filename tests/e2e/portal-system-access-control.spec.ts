@@ -36,7 +36,10 @@ test("permitted staff manage a custom role through the Settings portal", async (
 
   await signInToPortal(page, e2eAdminEmail("portal-access-control"));
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByRole("link", { name: "Access control" }).click();
+  await page
+    .getByRole("complementary", { name: "Portal navigation" })
+    .getByRole("link", { name: "Access control", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/portal\/#\/settings\/access-control\/grants$/);
 
   // Tabs are URL-addressed — switching to Roles navigates to its canonical URL.
@@ -70,7 +73,8 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await page.screenshot({ path: test.info().outputPath("role-profile-header.png"), fullPage: true });
 
   // The role's edit is reachable from its detail, guarded by the shared PATCH contract.
-  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("button", { name: "Role actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   const editForm = page.locator("form", { has: page.getByRole("button", { name: "Save changes" }) });
   await editForm.getByLabel("Description").fill("Updated browser-test role");
   const updateResponse = page.waitForResponse(

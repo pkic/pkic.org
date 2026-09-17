@@ -24,6 +24,7 @@ export function normalizeEventRegistrationPolicy(value: string): EventDetail["re
     case "invite_only":
       return "invitation_only";
     case "no_registration":
+    case "automatic":
     case "optional":
     case "invitation_only":
     case "required":

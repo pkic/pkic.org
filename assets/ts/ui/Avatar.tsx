@@ -23,6 +23,13 @@ export interface AvatarProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement
    * see it.
    */
   status?: AvatarStatus;
+  /**
+   * `round` is a person. An organization's mark is a logo, and a logo in a
+   * circle is cropped where a face is framed — so a square with the picture
+   * fitted inside it, never cut. Every surface that draws people round keeps
+   * doing so; the shape is the caller's because the subject is.
+   */
+  shape?: "round" | "square";
 }
 
 export interface AvatarStatus {
@@ -31,8 +38,14 @@ export interface AvatarStatus {
   tone?: "accent" | "neutral";
 }
 
-export function Avatar({ name, src, size = "md", status, ...rest }: AvatarProps) {
-  const classes = ["pk-avatar", size === "md" ? null : `pk-avatar--${size}`].filter(Boolean).join(" ");
+export function Avatar({ name, src, size = "md", status, shape = "round", ...rest }: AvatarProps) {
+  const classes = [
+    "pk-avatar",
+    size === "md" ? null : `pk-avatar--${size}`,
+    shape === "square" ? "pk-avatar--square" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
   /*
    * "No usable portrait" includes one the browser could not load. A stored
    * headshot whose object has gone missing leaves a broken `<img>`, which

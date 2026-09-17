@@ -245,7 +245,7 @@ describe("public shared link recovery and flow state", () => {
     // came back as "S".
     expect(initialsFrom("Órla Ó Súilleabháin")).toBe("ÓS");
     expect(monogramFrom("Órla Ó Súilleabháin")).toBe("ÓÓS");
-    expect(statusLabel("in_consultation")).toBe("In consultation");
+    expect(statusLabel("processing")).toBe("Processing");
     expect(ORGANIZATION_CONTENT_FIELD_LABELS.blogFeedUrl).toBe("Blog feed URL");
     const container = mount(
       <>

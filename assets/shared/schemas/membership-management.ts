@@ -15,15 +15,13 @@ import {
   membershipCategorySchema,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   memberStatusSchema,
+  type MembershipCategoryCatalogEntry,
 } from "./membership-categories";
 import { httpUrlSchema } from "./urls";
 
 export { MEMBERSHIP_CATEGORIES, membershipCategorySchema, INDIVIDUAL_MEMBERSHIP_CATEGORIES };
 
-export const INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST = MEMBERSHIP_CATEGORIES.filter((category) =>
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category),
-) as [string, ...string[]];
-export const individualMembershipCategorySchema = z.enum(INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST);
+export const individualMembershipCategorySchema = membershipCategorySchema;
 
 export const memberProvisionIdentitySchema = z.object({
   name: trimmedString(1, 200),
@@ -32,43 +30,54 @@ export const memberProvisionIdentitySchema = z.object({
   links: linksSchema.optional(),
 });
 
-export const memberProvisionSchema = z
-  .object({
-    organizationName: trimmedString(1, 200).optional(),
-    website: httpUrlSchema.optional(),
-    description: trimmedString(0, 2000).optional(),
-    membershipCategory: membershipCategorySchema,
-    memberSince: z.iso.date(),
-    identities: z.array(memberProvisionIdentitySchema).min(1).max(10),
-    workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
-    activationReason: trimmedString(1, 500),
-  })
-  .superRefine((value, ctx) => {
-    const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
+export const memberProvisionSchema = z.object({
+  organizationName: trimmedString(1, 200).optional(),
+  website: httpUrlSchema.optional(),
+  description: trimmedString(0, 2000).optional(),
+  membershipCategory: membershipCategorySchema,
+  memberSince: z.iso.date(),
+  identities: z.array(memberProvisionIdentitySchema).min(1).max(10),
+  workingGroupSlugs: z.array(groupSlugSchema).max(200).default([]),
+  activationReason: trimmedString(1, 500),
+});
 
-    if (isIndividual) {
-      if (value.organizationName) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Individual categories (H5/H6/H7) have no organization — leave organizationName blank",
-          path: ["organizationName"],
-        });
-      }
-      if (value.identities.length !== 1) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Individual categories (H5/H6/H7) must have exactly one identity",
-          path: ["identities"],
-        });
-      }
-    } else if (!value.organizationName) {
+function refineMembershipProvision(
+  value: Pick<z.infer<typeof memberProvisionSchema>, "organizationName" | "identities">,
+  category: Pick<MembershipCategoryCatalogEntry, "isIndividual">,
+  ctx: z.RefinementCtx,
+) {
+  if (category.isIndividual) {
+    if (value.organizationName)
       ctx.addIssue({
         code: "custom",
-        message: "organizationName is required for org-tied categories (A-G, H1-H4, H8)",
+        message: "Individual memberships do not have an organization",
         path: ["organizationName"],
       });
-    }
-  });
+    if (value.identities.length !== 1)
+      ctx.addIssue({
+        code: "custom",
+        message: "Individual memberships require exactly one user",
+        path: ["identities"],
+      });
+  } else if (!value.organizationName) {
+    ctx.addIssue({
+      code: "custom",
+      message: "An organization name is required for this category",
+      path: ["organizationName"],
+    });
+  }
+}
+
+export function memberProvisionSchemaForCategory(category: Pick<MembershipCategoryCatalogEntry, "isIndividual">) {
+  return memberProvisionSchema.superRefine((value, ctx) => refineMembershipProvision(value, category, ctx));
+}
+
+export function memberProvisionCategoryPolicySchema(category: Pick<MembershipCategoryCatalogEntry, "isIndividual">) {
+  return memberProvisionSchema
+    .pick({ organizationName: true })
+    .extend({ identities: z.array(memberProvisionIdentitySchema) })
+    .superRefine((value, ctx) => refineMembershipProvision(value, category, ctx));
+}
 
 const memberCapacityCoreSchema = z.object({
   id: databaseIdSchema,
@@ -99,11 +108,25 @@ export const memberCapacityMutationResponseSchema = z.object({
 });
 
 export const memberCapacityIdParamsSchema = z.object({ id: databaseIdSchema });
+/**
+ * The profile an individual capacity carries itself. An organization
+ * identity's profile is written on the organization; an individual member —
+ * H5, H6, H7 — has no organization to write it through, and had no way to
+ * state a biography at all (#91). A job title is a role at an organization,
+ * which an individual capacity does not have.
+ */
+export const memberCapacityProfileUpdateSchema = z
+  .object({
+    biography: trimmedString(0, 5000).nullable().optional(),
+    links: linksSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "At least one profile field is required");
 export const memberCapacityUpdateSchema = z
   .object({
     membershipCategory: individualMembershipCategorySchema.optional(),
     status: memberStatusSchema.optional(),
     showOnOrgProfile: z.boolean().optional(),
+    profile: memberCapacityProfileUpdateSchema.optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "At least one field must be provided",

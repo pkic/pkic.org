@@ -2415,7 +2415,7 @@ describe("speaker self-management endpoints", () => {
       env.DB,
       "SELECT template_key, subject, payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
-    expect(outboxRows[0].template_key).toBe("speaker_profile_request");
+    expect(outboxRows[0].template_key).toBe("speaker_profile_reminder");
     expect(outboxRows[0].subject).toContain("review or update your speaker profile");
     expect(outboxRows[0].payload_json).toContain("profileUrl");
   });
@@ -2438,11 +2438,17 @@ describe("speaker self-management endpoints", () => {
     expect(remindResponse.status).toBe(200);
 
     // Extract the token from the queued email's profileUrl
-    const outboxRows = await queryAll<{ payload_json: string }>(
+    const outboxRows = await queryAll<{ template_key: string; payload_json: string }>(
       env.DB,
-      "SELECT payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
+      "SELECT template_key, payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
     );
-    const payload = await deliveredEmailPayload<{ profileUrl?: string }>(env.DB, env, outboxRows[0].payload_json);
+    expect(outboxRows[0].template_key).toBe("speaker_profile_reminder");
+    const payload = await deliveredEmailPayload<{ profileUrl?: string; requiresConfirmation?: boolean }>(
+      env.DB,
+      env,
+      outboxRows[0].payload_json,
+    );
+    expect(payload.requiresConfirmation).toBe(true);
     expect(payload.profileUrl).toBeDefined();
     const profileUrl = new URL(payload.profileUrl!);
     const token = profileUrl.searchParams.get("token");

@@ -1,3 +1,6 @@
+import { useContractForm } from "../../../../hooks/useContractForm";
+import { Alert } from "../../../../ui/Alert";
+import { applicationStageTransitionSchema } from "../../../../../shared/schemas/membership-application-management";
 import { useState } from "preact/hooks";
 import {
   ON_HOLD_SUBTYPES,
@@ -22,14 +25,10 @@ import { Select, TextInput } from "../../../../ui/TextControl";
 export function ApplicationTransitionCard({
   detail,
   canWrite,
-  canApprove,
-  onApprove,
   onTransition,
 }: {
   detail: MembershipApplicationDetail;
   canWrite: boolean;
-  canApprove: boolean;
-  onApprove: () => Promise<void>;
   onTransition: (params: { toStage: string; onHoldSubtype?: string; note?: string }) => Promise<void>;
 }) {
   const [transitioning, setTransitioning] = useState(false);
@@ -37,25 +36,31 @@ export function ApplicationTransitionCard({
   const [onHoldSubtype, setOnHoldSubtype] = useState<string>(ON_HOLD_SUBTYPES[0]);
   const [transitionNote, setTransitionNote] = useState("");
 
+  const [error, setError] = useState("");
+  const form = useContractForm(applicationStageTransitionSchema, {
+    toStage,
+    onHoldSubtype: toStage === "on_hold" ? onHoldSubtype : undefined,
+    note: transitionNote,
+  });
   const availableTransitions = allowedTransitions(detail.stage as ApplicationStage) ?? [];
 
   async function submitTransition(e: Event) {
     e.preventDefault();
-    // `loading` keeps the submit button focusable rather than disabling it, so
-    // the guard against a second submission lives here instead of in the
-    // markup: a disabled control loses focus, which throws a screen-reader
-    // user out of the form they were in the middle of.
-    if (transitioning || !toStage) return;
+    if (transitioning) return;
+    setError("");
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setTransitioning(true);
     try {
-      await onTransition({ toStage, onHoldSubtype, note: transitionNote });
+      await onTransition(checked.data);
+      form.reset();
       setToStage("");
       setTransitionNote("");
-    } catch {
-      // The caller owns reporting a refused transition — it is the one holding
-      // the request — so this only has to keep the reader's work: the stage and
-      // the note stay as typed, ready to retry. Without the catch the rejection
-      // escaped as an unhandled promise and the card said nothing at all.
+    } catch (cause) {
+      setError(form.refuse(cause));
     } finally {
       setTransitioning(false);
     }
@@ -67,27 +72,23 @@ export function ApplicationTransitionCard({
     <Panel class="pk" aria-label="Stage transition">
       <PanelHeader title="Stage transition" />
       <PanelBody class="pk-stack pk-stack--snug">
-        {canApprove && detail.stage === "ec_review" && (
-          <div class="pk-cluster">
-            {/* Bootstrap's `success` and `primary` were two fills for one
-                thing — the card's affirmative action — so both resolve to the
-                system's single primary variant. */}
-            <Button size="sm" variant="primary" onClick={() => void onApprove()}>
-              Approve &amp; run onboarding
-            </Button>
-          </div>
-        )}
         {!canWrite ? null : availableTransitions.length === 0 ? (
           <p class="pk-muted pk-small">No further transitions from this stage.</p>
         ) : (
-          <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submitTransition(event)}>
+          <form
+            noValidate
+            {...form.handlers}
+            class="pk-stack pk-stack--snug"
+            onSubmit={(event) => void submitTransition(event)}
+          >
             {/* One `disabled` on the group takes every control out of play
                 while the transition is in flight, rather than one prop each. */}
             <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={transitioning}>
-              <Field label="Move to" required>
+              <Field label="Move to" required {...form.of("toStage")}>
                 {(control) => (
                   <Select
                     {...control}
+                    name="toStage"
                     value={toStage}
                     onChange={(event) => setToStage((event.target as HTMLSelectElement).value)}
                   >
@@ -101,10 +102,16 @@ export function ApplicationTransitionCard({
                 )}
               </Field>
               {toStage === "on_hold" && (
-                <Field label="Reason" required help="Why the application is being paused.">
+                <Field
+                  {...form.of("onHoldSubtype")}
+                  label="Reason"
+                  required
+                  help="Why the application is being paused."
+                >
                   {(control) => (
                     <Select
                       {...control}
+                      name="onHoldSubtype"
                       value={onHoldSubtype}
                       onChange={(event) => setOnHoldSubtype((event.target as HTMLSelectElement).value)}
                     >
@@ -120,18 +127,24 @@ export function ApplicationTransitionCard({
               {/* "(optional)" was part of the visible label, which made the
                   announced name of the control "Note (optional)". The word
                   belongs in the help text the label points at instead. */}
-              <Field label="Note" help="Optional. Recorded on the stage change for whoever reads it next.">
+              <Field
+                {...form.of("note")}
+                label="Note"
+                help="Optional. Recorded on the stage change for whoever reads it next."
+              >
                 {(control) => (
                   <TextInput
                     {...control}
+                    name="note"
                     value={transitionNote}
                     onInput={(event) => setTransitionNote((event.target as HTMLInputElement).value)}
                   />
                 )}
               </Field>
             </fieldset>
+            {error && <Alert tone="danger">{error}</Alert>}
             <div class="pk-cluster">
-              <Button type="submit" size="sm" variant="primary" loading={transitioning} disabled={!toStage}>
+              <Button type="submit" size="sm" variant="primary" loading={transitioning}>
                 Transition
               </Button>
             </div>

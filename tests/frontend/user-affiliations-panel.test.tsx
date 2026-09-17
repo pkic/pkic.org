@@ -1,16 +1,25 @@
 // @vitest-environment jsdom
+import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
+vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
+  useMembershipCategoryCatalog: () => exampleMembershipCategories,
+}));
 /**
  * The affiliations panel: the collection, and what may be added to it.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
+// The panel's own command navigates to the grant page (#107); the mock keeps
+// the router out of the test and records where it was sent.
+const navigate = vi.fn();
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";
+import { UserIdentityGrantForm } from "../../assets/ts/member-flows/portal/sections/system-users/UserIdentityGrantForm";
 import { identityCreateSchema } from "../../assets/shared/schemas/identity";
 import { individualMembershipGrantSchema } from "../../assets/shared/schemas/membership-management";
 import { organizationIdentityCreateRequestSchema } from "../../assets/shared/schemas/route-contracts-identities";
 import { normalizeValidation } from "../../assets/ts/shared/form/validation-map";
-import { buttonNamed, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseComboboxOption, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
 import { menuItemNamed } from "./helpers/row-actions";
 import {
   MEMBER_ID,
@@ -35,31 +44,44 @@ import {
 describe("UserAffiliationsPanel", () => {
   it("exposes the empty membership list as a live status region", () => {
     const container = mount();
-    void act(() =>
-      render(<UserAffiliationsPanel user={userWith([])} onChanged={vi.fn()} canManage canActivate />, container),
-    );
+    void act(() => render(<UserAffiliationsPanel user={userWith([])} onChanged={vi.fn()} canManage />, container));
 
     expect(container.querySelector('[role="status"]')?.textContent).toContain("No active identities.");
   });
 
+  // The grant form is a page under the record (#107); the panel's command
+  // only leads there, so the form is mounted the way the route mounts it.
   function openGrantForm(): HTMLElement {
     const container = mount();
     void act(() =>
-      render(<UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage canActivate />, container),
+      render(
+        <UserIdentityGrantForm user={userWith([])} canActivate onGranted={() => {}} cancelHref="/users/user-1" />,
+        container,
+      ),
+    );
+    return container;
+  }
+
+  it("leads to the identity grant page rather than unfolding a form in the panel", () => {
+    const container = mount();
+    void act(() =>
+      render(<UserAffiliationsPanel user={userWith([])} onChanged={async () => {}} canManage />, container),
     );
     void act(() => menuTrigger(container, "Affiliation settings").click());
     const add = menuItemNamed(container, "Add identity…");
     if (!add) throw new Error('the panel offers no "Add identity…"');
     void act(() => add.click());
-    return container;
-  }
+    expect(container.querySelector("form")).toBeNull();
+    expect(navigate).toHaveBeenCalledWith(`/users/${USER_ID}/affiliations/new`);
+  });
 
-  async function pickOrganizationOne(container: HTMLElement): Promise<HTMLSelectElement> {
-    await press(container, "Search");
-    const organization = controlFor<HTMLSelectElement>(container, "Organization");
-    await chooseOption(organization, PICKED_ORGANIZATION_ID);
+  // The organization is found by typing into one picker: no separate search
+  // button, no second request for the record (#96).
+  async function pickOrganizationOne(container: HTMLElement): Promise<HTMLInputElement> {
     await settle();
-    return organization;
+    await chooseComboboxOption(container, "Organization", PICKED_ORGANIZATION_ID);
+    await settle();
+    return controlFor<HTMLInputElement>(container, "Organization");
   }
 
   it("refuses an unpicked organization at the field, in the contract's words, and sends nothing", async () => {
@@ -69,7 +91,7 @@ describe("UserAffiliationsPanel", () => {
     await press(container, "Grant");
 
     expect(requests.filter((request) => request.method !== "GET")).toHaveLength(0);
-    const organization = controlFor<HTMLSelectElement>(container, "Organization");
+    const organization = controlFor<HTMLInputElement>(container, "Organization");
     expect(fieldOf(organization).classList.contains("pk-field--invalid")).toBe(true);
     expect(organization.getAttribute("aria-invalid")).toBe("true");
     const message = document.querySelector(`[id="${organization.getAttribute("aria-describedby") ?? ""}"]`);
@@ -156,7 +178,7 @@ describe("UserAffiliationsPanel", () => {
     const container = openGrantForm();
 
     await pickOrganizationOne(container);
-    expect(container.textContent).toContain("Category A");
+    expect(container.textContent).toContain("Example A (A)");
 
     const activate = container.querySelector<HTMLInputElement>("input#identity-activate-immediately");
     await act(() => {

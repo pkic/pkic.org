@@ -8,7 +8,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { MyOrganization } from "../../assets/ts/member-flows/portal/sections/MyOrganization";
 import { profile } from "../../assets/ts/member-flows/portal/state";
 import { beginRecordEdit } from "./helpers/record-edit";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor, markdownControl } from "./helpers/labelled-control";
 
 // The page carries the representatives roster, whose "Add coworker" leads to
 // an address of its own; the location hook needs a router in this environment.
@@ -243,11 +243,15 @@ describe("portal organization self-service", () => {
 
   /** The control a visible label is bound to, resolved the way a reader's
    *  assistive technology resolves it: through `for` and `id`, not proximity. */
-  function labelledControl(root: HTMLElement, label: string): HTMLInputElement | HTMLTextAreaElement {
+  function labelledControl(root: HTMLElement, label: string): HTMLElement {
     const element = [...root.querySelectorAll("label")].find((candidate) => candidate.textContent?.trim() === label);
     if (!element) throw new Error(`no label reads "${label}"`);
     const control = document.getElementById(element.htmlFor);
-    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+    // A native control, or the Markdown editor's editing surface (#114).
+    if (
+      !(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) &&
+      control?.getAttribute("role") !== "textbox"
+    ) {
       throw new Error(`the "${label}" label is not bound to a control`);
     }
     return control;
@@ -296,7 +300,7 @@ describe("portal organization self-service", () => {
 
     await beginRecordEdit(container, "Member page content actions");
     await settle();
-    const slogan = labelledControl(container, "Slogan");
+    const slogan = labelledControl(container, "Slogan") as HTMLInputElement;
     slogan.value = "Trust, made routine";
     await act(() => {
       slogan.dispatchEvent(new Event("input", { bubbles: true }));
@@ -314,7 +318,7 @@ describe("portal organization self-service", () => {
     expect(alert?.textContent).toContain("You don't have access to this");
     expect(container.textContent).not.toContain("HTTP 403");
     // A failed submission is a retry, not a restart: the edit survives it.
-    expect(labelledControl(container, "Slogan").value).toBe("Trust, made routine");
+    expect((labelledControl(container, "Slogan") as HTMLInputElement).value).toBe("Trust, made routine");
   });
 
   it("withholds the editor and the submission history from a member who is not an organization contact", async () => {
@@ -344,7 +348,9 @@ describe("portal organization self-service", () => {
     await beginRecordEdit(container, "Member page content actions");
     await settle();
     // Every editable field is bound to its label, so a screen reader announces
-    // the field rather than an unlabelled edit box.
+    // the field rather than an unlabelled edit box. The description is the
+    // shared Markdown editor, a lazy chunk, so it is waited for.
+    await markdownControl(container, "Description");
     for (const label of ["Slogan", "Description", "Website"]) {
       expect(labelledControl(container, label)).toBeInstanceOf(HTMLElement);
     }

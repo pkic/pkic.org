@@ -37,22 +37,19 @@ test("group configuration requires editing and preserves only saved changes", as
   await page.getByRole("tab", { name: "Eligibility", exact: true }).click();
   const eligibility = page.getByRole("tabpanel");
   await expect(eligibility.getByRole("table")).toBeVisible();
-  await expect(eligibility.getByRole("checkbox")).toHaveCount(0);
-  await edit("Eligibility actions");
-  const category = eligibility.getByRole("checkbox", {
-    name: "Certification Authorities and Trust Service Providers may join",
-    exact: true,
-  });
-  const initial = await category.isChecked();
-  await category.setChecked(!initial);
+  const label = "Certification Authorities and Trust Service Providers";
+  const row = eligibility.getByRole("row").filter({ has: page.getByText(label, { exact: true }) });
+  await expect(row.getByRole("checkbox", { name: label, exact: true })).toBeVisible();
+  const initial = (await row.innerText()).includes("Not allowed") ? false : true;
+  await row.getByRole("button", { name: `Actions for ${label}`, exact: true }).click();
+  await page.getByRole("menuitem", { name: initial ? "Disallow joining" : "Allow joining", exact: true }).click();
   await eligibility.getByRole("button", { name: "Cancel", exact: true }).click();
-  await edit("Eligibility actions");
-  await expect(category).toBeChecked({ checked: initial });
-  await category.setChecked(!initial);
+  await expect(row).toContainText(initial ? "Allowed" : "Not allowed");
+  await row.getByRole("checkbox", { name: label, exact: true }).check();
+  await eligibility.getByRole("button", { name: initial ? "Disallow joining" : "Allow joining", exact: true }).click();
+  await expect(row).toContainText(initial ? "Not allowed" : "Allowed");
   await eligibility.getByRole("button", { name: "Save category rules", exact: true }).click();
-  await expect(eligibility.getByRole("checkbox")).toHaveCount(0);
+  await expect(eligibility.getByRole("button", { name: "Save category rules", exact: true })).toHaveCount(0);
   await page.reload();
-  await edit("Eligibility actions");
-  await expect(category).toBeChecked({ checked: !initial });
-  await eligibility.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(row).toContainText(initial ? "Not allowed" : "Allowed");
 });

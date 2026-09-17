@@ -12,6 +12,7 @@ import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
 import { DataTable } from "../../../components/Table";
+import { TextDiff } from "../../../components/TextDiff";
 import { useContractForm } from "../../../hooks/useContractForm";
 import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
@@ -19,11 +20,8 @@ import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
-import { Textarea } from "../../../ui/TextControl";
 import { fmt, toast } from "../ui";
-// `pk-answer-pre` is written here as a class name rather than reached through a
-// component, so this module has to pull its stylesheet into its own chunk.
-import "../../../ui/Content.css";
+import { MarkdownEditor } from "../../../components/markdown-editor/MarkdownInput";
 
 const API_BASE = "/api/v1/organizations/content-reviews";
 type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
@@ -37,22 +35,12 @@ type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
  */
 const DEFAULT_QUEUE_STATUS: ReviewStatus = "pending";
 
+/**
+ * A field value as text to compare. `links` arrives as an array and is read
+ * one per line, so a changed link is marked on its own line.
+ */
 function formatDiffValue(value: unknown): string {
   return Array.isArray(value) ? value.join("\n") : String(value ?? "");
-}
-
-function isEmptyValue(value: unknown): boolean {
-  return value == null || value === "" || (Array.isArray(value) && value.length === 0);
-}
-
-/**
- * One side of a field diff. A multi-line proposal keeps its line breaks —
- * `links` arrives as an array joined by newlines — so the value renders as
- * wrapping preformatted text rather than collapsing into one run-on line.
- */
-function DiffValue({ value }: { value: unknown }) {
-  if (isEmptyValue(value)) return <em class="pk-muted">(empty)</em>;
-  return <p class="pk-answer-pre pk-break">{formatDiffValue(value)}</p>;
 }
 
 function statusLabel(value: ReviewStatus): string {
@@ -148,10 +136,21 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
               cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
               width: "fit",
             },
-            { header: "Current", cell: (entry) => <DiffValue value={entry.current} />, className: "pk-muted" },
-            // The first labelled column is fit-width here, so the prose
-            // column claims the slack explicitly.
-            { header: "Proposed", cell: (entry) => <DiffValue value={entry.proposed} />, width: "primary" },
+            // One column shows the change in place — removed words struck,
+            // inserted ones marked — instead of two fixed columns of prose
+            // to compare by eye (#97). The first column is fit-width, so
+            // this one claims the slack explicitly.
+            {
+              header: "Change",
+              cell: (entry) => (
+                <TextDiff
+                  before={formatDiffValue(entry.current)}
+                  after={formatDiffValue(entry.proposed)}
+                  label={`Change to ${ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field}`}
+                />
+              ),
+              width: "primary",
+            },
           ]}
           data={detail.diff}
           rowKey={(entry) => entry.field}
@@ -166,13 +165,13 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
               {...form.of("reviewerNote")}
             >
               {(control) => (
-                <Textarea
+                <MarkdownEditor
+                  variant="compact"
                   {...control}
                   name="reviewerNote"
-                  rows={3}
-                  maxlength={2000}
-                  value={reviewerNote}
-                  onInput={(event) => setReviewerNote((event.target as HTMLTextAreaElement).value)}
+                  label="Reviewer note"
+                  initialValue={reviewerNote}
+                  onChange={setReviewerNote}
                 />
               )}
             </Field>

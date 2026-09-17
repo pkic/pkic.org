@@ -103,6 +103,26 @@ afterEach(() => {
 });
 
 describe("group form management", () => {
+  it.each([
+    ["event_registration", "Registrations"],
+    ["proposal_submission", "Proposals"],
+  ])("explains where %s answers live without querying unrelated submissions", async (purpose, section) => {
+    const form = detail(GROUP_ID, ["view_definition", "submit", "view_responses", "manage"]);
+    form.form.purpose = purpose;
+    form.placement.contextType = "event";
+    const fetcher = vi.fn(async () => json(form));
+    vi.stubGlobal("fetch", fetcher);
+    const container = mount(
+      <GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={() => undefined} />,
+    );
+    await settle();
+    expect(container.textContent).toContain(`event’s ${section} section`);
+    expect(container.textContent).not.toContain("No responses yet");
+    expect(tabs(container).map((tab) => tab.textContent)).not.toContain("Analytics");
+    expect(tabs(container).map((tab) => tab.textContent)).not.toContain("Respond");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a path-owned group form with the shared authoring schema", async () => {
     const requests: Array<{ path: string; method: string; body: Record<string, unknown> }> = [];
     vi.stubGlobal(
@@ -368,7 +388,7 @@ describe("group form management", () => {
     );
     await settle();
 
-    const statisticsTab = tabs(container).find((item) => item.textContent === "Statistics")!;
+    const statisticsTab = tabs(container).find((item) => item.textContent === "Analytics")!;
     expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${PLACEMENT_ID}/statistics`);
 
     await act(async () => statisticsTab.click());

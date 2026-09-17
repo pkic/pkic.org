@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
+import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
+vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
+  useMembershipCategoryCatalog: () => exampleMembershipCategories,
+}));
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
@@ -69,6 +74,7 @@ describe("portal group mailing lists", () => {
           location.origin,
         );
         requests.push(url);
+        if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled: true, revision: 0 } });
         return json({
           mailingLists: [
             {
@@ -105,17 +111,23 @@ describe("portal group mailing lists", () => {
     expect(container.textContent).toContain("Architecture discussion");
     expect(container.textContent).not.toContain("My mailing-list preferences");
     expect(container.querySelector('select[aria-label^="Subscription preference"]')).toBeNull();
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
+    const collectionRequests = requests.filter((url) => url.pathname.endsWith("/management"));
+    expect(collectionRequests).toHaveLength(1);
+    expect(collectionRequests[0]).toMatchObject({
       pathname: `/api/v1/groups/${GROUP_ID}/mailing-lists/management`,
     });
-    expect(requests[0].searchParams.get("limit")).toBe("50");
-    expect(requests[0].searchParams.get("sort")).toBe("label");
+    expect(collectionRequests[0].searchParams.get("limit")).toBe("50");
+    expect(collectionRequests[0].searchParams.get("sort")).toBe("label");
+    expect(container.textContent).toContain("Enable Google Groups synchronization");
   });
   it("renders the manager empty state", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).endsWith("/synchronization")
+          ? json({ synchronization: { enabled: true, revision: 0 } })
+          : json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }),
+      ),
     );
     const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage />);
     await settle();
@@ -128,6 +140,8 @@ describe("portal group mailing lists", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         requests.push(new URL(String(input), location.origin));
+        if (String(input).endsWith("/synchronization"))
+          return json({ synchronization: { enabled: true, revision: 0 } });
         return json({ mailingLists: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
       }),
     );
@@ -187,6 +201,7 @@ describe("portal group mailing lists", () => {
         const method = init.method ?? "GET";
         const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
         requests.push({ url, method, body });
+        if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled: true, revision: 0 } });
         if (method === "POST") return json({ mailingList: list });
         if (method === "PATCH") return json({ mailingList: list });
         if (method === "DELETE") return json({ success: true });
@@ -209,7 +224,7 @@ describe("portal group mailing lists", () => {
     await settle();
     // Nothing is layered over the list to begin with: creating is a place
     // with its own address, under the reserved `new` segment.
-    expect(listing.querySelector("form")).toBeNull();
+    expect(listing.querySelector('input[type="email"]')).toBeNull();
 
     const container = mount(
       <>
@@ -295,11 +310,7 @@ describe("portal group mailing lists", () => {
     // their own preferences for every other list.
     expect(record.textContent).not.toContain("My mailing-list preferences");
     expect(record.querySelector('input[name="label"]')).toBeNull();
-    await act(async () => {
-      Array.from(record.querySelectorAll<HTMLButtonElement>('section[aria-label="Delivery"] button'))
-        .find((candidate) => candidate.textContent?.trim() === "Edit")
-        ?.click();
-    });
+    await beginRecordEdit(record, "Delivery actions", "Edit");
     await settle();
     const saveButton = Array.from(record.querySelectorAll("button")).find(
       (candidate) => candidate.textContent?.trim() === "Save changes",

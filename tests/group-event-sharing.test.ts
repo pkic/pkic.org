@@ -197,14 +197,58 @@ function registrationSubmissionMetadata() {
 beforeEach(resetDb);
 
 describe("group event sharing", () => {
+  it("separates unscheduled meeting containers from ordinary group events", async () => {
+    const fixture = await createFixture();
+    const draftId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO events
+      (id, slug, name, timezone, owner_group_id, profile_key, source_mode, created_at, updated_at)
+      VALUES (?, 'draft-meeting', 'Unscheduled meeting', 'UTC', ?, 'meeting', 'portal',
+        '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    )
+      .bind(draftId, fixture.ownerId)
+      .run();
+    const base = `/api/v1/groups/${fixture.ownerId}/events`;
+    const events = await authenticatedRequest(fixture.adminToken, `${base}?collection=events`);
+    expect(events.status).toBe(200);
+    expect(await events.json()).toMatchObject({ events: [{ id: fixture.eventId }], page: { total: 1 } });
+    const drafts = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
+    expect(drafts.status).toBe(200);
+    expect(await drafts.json()).toMatchObject({ events: [{ id: draftId, seriesId: null }], page: { total: 1 } });
+    const input = {
+      existingEventId: draftId,
+      eventSlug: "draft-meeting",
+      eventName: "Scheduled meeting",
+      profileKey: "meeting" as const,
+      policy: {
+        registrationPolicy: "no_registration" as const,
+        visibility: "group_members" as const,
+        memberEligibility: "owner_group" as const,
+        guestPolicy: "occurrence_invitation" as const,
+      },
+      startsAt: "2027-01-10T10:00:00.000Z",
+      recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+      timezone: "UTC",
+      durationMinutes: 60,
+    };
+    await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.granteeId, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    const series = await createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input);
+    expect(series.eventId).toBe(draftId);
+    expect(series.eventSlug).toBe("draft-meeting");
+    await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    const after = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
+    expect(await after.json()).toMatchObject({ events: [], page: { total: 0 } });
+  });
+
   it("discovers and reads an event only through the selected member grant context", async () => {
     const fixture = await createFixture();
     const occurrenceId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO event_occurrences
-         (id, series_id, starts_at, ends_at, status, created_at, updated_at)
-       VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
-               'scheduled', datetime('now'), datetime('now'))`,
+      `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
     )
       .bind(occurrenceId, fixture.seriesId)
       .run();
@@ -333,14 +377,14 @@ describe("group event sharing", () => {
         ownerGroupId: fixture.ownerId,
         profileKey: "workshop",
         capabilities: ["view", "register"],
-        occurrenceCount: 1,
+        occurrenceCount: 2,
       },
     });
 
     const calendar = await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/calendar.ics`);
     expect(calendar.status, await calendar.clone().text()).toBe(200);
     expect(calendar.headers.get("content-type")).toContain("text/calendar");
-    expect(await calendar.text()).toContain(`UID:${occurrenceId}@pkic.org`);
+    expect(await calendar.text()).toContain(`UID:${fixture.seriesId}@pkic.org`);
 
     const occurrences = await authenticatedRequest(
       fixture.memberToken,
@@ -348,8 +392,8 @@ describe("group event sharing", () => {
     );
     expect(occurrences.status, await occurrences.clone().text()).toBe(200);
     expect(await occurrences.json()).toMatchObject({
-      occurrences: [{ id: occurrenceId, seriesId: fixture.seriesId }],
-      page: { total: 1, hasMore: false },
+      occurrences: expect.arrayContaining([expect.objectContaining({ id: occurrenceId, seriesId: fixture.seriesId })]),
+      page: { total: 2, hasMore: false },
     });
 
     const wrongContext = await authenticatedRequest(
@@ -464,10 +508,7 @@ describe("group event sharing", () => {
     const confirmationId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO event_occurrences
-           (id, series_id, starts_at, ends_at, status, created_at, updated_at)
-         VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
-                 'scheduled', datetime('now'), datetime('now'))`,
+        `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
       ).bind(occurrenceId, fixture.seriesId),
       env.DB.prepare(
         `INSERT INTO event_occurrence_join_confirmations
@@ -618,10 +659,7 @@ describe("group event sharing", () => {
     const fixture = await createFixture();
     const occurrenceId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO event_occurrences
-         (id, series_id, starts_at, ends_at, status, created_at, updated_at)
-       VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
-               'scheduled', datetime('now'), datetime('now'))`,
+      `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
     )
       .bind(occurrenceId, fixture.seriesId)
       .run();
@@ -703,10 +741,7 @@ describe("group event sharing", () => {
     const fixture = await createFixture();
     const occurrenceId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO event_occurrences
-         (id, series_id, starts_at, ends_at, status, created_at, updated_at)
-       VALUES (?, ?, '2027-01-10T10:00:00.000Z', '2027-01-10T11:00:00.000Z',
-               'scheduled', datetime('now'), datetime('now'))`,
+      `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
     )
       .bind(occurrenceId, fixture.seriesId)
       .run();
@@ -749,7 +784,7 @@ describe("group event sharing", () => {
       body: JSON.stringify({ through: "2027-01-24T10:00:00.000Z", maxOccurrences: 10 }),
     });
     expect(materialized.status, await materialized.clone().text()).toBe(200);
-    expect(await materialized.json()).toMatchObject({ created: 1, existing: 1 });
+    expect(await materialized.json()).toMatchObject({ created: 0, existing: 2 });
 
     const createdOccurrence = await authenticatedRequest(fixture.leaderToken, `${seriesPath}/occurrences`, {
       method: "POST",

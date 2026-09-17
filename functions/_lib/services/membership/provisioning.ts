@@ -59,7 +59,7 @@ import {
   resolveRepresentativeRoleHolders,
 } from "./representative-roles";
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
-import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/schemas/membership-categories";
+import { requireProvisioningCategory } from "./provisioning-policy";
 import { prepareClaimDomainForOrganization, prepareTransferApplicationDomainClaim } from "./organization-domain-claims";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
@@ -141,20 +141,26 @@ async function resolveProvisioningGroups(
 ): Promise<ProvisionedGroup[]> {
   const slugs = [...new Set(input.workingGroupSlugs)];
   if (slugs.length === 0) return [];
-  const filter = buildD1JsonMembershipFilter("g.slug", slugs);
+  // An application names its groups the way the form's option catalog did —
+  // by id — or, for older and hand-written answers, by slug (#105).
+  const slugFilter = buildD1JsonMembershipFilter("g.slug", slugs);
+  const idFilter = buildD1JsonMembershipFilter("g.id", slugs);
   const rows = await all<ProvisioningGroupRow>(
     db,
     `SELECT g.id, g.slug, g.name, g.eligibility_mode, rule.permits_join
        FROM groups g
   LEFT JOIN group_membership_category_rules rule
          ON rule.group_id = g.id AND rule.membership_category_code = ?
-      WHERE g.type_key = 'working_group' AND g.active = 1 AND ${filter.sql}`,
-    [input.membershipCategory, ...filter.bindings],
+      WHERE g.type_key = 'working_group' AND g.active = 1 AND (${slugFilter.sql} OR ${idFilter.sql})`,
+    [input.membershipCategory, ...slugFilter.bindings, ...idFilter.bindings],
   );
-  const bySlug = new Map(rows.map((row) => [row.slug, row]));
-  const requested = slugs.flatMap((slug) => {
-    const row = bySlug.get(slug);
-    return row ? [row] : [];
+  const byKey = new Map(rows.flatMap((row) => [[row.slug, row] as const, [row.id, row] as const]));
+  const seen = new Set<string>();
+  const requested = slugs.flatMap((requestedKey) => {
+    const row = byKey.get(requestedKey);
+    if (!row || seen.has(row.id)) return [];
+    seen.add(row.id);
+    return [row];
   });
   const allowManaged = input.allowManagedGroupEnrollment ?? true;
   const eligible = requested.filter(
@@ -572,8 +578,11 @@ export async function buildProvisionOrganizationMembership(
   const now = nowIso();
   const groups = await resolveProvisioningGroups(db, input);
 
-  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(input.membershipCategory);
-  if (isIndividual || !input.organizationName) {
+  const category = await requireProvisioningCategory(db, input.membershipCategory, {
+    organizationName: input.organizationName ?? undefined,
+    identities: input.identities.map(({ name, email }) => ({ name, email })),
+  });
+  if (category.isIndividual) {
     return buildProvisionIndividualMemberships(db, input, groups, now);
   }
   return buildProvisionOrganizationTiedMemberships(db, input, groups, now);

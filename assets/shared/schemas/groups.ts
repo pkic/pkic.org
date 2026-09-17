@@ -3,7 +3,7 @@ import { z } from "zod";
 import { booleanQueryFlagSchema, slugPattern, trimmedString, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
-import { membershipCategorySchema } from "./membership-categories";
+import { MEMBERSHIP_CATEGORY_CATALOG_LIMIT, membershipCategorySchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
 
@@ -198,7 +198,7 @@ export const groupCategoryRuleSchema = z.object({
 export type GroupCategoryRule = z.infer<typeof groupCategoryRuleSchema>;
 export const groupCategoryRulesReplaceSchema = z.object({
   expectedRevision: groupRevisionSchema.optional(),
-  rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })).max(100),
+  rules: z.array(groupCategoryRuleSchema.omit({ groupId: true })).max(MEMBERSHIP_CATEGORY_CATALOG_LIMIT),
 });
 export type GroupCategoryRulesReplaceInput = z.infer<typeof groupCategoryRulesReplaceSchema>;
 export const groupCategoryRulesResponseSchema = z.object({
@@ -227,6 +227,8 @@ export const groupMembershipSchema = z.object({
   memberType: z.enum(["individual", "organization"]),
   userName: z.string(),
   email: z.email(),
+  /** The person's portrait, so a roster row shows the person (#90). */
+  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
   organizationName: z.string().nullable(),
   membershipCategory: membershipCategorySchema.nullable(),
   source: groupMembershipSourceSchema,

@@ -37,19 +37,26 @@ export const EVENT_PROFILE_LABELS: Record<EventProfileKey, string> = {
 export const EVENT_SOURCE_MODES = ["hugo", "portal", "integration"] as const;
 export const eventSourceModeSchema = z.enum(EVENT_SOURCE_MODES);
 export type EventSourceMode = z.infer<typeof eventSourceModeSchema>;
+/** Where an event is authored, in product language rather than schema keys. */
+export const EVENT_SOURCE_MODE_LABELS = {
+  hugo: "Website content",
+  portal: "Portal",
+  integration: "Integration",
+} as const satisfies Record<EventSourceMode, string>;
 
 export const EVENT_VISIBILITIES = ["invitation_only", "group_members", "all_members", "public"] as const;
 export const eventVisibilitySchema = z.enum(EVENT_VISIBILITIES);
 export type EventVisibility = z.infer<typeof eventVisibilitySchema>;
 export const EVENT_VISIBILITY_LABELS = {
   invitation_only: "Invited participants only",
-  group_members: "Owning and shared group members",
-  all_members: "All members",
+  group_members: "Members of this group and of the groups it is shared with",
+  all_members: "All consortium members",
   public: "Public",
 } as const satisfies Record<EventVisibility, string>;
 
 export const EVENT_REGISTRATION_POLICIES = [
   "no_registration",
+  "automatic",
   "optional",
   "invitation_only",
   "required",
@@ -59,11 +66,31 @@ export const eventRegistrationPolicySchema = z.enum(EVENT_REGISTRATION_POLICIES)
 export type EventRegistrationPolicy = z.infer<typeof eventRegistrationPolicySchema>;
 export const EVENT_REGISTRATION_POLICY_LABELS = {
   no_registration: "No registration",
+  automatic: "Automatic for group members (opt-out)",
   optional: "Optional registration",
   invitation_only: "Invitation only",
   required: "Registration required",
   public: "Public registration",
 } as const satisfies Record<EventRegistrationPolicy, string>;
+/**
+ * What each policy means, in the words the form shows beside it. "Automatic"
+ * is the mailing-list model (#103): every member of the group is invited to
+ * each scheduled occurrence without registering, and somebody who joins the
+ * group later is invited to the upcoming ones as they join.
+ */
+export const EVENT_REGISTRATION_POLICY_HELP = {
+  no_registration: "Nobody registers; managers send join links by hand.",
+  automatic:
+    "Every group member receives one recurring calendar invitation. New members receive the current calendar; changed or canceled meetings send updates. Calendar accept and decline responses are recorded.",
+  optional: "Members may register, but attending does not require it.",
+  invitation_only: "Only people with an invitation may register.",
+  required: "Attending requires a registration.",
+  public: "Anyone may register, member or not.",
+} as const satisfies Record<EventRegistrationPolicy, string>;
+/** The policies a standalone event may use: automatic invitation is a meeting's, since it needs a group roster. */
+export const STANDALONE_EVENT_REGISTRATION_POLICIES = EVENT_REGISTRATION_POLICIES.filter(
+  (policy) => policy !== "automatic",
+);
 export const EVENT_GUEST_POLICIES = ["none", "occurrence_invitation", "public_registration"] as const;
 export const eventGuestPolicySchema = z.enum(EVENT_GUEST_POLICIES);
 export type EventGuestPolicy = z.infer<typeof eventGuestPolicySchema>;
@@ -147,6 +174,7 @@ export const groupEventSeriesSchema = eventSeriesSchema.extend({
 export type GroupEventSeries = z.infer<typeof groupEventSeriesSchema>;
 
 export const eventSeriesCreateSchema = z.object({
+  existingEventId: eventIdSchema.optional(),
   eventName: trimmedString(1, 200),
   eventSlug: z.string().trim().min(1).max(200),
   profileKey: eventProfileKeySchema.default("meeting"),
@@ -162,13 +190,16 @@ export const eventSeriesCreateSchema = z.object({
   location: trimmedString(0, 500).nullable().optional(),
   providerType: eventProviderTypeSchema.nullable().optional(),
 });
-export const eventSeriesUpdateSchema = eventSeriesCreateSchema.omit({ eventSlug: true }).partial().extend({
-  // `partial()` preserves Zod defaults. A PATCH that omitted profileKey
-  // must not silently reset a board meeting or workshop to `meeting`.
-  profileKey: eventProfileKeySchema.optional(),
-  active: z.boolean().optional(),
-  expectedUpdatedAt: utcInstantSchema,
-});
+export const eventSeriesUpdateSchema = eventSeriesCreateSchema
+  .omit({ eventSlug: true, existingEventId: true })
+  .partial()
+  .extend({
+    // `partial()` preserves Zod defaults. A PATCH that omitted profileKey
+    // must not silently reset a board meeting or workshop to `meeting`.
+    profileKey: eventProfileKeySchema.optional(),
+    active: z.boolean().optional(),
+    expectedUpdatedAt: utcInstantSchema,
+  });
 
 export const eventSeriesMaterializeSchema = z.object({
   through: utcInstantSchema,
@@ -206,6 +237,16 @@ export const eventOccurrenceSchema = z.object({
   invitationsRound: z.number().int().min(0),
   /** When the most recent round was sent, or `null` while none has been. */
   invitationsSentAt: z.string().nullable(),
+  /** How many people hold an invitation to this occurrence, whichever way it reached them. */
+  invitedCount: z.number().int().min(0),
+  /** The iCalendar SEQUENCE the invited calendars hold; bumped when the meeting moves or is called off. */
+  calendarSequence: z.number().int().min(0),
+  /** What invited calendars have answered so far. */
+  rsvp: z.object({
+    accepted: z.number().int().min(0),
+    declined: z.number().int().min(0),
+    tentative: z.number().int().min(0),
+  }),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -325,7 +366,7 @@ export const eventOccurrenceParamsSchema = eventSeriesParamsSchema.extend({ occu
 export const eventGuestParamsSchema = eventOccurrenceParamsSchema.extend({ guestId: databaseIdSchema });
 export const eventAttendanceParamsSchema = eventOccurrenceParamsSchema.extend({ confirmationId: databaseIdSchema });
 
-const eventManagementErrorResponses = {
+export const eventManagementErrorResponses = {
   "401": jsonErrorResponse("An authenticated management identity is required."),
   "403": jsonErrorResponse("Effective event-management capability through this group is required."),
   "404": jsonErrorResponse("The group, meeting series, occurrence, or child resource was not found."),
@@ -460,7 +501,7 @@ export const eventSeriesCalendarRouteSchema = {
   ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Generate the current meeting-series calendar",
-  request: { params: eventSeriesParamsSchema },
+  request: { params: eventSeriesParamsSchema, query: z.object({ occurrenceId: databaseIdSchema.optional() }) },
   responses: {
     "200": { description: "Generated text/calendar content." },
     "401": jsonErrorResponse("An authenticated portal identity is required."),

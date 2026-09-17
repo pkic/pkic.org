@@ -46,7 +46,7 @@ export function AnalyticsOverview() {
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-grid pk-grid--tight">
+      <div class="pk-stat-row">
         <StatCard
           label="Total Registrations"
           value={registrations.total}

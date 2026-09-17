@@ -32,15 +32,6 @@ $portal-sidebar-width: 240px;
   max-width: 400px;
 }
 
-// The audit log's three type-ahead filters share the toolbar row with the
-// list's search field; unbounded, `.pk-input`'s 100% width would give each
-// one a row of its own. `max-width`, because this sheet sits in the lowest
-// cascade layer and cannot out-rank the component's own `width: 100%` —
-// capping it does not need to.
-.portal-audit-filter {
-  max-width: 9rem;
-}
-
 .portal-access-role-permissions {
   max-height: 180px;
   overflow-y: auto;

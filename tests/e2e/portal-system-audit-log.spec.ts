@@ -75,8 +75,18 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   };
 
   await page.route("**/api/v1/audit-log**", async (route) => {
-    requestCount += 1;
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/filters")) {
+      const value = url.searchParams.get("field") === "action" ? "page_one_action" : "system_setting";
+      await route.fulfill({
+        json: {
+          options: [{ value, label: value.replace(/_/g, " ") }],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        },
+      });
+      return;
+    }
+    requestCount += 1;
     const offset = Number(url.searchParams.get("offset") ?? "0");
     requestOffsets.push(offset);
 
@@ -131,6 +141,11 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   await expect(pager).toContainText("1–1 of 51");
   await expect(currentPage).toHaveText("1");
   await expect(nextPage).toBeEnabled();
+  await page.getByRole("button", { name: "Action column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
+  await expect(page.getByRole("menuitemradio", { name: "page one action", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Filter this column…" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
 
   const details = page
     .getByRole("row")

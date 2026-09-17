@@ -8,15 +8,19 @@
  * wiring, so it stays a thin orchestration layer per scripts/AGENTS.md.
  */
 import path from "node:path";
+import fs from "node:fs";
 import { loadRosterCsv, loadMemberYamlFiles, activeRepresentatives } from "./parsers.mjs";
 import { buildEmailsByDomain, candidateEmailsForDomains } from "./reconciliation.mjs";
-import { buildUpsertUserStatement } from "./sql-renderer.mjs";
+import { buildAutomaticEnrollmentStatement, buildUpsertUserStatements } from "./sql-renderer.mjs";
 import { assertCategoriesValid, isIndividualMembershipCategory } from "./categories.mjs";
 import { processIndividualRecord } from "./individuals.mjs";
 import { processOrganizationRecord } from "./organizations.mjs";
-import { processBareRosterUsers, processWorkingGroupMemberships } from "./roster-users.mjs";
+import { processBareRosterUsers, processGroupMemberships } from "./roster-users.mjs";
 import { processNonMemberSponsors } from "./non-member-sponsors.mjs";
-import { WORKING_GROUP_CSVS } from "./constants.mjs";
+import { legacyEventFormPlacementSql, legacyEventOwnershipSql } from "./event-ownership.mjs";
+import { loadManualMappings, reconcileManualRecord } from "./manual-mapping.mjs";
+import { buildPlaceholderEmailStatement } from "./placeholder-email.mjs";
+import { GROUP_ROSTER_CSVS } from "./constants.mjs";
 
 const ROOT = process.cwd();
 const MEMBERS_DIR = path.join(ROOT, "data", "members");
@@ -31,18 +35,25 @@ function emptyReport(yamlRecordCount) {
     totals: {
       yamlFiles: yamlRecordCount,
       matchedOrgs: 0,
+      organizations: 0,
       sentinelIndividuals: 0,
       unmatched: [],
       missingCategory: [],
       ambiguousPairing: [],
     },
+    manualMappings: [],
     needsEmailIndividuals: [],
     bareRosterUsers: [],
-    wgOnlyRosterUsers: [],
+    groupOnlyRosterUsers: [],
     invalidLinks: [],
     unmatchedEventSponsorships: [],
+    // Filled in after the SQL is applied, by the entry point's reservation
+    // check; stays null when nothing was applied (--dry-run) so the report
+    // never presents "not checked" as "nothing found".
+    emailReservationConflicts: null,
     nonMemberSponsorships: { created: 0, unmatchedEvents: [] },
-    workingGroupCounts: Object.fromEntries(Object.keys(WORKING_GROUP_CSVS).map((k) => [k, 0])),
+    groupRosterCounts: Object.fromEntries(Object.keys(GROUP_ROSTER_CSVS).map((k) => [k, 0])),
+    missingOptionalRosters: [],
   };
 }
 
@@ -52,6 +63,8 @@ function emptyReport(yamlRecordCount) {
  */
 export function buildMigration({
   uploadLogos,
+  rosterTimeZone,
+  manualMappingPath = "",
   membersDir = MEMBERS_DIR,
   csvDir = CSV_DIR,
   logoDir = LOGO_DIR,
@@ -63,11 +76,18 @@ export function buildMigration({
   // Fail loudly, before generating any SQL, on a missing/unknown/
   // kind-incompatible category — see categories.mjs.
   assertCategoriesValid(yamlRecords);
+  const manualMappings = loadManualMappings(manualMappingPath, yamlRecords);
 
   const pkicRoster = loadRosterCsv(path.join(csvDir, "pkic.csv"));
-  const wgRosters = {};
-  for (const [slug, filename] of Object.entries(WORKING_GROUP_CSVS)) {
-    wgRosters[slug] = loadRosterCsv(path.join(csvDir, filename));
+  const groupRosters = {};
+  const missingOptionalRosters = [];
+  for (const [slug, source] of Object.entries(GROUP_ROSTER_CSVS)) {
+    const filePath = path.join(csvDir, source.filename);
+    if (source.optional && !fs.existsSync(filePath)) {
+      missingOptionalRosters.push(source.filename);
+      continue;
+    }
+    groupRosters[slug] = loadRosterCsv(filePath, { allowEmpty: true });
   }
 
   // Domain-based org matching (Step 2 representative pairing, and the
@@ -79,7 +99,7 @@ export function buildMigration({
   // should be attributed to it instead of silently ending up an org-less
   // bare/WG-only user.
   const combinedRoster = new Map(pkicRoster);
-  for (const roster of Object.values(wgRosters)) {
+  for (const roster of Object.values(groupRosters)) {
     for (const [email, meta] of roster.entries()) {
       if (!combinedRoster.has(email)) combinedRoster.set(email, meta);
     }
@@ -92,37 +112,79 @@ export function buildMigration({
     statements: ["PRAGMA foreign_keys = ON;"],
     logoUploads: [], // { slug, filePath, r2Key }
     claimedEmails: new Set(),
-    createdUserEmails: new Set(), // every email we insert a `users` row for
-    report: emptyReport(yamlRecords.length),
+    importedEmails: new Set(), // every address this import expects an account behind
+    report: { ...emptyReport(yamlRecords.length), rosterUsers: combinedRoster.size, missingOptionalRosters },
     upsertUser(input) {
-      const { statement, normalizedEmail } = buildUpsertUserStatement(input);
-      this.statements.push(statement);
-      this.createdUserEmails.add(normalizedEmail);
+      const { statements, normalizedEmail } = buildUpsertUserStatements(input);
+      this.statements.push(...statements);
+      this.importedEmails.add(normalizedEmail);
       return normalizedEmail;
     },
   };
+
+  ctx.report.manualMappings = [...manualMappings.values()].flat().map((row) => ({
+    file: row.source_file,
+    name: row.representative_name,
+    decision: row.decision,
+    email: row.decision === "confirmed" ? row.confirmed_email : null,
+    previousEmail: row.current_or_placeholder_email,
+    notes: row.notes,
+  }));
+  const placeholderMappings = ctx.report.manualMappings.filter(
+    (row) => row.decision === "confirmed" && row.previousEmail.endsWith("@members.invalid"),
+  );
+  ctx.statements.push(...placeholderMappings.map(buildPlaceholderEmailStatement));
 
   // ── Step 2: organizations + identities, or org-less individuals ────────
   for (const { filename, slug, doc } of yamlRecords) {
     const name = String(doc.name ?? slug).trim();
     const memberType = String(doc.memberType ?? "").trim();
-    const domains = Array.isArray(doc.organizationDomains) ? doc.organizationDomains.filter(Boolean) : [];
-    const reps = activeRepresentatives(doc);
-    const candidates = candidateEmailsForDomains(domains, emailsByDomain);
+    const mappings = manualMappings.get(filename) ?? [];
+    const domains =
+      mappings.find((row) => row.domains.length)?.domains ??
+      (Array.isArray(doc.organizationDomains) ? doc.organizationDomains.filter(Boolean) : []);
+    const { reps, candidates } = reconcileManualRecord({
+      reps: activeRepresentatives(doc),
+      candidates: candidateEmailsForDomains(domains, emailsByDomain),
+      mappings,
+    });
 
     if (isIndividualMembershipCategory(memberType)) {
-      processIndividualRecord(ctx, { filename, slug, doc, name, memberType, domains, candidates });
+      const confirmed = mappings.find((row) => row.decision === "confirmed");
+      processIndividualRecord(ctx, {
+        filename,
+        slug,
+        doc,
+        name,
+        memberType,
+        domains,
+        candidates: mappings.length ? (confirmed ? [{ email: confirmed.confirmed_email }] : []) : candidates,
+      });
     } else {
-      processOrganizationRecord(ctx, { filename, slug, doc, name, memberType, domains, reps, candidates });
+      processOrganizationRecord(ctx, { filename, slug, doc, name, memberType, domains, reps, candidates, mappings });
     }
   }
 
   // ── Step 3 / 3b: bare roster users + canonical group memberships ──────
-  processBareRosterUsers(ctx, { pkicRoster, wgRosters });
-  processWorkingGroupMemberships(ctx, { wgRosters });
+  processBareRosterUsers(ctx, { pkicRoster, groupRosters });
+  processGroupMemberships(ctx, { groupRosters, rosterTimeZone });
 
   // ── non-member sponsors (data/sponsors.yaml) ────────────────────────────
   processNonMemberSponsors(ctx, { sponsorsYamlPath, sponsorLogoDir });
 
-  return { sql: ctx.statements.join("\n"), report: ctx.report, logoUploads: ctx.logoUploads };
+  ctx.statements.push(legacyEventOwnershipSql());
+  ctx.statements.push(legacyEventFormPlacementSql());
+  // Last, once every capacity above exists: the memberships the portal's
+  // automatic enrollment would have written as those capacities were created.
+  ctx.statements.push(buildAutomaticEnrollmentStatement());
+  return {
+    placeholderMappings,
+    sql: ctx.statements.join("\n"),
+    report: ctx.report,
+    logoUploads: ctx.logoUploads,
+    // Every address this import expects a live account behind, so the
+    // caller can check them against the reservations the target database
+    // actually holds — see migrate-members/email-reservations.mjs.
+    importedEmails: [...ctx.importedEmails],
+  };
 }

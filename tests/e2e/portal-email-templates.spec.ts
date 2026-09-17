@@ -33,9 +33,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await page.getByLabel("Template key").fill(templateKey);
   await expect(page.getByText("Key is available", { exact: true })).toBeVisible();
   await page.getByLabel("Subject template").fill("System template for {{firstName}}");
-  // A required Field carries a screen-reader-only "(required)" inside its
-  // label, so that — not the bare word — is the control's accessible name.
-  await page.getByRole("textbox", { name: "Body (required)", exact: true }).fill(initialBody);
+  await page.getByRole("textbox", { name: "Body Markdown source", exact: true }).fill(initialBody);
 
   const createResponse = page.waitForResponse(
     (response) =>
@@ -46,8 +44,28 @@ test("permitted staff create, preview, activate, and reopen an email template th
   expect((await createResponse).status()).toBe(200);
   await expect(page.getByText(`Edit: ${templateKey}`, { exact: false })).toBeVisible();
 
+  const source = page.getByRole("textbox", { name: "Body Markdown source", exact: true });
+  const editor = page.locator(".pk-markdown-editor").filter({ has: source });
+  await source.fill("{{#if firstName}}Hello {{firstName}}{{else}}Hello user{{/if}}");
+  await expect(editor.locator(".pk-overlay-editor .adm-template-token-var")).toHaveText("{{firstName}}");
+  await expect(
+    editor.locator(".pk-overlay-editor .adm-template-token").filter({ hasText: /\{\{(?:#if|else|\/if)/ }),
+  ).toHaveCount(3);
+  await source.press("ControlOrMeta+End");
+  await editor.getByRole("button", { name: "Insert variables and conditions" }).click();
+  await page.getByRole("menuitem", { name: "organizationName", exact: true }).click();
+  await expect(source).toHaveValue("{{#if firstName}}Hello {{firstName}}{{else}}Hello user{{/if}}{{organizationName}}");
+  await expect(source).toBeFocused();
+  await editor.getByRole("button", { name: "Visual editor", exact: true }).click();
+  const visual = page.getByRole("textbox", { name: "Body", exact: true });
+  await expect(visual.locator(".adm-template-token-var")).toHaveCount(2);
+  await page.getByRole("button", { name: "Insert reusable templates", exact: true }).click();
+  await expect(page.getByRole("menuitem").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
+
   const revisedBody = "Hello {{firstName}}, this version is ready for immediate activation.";
-  await page.getByLabel("Body").fill(revisedBody);
+  await page.getByRole("textbox", { name: "Body Markdown source", exact: true }).fill(revisedBody);
   const previewResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/preview` && response.request().method() === "POST",
@@ -106,25 +124,28 @@ test("permitted staff create, preview, activate, and reopen an email template th
       new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/${templateKey}/activate` &&
       response.request().method() === "POST",
   );
-  await versionTwoRow.getByRole("button", { name: "Activate" }).click();
+  // Activation is a command in the row's menu, not a button on the row (#98).
+  await versionTwoRow.getByRole("button", { name: "Actions for v2" }).click();
+  await page.getByRole("menuitem", { name: "Activate" }).click();
   expect((await activateResponse).status()).toBe(200);
   await expect(page.getByText("v2 is now active", { exact: true })).toBeVisible();
-  await expect(versionTwoRow.getByText("In use", { exact: true })).toBeVisible();
+  await expect(versionTwoRow.getByText("Active", { exact: true })).toBeVisible();
 
   await page.reload();
   await page.getByPlaceholder("Search template key…").fill(templateKey);
-  await expect(page.getByRole("cell", { name: templateKey })).toBeVisible();
+  // The row's actions cell is also named after the key, so the row is the target.
+  await expect(page.getByRole("row").filter({ hasText: templateKey })).toBeVisible();
   await page
     .getByRole("row")
     .filter({ hasText: templateKey })
     .getByRole("button", { name: "Edit", exact: false })
     .click();
-  await expect(page.getByLabel("Body")).toHaveValue(revisedBody);
+  await expect(page.getByRole("textbox", { name: "Body Markdown source", exact: true })).toHaveValue(revisedBody);
   await expect(
     page
       .getByRole("row")
       .filter({ has: page.getByText("v2", { exact: true }) })
-      .getByText("In use"),
+      .getByText("Active", { exact: true }),
   ).toBeVisible();
 
   await page.goto("/portal/#/settings/email-templates");

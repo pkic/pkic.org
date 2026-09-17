@@ -1,3 +1,4 @@
+import { executiveCouncilSeatSql } from "../auth/executive-council";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { publicUserHeadshotPath } from "./user-headshot";
 import { batchFirst, batchRows } from "../db/pagination";
@@ -62,7 +63,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     db
       .prepare(
         `SELECT id, email, first_name, last_name, preferred_name,
-                role, active, is_ec_member,
+                role, active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member,
                 headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
          FROM users WHERE id = ?`,
       )

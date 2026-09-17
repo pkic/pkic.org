@@ -3,11 +3,11 @@
  *
  * The veil naming the command is drawn over the picture only while the tile
  * is hovered or focused, so at rest the tile reads as the logo and nothing
- * else. Remove sits beside it in the quiet destructive tone and appears with
- * the veil; a keyboard reaches it whether or not it is drawn.
+ * else. The corner removal control stays visible and keyboard accessible.
  */
 @layer components {
   .pk-picture-tile {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -103,13 +103,41 @@
     pointer-events: none;
   }
 
-  .pk-picture-tile__actions {
+  .pk-picture-tile__remove {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--pk-line-strong);
+    border-radius: 50%;
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    font-size: var(--pk-text-lg);
+    cursor: pointer;
+  }
+
+  /*
+   * At rest the tile is the picture and nothing else; the remove appears when
+   * the tile is hovered or holds focus (#89). It stays reachable by keyboard
+   * because focusing it is itself what reveals it.
+   */
+  .pk-picture-tile__remove {
     opacity: 0;
     transition: opacity var(--pk-dur-fast) var(--pk-ease);
   }
 
-  .pk-picture-tile:hover .pk-picture-tile__actions,
-  .pk-picture-tile:focus-within .pk-picture-tile__actions {
+  .pk-picture-tile--editable:hover .pk-picture-tile__remove,
+  .pk-picture-tile--editable:focus-within .pk-picture-tile__remove,
+  .pk-picture-tile__remove:focus-visible {
     opacity: 1;
+  }
+
+  .pk-picture-tile__remove:disabled {
+    cursor: progress;
   }
 }

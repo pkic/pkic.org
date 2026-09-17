@@ -344,6 +344,7 @@ interface MembershipRow {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  headshot_r2_key: string | null;
   organization_name: string | null;
   membership_category: string | null;
   source: GroupMembership["source"];
@@ -363,6 +364,7 @@ function mapMembership(row: MembershipRow): GroupMembership {
     memberType: row.member_type,
     userName: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     email: row.email,
+    headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     organizationName: row.organization_name,
     membershipCategory: row.membership_category as GroupMembership["membershipCategory"],
     source: row.source,
@@ -374,7 +376,7 @@ function mapMembership(row: MembershipRow): GroupMembership {
 }
 
 const MEMBERSHIP_SELECT = `SELECT gm.id, gm.group_id, gm.user_id, gm.identity_id, gm.member_id, m.member_type,
-  u.first_name, u.last_name, u.email, o.name AS organization_name,
+  u.first_name, u.last_name, u.email, u.headshot_r2_key, o.name AS organization_name,
   mca.category_code AS membership_category, gm.source, gm.created_by_user_id,
   CASE WHEN gm.left_at IS NULL THEN leadership.title ELSE gm.title END AS title, gm.joined_at, gm.left_at`;
 
@@ -461,6 +463,7 @@ interface ParticipantRow {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
+  email: string;
   headshot_r2_key: string | null;
   organization_name: string | null;
 }
@@ -468,7 +471,11 @@ interface ParticipantRow {
 function mapParticipant(row: ParticipantRow): GroupParticipant {
   return {
     userId: row.user_id,
-    name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Participant",
+    // A person with no name on file — a roster import carries only the
+    // address — is named by that address rather than as "Participant",
+    // which told a fellow member nothing (#117). The address is used only
+    // as the name in that case; it is not a column of its own.
+    name: [row.first_name, row.last_name].filter(Boolean).join(" ") || row.email,
     headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
     organizationName: row.organization_name,
   };
@@ -484,8 +491,9 @@ const PARTICIPANT_SORT_EXPRESSIONS = {
  * `participate` capability. It reuses the exact same active-capacity
  * predicate as {@link buildGroupMembershipsPageQuery} so a participant never
  * sees a row a manager would not also see, but selects and searches only
- * identity and affiliation columns — no email, category, source, or
- * membership-capacity identifier ever enters the query or the projection.
+ * identity and affiliation columns — no category, source, or
+ * membership-capacity identifier ever enters the query or the projection,
+ * and the address only stands in for a missing name.
  */
 export function buildGroupParticipantsPageQuery(groupId: string, query: GroupMembershipsListQuery): OffsetPageQuery {
   const search = query.q ? buildD1TextSearchFilter(query.q, ["u.first_name", "u.last_name", "o.name"]) : null;
@@ -502,7 +510,7 @@ export function buildGroupParticipantsPageQuery(groupId: string, query: GroupMem
    WHERE ${conditions.join(" AND ")}`;
   return {
     source: {
-      selectSql: `SELECT gm.user_id, u.first_name, u.last_name, u.headshot_r2_key, o.name AS organization_name`,
+      selectSql: `SELECT gm.user_id, u.first_name, u.last_name, u.email, u.headshot_r2_key, o.name AS organization_name`,
       fromSql,
       bindings,
     },

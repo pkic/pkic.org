@@ -37,7 +37,12 @@ import "./Menu.css";
 export interface MenuItem {
   id: string;
   label: string;
+  icon?: ComponentChildren;
   onSelect: () => void;
+  /** Navigation within a paginated menu keeps the popup available. */
+  keepOpen?: boolean;
+  /** Choices opened as a submenu, with keyboard return to their parent. */
+  children?: readonly MenuItem[];
   /** Renders in the destructive tone. Does not change behaviour. */
   danger?: boolean;
   disabled?: boolean;
@@ -77,6 +82,28 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [submenuPath, setSubmenuPath] = useState<string[]>([]);
+  function returnToParent() {
+    const parentPath = submenuPath.slice(0, -1);
+    let parentItems = items;
+    for (const id of parentPath) parentItems = parentItems.find((item) => item.id === id)?.children ?? [];
+    const parentIndex = parentItems.findIndex((item) => item.id === submenuPath[submenuPath.length - 1]);
+    setSubmenuPath(parentPath);
+    setActiveIndex(Math.max(0, parentIndex) + (parentPath.length ? 1 : 0));
+  }
+  let visibleItems = items;
+  for (const id of submenuPath) visibleItems = visibleItems.find((item) => item.id === id)?.children ?? [];
+  const displayedItems: readonly MenuItem[] = submenuPath.length
+    ? [
+        {
+          id: "menu-back",
+          label: "Back",
+          keepOpen: true,
+          onSelect: returnToParent,
+        },
+        ...visibleItems,
+      ]
+    : visibleItems;
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -84,9 +111,10 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
 
   // Indexes into the rendered list, so `activeIndex` and the DOM agree even
   // though disabled items are rendered but never focused.
-  const reachable = items.flatMap((item, index) => (item.disabled ? [] : [index]));
+  const reachable = displayedItems.flatMap((item, index) => (item.disabled ? [] : [index]));
   const firstReachable = reachable[0] ?? -1;
   const lastReachable = reachable[reachable.length - 1] ?? -1;
+  const itemRevision = displayedItems.map((item) => `${item.id}:${Boolean(item.disabled)}`).join("|");
 
   function step(from: number, delta: number): number {
     if (reachable.length === 0) return -1;
@@ -98,6 +126,7 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
   const close = useCallback(
     (returnFocus: boolean) => {
       setOpen(false);
+      setSubmenuPath([]);
       setActiveIndex(-1);
       if (returnFocus) triggerRef.current?.focus({ preventScroll: true });
     },
@@ -113,14 +142,32 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
   );
 
   /** One placement policy, and one lifetime for it — see `popup-placement.ts`. */
-  usePopupPlacement({ open, anchorRef: triggerRef, popupRef, align, revision: `${items.length}:${heading ?? ""}` });
+  usePopupPlacement({
+    open,
+    anchorRef: triggerRef,
+    popupRef,
+    align,
+    revision: `${displayedItems.length}:${submenuPath.join("/")}:${heading ?? ""}`,
+  });
 
   // Focus follows the active index rather than being set at each call site, so
   // there is one place where focus can go wrong.
   useLayoutEffect(() => {
-    if (!open || activeIndex < 0) return;
-    itemRefs.current[activeIndex]?.focus({ preventScroll: true });
-  }, [open, activeIndex]);
+    if (!open) return;
+    if (!reachable.includes(activeIndex)) {
+      setActiveIndex(firstReachable);
+      return;
+    }
+    const item = itemRefs.current[activeIndex];
+    item?.focus({ preventScroll: true });
+    const popup = popupRef.current;
+    if (item && popup) {
+      const row = item.getBoundingClientRect();
+      const bounds = popup.getBoundingClientRect();
+      if (row.bottom > bounds.bottom) popup.scrollTop += row.bottom - bounds.bottom;
+      else if (row.top < bounds.top) popup.scrollTop -= bounds.top - row.top;
+    }
+  }, [open, activeIndex, itemRevision]);
 
   useEffect(() => {
     if (!open) return;
@@ -162,6 +209,18 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
         event.preventDefault();
         setActiveIndex(lastReachable);
         break;
+      case "ArrowRight":
+        if (displayedItems[activeIndex]?.children) {
+          event.preventDefault();
+          select(displayedItems[activeIndex]);
+        }
+        break;
+      case "ArrowLeft":
+        if (submenuPath.length) {
+          event.preventDefault();
+          returnToParent();
+        }
+        break;
       case "Escape":
         event.preventDefault();
         close(true);
@@ -176,7 +235,12 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
 
   function select(item: MenuItem) {
     if (item.disabled) return;
-    close(true);
+    if (item.children) {
+      setSubmenuPath((path) => [...path, item.id]);
+      setActiveIndex(1);
+      return;
+    }
+    if (!item.keepOpen) close(true);
     item.onSelect();
   }
 
@@ -199,7 +263,7 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
       {open && (
         <div ref={popupRef} id={menuId} role="menu" aria-label={label} class="pk-menu__popup" onKeyDown={onMenuKeyDown}>
           {heading && <p class="pk-menu__heading">{heading}</p>}
-          {items.map((item, index) => (
+          {displayedItems.map((item, index) => (
             <button
               key={item.id}
               ref={(element) => {
@@ -207,6 +271,7 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
               }}
               type="button"
               role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+              aria-haspopup={item.children ? "menu" : undefined}
               aria-checked={item.checked === undefined ? undefined : item.checked ? "true" : "false"}
               disabled={item.disabled}
               tabIndex={index === activeIndex ? 0 : -1}
@@ -225,7 +290,13 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
                   {item.checked ? "✓" : ""}
                 </span>
               )}
+              {item.icon && (
+                <span class="pk-menu__item-icon" aria-hidden="true">
+                  {item.icon}
+                </span>
+              )}
               {item.label}
+              {item.children && <span aria-hidden="true"> ›</span>}
             </button>
           ))}
         </div>

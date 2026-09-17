@@ -18,7 +18,6 @@ function draftFromOccurrence(occurrence: EventOccurrence, timeZone: string): Mee
     location: occurrence.locationOverride ?? "",
     providerUrlAction: occurrence.providerConfigured ? "keep" : "replace",
     providerJoinUrl: "",
-    status: occurrence.status,
   };
 }
 
@@ -27,11 +26,14 @@ export function MeetingOccurrenceEditor({
   occurrence,
   timeZone,
   onChanged,
+  onCancel,
 }: {
   endpoint: string;
   occurrence: EventOccurrence;
   timeZone: string;
   onChanged: () => void | Promise<void>;
+  /** Leaves editing without saving; absent where the form stands alone. */
+  onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState(() => draftFromOccurrence(occurrence, timeZone));
   const [saving, setSaving] = useState(false);
@@ -51,7 +53,6 @@ export function MeetingOccurrenceEditor({
       const endsAt = isoDateTimeValue(draft.endsAt, timeZone);
       if (startsAt !== occurrence.startsAt) changes.startsAt = startsAt;
       if (endsAt !== occurrence.endsAt) changes.endsAt = endsAt;
-      if (draft.status !== occurrence.status) changes.status = draft.status;
       const location = draft.location.trim() || null;
       if (location !== occurrence.locationOverride) changes.locationOverride = location;
       if (draft.providerUrlAction === "replace" && draft.providerJoinUrl.trim()) {
@@ -76,7 +77,7 @@ export function MeetingOccurrenceEditor({
   }
 
   return (
-    <form class="pk pk-stack" onSubmit={(event) => void save(event)}>
+    <form class="pk pk-stack" aria-label="Edit occurrence" onSubmit={(event) => void save(event)}>
       <MeetingOccurrenceFields
         draft={draft}
         existing
@@ -88,6 +89,11 @@ export function MeetingOccurrenceEditor({
         <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
           {saving ? "Saving…" : "Save occurrence"}
         </Button>
+        {onCancel && (
+          <Button type="button" size="sm" disabled={saving} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
       {/* The failure sits below the actions rather than beside them: an alert
           is a block, and sharing the button's row pushed the button off the

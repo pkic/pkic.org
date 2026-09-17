@@ -62,7 +62,7 @@ test("a read-only staff persona reads applications and cannot change one", async
       method: "PATCH",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "withdrawn" }),
     });
     return response.status;
   });

@@ -59,10 +59,15 @@ function parseCountRecord(value: string): Record<string, number> {
 }
 
 export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery): OffsetPageQuery {
-  const conditions = ["sp.event_id = ?", query.archived ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
+  // The archive is the deleted proposals, reached through the status filter
+  // like every other view of the list; no other status narrows it further.
+  const archived = query.status === "archived";
+  const conditions = ["sp.event_id = ?", archived ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
   const predicateBindings: unknown[] = [query.eventId];
 
-  if (query.status === "active") {
+  if (archived) {
+    // Nothing more to narrow: the archive is the whole of it.
+  } else if (query.status === "active") {
     conditions.push(`sp.status NOT IN (${PROPOSAL_INACTIVE_STATUSES.map(() => "?").join(", ")})`);
     predicateBindings.push(...PROPOSAL_INACTIVE_STATUSES);
   } else if (query.status) {
@@ -114,7 +119,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
   }
 
   const where = conditions.join(" AND ");
-  const reviewDeletedScope = query.archived ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
+  const reviewDeletedScope = archived ? "review_sp.deleted_at IS NOT NULL" : "review_sp.deleted_at IS NULL";
   const baseFromSql = `FROM session_proposals sp
          JOIN users u ON u.id = sp.proposer_user_id
          WHERE ${where}`;
@@ -162,7 +167,7 @@ export async function listEventProposals(
 ): Promise<{ proposals: EventProposalSummary[]; stats: ProposalStats; page: ReturnType<typeof buildPageInfo> }> {
   const pageQuery = buildEventProposalsPageQuery(query);
   const [pageStatement, countStatement] = buildOffsetPageStatements(db, pageQuery);
-  const deletedScope = query.archived ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
+  const deletedScope = query.status === "archived" ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL";
   const [rowsResult, totalResult, statsResult] = await db.batch([
     pageStatement,
     countStatement,

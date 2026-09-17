@@ -1,3 +1,4 @@
+import { deliverSeriesCalendar } from "../../../../../../../_lib/services/event-series/automatic-invitations";
 import {
   eventSeriesResponseSchema,
   eventSeriesUpdateRouteSchema,
@@ -25,5 +26,6 @@ export const GroupMeetingSeriesUpdate = openApiRoute(eventSeriesUpdateRouteSchem
   const db = requestDb(c);
   const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
   const series = await updateGroupEventSeries(db, actor, data.params.groupId, data.params.seriesId, data.body);
+  c.executionCtx.waitUntil(deliverSeriesCalendar(db, c.env, c.req.raw, series.id));
   return json(eventSeriesResponseSchema.parse({ series }));
 });

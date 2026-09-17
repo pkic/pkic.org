@@ -1,3 +1,16 @@
+/**
+ * One registration's days: what the attendee holds on each, whether they are
+ * waiting for a seat, when it was last changed — and what a manager may do
+ * about it.
+ *
+ * The list works the way every list in the portal works (#113): a row's own
+ * `…` menu changes that day; the checkboxes select several days and the
+ * bulk bar changes them together, in one request and one email. Every
+ * change is asked about before it is made — a method to move to, a reason
+ * to admit beyond capacity, a confirmation to leave a day — so nothing
+ * happens the instant a menu item is chosen and a single day and a group of
+ * days are changed through the same dialogs.
+ */
 import { useState } from "preact/hooks";
 import type { EventDay } from "../../../shared/schemas/event-configuration";
 import {
@@ -9,17 +22,21 @@ import {
 import { useContractForm } from "../../hooks/useContractForm";
 import { patchJson, postJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
+import { formatServiceDate } from "../../../shared/format-date";
 import { DataTable } from "../Table";
 import { Badge } from "../Badge";
+import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
+import { BulkBar } from "../../ui/BulkBar";
 import { Button } from "../../ui/Button";
-import { Checkbox } from "../../ui/Checkbox";
+import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
-import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { Menu, type MenuItem } from "../../ui/Menu";
+import { RowActions } from "../../ui/RowActions";
 import { Select, Textarea } from "../../ui/TextControl";
 
-// `pk-mono` on the offer-expiry stamp comes from the content stylesheet,
-// which is not in the entry chunk, so this module has to pull it in.
+// `pk-mono` on the date stamps comes from the content stylesheet, which is
+// not in the entry chunk, so this module has to pull it in.
 import "../../ui/Content.css";
 
 type DayOption = "none" | string;
@@ -36,11 +53,33 @@ export interface DayAttendanceManagerProps {
   onSuccess?: (message: string) => void;
 }
 
-/**
- * Canonical per-day attendance, waitlist, and admission controls.
- * Authorization belongs to the selected route; this component owns only the
- * shared interaction and request contracts.
- */
+interface DayRow {
+  dayDate: string;
+  label: string | null;
+  subject: string;
+  supportsInPerson: boolean;
+  inPersonCapacity: number | null;
+  current: DayOption;
+  options: EventDay["attendanceOptions"];
+  waitlist: AttendanceDetail["dayWaitlist"][number] | null;
+  activeWaitlist: boolean;
+  heldSince: string | null;
+  changedAt: string | null;
+}
+
+type OpenDialog = { kind: "change"; days: DayRow[]; choice: string } | { kind: "vip"; days: DayRow[]; reason: string };
+
+/** "Tuesday 1 December and Wednesday 2 December", for a dialog's sentence. */
+function nameDays(days: readonly DayRow[]): string {
+  const names = days.map((day) => day.subject);
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+function countDays(count: number): string {
+  return `${String(count)} ${count === 1 ? "day" : "days"}`;
+}
+
 export function DayAttendanceManager({
   dayAttendance,
   dayWaitlist,
@@ -50,142 +89,273 @@ export function DayAttendanceManager({
   onReload,
   onSuccess,
 }: DayAttendanceManagerProps) {
-  const [pending, setPending] = useState<Record<string, DayOption>>({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
-  const [admitDayDates, setAdmitDayDates] = useState<string[]>([]);
-  const [admitting, setAdmitting] = useState(false);
-  const [vipDayDates, setVipDayDates] = useState<string[]>([]);
-  const [vipReason, setVipReason] = useState("");
-  const [applyingVip, setApplyingVip] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const [message, setMessage] = useState<{ text: string; kind: "success" | "danger" } | null>(null);
+  const vip = dialog?.kind === "vip" ? dialog : null;
   // One basis for validation: the shared admission contract the server parses
   // decides what the reason field shows, live, and what the override may send.
   const vipForm = useContractForm(eventRegistrationSelectedDayAdmitSchema, {
     mode: "vip",
-    reason: vipReason,
-    dayDates: vipDayDates,
+    reason: vip?.reason ?? "",
+    dayDates: vip?.days.map((day) => day.dayDate) ?? [],
   });
 
   if (!eventDays.length) return <p class="pk pk-small">No event days configured.</p>;
 
-  const attendanceByDate = new Map(dayAttendance.map((day) => [day.dayDate, day.attendanceType as DayOption]));
+  const attendanceByDate = new Map(dayAttendance.map((day) => [day.dayDate, day]));
   const waitlistByDate = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry]));
-  const rows = eventDays.map((day) => {
+  const rows: DayRow[] = eventDays.map((day) => {
     const inPerson = day.attendanceOptions.find((option) => option.value === "in_person");
+    const held = attendanceByDate.get(day.date);
+    const waitlist = waitlistByDate.get(day.date) ?? null;
     return {
       dayDate: day.date,
       label: day.label,
+      subject: day.label ?? formatServiceDate(day.date),
       supportsInPerson: Boolean(inPerson),
       inPersonCapacity: inPerson?.capacity ?? null,
-      current: attendanceByDate.get(day.date) ?? ("none" as DayOption),
+      current: held?.attendanceType ?? ("none" as DayOption),
       options: day.attendanceOptions,
-      waitlist: waitlistByDate.get(day.date) ?? null,
+      waitlist,
+      activeWaitlist: waitlist?.status === "waiting" || waitlist?.status === "offered",
+      heldSince: held?.heldSince ?? null,
+      changedAt: held?.changedAt ?? null,
     };
   });
-  const activeWaitlistCount = dayWaitlist.filter(
-    (entry) => entry.status === "waiting" || entry.status === "offered",
-  ).length;
+  const rowsByDate = new Map(rows.map((day) => [day.dayDate, day]));
+  const selectedRows = rows.filter((day) => selected.has(day.dayDate));
+
+  // What each command may act on, so a command that applies to none of the
+  // chosen days is absent from the menu rather than failing on the server.
+  const canChange = (days: readonly DayRow[]) => changeChoices(days).length > 0;
+  const admittable = (days: readonly DayRow[]) =>
+    days.filter((day) => day.activeWaitlist && day.current === "in_person");
+  const returnable = (days: readonly DayRow[]) =>
+    days.filter(
+      (day) =>
+        !day.activeWaitlist && day.current === "in_person" && day.inPersonCapacity != null && day.inPersonCapacity > 0,
+    );
+  const overridable = (days: readonly DayRow[]) => days.filter((day) => day.supportsInPerson);
+  const leavable = (days: readonly DayRow[]) => days.filter((day) => day.current !== "none");
+
+  /** The methods every chosen day offers, less the one they all already hold. */
+  function changeChoices(days: readonly DayRow[]): Array<{ value: string; label: string }> {
+    if (days.length === 0) return [];
+    const shared = days[0].options.filter((option) =>
+      days.every((day) => day.options.some((o) => o.value === option.value)),
+    );
+    const same = days.every((day) => day.current === days[0].current) ? days[0].current : null;
+    return shared
+      .filter((option) => option.value !== same)
+      .map((option) => ({ value: option.value, label: option.label }));
+  }
+
   async function reloadWithSuccess(text: string): Promise<void> {
     onSuccess?.(text);
     await onReload();
+    setSelected(new Set());
     setMessage({ text, kind: "success" });
   }
 
-  async function applyChange(dayDate: string, action: DayOption | "waitlist"): Promise<void> {
-    setSaving((current) => ({ ...current, [dayDate]: true }));
+  async function run(request: () => Promise<unknown>, success: string): Promise<void> {
+    setBusy(true);
     setMessage(null);
     try {
-      await patchJson(
-        `${registrationEndpoint}/day-attendance`,
-        { action: action === "none" ? "remove" : action, dayDates: [dayDate] },
-        eventRegistrationDayAttendanceResponseSchema,
-      );
-      setPending((current) => {
-        const next = { ...current };
-        delete next[dayDate];
-        return next;
-      });
-      await reloadWithSuccess(`Day ${dayDate} updated.`);
+      await request();
+      await reloadWithSuccess(success);
     } catch (error) {
       setMessage({ text: (error as Error).message, kind: "danger" });
     } finally {
-      setSaving((current) => ({ ...current, [dayDate]: false }));
+      setBusy(false);
     }
   }
 
-  function setAdmitChecked(dayDate: string, checked: boolean): void {
-    setAdmitDayDates((current) => {
-      const next = new Set(current);
-      if (checked) next.add(dayDate);
-      else next.delete(dayDate);
-      return Array.from(next);
-    });
+  function patchDays(days: readonly DayRow[], action: string) {
+    return patchJson(
+      `${registrationEndpoint}/day-attendance`,
+      { action, dayDates: days.map((day) => day.dayDate) },
+      eventRegistrationDayAttendanceResponseSchema,
+    );
   }
 
-  function setVipChecked(dayDate: string, checked: boolean): void {
-    setVipDayDates((current) => {
-      const next = new Set(current);
-      if (checked) next.add(dayDate);
-      else next.delete(dayDate);
-      return Array.from(next);
-    });
+  // ── The commands, each asked about before it runs ──────────────────────
+
+  function openChange(days: DayRow[]): void {
+    const choices = changeChoices(days);
+    if (choices.length === 0) return;
+    setDialog({ kind: "change", days, choice: choices[0].value });
   }
 
-  async function admitSelectedDays(): Promise<void> {
-    if (admitDayDates.length === 0) return;
-    setAdmitting(true);
-    setMessage(null);
-    try {
-      await postJson(
-        `${registrationEndpoint}/admissions`,
-        {
-          mode: "capacity_exempt",
-          reason: "Event manager approved in-person admission",
-          dayDates: admitDayDates,
-        },
-        eventRegistrationAdmitResponseSchema,
-      );
-      const admittedCount = admitDayDates.length;
-      setAdmitDayDates([]);
-      await reloadWithSuccess(
-        `${admittedCount === 1 ? "Day" : "Days"} admitted; the registration update email was queued.`,
-      );
-    } catch (error) {
-      setMessage({ text: (error as Error).message, kind: "danger" });
-    } finally {
-      setAdmitting(false);
-    }
+  async function applyChange(): Promise<void> {
+    if (dialog?.kind !== "change") return;
+    const { days, choice } = dialog;
+    const label = changeChoices(days).find((option) => option.value === choice)?.label ?? choice;
+    setDialog(null);
+    await run(
+      () => patchDays(days, choice),
+      `${countDays(days.length)} changed to ${label.toLowerCase()}; the registration update email was queued.`,
+    );
+  }
+
+  async function admitFromWaitlist(days: readonly DayRow[]): Promise<void> {
+    const targets = admittable(days);
+    if (targets.length === 0) return;
+    const confirmed = await confirmAction({
+      title: `Admit ${nameDays(targets)} from the waitlist?`,
+      body: "The attendee takes a seat in person on each of these days.",
+      consequences: ["One registration update email is sent for the change."],
+      confirmLabel: "Admit from waitlist",
+      tone: "primary",
+    });
+    if (!confirmed) return;
+    await run(
+      () =>
+        postJson(
+          `${registrationEndpoint}/admissions`,
+          {
+            mode: "capacity_exempt",
+            reason: "Event manager approved in-person admission",
+            dayDates: targets.map((day) => day.dayDate),
+          },
+          eventRegistrationAdmitResponseSchema,
+        ),
+      `${countDays(targets.length)} admitted; the registration update email was queued.`,
+    );
+  }
+
+  async function returnToWaitlist(days: readonly DayRow[]): Promise<void> {
+    const targets = returnable(days);
+    if (targets.length === 0) return;
+    const confirmed = await confirmAction({
+      title: `Return ${nameDays(targets)} to the waitlist?`,
+      body: "The attendee gives up the in-person seat and waits for one again.",
+      consequences: ["One registration update email is sent for the change."],
+      confirmLabel: "Return to waitlist",
+      tone: "primary",
+    });
+    if (!confirmed) return;
+    await run(
+      () => patchDays(targets, "waitlist"),
+      `${countDays(targets.length)} returned to the waitlist; the registration update email was queued.`,
+    );
+  }
+
+  function openVip(days: readonly DayRow[]): void {
+    const targets = overridable(days);
+    if (targets.length === 0) return;
+    setDialog({ kind: "vip", days: targets, reason: "" });
   }
 
   async function applyVipOverride(): Promise<void> {
     const checked = vipForm.submit();
     if (!checked.data) return;
-    setApplyingVip(true);
-    setMessage(null);
-    try {
-      await postJson(`${registrationEndpoint}/admissions`, checked.data, eventRegistrationAdmitResponseSchema);
-      const admittedCount = checked.data.dayDates.length;
-      setVipDayDates([]);
-      setVipReason("");
-      vipForm.reset();
-      await reloadWithSuccess(
-        `VIP override applied to ${admittedCount} ${admittedCount === 1 ? "day" : "days"}; the registration update email was queued.`,
-      );
-    } catch (error) {
-      setMessage({ text: vipForm.refuse(error), kind: "danger" });
-    } finally {
-      setApplyingVip(false);
-    }
+    const count = checked.data.dayDates.length;
+    setDialog(null);
+    vipForm.reset();
+    await run(
+      () => postJson(`${registrationEndpoint}/admissions`, checked.data, eventRegistrationAdmitResponseSchema),
+      `VIP override applied to ${countDays(count)}; the registration update email was queued.`,
+    );
   }
 
+  async function leaveDays(days: readonly DayRow[]): Promise<void> {
+    const targets = leavable(days);
+    if (targets.length === 0) return;
+    const confirmed = await confirmAction({
+      title: `Mark ${nameDays(targets)} as not attending?`,
+      body: "The attendee no longer holds these days.",
+      consequences: ["Any waitlist place on these days is given up.", "One registration update email is sent."],
+      confirmLabel: "Not attending",
+    });
+    if (!confirmed) return;
+    await run(
+      () => patchDays(targets, "remove"),
+      `${countDays(targets.length)} marked as not attending; the registration update email was queued.`,
+    );
+  }
+
+  /**
+   * The commands for a set of days — one day from its row, several from the
+   * bulk bar — in the order a manager reaches for them. A command that
+   * applies to none of the days is left out, so the menu reads as the days'
+   * state.
+   */
+  function commandsFor(days: DayRow[]): MenuItem[] {
+    const items: MenuItem[] = [];
+    if (canChange(days)) {
+      items.push({ id: "change", label: "Change attendance…", disabled: busy, onSelect: () => openChange(days) });
+    }
+    if (admittable(days).length > 0) {
+      items.push({
+        id: "admit",
+        label: "Admit from waitlist…",
+        disabled: busy,
+        onSelect: () => void admitFromWaitlist(days),
+      });
+    }
+    if (returnable(days).length > 0) {
+      items.push({
+        id: "waitlist",
+        label: "Return to waitlist…",
+        disabled: busy,
+        onSelect: () => void returnToWaitlist(days),
+      });
+    }
+    if (canVip && overridable(days).length > 0) {
+      items.push({ id: "vip", label: "Admit beyond capacity…", disabled: busy, onSelect: () => openVip(days) });
+    }
+    if (leavable(days).length > 0) {
+      items.push({
+        id: "remove",
+        label: "Not attending…",
+        danger: true,
+        separatorBefore: items.length > 0,
+        disabled: busy,
+        onSelect: () => void leaveDays(days),
+      });
+    }
+    return items;
+  }
+
+  function attendanceLabel(day: DayRow): string {
+    if (day.current === "none") return "Not attending";
+    return day.options.find((option) => option.value === day.current)?.label ?? day.current.replaceAll("_", " ");
+  }
+
+  /**
+   * When the day last changed, with the day it was first held under it when
+   * that is a different day — one column, since a held day's two dates are
+   * usually the same one and a record's main column has no room for two
+   * columns of timestamps.
+   */
+  const changed = (day: DayRow) => {
+    if (!day.changedAt) {
+      return (
+        <>
+          <span class="pk-muted" aria-hidden="true">
+            —
+          </span>
+          <span class="pk-sr-only">Not held</span>
+        </>
+      );
+    }
+    const heldEarlier = day.heldSince && day.heldSince.slice(0, 10) !== day.changedAt.slice(0, 10);
+    return (
+      <div class="pk-stack pk-stack--tight">
+        <span class="pk-nowrap">{formatDateTime(day.changedAt)}</span>
+        {heldEarlier && <span class="pk-small pk-muted pk-nowrap">Held since {formatServiceDate(day.heldSince!)}</span>}
+      </div>
+    );
+  };
+
+  const bulkCommands = commandsFor(selectedRows);
+  const bulkPrimary = bulkCommands.find((item) => item.id === "change");
+  const bulkRest = bulkCommands.filter((item) => item.id !== "change");
+
   return (
-    <div class="pk pk-stack pk-stack--snug">
-      {activeWaitlistCount > 0 && (
-        <Alert tone="info">
-          Select <strong>Manager override</strong> for one or more waitlisted in-person days to admit this attendee
-          beyond capacity. Admission removes those day waitlist entries and queues an update email.
-        </Alert>
-      )}
+    <div class="pk-table-list">
       {/*
        * Outcome messages name what happened, so the tone reinforces the words
        * rather than carrying the meaning on its own. Alert also picks the
@@ -193,55 +363,36 @@ export function DayAttendanceManager({
        * not.
        */}
       {message && <Alert tone={message.kind === "success" ? "ok" : "danger"}>{message.text}</Alert>}
+      {selected.size > 0 && (
+        <BulkBar count={selected.size} total={rows.length} onClear={() => setSelected(new Set())}>
+          {bulkPrimary && (
+            <Button size="sm" variant="secondary" disabled={bulkPrimary.disabled} onClick={bulkPrimary.onSelect}>
+              {bulkPrimary.label}
+            </Button>
+          )}
+          {bulkRest.length > 0 && <Menu label="More actions for the selected days" items={bulkRest} align="end" />}
+        </BulkBar>
+      )}
       <DataTable
         caption="Attendance by event day"
         columns={[
-          { header: "Date", cell: (day) => day.dayDate, className: "pk-mono pk-small" },
-          { header: "Day", cell: (day) => day.label ?? "—", className: "pk-small" },
+          {
+            // The day's own name over its date: two facts about one thing,
+            // in one column.
+            // Not the slack column: a day's name is short, and the primary
+            // column's reading-measure floor pushed the two timestamps off
+            // the record's main column on a laptop.
+            header: "Day",
+            cell: (day) => (
+              <div class="pk-stack pk-stack--tight">
+                <span class="pk-strong">{day.subject}</span>
+                <span class="pk-small pk-muted pk-mono">{day.dayDate}</span>
+              </div>
+            ),
+          },
           {
             header: "Attendance",
-            cell: (day) => {
-              const selected = pending[day.dayDate] ?? day.current;
-              const isSaving = saving[day.dayDate] ?? false;
-              const changed = selected !== day.current;
-              return (
-                <div class="pk-cluster">
-                  <Select
-                    aria-label={`Attendance for ${day.dayDate}`}
-                    value={selected}
-                    disabled={isSaving}
-                    onChange={(event) => {
-                      const value = (event.target as HTMLSelectElement).value as DayOption;
-                      setPending((current) => ({ ...current, [day.dayDate]: value }));
-                      if (value !== "in_person") setAdmitChecked(day.dayDate, false);
-                    }}
-                  >
-                    {[
-                      { value: "none", label: "Not attending" },
-                      ...day.options,
-                      ...(selected !== "none" && !day.options.some((option) => option.value === selected)
-                        ? [{ value: selected, label: selected.replaceAll("_", " ") }]
-                        : []),
-                    ].map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                  {changed && (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      class="pk-nowrap"
-                      loading={isSaving}
-                      onClick={() => void applyChange(day.dayDate, selected)}
-                    >
-                      {isSaving ? "Saving…" : "Apply"}
-                    </Button>
-                  )}
-                </div>
-              );
-            },
+            cell: (day) => <span class={day.current === "none" ? "pk-muted" : undefined}>{attendanceLabel(day)}</span>,
           },
           {
             header: "Waitlist",
@@ -250,138 +401,109 @@ export function DayAttendanceManager({
                 <div class="pk-stack pk-stack--tight pk-small">
                   <div class="pk-cluster">
                     <Badge status={day.waitlist.status} />
-                    <span class="pk-muted">{day.waitlist.priorityLane}</span>
+                    <span class="pk-muted">{day.waitlist.priorityLane} lane</span>
                   </div>
                   {day.waitlist.offerExpiresAt && (
-                    <span class="pk-muted pk-mono">Offer expires {formatDateTime(day.waitlist.offerExpiresAt)}</span>
+                    <span class="pk-muted">Offer expires {formatDateTime(day.waitlist.offerExpiresAt)}</span>
                   )}
                 </div>
               ) : (
-                <span class="pk-small">—</span>
+                <>
+                  <span class="pk-muted" aria-hidden="true">
+                    —
+                  </span>
+                  <span class="pk-sr-only">Not waitlisted</span>
+                </>
               ),
           },
+          { header: "Last changed", width: "fit", className: "pk-small pk-muted", cell: changed },
           {
-            header: "Manager override",
-            cell: (day) => {
-              const selected = pending[day.dayDate] ?? day.current;
-              const activeWaitlist = day.waitlist?.status === "waiting" || day.waitlist?.status === "offered";
-              const canAdmit = activeWaitlist && selected === "in_person";
-              const canReturnToWaitlist =
-                !activeWaitlist &&
-                selected === "in_person" &&
-                day.current === "in_person" &&
-                day.inPersonCapacity != null &&
-                day.inPersonCapacity > 0;
-              return (
-                <div class="pk-stack pk-stack--tight">
-                  <Checkbox
-                    class="pk-small"
-                    checked={admitDayDates.includes(day.dayDate)}
-                    disabled={!canAdmit || admitting}
-                    onChange={(event) => setAdmitChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
-                    label="Admit day"
-                  />
-                  {canReturnToWaitlist && (
-                    <div class="pk-cluster">
-                      <Button
-                        size="sm"
-                        variant="danger-quiet"
-                        class="pk-nowrap"
-                        disabled={saving[day.dayDate] ?? false}
-                        onClick={() => void applyChange(day.dayDate, "waitlist")}
-                      >
-                        Return to waitlist
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              );
-            },
-            className: "pk-nowrap",
+            header: "",
+            className: "pk-end",
+            width: "fit",
+            cell: (day) => <RowActions subject={day.subject} actions={commandsFor([day])} />,
           },
         ]}
         data={rows}
         rowKey={(day) => day.dayDate}
+        selection={{
+          selected,
+          onChange: setSelected,
+          rowLabel: (dayDate) => `Select ${rowsByDate.get(dayDate)?.subject ?? dayDate}`,
+        }}
       />
-      <div class="pk-cluster">
-        <Button
-          size="sm"
-          variant="primary"
-          disabled={admitDayDates.length === 0}
-          loading={admitting}
-          onClick={() => void admitSelectedDays()}
+      {dialog?.kind === "change" && (
+        <Dialog
+          open
+          title="Change attendance"
+          description={`${nameDays(dialog.days)}: the attendee moves to the chosen method. One registration update email is sent.`}
+          confirmLabel="Change attendance"
+          confirmDisabled={busy}
+          onConfirm={() => void applyChange()}
+          onCancel={() => setDialog(null)}
         >
-          {admitting ? "Admitting…" : "Admit selected days"}
-        </Button>
-        <span class="pk-small" role="status">
-          {admitDayDates.length > 0
-            ? `${admitDayDates.length} ${admitDayDates.length === 1 ? "day" : "days"} selected`
-            : "Select waitlisted in-person days to enable admission."}
-        </span>
-      </div>
-      {/* The override is one of several sections stacked inside the attendance
-          panel, so it names itself: an unnamed <section> is announced as
-          nothing at all. */}
-      {canVip && (
-        <Panel aria-label="Reasoned VIP admission override">
-          <PanelHeader title="Reasoned VIP admission override" />
-          <PanelBody class="pk-stack pk-stack--snug">
-            <p class="pk-small">
-              Requires the effective event <code>manage</code> capability. The narrower <code>manage_attendance</code>
-              capability can admit only actively waitlisted days and cannot use this capacity override.
-            </p>
-            {/* The contract's handlers sit on the group so every control in it
-                reports being touched; the reason is the one they name. */}
-            <div class="pk-stack pk-stack--snug" {...vipForm.handlers}>
-              <fieldset class="pk-fieldset pk-field" disabled={applyingVip}>
-                <legend class="pk-field__label">Days to admit</legend>
-                <div class="pk-cluster">
-                  {rows
-                    .filter((day) => day.supportsInPerson)
-                    .map((day) => (
-                      <Checkbox
-                        key={day.dayDate}
-                        checked={vipDayDates.includes(day.dayDate)}
-                        disabled={applyingVip}
-                        onChange={(event) => setVipChecked(day.dayDate, (event.target as HTMLInputElement).checked)}
-                        label={`${day.label ? `${day.label} — ` : ""}${day.dayDate}`}
-                      />
-                    ))}
-                </div>
-              </fieldset>
-              <Field
-                label="Required reason"
-                required
-                help="At least three characters. This action is audited and queues a registration-update email."
-                {...vipForm.of("reason")}
+          <Field label="Attendance method">
+            {(control) => (
+              <Select
+                {...control}
+                value={dialog.choice}
+                disabled={busy}
+                onChange={(event) =>
+                  setDialog((current) =>
+                    current?.kind === "change"
+                      ? { ...current, choice: (event.target as HTMLSelectElement).value }
+                      : current,
+                  )
+                }
               >
-                {(control) => (
-                  <Textarea
-                    {...control}
-                    name="reason"
-                    rows={2}
-                    minLength={3}
-                    maxLength={1000}
-                    value={vipReason}
-                    disabled={applyingVip}
-                    onInput={(event) => setVipReason((event.target as HTMLTextAreaElement).value)}
-                  />
-                )}
-              </Field>
-              <div class="pk-cluster">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={!vipForm.valid}
-                  loading={applyingVip}
-                  onClick={() => void applyVipOverride()}
-                >
-                  {applyingVip ? "Applying…" : "Apply VIP override"}
-                </Button>
-              </div>
-            </div>
-          </PanelBody>
-        </Panel>
+                {changeChoices(dialog.days).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </Dialog>
+      )}
+      {vip && (
+        <Dialog
+          open
+          title="Admit beyond capacity"
+          description={`Seats the attendee in person on ${nameDays(vip.days)} although the day is full, with a recorded reason. This is audited and sends one registration update email.`}
+          confirmLabel="Apply VIP override"
+          confirmDisabled={!vipForm.valid || busy}
+          onConfirm={() => void applyVipOverride()}
+          onCancel={() => {
+            setDialog(null);
+            vipForm.reset();
+          }}
+        >
+          {/* The contract's handlers sit on the group so every control in it
+              reports being touched; the reason is the one they name. */}
+          <div class="pk-stack pk-stack--snug" {...vipForm.handlers}>
+            <Field label="Required reason" required help="At least three characters." {...vipForm.of("reason")}>
+              {(control) => (
+                <Textarea
+                  {...control}
+                  name="reason"
+                  rows={2}
+                  minLength={3}
+                  maxLength={1000}
+                  value={vip.reason}
+                  disabled={busy}
+                  onInput={(event) =>
+                    setDialog((current) =>
+                      current?.kind === "vip"
+                        ? { ...current, reason: (event.target as HTMLTextAreaElement).value }
+                        : current,
+                    )
+                  }
+                />
+              )}
+            </Field>
+          </div>
+        </Dialog>
       )}
     </div>
   );

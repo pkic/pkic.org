@@ -1,8 +1,10 @@
+import { MEETING_CALENDAR_HELP } from "../../../../../shared/meeting-calendar-policy";
 import {
   EVENT_GUEST_POLICIES,
   EVENT_MEMBER_ELIGIBILITIES,
   EVENT_PROFILE_LABELS,
   EVENT_PROFILE_KEYS,
+  EVENT_REGISTRATION_POLICY_HELP,
   EVENT_REGISTRATION_POLICY_LABELS,
   EVENT_REGISTRATION_POLICIES,
   EVENT_VISIBILITIES,
@@ -33,10 +35,15 @@ export interface MeetingSeriesDraft {
   guestPolicy: EventGuestPolicy;
 }
 
+/**
+ * Each option names the people it admits. "Owning group" named the record's
+ * relationship to the group, which a manager setting up a meeting had no
+ * way to read as "the members of this group" (#103).
+ */
 export const ELIGIBILITY_LABELS: Record<EventMemberEligibility, string> = {
-  owner_group: "Owning group",
-  shared_groups: "Owning and explicitly shared groups",
-  public: "Public",
+  owner_group: "Members of this group",
+  shared_groups: "Members of this group and of the groups it is shared with",
+  public: "Anyone",
 };
 
 export const GUEST_LABELS: Record<EventGuestPolicy, string> = {
@@ -84,6 +91,7 @@ export function MeetingSeriesFields({
 
   return (
     <div class="pk pk-stack">
+      <p class="pk-muted">{MEETING_CALENDAR_HELP}</p>
       <div class="pk-grid">
         <Field {...fieldProps.name} label="Meeting name" required>
           {(control) => (
@@ -164,7 +172,11 @@ export function MeetingSeriesFields({
       </div>
 
       <div class="pk-grid">
-        <Field {...fieldProps.registrationPolicy} label="Registration">
+        <Field
+          {...fieldProps.registrationPolicy}
+          label="Registration"
+          help={EVENT_REGISTRATION_POLICY_HELP[draft.registrationPolicy]}
+        >
           {(control) => (
             <Select
               {...control}
@@ -183,7 +195,11 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
-        <Field {...fieldProps.visibility} label="Visibility">
+        <Field
+          {...fieldProps.visibility}
+          label="Visibility"
+          help="Who can see the meeting listed at all: on the group's page, in the portal calendar, or publicly."
+        >
           {(control) => (
             <Select
               {...control}
@@ -202,7 +218,11 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
-        <Field {...fieldProps.memberEligibility} label="Attendee eligibility">
+        <Field
+          {...fieldProps.memberEligibility}
+          label="Attendee eligibility"
+          help="Who may attend without a personal invitation. People from outside are covered by External guests."
+        >
           {(control) => (
             <Select
               {...control}

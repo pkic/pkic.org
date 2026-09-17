@@ -32,6 +32,12 @@ export const PROPOSAL_INACTIVE_STATUSES = [
   "duplicate",
   "deleted",
 ] as const;
+/**
+ * What a proposal list can be narrowed to. `active` is every proposal still
+ * in play; `archived` is the deleted ones, which are otherwise never listed.
+ * Both are views of the one Status column rather than a second query
+ * dialect: a reader finds the archive where they find every other status.
+ */
 export const PROPOSAL_ADMIN_STATUS_FILTERS = [
   "active",
   ...PROPOSAL_DECIDABLE_STATUSES,
@@ -40,7 +46,22 @@ export const PROPOSAL_ADMIN_STATUS_FILTERS = [
   "canceled",
   "spam",
   "duplicate",
+  "archived",
 ] as const;
+export const PROPOSAL_ADMIN_STATUS_FILTER_LABELS: Record<(typeof PROPOSAL_ADMIN_STATUS_FILTERS)[number], string> = {
+  active: "Active",
+  submitted: "Submitted",
+  resubmitted: "Resubmitted",
+  under_review: "Under review",
+  "needs-work": "Needs work",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+  canceled: "Canceled",
+  spam: "Spam",
+  duplicate: "Duplicate",
+  archived: "Archived (deleted)",
+};
 export const proposalAdminStatusFilterSchema = z.enum(PROPOSAL_ADMIN_STATUS_FILTERS);
 
 export const PROPOSAL_FLAG_ACTIONS = ["spam", "duplicate", "delete"] as const;

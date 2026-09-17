@@ -1,3 +1,4 @@
+import { openColumnFilterMenu } from "./helpers/column-menu";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -143,10 +144,7 @@ describe("portal System Users list controls", () => {
     expect(container.querySelector('[role="toolbar"] select')).toBeNull();
     const roleMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Role column options"]');
     expect(roleMenu).not.toBeNull();
-    await act(async () => {
-      roleMenu!.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    openColumnFilterMenu(container, "Role");
     const admins = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
       item.textContent!.includes("Administrators"),
     );

@@ -33,6 +33,9 @@ const SystemAuditLog = lazy(() => import("../SystemAuditLog").then((module) => (
 const EmailTemplates = lazy(() =>
   import("../email-templates/EmailTemplates").then((module) => ({ default: module.EmailTemplates })),
 );
+const EmailOutboxDetail = lazy(() =>
+  import("../system-operations/EmailOutboxDetail").then((module) => ({ default: module.EmailOutboxDetail })),
+);
 const EmailOutbox = lazy(() =>
   import("../system-operations/EmailOutbox").then((module) => ({ default: module.EmailOutbox })),
 );
@@ -72,11 +75,18 @@ export function SettingsSection({
   return (
     <Suspense fallback={<Spinner />}>
       {requested === "/settings/application-workflow" ? (
-        <ApplicationWorkflow canWrite={portalHasGlobalPermission(session, "membership:write")} />
+        <ApplicationWorkflow
+          canPublish={portalHasGlobalPermission(session, "membership:approve")}
+          canWrite={portalHasGlobalPermission(session, "membership:write")}
+          resourceId={resourceId}
+        />
       ) : requested === "/settings/membership-application-form" ? (
         <MembershipApplicationForm canWrite={portalHasGlobalPermission(session, "membership:write")} />
       ) : requested === "/settings/membership-categories" ? (
-        <MembershipCategories canWrite={portalHasGlobalPermission(session, "membership:write")} />
+        <MembershipCategories
+          canWrite={portalHasGlobalPermission(session, "membership:write")}
+          categoryCode={resourceId}
+        />
       ) : requested === "/settings/organization-content-reviews" ? (
         <OrganizationContentReviews />
       ) : requested === "/settings/audit-log" ? (
@@ -85,9 +95,14 @@ export function SettingsSection({
         <EmailTemplates
           canRead={portalHasGlobalPermission(session, "email-templates:read")}
           canWrite={portalHasGlobalPermission(session, "email-templates:write")}
+          canManage={portalHasGlobalPermission(session, "email-templates:manage")}
         />
       ) : requested === "/settings/email-outbox" ? (
-        <EmailOutbox canManage={portalHasGlobalPermission(session, "email:manage")} />
+        resourceId ? (
+          <EmailOutboxDetail id={resourceId} />
+        ) : (
+          <EmailOutbox canManage={portalHasGlobalPermission(session, "email:manage")} />
+        )
       ) : requested === "/settings/scheduled-work" ? (
         <ScheduledWork
           canManageEmail={portalHasGlobalPermission(session, "email:manage")}

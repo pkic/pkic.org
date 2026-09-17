@@ -1,3 +1,4 @@
+import { deliverSeriesCalendar } from "../../../../../../../../_lib/services/event-series/automatic-invitations";
 import {
   eventOccurrenceCreateRouteSchema,
   eventOccurrenceResponseSchema,
@@ -40,6 +41,7 @@ export const GroupMeetingOccurrenceCreate = openApiRoute(
       data.body,
       c.env.MEETING_PROVIDER_ENCRYPTION_KEY ?? "",
     );
+    c.executionCtx.waitUntil(deliverSeriesCalendar(db, c.env, c.req.raw, data.params.seriesId));
     return json(eventOccurrenceResponseSchema.parse({ occurrence }), 201);
   },
 );

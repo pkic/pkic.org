@@ -1,13 +1,13 @@
+import { MembershipWorkflowProgress } from "../components/MembershipWorkflowProgress";
 /**
  * Membership application status-check page.
  *
  * Reached via the token-gated link emailed on submission (see
- * functions/api/v1/members/applications/index.ts statusUrl). Falls back to a
- * manual entry form when reached without a query string — there is no
- * "resend" endpoint for applications, unlike event registrations.
+ * functions/api/v1/members/applications/index.ts statusUrl). Incomplete links
+ * show email guidance without asking applicants to copy secrets.
  */
 import { render } from "preact";
-import { getJson } from "../shared/api-client";
+import { ApiClientError, getJson } from "../shared/api-client";
 import { formatDate } from "../shared/ui";
 import { setStatus } from "../shared/form/helpers";
 import { Badge } from "../components/Badge";
@@ -39,9 +39,12 @@ export function StatusSummary({ data }: { data: ApplicationStatus }) {
   return (
     <div class="pk pk-stack pk-stack--snug">
       <h2>Application status</h2>
-      <p>
-        <Badge status={data.stage} />
-      </p>
+      {data.workflow && <MembershipWorkflowProgress progress={data.workflow} />}
+      {!data.workflow && (
+        <p>
+          <Badge status={data.stage} />
+        </p>
+      )}
       <p class="pk-small">
         Submitted {formatDate(data.createdAt)} — last updated {formatDate(data.stageEnteredAt)}.
       </p>
@@ -50,12 +53,15 @@ export function StatusSummary({ data }: { data: ApplicationStatus }) {
 }
 
 async function showStatus(root: HTMLElement, apiBase: string, { id, token }: LookupParams): Promise<void> {
-  const lookupForm = root.querySelector<HTMLElement>("[data-lookup-form]");
+  const linkHelp = root.querySelector<HTMLElement>("[data-link-help]");
+  const retry = root.querySelector<HTMLElement>("[data-status-retry]");
   const resultContainer = root.querySelector<HTMLElement>("[data-status-result]");
   const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
   if (!resultContainer || !statusEl) return;
 
-  if (lookupForm) lookupForm.hidden = true;
+  if (linkHelp) linkHelp.hidden = true;
+  if (retry) retry.hidden = true;
+  statusEl.hidden = true;
   resultContainer.hidden = false;
 
   try {
@@ -69,33 +75,21 @@ async function showStatus(root: HTMLElement, apiBase: string, { id, token }: Loo
     resultContainer.append(summaryHost);
 
     render(<StatusSummary data={data} />, summaryHost);
-  } catch {
+  } catch (error) {
+    const transient =
+      error instanceof ApiClientError && (error.status === 0 || error.status === 429 || error.status >= 500);
     resultContainer.textContent = "";
     setStatus(
       statusEl,
-      "We couldn't find an application matching that ID and token. Please check the link from your confirmation email.",
+      transient
+        ? "Application status is temporarily unavailable. Please try again shortly."
+        : "This status link is incomplete, invalid, or expired. Please open the link from your confirmation email or a more recent update.",
       true,
     );
-    if (lookupForm) lookupForm.hidden = false;
+    if (linkHelp) linkHelp.hidden = transient;
+    if (retry) retry.hidden = !transient;
     resultContainer.hidden = true;
   }
-}
-
-function wireLookupForm(root: HTMLElement, apiBase: string): void {
-  const idInput = root.querySelector<HTMLInputElement>("[data-lookup-id]");
-  const tokenInput = root.querySelector<HTMLInputElement>("[data-lookup-token]");
-  const submitBtn = root.querySelector<HTMLButtonElement>("[data-lookup-submit]");
-  const statusEl = root.querySelector<HTMLElement>("[data-flow-status]");
-
-  submitBtn?.addEventListener("click", () => {
-    const id = idInput?.value.trim();
-    const token = tokenInput?.value.trim();
-    if (!id || !token) {
-      if (statusEl) setStatus(statusEl, "Please enter both the application ID and token.", true);
-      return;
-    }
-    void showStatus(root, apiBase, { id, token });
-  });
 }
 
 async function main(): Promise<void> {
@@ -103,10 +97,11 @@ async function main(): Promise<void> {
   if (!root) return;
   const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
 
-  wireLookupForm(root, apiBase);
-
   const params = parseLookupParams(window.location.search);
   if (params) {
+    root
+      .querySelector("[data-status-retry] button")
+      ?.addEventListener("click", () => void showStatus(root, apiBase, params));
     await showStatus(root, apiBase, params);
   }
 }

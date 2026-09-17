@@ -15,11 +15,13 @@ interface ReportFixture {
   totals: ReportTotals;
   needsEmailIndividuals: unknown[];
   bareRosterUsers: unknown[];
-  wgOnlyRosterUsers: unknown[];
+  groupOnlyRosterUsers: unknown[];
   invalidLinks: unknown[];
   unmatchedEventSponsorships: unknown[];
+  emailReservationConflicts: { email: string; reservedBy: string | null; reason: string }[] | null;
   nonMemberSponsorships: { created: number; unmatchedEvents: unknown[] };
-  workingGroupCounts: Record<string, number>;
+  groupRosterCounts: Record<string, number>;
+  missingOptionalRosters: string[];
 }
 
 function reportFixture(
@@ -29,11 +31,13 @@ function reportFixture(
     generatedAt: "2026-08-16T00:00:00.000Z",
     needsEmailIndividuals: [],
     bareRosterUsers: [],
-    wgOnlyRosterUsers: [],
+    groupOnlyRosterUsers: [],
     invalidLinks: [],
     unmatchedEventSponsorships: [],
+    emailReservationConflicts: null,
     nonMemberSponsorships: { created: 0, unmatchedEvents: [] },
-    workingGroupCounts: {},
+    groupRosterCounts: {},
+    missingOptionalRosters: [],
     ...overrides,
     totals: {
       yamlFiles: 0,
@@ -70,11 +74,12 @@ describe("formatRep", () => {
 
 describe("renderMarkdownReport", () => {
   it("renders the summary counts and each report section for an empty report", () => {
-    const report = reportFixture({ workingGroupCounts: { ca: 0 } });
+    const report = reportFixture({ groupRosterCounts: { ca: 0 }, missingOptionalRosters: ["board.csv"] });
     const markdown = renderMarkdownReport(report);
     expect(markdown).toContain("# Member migration report (2026-08-16T00:00:00.000Z)");
     expect(markdown).toContain("YAML files processed: 0");
     expect(markdown).toContain("- ca: 0");
+    expect(markdown).toContain("Missing optional roster: board.csv");
   });
 
   it("includes an unmatched organization's reason and representative summaries", () => {
@@ -96,6 +101,31 @@ describe("renderMarkdownReport", () => {
     const markdown = renderMarkdownReport(report);
     expect(markdown).toContain("**Acme Corp** (`acme.yaml`, category A) — no roster subscriber at this domain");
     expect(markdown).toContain("Alice (CEO)");
+  });
+
+  it("distinguishes a reservation check that found nothing from one that never ran", () => {
+    expect(renderMarkdownReport(reportFixture({ emailReservationConflicts: null }))).toContain(
+      "Not checked: no SQL was applied to a database in this run.",
+    );
+    expect(renderMarkdownReport(reportFixture({ emailReservationConflicts: [] }))).toContain(
+      "None: every imported address belongs to a live account.",
+    );
+  });
+
+  it("names every address that got no member account because another account reserved it", () => {
+    const markdown = renderMarkdownReport(
+      reportFixture({
+        emailReservationConflicts: [
+          { email: "alice@acme.example", reservedBy: "old@example.org", reason: "pending_email_change" },
+          { email: "dave@acme.example", reservedBy: null, reason: "closed_account" },
+        ],
+      }),
+    );
+    expect(markdown).toContain("## Addresses reserved elsewhere");
+    expect(markdown).toContain(
+      "- `alice@acme.example` — reserved by another account's unconfirmed email change (`old@example.org`)",
+    );
+    expect(markdown).toContain("- `dave@acme.example` — owned by a redacted or merged account");
   });
 
   it("includes dropped invalid links with their file and offending URL", () => {

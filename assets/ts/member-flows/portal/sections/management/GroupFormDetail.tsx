@@ -1,7 +1,7 @@
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { usePortalHashLocation } from "../../hash-location";
 import { deriveFormSubmissionWindowState } from "../../../../../shared/form-submission-window";
-import type { FormPlacement } from "../../../../../shared/schemas/forms";
+import { eventFormsPurposeSchema, type FormPlacement } from "../../../../../shared/schemas/forms";
 import {
   groupFormDefinitionResponseSchema,
   groupFormSubmissionResponseSchema,
@@ -77,13 +77,18 @@ export function GroupFormDetail({
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`;
   const requestedTab = (initialTab as GroupFormTab | undefined) ?? DEFAULT_TAB;
   const detail = useData(() => getJson(base, groupFormDefinitionResponseSchema), [base]);
+  const eventResponses =
+    detail.data?.placement.contextType === "event" &&
+    eventFormsPurposeSchema.safeParse(detail.data.form.purpose).success;
   const canViewResponses = detail.data?.capabilities.includes("view_responses") ?? false;
   // Holding the capability is what earns the tab; whether the window is open
   // decides only whether the tab shows the questions or the reason it cannot.
-  const canSubmit = detail.data?.capabilities.includes("submit") ?? false;
+  const canSubmit = !eventResponses && (detail.data?.capabilities.includes("submit") ?? false);
   const acceptingResponses = detail.data?.acceptingResponses ?? false;
   const shouldLoadStats =
-    canViewResponses && (requestedTab === "statistics" || (!canSubmit && requestedTab === "respond"));
+    !eventResponses &&
+    canViewResponses &&
+    (requestedTab === "statistics" || (!canSubmit && requestedTab === "respond"));
   const stats = useData(
     () =>
       shouldLoadStats
@@ -103,7 +108,7 @@ export function GroupFormDetail({
     ...(canSubmit ? [{ key: "respond", label: "Respond" }] : []),
     ...(canViewResponses
       ? [
-          { key: "statistics", label: "Statistics" },
+          ...(!eventResponses ? [{ key: "statistics", label: "Analytics" }] : []),
           { key: "responses", label: "Responses" },
         ]
       : []),
@@ -171,13 +176,21 @@ export function GroupFormDetail({
           ))}
         {activeTab === "statistics" &&
           (stats.loading ? (
-            <Spinner label="Loading response statistics…" />
+            <Spinner label="Loading response analytics…" />
           ) : stats.error ? (
             <ErrorAlert error={stats.error} />
           ) : stats.data ? (
             <FormResponseStats fields={form.fields} stats={stats.data.stats} total={stats.data.total} />
           ) : null)}
-        {activeTab === "responses" && (
+        {activeTab === "responses" && eventResponses && (
+          <Alert tone="info" title="Responses are part of the event records">
+            {form.form.purpose === "event_registration"
+              ? "Users answer these questions when registering for the event. View their answers in the event’s Registrations section."
+              : "Users answer these questions when submitting a proposal. View their answers in the event’s Proposals section."}{" "}
+            This form page manages the questions and availability; it does not list those responses.
+          </Alert>
+        )}
+        {activeTab === "responses" && !eventResponses && (
           <FormSubmissionsTable
             fields={form.fields}
             endpoint={`${base}/submissions`}

@@ -142,9 +142,10 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     expect(identities.identities).toHaveLength(1);
     expect(identities.identities[0].organizationName).toBe(organizationName);
     expect((await subscribers()).subscribers).toMatchObject([{ subscribed: true }]);
-    expect((await attendee.request.post("/api/v1/members/join/verify", { data: { token: joinToken } })).status()).toBe(
-      409,
-    );
+    const replay = await attendee.request.post("/api/v1/members/join/verify", { data: { token: joinToken } });
+    expect(replay.status()).toBe(200);
+    expect(await replay.json()).toEqual({ status: "already_member" });
+    expect(replay.headers()["set-cookie"]).toBeUndefined();
     expect(
       identitiesListResponseSchema.parse(
         await (await attendee.request.get("/api/v1/users/current/identities?active=true")).json(),

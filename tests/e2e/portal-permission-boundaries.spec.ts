@@ -1,3 +1,4 @@
+import { completeSyntheticMembershipReview } from "./helpers/member-provisioning";
 /**
  * What a permission actually buys, seen from the browser.
  *
@@ -25,30 +26,8 @@ async function provisionUser(page: Page, suffix: string): Promise<{ email: strin
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-permission-boundaries"));
-  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
-    const status = await page.evaluate(
-      async ({ applicationId, toStage }) => {
-        const response = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ toStage }),
-        });
-        return response.status;
-      },
-      { applicationId: application.applicationId, toStage },
-    );
-    expect(status).toBe(200);
-  }
-  const approved = await page.evaluate(async (applicationId) => {
-    const response = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
-    return { status: response.status, body: (await response.json()) as { userId: string } };
-  }, application.applicationId);
-  expect(approved.status, JSON.stringify(approved.body)).toBe(200);
-  return { email, userId: approved.body.userId };
+  const approved = await completeSyntheticMembershipReview(page.request, application.applicationId);
+  return { email, userId: approved.userId };
 }
 
 async function grantPermission(page: Page, userId: string, permission: string): Promise<void> {
@@ -110,7 +89,7 @@ test("membership:read alone reads applications but offers and accepts no stage c
       method: "PATCH",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ toStage: "in_review" }),
+      body: JSON.stringify({ toStage: "withdrawn" }),
     });
     return response.status;
   }, target.applicationId);
@@ -144,22 +123,15 @@ test("membership:write can move stages but cannot approve", async ({ page }) => 
   // The transition control is available to a writer.
   await expect(transitionCard(page).locator("select").first()).toBeVisible();
 
-  // Approval is a separate permission. Reaching ec_review through the API and
-  // then attempting approval isolates that boundary from the stage boundary.
-  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
-    const status = await page.evaluate(
-      async ({ applicationId, toStage }) => {
-        const response = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ toStage }),
-        });
-        return response.status;
+  // Staff can hold and resume the application without gaining approval authority.
+  for (const toStage of ["on_hold", "processing"]) {
+    const response = await page.request.patch(`/api/v1/members/applications/${target.applicationId}/stage`, {
+      data: {
+        toStage,
+        ...(toStage === "on_hold" ? { onHoldSubtype: "request_information", note: "Please clarify the form." } : {}),
       },
-      { applicationId: target.applicationId, toStage },
-    );
-    expect(status, `a writer must be able to move to ${toStage}`).toBe(200);
+    });
+    expect(response.status()).toBe(200);
   }
 
   const refused = await page.evaluate(async (applicationId) => {

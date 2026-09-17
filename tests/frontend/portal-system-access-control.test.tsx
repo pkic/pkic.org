@@ -10,6 +10,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { roleCreateSchema, roleUpdateSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 import { PERMISSIONS } from "../../assets/shared/schemas/permissions";
 import { confirmationButton } from "./helpers/confirm-dialog";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { buttonNamed, controlFor } from "./helpers/labelled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
@@ -390,10 +391,7 @@ describe("portal system access control", () => {
       const container = mount(<Roles canGrant canRevoke roleSegment={ROLE.id} onNavigate={vi.fn()} />);
       await settle();
 
-      const editButton = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent === "Edit",
-      )!;
-      void act(() => editButton.click());
+      await beginRecordEdit(container, "Role actions", "Edit");
 
       // Reached through the `for`/`id` pair the Field emits rather than a
       // hand-written id, so the lookup fails exactly when the label stops
@@ -440,11 +438,7 @@ describe("portal system access control", () => {
 
       const container = mount(<Roles canGrant canRevoke roleSegment={ROLE.id} onNavigate={vi.fn()} />);
       await settle();
-      void act(() =>
-        Array.from(container.querySelectorAll("button"))
-          .find((button) => button.textContent === "Edit")!
-          .click(),
-      );
+      await beginRecordEdit(container, "Role actions", "Edit");
 
       // The name is required, so the form refuses to submit an empty one
       // before it ever reaches the server.

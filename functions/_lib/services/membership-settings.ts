@@ -15,11 +15,7 @@ import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audi
 
 export interface MembershipSettingsRow {
   id: string;
-  consultation_window_days: number;
-  ec_review_window_days: number;
   on_hold_response_deadline_days: number;
-  consultation_email_recipients: string;
-  ec_email_recipients: string;
   cc_applicant_emails: string;
   auto_reminder_on_holds: number;
   revision: number;
@@ -28,8 +24,8 @@ export interface MembershipSettingsRow {
 }
 
 const MEMBERSHIP_SETTINGS_COLUMNS =
-  "id, consultation_window_days, ec_review_window_days, on_hold_response_deadline_days, " +
-  "consultation_email_recipients, ec_email_recipients, cc_applicant_emails, auto_reminder_on_holds, " +
+  "id, on_hold_response_deadline_days, " +
+  "cc_applicant_emails, auto_reminder_on_holds, " +
   "revision, updated_at, updated_by_user_id";
 
 export async function getMembershipSettings(db: DatabaseLike): Promise<MembershipSettingsRow> {
@@ -66,11 +62,7 @@ export async function updateMembershipSettings(
 
   const next: MembershipSettingsRow = {
     ...current,
-    consultation_window_days: updates.consultationWindowDays ?? current.consultation_window_days,
-    ec_review_window_days: updates.ecReviewWindowDays ?? current.ec_review_window_days,
     on_hold_response_deadline_days: updates.onHoldResponseDeadlineDays ?? current.on_hold_response_deadline_days,
-    consultation_email_recipients: updates.consultationEmailRecipients ?? current.consultation_email_recipients,
-    ec_email_recipients: updates.ecEmailRecipients ?? current.ec_email_recipients,
     cc_applicant_emails: updates.ccApplicantEmails ?? current.cc_applicant_emails,
     auto_reminder_on_holds:
       updates.autoReminderOnHolds === undefined ? current.auto_reminder_on_holds : updates.autoReminderOnHolds ? 1 : 0,
@@ -82,17 +74,13 @@ export async function updateMembershipSettings(
   const update = db
     .prepare(
       `UPDATE membership_settings
-       SET consultation_window_days = ?, ec_review_window_days = ?, on_hold_response_deadline_days = ?,
-           consultation_email_recipients = ?, ec_email_recipients = ?, cc_applicant_emails = ?,
+       SET on_hold_response_deadline_days = ?,
+           cc_applicant_emails = ?,
            auto_reminder_on_holds = ?, revision = revision + 1, updated_at = ?, updated_by_user_id = ?
        WHERE id = 'default' AND revision = ?`,
     )
     .bind(
-      next.consultation_window_days,
-      next.ec_review_window_days,
       next.on_hold_response_deadline_days,
-      next.consultation_email_recipients,
-      next.ec_email_recipients,
       next.cc_applicant_emails,
       next.auto_reminder_on_holds,
       now,

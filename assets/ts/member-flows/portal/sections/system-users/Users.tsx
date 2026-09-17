@@ -5,10 +5,15 @@ import { UsersList } from "./UsersList";
 
 export function Users({
   userId,
+  section,
+  segment,
   permissions,
   viewerUserId,
 }: {
   userId?: string;
+  /** A page under the record: `affiliations` with segment `new` is the identity grant. */
+  section?: string;
+  segment?: string;
   permissions: UserPermissions;
   /** Who is reading. A record about the reader offers different things. */
   viewerUserId?: string;
@@ -16,7 +21,15 @@ export function Users({
   const [, navigate] = usePortalHashLocation();
 
   if (userId) {
-    return <UserDetail userId={userId} permissions={permissions} viewerUserId={viewerUserId} />;
+    return (
+      <UserDetail
+        userId={userId}
+        section={section}
+        segment={segment}
+        permissions={permissions}
+        viewerUserId={viewerUserId}
+      />
+    );
   }
 
   if (!permissions.canRead) {

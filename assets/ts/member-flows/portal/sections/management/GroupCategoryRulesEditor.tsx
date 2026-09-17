@@ -12,8 +12,10 @@ import { Spinner } from "../../../../components/Spinner";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { ApiClientError, getJson, putJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
+import { BulkBar } from "../../../../ui/BulkBar";
+import { Button } from "../../../../ui/Button";
 import { EditActions } from "../../../../ui/EditActions";
-import { Checkbox } from "../../../../ui/Checkbox";
+import { RowActions } from "../../../../ui/RowActions";
 import { DataTable } from "../../../../ui/DataTable";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import "../../../../ui/Content.css";
@@ -40,6 +42,7 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +58,7 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
         setRules(draftFromResponse(response));
         setSavedRules(draftFromResponse(response));
         setEditing(false);
+        setSelected(new Set());
         setCategories(categoryCatalog);
       })
       .catch((cause) => {
@@ -71,6 +75,8 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
   const rulesByCategory = useMemo(() => new Map(rules.map((rule) => [rule.membershipCategory, rule])), [rules]);
 
   function updateRule(category: string, field: "permitsJoin" | "automaticEnrollment", value: boolean): void {
+    setEditing(true);
+    setSaved(false);
     setRules((current) => {
       const existing = current.find((rule) => rule.membershipCategory === category) ?? {
         membershipCategory: category,
@@ -111,6 +117,7 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
       await onUpdated();
       setSavedRules(rules);
       setEditing(false);
+      setSelected(new Set());
       setSaved(true);
     } catch (cause) {
       // A server refusal names its fields the way the contract does.
@@ -140,6 +147,7 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
               onCancel={() => {
                 setRules(savedRules);
                 setEditing(false);
+                setSelected(new Set());
                 setError(null);
                 form.reset();
               }}
@@ -149,65 +157,87 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
         <PanelBody class="pk-stack">
           <p class="pk-small">The membership categories that may join this group and those enrolled automatically.</p>
           {error && <ErrorAlert error={error} />}
-          {/* Two checkboxes per category, each named after the category it
-              belongs to, so a reader moving through the grid always knows
-              which row they are in without a visible row header. */}
+          {categories.length > 0 && (
+            <BulkBar count={selected.size} total={categories.length} onClear={() => setSelected(new Set())}>
+              {(
+                [
+                  ["Allow joining", "permitsJoin", true],
+                  ["Disallow joining", "permitsJoin", false],
+                  ["Enable automatic enrollment", "automaticEnrollment", true],
+                  ["Disable automatic enrollment", "automaticEnrollment", false],
+                ] as const
+              ).map(([label, field, value]) => (
+                <Button
+                  key={label}
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => {
+                    for (const category of selected) updateRule(category, field, value);
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </BulkBar>
+          )}
           <DataTable
             caption="Membership category eligibility"
             rows={categories}
             rowKey={(category) => category.code}
+            selection={{
+              selected,
+              onChange: setSelected,
+              rowLabel: (code) => categories.find((category) => category.code === code)?.label ?? code,
+            }}
             empty="No membership categories are configured."
             columns={[
               {
                 id: "category",
                 header: "Category",
-                cell: (category) => (
-                  <div class="pk-stack pk-stack--tight">
-                    <span class="pk-strong">{category.label}</span>
-                    <span class="pk-small pk-mono">{category.code}</span>
-                  </div>
-                ),
+                cell: (category) => <span class="pk-strong">{category.label}</span>,
               },
               {
                 id: "join",
                 header: "Join",
-                // The name is real label text, hidden because the row and
-                // column headers already carry it visually, so a reader moving
-                // through the grid still hears which category a box belongs to.
-                cell: (category) =>
-                  editing ? (
-                    <Checkbox
-                      checked={rulesByCategory.get(category.code)?.permitsJoin ?? false}
-                      disabled={saving}
-                      onChange={(event) =>
-                        updateRule(category.code, "permitsJoin", (event.target as HTMLInputElement).checked)
-                      }
-                      label={<span class="pk-sr-only">{`${category.label} may join`}</span>}
-                    />
-                  ) : rulesByCategory.get(category.code)?.permitsJoin ? (
-                    "Allowed"
-                  ) : (
-                    "Not allowed"
-                  ),
+                cell: (category) => (rulesByCategory.get(category.code)?.permitsJoin ? "Allowed" : "Not allowed"),
               },
               {
                 id: "automatic",
                 header: "Automatic enrollment",
-                cell: (category) =>
-                  editing ? (
-                    <Checkbox
-                      checked={rulesByCategory.get(category.code)?.automaticEnrollment ?? false}
-                      disabled={saving}
-                      onChange={(event) =>
-                        updateRule(category.code, "automaticEnrollment", (event.target as HTMLInputElement).checked)
-                      }
-                      label={<span class="pk-sr-only">{`${category.label} automatic enrollment`}</span>}
-                    />
-                  ) : rulesByCategory.get(category.code)?.automaticEnrollment ? (
-                    "Enabled"
-                  ) : (
-                    "Disabled"
-                  ),
+                cell: (category) => (rulesByCategory.get(category.code)?.automaticEnrollment ? "Enabled" : "Disabled"),
+              },
+              {
+                id: "actions",
+                header: "Actions",
+                headerHidden: true,
+                align: "end",
+                cell: (category) => (
+                  <RowActions
+                    subject={category.label}
+                    actions={[
+                      {
+                        id: "join",
+                        label: rulesByCategory.get(category.code)?.permitsJoin ? "Disallow joining" : "Allow joining",
+                        disabled: saving,
+                        onSelect: () =>
+                          updateRule(category.code, "permitsJoin", !rulesByCategory.get(category.code)?.permitsJoin),
+                      },
+                      {
+                        id: "automatic",
+                        label: rulesByCategory.get(category.code)?.automaticEnrollment
+                          ? "Disable automatic enrollment"
+                          : "Enable automatic enrollment",
+                        disabled: saving,
+                        onSelect: () =>
+                          updateRule(
+                            category.code,
+                            "automaticEnrollment",
+                            !rulesByCategory.get(category.code)?.automaticEnrollment,
+                          ),
+                      },
+                    ]}
+                  />
+                ),
               },
             ]}
           />

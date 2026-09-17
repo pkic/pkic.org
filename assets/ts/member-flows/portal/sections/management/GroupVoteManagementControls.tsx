@@ -18,13 +18,14 @@ import { patchJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt } from "../../ui";
 import { GroupVoteLifecycleActions } from "./GroupVoteLifecycleActions";
 // The ballot columns are written by class name (`pk-mono` for the opaque
 // identifiers), and component CSS ships in a lazy chunk, so the stylesheet
 // that defines them has to be imported by the module that names them.
 import "../../../../ui/Content.css";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 const VISIBILITY_LABELS: Record<VoteVisibility, string> = {
   private: "Private",
@@ -136,12 +137,13 @@ export function GroupVoteSettings({
               </Field>
               <Field label="Description">
                 {(control) => (
-                  <Textarea
+                  <MarkdownEditor
+                    variant="compact"
                     {...control}
-                    rows={3}
-                    maxLength={10000}
-                    value={description}
-                    onInput={(event) => setDescription(event.currentTarget.value)}
+                    name="description"
+                    label="Description"
+                    initialValue={description}
+                    onChange={setDescription}
                   />
                 )}
               </Field>

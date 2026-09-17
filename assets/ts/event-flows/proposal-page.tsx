@@ -1,3 +1,4 @@
+import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render, createRef } from "preact";
 import type { z } from "zod";
 import { getJson, postJson } from "../shared/api-client";
@@ -251,6 +252,11 @@ async function main(): Promise<void> {
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
 
+  const abstractEditor = await mountMarkdownField(
+    form.querySelector<HTMLTextAreaElement>("#proposal-abstract"),
+    "Abstract",
+    proposalCreateSchema.shape.proposal.shape.abstract,
+  );
   installLiveValidation(form, statusEl);
 
   const consentsContainer = boot.root.querySelector<HTMLElement>("[data-consents]");
@@ -320,6 +326,7 @@ async function main(): Promise<void> {
   // ── Step navigation — pre-fill proposer card when entering step 3 ─────────
 
   installStepNavigation(boot.root, form, statusEl, (currentStep) => {
+    if (currentStep === 3 && abstractEditor && !abstractEditor.validate()) return false;
     if (currentStep === 3 && isPresentingCheckbox?.checked) {
       ensureProposerCard();
       prefillProposerCard();
@@ -372,7 +379,7 @@ async function main(): Promise<void> {
     // draw their own error from the platform's `invalid` event, which
     // `syncConsentValidation` triggers, so nothing here depended on the class.
     syncConsentValidation(form);
-    if (!validateBeforeSubmit(form, statusEl)) return;
+    if (!validateBeforeSubmit(form, statusEl) || (abstractEditor && !abstractEditor.validate())) return;
 
     await withLoadingButton(findSubmitButton(form), async () => {
       try {

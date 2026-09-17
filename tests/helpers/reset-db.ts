@@ -82,6 +82,8 @@ const EXCLUDED_TABLES = new Set([
   "sponsorship_tier_config",
   "_test_membership_category_baseline",
   "_test_membership_settings_baseline",
+  "_test_membership_workflows_baseline",
+  "_test_membership_versions_baseline",
 ]);
 
 const SEEDED_GROUP_IDS = [
@@ -178,13 +180,17 @@ async function ensureMembershipCategoryBaseline(): Promise<void> {
          label TEXT NOT NULL,
          description TEXT,
          display_order INTEGER NOT NULL,
-         is_voting INTEGER NOT NULL
+         is_voting INTEGER NOT NULL,
+         is_individual INTEGER NOT NULL,
+         requires_university_email INTEGER NOT NULL,
+         retired_at TEXT,
+         workflow_version_id TEXT
        )`,
     ),
     env.DB.prepare(
       `INSERT OR IGNORE INTO _test_membership_category_baseline
-         (code, label, description, display_order, is_voting)
-       SELECT code, label, description, display_order, is_voting
+         (code, label, description, display_order, is_voting, is_individual, requires_university_email, retired_at, workflow_version_id)
+       SELECT code, label, description, display_order, is_voting, is_individual, requires_university_email, retired_at, workflow_version_id
          FROM membership_categories`,
     ),
   ]);
@@ -244,6 +250,8 @@ async function resetMembershipConfiguration(): Promise<void> {
               description = (SELECT description FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
               display_order = (SELECT display_order FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
               is_voting = (SELECT is_voting FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+              is_individual = (SELECT is_individual FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+              requires_university_email = (SELECT requires_university_email FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
               revision = 0,
               updated_at = '1970-01-01T00:00:00.000Z'
         WHERE code IN (SELECT code FROM _test_membership_category_baseline)`,
@@ -251,35 +259,50 @@ async function resetMembershipConfiguration(): Promise<void> {
   ]);
 }
 
-/** Test isolation may delete history, while production code remains unable to do so. */
-async function suspendHistoryDeleteTrigger(): Promise<string | null> {
-  const trigger = await env.DB.prepare(
-    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_group_memberships_prevent_delete'",
-  ).first<{ sql: string }>();
-  if (!trigger?.sql) return null;
-  await env.DB.prepare("DROP TRIGGER trg_group_memberships_prevent_delete").run();
-  return trigger.sql;
+/** Test isolation temporarily removes retention guards and restores their exact definitions. */
+async function suspendRetentionTriggers(): Promise<string[]> {
+  const names = [
+    "trg_group_memberships_prevent_delete",
+    "trg_mailing_lists_retain_history",
+    "membership_workflow_versions_published_delete",
+  ];
+  const definitions: string[] = [];
+  for (const name of names) {
+    const trigger = await env.DB.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?")
+      .bind(name)
+      .first<{ sql: string }>();
+    if (!trigger?.sql) continue;
+    await env.DB.prepare(`DROP TRIGGER "${name}"`).run();
+    definitions.push(trigger.sql);
+  }
+  return definitions;
 }
 
-async function restoreHistoryDeleteTrigger(sql: string | null): Promise<void> {
-  if (!sql) return;
-  // D1 exec() splits on the semicolon inside the trigger body. A prepared
-  // schema statement preserves the complete CREATE TRIGGER statement.
-  await env.DB.prepare(sql).run();
+async function ensureWorkflowBaseline(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS _test_membership_workflows_baseline AS SELECT id, created_at FROM membership_workflows",
+    ),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS _test_membership_versions_baseline AS
+      SELECT id, workflow_id, version, revision, name, status, definition_json, created_at, published_at, published_by_user_id
+      FROM membership_workflow_versions`),
+  ]);
 }
 
-async function suspendMailingListDeleteTrigger(): Promise<string | null> {
-  const trigger = await env.DB.prepare(
-    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_mailing_lists_retain_history'",
-  ).first<{ sql: string }>();
-  if (!trigger?.sql) return null;
-  await env.DB.prepare("DROP TRIGGER trg_mailing_lists_retain_history").run();
-  return trigger.sql;
-}
-
-async function restoreMailingListDeleteTrigger(sql: string | null): Promise<void> {
-  if (!sql) return;
-  await env.DB.prepare(sql).run();
+async function restoreWorkflowBaseline(): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO membership_workflows (id, created_at) SELECT id, created_at FROM _test_membership_workflows_baseline",
+    ),
+    env.DB.prepare(`INSERT INTO membership_workflow_versions
+      (id, workflow_id, version, revision, name, status, definition_json, created_at, published_at, published_by_user_id)
+      SELECT id, workflow_id, version, revision, name, status, definition_json, created_at, published_at, published_by_user_id
+      FROM _test_membership_versions_baseline`),
+    env.DB.prepare(`UPDATE membership_categories SET
+      retired_at = (SELECT retired_at FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code),
+      workflow_version_id = (SELECT workflow_version_id FROM _test_membership_category_baseline baseline WHERE baseline.code = membership_categories.code)
+      WHERE code IN (SELECT code FROM _test_membership_category_baseline)`),
+  ]);
 }
 
 /** Preserve migration-owned list configuration while removing test-created lists. */
@@ -307,21 +330,33 @@ async function clearTestGroups(): Promise<void> {
  * that create multiple independent DB scenarios.
  */
 export async function resetDb(): Promise<void> {
-  const historyDeleteTriggerSql = await suspendHistoryDeleteTrigger();
-  const mailingListDeleteTriggerSql = await suspendMailingListDeleteTrigger();
+  const retentionTriggers = await suspendRetentionTriggers();
   try {
     if (!baselinesInitialized) {
       await ensureMembershipCategoryBaseline();
       await ensureMembershipSettingsBaseline();
+      await ensureWorkflowBaseline();
       baselinesInitialized = true;
     }
     await resetMembershipConfiguration();
+    await env.DB.prepare("UPDATE membership_categories SET workflow_version_id = NULL").run();
     const tableNames = await listResettableTables();
     await clearTablesWithRetry(tableNames);
     await clearTestMailingLists();
     await clearTestGroups();
+    await env.DB.batch([
+      env.DB.prepare(
+        "DELETE FROM group_membership_category_rules WHERE membership_category_code NOT IN (SELECT code FROM _test_membership_category_baseline)",
+      ),
+      env.DB.prepare(
+        "DELETE FROM membership_categories WHERE code NOT IN (SELECT code FROM _test_membership_category_baseline)",
+      ),
+      env.DB
+        .prepare(`INSERT OR IGNORE INTO membership_categories (code, label, description, display_order, is_voting, is_individual, requires_university_email, revision, updated_at)
+        SELECT code, label, description, display_order, is_voting, is_individual, requires_university_email, 0, '1970-01-01T00:00:00.000Z' FROM _test_membership_category_baseline`),
+    ]);
+    await restoreWorkflowBaseline();
   } finally {
-    await restoreMailingListDeleteTrigger(mailingListDeleteTriggerSql);
-    await restoreHistoryDeleteTrigger(historyDeleteTriggerSql);
+    for (const sql of retentionTriggers) await env.DB.prepare(sql).run();
   }
 }

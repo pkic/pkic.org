@@ -97,12 +97,18 @@ export interface EventOccurrenceRow {
   attendance_verified_count: number;
   invitations_round: number;
   invitations_sent_at: string | null;
+  invited_count: number;
+  rsvp_accepted_count: number;
+  rsvp_declined_count: number;
+  rsvp_tentative_count: number;
+  calendar_sequence: number;
   created_at: string;
   updated_at: string;
 }
 
 export function toEventOccurrence(row: EventOccurrenceRow) {
   return eventOccurrenceSchema.parse({
+    calendarSequence: row.calendar_sequence,
     id: row.id,
     seriesId: row.series_id,
     startsAt: row.starts_at,
@@ -116,6 +122,12 @@ export function toEventOccurrence(row: EventOccurrenceRow) {
     attendanceVerifiedCount: row.attendance_verified_count,
     invitationsRound: row.invitations_round,
     invitationsSentAt: row.invitations_sent_at,
+    invitedCount: row.invited_count,
+    rsvp: {
+      accepted: row.rsvp_accepted_count,
+      declined: row.rsvp_declined_count,
+      tentative: row.rsvp_tentative_count,
+    },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });

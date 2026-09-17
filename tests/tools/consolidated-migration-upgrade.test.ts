@@ -1,8 +1,10 @@
+import { readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { afterEach, describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
-import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
+import { DEFAULT_LAYOUT_HTML, DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
+import { renderEmail } from "../../functions/_lib/email/render";
 
 const ROOT = path.resolve(__dirname, "..", "..");
 const MIGRATIONS_DIR = path.join(ROOT, "migrations");
@@ -209,7 +211,7 @@ describe("consolidated pending migration upgrade", () => {
     db = undefined;
   });
 
-  it("upgrades realistic pre-0035 data without rebuilding members or organizations or losing backfills", () => {
+  it("upgrades realistic pre-0035 data without rebuilding members or organizations or losing backfills", async () => {
     db = new DatabaseSync(":memory:");
     applyMigrationsBefore0035(db);
     seedRepresentativePre0035State(db);
@@ -218,6 +220,25 @@ describe("consolidated pending migration upgrade", () => {
     expect(migrationSql).not.toMatch(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:members|organizations)\b/i);
     expect(migrationSql).not.toMatch(/ALTER\s+TABLE\s+(?:members|organizations)\s+RENAME\b/i);
     db.exec(migrationSql);
+    const reminder = db
+      .prepare(
+        "SELECT body FROM email_template_versions WHERE template_key = 'speaker_profile_reminder' AND status = 'active'",
+      )
+      .get();
+    const reminderEmail = await renderEmail(
+      String(reminder?.body),
+      {
+        proposalTitle: "Forms for organizations",
+        eventName: "User conference",
+        requiresConfirmation: true,
+        profileUrl: "https://example.test/speaker",
+      },
+      DEFAULT_LAYOUT_HTML,
+      "markdown",
+      "https://example.test",
+    );
+    expect(reminderEmail.text).toContain("confirm or decline your participation");
+    expect(reminderEmail.text).not.toContain("has been accepted");
     const userMagicLinkBaseline = DEFAULT_TEMPLATES.find((template) => template.key === "user_magic_link");
     expect(userMagicLinkBaseline).toBeDefined();
 
@@ -997,4 +1018,13 @@ describe("consolidated pending migration upgrade", () => {
 
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
+});
+
+it("splits the consolidated migration into bounded statements for D1", async () => {
+  const migrations = await readD1Migrations(MIGRATIONS_DIR);
+  const consolidated = migrations.find((migration) => migration.name === CONSOLIDATED_MIGRATION)!;
+  expect(consolidated.queries.length).toBeGreaterThan(500);
+  expect(Math.max(...consolidated.queries.map((query) => new TextEncoder().encode(query).byteLength))).toBeLessThan(
+    100_000,
+  );
 });

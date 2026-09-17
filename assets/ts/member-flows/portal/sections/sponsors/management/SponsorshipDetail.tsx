@@ -11,16 +11,19 @@ import { fmtDate, toast } from "../../../ui";
 import type { Sponsorship, SponsorshipPipelineStage } from "../../../../../../shared/schemas/sponsorship-management";
 import type { ApiTableActions } from "../../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../../components/Badge";
-import { Button } from "../../../../../ui/Button";
+import { Breadcrumb } from "../../../../../ui/Breadcrumb";
+import { Dialog } from "../../../../../ui/Dialog";
 import { Field } from "../../../../../ui/Field";
 import { DescriptionList, type DescriptionListItem } from "../../../../../ui/DescriptionList";
-import { PageHeader } from "../../../../../ui/PageHeader";
+import { Menu, type MenuItem } from "../../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { ProfileHeader } from "../../../../../ui/ProfileHeader";
 import { usePortalHashLocation } from "../../../hash-location";
 import { Select, TextInput } from "../../../../../ui/TextControl";
 import { SponsorshipHistory } from "./SponsorshipHistory";
 import { SponsorshipLogo } from "./SponsorshipLogo";
 import { SponsorshipRecordForm } from "./SponsorshipRecordForm";
+import { Markdown } from "../../../../../components/Markdown";
 
 /** What the sponsorship is called, falling through the names it may carry. */
 function sponsorTitle(sponsorship: Sponsorship): string {
@@ -40,6 +43,8 @@ export function SponsorshipDetail({
   const [stageNote, setStageNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  // The stage move is a dialog the record's menu opens, never a form
+  // standing open in the pipeline panel (#116).
   const [advancing, setAdvancing] = useState(false);
   const historyRef = useRef<ApiTableActions | null>(null);
 
@@ -103,31 +108,81 @@ export function SponsorshipDetail({
     },
     { term: "Assigned staff", value: sponsorship.assignedToName },
     { term: "Renewal date", value: sponsorship.renewalDate ? fmtDate(sponsorship.renewalDate) : null },
-    { term: "Notes", value: sponsorship.notes },
+    { term: "Notes", value: sponsorship.notes ? <Markdown markdown={sponsorship.notes} /> : null },
+  ];
+
+  const commands: MenuItem[] = [
+    { id: "edit", label: "Edit record…", disabled: editing, onSelect: () => setEditing(true) },
+    { id: "stage", label: "Move stage…", disabled: busy, onSelect: () => setAdvancing(true) },
   ];
 
   return (
-    // The record page: the record and its facts take the width; the pipeline
-    // — where it stands and the one command that moves it — keeps the narrower
-    // column beside it, and how it got there is the table below both. Every
-    // form here is closed until asked for: a reader who opened a sponsorship
-    // to look at it is not handed three forms to fill in.
+    // The record page, with the same anatomy as an organization's: a trail,
+    // the subject's header carrying its standing and its commands in the `…`
+    // menu, the facts taking the width and the pipeline keeping the column
+    // beside them. Every form here is closed until asked for through the
+    // menu: a reader who opened a sponsorship to look at it is not handed
+    // forms to fill in, and there are no buttons on the cards (#116).
     <section class="pk pk-stack" aria-label={title}>
       {error && <ErrorAlert error={error} />}
-      <PageHeader
-        trail={[{ label: "Sponsors", href: usePortalHashLocation.hrefs("/sponsors") }, { label: title }]}
+      <Breadcrumb items={[{ label: "Sponsors", href: usePortalHashLocation.hrefs("/sponsors") }, { label: title }]} />
+      <ProfileHeader
         title={title}
+        lede={[`${statusLabel(sponsorship.sponsorType)} sponsorship`, sponsorship.tier].filter(Boolean).join(" · ")}
         context={<Badge status={sponsorship.pipelineStage} />}
+        facts={[
+          sponsorship.eventName,
+          sponsorship.contactEmail ? (sponsorship.contactName ?? sponsorship.contactEmail) : null,
+          sponsorship.renewalDate ? `Renews ${fmtDate(sponsorship.renewalDate)}` : null,
+        ].filter((fact): fact is string => Boolean(fact))}
+        actions={canWrite ? <Menu label="Sponsorship actions" align="end" items={commands} /> : undefined}
       />
+      {canWrite && advancing && (
+        <Dialog
+          open
+          title="Move stage"
+          description={`${title} stands at ${statusLabel(sponsorship.pipelineStage)}. The move and its note are written to the pipeline history.`}
+          confirmLabel={busy ? "Moving…" : "Move stage"}
+          confirmDisabled={busy}
+          onConfirm={() => void moveStage()}
+          onCancel={() => {
+            setAdvancing(false);
+            setStageNote("");
+          }}
+        >
+          <div class="pk-stack pk-stack--snug">
+            <Field label="Move to stage">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={nextStage}
+                  disabled={busy}
+                  onChange={(e) => setNextStage((e.target as HTMLSelectElement).value as SponsorshipPipelineStage)}
+                >
+                  {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
+                    <option value={s} key={s}>
+                      {statusLabel(s)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Note (optional)">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={stageNote}
+                  disabled={busy}
+                  onInput={(e) => setStageNote((e.target as HTMLInputElement).value)}
+                />
+              )}
+            </Field>
+          </div>
+        </Dialog>
+      )}
       <div class="pk-record">
         <Panel aria-label="Sponsorship record">
-          <PanelHeader title="Record">
-            {canWrite && (
-              <Button size="sm" onClick={() => setEditing((current) => !current)} aria-expanded={editing}>
-                {editing ? "Cancel" : "Edit"}
-              </Button>
-            )}
-          </PanelHeader>
+          <PanelHeader title="Record" />
           <PanelBody class="pk-stack">
             {!editing && <DescriptionList items={facts} density="compact" />}
             {canWrite && editing && (
@@ -138,6 +193,7 @@ export function SponsorshipDetail({
                   await load();
                   onChanged?.();
                 }}
+                onCancel={() => setEditing(false)}
               />
             )}
             {canWrite && !sponsorship.organizationId && <SponsorshipLogo sponsorship={sponsorship} onChanged={load} />}
@@ -145,56 +201,15 @@ export function SponsorshipDetail({
         </Panel>
 
         <Panel aria-label="Pipeline">
-          <PanelHeader title="Pipeline">
-            {canWrite && (
-              <Button size="sm" onClick={() => setAdvancing((current) => !current)} aria-expanded={advancing}>
-                {advancing ? "Cancel" : "Move stage"}
-              </Button>
-            )}
-          </PanelHeader>
+          <PanelHeader title="Pipeline" />
           <PanelBody class="pk-stack">
-            {canWrite && advancing && (
-              <form
-                class="pk-stack pk-stack--snug"
-                aria-label="Move pipeline stage"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void moveStage();
-                }}
-              >
-                <Field label="Move to stage">
-                  {(control) => (
-                    <Select
-                      {...control}
-                      value={nextStage}
-                      disabled={busy}
-                      onChange={(e) => setNextStage((e.target as HTMLSelectElement).value as SponsorshipPipelineStage)}
-                    >
-                      {SPONSORSHIP_PIPELINE_STAGES.map((s) => (
-                        <option value={s} key={s}>
-                          {statusLabel(s)}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-                <Field label="Note (optional)">
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={stageNote}
-                      disabled={busy}
-                      onInput={(e) => setStageNote((e.target as HTMLInputElement).value)}
-                    />
-                  )}
-                </Field>
-                <div class="pk-cluster">
-                  <Button type="submit" variant="primary" size="sm" loading={busy}>
-                    Move
-                  </Button>
-                </div>
-              </form>
-            )}
+            <DescriptionList
+              density="compact"
+              items={[
+                { term: "Stage", value: <Badge status={sponsorship.pipelineStage} /> },
+                { term: "Assigned staff", value: sponsorship.assignedToName },
+              ]}
+            />
             <p class="pk-small pk-muted">Every stage this sponsorship has passed through is listed below the record.</p>
           </PanelBody>
         </Panel>

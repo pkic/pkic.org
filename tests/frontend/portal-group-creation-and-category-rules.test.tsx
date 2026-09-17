@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { beginRecordEdit } from "./helpers/record-edit";
 import { render, type JSX } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +7,7 @@ import { GroupCreateForm } from "../../assets/ts/member-flows/portal/sections/ma
 import { Groups } from "../../assets/ts/member-flows/portal/sections/Groups";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
-import { groupCreateSchema } from "../../assets/shared/schemas/groups";
+import { groupCreateSchema, groupCategoryRulesReplaceSchema } from "../../assets/shared/schemas/groups";
 import {
   buttonNamed,
   chooseComboboxOption,
@@ -17,6 +16,7 @@ import {
   submitForm,
   typeInto,
 } from "./helpers/labelled-control";
+import { typeMarkdown } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 
@@ -154,7 +154,7 @@ describe("portal group creation and category policy", () => {
     }
 
     await typeInto(controlFor(container, "Name"), "Security Working Group");
-    await typeInto(controlFor<HTMLTextAreaElement>(container, "Description"), "Coordinates security work.");
+    await typeMarkdown(container, "Description", "Coordinates security work.");
     await act(async () => buttonNamed(container, "Create group").click());
     await settle();
 
@@ -337,17 +337,16 @@ describe("portal group creation and category policy", () => {
     await settle();
     expect(container.textContent).toContain("Organization member");
     expect(container.textContent).toContain("Student");
-    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
-    await beginRecordEdit(container, "Eligibility actions");
-    const studentJoin = controlFor(container, "Student may join");
-    await act(() => studentJoin.click());
+    expect(container.querySelector('input[aria-label="Student"]')).not.toBeNull();
+    await act(() => container.querySelector<HTMLInputElement>('input[aria-label="Student"]')!.click());
+    await act(() => buttonNamed(container, "Allow joining")!.click());
     const save = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Save category rules",
     )!;
     await act(async () => save.click());
     await settle();
     const update = requests.find(({ method }) => method === "PUT");
-    expect(update?.body).toEqual({
+    expect(groupCategoryRulesReplaceSchema.parse(update?.body)).toEqual({
       expectedRevision: 7,
       rules: [
         { membershipCategory: "A", permitsJoin: true, automaticEnrollment: false },
@@ -356,22 +355,10 @@ describe("portal group creation and category policy", () => {
     });
     expect(onUpdated).toHaveBeenCalled();
 
-    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
-    await beginRecordEdit(container, "Eligibility actions");
-    // The matrix names itself and every control in it, so a reader moving
-    // through the grid always knows which category a checkbox belongs to
-    // without a visible row header to read back.
+    expect(container.querySelector('input[aria-label="Student"]')).not.toBeNull();
     expect(container.querySelector("table caption")?.textContent).toBe("Membership category eligibility");
-    expect(
-      [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].map(
-        (input) => input.closest("label")?.textContent,
-      ),
-    ).toEqual([
-      "Organization member may join",
-      "Organization member automatic enrollment",
-      "Student may join",
-      "Student automatic enrollment",
-    ]);
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
+    expect(container.querySelector('button[aria-label="Actions for Student"]')).not.toBeNull();
     // The confirmation is announced as well as tinted, so the outcome reaches
     // a reader who never sees the tone.
     expect(onUpdated).toHaveBeenCalledTimes(1);

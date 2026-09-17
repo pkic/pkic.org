@@ -1,6 +1,8 @@
 import type { EmailMessageType } from "../../../../assets/shared/schemas/email-templates";
-import type { EventEmailCampaignPreviewInput } from "../../../../assets/shared/schemas/event-email-campaigns";
-import type { AttendanceType } from "../../../../assets/shared/schemas/registration";
+import type {
+  EventEmailCampaignFilter,
+  EventEmailCampaignPreviewInput,
+} from "../../../../assets/shared/schemas/event-email-campaigns";
 import type { EventRecord } from "../events";
 import type { ResolvedEmailTemplate } from "../../email/templates";
 import type { FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
@@ -29,14 +31,7 @@ export interface CampaignFormResponseData {
   fields: FormFieldDefinition[] | null;
 }
 
-export interface CampaignAudienceFilter {
-  audience: "attendees" | "speakers";
-  attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "cancelled";
-  attendanceType?: "all" | AttendanceType;
-  dayDate?: string;
-  dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
-  speakerStatus?: "all" | "confirmed" | "invited" | "pending";
-}
+export type CampaignAudienceFilter = EventEmailCampaignFilter;
 
 export interface AttendeeCampaignRow {
   registration_id: string;
@@ -111,10 +106,8 @@ export type CampaignTemplate = Pick<
   "subjectTemplate" | "content" | "contentType" | "messageType"
 >;
 
-export interface PreparedEventEmailCampaign {
+export interface CampaignDeliveryPage {
   template: CampaignTemplate | null;
   messageType: EmailMessageType;
-  filter: CampaignAudienceFilter;
   recipients: CampaignRecipient[];
-  digest: string;
 }

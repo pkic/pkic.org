@@ -1,3 +1,11 @@
+/**
+ * The proposal's speaker roster: one card per speaker, and — for an operator —
+ * the way to the page that invites another.
+ *
+ * Inviting is a page under this facet rather than a form standing open above
+ * the cards: a create action is never loaded inline, and a reader who opens
+ * the roster to look at it should not be handed a form.
+ */
 import { useEffect, useState } from "preact/hooks";
 import { proposalSpeakersResponseSchema, type ProposalSpeaker } from "../../../shared/schemas/proposal-speakers";
 import { useData } from "../../hooks/useData";
@@ -6,15 +14,13 @@ import { formatDateTime, type ToastType } from "../../shared/ui";
 import { EmptyState } from "../EmptyState";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
-import { Button } from "../../ui/Button";
+import { ButtonLink } from "../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import {
   ProposalSpeakerCard,
   buildReplacementProposerOptions,
   type ProposalSpeakerEndpointConfig,
 } from "./ProposalSpeakerCard";
-import { ProposalCoSpeakerInviteForm } from "./ProposalCoSpeakerInviteForm";
-import type { EventInviteWindow } from "../../../shared/schemas/event-invite-validity";
 
 export function ProposalSpeakersPanel({
   endpoint,
@@ -25,8 +31,8 @@ export function ProposalSpeakersPanel({
   onReload,
   notify,
   endpoints,
-  inviteEndpoint,
-  inviteWindow,
+  invitePath,
+  refreshKey,
 }: {
   endpoint: string;
   proposalId: string;
@@ -36,12 +42,14 @@ export function ProposalSpeakersPanel({
   onReload?: () => void | Promise<void>;
   notify?: (message: string, type: ToastType) => void;
   endpoints: ProposalSpeakerEndpointConfig;
-  inviteEndpoint?: string;
-  inviteWindow?: EventInviteWindow;
+  /** Where an operator invites a co-speaker; absent when the caller cannot route it or the reader may not. */
+  invitePath?: string;
+  /** Changes when something outside the panel altered the roster, so it reads again. */
+  refreshKey?: string | number;
 }) {
   const [speakerOverrides, setSpeakerOverrides] = useState<Record<string, Partial<ProposalSpeaker>>>({});
-  const roster = useData(() => getJson(`${endpoint}/speakers`, proposalSpeakersResponseSchema), [endpoint]);
-  useEffect(() => setSpeakerOverrides({}), [endpoint]);
+  const roster = useData(() => getJson(`${endpoint}/speakers`, proposalSpeakersResponseSchema), [endpoint, refreshKey]);
+  useEffect(() => setSpeakerOverrides({}), [endpoint, refreshKey]);
   if (roster.loading) return <Spinner />;
   if (roster.error) return <ErrorAlert error={roster.error} />;
   if (!roster.data) return null;
@@ -58,24 +66,16 @@ export function ProposalSpeakersPanel({
     <div class="pk">
       <Panel aria-label="Proposal speakers">
         <PanelHeader title="Speakers" headingLevel={4}>
-          <span class="pk-small pk-nowrap">{speakers.length} assigned</span>
-          <Button size="sm" onClick={() => void roster.reload()}>
-            ↺ Refresh
-          </Button>
+          <span class="pk-small pk-muted pk-nowrap">
+            {speakers.length} {speakers.length === 1 ? "speaker" : "speakers"}
+          </span>
+          {access.canFinalize && invitePath && (
+            <ButtonLink size="sm" variant="primary" href={invitePath}>
+              Invite co-speaker
+            </ButtonLink>
+          )}
         </PanelHeader>
         <PanelBody class="pk-stack pk-stack--snug">
-          {access.canFinalize && inviteEndpoint && inviteWindow && (
-            <ProposalCoSpeakerInviteForm
-              endpoint={inviteEndpoint}
-              proposalId={proposalId}
-              event={inviteWindow}
-              notify={notify}
-              onInvited={async () => {
-                await roster.reload();
-                await onReload?.();
-              }}
-            />
-          )}
           {speakers.length === 0 ? (
             <EmptyState
               title="No speakers assigned yet"

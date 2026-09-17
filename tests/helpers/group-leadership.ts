@@ -115,3 +115,22 @@ export async function grantGroupLeadershipCapacity(
     .run();
   return { roleAssignmentId, memberId, identityId };
 }
+
+/** Seats a user on the Executive Council, creating an individual capacity when they hold none. */
+export async function seatInExecutiveCouncil(db: DatabaseLike, userId: string): Promise<void> {
+  const council = await first<{ id: string }>(db, "SELECT id FROM groups WHERE slug = 'executive-council'", []);
+  if (!council) throw new Error("The Executive Council group is not seeded");
+  await ensureGroupMembershipCapacity(db, council.id, userId);
+}
+
+/** Ends every Executive Council seat a user holds. */
+export async function unseatFromExecutiveCouncil(db: DatabaseLike, userId: string): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE group_memberships SET left_at = datetime('now'), updated_at = datetime('now')
+        WHERE user_id = ? AND left_at IS NULL
+          AND group_id IN (SELECT id FROM groups WHERE slug = 'executive-council')`,
+    )
+    .bind(userId)
+    .run();
+}

@@ -22,7 +22,6 @@ type EditableUser = {
   preferredName: string;
   role: string;
   active: boolean;
-  isEcMember: boolean;
 };
 
 type NameField = "firstName" | "lastName" | "preferredName";
@@ -41,7 +40,6 @@ function editFormFor(user: UserDetail): EditableUser {
     preferredName: user.preferred_name ?? "",
     role: user.role,
     active: user.active,
-    isEcMember: user.isEcMember ?? false,
   };
 }
 
@@ -59,7 +57,6 @@ function payloadFromDraft(draft: EditableUser, canGrantAccess: boolean) {
     lastName: draft.lastName || null,
     preferredName: draft.preferredName || null,
     active: draft.active,
-    isEcMember: draft.isEcMember,
   };
 }
 
@@ -198,12 +195,6 @@ export function UserProfileEditor({
                 checked={draft.active}
                 onChange={(event) => update({ active: event.currentTarget.checked })}
                 label="Active"
-              />
-              <Checkbox
-                name="isEcMember"
-                checked={draft.isEcMember}
-                onChange={(event) => update({ isEcMember: event.currentTarget.checked })}
-                label="Executive Council member"
               />
             </div>
           </fieldset>

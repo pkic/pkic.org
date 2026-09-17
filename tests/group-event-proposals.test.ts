@@ -264,7 +264,9 @@ describe("event proposal collection and canonical proposal resource routes", () 
     const filtered = eventProposalsResponseSchema.parse(await filteredResponse.json());
     expect(filtered.proposals).toHaveLength(1);
     expect(filtered.page).toMatchObject({ limit: 1, offset: 0, total: 1, hasMore: false });
-    const archivedSelector = eventProposalsResponseSchema.parse(await (await route(fixture, "?archived=true")).json());
+    const archivedSelector = eventProposalsResponseSchema.parse(
+      await (await route(fixture, "?status=archived")).json(),
+    );
     expect(archivedSelector.proposals).toEqual([]);
     expect((await route(fixture, "/" + fixture.proposalId)).status).toBe(200);
 

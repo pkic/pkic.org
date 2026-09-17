@@ -79,7 +79,8 @@ test("the outbox, the due queue and the job registry are pages, each on canonica
         response.request().method() === "PATCH" &&
         new URL(response.url()).pathname === "/api/v1/scheduler/jobs/working_group_chair_digest",
     );
-    await pauseForm.getByRole("button", { name: "Confirm pause" }).click();
+    // The reason is asked for in a dialog (#126); its confirm is the dialog's.
+    await page.getByRole("dialog").getByRole("button", { name: "Confirm pause" }).click();
     expect((await pauseResponse).status()).toBe(200);
     paused = true;
     await expect(jobRow.getByText("Paused", { exact: true })).toBeVisible();

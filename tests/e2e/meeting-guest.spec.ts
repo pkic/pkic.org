@@ -1,6 +1,7 @@
 /**
  * @covers event.3.5
  */
+import type { EventOccurrence } from "../../assets/shared/schemas/event-series";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
@@ -14,10 +15,9 @@ test("invited external guest verifies the separate mailbox code before meeting e
   const eventName = `E2E external guest meeting ${unique}`;
   const guestEmail = `meeting-guest-${unique}@example.test`;
   const startsAt = new Date(Date.now() + 3_600_000).toISOString();
-  const endsAt = new Date(Date.now() + 7_200_000).toISOString();
 
   const created = await page.evaluate(
-    async ({ groupId, eventName, unique, startsAt, endsAt, guestEmail }) => {
+    async ({ groupId, eventName, unique, startsAt, guestEmail }) => {
       const seriesResponse = await fetch(`/api/v1/groups/${groupId}/meetings/series`, {
         method: "POST",
         credentials: "same-origin",
@@ -42,19 +42,18 @@ test("invited external guest verifies the separate mailbox code before meeting e
       const seriesBody = (await seriesResponse.json()) as { series?: { id: string }; error?: unknown };
       if (!seriesBody.series) return { stage: "series", status: seriesResponse.status, body: seriesBody };
 
-      const occurrenceResponse = await fetch(
-        `/api/v1/groups/${groupId}/meetings/series/${seriesBody.series.id}/occurrences`,
-        {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            startsAt,
-            endsAt,
-            providerJoinUrl: `https://meet.example.test/${unique}`,
-          }),
-        },
-      );
+      const occurrencePath = `/api/v1/groups/${groupId}/meetings/series/${seriesBody.series.id}/occurrences`;
+      const generatedResponse = await fetch(occurrencePath, { credentials: "same-origin" });
+      const generated = ((await generatedResponse.json()) as { occurrences: EventOccurrence[] }).occurrences[0];
+      const occurrenceResponse = await fetch(`${occurrencePath}/${generated.id}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expectedUpdatedAt: generated.updatedAt,
+          providerJoinUrl: `https://meet.example.test/${unique}`,
+        }),
+      });
       const occurrenceBody = (await occurrenceResponse.json()) as {
         occurrence?: { id: string };
         error?: unknown;
@@ -85,7 +84,7 @@ test("invited external guest verifies the separate mailbox code before meeting e
         occurrenceId: occurrenceBody.occurrence.id,
       };
     },
-    { groupId: GROUP_ID, eventName, unique, startsAt, endsAt, guestEmail },
+    { groupId: GROUP_ID, eventName, unique, startsAt, guestEmail },
   );
   expect(created.stage, JSON.stringify(created.body)).toBe("guest");
   expect(created.status, JSON.stringify(created.body)).toBe(201);

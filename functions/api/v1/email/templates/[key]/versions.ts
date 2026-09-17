@@ -34,6 +34,8 @@ async function handleVersionCreate(
     subjectTemplate: body.subjectTemplate,
     contentType: body.contentType,
     messageType: body.messageType,
+    fromEmail: body.fromEmail,
+    fromName: body.fromName,
   });
 
   return json(emailTemplateVersionCreateResponseSchema.parse({ success: true, version }));

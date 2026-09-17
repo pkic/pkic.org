@@ -27,6 +27,10 @@ export const eventTeamRoleAssignmentSchema = z.object({
   id: databaseIdSchema,
   userEmail: z.email(),
   userId: databaseIdSchema,
+  /** The person behind the assignment, so a roster row reads as a person and opens their record. */
+  userFirstName: z.string().nullable(),
+  userLastName: z.string().nullable(),
+  headshotUrl: z.string().nullable(),
   role: eventTeamRoleSchema,
   grantedByUserId: databaseIdSchema.nullable(),
   expiresAt: utcInstantSchema.nullable(),
@@ -37,8 +41,14 @@ export type EventTeamRoleAssignment = z.infer<typeof eventTeamRoleAssignmentSche
 
 export const eventTeamRolesResponseSchema = paginatedResponseSchema("roles", eventTeamRoleAssignmentSchema);
 
+/**
+ * A team role is granted to a person the portal already knows: the form
+ * finds them with the user picker and sends their id. Nothing is created by
+ * address — an unknown address used to become an empty account on the spot,
+ * which is not what "add a team member" means (#88).
+ */
 export const eventTeamRoleCreateSchema = z.object({
-  userEmail: z.email().trim().toLowerCase(),
+  userId: databaseIdSchema,
   role: eventTeamRoleSchema,
   expiresAt: utcInstantSchema.nullable().optional(),
 });

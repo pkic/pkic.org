@@ -7,12 +7,14 @@ import { EmptyState } from "../../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { Spinner } from "../../../../../ui/Spinner";
 import { StatCard } from "../../../../../ui/StatCard";
+import { Tabs } from "../../../../../components/Tabs";
+import { usePortalHashLocation } from "../../../hash-location";
 import { statusLabel } from "../../../../../components/Badge";
 import { friendlyErrorMessage } from "../../../../../components/ErrorAlert";
 import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
-import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../attendance";
-import { svgStackedBarChart } from "../../../../../ui/chart";
+import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../../../shared/attendance";
+import { StackedBarChart } from "../../../../../ui/StackedBarChart";
 import { isoDateRange } from "../../../../../components/analytics/date-range";
 import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
@@ -113,7 +115,28 @@ const WAITLIST_DAY_COLUMNS: ReadonlyArray<DataTableColumn<WaitlistDayRow>> = [
   },
 ];
 
-export function EventStats({ slug }: { slug: string }) {
+/** The page's sections, each a routed tab (#118). */
+type StatsSection = "overview" | "attendance" | "registrations" | "invitations" | "calendar";
+const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
+  { key: "overview", label: "Overview" },
+  { key: "attendance", label: "Attendance" },
+  { key: "registrations", label: "Registrations" },
+  { key: "invitations", label: "Invitations" },
+  { key: "calendar", label: "Calendar" },
+];
+
+export function EventStats({
+  slug,
+  section,
+  basePath = `/events/${encodeURIComponent(slug)}/stats`,
+}: {
+  slug: string;
+  /** The routed section below the tab; the overview when absent. */
+  section?: string;
+  /** Where the sections live, so the tabs stay inside the workspace that rendered them. */
+  basePath?: string;
+}) {
+  const [, navigate] = usePortalHashLocation();
   const {
     data: stats,
     loading,
@@ -260,175 +283,224 @@ export function EventStats({ slug }: { slug: string }) {
     count,
   }));
 
+  // The sections a reader can open: the calendar only once something has
+  // been answered, and the invitation section only when invitations exist.
+  const hasInvites = Boolean(s.invites?.attendee || s.invites?.speaker);
+  const hasRsvp = (s.rsvp?.total ?? 0) > 0;
+  const sections = STATS_SECTIONS.filter(
+    ({ key }) => (key !== "calendar" || hasRsvp) && (key !== "invitations" || hasInvites),
+  );
+  const active: StatsSection = sections.find(({ key }) => key === section)?.key ?? "overview";
+  const hrefFor = (key: string) => (key === "overview" ? basePath : `${basePath}/${key}`);
+
   return (
     <div class="pk pk-stack">
-      <Panel>
-        <PanelHeader title="Event dashboard" headingLevel={2}>
-          <Button size="sm" onClick={() => void reload()}>
-            <span aria-hidden="true">↺</span> Refresh
-          </Button>
-        </PanelHeader>
-        <PanelBody class="pk-stack">
-          <p class="pk-small">Current attendee status, movement, waitlist pressure, and event activity.</p>
+      {/* One page, several questions: how the event stands, how attendance is
+          moving, how registrations arrived, how invitations fared. Each is a
+          section with its own address rather than a column of every panel
+          at once (#118). */}
+      <Tabs
+        label="Analytics sections"
+        items={sections}
+        active={active}
+        onChange={(key) => navigate(hrefFor(key))}
+        hrefFor={hrefFor}
+      />
 
-          <div class="pk-grid pk-grid--tight">
-            <StatCard label="Accepted attendees" value={String(acceptedAttendees)} note="not on an active waitlist" />
-            <StatCard
-              label="Waitlisted attendees"
-              value={String(waitlistedAttendees)}
-              note="unique people with an active day waitlist"
-            />
-            <StatCard label="Pending confirmation" value={String(pendingConfirmation)} note="email not confirmed" />
-            <StatCard label="Total registrations" value={String(s.registrations?.total ?? 0)} note="all statuses" />
-            {s.proposals && (
-              <StatCard label="Proposals" value={String(s.proposals.total)} note="all proposal statuses" />
-            )}
-            <StatCard
-              label="Sponsor consent"
-              value={String(consentGranted)}
-              note={`${String(consentPct)}% of ${String(consentTotal)}`}
-            />
-          </div>
-
-          {needsAttention.length > 0 && (
-            <Alert tone="warn" title="Needs attention">
-              {needsAttention.join(" · ")}
-            </Alert>
-          )}
-        </PanelBody>
-      </Panel>
-
-      <Panel>
-        <PanelHeader title="Attendance status" headingLevel={2} />
-        <PanelBody>
-          <div class="pk-grid pk-grid--tight">
-            {attendanceStatuses.map(({ type, label, accepted, waitlisted }) => (
-              <StatCard
-                key={type}
-                label={`${label} accepted`}
-                value={String(accepted)}
-                note={waitlisted > 0 ? `+${String(waitlisted)} waitlisted` : "No active waitlist"}
-              />
-            ))}
-          </div>
-        </PanelBody>
-      </Panel>
-
-      <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />
-
-      <Panel>
-        <PanelHeader title="Registrations received by day" headingLevel={2} />
-        <PanelBody>
-          {growthDates.length > 0 && growthSeries.length > 0 ? (
-            <div
-              dangerouslySetInnerHTML={{
-                __html: svgStackedBarChart(
-                  growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`),
-                  growthSeries,
-                  { caption: "Registrations received by day", isoLabels: growthDates },
-                ),
-              }}
-            />
-          ) : (
-            <EmptyState title="No registrations yet." />
-          )}
-        </PanelBody>
-      </Panel>
-
-      {dayLabels.length > 0 && (
-        <Panel>
-          <PanelHeader title="Registrations by event day" headingLevel={2} />
-          <PanelBody class="pk-stack pk-stack--snug">
-            {/* The chart's own legend names each series; this key explains what
-                the two shades within a series mean. The badge dot repeats the
-                tone as a shape, so it does not rest on colour alone. */}
-            <div class="pk-cluster">
-              <Badge tone="ok">solid = accepted</Badge>
-              <Badge tone="neutral">light = pending/waitlisted</Badge>
-            </div>
-            {daySeries.length > 0 ? (
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: svgStackedBarChart(dayLabels, daySeries, { caption: "Registrations by event day" }),
-                }}
-              />
-            ) : (
-              <EmptyState title="No registrations on any event day yet." />
-            )}
-          </PanelBody>
-        </Panel>
-      )}
-
-      {waitlistDayRows.length > 0 && (
-        <Panel>
-          <PanelHeader title="Open waitlist by event day" headingLevel={2} />
-          <PanelBody class="pk-stack">
-            <div class="pk-grid pk-grid--tight">
-              <StatCard label="Open day entries" value={String(waitlistOpenCount)} note="waiting + offered" />
-              <StatCard
-                label="Offers awaiting response"
-                value={String(waitlistOfferedCount)}
-                note="included in open entries"
-              />
-              <StatCard label="Accepted from waitlist" value={String(waitlistAcceptedCount)} note="historical total" />
-            </div>
-            <DataTable
-              caption="Open waitlist by event day"
-              columns={WAITLIST_DAY_COLUMNS}
-              rows={waitlistDayRows}
-              rowKey={(row) => row.label}
-            />
-          </PanelBody>
-        </Panel>
-      )}
-
-      <div class="pk-grid pk-grid--roomy">
-        {(["attendee", "speaker"] as const).map((type) => {
-          const inv = s.invites?.[type];
-          if (!inv) return null;
-          const declineReasons = inv.declineReasons ?? [];
-          const title = type === "attendee" ? "Attendee invites" : "Speaker invites";
-          const inviteRows: CountRow[] = [
-            ...Object.entries(inv.byStatus ?? {}).map(([status, count]) => ({
-              key: status,
-              label: inviteBadge(status),
-              count,
-            })),
-            { key: "__total", label: <span class="pk-strong">Total</span>, count: inv.total ?? 0 },
-          ];
-          return (
-            <Panel key={type}>
-              <PanelHeader title={title} headingLevel={2} />
-              <PanelBody class="pk-stack pk-stack--snug">
-                <DataTable
-                  caption={`${title} by status`}
-                  columns={countColumns("Status")}
-                  rows={inviteRows}
-                  rowKey={countRowKey}
+      {active === "overview" && (
+        <>
+          <Panel>
+            <PanelHeader title="Event dashboard" headingLevel={2}>
+              <Button size="sm" onClick={() => void reload()}>
+                <span aria-hidden="true">↺</span> Refresh
+              </Button>
+            </PanelHeader>
+            <PanelBody class="pk-stack">
+              <div class="pk-stat-row">
+                {/* Each card's tone says what its number is — seated, waiting,
+                    unconfirmed — beside the label that says so in words (#110). */}
+                <StatCard
+                  label="Accepted attendees"
+                  value={String(acceptedAttendees)}
+                  note="not on an active waitlist"
+                  tone="ok"
                 />
-                {declineReasons.length > 0 && (
-                  <>
-                    <p class="pk-strong pk-small">Decline reasons</p>
-                    <DataTable
-                      caption={`${title}: decline reasons`}
-                      columns={DECLINE_REASON_COLUMNS}
-                      rows={declineReasons.map((dr, index) => ({
-                        key: dr.reason_code ?? `unspecified-${String(index)}`,
-                        reason: dr.reason_code ?? "Not specified",
-                        count: dr.count,
-                        unsubscribed: dr.unsubscribed,
-                      }))}
-                      rowKey={(row) => row.key}
-                    />
-                  </>
+                <StatCard
+                  label="Waitlisted attendees"
+                  value={String(waitlistedAttendees)}
+                  note="unique people with an active day waitlist"
+                  tone={waitlistedAttendees > 0 ? "warn" : "neutral"}
+                />
+                <StatCard
+                  label="Pending confirmation"
+                  value={String(pendingConfirmation)}
+                  note="email not confirmed"
+                  tone={pendingConfirmation > 0 ? "info" : "neutral"}
+                />
+                <StatCard label="Total registrations" value={String(s.registrations?.total ?? 0)} note="all statuses" />
+                {s.proposals && (
+                  <StatCard label="Proposals" value={String(s.proposals.total)} note="all proposal statuses" />
+                )}
+                <StatCard
+                  label="Sponsor consent"
+                  value={String(consentGranted)}
+                  note={`${String(consentPct)}% of ${String(consentTotal)}`}
+                  tone="info"
+                />
+              </div>
+
+              {needsAttention.length > 0 && (
+                <Alert tone="warn" title="Needs attention">
+                  {needsAttention.join(" · ")}
+                </Alert>
+              )}
+            </PanelBody>
+          </Panel>
+
+          <Panel>
+            <PanelHeader title="Attendance status" headingLevel={2} />
+            <PanelBody>
+              <div class="pk-stat-row">
+                {attendanceStatuses.map(({ type, label, accepted, waitlisted }) => (
+                  <StatCard
+                    key={type}
+                    label={`${label} accepted`}
+                    value={String(accepted)}
+                    note={waitlisted > 0 ? `+${String(waitlisted)} waitlisted` : "No active waitlist"}
+                    tone={waitlisted > 0 ? "warn" : undefined}
+                  />
+                ))}
+              </div>
+            </PanelBody>
+          </Panel>
+
+          {dayLabels.length > 0 && (
+            <Panel>
+              <PanelHeader title="Registrations by event day" headingLevel={2} />
+              <PanelBody class="pk-stack pk-stack--snug">
+                {/* The chart's own legend names each series; this key explains what
+                    the two shades within a series mean. The badge dot repeats the
+                    tone as a shape, so it does not rest on colour alone. */}
+                <div class="pk-cluster">
+                  <Badge tone="ok">solid = accepted</Badge>
+                  <Badge tone="neutral">light = pending/waitlisted</Badge>
+                </div>
+                {daySeries.length > 0 ? (
+                  <StackedBarChart labels={dayLabels} series={daySeries} caption="Registrations by event day" />
+                ) : (
+                  <EmptyState title="No registrations on any event day yet." />
                 )}
               </PanelBody>
             </Panel>
-          );
-        })}
-      </div>
+          )}
+        </>
+      )}
 
-      {(s.rsvp?.total ?? 0) > 0 && (
+      {active === "attendance" && <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />}
+
+      {active === "registrations" && (
+        <>
+          <Panel>
+            <PanelHeader title="Registrations received by day" headingLevel={2} />
+            <PanelBody>
+              {growthDates.length > 0 && growthSeries.length > 0 ? (
+                <StackedBarChart
+                  labels={growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`)}
+                  series={growthSeries}
+                  caption="Registrations received by day"
+                  isoLabels={growthDates}
+                />
+              ) : (
+                <EmptyState title="No registrations yet." />
+              )}
+            </PanelBody>
+          </Panel>
+
+          {waitlistDayRows.length > 0 && (
+            <Panel>
+              <PanelHeader title="Open waitlist by event day" headingLevel={2} />
+              <PanelBody class="pk-stack">
+                <div class="pk-stat-row">
+                  <StatCard
+                    label="Open day entries"
+                    value={String(waitlistOpenCount)}
+                    note="waiting + offered"
+                    tone={waitlistOpenCount > 0 ? "warn" : "neutral"}
+                  />
+                  <StatCard
+                    label="Offers awaiting response"
+                    value={String(waitlistOfferedCount)}
+                    note="included in open entries"
+                    tone={waitlistOfferedCount > 0 ? "info" : "neutral"}
+                  />
+                  <StatCard
+                    label="Accepted from waitlist"
+                    value={String(waitlistAcceptedCount)}
+                    note="historical total"
+                    tone="ok"
+                  />
+                </div>
+                <DataTable
+                  caption="Open waitlist by event day"
+                  columns={WAITLIST_DAY_COLUMNS}
+                  rows={waitlistDayRows}
+                  rowKey={(row) => row.label}
+                />
+              </PanelBody>
+            </Panel>
+          )}
+        </>
+      )}
+
+      {active === "invitations" && (
+        <div class="pk-grid pk-grid--roomy">
+          {(["attendee", "speaker"] as const).map((type) => {
+            const inv = s.invites?.[type];
+            if (!inv) return null;
+            const declineReasons = inv.declineReasons ?? [];
+            const title = type === "attendee" ? "Attendee invites" : "Speaker invites";
+            const inviteRows: CountRow[] = [
+              ...Object.entries(inv.byStatus ?? {}).map(([status, count]) => ({
+                key: status,
+                label: inviteBadge(status),
+                count,
+              })),
+              { key: "__total", label: <span class="pk-strong">Total</span>, count: inv.total ?? 0 },
+            ];
+            return (
+              <Panel key={type}>
+                <PanelHeader title={title} headingLevel={2} />
+                <PanelBody class="pk-stack pk-stack--snug">
+                  <DataTable
+                    caption={`${title} by status`}
+                    columns={countColumns("Status")}
+                    rows={inviteRows}
+                    rowKey={countRowKey}
+                  />
+                  {declineReasons.length > 0 && (
+                    <>
+                      <p class="pk-strong pk-small">Decline reasons</p>
+                      <DataTable
+                        caption={`${title}: decline reasons`}
+                        columns={DECLINE_REASON_COLUMNS}
+                        rows={declineReasons.map((dr, index) => ({
+                          key: dr.reason_code ?? `unspecified-${String(index)}`,
+                          reason: dr.reason_code ?? "Not specified",
+                          count: dr.count,
+                          unsubscribed: dr.unsubscribed,
+                        }))}
+                        rowKey={(row) => row.key}
+                      />
+                    </>
+                  )}
+                </PanelBody>
+              </Panel>
+            );
+          })}
+        </div>
+      )}
+
+      {active === "calendar" && (
         <Panel>
           <PanelHeader title={`Calendar RSVP (${String(s.rsvp.total)})`} headingLevel={2} />
           <PanelBody>

@@ -17,7 +17,7 @@ import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { isPersonalEmailAddress } from "../../shared/constants/email-domains";
 import {
   memberApplicationCreateResponseSchema,
-  memberApplicationCreateSchema,
+  memberApplicationCreateSchemaForCategory,
   memberApplicationFormResponseSchema,
   type MemberApplicationFormResponse,
 } from "../../shared/schemas/member-applications";
@@ -484,7 +484,9 @@ async function main(): Promise<void> {
     const context = applicationContext;
     await withLoadingButton(findSubmitButton(applicationForm), async () => {
       try {
-        const payload = memberApplicationCreateSchema.parse(
+        const configuredCategory = categories.find((entry) => entry.code === category);
+        if (!configuredCategory) throw new Error("Choose an available membership category");
+        const payload = memberApplicationCreateSchemaForCategory(configuredCategory).parse(
           buildApplicationPayload(applicationForm, category, context),
         );
         const result = await postJson(

@@ -9,6 +9,7 @@
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mailingListLifecycleTransitionSchema, type MailingList } from "../../assets/shared/schemas/mailing-lists";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
@@ -185,10 +186,8 @@ describe("group mailing-list record", () => {
     await settle();
     const delivery = container.querySelector('section[aria-label="Delivery"]')!;
     const audience = container.querySelector('section[aria-label="Audience"]')!;
-    await act(() => {
-      buttonNamed(delivery, "Edit").click();
-      buttonNamed(audience, "Edit").click();
-    });
+    await beginRecordEdit(delivery, "Delivery actions", "Edit");
+    await beginRecordEdit(audience, "Audience actions", "Edit");
     await act(() => {
       const label = delivery.querySelector<HTMLInputElement>('input[name="label"]')!;
       label.value = "Unsaved delivery name";

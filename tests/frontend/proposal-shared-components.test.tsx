@@ -16,7 +16,17 @@ import {
   proposalReviewUpsertSchema,
   type ProposalReview,
 } from "../../assets/shared/schemas/proposal-reviews";
-import { buttonNamed, chooseOption, controlFor, labelNames, optionValues, typeInto } from "./helpers/labelled-control";
+import {
+  buttonNamed,
+  chooseOption,
+  controlFor,
+  labelNames,
+  markdownValue,
+  optionValues,
+  typeInto,
+  typeMarkdown,
+  markdownControl,
+} from "./helpers/labelled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -87,7 +97,7 @@ function reviewPanel(overrides: Partial<Parameters<typeof ProposalReviewsPanel>[
 }
 
 describe("one review card", () => {
-  it("names the card after its reviewer so a column of them can be navigated", () => {
+  it("names the card after its reviewer so a column of them can be navigated", async () => {
     const root = mount(<ProposalReviewCard review={review} />);
 
     // An unnamed <section> is not exposed as a region at all, which is what a
@@ -96,7 +106,7 @@ describe("one review card", () => {
     expect(card?.getAttribute("aria-label")).toBe("Review by Review Owner");
   });
 
-  it("states the recommendation and the score in words, not in colour", () => {
+  it("states the recommendation and the score in words, not in colour", async () => {
     const root = mount(<ProposalReviewCard review={review} />);
 
     // Roughly one man in twelve cannot separate the accept and reject hues, so
@@ -105,7 +115,7 @@ describe("one review card", () => {
     expect(root.textContent).toContain("Score 9/10");
   });
 
-  it("falls back to an identifier when the reviewer record carries no name", () => {
+  it("falls back to an identifier when the reviewer record carries no name", async () => {
     const root = mount(
       <ProposalReviewCard
         review={{ ...review, reviewer_first_name: null, reviewer_last_name: null, reviewer_email: null }}
@@ -118,14 +128,14 @@ describe("one review card", () => {
     expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Review by reviewer-1");
   });
 
-  it("omits both note blocks when the review carries neither", () => {
+  it("omits both note blocks when the review carries neither", async () => {
     const root = mount(<ProposalReviewCard review={{ ...review, reviewer_comment: null, applicant_note: null }} />);
 
     expect(root.textContent).not.toContain("Internal review notes");
     expect(root.textContent).not.toContain("Suggested note to applicant");
   });
 
-  it("labels the applicant draft rather than distinguishing it by tint alone", () => {
+  it("labels the applicant draft rather than distinguishing it by tint alone", async () => {
     const root = mount(<ProposalReviewCard review={{ ...review, applicant_note: "Please shorten the abstract." }} />);
 
     expect(root.textContent).toContain("Suggested note to applicant");
@@ -134,7 +144,7 @@ describe("one review card", () => {
 });
 
 describe("shared proposal management components", () => {
-  it("shows review content without exposing a write form to non-reviewers", () => {
+  it("shows review content without exposing a write form to non-reviewers", async () => {
     const root = mount(reviewPanel());
 
     expect(root.textContent).toContain("Strong proposal.");
@@ -142,22 +152,22 @@ describe("shared proposal management components", () => {
     expect(root.querySelector("form")).toBeNull();
   });
 
-  it("exposes only the authenticated reviewer's own review form when unlocked", () => {
+  it("exposes only the authenticated reviewer's own review form when unlocked", async () => {
     const root = mount(reviewPanel({ canReview: true, myReview: review }));
 
     expect(root.textContent).toContain("Edit My Review");
     expect(root.querySelector("form")).not.toBeNull();
-    expect(root.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Strong proposal.");
+    expect(await markdownValue(root, "Internal review notes")).toBe("Strong proposal.");
   });
 
-  it("keeps reviewer writes hidden after a decision", () => {
+  it("keeps reviewer writes hidden after a decision", async () => {
     const root = mount(reviewPanel({ canReview: true, reviewLocked: true }));
 
     expect(root.textContent).toContain("Reviews are read-only after a proposal decision.");
     expect(root.querySelector("form")).toBeNull();
   });
 
-  it("offers every recommendation the review contract accepts", () => {
+  it("offers every recommendation the review contract accepts", async () => {
     const root = mount(reviewPanel({ canReview: true }));
 
     // The set and the order are the contract's, so a verdict added to
@@ -172,7 +182,7 @@ describe("shared proposal management components", () => {
 
     await chooseOption(controlFor<HTMLSelectElement>(root, "Recommendation"), "needs-work");
     await typeInto(controlFor(root, "Score (1–10)"), "7");
-    await typeInto(controlFor<HTMLTextAreaElement>(root, "Internal review notes"), "  Needs a tighter scope.  ");
+    await typeMarkdown(root, "Internal review notes", "  Needs a tighter scope.  ");
     await act(async () => {
       root.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -219,7 +229,7 @@ describe("shared proposal management components", () => {
     expect(buttonNamed(root, "Submit Review").disabled).toBe(false);
   });
 
-  it("names every review control and says quorum in words as well as tone", () => {
+  it("names every review control and says quorum in words as well as tone", async () => {
     const root = mount(reviewPanel({ canReview: true }));
 
     expect(labelNames(root)).toEqual([
@@ -245,7 +255,7 @@ describe("shared proposal management components", () => {
     expect(onLoadMore).toHaveBeenCalledOnce();
   });
 
-  it("names the empty review list instead of leaving the region blank", () => {
+  it("names the empty review list instead of leaving the region blank", async () => {
     const root = mount(reviewPanel({ reviews: [], summary: { ...summary, totalReviews: 0 } }));
 
     const status = root.querySelector('[role="status"]');
@@ -268,11 +278,9 @@ describe("shared proposal management components", () => {
 
     const submit = root.querySelector<HTMLButtonElement>('button[type="submit"]');
     expect(submit?.disabled).toBe(true);
-    const comment = root.querySelector<HTMLTextAreaElement>("textarea")!;
+    await typeMarkdown(root, "Comment to speakers", "Speaker unavailable");
     const confirmation = root.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     await act(async () => {
-      comment.value = "Speaker unavailable";
-      comment.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.checked = true;
       confirmation.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.dispatchEvent(new Event("change", { bubbles: true }));
@@ -285,7 +293,7 @@ describe("shared proposal management components", () => {
     expect(onCanceled).toHaveBeenCalledWith(2);
   });
 
-  it("names the comment control, draws a real checkbox, and states the consequences in words", () => {
+  it("names the comment control, draws a real checkbox, and states the consequences in words", async () => {
     const root = mount(
       <AcceptedProposalCancellationPanel
         proposal={{ status: "accepted", canceled_at: null, cancellation_comment: null }}
@@ -299,7 +307,7 @@ describe("shared proposal management components", () => {
     // The textarea is reached through the label's `for` and the control's
     // `id`, which is the pair that names it to a reader.
     expect(labelNames(root)).toContain("Comment to speakers");
-    expect(controlFor<HTMLTextAreaElement>(root, "Comment to speakers").required).toBe(true);
+    expect((await markdownControl(root, "Comment to speakers")).getAttribute("aria-required")).toBe("true");
 
     // All three check parts, or the browser draws its own control: the block
     // on the label, the input class, and the label class.
@@ -327,11 +335,9 @@ describe("shared proposal management components", () => {
       />,
     );
 
-    const comment = controlFor<HTMLTextAreaElement>(root, "Comment to speakers");
+    await typeMarkdown(root, "Comment to speakers", "Speaker unavailable");
     const confirmation = root.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     await act(async () => {
-      comment.value = "Speaker unavailable";
-      comment.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.checked = true;
       confirmation.dispatchEvent(new Event("input", { bubbles: true }));
       confirmation.dispatchEvent(new Event("change", { bubbles: true }));
@@ -348,7 +354,7 @@ describe("shared proposal management components", () => {
     expect(submit?.hasAttribute("aria-busy")).toBe(false);
   });
 
-  it("renders cancellation history without showing a second mutation form", () => {
+  it("renders cancellation history without showing a second mutation form", async () => {
     const root = mount(
       <AcceptedProposalCancellationPanel
         proposal={{
@@ -443,7 +449,6 @@ describe("shared proposal management components", () => {
     const root = mount(
       <ProposalCoSpeakerInviteForm
         endpoint="/api/v1/proposals/proposal-1/speakers"
-        proposalId="proposal-1"
         event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
         onInvited={onInvited}
       />,
@@ -477,26 +482,24 @@ describe("shared proposal management components", () => {
     expect(invited.role).toBe("panelist");
     expect(invited.expiresAt).toBe("2027-01-01T12:00:00.000Z");
     expect(onInvited).toHaveBeenCalledOnce();
-    expect(email.value).toBe("");
   });
 
-  it("pairs every co-speaker label with its control and names the set", () => {
+  it("pairs every co-speaker label with its control and names the page", async () => {
     const root = mount(
       <ProposalCoSpeakerInviteForm
         endpoint="/api/v1/proposals/proposal-1/speakers"
-        proposalId="proposal-1"
         event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
         onInvited={vi.fn()}
       />,
     );
 
-    // The legend names the group, so the five controls are announced as one
-    // question rather than as loose inputs after a styled heading.
-    expect(root.querySelector("fieldset > legend")?.textContent).toBe("Invite a co-speaker");
-    expect(root.querySelector("form")?.id).toBe("proposal-proposal-1-speaker-invite");
-
-    const labels = [...root.querySelectorAll<HTMLLabelElement>("label.pk-field__label")];
+    // A page of its own: the panel names it, and the two groups inside say
+    // who is being invited and on what terms.
+    expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Invite a co-speaker");
+    expect([...root.querySelectorAll("legend")].map((legend) => legend.textContent)).toEqual(["Who", "Invitation"]);
+    const labels = [...root.querySelectorAll<HTMLLabelElement>("label")];
     expect(labels.map((label) => label.textContent?.replace(/\*\(required\)$/, ""))).toEqual([
+      "Existing user",
       "Email address",
       "First name",
       "Last name",
@@ -504,14 +507,11 @@ describe("shared proposal management components", () => {
       "Invitation deadline",
     ]);
     for (const label of labels) {
-      // Every label points at a control that actually exists.
+      expect(label.htmlFor).toBeTruthy();
       expect(root.querySelector(`#${label.htmlFor}`)).not.toBeNull();
     }
-
     const email = root.querySelector<HTMLInputElement>('input[type="email"]');
     expect(email?.required).toBe(true);
-
-    // The deadline's rule is tied to the control, not a sentence beside it.
     const deadline = root.querySelector<HTMLInputElement>('input[type="datetime-local"]');
     const describedBy = deadline?.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
@@ -542,7 +542,6 @@ describe("shared proposal management components", () => {
     const root = mount(
       <ProposalCoSpeakerInviteForm
         endpoint="/api/v1/proposals/proposal-1/speakers"
-        proposalId="proposal-1"
         event={{ startsAt: "2027-01-01T09:00:00.000Z", endsAt: "2027-01-01T17:00:00.000Z", timezone: "UTC" }}
         notify={notify}
         onInvited={onInvited}

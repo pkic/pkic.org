@@ -45,7 +45,7 @@ const detailResponse = eventRegistrationDetailResponseSchema.parse({
     referral_code: "abc123",
   },
   form: null,
-  dayAttendance: [],
+  dayAttendance: [{ dayDate: "2026-09-16", attendanceType: "virtual", label: "Conference day" }],
   dayWaitlist: [],
 });
 
@@ -175,7 +175,11 @@ describe("registration detail", () => {
 
     // The history table says whose history it is, so a page carrying several
     // tables does not announce two of them under the same generic name.
-    expect(container.querySelector("caption")?.textContent).toContain("Registration history");
+    expect([...container.querySelectorAll("caption")].map((caption) => caption.textContent)).toContain(
+      "Registration history",
+    );
+    expect(container.querySelector(".pk-record > aside")).not.toBeNull();
+    expect(container.querySelector(".pk-record table tbody")?.textContent).toContain("Virtual");
   });
 
   it("sends the shared notification contract and announces the queued email", async () => {

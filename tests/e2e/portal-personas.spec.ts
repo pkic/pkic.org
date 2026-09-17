@@ -289,7 +289,7 @@ test.describe("selected-group portal personas", () => {
     // "Members" is a participant section: a participant sees who else is in
     // the group through the privacy-reduced roster projection.
     await expectSections(page, ["Overview", "Members", "Events", "Meetings", "Forms", "Votes", "Mailing lists"]);
-    await expectNoSections(page, ["Settings", "Leadership", "Statistics", "Audit log"]);
+    await expectNoSections(page, ["Settings", "Leadership", "Analytics", "Audit log"]);
     await expectParticipantRoster(page);
     // A plain member holds no global system permission, so the sidebar has no
     // admin surface at all.
@@ -308,7 +308,7 @@ test.describe("selected-group portal personas", () => {
       "Meetings",
       "Forms",
       "Votes",
-      "Statistics",
+      "Analytics",
       "Mailing lists",
       "Audit log",
       "Settings",
@@ -334,7 +334,7 @@ test.describe("selected-group portal personas", () => {
 
   test("local-only child participant cannot see management controls", async ({ page }) => {
     await openGroup(page, PERSONAS.localOnly);
-    await expectNoSections(page, ["Settings", "Leadership", "Statistics", "Audit log"]);
+    await expectNoSections(page, ["Settings", "Leadership", "Analytics", "Audit log"]);
     // The roster this participant does reach carries no management affordance.
     await expectParticipantRoster(page);
     // No global system permission means no admin surface for this identity.

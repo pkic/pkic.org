@@ -19,7 +19,7 @@
  */
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { openRow, runRowAction } from "./helpers/data-table";
+import { runRowAction } from "./helpers/data-table";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { acceptConfirmDialog, confirmDialog } from "./helpers/confirm-dialog";
@@ -242,36 +242,31 @@ test.describe("Group votes: lifecycle actions, proposal moderation, and sharing"
     );
     await proposeForm.getByRole("button", { name: "Submit proposal" }).click();
     expect((await submitted).status()).toBe(200);
-    // A successful submit returns to the proposals it was added to.
-    await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes$`));
-    await tab(page, "Proposals").click();
+    // A successful submit returns to the proposals list it was added to,
+    // which has an address of its own.
+    await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes/proposals$`));
+    await expectCurrentTab(page, "Proposals");
 
     const proposalRow = page
       .getByRole("row")
       .filter({ hasText: title })
-      .filter({ has: page.getByRole("button", { name: new RegExp(`^(?:Show|Hide) details for ${title}$`) }) });
+      .filter({ has: page.getByRole("link", { name: `Open ${title}` }) });
 
-    // The row's detail panel closes itself after every mutating action (the
-    // list reload that follows also clears the open selection). Rather than
-    // race that client-side reload, each reopen below starts from a fresh
-    // navigation: a clean read of the server's current truth, and proof the
-    // change actually persisted rather than merely appearing to.
+    // Each reopen below starts from a fresh navigation: a clean read of the
+    // server's current truth, and proof the change actually persisted rather
+    // than merely appearing to.
     async function openDetail() {
       // `goto` alone is a same-document hash change when the hash is already
-      // "#/groups/{id}/votes" (e.g. immediately after the previous reopen),
-      // which a hash router does not remount for — `reload` after it forces
-      // an actual fresh fetch every time, regardless of where the previous
-      // step left the page.
-      await page.goto(`/portal/#/groups/${GROUP_ID}/votes`);
+      // the list's, which a hash router does not remount for — `reload`
+      // after it forces an actual fresh fetch every time.
+      await page.goto(`/portal/#/groups/${GROUP_ID}/votes/proposals`);
       await page.reload();
-      await tab(page, "Proposals").click();
       await expectCurrentTab(page, "Proposals");
       await expect(proposalRow).toBeVisible({ timeout: 15_000 });
-      // This row's action is the whole-row "activate" control (a stretched
-      // link/button, opened the way the keyboard does), not a `RowActions`
-      // menu — `openRow` targets that directly rather than probing for an
-      // "Actions for …" menu that this row never renders.
-      await openRow(proposalRow, `Show details for ${title}`);
+      // The row is a link to the proposal's own page (#126), never an
+      // expansion between the rows; the page's region is named after it.
+      await proposalRow.getByRole("link", { name: `Open ${title}` }).click();
+      await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes/proposals/[^/]+$`));
       const region = page.getByRole("region", { name: title });
       await expect(region).toBeVisible();
       return region;

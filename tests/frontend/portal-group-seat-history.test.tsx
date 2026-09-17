@@ -59,6 +59,7 @@ function seat(overrides: Record<string, unknown>) {
     memberType: "organization",
     userName: "Former Director",
     email: "former@example.test",
+    headshotUrl: null,
     organizationName: "Former Organization",
     membershipCategory: "A",
     source: "staff",
@@ -123,9 +124,12 @@ describe("portal group seat history", () => {
     await settle();
 
     expect(container.textContent).toContain("No members yet");
+    expect([...container.querySelectorAll("th")].map((cell) => cell.textContent).join(" ")).not.toContain(
+      "Joined through",
+    );
     // Current or former is the Seat column's own filter, so the choice is
     // made where the column is read.
-    await chooseColumnFilter(container, "Seat", "Former seats");
+    await chooseColumnFilter(container, "Membership dates", "Former members");
     await settle();
     expect(requests.at(-1)?.url.searchParams.get("active")).toBe("false");
     expect(container.textContent).toContain("Former Director");

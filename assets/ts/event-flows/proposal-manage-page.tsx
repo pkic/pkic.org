@@ -1,3 +1,4 @@
+import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { deleteJson, getJson, patchJson, postJson, requestJson } from "../shared/api-client";
@@ -14,7 +15,7 @@ import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { Panel, PanelBody } from "../ui/Panel";
 import { Field } from "../ui/Field";
-import { Select, Textarea, TextInput } from "../ui/TextControl";
+import { Select, TextInput } from "../ui/TextControl";
 import { AdminHeadshotManager } from "../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "../shared/widgets/profile-links";
@@ -24,11 +25,13 @@ import { successResponseSchema } from "../../shared/schemas/api-common";
 import {
   coSpeakerInviteResponseSchema,
   proposalAccessPatchResponseSchema,
+  proposalAccessPatchSchema,
   proposalAccessReadResponseSchema,
   proposerSpeakerPatchSchema,
   proposalSpeakerRemovalResponseSchema,
 } from "../../shared/schemas/proposal-management";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
+import { MarkdownEditor } from "../components/markdown-editor/MarkdownInput";
 import { proposalAccessPath } from "../../shared/proposal-access-paths";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
@@ -297,13 +300,18 @@ export function ProposalManageSpeakerCard({
             </div>
             <Field label="Biography" help="Visible to attendees on the event program.">
               {(control) => (
-                <Textarea
+                // The shared Markdown editor (#114), remounted when the saved
+                // biography changes so a reload shows what was saved. The
+                // guidance is wired to the control rather than merely sitting
+                // under it, so it is announced with the field it is about.
+                <MarkdownEditor
+                  key={speaker.bio ?? ""}
                   {...control}
-                  rows={4}
-                  value={biography}
-                  // Wired to the control rather than merely sitting under it, so
-                  // the guidance is announced with the field it is about.
-                  onInput={(event) => setBiography((event.target as HTMLTextAreaElement).value)}
+                  variant="compact"
+                  name={`speaker-biography-${speaker.userId}`}
+                  label="Biography"
+                  initialValue={biography}
+                  onChange={setBiography}
                 />
               )}
             </Field>
@@ -422,6 +430,11 @@ async function main(): Promise<void> {
     setField(boot.form, "proposalType", proposalData.proposal.proposal_type);
     setField(boot.form, "title", proposalData.proposal.title);
     setField(boot.form, "abstract", proposalData.proposal.abstract);
+    await mountMarkdownField(
+      boot.form.querySelector<HTMLTextAreaElement>("#manage-proposal-abstract"),
+      "Abstract",
+      proposalAccessPatchSchema.shape.abstract,
+    );
   } catch (error) {
     const normalized = normalizeValidation(error);
     showResendProposalManageLinkForm(

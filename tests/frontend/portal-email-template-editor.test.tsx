@@ -1,3 +1,4 @@
+import { markdownControl } from "./helpers/labelled-control";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -10,6 +11,7 @@ import {
 } from "../../assets/shared/schemas/email-templates";
 import { emailContentTypeSchema, emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
 import { controlFor, labelNames, optionValues } from "./helpers/labelled-control";
+import { menuItemNamed, openRowMenu } from "./helpers/row-actions";
 
 const TEMPLATE_KEY = "welcome_email";
 const VERSIONS_PATH = `/api/v1/email/templates/${TEMPLATE_KEY}/versions`;
@@ -28,6 +30,8 @@ const ACTIVE_VERSION: EmailTemplateVersion = {
   created_by_user_id: "user-1",
   created_at: "2026-08-27T12:00:00.000Z",
   message_type: "transactional",
+  from_email: null,
+  from_name: null,
 };
 
 const RENDERED_HTML = "<p>Hello Jane</p>";
@@ -114,6 +118,7 @@ async function mount(props: { canWrite?: boolean; onBack?: () => void } = {}): P
     ),
   );
   await settle();
+  await markdownControl(container!, "Body");
 }
 
 function button(label: string): HTMLButtonElement | undefined {
@@ -169,11 +174,8 @@ describe("portal email template editor", () => {
 
     const root = container!.firstElementChild!;
     expect(root.classList.contains("pk")).toBe(true);
-    // The syntax-highlight backdrop is decorative: the textarea beside it is
-    // what a screen reader reads, so the backdrop must stay out of the tree.
-    const backdrop = container!.querySelector(".pk-overlay-editor__backdrop--wrap")!;
-    expect(backdrop.getAttribute("aria-hidden")).toBe("true");
-    expect(backdrop.innerHTML).toContain("firstName");
+    const source = await markdownControl(container!, "Body");
+    expect((source as HTMLTextAreaElement).value).toContain("firstName");
     // The preview is untrusted rendered HTML and stays fully sandboxed.
     expect(previewFrame()!.getAttribute("sandbox")).toBe("");
   });
@@ -214,10 +216,17 @@ describe("portal email template editor", () => {
     expect(previewFrame()!.srcdoc).toBe(RENDERED_HTML);
     expect(save().disabled).toBe(false);
 
+    // The sender the template names goes with the version (#106).
+    await typeInto("From address", "membership@pkic.org");
+    await typeInto("From name", "PKIC Membership");
     await click("Save as Draft");
     const created = requests.filter((request) => request.pathname === VERSIONS_PATH && request.method === "POST");
     expect(created).toHaveLength(1);
-    expect(emailTemplateVersionSchema.parse(created[0].body).content).toBe(revised);
+    expect(emailTemplateVersionSchema.parse(created[0].body)).toMatchObject({
+      content: revised,
+      fromEmail: "membership@pkic.org",
+      fromName: "PKIC Membership",
+    });
     expect(toastMessages()).toContain("Saved as draft v2");
   });
 
@@ -301,15 +310,33 @@ describe("portal email template editor", () => {
     stubApi();
     await mount({ canWrite: false });
 
-    expect(controlFor<HTMLTextAreaElement>(container!, "Body").readOnly).toBe(true);
+    expect(controlFor<HTMLTextAreaElement>(container!, "Body").disabled).toBe(true);
     expect(labelNames(container!)).not.toContain("Preview data (JSON)");
     expect(previewFrame()).toBeNull();
     expect(button("Render Preview")).toBeUndefined();
     expect(button("Save as Draft")).toBeUndefined();
     expect(button("Activate")).toBeUndefined();
     expect(container!.textContent).toContain("Read-only access.");
-    // The active version still reports itself, so a reader can see what ships.
-    expect(container!.textContent).toContain("In use");
+    // The version in use says so once, in its Status column; the row's menu
+    // offers a reader the load command and nothing that writes (#98).
+    expect(container!.textContent).not.toContain("In use");
+    await openRowMenu(container!, "v1");
+    expect(menuItemNamed(container!, "Load into editor")).not.toBeNull();
+    expect(menuItemNamed(container!, "Activate")).toBeNull();
+  });
+
+  it("activates a draft from its row's menu rather than a button in the row", async () => {
+    const requests = stubApi();
+    await mount();
+    // Nothing in the history is a button of its own: the version in use has
+    // no "Activate", and a row's commands sit behind its menu.
+    expect(button("Activate")).toBeUndefined();
+    await openRowMenu(container!, "v1");
+    expect(menuItemNamed(container!, "Activate")).toBeNull();
+    expect(menuItemNamed(container!, "Load into editor")).not.toBeNull();
+    expect(requests.every((request) => request.pathname !== `/api/v1/email/templates/${TEMPLATE_KEY}/activate`)).toBe(
+      true,
+    );
   });
 
   it("returns to the list from the panel header", async () => {

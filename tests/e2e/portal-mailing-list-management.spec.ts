@@ -81,16 +81,18 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   await expect(settings.getByRole("button", { name: "Save changes" })).toHaveCount(0);
   await settings
     .getByRole("region", { name: "Delivery", exact: true })
-    .getByRole("button", { name: "Edit", exact: true })
+    .getByRole("button", { name: "Delivery actions", exact: true })
     .click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await settings.getByLabel("Label").fill("Unsaved change");
   await settings.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(settings.getByLabel("Label")).toHaveCount(0);
   await expect(settings).toContainText(label);
   await settings
     .getByRole("region", { name: "Delivery", exact: true })
-    .getByRole("button", { name: "Edit", exact: true })
+    .getByRole("button", { name: "Delivery actions", exact: true })
     .click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await expect(settings.getByLabel("Label")).toHaveValue(label);
   await settings.getByLabel("Label").fill(editedLabel);
   // The edit is asserted on its own response, the way the creation above is,
@@ -112,7 +114,8 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   const standing = page.getByRole("region", { name: "Standing", exact: true });
   await expect(standing).toContainText("Created");
   await expect(settings).not.toContainText("Primary discussion");
-  await standing.getByRole("button", { name: "Edit", exact: true }).click();
+  await standing.getByRole("button", { name: "Standing actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await expect(standing.getByRole("checkbox", { name: "Active", exact: true })).toBeChecked();
   await standing.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(standing.getByRole("checkbox")).toHaveCount(0);

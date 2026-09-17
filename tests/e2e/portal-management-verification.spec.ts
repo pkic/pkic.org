@@ -1,3 +1,4 @@
+import { completeSyntheticMembershipReview, prepareSyntheticMembershipReview } from "./helpers/member-provisioning";
 /**
  * E2E coverage for: a real-browser verification pass on
  * permission-scoped management screens that previously lacked complete
@@ -30,7 +31,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { openRow, runRowAction } from "./helpers/data-table";
+import { runRowAction } from "./helpers/data-table";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
@@ -96,21 +97,7 @@ async function signInAsAdmin(page: Page): Promise<void> {
   await signInAsE2eStaff(page, ADMIN_EMAIL);
 }
 
-/**
- * Walks a freshly-submitted membership application through its real stage
- * transitions (pending → in_review → in_consultation → ec_review) and, by
- * default, approves it — the only path that provisions a real organization
- * + user, exactly what member-applications.ts's ALLOWED_STAGE_TRANSITIONS
- * requires. `page` must already be signed in as admin for the stage/approve
- * calls; the initial application submission itself is the public,
- * unauthenticated endpoint.
- *
- * `opts.stopBeforeApprove` leaves the application sitting at `ec_review`
- * instead of calling its own `/approve` API — for tests (e.g. the
- * "Approve & run onboarding" admin-UI click-through) that need to trigger
- * the approval themselves, via the UI, rather than have this helper do it
- * over the API first.
- */
+/** Provision synthetic members through a published staff-review policy and its required evidence. */
 async function provisionApprovedMember(
   page: Page,
   opts: { email: string; name: string; orgName?: string; category?: string; stopBeforeApprove?: boolean },
@@ -147,37 +134,12 @@ async function provisionApprovedMember(
   expect(created.status, JSON.stringify(created.body)).toBe(201);
   const applicationId = created.body.applicationId!;
 
-  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
-    const status = await page.evaluate(
-      async ({ applicationId, toStage }) => {
-        const res = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ toStage }),
-        });
-        return res.status;
-      },
-      { applicationId, toStage },
-    );
-    expect(status, `stage transition to ${toStage}`).toBe(200);
-  }
-
   if (opts.stopBeforeApprove) {
+    await prepareSyntheticMembershipReview(page.request, applicationId);
     return { applicationId, organizationId: null, userId: null };
   }
-
-  const approved = await page.evaluate(async (applicationId) => {
-    const res = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
-    const body = (await res.json()) as { organizationId: string | null; userId: string };
-    return { status: res.status, body };
-  }, applicationId);
-  expect(approved.status, JSON.stringify(approved.body)).toBe(200);
-
-  return { applicationId, organizationId: approved.body.organizationId, userId: approved.body.userId };
+  const approved = await completeSyntheticMembershipReview(page.request, applicationId);
+  return { applicationId, organizationId: approved.organizationId, userId: approved.userId };
 }
 
 test.describe("Portal management browser-verification pass", () => {
@@ -320,18 +282,10 @@ test.describe("Portal management browser-verification pass", () => {
     await tab(page, "Proposals").click();
     await expectCurrentTab(page, "Proposals");
 
-    // The expanded detail is a second table row containing the same title.
-    // Anchor the locator to the data row's own named row control — which reads
-    // "Show details for …" collapsed and "Hide details for …" expanded — so it
-    // stays unique before and after expansion.
-    const proposalRow = page
-      .getByRole("row")
-      .filter({ hasText: title })
-      .filter({ has: page.getByRole("button", { name: new RegExp(`^(?:Show|Hide) details for ${title}$`) }) });
+    // Proposals open their own record page from the list.
+    const proposalRow = page.getByRole("row").filter({ hasText: title });
     await expect(proposalRow).toBeVisible();
-    await openRow(proposalRow, `Show details for ${title}`);
-    // The expanded proposal is a region named after the proposal, so it is
-    // located the way a reader finds it rather than by a background utility.
+    await proposalRow.getByRole("link", { name: `Open ${title}`, exact: true }).click();
     const detail = page.getByRole("region", { name: title });
     await expect(detail.getByText("0 of 1 required endorsements")).toBeVisible();
 
@@ -400,16 +354,18 @@ test.describe("Portal management browser-verification pass", () => {
     // that name rather than by the container class it happens to carry.
     const detail = page.getByRole("region", { name: contactName });
     await expect(detail).toBeVisible();
-    // The picked event survived the round trip: the detail names it rather
-    // than showing a dangling or absent event reference. Asserted on the cell,
-    // because every row of a table with a row action also carries that
-    // action's accessible name, which repeats the row's own text.
-    await expect(detail.getByRole("cell", { name: "Post-Quantum Cryptography Conference", exact: true })).toBeVisible();
+    // The picked event survived the round trip: the record states it under
+    // "Event" rather than showing a dangling or absent event reference.
+    await expect(
+      detail.getByLabel("Sponsorship record").getByText("Post-Quantum Cryptography Conference", { exact: true }),
+    ).toBeVisible();
     // New sponsorships default to pipeline_stage='new_inquiry' (migration
     // 0034) — assert via the stage badge specifically, since "Move to stage"
     // is a <select> whose <option>s (incl. "payment pending") are also
     // present in the DOM but hidden.
-    await expect(detail.locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
+    // The stage shows in the header and in the Pipeline card; the card is
+    // the one asserted.
+    await expect(detail.getByLabel("Pipeline").locator("span.pk-badge", { hasText: "new inquiry" })).toBeVisible();
 
     /*
      * Forms are closed until asked for; the record shows its facts first.
@@ -420,10 +376,13 @@ test.describe("Portal management browser-verification pass", () => {
      * tier is a select over the catalog, not a box to spell a tier into.
      */
     const correctedContact = `Corrected ${contactName}`;
-    await detail.getByRole("button", { name: "Edit", exact: true }).click();
+    // Commands live in the record's `…` menu (#116); the notes are the
+    // shared Markdown editor, filled through its editing surface.
+    await detail.getByRole("button", { name: "Sponsorship actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit record…" }).click();
     await detail.getByLabel("Contact name").fill(correctedContact);
     await detail.getByLabel("Contact email").fill("verified-contact@sponsor.test");
-    await detail.getByLabel("Notes").fill("E2E verification note");
+    await detail.getByRole("textbox", { name: "Notes", exact: true }).fill("E2E verification note");
     await detail.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Saved" })).toBeVisible();
 
@@ -433,14 +392,18 @@ test.describe("Portal management browser-verification pass", () => {
     const corrected = page.getByRole("region", { name: correctedContact });
     await expect(corrected.getByText("verified-contact@sponsor.test")).toBeVisible();
 
-    await corrected.getByRole("button", { name: "Move stage" }).click();
+    await corrected.getByRole("button", { name: "Sponsorship actions" }).click();
+    await page.getByRole("menuitem", { name: "Move stage…" }).click();
+    const moveDialog = page.getByRole("dialog", { name: "Move stage" });
     // The vocabulary now has a word for a company that decides against it,
     // which staff previously had to record as a lapse or leave in limbo.
-    await expect(corrected.getByLabel("Move to stage").locator("option", { hasText: "Not proceeding" })).toHaveCount(1);
-    await corrected.getByLabel("Move to stage").selectOption("contacted");
-    await corrected.getByRole("button", { name: "Move", exact: true }).click();
+    await expect(moveDialog.getByLabel("Move to stage").locator("option", { hasText: "Not proceeding" })).toHaveCount(
+      1,
+    );
+    await moveDialog.getByLabel("Move to stage").selectOption("contacted");
+    await moveDialog.getByRole("button", { name: "Move stage", exact: true }).click();
     await expect(page.locator(".my-toast", { hasText: "Stage moved to contacted" })).toBeVisible();
-    await expect(corrected.locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
+    await expect(corrected.getByLabel("Pipeline").locator("span.pk-badge", { hasText: "contacted" })).toBeVisible();
     await expect(corrected.getByText(/new inquiry\s*→\s*contacted/i)).toBeVisible();
     expect(canonicalRequests).toEqual(expect.arrayContaining(["GET /api/v1/sponsors/companies"]));
     expect(canonicalRequests.some((request) => request.startsWith("POST /api/v1/sponsors"))).toBe(true);
@@ -515,24 +478,30 @@ test.describe("Portal management browser-verification pass", () => {
     // Stages filter keeps it under "New Inquiry" and drops it under any
     // other stage.
     await page.getByRole("button", { name: "Stages column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "New Inquiry" }).click();
     await expect(companyRow).toBeVisible();
     await page.getByRole("button", { name: "Stages column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Contacted" }).click();
     await expect(companyRow).toHaveCount(0);
     await page.getByRole("button", { name: "Stages column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "All stages" }).click();
     await expect(companyRow).toBeVisible();
 
     // The Sponsorships column filters by sponsor type: this fixture is
     // type "event", so "Event" keeps it and "Consortium" drops it.
     await page.getByRole("button", { name: "Sponsorships column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Event", exact: true }).click();
     await expect(companyRow).toBeVisible();
     await page.getByRole("button", { name: "Sponsorships column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Consortium" }).click();
     await expect(companyRow).toHaveCount(0);
     await page.getByRole("button", { name: "Sponsorships column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "All types" }).click();
     await expect(companyRow).toBeVisible();
   });
@@ -592,7 +561,9 @@ test.describe("Portal management browser-verification pass", () => {
   });
 
   test("event team: assign and revoke a role through the canonical event resource", async ({ page }) => {
-    const email = `e2e-event-team-${Date.now()}@example.test`;
+    // A team member is an existing user, found with the picker (#88): the
+    // journey links the signed-in administrator to the event's team.
+    const email = e2eAdminEmail();
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
@@ -608,15 +579,18 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page).toHaveURL(new RegExp(`#/events/${EVENT_SLUG}/settings/team/new$`));
     await expect(page.getByRole("table", { name: "Event team members" })).toHaveCount(0);
 
-    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Add", exact: true }) });
-    await form.getByLabel("Email").fill(email);
+    const form = page.locator("form").filter({
+      has: page.getByRole("button", { name: "Add team member", exact: true }),
+    });
+    await form.getByLabel("Person").fill(email);
+    await page.getByRole("group", { name: "Matching users" }).getByRole("button", { name: email }).click();
     await form.getByLabel("Role").selectOption("program_committee");
     const assigned = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/roles` &&
         response.request().method() === "POST",
     );
-    await form.getByRole("button", { name: "Add", exact: true }).click();
+    await form.getByRole("button", { name: "Add team member", exact: true }).click();
     expect((await assigned).status()).toBe(201);
     // And it returns to the list it added to.
     await expect(page).toHaveURL(new RegExp(`#/events/${EVENT_SLUG}/settings/team$`));
@@ -805,6 +779,7 @@ test.describe("Portal management browser-verification pass", () => {
     // The status filter is the Status column's own menu; the approved
     // submission is found by narrowing the column to it.
     await page.getByRole("button", { name: "Status column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Approved", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: orgName })).toBeVisible();
     expect(canonicalRequests).toContain("GET /api/v1/organizations/content-reviews");
@@ -868,12 +843,7 @@ test.describe("Portal management browser-verification pass", () => {
     expect(consoleErrors, consoleErrors.join("\n")).toEqual([]);
   });
 
-  // P1-R03: closes the "Approve & run onboarding" click-through gap flagged
-  // in Phase 1 remediation ("not completed live in-browser") — the button
-  // only renders at stage ec_review and its handler gates on a real
-  // `window.confirm`, which this test dismisses programmatically the same
-  // way the "mailing lists" and "working groups" tests above dismiss theirs.
-  test("applications: Approve & run onboarding click-through runs full onboarding", async ({ page }) => {
+  test("applications: completing the required review runs full onboarding", async ({ page }) => {
     const canonicalRequests: string[] = [];
     const legacyRequests: string[] = [];
     page.on("request", (request) => {
@@ -914,9 +884,10 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("link", { name: "Applications", exact: true })).toHaveClass(/active/);
     // The shared table sends search/filter/pagination to the backend. The
     // stage filter — the Stage column's own menu — is sufficient here because
-    // every earlier fixture has already moved out of ec_review.
+    // the search locates this synthetic application.
     await page.getByRole("button", { name: "Stage column options" }).click();
-    await page.getByRole("menuitemradio", { name: "EC review", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
+    await page.getByRole("menuitemradio", { name: "Processing", exact: true }).click();
     const row = page.locator("tr").filter({ hasText: email });
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.click();
@@ -927,20 +898,13 @@ test.describe("Portal management browser-verification pass", () => {
     const applicantHeading = page.getByRole("heading", { name, level: 2 });
     await expect(applicantHeading).toBeVisible({ timeout: 10_000 });
     const header = page.locator("div").filter({ has: applicantHeading }).last();
-    await expect(header.getByText("EC review", { exact: true })).toBeVisible();
+    await expect(header.getByText("Processing", { exact: true })).toBeVisible();
 
-    const approveButton = page.getByRole("button", { name: "Approve & run onboarding" });
-    await expect(approveButton).toBeVisible();
-    await approveButton.click();
-    await acceptConfirmDialog(page, "Approve & run onboarding");
-    await expect(page.locator(".my-toast", { hasText: "Application approved" })).toBeVisible({ timeout: 15_000 });
-
-    // The click-through's own UI state: the confirmation dialog was accepted,
-    // the approve call landed (toast above), and the reloaded detail view now
-    // shows the post-approval stage with no further transitions available.
-    await expect(header.getByText("Approved", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
-    await expect(page.getByText("No further transitions from this stage.")).toBeVisible();
+    await page.getByRole("link", { name: "Review workflow and objections", exact: true }).click();
+    await page.getByLabel("Review decision and reason").fill("Verified the organization and applicant authority.");
+    await page.getByRole("button", { name: "Complete review", exact: true }).click();
+    await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Complete review", exact: true })).toHaveCount(0);
 
     // Independent confirmation 1/3: re-fetch the application from the System
     // API (not the same optimistic UI state the toast/badge above already
@@ -987,7 +951,7 @@ test.describe("Portal management browser-verification pass", () => {
 
     expect(canonicalRequests).toContain(`GET /api/v1/members/applications`);
     expect(canonicalRequests).toContain(`GET /api/v1/members/applications/${applicationId}`);
-    expect(canonicalRequests).toContain(`POST /api/v1/members/applications/${applicationId}/approve`);
+    expect(canonicalRequests).toContain(`POST /api/v1/members/applications/${applicationId}/reviews/completion`);
     expect(legacyRequests).toEqual([]);
 
     // Independent confirmation 3/3: the onboarding welcome email — one of

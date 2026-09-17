@@ -1,3 +1,4 @@
+import { openColumnFilterMenu } from "./helpers/column-menu";
 // @vitest-environment jsdom
 /**
  * One company's sponsorships.
@@ -185,10 +186,7 @@ describe("one company's sponsorship list", () => {
 
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stage column options"]');
     if (!trigger) throw new Error("the stage column menu is not rendered");
-    await act(async () => {
-      trigger.click();
-      await settle();
-    });
+    openColumnFilterMenu(container, "Stage");
     const contacted = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
       item.textContent?.includes("Contacted"),
     );

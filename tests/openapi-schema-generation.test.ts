@@ -69,7 +69,7 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/members/applications/{id}/stage"].patch).toBeDefined();
     expect(spec.paths["/api/v1/members/applications/{id}/communications"].post).toBeDefined();
     expect(spec.paths["/api/v1/members/applications/{id}/notes"].post).toBeDefined();
-    expect(spec.paths["/api/v1/members/applications/{id}/ec-decisions"].post).toBeDefined();
+    expect(spec.paths["/api/v1/members/applications/{id}/objections"].post).toBeDefined();
     expect(spec.paths["/api/v1/members/applications/{id}/approve"].post).toBeDefined();
     expect(spec.paths["/api/v1/system/membership-applications"]).toBeUndefined();
     expect(spec.paths["/api/v1/system/membership-applications/{id}"]).toBeUndefined();
@@ -153,14 +153,14 @@ describe("OpenAPI schema generation", () => {
     expect(spec.paths["/api/v1/retention/due"].get).toBeDefined();
     expect(spec.paths["/api/v1/retention/runs"].post).toBeDefined();
     expect(spec.paths["/api/v1/email/reminders/runs"].post).toBeDefined();
-    expect(spec.paths["/api/v1/membership/batches/{batchKey}/runs"].post).toBeDefined();
+    expect(spec.paths["/api/v1/membership/workflows/versions"].post).toBeDefined();
     // The operations bucket is retired; each surface now lives in its own domain.
     expect(spec.paths["/api/v1/operations/due-work"]).toBeUndefined();
     expect(spec.paths["/api/v1/operations/reminders/run"]).toBeUndefined();
     expect(spec.paths["/api/v1/operations/retention/run"]).toBeUndefined();
     // One parameterised route replaces the three per-batch families.
     expect(spec.paths["/api/v1/operations/membership-batches/consultation/run"]).toBeUndefined();
-    expect(spec.paths["/api/v1/membership/batches/{batchKey}/runs"].post[AUTH_EXTENSION]).toMatchObject({
+    expect(spec.paths["/api/v1/membership/workflows/versions"].post[AUTH_EXTENSION]).toMatchObject({
       scopes: ["membership:write"],
     });
     expect(spec.paths["/api/v1/email/reminders/runs"].post[AUTH_EXTENSION]).toMatchObject({

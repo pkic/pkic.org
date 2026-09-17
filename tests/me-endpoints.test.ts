@@ -203,7 +203,7 @@ describe("Current-user and application self-service", () => {
       organizationName: "Other Org",
       organizationDomain: "other.example.test",
       membershipCategory: "F",
-      stage: "in_review",
+      stage: "processing",
     });
 
     const response = await call(token, "/api/v1/users/current/applications");
@@ -211,7 +211,7 @@ describe("Current-user and application self-service", () => {
     const body = myApplicationsListResponseSchema.parse(await response.json());
     expect(body.applications).toHaveLength(2);
     expect(body.applications.map((application) => application.stage)).toEqual(
-      expect.arrayContaining(["approved", "in_review"]),
+      expect.arrayContaining(["approved", "processing"]),
     );
     expect(body.page).toEqual({ limit: 25, offset: 0, total: 2, hasMore: false });
 
@@ -245,16 +245,16 @@ describe("Current-user and application self-service", () => {
       organizationName: "Org",
       organizationDomain: "example.test",
       membershipCategory: "F",
-      stage: "in_review",
+      stage: "processing",
     });
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, NULL, 'pending', NULL, 'Application submitted', datetime('now'))`,
+         VALUES (?, ?, NULL, 'submitted', NULL, 'Application submitted', datetime('now'))`,
       ).bind(crypto.randomUUID(), applicationId),
       env.DB.prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-         VALUES (?, ?, 'pending', 'in_review', NULL, 'Moved to review', datetime('now'))`,
+         VALUES (?, ?, 'submitted', 'processing', NULL, 'Moved to review', datetime('now'))`,
       ).bind(crypto.randomUUID(), applicationId),
       env.DB.prepare(
         `INSERT INTO application_communications (id, application_id, kind, actor_user_id, subject, body, template_key, email_outbox_id, created_at)
@@ -273,10 +273,10 @@ describe("Current-user and application self-service", () => {
       timeline: Array<{ toStage: string }>;
       communications: Array<{ body: string }>;
     };
-    expect(body.stage).toBe("in_review");
+    expect(body.stage).toBe("processing");
     expect(body.timeline).toHaveLength(2);
-    expect(body.timeline[0].toStage).toBe("pending");
-    expect(body.timeline[1].toStage).toBe("in_review");
+    expect(body.timeline[0].toStage).toBe("submitted");
+    expect(body.timeline[1].toStage).toBe("processing");
     expect(body.communications).toHaveLength(1);
     expect(body.communications[0].body).toBe("Thanks for applying");
     expect(body.communications.some((c) => c.body.includes("Internal staff note"))).toBe(false);

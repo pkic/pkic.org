@@ -15,6 +15,7 @@ import { confirmRegistrationByToken, getRegistrationByManageToken } from "../fun
 import { updateUser } from "../functions/_lib/services/user-management-update";
 import { anonymizeUser as anonymizeUserService } from "../functions/_lib/services/user-anonymization";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { seatInExecutiveCouncil } from "./helpers/group-leadership";
 import { userDetailResponseSchema } from "../assets/shared/schemas/user-management";
 
 let adminToken: string;
@@ -543,40 +544,27 @@ describe("admin user deactivation", () => {
     });
   });
 
-  it("sets and clears isEcMember (users.is_ec_member, consolidated migration 0035)", async () => {
+  it("does not take council membership from the account form: the Executive Council group's roster says who sits", async () => {
     await setup();
     const userId = await seedUser(env.DB, "ec-member@example.test");
-
-    const setResponse = await patchUser(
-      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: true }), { userId }),
+    // The field is no longer part of the update contract; the report of the
+    // flag comes from the group (#104).
+    const response = await patchUser(
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: true, firstName: "Sam" }), {
+        userId,
+      }),
     );
-    expect(setResponse.status).toBe(200);
-    const setData = (await setResponse.json()) as { user: { isEcMember: boolean } };
-    expect(setData.user.isEcMember).toBe(true);
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { user: { isEcMember: boolean } };
+    expect(data.user.isEcMember).toBe(false);
 
-    const rowAfterSet = (
-      await queryAll<{ is_ec_member: number }>(env.DB, "SELECT is_ec_member FROM users WHERE id = ?", [userId])
-    )[0];
-    expect(rowAfterSet.is_ec_member).toBe(1);
-
+    await seatInExecutiveCouncil(env.DB, userId);
     const getResponse = await app.fetch(
       adminRequest(`/api/v1/users/${userId}`, "GET"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
-    const getData = (await getResponse.json()) as { user: { isEcMember: boolean } };
-    expect(getData.user.isEcMember).toBe(true);
-
-    const clearResponse = await patchUser(
-      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: false }), { userId }),
-    );
-    const clearData = (await clearResponse.json()) as { user: { isEcMember: boolean } };
-    expect(clearData.user.isEcMember).toBe(false);
-
-    const rowAfterClear = (
-      await queryAll<{ is_ec_member: number }>(env.DB, "SELECT is_ec_member FROM users WHERE id = ?", [userId])
-    )[0];
-    expect(rowAfterClear.is_ec_member).toBe(0);
+    expect(((await getResponse.json()) as { user: { isEcMember: boolean } }).user.isEcMember).toBe(true);
   });
 
   it("returns the canonical organization representation profile instead of the stale user-wide profile", async () => {

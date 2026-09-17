@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
-import { confirmAction } from "../../../../components/ConfirmDialog";
 import { toast } from "../../ui";
 import type {
   ApplicationCommunicationCreate,
-  EcDecisionRecordInput,
   MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
 import {
   membershipApplicationDetailSchema,
-  ecDecisionRecordResponseSchema,
-  applicationApproveResponseSchema,
   applicationCommunicationCreateResponseSchema,
   applicationNoteCreateResponseSchema,
   applicationStageTransitionResponseSchema,
@@ -59,6 +55,7 @@ export function useApplicationDetail(applicationId: string) {
       await reload();
     } catch (e) {
       toast((e as Error).message, "error");
+      throw e;
     }
   }
 
@@ -97,42 +94,6 @@ export function useApplicationDetail(applicationId: string) {
     } catch (e) {
       toast((e as Error).message, "error");
       throw e;
-    }
-  }
-
-  async function recordEcDecision(decision: EcDecisionRecordInput) {
-    try {
-      await postJson(
-        `/api/v1/members/applications/${applicationId}/ec-decisions`,
-        decision,
-        ecDecisionRecordResponseSchema,
-      );
-      toast("EC decision recorded", "success");
-      await reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-      throw e;
-    }
-  }
-
-  async function approve() {
-    const applicantName = detail?.applicantName ?? "this applicant";
-    const confirmed = await confirmAction({
-      title: `Approve ${applicantName}'s application and run onboarding?`,
-      consequences: [
-        "The applicant becomes a member and receives their onboarding communication",
-        "Membership records and access are created for them immediately",
-      ],
-      confirmLabel: "Approve & run onboarding",
-      tone: "primary",
-    });
-    if (!confirmed) return;
-    try {
-      await postJson(`/api/v1/members/applications/${applicationId}/approve`, {}, applicationApproveResponseSchema);
-      toast("Application approved", "success");
-      await reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
     }
   }
 
@@ -179,8 +140,6 @@ export function useApplicationDetail(applicationId: string) {
     transition,
     sendCommunication,
     addNote,
-    recordEcDecision,
-    approve,
     saveEdit,
   };
 }

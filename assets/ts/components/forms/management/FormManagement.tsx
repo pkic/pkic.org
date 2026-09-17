@@ -263,7 +263,7 @@ export function FormManagementDetail({
           <Tabs
             label={`${detail.form.title} sections`}
             items={[
-              { key: "statistics", label: `Statistics (${totalResponses})`, panelId: statisticsPanelId },
+              { key: "statistics", label: `Analytics (${totalResponses})`, panelId: statisticsPanelId },
               { key: "responses", label: "Responses", panelId: responsesPanelId },
               ...(canManageForm ? [{ key: "edit", label: "Edit", panelId: editPanelId }] : []),
             ]}

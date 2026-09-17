@@ -56,6 +56,8 @@ function noData(): string {
  *
  * `pk-sr-only` and `pk-muted` are entry-stylesheet utilities, so this markup
  * is styled on every page whether or not the chart's own chunk has loaded.
+ * Clip a wrapper: a table keeps its minimum row height even when assigned
+ * one pixel, which otherwise creates vertical overflow in a parent list.
  */
 function dataTable(
   caption: string,
@@ -69,11 +71,11 @@ function dataTable(
       `<tr><th scope="row">${esc(label)}</th>${values.map((v) => `<td>${esc(v)}</td>`).join("")}</tr>`,
   );
   return (
-    `<table class="pk-sr-only">` +
+    `<div class="pk-sr-only"><table>` +
     `<caption>${esc(caption)}</caption>` +
     `<thead><tr>${head.join("")}</tr></thead>` +
     `<tbody>${body.join("")}</tbody>` +
-    `</table>`
+    `</table></div>`
   );
 }
 
@@ -85,7 +87,7 @@ function legendSwatch(color: string, label: string, trailing = ""): string {
   return (
     `<span class="pk-chart__key">` +
     `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false">` +
-    `<rect width="10" height="10" rx="2" fill="${color}"/></svg>` +
+    `<rect width="10" height="10" rx="2" fill="${esc(color)}"/></svg>` +
     `${esc(label)}${trailing}</span>`
   );
 }
@@ -157,42 +159,48 @@ function statusLabelFor(key: string): string {
 }
 
 export function svgStatusSegmentBar(byStatus: Record<string, number>, total: number, opts: ChartCaption): string {
+  const known: readonly string[] = STATUS_ORDER;
+  const sorted = [...known, ...Object.keys(byStatus).filter((key) => !known.includes(key))];
+  return svgSegmentBar(
+    sorted.map((key) => ({ label: statusLabelFor(key), value: byStatus[key] ?? 0, color: statusColorFor(key) })),
+    total,
+    opts,
+  );
+}
+
+/** A labeled distribution with the same accessible legend and table as status charts. */
+export function svgSegmentBar(
+  entries: Array<{ label: string; value: number; color: string }>,
+  total: number,
+  opts: ChartCaption,
+): string {
   if (!total) return noData();
   const W = 460;
   const barH = 20;
-  const radius = 4;
-  const known: readonly string[] = STATUS_ORDER;
-  const sorted = [...known, ...Object.keys(byStatus).filter((key) => !known.includes(key))];
-  const items = sorted.map((key) => [key, byStatus[key] ?? 0] as [string, number]).filter(([, value]) => value > 0);
-
+  const items = entries.filter(({ value }) => value > 0);
   let x = 0;
   let segments = "";
-  items.forEach(([key, value], index) => {
+  items.forEach(({ label, value, color }, index) => {
     const segW = (value / total) * W;
-    const color = statusColorFor(key);
-    const label = statusLabelFor(key);
+    const radius = Math.min(4, segW / 2);
     const pct = Math.round((value / total) * 100);
     const isFirst = index === 0;
     const isLast = index === items.length - 1;
     const title = `<title>${esc(`${label}: ${value} (${pct}%)`)}</title>`;
-    segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${color}"${isFirst || isLast ? ` rx="${radius}"` : ""}>${title}</rect>`;
+    segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${esc(color)}"${isFirst || isLast ? ` rx="${radius}"` : ""}>${title}</rect>`;
     // Square off the inner corner so adjacent segments meet flush.
     if (isFirst && !isLast) {
-      segments += `<rect x="${(x + segW - radius).toFixed(2)}" y="0" width="${radius}" height="${barH}" fill="${color}"/>`;
+      segments += `<rect x="${(x + segW - radius).toFixed(2)}" y="0" width="${radius}" height="${barH}" fill="${esc(color)}"/>`;
     } else if (isLast && !isFirst) {
-      segments += `<rect x="${x.toFixed(2)}" y="0" width="${radius}" height="${barH}" fill="${color}"/>`;
+      segments += `<rect x="${x.toFixed(2)}" y="0" width="${radius}" height="${barH}" fill="${esc(color)}"/>`;
     }
     x += segW;
   });
 
   const legend = items
-    .map(([key, value]) => {
+    .map(({ label, value, color }) => {
       const pct = Math.round((value / total) * 100);
-      return legendSwatch(
-        statusColorFor(key),
-        `${statusLabelFor(key)}: `,
-        `<strong>${value}</strong> <span class="pk-muted">(${pct}%)</span>`,
-      );
+      return legendSwatch(color, `${label}: `, `<strong>${value}</strong> <span class="pk-muted">(${pct}%)</span>`);
     })
     .join("");
 
@@ -200,7 +208,7 @@ export function svgStatusSegmentBar(byStatus: Record<string, number>, total: num
     opts.caption,
     "Status",
     ["Count", "Share"],
-    items.map(([key, value]) => [statusLabelFor(key), [String(value), `${Math.round((value / total) * 100)}%`]]),
+    items.map(({ label, value }) => [label, [String(value), `${Math.round((value / total) * 100)}%`]]),
   );
 
   return figure(
@@ -254,7 +262,7 @@ export function svgBarChart(
     const x = pL + i * slotW + 1.5;
     const barH = values[i] === 0 ? 0 : Math.max(2, (values[i] / maxVal) * chartH);
     const y = pT + chartH - barH;
-    out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}" rx="2"/>`;
+    out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${esc(color)}" rx="2"/>`;
     if (values[i] > 0 && barH > 14) {
       out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" font-size="9" fill="${VALUE_INK}" font-family="inherit">${values[i]}</text>`;
     }
@@ -363,25 +371,27 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export function svgStackedBarChart(
   labels: string[],
   series: Array<{ label: string; values: number[]; color: string }>,
-  opts: ChartCaption & { isoLabels?: string[]; valueFormatter?: (value: number) => string },
+  opts: ChartCaption & { isoLabels?: string[]; valueFormatter?: (value: number) => string; width?: number },
 ): string {
   const n = labels.length;
   if (!n || series.length === 0) return noData();
 
   const hasIso = (opts.isoLabels?.length ?? 0) === n;
-  const W = 460;
-  const pL = 30;
+  const W = Math.max(240, opts.width ?? 460);
+  const labelSize = opts.width ? 12 : 9;
+  const valueSize = opts.width ? 11 : 8;
+  const pL = opts.width ? 42 : 30;
   const pR = 8;
   const pT = 18;
   const pB = hasIso ? 40 : 28;
-  const chartH = 114;
+  const chartH = opts.width ? 180 : 114;
   const H = pT + chartH + pB;
   const chartW = W - pL - pR;
   const totals = labels.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0));
   const maxVal = Math.max(...totals, 1);
   const slotW = chartW / n;
   const barW = Math.max(2, slotW - 3);
-  const step = Math.max(1, Math.ceil(n / 12));
+  const step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(chartW / 60))));
   const gridSteps = 3;
   const fmtVal = opts.valueFormatter ?? ((value: number) => String(Math.round(value)));
   const dayOfWeek = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay();
@@ -390,7 +400,7 @@ export function svgStackedBarChart(
   for (let g = 1; g <= gridSteps; g++) {
     const gy = pT + chartH - (g / gridSteps) * chartH;
     out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="${GRID}" stroke-width="1"/>`;
-    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="${AXIS_INK}" font-family="inherit">${esc(fmtVal((g / gridSteps) * maxVal))}</text>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="${labelSize}" fill="${AXIS_INK}" font-family="inherit">${esc(fmtVal((g / gridSteps) * maxVal))}</text>`;
   }
 
   if (hasIso) {
@@ -417,14 +427,14 @@ export function svgStackedBarChart(
     }
     const total = totals[i];
     if (total > 0 && pT + chartH - yBase > 14) {
-      out += `<text x="${cx}" y="${(yBase - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="${VALUE_INK}" font-family="inherit">${esc(fmtVal(total))}</text>`;
+      out += `<text x="${cx}" y="${(yBase - 3).toFixed(1)}" text-anchor="middle" font-size="${valueSize}" fill="${VALUE_INK}" font-family="inherit">${esc(fmtVal(total))}</text>`;
     }
     if (i % step === 0 || i === n - 1) {
-      out += `<text x="${cx}" y="${(pT + chartH + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="${AXIS_INK}" font-family="inherit">${esc(labels[i])}</text>`;
+      out += `<text x="${cx}" y="${(pT + chartH + 12).toFixed(1)}" text-anchor="middle" font-size="${labelSize}" fill="${AXIS_INK}" font-family="inherit">${esc(labels[i])}</text>`;
       if (hasIso) {
         const dow = dayOfWeek(opts.isoLabels![i]);
         const isWeekend = dow === 0 || dow === 6;
-        out += `<text x="${cx}" y="${(pT + chartH + 24).toFixed(1)}" text-anchor="middle" font-size="8" fill="${isWeekend ? FAINT_INK : AXIS_INK}" font-family="inherit">${WEEKDAYS[dow]}</text>`;
+        out += `<text x="${cx}" y="${(pT + chartH + 24).toFixed(1)}" text-anchor="middle" font-size="${valueSize}" fill="${isWeekend ? FAINT_INK : AXIS_INK}" font-family="inherit">${WEEKDAYS[dow]}</text>`;
       }
     }
     if (total > 0) {

@@ -193,7 +193,7 @@ export async function sendProposalSpeakerReminders(
       payload.kind === "profile"
         ? speakerManagePageUrl(payload.appBaseUrl, event, token)
         : speakerPresentationPageUrl(payload.appBaseUrl, event, token);
-    const templateKey = payload.kind === "profile" ? "speaker_profile_request" : "presentation_upload_request";
+    const templateKey = payload.kind === "profile" ? "speaker_profile_reminder" : "presentation_upload_request";
     const queued = prepareQueueEmailStatement(
       db,
       {
@@ -214,9 +214,11 @@ export async function sendProposalSpeakerReminders(
           speakerUserId: speaker.user_id,
           firstName: emailPlainText(speaker.first_name ?? ""),
           proposalTitle: emailPlainText(proposal.title),
+          proposalDecisionStatus: proposal.decision_status ?? proposal.status,
           ...(payload.kind === "profile"
             ? {
                 profileUrl: actionUrl,
+                requiresConfirmation: speaker.status === "invited",
                 hasHeadshot: speaker.headshot_r2_key ? "true" : "",
                 hasBio: speaker.biography ? "true" : "",
               }
@@ -270,7 +272,7 @@ export async function remindProposalSpeakerByProposer(
   if (isProposalInactiveStatus(payload.proposal.status)) {
     throw new AppError(409, "PROPOSAL_CLOSED", "Cannot send reminders for a closed proposal");
   }
-  const [event, speakers, inviteContext, proposer] = await Promise.all([
+  const [event, speakers, inviteContext, proposer, currentProposal] = await Promise.all([
     getEventById(db, payload.proposal.event_id),
     loadReminderSpeakers(db, payload.proposal.id, payload.userId),
     buildProposalInviteEmailContext(db, {
@@ -280,6 +282,7 @@ export async function remindProposalSpeakerByProposer(
     first<{ first_name: string | null }>(db, "SELECT first_name FROM users WHERE id = ?", [
       payload.proposal.proposer_user_id,
     ]),
+    loadReminderProposal(db, payload.proposal.id),
   ]);
   const speaker = speakers[0];
   if (!speaker) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
@@ -296,7 +299,7 @@ export async function remindProposalSpeakerByProposer(
     {
       eventId: event.id,
       baseUrl: payload.appBaseUrl,
-      templateKey: isProfileReviewRequest ? "speaker_profile_request" : "co_speaker_invite",
+      templateKey: isProfileReviewRequest ? "speaker_profile_reminder" : "co_speaker_invite",
       recipientEmail: speaker.email,
       recipientUserId: speaker.user_id,
       messageType: "transactional",
@@ -311,6 +314,7 @@ export async function remindProposalSpeakerByProposer(
             speakerUserId: speaker.user_id,
             firstName: emailPlainText(speaker.first_name ?? ""),
             proposalTitle: emailPlainText(inviteContext.proposalTitle),
+            proposalDecisionStatus: currentProposal.decision_status ?? currentProposal.status,
             profileUrl: manageUrl,
             hasHeadshot: speaker.headshot_r2_key ? "true" : "",
             hasBio: speaker.biography ? "true" : "",
@@ -333,6 +337,7 @@ export async function remindProposalSpeakerByProposer(
   );
   try {
     await db.batch([
+      prepareReminderSnapshotGuard(db, currentProposal, speakers, event, now, payload.userId),
       queued.statement,
       db
         .prepare(
@@ -392,7 +397,7 @@ export async function remindProposalSpeakerByProposer(
       ),
     ]);
   } catch (error) {
-    if (isAuditChangeGuardFailure(error)) {
+    if (isAuthorizationGuardFailure(error) || isAuditChangeGuardFailure(error)) {
       throw new AppError(
         409,
         "PROPOSAL_SPEAKER_CONFLICT",

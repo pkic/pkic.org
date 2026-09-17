@@ -11,11 +11,7 @@ import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 
 function toResponse(row: Awaited<ReturnType<typeof getMembershipSettings>>) {
   return membershipSettingsSchema.parse({
-    consultationWindowDays: row.consultation_window_days,
-    ecReviewWindowDays: row.ec_review_window_days,
     onHoldResponseDeadlineDays: row.on_hold_response_deadline_days,
-    consultationEmailRecipients: row.consultation_email_recipients,
-    ecEmailRecipients: row.ec_email_recipients,
     ccApplicantEmails: row.cc_applicant_emails,
     autoReminderOnHolds: row.auto_reminder_on_holds === 1,
     revision: row.revision,

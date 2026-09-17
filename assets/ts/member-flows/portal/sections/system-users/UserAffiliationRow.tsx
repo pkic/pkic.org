@@ -1,3 +1,4 @@
+import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * One tie between a person and an organization, stated and managed in place.
@@ -15,11 +16,7 @@ import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCate
 import { useId, useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
-import {
-  MEMBERSHIP_CATEGORIES,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  memberCapacityMutationResponseSchema,
-} from "../../../../../shared/schemas/membership-management";
+import { memberCapacityMutationResponseSchema } from "../../../../../shared/schemas/membership-management";
 import { MEMBER_STATUSES } from "../../../../../shared/schemas/membership-categories";
 import { deleteJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
@@ -31,9 +28,10 @@ import { Avatar } from "../../../../ui/Avatar";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Menu, type MenuItem } from "../../../../ui/Menu";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { usePortalHashLocation } from "../../hash-location";
 import type { UserMembership } from "./model";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 export function UserAffiliationRow({
   membership,
@@ -54,9 +52,14 @@ export function UserAffiliationRow({
   summarized?: boolean;
 }) {
   const categories = useMembershipCategoryLabels();
+  const catalog = useMembershipCategoryCatalog();
   const [busy, setBusy] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [editingMembership, setEditingMembership] = useState(false);
+  // The membership editor is a draft: nothing is written until Save, so a
+  // stray change to a select changes nothing (#91).
+  const [draftCategory, setDraftCategory] = useState<string>(membership.membershipCategory);
+  const [draftStatus, setDraftStatus] = useState<string>(membership.status);
   const [jobTitle, setJobTitle] = useState(membership.jobTitle ?? "");
   const [biography, setBiography] = useState(membership.biography ?? "");
   const [links, setLinks] = useState(membership.links);
@@ -67,20 +70,25 @@ export function UserAffiliationRow({
   const categoryEditable = !membership.organizationId && canManage;
   const statusEditable = !membership.organizationId;
   const organizationName = membership.organizationName ?? "Individual member";
-  const organizationLabel = membership.organizationName ?? "this organization";
+  // The editor's fields name the tie they belong to: the organization, or
+  // for an individual capacity the membership itself.
+  const organizationLabel =
+    membership.organizationName ?? (membership.organizationId ? "this organization" : "this membership");
 
-  async function patchMember(body: Record<string, unknown>) {
+  async function patchMember(body: Record<string, unknown>): Promise<boolean> {
     setBusy(true);
     try {
       await patchJson(
-        `/api/v1/members/capacities/${encodeURIComponent(membership.memberId)}`,
+        `/api/v1/members/capacities/${encodeURIComponent(membership.identityId)}`,
         body,
         memberCapacityMutationResponseSchema,
       );
       toast("Membership updated", "success");
       await onChanged();
+      return true;
     } catch (error) {
       toast((error as Error).message, "error");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -120,7 +128,10 @@ export function UserAffiliationRow({
     }
     setBusy(true);
     try {
-      await deleteJson(`/api/v1/members/capacities/${encodeURIComponent(membership.memberId)}`, successResponseSchema);
+      await deleteJson(
+        `/api/v1/members/capacities/${encodeURIComponent(membership.identityId)}`,
+        successResponseSchema,
+      );
       toast("Identity ended", "success");
       await onChanged();
     } catch (error) {
@@ -131,12 +142,33 @@ export function UserAffiliationRow({
   }
 
   async function saveIdentityProfile() {
-    if (!membership.organizationId) return;
-    const saved = await patchIdentity(
-      { profile: { jobTitle: jobTitle.trim() || null, biography: biography.trim() || null, links } },
-      "Identity profile updated",
-    );
+    const profile = { biography: biography.trim() || null, links };
+    // An organization identity is written on the organization, and a job
+    // title is a role there; an individual capacity — H5, H6, H7 — carries
+    // its biography and links on the capacity itself, which used to have no
+    // editor at all (#91).
+    const saved = membership.organizationId
+      ? await patchIdentity({ profile: { ...profile, jobTitle: jobTitle.trim() || null } }, "Identity profile updated")
+      : await patchMember({ profile });
     if (saved) setEditingProfile(false);
+  }
+
+  function openMembershipEditor() {
+    setDraftCategory(membership.membershipCategory);
+    setDraftStatus(membership.status);
+    setEditingMembership(true);
+  }
+
+  async function saveMembership() {
+    const body: Record<string, unknown> = {};
+    if (categoryEditable && draftCategory !== membership.membershipCategory) body.membershipCategory = draftCategory;
+    if (statusEditable && draftStatus !== membership.status) body.status = draftStatus;
+    // Nothing changed is not a refusal: the editor simply closes.
+    if (Object.keys(body).length === 0) {
+      setEditingMembership(false);
+      return;
+    }
+    if (await patchMember(body)) setEditingMembership(false);
   }
 
   function toggleIdentityEditor() {
@@ -179,13 +211,13 @@ export function UserAffiliationRow({
    * is in.
    */
   const rowActions: MenuItem[] = [];
+  rowActions.push({
+    id: "profile",
+    label: editingProfile ? "Close identity editor" : "Edit identity profile…",
+    disabled: busy,
+    onSelect: toggleIdentityEditor,
+  });
   if (membership.organizationId) {
-    rowActions.push({
-      id: "profile",
-      label: editingProfile ? "Close identity editor" : "Edit identity profile…",
-      disabled: busy,
-      onSelect: toggleIdentityEditor,
-    });
     rowActions.push({
       id: "visibility",
       label: membership.showOnOrgProfile
@@ -211,7 +243,7 @@ export function UserAffiliationRow({
       id: "membership",
       label: editingMembership ? "Close membership editor" : "Edit membership…",
       disabled: busy,
-      onSelect: () => setEditingMembership((current) => !current),
+      onSelect: () => (editingMembership ? setEditingMembership(false) : openMembershipEditor()),
     });
   }
   rowActions.push({
@@ -259,63 +291,73 @@ export function UserAffiliationRow({
       footer={
         <>
           {editingMembership && (categoryEditable || statusEditable) && (
-            <div class="pk-grid pk-grid--tight">
-              {categoryEditable && (
-                <Field label="Category">
-                  {(control) => (
-                    <Select
-                      {...control}
-                      value={membership.membershipCategory}
-                      disabled={busy}
-                      onChange={(event) =>
-                        void patchMember({ membershipCategory: (event.target as HTMLSelectElement).value })
-                      }
-                    >
-                      {MEMBERSHIP_CATEGORIES.filter((category) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category)).map(
-                        (category) => (
-                          <option key={category} value={category}>
-                            {categories.label(category)}
+            <div class="pk-stack pk-stack--snug">
+              <div class="pk-grid pk-grid--tight">
+                {categoryEditable && (
+                  <Field label="Category">
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={draftCategory}
+                        disabled={busy}
+                        onChange={(event) => setDraftCategory((event.target as HTMLSelectElement).value)}
+                      >
+                        {catalog
+                          .filter((category) => category.isIndividual)
+                          .map(({ code: category }) => (
+                            <option key={category} value={category}>
+                              {categories.label(category)}
+                            </option>
+                          ))}
+                      </Select>
+                    )}
+                  </Field>
+                )}
+                {statusEditable && (
+                  <Field label="Status">
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={draftStatus}
+                        disabled={busy || !canManage}
+                        onChange={(event) => setDraftStatus((event.target as HTMLSelectElement).value)}
+                      >
+                        {MEMBER_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {statusLabel(status)}
                           </option>
-                        ),
-                      )}
-                    </Select>
-                  )}
-                </Field>
-              )}
-              {statusEditable && (
-                <Field label="Status">
-                  {(control) => (
-                    <Select
-                      {...control}
-                      value={membership.status}
-                      disabled={busy || !canManage}
-                      onChange={(event) => void patchMember({ status: (event.target as HTMLSelectElement).value })}
-                    >
-                      {MEMBER_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {statusLabel(status)}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-              )}
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                )}
+              </div>
+              <div class="pk-cluster">
+                <Button variant="primary" size="sm" loading={busy} onClick={() => void saveMembership()}>
+                  {busy ? "Saving…" : "Save membership"}
+                </Button>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setEditingMembership(false)}>
+                  Cancel
+                </Button>
+              </div>
             </div>
           )}
 
-          {editingProfile && membership.organizationId && (
+          {editingProfile && (
             <div class="pk-stack pk-stack--snug">
               <div class="pk-grid pk-grid--tight">
-                <Field label={`Job title for ${organizationLabel}`}>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={jobTitle}
-                      onInput={(event) => setJobTitle(event.currentTarget.value)}
-                      disabled={busy}
-                    />
-                  )}
-                </Field>
+                {membership.organizationId && (
+                  <Field label={`Job title for ${organizationLabel}`}>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={jobTitle}
+                        onInput={(event) => setJobTitle(event.currentTarget.value)}
+                        disabled={busy}
+                      />
+                    )}
+                  </Field>
+                )}
                 <div class="pk-stack pk-stack--tight">
                   <span class="pk-strong pk-small" id={linksLabelId}>
                     Profile links for {organizationLabel}
@@ -331,12 +373,14 @@ export function UserAffiliationRow({
               </div>
               <Field label={`Biography for ${organizationLabel}`}>
                 {(control) => (
-                  <Textarea
+                  <MarkdownEditor
                     {...control}
-                    rows={3}
-                    value={biography}
-                    onInput={(event) => setBiography(event.currentTarget.value)}
+                    variant="compact"
+                    name={`identity.${membership.identityId}.biography`}
+                    label={`Biography for ${organizationLabel}`}
+                    initialValue={biography}
                     disabled={busy}
+                    onChange={setBiography}
                   />
                 )}
               </Field>

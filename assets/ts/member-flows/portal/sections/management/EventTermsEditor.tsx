@@ -370,9 +370,9 @@ export function EventTermsEditor({
         <div class="pk-stack">
           {(["attendee", "speaker", "presentation"] as const).map((audience) => (
             <div key={audience}>
-              <h6>
+              <h4>
                 {audience === "attendee" ? "Attendee" : audience === "speaker" ? "Speaker" : "Presentation upload"}
-              </h6>
+              </h4>
               {resource.data!.terms[audience].length ? (
                 <DescriptionList
                   items={resource.data!.terms[audience].map((term) => ({

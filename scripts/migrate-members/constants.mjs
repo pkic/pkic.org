@@ -5,16 +5,16 @@
  * from the orchestrator, avoiding a circular-import risk.
  */
 
-export const WORKING_GROUP_CSVS = {
-  ca: "ca.csv",
-  cbom: "cbom.csv",
-  cm: "cm.csv",
-  pkimm: "pkimm.csv",
-  pqc: "pqc.csv",
-  tcwg: "tcwg.csv",
+export const GROUP_ROSTER_CSVS = {
+  ca: { filename: "ca.csv", type: "working_group" },
+  cbom: { filename: "cbom.csv", type: "working_group" },
+  cm: { filename: "cm.csv", type: "working_group" },
+  pkimm: { filename: "pkimm.csv", type: "working_group" },
+  pqc: { filename: "pqc.csv", type: "working_group" },
+  tcwg: { filename: "tcwg.csv", type: "working_group" },
+  board: { filename: "board.csv", type: "board", optional: true },
+  "executive-council": { filename: "ec.csv", type: "board", optional: true },
 };
-// csv/ec.csv (Executive Council roster) is intentionally excluded — EC
-// membership is scope (users.is_ec_member), not this migration.
 
 // (sponsorship reconciliation): maps a YAML `sponsor.sponsoring.<key>`
 // event name to the `events` row it should attribute to. Only 3 distinct

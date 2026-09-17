@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
-import { databaseIdSchema } from "./identifiers";
+import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth.ts";
+import { databaseIdSchema } from "./identifiers.ts";
 
 /** Exact base response contract for successful mutations. Extend this for declared domain payloads. */
 export const successResponseSchema = z.object({ success: z.literal(true) }).strict();

@@ -1,4 +1,5 @@
 /** Staff commands over exact Member acting identities. */
+import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import type { MemberCapacityUpdateInput } from "../../../../assets/shared/schemas/membership-management";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -8,6 +9,7 @@ import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../aud
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { authorizedMembershipMutationDb } from "../membership-authorization";
 import { buildCreateIdentityStatement } from "./identities";
+import { assertCategoryCompatible, prepareMembershipCategoryGuard } from "./categories";
 import { buildCreateIndividualMemberStatements } from "./memberships";
 import { buildMembershipAccessOffboardingStatements } from "./offboarding";
 import { REPRESENTATIVE_ROLE_IDS, buildRevokeRepresentativeRoleStatement } from "./representative-roles";
@@ -81,6 +83,18 @@ export async function updateMembershipCapacity(
       "Individual identities have no organization profile",
     );
   }
+  // An organization identity's profile is written on the organization, where
+  // its representatives manage it; only an individual capacity carries the
+  // profile on itself (#91).
+  if (identity.organization_id && input.profile !== undefined) {
+    throw new AppError(
+      422,
+      "IDENTITY_PROFILE_MANAGED_BY_ORGANIZATION",
+      "An organization identity's profile is edited through the organization",
+    );
+  }
+
+  if (input.membershipCategory !== undefined) await assertCategoryCompatible(db, input.membershipCategory, true);
 
   const at = nowIso();
   const authorizedDb = authorizedMembershipMutationDb(db, actor, ["membership:write"]);
@@ -131,8 +145,31 @@ export async function updateMembershipCapacity(
     );
   }
 
+  if (input.profile !== undefined) {
+    const { biography, links } = input.profile;
+    statements.push(
+      authorizedDb
+        .prepare(
+          `UPDATE identities SET
+             biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
+             links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
+             updated_at = ?
+           WHERE id = ?`,
+        )
+        .bind(
+          biography === undefined ? 0 : 1,
+          biography ?? null,
+          links === undefined ? 0 : 1,
+          links === undefined ? null : serializeLinks(links),
+          at,
+          identity.id,
+        ),
+    );
+  }
+
   if (!identity.organization_id && input.membershipCategory !== undefined) {
     statements.push(
+      prepareMembershipCategoryGuard(authorizedDb, input.membershipCategory, true),
       authorizedDb
         .prepare("UPDATE member_category_assignments SET category_code = ?, updated_at = ? WHERE member_id = ?")
         .bind(input.membershipCategory, at, identity.member_id),
@@ -169,12 +206,13 @@ export async function updateMembershipCapacity(
   return capacityResponse(identity, input);
 }
 
-/** Grants one active individual H5/H6/H7 identity to an existing user. */
+/** Grants one active identity in a configured individual category to an existing user. */
 export async function grantIndividualMembership(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
   input: { userId: string; membershipCategory: string; activationReason: string },
 ) {
+  await assertCategoryCompatible(db, input.membershipCategory, true);
   const user = await first<{ id: string; updated_at: string }>(
     db,
     `SELECT id, updated_at FROM users
@@ -215,7 +253,7 @@ export async function grantIndividualMembership(
   };
   const {
     memberId,
-    statements: [memberInsert, categoryAssignment],
+    statements: [categoryGuard, memberInsert, categoryAssignment],
   } = buildCreateIndividualMemberStatements(
     authorizedDb,
     input.userId,
@@ -242,6 +280,7 @@ export async function grantIndividualMembership(
   });
   try {
     await authorizedDb.batch([
+      categoryGuard,
       memberInsert,
       categoryAssignment,
       identity.statement,

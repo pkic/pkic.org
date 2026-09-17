@@ -1,17 +1,14 @@
+import { membershipWorkflowProgressSchema, MEMBERSHIP_APPLICATION_LIFECYCLES } from "./membership-workflows";
 import { z } from "zod";
 import { activeFormSummarySchema } from "./forms";
 import { MEMBERSHIP_APPLICATION_FORM_KEY } from "./membership-application-form";
-import { normalizedEmailSchema } from "./api-common";
-import {
-  membershipCategorySchema,
-  membershipCategoryCatalogEntrySchema,
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  requiresUniversityEmail,
-} from "./membership-categories";
+import { tokenSchema } from "./api-common";
+import { membershipCategorySchema, membershipCategoryCatalogEntrySchema } from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import { memberApplicationCapabilityQuerySchema } from "./membership-application-capability";
-import { emailDomainOf, isDisposableEmailDomain, isPersonalEmailAddress } from "../constants/email-domains";
+import { membershipApplicantDetailsSchema, refineMembershipApplicant } from "./membership-applicant-policy";
+import type { MembershipCategoryCatalogEntry } from "./membership-categories";
 import {
   applicationDocumentUploadFormSchema,
   applicationDocumentUploadHeadersSchema,
@@ -31,16 +28,7 @@ export {
 // calls this file's own allowedTransitions() below as the actual
 // state-machine enforcement; this is its shared, API-facing type, not a
 // second source of truth) — PR #1 review §1.3.
-export const APPLICATION_STAGES = [
-  "pending",
-  "in_review",
-  "on_hold",
-  "in_consultation",
-  "ec_review",
-  "approved",
-  "declined",
-  "withdrawn",
-] as const;
+export const APPLICATION_STAGES = MEMBERSHIP_APPLICATION_LIFECYCLES;
 export type ApplicationStage = (typeof APPLICATION_STAGES)[number];
 export const applicationStageSchema = z.enum(APPLICATION_STAGES);
 export const APPLICATION_TERMINAL_STAGES = [
@@ -73,11 +61,9 @@ export const onHoldSubtypeSchema = z.enum(ON_HOLD_SUBTYPES);
  * onboarding orchestration in approveApplication(), not a bare transition.
  */
 export const APPLICATION_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
-  pending: ["in_review", "withdrawn"],
-  in_review: ["on_hold", "in_consultation", "declined", "withdrawn"],
-  on_hold: ["in_review", "withdrawn"],
-  in_consultation: ["ec_review", "withdrawn"],
-  ec_review: ["declined", "withdrawn"],
+  submitted: ["on_hold", "declined", "withdrawn"],
+  processing: ["on_hold", "declined", "withdrawn"],
+  on_hold: ["processing", "declined", "withdrawn"],
   approved: [],
   declined: [],
   withdrawn: [],
@@ -90,48 +76,18 @@ export function allowedTransitions(from: ApplicationStage): ApplicationStage[] {
   return APPLICATION_STAGE_TRANSITIONS[from];
 }
 
-export const memberApplicationCreateSchema = z
-  .object({
-    applicantEmail: normalizedEmailSchema,
-    applicantName: z.string().trim().min(1, "Name is required").max(160),
-    membershipCategory: membershipCategorySchema,
-    organizationName: z.string().trim().min(1).max(200).optional(),
-    joinToken: z.string().min(32).max(1024),
-    /** Validated answers keyed by form_fields.key (see GET .../applications/form). */
-    answers: formAnswersSchema.optional(),
-  })
-  .superRefine((value, ctx) => {
-    const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(value.membershipCategory);
-    if (!isIndividual && !value.organizationName) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["organizationName"],
-        message: "Organization name is required for this membership category",
-      });
-    }
-    const emailDomain = emailDomainOf(value.applicantEmail);
-    if (isDisposableEmailDomain(emailDomain)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["applicantEmail"],
-        message: "Disposable email providers are not accepted",
-      });
-    }
-    if (!isIndividual && isPersonalEmailAddress(value.applicantEmail)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["applicantEmail"],
-        message: "Use your employer or organization email address for an organization membership application",
-      });
-    }
-    if (requiresUniversityEmail(value.membershipCategory) && isPersonalEmailAddress(value.applicantEmail)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["applicantEmail"],
-        message: "Category H5 requires a university email address; personal email providers are not accepted",
-      });
-    }
-  });
+export const memberApplicationCreateSchema = membershipApplicantDetailsSchema.safeExtend({
+  applicantName: z.string().trim().min(1, "Name is required").max(160),
+  membershipCategory: membershipCategorySchema,
+  joinToken: z.string().min(32).max(1024),
+  answers: formAnswersSchema.optional(),
+});
+
+export function memberApplicationCreateSchemaForCategory(category: MembershipCategoryCatalogEntry) {
+  return memberApplicationCreateSchema.superRefine((input, context) =>
+    refineMembershipApplicant(input, category, context),
+  );
+}
 
 export type MemberApplicationCreateInput = z.infer<typeof memberApplicationCreateSchema>;
 
@@ -161,6 +117,7 @@ export const memberApplicationCreateRouteSchema = {
 };
 
 export const memberApplicationStatusResponseSchema = z.object({
+  workflow: membershipWorkflowProgressSchema.nullable().optional(),
   id: databaseIdSchema,
   stage: applicationStageSchema,
   stageEnteredAt: z.string(),
@@ -177,8 +134,12 @@ const memberApplicationCapabilityRequest = {
 export const memberApplicationStatusRouteSchema = {
   tags: ["Members"],
   summary: "Check membership application status",
-  description: "Token-gated status check for an applicant. Token is issued once at submission time.",
-  request: memberApplicationCapabilityRequest,
+  description:
+    "Token-gated status check using the original confirmation token or a signed status-only link from an update email.",
+  request: {
+    ...memberApplicationCapabilityRequest,
+    query: memberApplicationCapabilityQuerySchema.extend({ token: tokenSchema }),
+  },
   responses: {
     "200": {
       description: "Current application status.",
@@ -228,34 +189,5 @@ export const applicationDocumentUploadRouteSchema = {
     "404": { description: "Application not found." },
     "413": { description: "File too large." },
     "415": { description: "Unsupported file type." },
-  },
-};
-
-export const applicationConcernCreateSchema = z.object({
-  concernText: z.string().trim().min(1).max(5000),
-});
-
-export const applicationConcernResponseSchema = z.object({
-  id: databaseIdSchema,
-  createdAt: z.string(),
-});
-
-export const applicationConcernCreateRouteSchema = {
-  tags: ["Members"],
-  summary: "Submit a consultation concern (voting-category members only)",
-  description:
-    "Visible only to staff/processors, never to the applicant. Member-session gated; only members in a configured voting category may submit.",
-  request: {
-    params: memberApplicationIdParamsSchema,
-    body: { content: { "application/json": { schema: applicationConcernCreateSchema } }, required: true },
-  },
-  responses: {
-    "201": {
-      description: "Concern recorded.",
-      content: { "application/json": { schema: applicationConcernResponseSchema } },
-    },
-    "403": { description: "Only members in a voting membership category may submit a concern." },
-    "404": { description: "Application not found." },
-    "409": { description: "The application stage or the submitter's voting eligibility changed." },
   },
 };

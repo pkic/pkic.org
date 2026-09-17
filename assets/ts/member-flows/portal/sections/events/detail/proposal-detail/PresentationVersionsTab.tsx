@@ -19,12 +19,13 @@ import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { EmptyState } from "../../../../../../ui/EmptyState";
 import { Field } from "../../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
-import { Select, Textarea } from "../../../../../../ui/TextControl";
+import { Select } from "../../../../../../ui/TextControl";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
 import { proposalResourcePath } from "./proposal-api";
 // `pk-datalist` is written here as a class name rather than reached through a
 // component, so this module has to pull its stylesheet into its own chunk.
 import "../../../../../../ui/Content.css";
+import { MarkdownEditor } from "../../../../../../components/markdown-editor/MarkdownInput";
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";
@@ -299,13 +300,14 @@ export function PresentationVersionsTab({
                   {...review.of("note")}
                 >
                   {(control) => (
-                    <Textarea
+                    <MarkdownEditor
+                      variant="compact"
                       {...control}
                       name="note"
-                      rows={3}
-                      value={reviewNote}
+                      label="Note for the speaker"
+                      initialValue={reviewNote}
                       disabled={savingReview}
-                      onInput={(event) => setReviewNote((event.target as HTMLTextAreaElement).value)}
+                      onChange={setReviewNote}
                     />
                   )}
                 </Field>

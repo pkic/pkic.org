@@ -7,10 +7,11 @@ import {
 } from "../../../../assets/shared/schemas/event-registrations";
 import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { buildD1TextSearchFilter } from "../../db/search";
 import type { DatabaseLike } from "../../types";
+import { publicUserHeadshotPath } from "../user-headshot";
 import { getAttendanceStatusByType } from "./attendance-statistics";
+import { activeDayWaitlistExistsSql, loadRegistrationDayStates } from "./day-states";
 import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
 
@@ -23,12 +24,9 @@ interface AttendanceRegistrationRow {
   updated_at: string;
   user_email: string | null;
   display_name: string | null;
-}
-
-interface WaitlistSummaryRow {
-  registration_id: string;
-  summary: string | null;
-  count: number;
+  headshot_r2_key: string | null;
+  organization_name: string | null;
+  job_title: string | null;
 }
 
 export interface EventAttendanceRegistrationsListResult {
@@ -49,6 +47,8 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
     conditions.push("r.status = ?");
     bindings.push(params.status);
   }
+  if (params.waitlisted === "true") conditions.push(activeDayWaitlistExistsSql("r"));
+  else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
   const search = (params.q ?? "").trim();
   if (search) {
     const filter = buildD1TextSearchFilter(search, [
@@ -64,7 +64,9 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
     source: {
       selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.created_at, r.updated_at,
                          u.email AS user_email,
-                         COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name`,
+                         COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
+                         u.headshot_r2_key AS headshot_r2_key,
+                         u.organization_name AS organization_name, u.job_title AS job_title`,
       fromSql: `FROM registrations r
                 LEFT JOIN users u ON u.id = r.user_id
                 WHERE ${conditions.join(" AND ")}`,
@@ -85,28 +87,11 @@ export async function listEventAttendanceRegistrations(
     db,
     buildEventAttendanceRegistrationsPageQuery(eventId, params),
   );
-  const registrationFilter = buildD1JsonMembershipFilter(
-    "w.registration_id",
-    rows.map((row) => row.id),
-  );
-  const [waitlistSummaries, statRows, attendanceStatusByType] = await Promise.all([
-    rows.length
-      ? all<WaitlistSummaryRow>(
-          db,
-          `SELECT w.registration_id,
-                  GROUP_CONCAT(CASE
-                    WHEN ed.label IS NOT NULL AND ed.label <> '' THEN ed.label || ' (' || w.status || ')'
-                    ELSE ed.day_date || ' (' || w.status || ')'
-                  END, ' · ') AS summary,
-                  COUNT(*) AS count
-             FROM event_day_waitlist_entries w
-             JOIN event_days ed ON ed.id = w.event_day_id
-            WHERE ${registrationFilter.sql}
-              AND w.status IN ('waiting', 'offered')
-            GROUP BY w.registration_id`,
-          registrationFilter.bindings,
-        )
-      : Promise.resolve([]),
+  const [dayStates, statRows, attendanceStatusByType] = await Promise.all([
+    loadRegistrationDayStates(
+      db,
+      rows.map((row) => row.id),
+    ),
     all<EventRegistrationStatsRow>(
       db,
       `SELECT attendance_type, status, COUNT(*) AS count
@@ -117,17 +102,15 @@ export async function listEventAttendanceRegistrations(
     ),
     getAttendanceStatusByType(db, eventId),
   ]);
-  const waitlistByRegistrationId = new Map(waitlistSummaries.map((row) => [row.registration_id, row]));
   const { byAttendanceType, byStatus } = aggregateEventRegistrationStats(statRows);
   return {
-    registrations: rows.map((row) => {
-      const waitlist = waitlistByRegistrationId.get(row.id);
-      return eventAttendanceRegistrationSummarySchema.parse({
+    registrations: rows.map((row) =>
+      eventAttendanceRegistrationSummarySchema.parse({
         ...row,
-        dayWaitlistSummary: waitlist?.summary ?? null,
-        dayWaitlistCount: Number(waitlist?.count ?? 0),
-      });
-    }),
+        headshot_url: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
+        days: dayStates.get(row.id) ?? [],
+      }),
+    ),
     total,
     stats: eventAttendanceRegistrationsStatsSchema.parse({ byAttendanceType, byStatus, attendanceStatusByType }),
   };

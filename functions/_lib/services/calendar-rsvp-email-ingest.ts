@@ -31,8 +31,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
     });
 
     if (!env.INTERNAL_SIGNING_SECRET) {
-      logInfo("EMAIL_IGNORED_NO_SECRET", { messageId: emailData.messageId });
-      return;
+      throw new AppError(503, "EMAIL_SIGNING_NOT_CONFIGURED", "RSVP signing is temporarily unavailable");
     }
 
     // Check prefix before wasting cycles on crypto/HMAC verification
@@ -173,6 +172,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
       registrationId: rsvpRegistrationId,
       eventDayDate: rsvpDayDate,
       icsUid,
+      recurrenceId: parsedRsvp.recurrenceId,
       attendeeEmail: parsedRsvp.attendeeEmail,
       responseStatus: parsedRsvp.responseStatus,
       provider: "cloudflare_email_routing_ics",
@@ -184,7 +184,7 @@ export async function processIncomingEmail(message: IncomingRsvpEmail, env: Env)
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     logError("EMAIL_PROCESSING_FAILED", { error: errorMsg });
-    throw err; // Workers might need this to signal bounce or error but usually we catch to drop it gracefully
-    // message.setReject("Failed to parse")
+    // Propagate failures to Email Routing so SMTP can defer delivery instead of acknowledging it.
+    throw err;
   }
 }

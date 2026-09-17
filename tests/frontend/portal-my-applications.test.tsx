@@ -22,7 +22,7 @@ const DECIDED_AT = "2026-04-01T10:00:00.000Z";
 
 const summary = {
   id: APPLICATION_ID,
-  stage: "ec_review" as const,
+  stage: "processing" as const,
   membershipCategory: "F",
   createdAt: SUBMITTED_AT,
 };
@@ -33,12 +33,17 @@ const detail = {
   applicantEmail: "applicant@example.test",
   organizationName: "Example Organization",
   membershipCategory: "F",
-  stage: "ec_review" as const,
+  stage: "processing" as const,
   stageEnteredAt: DECIDED_AT,
   createdAt: SUBMITTED_AT,
   timeline: [
-    { fromStage: null, toStage: "in_review" as const, note: null, createdAt: SUBMITTED_AT },
-    { fromStage: "in_review" as const, toStage: "ec_review" as const, note: "Sent to the EC.", createdAt: DECIDED_AT },
+    { fromStage: null, toStage: "submitted" as const, note: null, createdAt: SUBMITTED_AT },
+    {
+      fromStage: "submitted" as const,
+      toStage: "processing" as const,
+      note: "Review started.",
+      createdAt: DECIDED_AT,
+    },
   ],
   communications: [{ subject: "We received your application", body: "Thank you.", createdAt: SUBMITTED_AT }],
 };
@@ -150,7 +155,7 @@ describe("my applications", () => {
     expect(collection[0]?.url.searchParams.get("limit")).toBe("50");
     expect(collection[0]?.url.searchParams.get("offset")).toBe("0");
     // The list is rendered from what the server returned, not filtered here.
-    expect(root.textContent).toContain("EC review");
+    expect(root.textContent).toContain("Processing");
     // The category reads as the catalog's words, never a bare letter code.
     expect(root.textContent).toContain("PKI or cryptographic software and device providers (F)");
   });
@@ -191,8 +196,8 @@ describe("my applications", () => {
     expect(root.textContent).toContain("Example Applicant");
     expect(root.textContent).toContain("Status history");
     // The status change reads as words, so the history does not rest on colour.
-    expect(root.textContent).toContain("In review → ");
-    expect(root.textContent).toContain("Sent to the EC.");
+    expect(root.textContent).toContain("Submitted → ");
+    expect(root.textContent).toContain("Review started.");
     expect(root.textContent).toContain("We received your application");
   });
 

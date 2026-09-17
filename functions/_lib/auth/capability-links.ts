@@ -170,6 +170,8 @@ export async function queuedCapabilityTokenBoundToSecret(
 
 function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite = false): string {
   switch (purpose) {
+    case "application_status":
+      return "SELECT manage_token_hash || char(10) || applicant_email AS link_secret FROM member_applications WHERE id = ?";
     case "registration_manage":
       return "SELECT manage_link_secret AS link_secret FROM registrations WHERE id = ?";
     case "registration_confirm":

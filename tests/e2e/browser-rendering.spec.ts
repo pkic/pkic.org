@@ -387,7 +387,7 @@ async function fillProposal(
     await expect(proposerCard).toBeVisible();
     await expect(proposerCard.locator('input[name="proposerSpeakerRole"][value="moderator"]')).toBeChecked();
     await proposerCard
-      .locator('textarea[name="proposerBio"]')
+      .getByRole("textbox", { name: "Bio", exact: true })
       .fill("Moderator biography with enough detail to satisfy validation for this panel proposal.");
   }
 
@@ -404,7 +404,7 @@ async function fillProposal(
       .locator('input[name="speaker.1.role"][value="panelist"]')
       .evaluate((el) => (el as HTMLInputElement).click());
     await panelistCard
-      .locator('textarea[name="speaker.1.bio"]')
+      .getByRole("textbox", { name: "Bio", exact: true })
       .fill("Panelist biography with enough detail to satisfy validation and represent a real panel participant.");
   }
 }
@@ -1094,7 +1094,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
-    const bioValue = await page.getByLabel(/Biography/i).inputValue();
+    const bioValue = await page.getByRole("textbox", { name: "Biography", exact: true }).innerText();
     expect(bioValue).not.toContain("injected bio");
     await screenshot("05-speaker-token-isolation-verified");
 
@@ -1504,7 +1504,7 @@ test.describe("browser workflows", () => {
     const statusSelect = versionCard.locator("select");
     await expect(statusSelect).toBeVisible({ timeout: 5_000 });
     await statusSelect.selectOption("needs_revision");
-    const noteInput = versionCard.locator("textarea");
+    const noteInput = versionCard.getByRole("textbox", { name: "Note for the speaker", exact: true });
     await noteInput.fill("Please add speaker notes to each slide before the final review.");
     await versionCard.getByRole("button", { name: /Save review/i }).click();
     await expect(versionCard.locator("[data-presentation-review-status]")).toHaveText("Needs revision", {

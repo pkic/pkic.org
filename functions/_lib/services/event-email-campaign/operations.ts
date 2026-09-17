@@ -16,20 +16,20 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { buildEventEmailVariables, type EventRecord } from "../events";
 import { proposalPageUrl, registrationManagePageUrl, registrationPageUrl } from "../frontend-links";
-import { queueEventEmailCampaign } from "../event-email-campaign-queue";
 import { assertCampaignBroadcastSafety } from "./broadcast-safety";
-import { chunkRecipients } from "./batching";
-import { prepareEventEmailCampaign } from "./preparation";
-import { signCampaignPreviewToken, verifyCampaignPreviewToken } from "./preview-token";
+import {
+  createCampaignSnapshot,
+  findCampaignSnapshot,
+  campaignSnapshotDigest,
+  acceptCampaignSnapshot,
+} from "./snapshots";
+import { verifyCampaignPreviewToken } from "./preview-token";
 import { buildPersonalCampaignTemplateData } from "./template-data";
-
-const PREVIEW_TTL_SECONDS = 10 * 60;
 
 export interface EventEmailCampaignOperationOptions {
   actorId: string;
   appBaseUrl: string;
   signingSecret: string;
-  maxRecipients: number;
 }
 
 export async function previewEventEmailCampaign(
@@ -38,17 +38,10 @@ export async function previewEventEmailCampaign(
   input: EventEmailCampaignPreviewInput,
   options: EventEmailCampaignOperationOptions,
 ): Promise<EventEmailCampaignPreviewResponse> {
-  const campaign = await prepareEventEmailCampaign(db, event, options.appBaseUrl, input, options.maxRecipients);
-  const { template, recipients, digest } = campaign;
-  const token = await signCampaignPreviewToken({
-    secret: options.signingSecret,
-    eventId: event.id,
-    actorId: options.actorId,
-    digest,
-    ttlSeconds: PREVIEW_TTL_SECONDS,
-  });
+  const campaign = await createCampaignSnapshot(db, event, input, options);
+  const { template, recipients, token, recipient_count: recipientCount } = campaign;
 
-  if (recipients.length === 0) {
+  if (recipientCount === 0) {
     return eventEmailCampaignPreviewResponseSchema.parse({
       success: true,
       recipientCount: 0,
@@ -75,7 +68,7 @@ export async function previewEventEmailCampaign(
       : { proposalUrl: proposalPageUrl(options.appBaseUrl, event, { source: "event_email" }) };
   const sampleData = buildPersonalCampaignTemplateData(sample, {
     ...buildEventEmailVariables(event, options.appBaseUrl),
-    recipientCount: recipients.length,
+    recipientCount,
     audience: input.filter.audience,
     ...routeVariables,
   });
@@ -102,9 +95,8 @@ export async function previewEventEmailCampaign(
 
   return eventEmailCampaignPreviewResponseSchema.parse({
     success: true,
-    recipientCount: recipients.length,
-    batchCount:
-      input.sendMode === "bcc_batch" ? chunkRecipients(recipients, input.batchSize).length : recipients.length,
+    recipientCount,
+    batchCount: input.sendMode === "bcc_batch" ? Math.ceil(recipientCount / input.batchSize) : recipientCount,
     previewToken: token.token,
     previewExpiresAt: token.expiresAt,
     sampleRecipients: recipients.slice(0, 10).map((recipient) => recipient.email),
@@ -123,8 +115,8 @@ export async function createEventEmailCampaign(
   if (!input.bodyContent && !input.templateKey) {
     throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before sending.");
   }
-  const campaign = await prepareEventEmailCampaign(db, event, options.appBaseUrl, input, options.maxRecipients);
-  const { template, recipients, digest } = campaign;
+  const snapshot = await findCampaignSnapshot(db, event.id, options.actorId, input.previewToken);
+  const digest = await campaignSnapshotDigest(input, snapshot.id);
   const validation = await verifyCampaignPreviewToken({
     secret: options.signingSecret,
     token: input.previewToken,
@@ -141,15 +133,15 @@ export async function createEventEmailCampaign(
     }
     throw new AppError(400, "CAMPAIGN_PREVIEW_INVALID", "Invalid campaign preview token.");
   }
-  if (recipients.length === 0) {
+  if (snapshot.recipient_count === 0) {
     throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "No recipients matched the selected filters.");
   }
-  assertCampaignBroadcastSafety(input, recipients, template);
-  const queued = await queueEventEmailCampaign(db, event, options.appBaseUrl, input, campaign);
+  await acceptCampaignSnapshot(db, event, input, snapshot);
   return eventEmailCampaignResponseSchema.parse({
     success: true,
-    queuedRecipients: queued.queuedRecipients,
-    queuedBatches: queued.queuedBatches,
+    queuedRecipients: snapshot.recipient_count,
+    queuedBatches:
+      input.sendMode === "bcc_batch" ? Math.ceil(snapshot.recipient_count / input.batchSize) : snapshot.recipient_count,
     mode: input.sendMode,
   });
 }

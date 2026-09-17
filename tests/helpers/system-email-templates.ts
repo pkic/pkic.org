@@ -26,7 +26,7 @@ export async function callWithToken(token: string, path: string, init: RequestIn
 }
 
 export async function createStaffSession(
-  permission: "email-templates:read" | "email-templates:write",
+  permission: "email-templates:read" | "email-templates:write" | "email-templates:manage",
 ): Promise<string> {
   const staffId = await insertUser(
     env.DB,

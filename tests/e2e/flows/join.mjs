@@ -50,7 +50,7 @@ export const JOIN_FLOW = {
     },
     {
       id: "1.2",
-      title: "Staff review: move the application through its stages, approve or decline",
+      title: "Staff review: complete requirements, hold, resume, or decline an application",
       status: "covered",
       note: "Declined is terminal and never reaches onboarding.",
     },
@@ -62,27 +62,27 @@ export const JOIN_FLOW = {
     },
     {
       id: "1.3",
-      title: "Staff open a member consultation on the application",
-      status: "covered",
-      note: "The stage walk visits in_consultation and back out of it.",
+      title: "A published workflow opens the configured member consultation",
+      status: "unit",
+      note: "The workflow evaluator opens the configured consensus step only after earlier requirements complete.",
     },
     {
       id: "1.3.a",
-      title: "The membership is notified of applications in consultation, in one batch",
+      title: "Each consultation sends its configured review notice",
       status: "unit",
-      note: "membership-scheduled-jobs covers the batch thoroughly: queued at most once, bounded so no application starves, safe under concurrent runners, and never sending details an admin edit has since changed. It is cron-driven rather than something a person does in a browser, so a spec would be walking a scheduled job through the UI it does not have.",
+      note: "Workflow execution tests verify durable notices and that only successful delivery starts the full review window. Application corrections require restarting previously dispatched review evidence.",
     },
     {
       id: "1.4",
       title: "Executive council review: silence approves once the window closes",
       status: "unit",
-      note: "runEcWindowAutoApprove approves an overdue application and logs auto_approved_no_ec_objection. Bounded by a LIMIT rather than scanning every overdue application. Cron-driven, as above.",
+      note: "The common workflow evaluator requires every configured step, the full delivered-notice window, and no unresolved objection before atomic provisioning. Scheduled discovery is bounded.",
     },
     {
       id: "1.4.a",
       title: "An executive council objection stops the automatic approval",
       status: "unit",
-      note: "An overdue application carrying an EC decline is held for staff resolution instead of auto-approving. This is the half worth guarding: silence approving is the default path, and an objection being ignored would approve a member the council refused.",
+      note: "Execution and concurrency tests verify unresolved and upheld objections block approval, including objections recorded during a concurrent approval attempt.",
     },
     {
       id: "1.5",

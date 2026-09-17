@@ -11,7 +11,7 @@ export const GROUP_CONTEXT_VIEWS = [
   { key: "forms", label: "Forms", capabilities: ["participate", "manage"] },
   { key: "mailing-lists", label: "Mailing lists", capabilities: ["participate", "manage"] },
   { key: "leadership", label: "Leadership", capabilities: ["manage"] },
-  { key: "stats", label: "Statistics", capabilities: ["manage"] },
+  { key: "stats", label: "Analytics", capabilities: ["manage"] },
   { key: "audit", label: "Audit log", capabilities: ["manage"] },
   { key: "settings", label: "Settings", capabilities: ["manage"] },
 ] as const satisfies ReadonlyArray<{

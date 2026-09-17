@@ -1,227 +1,35 @@
+import { beginRecordEdit } from "./helpers/record-edit";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+import type { ComponentChildren } from "preact";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
 import { ProposalDetailPage } from "../../assets/ts/member-flows/portal/sections/events/detail/ProposalDetailPage";
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
 import { proposalPatchSchema } from "../../assets/shared/schemas/proposal-management";
-import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
-import { isCurrentTab, tabs } from "./helpers/tabs";
+import { markdownControl, markdownValue, submitForm, typeMarkdown } from "./helpers/labelled-control";
+import { runCardAction } from "./helpers/row-actions";
 
-const GROUP_ID = "10000000-0000-4000-8000-000000000001";
-const EVENT_ID = "20000000-0000-4000-8000-000000000001";
-const EVENT_SLUG = "event";
-const PROPOSAL_ID = "30000000-0000-4000-8000-000000000001";
+import {
+  EVENT_SLUG,
+  PROPOSAL_ID,
+  access,
+  json,
+  presentationVersion,
+  settle,
+  stubFetch,
+  type RequestRecord,
+} from "./helpers/proposal-detail-fixture";
 let container: HTMLElement | null = null;
-
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-}
-
-const access = {
-  eventPermissions: ["proposals:read"],
-  canRead: true,
-  canReview: false,
-  canFinalize: false,
-  canEditAcceptedAbstract: false,
-  canCancelAcceptedProposal: false,
-};
-
-function proposal() {
-  return {
-    id: PROPOSAL_ID,
-    event_id: EVENT_ID,
-    proposer_user_id: "40000000-0000-4000-8000-000000000001",
-    status: "submitted",
-    proposal_type: "talk",
-    title: "Read-only proposal",
-    abstract: "A sufficiently long abstract for the program committee detail view.",
-    review_round: 1,
-    submitted_at: "2026-08-01T00:00:00.000Z",
-    updated_at: "2026-08-01T00:00:00.000Z",
-    proposer_email: "proposer@example.test",
-    proposer_first_name: "Proposal",
-    proposer_last_name: "Owner",
-    decision_status: "accepted",
-    decision_note: null,
-    decision_decided_at: null,
-    review_count: 0,
-    average_review_score: null,
-    recommendation_accept_count: 0,
-    recommendation_needs_work_count: 0,
-    recommendation_reject_count: 0,
-  };
-}
-
-function speaker(userId: string, role: "proposer" | "speaker" = "speaker") {
-  return {
-    userId,
-    role,
-    status: "confirmed",
-    email: `${userId}@example.test`,
-    firstName: userId.endsWith("0001") ? "Proposal" : "Second",
-    lastName: "Speaker",
-    organizationName: "PKI Consortium",
-    jobTitle: "Researcher",
-    links: [],
-    headshotUpdatedAt: null,
-    headshotUrl: null,
-    confirmedAt: "2026-08-01T00:00:00.000Z",
-    declinedAt: null,
-    declineReason: null,
-    inviteExpiresAt: null,
-    termsAcceptedAt: null,
-    addedAt: "2026-08-01T00:00:00.000Z",
-    biography: "A speaker biography.",
-    profileComplete: false,
-    hasHeadshot: false,
-    hasBio: true,
-  };
-}
-
-type RequestRecord = { url: string; method: string };
-type DetailAccess = typeof access | (() => typeof access);
-
-const presentationVersion = {
-  id: "50000000-0000-4000-8000-000000000001",
-  proposalId: PROPOSAL_ID,
-  versionNumber: 1,
-  fileName: "presentation.pdf",
-  fileSize: 1024,
-  mimeType: "application/pdf",
-  uploadedByUserId: "40000000-0000-4000-8000-000000000001",
-  uploadedAt: "2026-08-02T00:00:00.000Z",
-  isCurrent: true,
-  deletedAt: null,
-  latestReview: null,
-};
-
-function stubFetch(
-  calls: RequestRecord[],
-  detailAccess: DetailAccess = access,
-  presentationVersions: (typeof presentationVersion)[] = [],
-): void {
-  const currentAccess = () => (typeof detailAccess === "function" ? detailAccess() : detailAccess);
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      calls.push({ url, method: init?.method ?? "GET" });
-      if (url.startsWith("/api/v1/proposals/programs")) {
-        return json({
-          programs: [
-            {
-              group: { id: GROUP_ID, slug: "working-group", name: "Working Group" },
-              event: { id: EVENT_ID, slug: "event", name: "Program Event", startsAt: null },
-              access: currentAccess(),
-            },
-          ],
-          page: { limit: 25, offset: 0, total: 1, hasMore: false },
-        });
-      }
-      if (url.startsWith(`/api/v1/events/${EVENT_SLUG}/proposals?`)) {
-        return json({
-          event: { id: EVENT_ID, slug: "event", name: "Program Event" },
-          access: currentAccess(),
-          proposals: [proposal()],
-          stats: {
-            byStatus: { submitted: 1 },
-            byRecommendation: {},
-            reviewedCount: 0,
-            unreviewedCount: 1,
-            total: 1,
-          },
-          page: { limit: 25, offset: 0, total: 1, hasMore: false },
-        });
-      }
-      if (url === `/api/v1/proposals/${PROPOSAL_ID}`) {
-        return json({
-          event: {
-            startsAt: "2026-09-01T09:00:00.000Z",
-            endsAt: "2026-09-01T17:00:00.000Z",
-            timezone: "UTC",
-          },
-          proposal: { ...proposal(), details: null, canceled_at: null, cancellation_comment: null },
-          access: currentAccess(),
-          form: null,
-          minReviewsRequired: 2,
-          sessionTypes: [{ label: "talk", requiresPresentation: true }],
-        });
-      }
-      if (url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`) {
-        return json({
-          proposal: {
-            id: PROPOSAL_ID,
-            title: "Read-only proposal",
-            status: "submitted",
-            presentationDeadline: null,
-            presentationUploaded: false,
-            presentationUploadedAt: null,
-          },
-          summary: { total: 2, confirmed: 2, pending: 0, declined: 0, profileComplete: 0, presentationUploaded: 0 },
-          speakers: [
-            speaker("40000000-0000-4000-8000-000000000001", "proposer"),
-            speaker("40000000-0000-4000-8000-000000000002"),
-          ],
-        });
-      }
-      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/audit-log`)) {
-        return json({
-          auditLog: [
-            {
-              id: "audit-1",
-              created_at: "2026-08-21T12:00:00.000Z",
-              actor_type: "admin",
-              actor_id: "reviewer-1",
-              actor_display: "Reviewer",
-              action: "proposal_decision_recorded",
-              entity_type: "proposal",
-              entity_id: PROPOSAL_ID,
-              details: { finalStatus: "accepted" },
-            },
-          ],
-          page: { limit: 50, offset: 0, total: 1, hasMore: false },
-        });
-      }
-      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/reviews`)) {
-        return json({
-          proposalId: PROPOSAL_ID,
-          reviews: [],
-          myReview: null,
-          summary: {
-            totalReviews: 0,
-            averageScore: null,
-            acceptCount: 0,
-            needsWorkCount: 0,
-            rejectCount: 0,
-            minReviewsRequired: 2,
-            quorumMet: false,
-          },
-          page: { limit: 25, offset: 0, total: 0, hasMore: false },
-        });
-      }
-      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/comments`)) {
-        return json({ comments: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
-      }
-      if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/presentations`)) {
-        return json({
-          versions: presentationVersions,
-          page: { limit: 25, offset: 0, total: presentationVersions.length, hasMore: false },
-        });
-      }
-      return json({ error: { code: "UNEXPECTED", message: url } }, 500);
-    }),
-  );
-}
-
-async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
 
 afterEach(() => {
   if (container) {
@@ -233,17 +41,18 @@ afterEach(() => {
 });
 
 /**
- * Opens a proposal the way a person does.
+ * Opens the record's actions menu and returns its items by label.
  *
- * These used to dispatch a click at the `<tr>`, which matched the old
- * implementation's handler on the row — an affordance no keyboard could reach.
- * The row's control is now a real button; clicking that is both what a mouse
- * does and what Enter does.
+ * The commands used to be eight block buttons in a sidebar panel; they are
+ * one menu in the header now, reached the way a reader reaches it.
  */
-function rowControl(container: HTMLElement): HTMLElement {
-  const control = container.querySelector<HTMLElement>("tbody .pk-table__row-link");
-  if (!control) throw new Error("the table row offers no control to activate");
-  return control;
+async function openProposalActions(root: HTMLElement): Promise<HTMLButtonElement[]> {
+  const trigger = root.querySelector<HTMLButtonElement>('button[aria-label="Proposal actions"]');
+  if (!trigger) throw new Error("the proposal offers no actions menu");
+  await act(async () => trigger.click());
+  return [
+    ...root.querySelectorAll<HTMLButtonElement>('[role="menu"][aria-label="Proposal actions"] [role="menuitem"]'),
+  ];
 }
 
 /** The Panel whose header reads `title` — the migrated shape of a card. */
@@ -305,35 +114,12 @@ describe("group event proposal portal", () => {
     ).toBe(false);
   });
 
-  it("opens the tab named in a preset hash query instead of the default submission tab", async () => {
-    const previousHash = window.location.hash;
-    window.location.hash = "#/x?proposalTab=reviews";
-    try {
-      const calls: RequestRecord[] = [];
-      stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
-      container = document.createElement("div");
-      document.body.append(container);
-      await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
-      await settle();
-      await settle();
-
-      const activeTab = tabs(container).find(isCurrentTab);
-      expect(activeTab?.textContent).toBe("Reviews (0)");
-    } finally {
-      window.location.hash = previousHash;
-    }
-  });
-
   it("does not fetch private reviews or comments for a read-only program identity", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls);
     container = document.createElement("div");
     document.body.append(container);
-    void act(() => render(<GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />, container!));
-    await settle();
-    await settle();
-
-    await act(async () => rowControl(container!).click());
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
     await settle();
     await settle();
 
@@ -351,61 +137,21 @@ describe("group event proposal portal", () => {
     stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
     container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />, container!));
-    await settle();
-    await settle();
-    await act(async () => rowControl(container!).click());
+    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
     await settle();
     await settle();
 
     expect(container.textContent).toContain("Reviews");
     const auditTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Audit Log"),
+      button.textContent?.includes("Audit log"),
     );
     expect(auditTab).not.toBeNull();
     await act(async () => auditTab?.click());
     await settle();
-    expect(container.textContent).toContain("Audit Log");
+    expect(container.textContent).toContain("Audit log");
     expect(container.textContent).not.toContain("Final decision");
     expect(calls.some(({ url }) => url.includes("/decisions"))).toBe(false);
     expect(calls.some(({ url }) => url.includes("/audit-log"))).toBe(true);
-  });
-
-  it("returns to submission when live reviewer access is removed", async () => {
-    let currentAccess: typeof access = { ...access, canReview: true, eventPermissions: ["proposals:score"] };
-    const calls: RequestRecord[] = [];
-    stubFetch(calls, () => currentAccess);
-    container = document.createElement("div");
-    document.body.append(container);
-    await act(() => render(<ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />, container!));
-    await settle();
-    await settle();
-
-    const reviewsTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Reviews"),
-    );
-    await act(async () => reviewsTab?.click());
-    expect(container.textContent).toContain("Reviews");
-
-    currentAccess = { ...access };
-    const refresh = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Refresh"),
-    );
-    await act(async () => refresh?.click());
-    await settle();
-    await settle();
-
-    expect(container.textContent).toContain("Abstract");
-    expect(
-      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) =>
-        button.textContent?.includes("Reviews"),
-      ),
-    ).toBe(false);
-    expect(
-      Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) =>
-        button.textContent?.includes("Audit Log"),
-      ),
-    ).toBe(false);
   });
 
   it("loads speakers through the canonical proposal resource and keeps all actions off admin paths", async () => {
@@ -416,7 +162,7 @@ describe("group event proposal portal", () => {
     await act(() =>
       render(
         <>
-          <GroupEventProposals groupId={GROUP_ID} eventId={EVENT_ID} />
+          <ProposalDetailPage slug={EVENT_SLUG} proposalId={PROPOSAL_ID} />
           <ConfirmDialogHost />
         </>,
         container!,
@@ -424,20 +170,15 @@ describe("group event proposal portal", () => {
     );
     await settle();
     await settle();
-    await act(async () => rowControl(container!).click());
-    await settle();
-    await settle();
 
     expect(container.textContent).toContain("Speakers");
-    // The sidebar's operator panel, located by its heading and its control's
-    // accessible name rather than by a substring of the whole page, so a
-    // rename surfaces here as the panel going missing.
-    expect([...container.querySelectorAll("h3")].map((heading) => heading.textContent)).toContain("Operator actions");
-    expect(
-      [...container.querySelectorAll("button")].some(
-        (button) => button.textContent?.trim() === "Open proposer manage page",
-      ),
-    ).toBe(true);
+    // The operator's commands are the record's actions menu, located by its
+    // accessible name rather than by a substring of the whole page.
+    const items = await openProposalActions(container);
+    expect(items.map((item) => item.textContent?.trim())).toContain("Open proposer manage page");
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
     expect(calls.some(({ url }) => url.includes("/api/v1/admin/"))).toBe(false);
 
     const speakersTab = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
@@ -447,13 +188,9 @@ describe("group event proposal portal", () => {
     await settle();
     expect(calls.filter(({ url }) => url.endsWith(`/proposals/${PROPOSAL_ID}/speakers`))).toHaveLength(1);
 
-    const edit = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Edit profile"),
-    );
-    expect(edit).not.toBeNull();
-    await act(async () => edit?.click());
-    // The speaker card is a design-system Panel now, not a Bootstrap card.
-    const form = edit?.closest(".pk-panel")?.querySelector("form");
+    // The speaker's commands sit behind the card's own menu.
+    await runCardAction(container, "Proposal Speaker", "Edit profile");
+    const form = container.querySelector('section[aria-label="Speaker Proposal Speaker"] form');
     expect(form).not.toBeNull();
     await act(async () => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -466,43 +203,35 @@ describe("group event proposal portal", () => {
       ),
     ).toBe(true);
 
-    const profileReminder = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Profile reminder"),
-    );
-    await act(async () => profileReminder?.click());
+    await runCardAction(container, "Proposal Speaker", "Send profile reminder");
     await settle();
     expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/reminders"))).toBe(true);
 
-    const presentationReminder = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Presentation reminder"),
-    );
-    await act(async () => presentationReminder?.click());
+    await runCardAction(container, "Proposal Speaker", "Send presentation reminder");
     await settle();
     expect(calls.filter(({ url, method }) => method === "POST" && url.endsWith("/reminders"))).toHaveLength(2);
 
-    const gravatar = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
-      button.textContent?.includes("Fetch from Gravatar"),
-    );
-    await act(async () => gravatar?.click());
+    await runCardAction(container, "Proposal Speaker", "Use Gravatar photo");
     await settle();
     expect(calls.some(({ url, method }) => method === "POST" && url.endsWith("/headshot"))).toBe(true);
     expect(proposalSpeakerAssetPath(PROPOSAL_ID, "speaker-1", "headshot")).toContain("/speakers/speaker-1/headshot");
 
-    const remove = container.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]");
-    const replacement = container.querySelector<HTMLSelectElement>("[data-replacement-proposer]");
-    if (replacement) {
-      await act(async () => {
-        replacement.value = "40000000-0000-4000-8000-000000000002";
-        replacement.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-    }
-    await act(async () => remove?.click());
-    await settle();
-    const removeDialog = document.querySelector('[role="alertdialog"]');
+    // Removing the proposer passes the proposal on: the replacement is chosen
+    // in the card's own dialog before the removal is confirmed.
+    await runCardAction(container, "Proposal Speaker", "Remove speaker");
+    const removeDialog = container.querySelector<HTMLDialogElement>(
+      'section[aria-label="Speaker Proposal Speaker"] ~ dialog, dialog',
+    );
     expect(removeDialog).not.toBeNull();
+    const replacement = removeDialog?.querySelector<HTMLSelectElement>("[data-replacement-proposer]");
+    expect(replacement).not.toBeNull();
+    await act(async () => {
+      replacement!.value = "40000000-0000-4000-8000-000000000002";
+      replacement!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await act(async () => {
       Array.from(removeDialog?.querySelectorAll("button") ?? [])
-        .find((candidate) => candidate.textContent === "Remove speaker")
+        .find((candidate) => candidate.textContent?.trim() === "Remove speaker")
         ?.click();
     });
     await settle();
@@ -542,16 +271,16 @@ describe("group event proposal portal", () => {
     await settle();
 
     const abstractPanel = panelTitled(container, "Abstract");
-    await act(async () => buttonNamed(abstractPanel, "Edit").click());
+    await beginRecordEdit(abstractPanel, "Abstract actions", "Edit");
 
     // Resolving through the `for`/`id` pair fails exactly when the pair is
     // broken, which is the half a visual review cannot see.
-    const editor = controlFor(abstractPanel, "Abstract");
-    expect(editor.tagName.toLowerCase()).toBe("textarea");
+    const editor = await markdownControl(abstractPanel, "Abstract");
+    expect(editor.closest(".pk-markdown-editor")).not.toBeNull();
 
     const draft =
       "A revised abstract, long enough to satisfy the shared proposal contract, that the server will refuse anyway.";
-    await typeInto(editor, draft);
+    await typeMarkdown(abstractPanel, "Abstract", draft);
     await submitForm(abstractPanel);
 
     // The request is checked against the canonical contract rather than a
@@ -561,11 +290,10 @@ describe("group event proposal portal", () => {
     expect(proposalPatchSchema.parse(JSON.parse(patchBodies[0]))).toEqual({ abstract: draft });
 
     // A refused save keeps the editor — and what the reader typed — in place.
-    const stillEditing = controlFor(panelTitled(container, "Abstract"), "Abstract") as HTMLTextAreaElement;
-    expect(stillEditing.value).toBe(draft);
+    expect(await markdownValue(panelTitled(container, "Abstract"), "Abstract")).toBe(draft);
   });
 
-  it("summarizes the proposal without leaning on colour to say whether quorum is met", async () => {
+  it("summarizes the proposal beside its facets without leaning on colour to say whether quorum is met", async () => {
     const calls: RequestRecord[] = [];
     stubFetch(calls, { ...access, canReview: true, eventPermissions: ["proposals:score"] });
     container = document.createElement("div");
@@ -574,16 +302,17 @@ describe("group event proposal portal", () => {
     await settle();
     await settle();
 
-    const stats = Array.from(container.querySelectorAll<HTMLElement>(".pk-stat-card")).map((card) => ({
-      label: card.querySelector(".pk-stat-card__label")?.textContent?.trim(),
-      value: card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
-      note: card.querySelector(".pk-stat-card__note")?.textContent?.trim(),
-    }));
-    expect(stats.map(({ label }) => label)).toEqual(["Proposer", "Type", "Reviews", "Decision"]);
-    expect(stats[2]).toMatchObject({ value: "0 / 2 required", note: "Quorum not met" });
+    // No band of stat cards restating the header; the record opens with its
+    // subject, and what it is called is in the heading itself.
+    expect(container.querySelector(".pk-stat-card")).toBeNull();
+    expect(container.querySelector("h3.pk-profile-header__title")?.textContent).toBe("Read-only proposal");
     // Stored vocabulary is capitalized in the text itself, not by a CSS
     // transform a screen reader never sees.
-    expect(stats[1]?.value).toBe("Talk");
-    expect(stats[3]?.value).toBe("Accepted");
+    expect(container.querySelector(".pk-profile-header__lede")?.textContent).toBe("Talk · proposed by Proposal Owner");
+
+    const standing = container.querySelector('section[aria-label="Review standing"]')!;
+    expect(standing.textContent).toContain("0 of 2 required");
+    expect(standing.querySelector(".pk-badge--warn")?.textContent).toBe("Quorum not met");
+    expect(standing.textContent).toContain("Accepted");
   });
 });

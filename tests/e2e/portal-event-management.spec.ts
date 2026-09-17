@@ -72,10 +72,13 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.screenshot({ path: test.info().outputPath("event-attached-surface.png"), fullPage: true });
 
   await tab(detail, "Communications").click();
-  const communications = detail.locator("details").filter({ has: page.getByText("Email campaigns", { exact: true }) });
-  await communications.getByText("Email campaigns", { exact: true }).click();
+  // Composing a campaign is a page of its own under the tab, with its own
+  // address, rather than a form standing open on arrival.
+  await detail.getByRole("link", { name: "New campaign" }).click();
+  await expect(page).toHaveURL(/\/communications\/new$/);
+  const communications = detail.getByRole("region", { name: "New attendees campaign" });
   await communications.getByPlaceholder("Email subject").fill("Workshop planning update");
-  await communications.getByPlaceholder("Write your message here, or load a template above.").fill("Hello members");
+  await communications.getByRole("textbox", { name: "Message Markdown source" }).fill("Hello members");
   const campaignPreview = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&
@@ -104,7 +107,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await registrationSetup.getByRole("button", { name: "Save terms" }).click();
   expect((await termsSaved).status()).toBe(200);
 
-  const policySection = registrationSetup.locator("details").filter({ hasText: "Policy and registration questions" });
+  const policySection = registrationSetup.getByRole("region", { name: "Registration policy and questions" });
   await policySection.getByRole("button", { name: "Registration policy actions" }).click();
   await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
   await policySection.getByLabel("Registration policy").selectOption("optional");
@@ -189,7 +192,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await submissionWindow.getByRole("button", { name: "Cancel", exact: true }).click();
 
   registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });
-  await registrationSetup.getByText("Attendance days", { exact: true }).click();
+  // Every setting is a panel open on arrival; nothing has to be unfolded.
   await registrationSetup.getByRole("button", { name: "Attendance days actions" }).click();
   await page.getByRole("menuitem", { name: "Edit attendance days", exact: true }).click();
   await registrationSetup.getByRole("button", { name: "Add day" }).click();
@@ -209,8 +212,11 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await registrationSetup.getByRole("button", { name: "Save days" }).click();
   expect((await daysSaved).status()).toBe(200);
 
-  await page.getByRole("button", { name: "Edit event" }).click();
-  const editor = page.getByRole("heading", { name: "Edit event" }).locator("..");
+  // The event's facts are edited where they are read: Edit is the details
+  // panel's own command, and the panel becomes the form.
+  await page.getByRole("button", { name: "Event actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit event", exact: true }).click();
+  const editor = page.getByRole("region", { name: "Edit event" });
   await expect(editor.getByLabel("Peer invitation limit")).toHaveValue("7");
   await editor.getByLabel("Peer invitation limit").fill("9");
   await editor.getByLabel("Location").fill("Rotterdam and online");

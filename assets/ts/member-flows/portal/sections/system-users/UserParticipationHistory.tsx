@@ -119,21 +119,22 @@ function EventsTab({ userId, canRead }: { userId: string; canRead: boolean }) {
     canRead,
   );
   const columns: DataTableColumn<NonNullable<typeof data>["events"][number]>[] = [
-    { id: "name", header: "Event", width: "primary", cell: (row) => <span class="pk-strong">{row.eventName}</span> },
+    { id: "name", header: "Event", cell: (row) => <span class="pk-strong">{row.eventName}</span> },
     {
       id: "roles",
-      header: "Role",
+      header: "Roles",
       width: "fit",
       // One row per event carrying every role held there, so somebody who
       // spoke and organized reads as one line with two badges.
       cell: (row) => (
-        <span class="pk-cluster">
+        <span class="pk-cluster pk-cluster--nowrap">
           {row.roles.map((role) => (
             <Badge key={role} status={role} />
           ))}
         </span>
       ),
     },
+    { id: "location", header: "Location", cell: (row) => row.location ?? "—" },
     { id: "date", header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
   ];
   return (

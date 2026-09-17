@@ -12,6 +12,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupEventProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupEventProposals";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
@@ -117,52 +118,63 @@ afterEach(() => {
 });
 
 describe("the shared proposal catalog", () => {
-  it("states the proposal statistics in words and names the group they form", async () => {
+  it("states the proposal statistics in words and draws the list as one named panel", async () => {
     stubCatalog();
 
     const page = await mountCatalog(EVENT_SLUG);
 
-    // The counts were tinted green and amber, which was the only thing saying
+    // The counts used to be tinted green and amber, which was the only thing saying
     // which of them mattered. The label beside each number says it instead.
     const summary = page.querySelector('[role="group"][aria-label="Proposal statistics"]')!;
     expect(summary).not.toBeNull();
-    expect(summary.textContent).toContain("1 submitted");
-    expect(summary.textContent).toContain("1 no reviews");
+    const figures = Object.fromEntries(
+      [...summary.querySelectorAll(".pk-stat-card")].map((card) => [
+        card.querySelector(".pk-stat-card__label")?.textContent?.trim(),
+        card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
+      ]),
+    );
+    expect(figures).toMatchObject({ submitted: "1", "no reviews": "1" });
     expect(summary.querySelector(".text-success, .text-warning")).toBeNull();
 
-    // The section is a named panel, and the table inside it names itself.
-    expect(page.querySelector('[aria-label="Proposal program"]')).not.toBeNull();
-    expect(page.querySelector("h4")?.textContent).toBe("Proposal program");
+    // No titled panel restating what the breadcrumb, header and tab already
+    // say: the list panel names itself, and that is the region.
+    expect(page.querySelector('[aria-label="Proposal program"]')).toBeNull();
     expect(page.querySelector("caption")?.textContent).toBe("Event proposals");
-    // Every proposal filter carries a name, even without room for a visible one.
-    const filterNames = Array.from(page.querySelectorAll("select")).map((select) => select.getAttribute("aria-label"));
-    expect(filterNames).toEqual(
-      expect.arrayContaining(["Proposal status", "Review recommendation", "Proposal archive"]),
+    // The filters live in the columns they narrow; nothing sits above the
+    // table but search and refresh.
+    expect(page.querySelectorAll("select")).toHaveLength(0);
+    expect(columnFilterOptions(page, "Status")).toEqual(
+      expect.arrayContaining(["All statuses", "Active", "Submitted", "Under review", "Accepted", "Archived (deleted)"]),
     );
+    expect(columnFilterOptions(page, "Recommendations")).toEqual([
+      "All recommendations",
+      "Accept",
+      "Reject",
+      "Needs work",
+    ]);
+    // A row is a link to the proposal's own page.
+    const row = page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
+    expect(row?.textContent).toBe("Open Read-only proposal");
+    expect(row?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`);
   });
 
-  it("sends the archive choice to the proposals query rather than filtering rows in the browser", async () => {
+  it("sends the archive choice to the proposals query as a status rather than filtering rows in the browser", async () => {
     stubCatalog();
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
 
     const page = await mountCatalog(EVENT_SLUG);
 
-    const archive = page.querySelector<HTMLSelectElement>('select[aria-label="Proposal archive"]')!;
-    expect(archive).not.toBeNull();
-    // The default view is the server default: no `archived` parameter at all.
-    const before = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(before.some((url) => url.includes("archived="))).toBe(false);
+    // The list opens on what is in play, and says so under the column.
+    const before = fetchMock.mock.calls.map((call) => new URL(String(call[0]), location.origin));
+    expect(before.at(-1)?.searchParams.get("status")).toBe("active");
+    expect(columnFilterSummary(page, "Status")).toBe("Active");
 
-    archive.value = "true";
-    await act(async () => {
-      archive.dispatchEvent(new Event("change", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await chooseColumnFilter(page, "Status", "Archived (deleted)");
     await settle();
 
     const requested = fetchMock.mock.calls.map((call) => new URL(String(call[0]), location.origin));
-    expect(requested.some((url) => url.searchParams.get("archived") === "true")).toBe(true);
-    sessionStorage.clear();
+    expect(requested.at(-1)?.searchParams.get("status")).toBe("archived");
+    expect(requested.some((url) => url.searchParams.has("archived"))).toBe(false);
   });
 
   it("states an unavailable proposal program as a status region rather than a bare line", async () => {

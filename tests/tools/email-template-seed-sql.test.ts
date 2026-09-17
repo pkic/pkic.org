@@ -40,11 +40,49 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "rsvp_downgraded",
   "rsvp_warning",
   "speaker_invite",
+  "speaker_profile_reminder",
   "speaker_profile_request",
   "user_magic_link",
 ] as const;
 
 describe("buildTemplateSqlStatements", () => {
+  it.each([true, false])(
+    "keeps profile reminders independent of decisions (invited: %s)",
+    async (requiresConfirmation) => {
+      const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
+      const rendered = await renderEmail(
+        reminder.content,
+        {
+          firstName: "Alex",
+          proposalTitle: "Accessible forms for organizations",
+          eventName: "Example user conference",
+          profileUrl: "https://example.test/speaker",
+          requiresConfirmation,
+        },
+        DEFAULT_LAYOUT_HTML,
+        "markdown",
+        "https://example.test",
+      );
+      expect(rendered.text).toContain("awaiting a decision");
+      expect(rendered.text).not.toContain("has been accepted");
+      expect(rendered.text.includes("confirm or decline")).toBe(requiresConfirmation);
+    },
+  );
+  it.each([
+    ["accepted", "has been accepted"],
+    ["waitlisted", "on the waitlist"],
+    ["needs-work", "Updates are requested"],
+    ["submitted", "awaiting a decision"],
+  ])("explains the actual proposal status: %s", async (proposalDecisionStatus, expected) => {
+    const reminder = DEFAULT_TEMPLATES.find((item) => item.key === "speaker_profile_reminder")!;
+    const rendered = await renderEmail(
+      reminder.content,
+      { proposalDecisionStatus, proposalTitle: "Forms for organizations", eventName: "User conference" },
+      DEFAULT_LAYOUT_HTML,
+    );
+    expect(rendered.text).toContain(expected);
+    expect(rendered.text.includes("has been accepted")).toBe(proposalDecisionStatus === "accepted");
+  });
   it("keeps the baseline layout light and separates public branding from action links", () => {
     expect(DEFAULT_LAYOUT_HTML).toContain('content="light only"');
     expect(DEFAULT_LAYOUT_HTML).toContain("{{brandBaseUrl}}/img/logo-white.png");

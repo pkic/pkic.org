@@ -28,7 +28,7 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     organizationName: "Example Organization",
     membershipCategory: "F",
     membershipCategoryLabel: "General Member",
-    stage: "in_review",
+    stage: "processing",
     onHoldSubtype: null,
     assignedToUserId: null,
     createdAt: NOW,
@@ -38,8 +38,6 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     requestedWorkingGroups: [],
     events: [],
     communications: [],
-    concerns: [],
-    ecDecisions: [],
     ...overrides,
   } as MembershipApplicationDetail;
 }
@@ -69,14 +67,7 @@ afterEach(() => {
 
 function mountCard(props: Partial<Parameters<typeof ApplicationTransitionCard>[0]> = {}): HTMLElement {
   return mount(
-    <ApplicationTransitionCard
-      detail={detail()}
-      canWrite
-      canApprove={false}
-      onApprove={vi.fn(async () => undefined)}
-      onTransition={vi.fn(async () => undefined)}
-      {...props}
-    />,
+    <ApplicationTransitionCard detail={detail()} canWrite onTransition={vi.fn(async () => undefined)} {...props} />,
   );
 }
 
@@ -119,13 +110,7 @@ describe("membership application transition card", () => {
     const page = mountCard();
     const moveTo = controlFor<HTMLSelectElement>(page, "Move to");
 
-    expect([...moveTo.options].map((option) => option.value)).toEqual([
-      "",
-      "on_hold",
-      "in_consultation",
-      "declined",
-      "withdrawn",
-    ]);
+    expect([...moveTo.options].map((option) => option.value)).toEqual(["", "on_hold", "declined", "withdrawn"]);
   });
 
   it("asks for an on-hold reason only when the chosen stage is on hold", async () => {
@@ -189,11 +174,12 @@ describe("membership application transition card", () => {
     const onTransition = vi.fn(async () => undefined);
     const page = mountCard({ onTransition });
 
-    expect(buttonNamed(page, "Transition").disabled).toBe(true);
+    expect(buttonNamed(page, "Transition").disabled).toBe(false);
     await submit(page);
     await settle();
 
     expect(onTransition).not.toHaveBeenCalled();
+    expect(controlFor(page, "Move to").getAttribute("aria-invalid")).toBe("true");
   });
 
   it("says so in a sentence when the stage is terminal, rather than offering an empty form", () => {
@@ -204,34 +190,9 @@ describe("membership application transition card", () => {
     expect(labelNames(page)).toEqual([]);
   });
 
-  it("gates the transition form and the approval on their own permissions", async () => {
-    const onApprove = vi.fn(async () => undefined);
-
-    // Approve alone: the button, and no form at all.
-    const approver = mountCard({
-      detail: detail({ stage: "ec_review" }),
-      canWrite: false,
-      canApprove: true,
-      onApprove,
-    });
-    expect(approver.querySelector("form")).toBeNull();
-    expect(approver.querySelector("select")).toBeNull();
-    await act(() => buttonNamed(approver, "Approve & run onboarding").click());
-    expect(onApprove).toHaveBeenCalledOnce();
-
-    void act(() => render(null, container!));
-    container!.remove();
-    container = null;
-
-    // Write alone at the same stage: the form, and no approval.
-    const writer = mountCard({ detail: detail({ stage: "ec_review" }), canWrite: true, canApprove: false });
-    expect(buttonNames(writer)).not.toContain("Approve & run onboarding");
-    expect(buttonNames(writer)).toContain("Transition");
-  });
-
-  it("offers no approval before the application reaches EC review", () => {
-    const page = mountCard({ canApprove: true });
-
+  it("requires write permission for lifecycle changes", () => {
+    const page = mountCard({ canWrite: false });
+    expect(page.querySelector("form")).toBeNull();
     expect(buttonNames(page)).not.toContain("Approve & run onboarding");
   });
 });

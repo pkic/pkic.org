@@ -1,7 +1,7 @@
+import { expandStarts } from "./recurrence-expansion";
+import { prepareCalendarRevision } from "./calendar-schedule";
 import type { z } from "zod";
-import ICAL from "ical.js";
 import { eventSeriesMaterializeSchema } from "../../../../assets/shared/schemas/event-series";
-import { zonedDateTimeParts, zonedDateTimeToDate, type ZonedDateTimeParts } from "../../../../assets/shared/timezone";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -11,70 +11,6 @@ import { commitEventResourceManagementBatch } from "./management";
 import { getManagedGroupEventSeries } from "./series";
 
 type MaterializeInput = z.infer<typeof eventSeriesMaterializeSchema>;
-
-/** Converts a floating recurrence value to UTC while preserving local wall-clock time across DST. */
-function localDateTimeToUtc(value: ZonedDateTimeParts, timeZone: string): Date {
-  try {
-    return zonedDateTimeToDate(value, timeZone);
-  } catch {
-    throw new AppError(
-      422,
-      "EVENT_RECURRENCE_LOCAL_TIME_INVALID",
-      "The recurrence contains a local time that does not exist in the configured timezone",
-    );
-  }
-}
-
-function expandStarts(
-  startsAt: string,
-  timeZone: string,
-  recurrenceRule: string,
-  through: string,
-  maximum: number,
-): string[] {
-  const anchor = new Date(startsAt);
-  const horizon = new Date(through);
-  if (horizon <= anchor) {
-    throw new AppError(
-      422,
-      "EVENT_RECURRENCE_HORIZON_INVALID",
-      "The materialization horizon must follow the series start",
-    );
-  }
-  try {
-    const localAnchor = zonedDateTimeParts(anchor, timeZone);
-    const iterator = ICAL.Recur.fromString(recurrenceRule).iterator(
-      ICAL.Time.fromData({ ...localAnchor, isDate: false }),
-    );
-    const starts: string[] = [];
-    for (let next = iterator.next(); next; next = iterator.next()) {
-      const instant = localDateTimeToUtc(
-        {
-          year: next.year,
-          month: next.month,
-          day: next.day,
-          hour: next.hour,
-          minute: next.minute,
-          second: next.second,
-        },
-        timeZone,
-      );
-      if (instant > horizon) break;
-      starts.push(instant.toISOString());
-      if (starts.length > maximum) {
-        throw new AppError(
-          422,
-          "EVENT_RECURRENCE_LIMIT_EXCEEDED",
-          "The requested horizon exceeds the bounded occurrence limit",
-        );
-      }
-    }
-    return starts;
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError(422, "EVENT_RECURRENCE_INVALID", "The recurrence rule could not be expanded");
-  }
-}
 
 export async function materializeSeriesOccurrences(
   db: DatabaseLike,
@@ -102,15 +38,17 @@ export async function materializeSeriesOccurrences(
     db
       .prepare(
         `INSERT OR IGNORE INTO event_occurrences
-           (id, series_id, starts_at, ends_at, status, location_override,
+           (id, series_id, starts_at, recurrence_id, ends_at, status, location_override,
             provider_join_url_ciphertext, created_at, updated_at)
          SELECT json_extract(requested.value, '$.id'), ?,
-                json_extract(requested.value, '$.startsAt'),
+                json_extract(requested.value, '$.startsAt'), json_extract(requested.value, '$.startsAt'),
                 json_extract(requested.value, '$.endsAt'),
                 'scheduled', NULL, NULL, ?, ?
-           FROM json_each(?) requested`,
+           FROM json_each(?) requested
+          WHERE NOT EXISTS (SELECT 1 FROM event_occurrences old
+            WHERE old.series_id = ? AND COALESCE(old.recurrence_id, old.starts_at) = json_extract(requested.value, '$.startsAt'))`,
       )
-      .bind(seriesId, now, now, JSON.stringify(requested)),
+      .bind(seriesId, now, now, JSON.stringify(requested), seriesId),
     db
       .prepare(
         `UPDATE events SET
@@ -119,6 +57,7 @@ export async function materializeSeriesOccurrences(
            updated_at = ? WHERE id = ?`,
       )
       .bind(seriesId, seriesId, now, series.eventId),
+    ...prepareCalendarRevision(db, seriesId),
     prepareScopedAuditLog(
       db,
       { type: "group", id: context.groupId },

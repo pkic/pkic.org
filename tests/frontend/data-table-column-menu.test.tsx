@@ -82,18 +82,12 @@ describe("column menus", () => {
     );
 
     const popup = openMenu(container, "Stage column options");
-    expect(itemLabels(popup)).toEqual([
-      "Sort ascending",
-      "Sort descending",
-      "All stages",
-      "Contacted",
-      "New inquiry",
-      "Hide column",
-    ]);
+    expect(itemLabels(popup)).toEqual(["Sort ascending", "Sort descending", "Filter ›", "Hide column"]);
+    void act(() => popup.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click());
+    expect(itemLabels(popup)).toEqual(["Back", "All stages", "Contacted", "New inquiry"]);
     const checked = [...popup.querySelectorAll('[aria-checked="true"]')].map((item) => item.textContent!.trim());
-    expect(checked).toEqual(["✓Sort ascending", "✓Contacted"]);
-
-    void act(() => popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')[4].click());
+    expect(checked).toEqual(["✓Contacted"]);
+    void act(() => popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')[2].click());
     expect(onFilterChange).toHaveBeenCalledWith("stage", "new_inquiry");
   });
 

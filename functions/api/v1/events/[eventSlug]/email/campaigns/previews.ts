@@ -1,6 +1,6 @@
 import { eventEmailCampaignPreviewRouteSchema } from "../../../../../../../assets/shared/schemas/route-contracts-event-email-campaigns";
 import { guardPermissionDatabase } from "../../../../../../_lib/auth/permissions";
-import { getConfig, resolveAppBaseUrl } from "../../../../../../_lib/config";
+import { resolveAppBaseUrl } from "../../../../../../_lib/config";
 import type { AdminContext } from "../../../../../../_lib/db/context";
 import { AppError } from "../../../../../../_lib/errors";
 import { json } from "../../../../../../_lib/http";
@@ -26,7 +26,6 @@ export const EventEmailCampaignPreviewCreate = openApiRoute(
         actorId: authorization.actor.id,
         appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         signingSecret: requireInternalSecret(c.env),
-        maxRecipients: getConfig(c.env).eventCampaignMaxRecipients,
       }),
     );
   },

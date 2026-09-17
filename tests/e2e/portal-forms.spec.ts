@@ -128,23 +128,29 @@ test("permitted staff filter the forms list by Purpose and Status, and archive/d
   // Purpose column filter: "survey" (what this form is) keeps the row,
   // "feedback" (a different purpose) hides it.
   await page.getByRole("button", { name: "Purpose column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "survey" }).click();
   await expect(formRow).toBeVisible();
   await page.getByRole("button", { name: "Purpose column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "feedback" }).click();
   await expect(formRow).toHaveCount(0);
   await page.getByRole("button", { name: "Purpose column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "All purposes" }).click();
   await expect(formRow).toBeVisible();
 
   // Status column filter: a new form starts "active".
   await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "active", exact: true }).click();
   await expect(formRow).toBeVisible();
   await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "archived" }).click();
   await expect(formRow).toHaveCount(0);
   await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "All statuses" }).click();
   await expect(formRow).toBeVisible();
 

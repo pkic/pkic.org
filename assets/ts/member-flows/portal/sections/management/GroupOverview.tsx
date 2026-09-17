@@ -19,6 +19,7 @@ import "../../../../ui/Content.css";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { formatEventWhen, formatRelativeDays } from "../../../../shared/ui";
+import { Markdown } from "../../../../components/Markdown";
 
 function eventWhen(event: GroupEvent): string {
   const at = event.startsAt ?? event.nextOccurrenceAt;
@@ -124,7 +125,7 @@ export function GroupOverviewView({
       <Panel>
         <PanelHeader title="About this group" />
         <PanelBody class="pk-stack pk-stack--snug">
-          <p>{description || "No group description has been provided."}</p>
+          {description ? <Markdown markdown={description} /> : <p>No group description has been provided.</p>}
           {counts && (
             // The headline counts moved here from the workspace header: they
             // describe the group, so they are overview content rather than

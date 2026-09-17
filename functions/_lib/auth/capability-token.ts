@@ -15,6 +15,7 @@ const SIGNING_DOMAIN = "pkic-public-capability:v1";
 export type EmailAuthCapabilityPurpose = "user_sign_in" | "sponsor_sign_in";
 
 export type CapabilityPurpose =
+  | "application_status"
   | "registration_manage"
   | "registration_confirm"
   | "invite"
@@ -39,6 +40,7 @@ interface ParsedCapabilityToken {
 }
 
 const purposeCodes: Record<CapabilityPurpose, string> = {
+  application_status: "mas",
   registration_manage: "rm",
   registration_confirm: "rc",
   invite: "iv",

@@ -1,3 +1,4 @@
+import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import {
@@ -13,7 +14,6 @@ import { createInvite } from "../functions/_lib/services/invite-creation";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   createGroupEventSeries,
-  createSeriesOccurrence,
   inviteOccurrenceGuest,
   listOccurrenceGuests,
 } from "../functions/_lib/services/event-series";
@@ -48,12 +48,12 @@ async function seedMeetingWindow() {
       guestPolicy: "occurrence_invitation",
     },
     startsAt,
-    recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+    recurrenceRule: "FREQ=WEEKLY;COUNT=1",
     timezone: "UTC",
     durationMinutes: 60,
     providerType: null,
   });
-  const occurrence = await createSeriesOccurrence(
+  const occurrence = await configureMeetingOccurrence(
     env.DB,
     admin,
     GROUP_ID,

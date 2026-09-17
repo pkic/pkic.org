@@ -3,17 +3,18 @@ import type { D1QueryBudget } from "../../db/query-budget";
 import type { Env } from "../../types";
 
 export type ScheduledJobKey =
+  | "membership_workflows"
+  | "membership_fee_checkouts"
   | "member_news_refresh"
   | "due_work"
   | "on_hold_due_work"
-  | "ec_auto_approve"
   | "google_groups_sync"
   | "sponsorship_due_work"
   | "votes_due_work"
   | "retention"
-  | "consultation_batch"
-  | "ec_review_batch"
-  | "working_group_chair_digest";
+  | "working_group_chair_digest"
+  | "meeting_invitations"
+  | "event_email_campaigns";
 
 export interface ScheduledJobRunContext {
   env: Env;

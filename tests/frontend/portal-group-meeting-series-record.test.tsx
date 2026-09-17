@@ -151,7 +151,7 @@ describe("the meeting series record page", () => {
 
     const settingsTab = tabs(container).find((item) => item.textContent === "Series settings");
     expect(isCurrentTab(settingsTab)).toBe(true);
-    expect(container.querySelector('button[aria-label="Meeting series actions"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Meeting actions"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Save series");
   });
 

@@ -277,6 +277,8 @@ async function processOutboxRow(
     let subject: string;
     let contentWithCustom: string;
     let resolvedContentType: EmailContentType;
+    let resolvedFromEmail: string | null = null;
+    let resolvedFromName: string | null = null;
 
     if (bodyOverride) {
       // The row's own subject is the subject: a direct body resolves no
@@ -289,6 +291,8 @@ async function processOutboxRow(
       const template = await resolveTemplateOnce(db, context, row.template_key);
       resolvedTemplateVersion = template.version;
       resolvedContentType = template.contentType as EmailContentType;
+      resolvedFromEmail = template.fromEmail;
+      resolvedFromName = template.fromName;
       const customText =
         typeof payload.__eventCampaignCustomText === "string" ? payload.__eventCampaignCustomText : null;
       contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);
@@ -304,6 +308,9 @@ async function processOutboxRow(
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;
+    // A template that names its sender sends from there; a direct body has
+    // no template and goes out from the configured sender (#106).
+    const from = resolvedFromEmail ? { email: resolvedFromEmail, name: resolvedFromName } : undefined;
     if (calendar?.icsFiles?.length) {
       attachments = calendar.icsFiles.map((f) => ({
         filename: f.filename,
@@ -357,9 +364,11 @@ async function processOutboxRow(
       // use the text/calendar alternative with method=REQUEST for the native
       // accept/decline prompt. Generated per-day .ics attachments provide granular control.
       calendarIcsContent: calendar?.inlineContent,
+      calendarMethod: calendar?.method,
       categories: [row.template_key, row.message_type],
       replyTo: typeof payload.__replyTo === "string" ? payload.__replyTo : undefined,
       attachments,
+      from,
     });
 
     await markOutboxSent(db, row, processingToken, acceptedMessageId, resolvedTemplateVersion);

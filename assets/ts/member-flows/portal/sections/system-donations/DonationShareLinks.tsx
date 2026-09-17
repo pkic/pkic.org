@@ -163,7 +163,7 @@ function ShareLinksView() {
     <div class="pk pk-stack">
       <PageHeader title="Share links" />
       {summary.promoterCount > 0 && (
-        <div class="pk-grid pk-grid--tight">
+        <div class="pk-stat-row">
           <StatCard label="Share links" value={String(summary.promoterCount)} />
           <StatCard label="Own donations" value={formatDonationAmount(summary.totalOwnGrossUsd, "usd")} />
           <StatCard label="Link clicks" value={String(summary.totalClicks)} />

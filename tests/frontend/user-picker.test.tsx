@@ -323,7 +323,14 @@ describe("UserPicker instances on one page", () => {
       match.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSecondChange).toHaveBeenCalledWith({ id: "council-id", email: "council@example.test" });
+    // The pick carries the person's names too, so a form the picker prefills
+    // does not have to read the record again.
+    expect(onSecondChange).toHaveBeenCalledWith({
+      id: "council-id",
+      email: "council@example.test",
+      firstName: null,
+      lastName: null,
+    });
     // The pick closed the second picker's popup and filled its own input …
     expect(popupOf(second.container)).toBeNull();
     expect(second.input.value).toBe("council@example.test");

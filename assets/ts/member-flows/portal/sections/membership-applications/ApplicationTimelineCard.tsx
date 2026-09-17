@@ -21,7 +21,7 @@ export function ApplicationTimelineCard({ detail }: { detail: MembershipApplicat
                 <li key={i}>
                   <span class="pk-mono pk-muted pk-nowrap">{fmt(ev.createdAt)}</span>{" "}
                   {/* The stored vocabulary is turned into the product's own
-                      words here, so "ec_review" is not what a reader is asked
+                      words here, so "on_hold" is not what a reader is asked
                       to decode. The arrow is decorative; the two stage names
                       either side are what carries the change. */}
                   {ev.fromStage ? statusLabel(ev.fromStage) : "Not yet in a stage"}

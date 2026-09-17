@@ -1,3 +1,5 @@
+import { prepareCalendarSchedule, prepareCalendarRevision } from "./calendar-schedule";
+import { prepareSeriesEvent } from "./prepare-series-event";
 import type { z } from "zod";
 import {
   EVENT_SERIES_SORT_COLUMNS,
@@ -37,6 +39,7 @@ import {
   requireEventResourceManagementContext,
   type EventResourceManagementContext,
 } from "./management";
+import { prepareSeriesCancellationNotifications, type OccurrenceNotificationOptions } from "./occurrence-notifications";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
 
 type ParsedEventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
@@ -269,7 +272,7 @@ export async function createGroupEventSeries(
   if (!group.active) throw new AppError(409, "GROUP_INACTIVE", "Meetings cannot be created in an inactive group");
   await requireGroupManagement(db, actor, group.id);
   const id = uuid();
-  const eventId = uuid();
+  const eventId = input.existingEventId ?? uuid();
   const now = nowIso();
   const slug = normalizedSlug(input.eventSlug);
   const settings = JSON.stringify({
@@ -283,28 +286,11 @@ export async function createGroupEventSeries(
         sql: "SELECT 1 FROM groups WHERE id = ? AND active = 1",
         bindings: [group.id],
       }),
-      db
-        .prepare(
-          `INSERT INTO events
-             (id, slug, name, timezone, starts_at, ends_at, source_path, base_path,
-              capacity_in_person, registration_mode, invite_limit_attendee, settings_json,
-              visibility, created_at, updated_at, owner_group_id, profile_key, source_mode, links_json)
-           VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, ?, 0, ?, ?, ?, ?, ?, ?, 'portal', NULL)`,
-        )
-        .bind(
-          eventId,
-          slug,
-          input.eventName,
-          input.timezone,
-          `/portal/groups/${group.slug}/meetings`,
-          input.policy.registrationPolicy,
-          settings,
-          input.policy.visibility ?? "group_members",
-          now,
-          now,
-          group.id,
-          input.profileKey,
-        ),
+      ...prepareSeriesEvent(
+        db,
+        { ...input, policy: { ...input.policy, visibility: input.policy.visibility ?? "group_members" } },
+        { eventId, groupId: group.id, groupSlug: group.slug, slug, settings, now },
+      ),
       db
         .prepare(
           `INSERT INTO event_series
@@ -324,6 +310,7 @@ export async function createGroupEventSeries(
           now,
           now,
         ),
+      ...prepareCalendarSchedule(db, { ...input, id, eventId }, now),
       prepareAuditLog(db, "admin", actor.id, "event_series_created", "event_series", id, {
         eventId,
         groupId: group.id,
@@ -455,6 +442,21 @@ export async function updateGroupEventSeries(
         seriesId,
         auditChanges,
       ),
+      ...(scheduleChanged
+        ? prepareCalendarSchedule(
+            db,
+            {
+              id: seriesId,
+              eventId: existing.eventId,
+              startsAt: input.startsAt ?? existing.startsAt,
+              recurrenceRule: input.recurrenceRule ?? existing.recurrenceRule,
+              timezone: input.timezone ?? existing.timezone,
+              durationMinutes: input.durationMinutes ?? existing.durationMinutes,
+            },
+            now,
+          )
+        : []),
+      ...prepareCalendarRevision(db, seriesId),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
@@ -475,4 +477,82 @@ export async function updateGroupEventSeries(
   const updated = await getEventSeriesById(db, seriesId);
   if (!updated) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
   return updated;
+}
+
+/**
+ * Cancelling a meeting (#126): every upcoming scheduled occurrence is
+ * cancelled, everyone invited to one receives a calendar cancellation, and
+ * the series is deactivated so nothing more is generated from it. What has
+ * already happened is left as it is.
+ */
+export async function cancelGroupEventSeries(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  seriesId: string,
+  expectedUpdatedAt: string,
+  notify?: OccurrenceNotificationOptions,
+): Promise<{ series: EventSeries; cancelledOccurrences: number }> {
+  const { series: existing, context } = await getManagedGroupEventSeries(db, actor, groupIdOrSlug, seriesId);
+  if (existing.updatedAt !== expectedUpdatedAt) {
+    throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed; reload before cancelling");
+  }
+  const now = nowIso();
+  const upcoming = await first<{ count: number }>(
+    db,
+    "SELECT COUNT(*) AS count FROM event_occurrences WHERE series_id = ? AND status = 'scheduled' AND ends_at > ?",
+    [seriesId, now],
+  );
+  const cancelledOccurrences = upcoming?.count ?? 0;
+  const notifications = notify
+    ? await prepareSeriesCancellationNotifications(db, seriesId, existing.eventId, existing.eventName, now, notify)
+    : [];
+  try {
+    await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1
+                FROM event_series guarded_series
+                JOIN events guarded_event ON guarded_event.id = guarded_series.event_id
+               WHERE guarded_series.id = ?
+                 AND MAX(guarded_series.updated_at, guarded_event.updated_at) = ?`,
+        bindings: [seriesId, expectedUpdatedAt],
+      }),
+      db
+        .prepare(
+          `UPDATE event_occurrences
+              SET status = 'cancelled', calendar_sequence = calendar_sequence + 1, updated_at = ?
+            WHERE series_id = ? AND status = 'scheduled' AND ends_at > ?`,
+        )
+        .bind(now, seriesId, now),
+      db.prepare("UPDATE event_series SET active = 0, updated_at = ? WHERE id = ?").bind(now, seriesId),
+      db
+        .prepare(
+          `UPDATE events SET
+             starts_at = (SELECT MIN(starts_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
+             ends_at = (SELECT MAX(ends_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
+             updated_at = ? WHERE id = ?`,
+        )
+        .bind(seriesId, seriesId, now, existing.eventId),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_series_cancelled",
+        "event_series",
+        seriesId,
+        { cancelledOccurrences },
+      ),
+      ...notifications,
+      ...prepareCalendarRevision(db, seriesId),
+    ]);
+  } catch (error) {
+    if (isAuthorizationGuardFailure(error) || isAuditChangeGuardFailure(error)) {
+      throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while it was being cancelled");
+    }
+    throw error;
+  }
+  const updated = await getEventSeriesById(db, seriesId);
+  if (!updated) throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series not found");
+  return { series: updated, cancelledOccurrences };
 }

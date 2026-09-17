@@ -496,10 +496,12 @@ describe("admin event management endpoints", () => {
   it("manages event team roles through the canonical event resource", async () => {
     await setupAdmin();
 
+    // A team member is an existing user, linked by id (#88).
+    const organizerId = await insertUser(env.DB, "organizer@example.test");
     const roleResponse = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
       body: JSON.stringify({
-        userEmail: "organizer@example.test",
+        userId: organizerId,
         role: "organizer",
       }),
     });
@@ -523,7 +525,7 @@ describe("admin event management endpoints", () => {
     const duplicateRoleResponse = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
       body: JSON.stringify({
-        userEmail: "organizer@example.test",
+        userId: organizerId,
         role: "organizer",
       }),
     });
@@ -550,7 +552,7 @@ describe("admin event management endpoints", () => {
     ] as const) {
       const res = await callAdmin("/api/v1/events/pqc-2026/roles", {
         method: "POST",
-        body: JSON.stringify({ userEmail: email, role }),
+        body: JSON.stringify({ userId: await insertUser(env.DB, email), role }),
       });
       expect(res.status).toBe(201);
     }
@@ -583,9 +585,10 @@ describe("admin event management endpoints", () => {
     await setupAdmin();
     ADMIN_TOKEN = env.ADMIN_API_KEY ?? "test-admin-key";
 
+    const apiKeyOrganizerId = await insertUser(env.DB, "api-key-organizer@example.test");
     const response = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userEmail: "api-key-organizer@example.test", role: "organizer" }),
+      body: JSON.stringify({ userId: apiKeyOrganizerId, role: "organizer" }),
     });
 
     expect(response.status).toBe(403);
@@ -597,6 +600,18 @@ describe("admin event management endpoints", () => {
           WHERE u.normalized_email = 'api-key-organizer@example.test'`,
       ),
     ).toEqual([]);
+  });
+
+  it("refuses to link a person the portal does not know, and creates nobody", async () => {
+    await setupAdmin();
+    const unknownId = crypto.randomUUID();
+    const response = await callAdmin("/api/v1/events/pqc-2026/roles", {
+      method: "POST",
+      body: JSON.stringify({ userId: unknownId, role: "organizer" }),
+    });
+    expect(response.status).toBe(404);
+    expect(await queryAll(env.DB, "SELECT id FROM users WHERE id = ?", [unknownId])).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id = ?", [unknownId])).toHaveLength(0);
   });
 
   it("enforces live event-scoped management permission on every role operation", async () => {
@@ -617,7 +632,10 @@ describe("admin event management endpoints", () => {
 
     const assigned = await callAdmin("/api/v1/events/pqc-2026/roles", {
       method: "POST",
-      body: JSON.stringify({ userEmail: "scoped-team-member@example.test", role: "moderator" }),
+      body: JSON.stringify({
+        userId: await insertUser(env.DB, "scoped-team-member@example.test"),
+        role: "moderator",
+      }),
     });
     expect(assigned.status).toBe(201);
     const assignment = (await assigned.json()) as { role: { id: string } };
@@ -646,14 +664,14 @@ describe("admin event management endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
     const targetEmail = `event-team-create-race-${crypto.randomUUID()}@example.test`;
+    const targetId = await insertUser(env.DB, targetEmail);
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(roleAssignmentId).run(),
     );
 
     await expect(
-      grantEventTeamRole(racedDb, actor, "pqc-2026", { userEmail: targetEmail, role: "organizer" }),
+      grantEventTeamRole(racedDb, actor, "pqc-2026", { userId: targetId, role: "organizer" }),
     ).rejects.toMatchObject({ status: 409, code: "ACCESS_CONTROL_AUTHORIZATION_CHANGED" });
-    expect(await queryAll(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [targetEmail])).toHaveLength(0);
     expect(
       await queryAll(
         env.DB,
@@ -676,7 +694,7 @@ describe("admin event management endpoints", () => {
     const { actor } = await createScopedEventManager(eventId);
     const targetEmail = `event-team-target-race-${crypto.randomUUID()}@example.test`;
     const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
-      userEmail: targetEmail,
+      userId: await insertUser(env.DB, targetEmail),
       role: "organizer",
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
@@ -703,7 +721,7 @@ describe("admin event management endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { actor, roleAssignmentId } = await createScopedEventManager(eventId);
     const created = await grantEventTeamRole(env.DB, actor, "pqc-2026", {
-      userEmail: `event-team-revoke-race-${crypto.randomUUID()}@example.test`,
+      userId: await insertUser(env.DB, `event-team-revoke-race-${crypto.randomUUID()}@example.test`),
       role: "organizer",
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>

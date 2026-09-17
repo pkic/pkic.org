@@ -12,6 +12,60 @@ import { signInToPortal } from "./helpers/portal-auth";
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 test.use({ timezoneId: "Europe/Amsterdam" });
 
+test("event forms explain where registration and proposal answers are recorded", async ({ page }) => {
+  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  const placementId = "80000000-0000-4000-8000-000000000092";
+  const formId = "80000000-0000-4000-8000-000000000093";
+  const base = `/api/v1/groups/${GROUP_ID}/forms/${placementId}`;
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes(`${base}/submissions`)) requests.push(request.url());
+  });
+  for (const purpose of ["event_registration", "proposal_submission"] as const) {
+    await page.route(`**${base}`, (route) =>
+      route.fulfill({
+        json: groupFormDefinitionResponseSchema.parse({
+          form: {
+            id: formId,
+            key: "organization-questions",
+            purpose,
+            status: "active",
+            title: "Organization questions",
+            description: null,
+            updatedAt: "2026-09-01T00:00:00.000Z",
+          },
+          placement: {
+            id: placementId,
+            formId,
+            ownerGroupId: GROUP_ID,
+            contextType: "event",
+            contextRef: formId,
+            audience: purpose === "event_registration" ? "attendee" : "speaker",
+            active: true,
+            opensAt: null,
+            closesAt: null,
+            createdAt: "2026-09-01T00:00:00.000Z",
+            updatedAt: "2026-09-01T00:00:00.000Z",
+          },
+          capabilities: ["view_definition", "submit", "view_responses", "manage"],
+          acceptingResponses: true,
+          fields: [],
+        }),
+      }),
+    );
+    await page.goto(`/portal/#/groups/${GROUP_ID}/forms/${placementId}`);
+    await page.reload();
+    await expect(page.getByText("Responses are part of the event records", { exact: true })).toBeVisible();
+    await expect(page.getByText(/View their answers in the event’s/)).toContainText(
+      purpose === "event_registration" ? "Registrations" : "Proposals",
+    );
+    await expect(page.getByText("No responses yet.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Submit response", exact: true })).toHaveCount(0);
+    await page.unroute(`**${base}`);
+  }
+  expect(requests).toEqual([]);
+});
+
 test("a respondent cannot submit a form closed after they opened it", async ({ page, browser }) => {
   await signInToPortal(page, e2eAdminEmail("portal-users"));
   const member = await createMember(page);

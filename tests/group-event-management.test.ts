@@ -760,6 +760,23 @@ describe("group event management routes", () => {
     });
   });
 
+  it("reads a migrated event's legacy registration mode as the policy the detail already shows", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    // The production import left conferences on the vocabulary the public
+    // site used before the policy enum existed. The settings panel used to
+    // fail on it with an internal error while the event detail beside it
+    // rendered the same event without complaint.
+    await env.DB.prepare("UPDATE events SET registration_mode = 'invite_or_open' WHERE id = ?").bind(created.id).run();
+
+    const response = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registration-settings`,
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toEqual({ eventUpdatedAt: expect.any(String), registrationPolicy: "public" });
+  });
+
   it("keeps registration disabled without a form, then creates an exact group-owned attendee placement", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);

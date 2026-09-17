@@ -11,11 +11,14 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventOccurrence, GroupEventSeries } from "../../assets/shared/schemas/event-series";
+import { eventOccurrenceUpdateSchema } from "../../assets/shared/schemas/event-series";
+import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
 import { MeetingOccurrences } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrences";
 import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
+vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: vi.fn(async () => true) }));
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
@@ -93,6 +96,9 @@ function occurrence(overrides: Partial<EventOccurrence> = {}): EventOccurrence {
     attendanceVerifiedCount: 0,
     invitationsRound: 0,
     invitationsSentAt: null,
+    invitedCount: 0,
+    calendarSequence: 0,
+    rsvp: { accepted: 0, declined: 0, tentative: 0 },
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-25T10:00:00.000Z",
     ...overrides,
@@ -109,7 +115,38 @@ afterEach(() => {
 });
 
 describe("meeting occurrence list", () => {
-  it("names the table after its series and opens a row through a real disclosure", async () => {
+  it("cancels selected occurrences with the loaded revision and refreshes the list", async () => {
+    const requests: unknown[] = [];
+    let canceled = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          requests.push(eventOccurrenceUpdateSchema.parse(JSON.parse(String(init.body))));
+          canceled = true;
+          return json({ occurrence: occurrence({ status: "cancelled" }) });
+        }
+        return json({
+          occurrences: [occurrence({ status: canceled ? "cancelled" : "scheduled" })],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+    const changed = vi.fn();
+    const container = mount(<MeetingOccurrences groupId={GROUP_ID} series={series()} onSeriesChanged={changed} />);
+    await settle();
+    const select = container.querySelector<HTMLInputElement>('tbody input[type="checkbox"]');
+    expect(select).not.toBeNull();
+    await act(async () => select!.click());
+    await act(async () => buttonNamed(container, "Cancel selected…").click());
+    await settle();
+    expect(confirmAction).toHaveBeenCalled();
+    expect(requests).toEqual([{ expectedUpdatedAt: occurrence().updatedAt, status: "cancelled" }]);
+    expect(changed).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(container.textContent).toContain("Cancelled"));
+  });
+
+  it("names the table after its series and opens a row as the occurrence's own page", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() =>
@@ -128,17 +165,19 @@ describe("meeting occurrence list", () => {
     // occurrences it lists rather than being a second nameless "table".
     expect(container.querySelector("table caption")?.textContent).toBe("Scheduled occurrences of Architecture call");
 
-    // The row itself opens the management detail in place, and its
-    // activation names the occurrence it manages.
-    const manage = [...container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find((control) =>
-      control.textContent?.startsWith("Manage the occurrence starting"),
+    // The row is a link to the occurrence's own address (#126) — a record
+    // with facets, never an expansion under the row — and it names what it
+    // opens.
+    const open = container.querySelector<HTMLAnchorElement>("a.pk-table__row-link");
+    expect(open?.textContent).toMatch(/^Open the occurrence starting /);
+    expect(open?.getAttribute("href")).toBe(
+      `#/groups/${GROUP_ID}/meetings/${series().id}/occurrences/${occurrence().id}`,
     );
-    expect(manage).toBeTruthy();
-    await act(() => manage!.click());
-    const hide = [...container.querySelectorAll<HTMLButtonElement>("button.pk-table__row-link")].find((control) =>
-      control.textContent?.startsWith("Hide management for the occurrence starting"),
-    );
-    expect(hide).toBeTruthy();
+    expect(container.querySelector("form")).toBeNull();
+    // Who was told, and what their calendars answered, is a column each.
+    const headers = [...container.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim() ?? "");
+    expect(headers.some((header) => header.startsWith("Invited"))).toBe(true);
+    expect(headers.some((header) => header.startsWith("Accepted"))).toBe(true);
   });
 
   it("announces a rejected occurrence creation below the actions, not beside them", async () => {

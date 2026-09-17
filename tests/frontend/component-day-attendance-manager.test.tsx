@@ -8,8 +8,10 @@ import {
   eventRegistrationSelectedDayAdmitSchema,
   type EventRegistrationAttendanceDetailResponse,
 } from "../../assets/shared/schemas/event-registration-detail";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { DayAttendanceManager } from "../../assets/ts/components/event-registrations/DayAttendanceManager";
 import { controlFor } from "./helpers/labelled-control";
+import { openRowMenu, runRowAction } from "./helpers/row-actions";
 
 const REGISTRATION_ENDPOINT = "/api/v1/groups/g1/events/e1/registrations/r1";
 const DAY = "2026-09-01";
@@ -38,7 +40,15 @@ const eventDays: EventDay[] = [
 
 type Detail = EventRegistrationAttendanceDetailResponse;
 
-const dayAttendance: Detail["dayAttendance"] = [{ dayDate: DAY, attendanceType: "in_person", label: "Day one" }];
+const dayAttendance: Detail["dayAttendance"] = [
+  {
+    dayDate: DAY,
+    attendanceType: "in_person",
+    label: "Day one",
+    heldSince: "2026-08-01T09:00:00.000Z",
+    changedAt: "2026-08-20T15:30:00.000Z",
+  },
+];
 const waiting: Detail["dayWaitlist"] = [
   { dayDate: DAY, status: "waiting", priorityLane: "general", offerExpiresAt: "2026-08-25T10:00:00.000Z" },
 ];
@@ -109,14 +119,17 @@ function mount(
   mounted.push(container);
   void act(() =>
     render(
-      <DayAttendanceManager
-        dayAttendance={dayAttendance}
-        dayWaitlist={overrides.dayWaitlist ?? waiting}
-        eventDays={overrides.eventDays ?? eventDays}
-        registrationEndpoint={REGISTRATION_ENDPOINT}
-        canVip={overrides.canVip ?? false}
-        onReload={overrides.onReload ?? (() => undefined)}
-      />,
+      <>
+        <ConfirmDialogHost />
+        <DayAttendanceManager
+          dayAttendance={dayAttendance}
+          dayWaitlist={overrides.dayWaitlist ?? waiting}
+          eventDays={overrides.eventDays ?? eventDays}
+          registrationEndpoint={REGISTRATION_ENDPOINT}
+          canVip={overrides.canVip ?? false}
+          onReload={overrides.onReload ?? (() => undefined)}
+        />
+      </>,
       container,
     ),
   );
@@ -127,19 +140,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-/**
- * The design system's choice control whose line reads `text`. Its label wraps
- * the control, so there is no `for` to resolve: the input inside is the one.
- */
-function choice(container: HTMLElement, text: string): HTMLInputElement {
-  const label = [...container.querySelectorAll<HTMLLabelElement>("label.pk-check")].find(
-    (candidate) => candidate.querySelector(".pk-check__label")?.textContent === text,
-  );
-  const input = label?.querySelector<HTMLInputElement>("input");
-  if (!input) throw new Error(`no choice reads "${text}"`);
-  return input;
 }
 
 function button(container: HTMLElement, text: string): HTMLButtonElement {
@@ -166,17 +166,43 @@ afterEach(() => {
 });
 
 describe("day attendance manager", () => {
-  it("admits a checked waitlisted day with a body the admission contract accepts", async () => {
+  /**
+   * The confirm dialog's control reading `label`. A confirmation that is not
+   * destructive is a plain dialog, so it is found as the last dialog on the
+   * page rather than by the alert role.
+   */
+  function confirmButton(label: string): HTMLButtonElement {
+    const dialogs = document.querySelectorAll("dialog");
+    const dialog = dialogs[dialogs.length - 1];
+    if (!dialog) throw new Error("no confirm dialog is open");
+    return button(dialog as unknown as HTMLElement, label);
+  }
+
+  /** The confirmation's text, once the host has rendered it. */
+  async function confirmText(): Promise<string> {
+    await settle();
+    const dialogs = document.querySelectorAll("dialog");
+    return dialogs[dialogs.length - 1]?.textContent ?? "";
+  }
+
+  /** The override dialog's control reading `label`. */
+  function dialogButton(container: HTMLElement, label: string): HTMLButtonElement {
+    const dialog = container.querySelector("dialog");
+    if (!dialog) throw new Error("no dialog is open");
+    return button(dialog as unknown as HTMLElement, label);
+  }
+
+  it("admits a waitlisted day from its row's menu once the manager confirms, with a body the admission contract accepts", async () => {
     const requests = installApi();
     const reload = vi.fn();
     const container = mount({ onReload: reload });
 
-    const admit = choice(container, "Admit day");
-    expect(admit.disabled).toBe(false);
-    await act(async () => {
-      admit.click();
-    });
-    await click(button(container, "Admit selected days"));
+    await runRowAction(container, "Day one", "Admit from waitlist…");
+    // Nothing is written on choosing the command: the dialog states the day
+    // and that one email goes out, and the write follows the confirmation.
+    expect(await confirmText()).toContain("Admit Day one from the waitlist?");
+    expect(requests).toHaveLength(0);
+    await click(confirmButton("Admit from waitlist"));
 
     const admission = requests.find((request) => request.path === `${REGISTRATION_ENDPOINT}/admissions`);
     expect(admission?.method).toBe("POST");
@@ -191,7 +217,9 @@ describe("day attendance manager", () => {
     const requests = installApi();
     const container = mount({ dayWaitlist: [] });
 
-    await click(button(container, "Return to waitlist"));
+    await runRowAction(container, "Day one", "Return to waitlist…");
+    expect(await confirmText()).toContain("Return Day one to the waitlist?");
+    await click(confirmButton("Return to waitlist"));
 
     const change = requests.find((request) => request.path === `${REGISTRATION_ENDPOINT}/day-attendance`);
     expect(change?.method).toBe("PATCH");
@@ -199,29 +227,107 @@ describe("day attendance manager", () => {
     expect(body).toEqual({ action: "waitlist", dayDates: [DAY] });
   });
 
-  it("announces a rejected admission as an assertive message and keeps the selection", async () => {
+  it("changes one day's method through the same dialog the selection uses, never on the menu click", async () => {
+    const requests = installApi();
+    const container = mount({ dayWaitlist: [] });
+
+    await runRowAction(container, "Day one", "Change attendance…");
+    expect(requests).toHaveLength(0);
+    const method = controlFor<HTMLSelectElement>(container, "Attendance method");
+    // The day is held in person, so in person is not offered as a change.
+    expect([...method.options].map((option) => option.value)).toEqual(["livestream"]);
+    await click(dialogButton(container, "Change attendance"));
+
+    const change = requests.find((request) => request.path === `${REGISTRATION_ENDPOINT}/day-attendance`);
+    expect(eventRegistrationDayAttendanceChangeSchema.parse(change?.body)).toEqual({
+      action: "livestream",
+      dayDates: [DAY],
+    });
+    expect(container.textContent).toContain("1 day changed to live stream");
+  });
+
+  it("acts on every selected day at once from the bulk bar, in one request", async () => {
+    const requests = installApi();
+    const secondDay: EventDay = {
+      ...eventDays[0],
+      id: "50000000-0000-4000-8000-000000000002",
+      date: "2026-09-02",
+      label: "Day two",
+    };
+    const container = mount({ dayWaitlist: [], eventDays: [eventDays[0], secondDay] });
+
+    expect(container.querySelector(".pk-bulk-bar")).toBeNull();
+    await click(container.querySelector<HTMLInputElement>('input[aria-label="Select all rows"]')!);
+    expect(container.querySelector(".pk-bulk-bar")?.textContent).toContain("2 of 2 selected");
+    // The bar offers what applies to the selection: the days differ (one
+    // held, one not), so leaving applies to the held one and is offered.
+    await click(button(container.querySelector(".pk-bulk-bar") as HTMLElement, "Change attendance…"));
+    await click(dialogButton(container, "Change attendance"));
+
+    const changes = requests.filter((request) => request.path === `${REGISTRATION_ENDPOINT}/day-attendance`);
+    expect(changes).toHaveLength(1);
+    expect(eventRegistrationDayAttendanceChangeSchema.parse(changes[0].body).dayDates).toEqual([DAY, "2026-09-02"]);
+    // The selection is spent with the change.
+    expect(container.querySelector(".pk-bulk-bar")).toBeNull();
+  });
+
+  it("offers only the commands that apply to the day, and nothing stands open on the page", async () => {
+    installApi();
+    const container = mount({ dayWaitlist: [], canVip: true });
+
+    // The day is held in person: the other option, the waitlist, the
+    // override and leaving are offered; admitting from a waitlist it is not
+    // on is not (#113). Every command asks before it acts.
+    expect(container.querySelector("select")).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("In-person");
+    await openRowMenu(container, "Day one");
+    expect([...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).toEqual([
+      "Change attendance…",
+      "Return to waitlist…",
+      "Admit beyond capacity…",
+      "Not attending…",
+    ]);
+  });
+
+  it("states when each day last changed, and since when it has been held if that is another day", () => {
+    installApi();
+    const container = mount();
+
+    const headers = [...container.querySelectorAll("th")].map((cell) => cell.textContent?.trim());
+    expect(headers).toEqual(expect.arrayContaining(["Last changed"]));
+    const row = container.querySelector("tbody tr");
+    // The fixture was first held on 1 August and last changed on 20 August.
+    expect(row?.textContent).toContain("Held since");
+    expect(row?.textContent).toMatch(/Aug(ust)? 20|20 Aug|8\/20/);
+  });
+
+  it("announces a rejected admission as an assertive message", async () => {
     installApi({ fails: true });
     const container = mount();
 
-    const admit = choice(container, "Admit day");
-    await act(async () => {
-      admit.click();
-    });
-    await click(button(container, "Admit selected days"));
+    await runRowAction(container, "Day one", "Admit from waitlist…");
+    await confirmText();
+    await click(confirmButton("Admit from waitlist"));
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("That day is no longer waitlisted.");
     // The words carry the failure; the tone only reinforces them.
     expect(container.textContent).not.toContain("registration update email was queued");
-    expect(choice(container, "Admit day").checked).toBe(true);
   });
 
-  it("names its table and wires the VIP reason to its own label and description", () => {
+  it("names its table and, in the override dialog, names the day and wires the reason to its own label and description", async () => {
     installApi();
     const container = mount({ canVip: true });
 
     expect(container.querySelector("caption")?.textContent).toBe("Attendance by event day");
+    // The override is a dialog the row's command opens, not a form on the page.
+    expect(container.querySelector("dialog")).toBeNull();
+    await runRowAction(container, "Day one", "Admit beyond capacity…");
 
+    // The dialog says which day it is about; there is nothing to pick.
+    expect(container.querySelector("dialog")?.textContent).toContain("Day one");
+    expect(container.querySelector("dialog input[type='checkbox']")).toBeNull();
     // Resolved through the label's own for/id pair, so the lookup fails
     // exactly when the labelling contract does.
     const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
@@ -230,22 +336,15 @@ describe("day attendance manager", () => {
     const describedBy = reason.getAttribute("aria-describedby");
     expect(container.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain("At least three");
     expect(reason.getAttribute("aria-invalid")).toBeNull();
-
-    // Each day checkbox carries all three parts of the drawn control; only the
-    // block class would render an operating-system default box.
-    const vipDay = choice(container, `Day one — ${DAY}`);
-    expect(vipDay.classList.contains("pk-check__input")).toBe(true);
-    expect(vipDay.closest("label")?.classList.contains("pk-check")).toBe(true);
   });
 
   it("marks a too-short VIP reason invalid, announces why, and blocks the override", async () => {
     const requests = installApi();
     const container = mount({ canVip: true });
+    await runRowAction(container, "Day one", "Admit beyond capacity…");
 
     const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
-    const vipDay = choice(container, `Day one — ${DAY}`);
     await act(async () => {
-      vipDay.click();
       reason.value = "no";
       reason.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -253,38 +352,38 @@ describe("day attendance manager", () => {
     // The verdict is the shared admission contract's own, shown once the
     // reader has touched the field and announced as a blocking error.
     expect(reason.getAttribute("aria-invalid")).toBe("true");
-    const message = container.querySelector('[role="alert"]');
+    const message = container.querySelector('dialog [role="alert"]');
     expect(message?.textContent).toMatch(/3/);
     expect(reason.getAttribute("aria-describedby")).toBe(message?.id);
-    expect(button(container, "Apply VIP override").disabled).toBe(true);
+    expect(dialogButton(container, "Apply VIP override").disabled).toBe(true);
 
-    await click(button(container, "Apply VIP override"));
+    await click(dialogButton(container, "Apply VIP override"));
     expect(requests).toHaveLength(0);
   });
 
-  it("applies a VIP override with a body the admission contract accepts", async () => {
+  it("applies a VIP override with a body the admission contract accepts and closes the dialog", async () => {
     const requests = installApi();
     const reload = vi.fn();
     const container = mount({ canVip: true, onReload: reload });
+    await runRowAction(container, "Day one", "Admit beyond capacity…");
 
     const reason = controlFor<HTMLTextAreaElement>(container, "Required reason");
     await act(async () => {
-      choice(container, `Day one — ${DAY}`).click();
       reason.value = "Keynote speaker escort";
       reason.dispatchEvent(new Event("input", { bubbles: true }));
     });
     // A reason the contract accepts is marked as such, not merely left blank.
     expect(reason.getAttribute("aria-invalid")).toBeNull();
-    expect(button(container, "Apply VIP override").disabled).toBe(false);
-    await click(button(container, "Apply VIP override"));
+    expect(dialogButton(container, "Apply VIP override").disabled).toBe(false);
+    await click(dialogButton(container, "Apply VIP override"));
 
     const admission = requests.find((request) => request.path === `${REGISTRATION_ENDPOINT}/admissions`);
     const body = eventRegistrationSelectedDayAdmitSchema.parse(admission?.body);
     expect(body).toEqual({ mode: "vip", reason: "Keynote speaker escort", dayDates: [DAY] });
     expect(reload).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("VIP override applied to 1 day");
-    // The form is spent: the reason is cleared for the next override.
-    expect(controlFor<HTMLTextAreaElement>(container, "Required reason").value).toBe("");
+    // The dialog is spent: nothing of it stays on the page.
+    expect(container.querySelector("dialog")).toBeNull();
   });
 
   it("says so rather than rendering an empty table when the event has no days", () => {

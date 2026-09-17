@@ -28,11 +28,7 @@ describe("member migration R2 upload batch", () => {
     await uploadLogosToR2(
       "/workspace",
       { wranglerFlag: "--local", wranglerEnv: "local" },
-      {
-        logoBucket: "pkic-assets",
-        logoConcurrency: 3,
-        persistTo: "/state",
-      },
+      parseArgs(["--local", "--state", "/state", "--logo-concurrency", "3"], "/workspace"),
       uploads(8),
       {
         getPlatformProxy: async (options: { configPath: string }) => {

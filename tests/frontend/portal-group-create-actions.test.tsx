@@ -11,6 +11,15 @@ const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
 }));
+// The votes section's tabs are routed links (#126), which need a router in a
+// real mount; here they are plain anchors carrying the same address.
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];

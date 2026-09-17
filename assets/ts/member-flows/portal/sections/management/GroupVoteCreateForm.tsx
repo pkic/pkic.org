@@ -18,7 +18,8 @@ import { postValidated } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 interface CandidateDraft {
   name: string;
@@ -178,12 +179,13 @@ export function GroupVoteCreateForm({
             </Field>
             <Field label="Description">
               {(control) => (
-                <Textarea
+                <MarkdownEditor
+                  variant="compact"
                   {...control}
-                  rows={3}
-                  maxLength={10000}
-                  value={description}
-                  onInput={(event) => setDescription(event.currentTarget.value)}
+                  name="description"
+                  label="Description"
+                  initialValue={description}
+                  onChange={setDescription}
                 />
               )}
             </Field>

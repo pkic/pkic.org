@@ -1,7 +1,9 @@
 import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
+import { eventProposalDetailViewPath } from "./detail/proposal-paths";
 import { useEffect } from "preact/hooks";
-import { eventManagementDetailResponseSchema } from "../../../../../shared/schemas/event-management";
+import { EventAudienceView } from "./EventAudienceView";
+import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
 import { Spinner } from "../../../../components/Spinner";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { useData } from "../../../../hooks/useData";
@@ -28,7 +30,7 @@ const RegistrationDetailPage = lazy(() =>
 type EventWorkspaceProps =
   | { view: "list" }
   | { view: "detail"; slug: string; tab?: string; subTab?: string; detailSegment?: string }
-  | { view: "proposal"; slug: string; resourceId: string }
+  | { view: "proposal"; slug: string; resourceId: string; tab?: string; segment?: string }
   | { view: "registration"; slug: string; resourceId: string };
 
 /**
@@ -41,17 +43,20 @@ function OwnerGroupGate({
   slug,
   mapPath,
   children,
+  audienceFallback = false,
 }: {
   slug: string;
   mapPath: (base: string) => string;
   children: ComponentChildren;
+  audienceFallback?: boolean;
 }) {
   const [, navigate] = usePortalHashLocation();
   const detail = useData(
-    () => getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventManagementDetailResponseSchema),
+    () => getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventDetailResponseSchema),
     [slug],
   );
-  const ownerGroupId = detail.data?.event.ownerGroupId ?? null;
+  const event = detail.data?.event;
+  const ownerGroupId = event && "ownerGroupId" in event ? event.ownerGroupId : null;
   const eventId = detail.data?.event.id ?? null;
   const target =
     ownerGroupId && eventId
@@ -64,6 +69,7 @@ function OwnerGroupGate({
 
   if (detail.loading) return <Spinner label="Loading event…" />;
   if (target) return null;
+  if (audienceFallback && event && "viewer" in event) return <EventAudienceView event={event} />;
   return <>{children}</>;
 }
 
@@ -101,8 +107,23 @@ export function EventWorkspace(props: EventWorkspaceProps) {
   let content: ComponentChildren;
   if (props.view === "proposal") {
     content = (
-      <OwnerGroupGate slug={props.slug} mapPath={(base) => `${base}/proposals/${encodeURIComponent(props.resourceId)}`}>
-        <ProposalDetailPage slug={props.slug} proposalId={props.resourceId} />
+      <OwnerGroupGate
+        slug={props.slug}
+        mapPath={(base) =>
+          `${base}/proposals/${encodeURIComponent(props.resourceId)}${props.tab ? `/${encodeURIComponent(props.tab)}` : ""}${
+            props.segment ? `/${encodeURIComponent(props.segment)}` : ""
+          }`
+        }
+      >
+        <ProposalDetailPage
+          slug={props.slug}
+          proposalId={props.resourceId}
+          tab={props.tab}
+          segment={props.segment}
+          tabHref={(key) =>
+            `${eventProposalDetailViewPath(props.slug, props.resourceId)}${key === "submission" ? "" : `/${key}`}`
+          }
+        />
       </OwnerGroupGate>
     );
   } else if (props.view === "registration") {
@@ -120,6 +141,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     content = (
       <OwnerGroupGate
         slug={props.slug}
+        audienceFallback
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;
           if (tab === "promoters" && subTab) return `${base}/promoters/${encodeURIComponent(subTab)}`;

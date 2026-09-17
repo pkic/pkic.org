@@ -1,28 +1,41 @@
+/**
+ * The shared, D1-backed proposal catalogue for every event-scoped program
+ * surface — the group event's Proposals tab and the standalone event's.
+ *
+ * One list panel, the way every other collection in the portal is drawn.
+ * Status and recommendation narrow from their own columns' menus, and the
+ * archive — the deleted proposals — is one more value of the Status column
+ * rather than a third select above the table; the head keeps only search,
+ * the create action and refresh. Three selects stacked beside the search box,
+ * each remembered in session storage, was the toolbar-of-filters the shared
+ * table exists to prevent. The list's state now rides in the URL instead, so
+ * a narrowed page can be refreshed and shared.
+ */
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { Badge } from "../Badge";
 import { ApiDataTable, type ApiTableActions } from "../ApiDataTable";
-import { FilterSelect } from "../FilterSelect";
+import { CollectionTotals } from "../CollectionTotals";
 import {
   eventProposalsResponseSchema,
   type EventProposalSummary,
   type ProposalAccess,
   type ProposalStats,
 } from "../../../shared/schemas/event-proposals";
-import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../shared/schemas/proposal-status";
-import { PROPOSAL_RECOMMENDATIONS, type ProposalRecommendation } from "../../../shared/schemas/proposal-reviews";
+import {
+  PROPOSAL_ADMIN_STATUS_FILTER_LABELS,
+  PROPOSAL_ADMIN_STATUS_FILTERS,
+} from "../../../shared/schemas/proposal-status";
+import { PROPOSAL_RECOMMENDATIONS } from "../../../shared/schemas/proposal-reviews";
 import { formatDateTime } from "../../shared/ui";
+// `pk-mono` on the score column ships in Content.css, a lazy chunk rather than
+// the entry stylesheet, so the module that writes the class name imports it.
+import "../../ui/Content.css";
 
-type RecommendationFilter = "" | ProposalRecommendation;
-/** `""` shows current proposals (the server default); `"true"` shows the archive. */
-type ArchivedFilter = "" | "true";
-
-const VALID_STATUSES = new Set<string>(["", ...PROPOSAL_ADMIN_STATUS_FILTERS]);
-const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", ...PROPOSAL_RECOMMENDATIONS]);
-const PROPOSAL_FILTER_LABELS: Record<string, string> = {
-  active: "Active (excludes withdrawn/rejected/spam)",
-  under_review: "Under Review",
-  "needs-work": "Needs Work",
+const RECOMMENDATION_LABELS: Record<string, string> = {
+  accept: "Accept",
+  "needs-work": "Needs work",
+  reject: "Reject",
 };
 
 function formatAverageScore(score: number | null): string {
@@ -30,93 +43,67 @@ function formatAverageScore(score: number | null): string {
   return score.toFixed(1).replace(/\.0$/, "");
 }
 
-function proposalFilterLabel(value: string): string {
-  return PROPOSAL_FILTER_LABELS[value] ?? value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
+function recommendationLabel(value: string): string {
+  return RECOMMENDATION_LABELS[value] ?? value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
 }
 
 function recommendationSummary(proposal: EventProposalSummary) {
   const entries = [
-    ["accept", "Accept", proposal.recommendation_accept_count],
-    ["needs-work", "Needs work", proposal.recommendation_needs_work_count],
-    ["reject", "Reject", proposal.recommendation_reject_count],
+    ["accept", proposal.recommendation_accept_count],
+    ["needs-work", proposal.recommendation_needs_work_count],
+    ["reject", proposal.recommendation_reject_count],
   ] as const;
-  const visible = entries.filter(([, , count]) => count > 0);
-  if (visible.length === 0) return <span class="pk-muted pk-small">—</span>;
-
+  const visible = entries.filter(([, count]) => count > 0);
+  if (visible.length === 0) {
+    return (
+      <>
+        <span class="pk-muted" aria-hidden="true">
+          —
+        </span>
+        <span class="pk-sr-only">No recommendations</span>
+      </>
+    );
+  }
   return (
     <div class="pk-cluster">
-      {visible.map(([status, label, count]) => (
-        <Badge key={status} status={status} label={`${label} ${count}`} />
+      {visible.map(([status, count]) => (
+        <Badge key={status} status={status} label={`${recommendationLabel(status)} ${String(count)}`} />
       ))}
     </div>
   );
 }
 
-function loadSavedFilters(storageKey?: string): {
-  status: string;
-  recommendation: RecommendationFilter;
-  archived: ArchivedFilter;
-} {
-  const defaults = { status: "active", recommendation: "" as RecommendationFilter, archived: "" as ArchivedFilter };
-  if (!storageKey) return defaults;
-  try {
-    const raw = sessionStorage.getItem(storageKey);
-    if (!raw) return defaults;
-    const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed !== "object" || parsed === null) return defaults;
-    const { status, recommendation, archived } = parsed as Record<string, unknown>;
-    return {
-      status: typeof status === "string" && VALID_STATUSES.has(status) ? status : "active",
-      recommendation:
-        typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
-          ? (recommendation as RecommendationFilter)
-          : "",
-      archived: archived === "true" ? "true" : "",
-    };
-  } catch {
-    return defaults;
-  }
+function proposerName(proposal: EventProposalSummary): string {
+  return (
+    [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email
+  );
 }
 
-/** Shared, D1-backed proposal catalog for every event-scoped program surface. */
 export function EventProposalsTable({
   endpoint,
-  storageKey,
-  onSelect,
+  urlState,
+  rowHref,
   toolbarPrefix,
   empty = "No proposals found",
 }: {
   endpoint: string;
-  storageKey?: string;
-  onSelect: (proposal: EventProposalSummary) => void;
+  /** Namespace for the list's URL-addressed search, sort, page and filters. */
+  urlState?: string;
+  /** Where a row goes: the proposal's own page. */
+  rowHref: (proposal: EventProposalSummary) => string;
   toolbarPrefix?: (actions: ApiTableActions, access: ProposalAccess | null) => ComponentChildren;
   empty?: string;
 }) {
-  const initialFilters = loadSavedFilters(storageKey);
-  const [statusFilter, setStatusFilter] = useState(initialFilters.status);
-  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(initialFilters.recommendation);
-  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>(initialFilters.archived);
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [access, setAccess] = useState<ProposalAccess | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
-
-  useEffect(() => {
-    if (!storageKey) return;
-    try {
-      sessionStorage.setItem(
-        storageKey,
-        JSON.stringify({ status: statusFilter, recommendation: recommendationFilter, archived: archivedFilter }),
-      );
-    } catch {
-      // Session storage is optional and must never disable server-side filtering.
-    }
-  }, [storageKey, statusFilter, recommendationFilter, archivedFilter]);
 
   return (
     <div class="pk pk-stack pk-stack--snug">
       {stats && <ProposalStatsSummary stats={stats} />}
       <ApiDataTable
         caption="Event proposals"
+        urlState={urlState}
         endpoint={endpoint}
         responseSchema={eventProposalsResponseSchema}
         resolve={(response) => response.proposals}
@@ -127,79 +114,34 @@ export function EventProposalsTable({
         }}
         paginate
         initialSort="-submittedAt"
-        searchPlaceholder="Search proposals / reviews…"
-        params={{
-          ...(statusFilter ? { status: statusFilter } : {}),
-          ...(recommendationFilter ? { recommendation: recommendationFilter } : {}),
-          ...(archivedFilter ? { archived: archivedFilter } : {}),
-        }}
+        // The list opens on what is still in play; the archive and every
+        // other status are one choice away in the Status column's menu.
+        initialFilters={{ status: "active" }}
+        searchPlaceholder="title, proposer or review"
         actionsRef={tableRef}
-        toolbar={({ resetPage }) => (
-          <>
-            {toolbarPrefix?.({ reload: () => tableRef.current?.reload() ?? Promise.resolve(), resetPage }, access)}
-            <FilterSelect
-              ariaLabel="Proposal status"
-              value={statusFilter}
-              options={[
-                { value: "", label: "All statuses" },
-                ...PROPOSAL_ADMIN_STATUS_FILTERS.map((status) => ({
-                  value: status,
-                  label: proposalFilterLabel(status),
-                })),
-              ]}
-              onChange={(value) => {
-                setStatusFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Review recommendation"
-              value={recommendationFilter}
-              options={[
-                { value: "", label: "All recommendations" },
-                ...PROPOSAL_RECOMMENDATIONS.map((recommendation) => ({
-                  value: recommendation,
-                  label: proposalFilterLabel(recommendation),
-                })),
-              ]}
-              onChange={(value) => {
-                setRecommendationFilter(value);
-                resetPage();
-              }}
-            />
-            <FilterSelect
-              ariaLabel="Proposal archive"
-              value={archivedFilter}
-              options={[
-                { value: "" as ArchivedFilter, label: "Current proposals" },
-                { value: "true" as ArchivedFilter, label: "Archived proposals" },
-              ]}
-              onChange={(value) => {
-                setArchivedFilter(value);
-                resetPage();
-              }}
-            />
-          </>
-        )}
+        toolbar={
+          toolbarPrefix
+            ? (actions) => toolbarPrefix({ reload: actions.reload, resetPage: actions.resetPage }, access)
+            : undefined
+        }
         columns={[
           {
             header: "Title",
-            cell: (proposal) => <span class="pk-small">{proposal.title}</span>,
+            cell: (proposal) => <span class="pk-strong">{proposal.title}</span>,
+            width: "primary",
             sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
           },
           {
             header: "Proposer",
             cell: (proposal) => {
-              const proposer =
-                [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") ||
-                proposal.proposer_email;
+              const proposer = proposerName(proposal);
               return (
-                <>
-                  <span class="pk-small">{proposer}</span>
+                <div class="pk-stack pk-stack--tight">
+                  <span>{proposer}</span>
                   {proposer !== proposal.proposer_email && (
-                    <div class="pk-muted pk-small">{proposal.proposer_email}</div>
+                    <span class="pk-muted pk-small">{proposal.proposer_email}</span>
                   )}
-                </>
+                </div>
               );
             },
             sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
@@ -207,13 +149,24 @@ export function EventProposalsTable({
           {
             header: "Type",
             cell: (proposal) => proposal.proposal_type,
-            className: "pk-small",
+            width: "fit",
             sort: { asc: "type", desc: "-type", defaultDirection: "asc" },
           },
           {
             header: "Status",
             cell: (proposal) => <Badge status={proposal.status} />,
+            width: "fit",
             sort: { asc: "status", desc: "-status", defaultDirection: "asc" },
+            filter: {
+              param: "status",
+              options: [
+                { value: "", label: "All statuses" },
+                ...PROPOSAL_ADMIN_STATUS_FILTERS.map((status) => ({
+                  value: status as string,
+                  label: PROPOSAL_ADMIN_STATUS_FILTER_LABELS[status],
+                })),
+              ],
+            },
           },
           {
             header: "Decision",
@@ -221,65 +174,77 @@ export function EventProposalsTable({
               proposal.decision_status ? (
                 <Badge status={proposal.decision_status} />
               ) : (
-                <span class="pk-muted pk-small">—</span>
+                <>
+                  <span class="pk-muted" aria-hidden="true">
+                    —
+                  </span>
+                  <span class="pk-sr-only">No decision</span>
+                </>
               ),
+            width: "fit",
             sort: { asc: "decision", desc: "-decision", defaultDirection: "asc" },
           },
           {
-            header: "Avg. score",
+            header: "Score",
             cell: (proposal) => formatAverageScore(proposal.average_review_score),
             className: "pk-mono pk-end",
+            width: "fit",
             sort: { asc: "score", desc: "-score" },
           },
           {
             header: "Recommendations",
             cell: recommendationSummary,
             sort: { asc: "recommendations", desc: "-recommendations" },
+            filter: {
+              param: "recommendation",
+              options: [
+                { value: "", label: "All recommendations" },
+                ...PROPOSAL_RECOMMENDATIONS.map((recommendation) => ({
+                  value: recommendation as string,
+                  label: recommendationLabel(recommendation),
+                })),
+              ],
+            },
           },
           {
             header: "Reviews",
             cell: (proposal) => proposal.review_count,
-            className: "pk-mono pk-end",
+            className: "pk-end",
+            width: "fit",
             sort: { asc: "reviews", desc: "-reviews" },
           },
           {
             header: "Submitted",
             cell: (proposal) => formatDateTime(proposal.submitted_at),
-            className: "pk-small pk-nowrap",
+            width: "fit",
             sort: { asc: "submittedAt", desc: "-submittedAt" },
           },
         ]}
         empty={empty}
         rowKey={(proposal) => proposal.id}
-        rowAction={(proposal) => ({ label: `Open ${proposal.title}`, onSelect: () => onSelect(proposal) })}
+        // The row is a link to the proposal's own page, so it can be opened
+        // in a new tab and the address bar follows.
+        rowAction={(proposal) => ({ label: `Open ${proposal.title}`, href: rowHref(proposal) })}
       />
     </div>
   );
 }
 
 function ProposalStatsSummary({ stats }: { stats: ProposalStats }) {
-  // The counts used to be tinted green and amber. The tint was the only thing
-  // saying which of them mattered, which is the one signal a reader cannot be
-  // assumed to see — and the label beside each number already says it. So the
-  // words carry the meaning and the numbers are one colour.
-  const entries = [
-    ["Total", stats.total],
-    ["Submitted", stats.byStatus.submitted ?? 0],
-    ["Under review", stats.byStatus.under_review ?? 0],
-    ["Accepted", stats.byStatus.accepted ?? 0],
-    ["Needs work", stats.byStatus["needs-work"] ?? 0],
-    ["Reviewed", stats.reviewedCount],
-    ["No reviews", stats.unreviewedCount],
-  ] as const;
   return (
-    // `role="group"` so the name is actually exposed: `aria-label` on a bare
-    // div names nothing.
-    <div class="pk-cluster pk-small" role="group" aria-label="Proposal statistics">
-      {entries.map(([label, value]) => (
-        <span key={label}>
-          <strong>{value}</strong> {label.toLowerCase()}
-        </span>
-      ))}
-    </div>
+    <CollectionTotals
+      label="Proposal statistics"
+      // Each state's figure wears the tone its status badge wears in the
+      // rows; the plain counts stay plain.
+      items={[
+        { label: "total", value: stats.total },
+        { label: "submitted", value: stats.byStatus.submitted ?? 0, tone: "info" },
+        { label: "under review", value: stats.byStatus.under_review ?? 0, tone: "accent" },
+        { label: "accepted", value: stats.byStatus.accepted ?? 0, tone: "ok" },
+        { label: "needs work", value: stats.byStatus["needs-work"] ?? 0, tone: "warn" },
+        { label: "reviewed", value: stats.reviewedCount },
+        { label: "no reviews", value: stats.unreviewedCount, tone: stats.unreviewedCount > 0 ? "warn" : "neutral" },
+      ]}
+    />
   );
 }

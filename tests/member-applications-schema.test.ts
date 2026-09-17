@@ -32,8 +32,8 @@ describe("allowedTransitions", () => {
     expect(allowedTransitions("withdrawn")).toEqual([]);
   });
 
-  it("pending can move to in_review or withdrawn, and nowhere else", () => {
-    expect(allowedTransitions("pending")).toEqual(["in_review", "withdrawn"]);
+  it("submitted applications can be held, declined, or withdrawn manually", () => {
+    expect(allowedTransitions("submitted")).toEqual(["on_hold", "declined", "withdrawn"]);
   });
 });
 
@@ -53,10 +53,10 @@ describe("member application response schemas", () => {
     expect(
       memberApplicationCreateResponseSchema.parse({
         applicationId: "application-1",
-        stage: "pending",
+        stage: "submitted",
         manageToken: "a-valid-manage-token",
       }),
-    ).toMatchObject({ applicationId: "application-1", stage: "pending" });
+    ).toMatchObject({ applicationId: "application-1", stage: "submitted" });
     expect(memberApplicationFormResponseSchema.parse({ categories: [], form: null })).toEqual({
       categories: [],
       form: null,
@@ -64,11 +64,11 @@ describe("member application response schemas", () => {
     expect(
       memberApplicationStatusResponseSchema.parse({
         id: "00000000-0000-4000-8000-000000000001",
-        stage: "in_review",
+        stage: "processing",
         stageEnteredAt: "2026-08-23T00:00:00.000Z",
         createdAt: "2026-08-22T00:00:00.000Z",
       }),
-    ).toMatchObject({ id: "00000000-0000-4000-8000-000000000001", stage: "in_review" });
+    ).toMatchObject({ id: "00000000-0000-4000-8000-000000000001", stage: "processing" });
   });
 
   it("reject malformed response values instead of accepting a drifted contract", () => {
@@ -83,7 +83,7 @@ describe("member application response schemas", () => {
     expect(
       memberApplicationStatusResponseSchema.safeParse({
         id: "00000000-0000-4000-8000-000000000001",
-        stage: "pending",
+        stage: "submitted",
         stageEnteredAt: null,
         createdAt: "2026-08-22T00:00:00.000Z",
       }).success,

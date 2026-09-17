@@ -1,121 +1,23 @@
-import { useState } from "preact/hooks";
-import { eventSeriesCreateSchema, eventSeriesResponseSchema } from "../../../../../shared/schemas/event-series";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Button } from "../../../../ui/Button";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { ApiClientError, postJson } from "../../../../shared/api-client";
+import { GroupEvents } from "./GroupEvents";
+import { CreateMeetingSeries } from "./CreateMeetingSeries";
+import { Tabs } from "../../../../components/Tabs";
 import { HashRedirect } from "../../HashRedirect";
 import { usePortalHashLocation } from "../../hash-location";
 import { GroupMeetingSeriesList } from "./GroupMeetingSeriesList";
 import { GroupMeetingSeriesRecord } from "./GroupMeetingSeriesRecord";
-import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFields";
-import { isoDateTimeValue, localDateTimeValue } from "./meeting-form-utils";
-import { slugify } from "../../../../../shared/slug";
 
-/** Reserved series segment that routes to the creation page instead of a series' record. */
 const NEW_MEETING_SERIES_SEGMENT = "new";
+/**
+ * The meetings a migration brought over without a schedule. They are a view
+ * of the same list, reached by its tab, rather than a second table stacked
+ * under the first (#101).
+ */
+const UNSCHEDULED_SEGMENT = "unscheduled";
 
-function defaultStart(): string {
-  const start = new Date();
-  start.setDate(start.getDate() + ((8 - start.getDay()) % 7 || 7));
-  start.setHours(15, 0, 0, 0);
-  return localDateTimeValue(start);
-}
-
-function initialDraft(): MeetingSeriesDraft {
-  return {
-    name: "",
-    profileKey: "meeting",
-    startsAt: defaultStart(),
-    recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-    durationMinutes: 60,
-    location: "",
-    registrationPolicy: "no_registration",
-    visibility: "group_members",
-    memberEligibility: "owner_group",
-    guestPolicy: "occurrence_invitation",
-  };
-}
-
-function CreateMeetingSeries({
-  groupId,
-  onCreated,
-  onCancel,
-}: {
-  groupId: string;
-  onCreated: (createdSeriesId: string) => void;
-  onCancel: () => void;
-}) {
-  const [draft, setDraft] = useState(initialDraft);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(event: Event): Promise<void> {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const input = eventSeriesCreateSchema.parse({
-        eventName: draft.name,
-        eventSlug: slugify(draft.name),
-        profileKey: draft.profileKey,
-        policy: {
-          registrationPolicy: draft.registrationPolicy,
-          visibility: draft.visibility,
-          memberEligibility: draft.memberEligibility,
-          guestPolicy: draft.guestPolicy,
-        },
-        startsAt: isoDateTimeValue(draft.startsAt, draft.timezone),
-        recurrenceRule: draft.recurrenceRule,
-        timezone: draft.timezone,
-        durationMinutes: draft.durationMinutes,
-        location: draft.location.trim() || null,
-        providerType: null,
-      });
-      const created = await postJson(
-        `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`,
-        input,
-        eventSeriesResponseSchema,
-      );
-      onCreated(created.series.id);
-    } catch (cause) {
-      setError(
-        cause instanceof ApiClientError || cause instanceof Error
-          ? cause.message
-          : "Could not create the meeting series.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Panel aria-label="Schedule a recurring meeting">
-      <PanelHeader title="Schedule a recurring meeting" headingLevel={2} breadcrumb>
-        <Button size="sm" disabled={saving} onClick={onCancel}>
-          Cancel
-        </Button>
-      </PanelHeader>
-      <PanelBody>
-        <form class="pk-stack" onSubmit={(event) => void submit(event)}>
-          <p class="pk-small">
-            Configure attendance eligibility, registration, and guest access once for the recurring series.
-          </p>
-          {error && <ErrorAlert error={error} />}
-          <MeetingSeriesFields draft={draft} disabled={saving} onChange={setDraft} />
-          <div class="pk-cluster">
-            {/* `loading` announces the save through aria-busy and shows the
-                spinner; `disabled` is what actually stops a second submit. */}
-            <Button type="submit" variant="primary" loading={saving} disabled={saving}>
-              {saving ? "Creating…" : "Create meeting series"}
-            </Button>
-          </div>
-        </form>
-      </PanelBody>
-    </Panel>
-  );
-}
+const MEETING_VIEWS = [
+  { key: "meetings", label: "Meetings" },
+  { key: UNSCHEDULED_SEGMENT, label: "Awaiting a schedule" },
+] as const;
 
 export function GroupMeetings({
   groupId,
@@ -123,15 +25,18 @@ export function GroupMeetings({
   seriesSegment,
   seriesTab,
   seriesDetailId,
+  seriesDetailTab,
 }: {
   groupId: string;
   canManage: boolean;
-  /** `undefined` for the list, `"new"` for the create page, or a series id for its record. */
+  /** `undefined` for the list, `"unscheduled"` for its other view, `"new"` for the create page, or a series id for its record. */
   seriesSegment?: string;
   /** The URL-addressed tab segment below a series id. */
   seriesTab?: string;
-  /** The segment below a series tab — `"new"` under occurrences opens the add page. */
+  /** The segment below a series tab — `"new"` under occurrences opens the add page, an id opens that occurrence. */
   seriesDetailId?: string;
+  /** The facet of that occurrence's record. */
+  seriesDetailTab?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const meetingsPath = `/groups/${encodeURIComponent(groupId)}/meetings`;
@@ -149,6 +54,7 @@ export function GroupMeetings({
       <div class="pk pk-stack">
         <CreateMeetingSeries
           groupId={groupId}
+          existingEventId={seriesTab}
           onCreated={(createdSeriesId) => navigate(`${meetingsPath}/${encodeURIComponent(createdSeriesId)}`)}
           onCancel={leaveToList}
         />
@@ -156,7 +62,7 @@ export function GroupMeetings({
     );
   }
 
-  if (seriesSegment) {
+  if (seriesSegment && seriesSegment !== UNSCHEDULED_SEGMENT) {
     // A series is a record with facets — occurrences, settings — so it gets
     // its own page rather than an expansion between the list's rows.
     return (
@@ -165,21 +71,37 @@ export function GroupMeetings({
         seriesId={seriesSegment}
         initialTab={seriesTab}
         occurrenceSegment={seriesDetailId}
+        occurrenceTab={seriesDetailTab}
       />
     );
   }
 
+  const view = seriesSegment === UNSCHEDULED_SEGMENT ? UNSCHEDULED_SEGMENT : "meetings";
+
   return (
-    // The list is its own panel — head, table, pager inside one frame.
-    <div class="pk">
-      <GroupMeetingSeriesList
-        groupId={groupId}
-        createAction={
-          canManage
-            ? { label: "New series", onSelect: () => navigate(`${meetingsPath}/${NEW_MEETING_SERIES_SEGMENT}`) }
-            : undefined
-        }
-      />
+    // One list panel — head, table, pager inside one frame — and, for a
+    // manager, a tab strip that switches which list it shows.
+    <div class="pk pk-stack">
+      {canManage && (
+        <Tabs
+          label="Meeting views"
+          items={[...MEETING_VIEWS]}
+          active={view}
+          hrefFor={(key) => (key === UNSCHEDULED_SEGMENT ? `${meetingsPath}/${UNSCHEDULED_SEGMENT}` : meetingsPath)}
+        />
+      )}
+      {view === UNSCHEDULED_SEGMENT ? (
+        <GroupEvents groupId={groupId} collection="unscheduled_meetings" />
+      ) : (
+        <GroupMeetingSeriesList
+          groupId={groupId}
+          createAction={
+            canManage
+              ? { label: "New meeting", onSelect: () => navigate(`${meetingsPath}/${NEW_MEETING_SERIES_SEGMENT}`) }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

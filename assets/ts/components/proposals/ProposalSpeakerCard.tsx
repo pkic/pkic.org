@@ -1,26 +1,45 @@
+/**
+ * One speaker on a proposal: who they are, where they stand, and what an
+ * operator can do about it.
+ *
+ * The card reads like every other record card in the portal. The photo is the
+ * same `PictureTile` a user's portrait uses — the picture is the control, the
+ * remove sits in its corner — rather than a column of three buttons under a
+ * placeholder. The commands live behind one `…` menu at the card's top right;
+ * they used to be a row of five buttons and a select beside the name, which
+ * made a list of speakers read as a list of things to click. Editing turns
+ * the card's values into inputs in place, behind that menu, never on arrival.
+ */
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { speakerRoleSchema } from "../../../shared/schemas/registration";
 import { isEligibleReplacementProposerStatus } from "../../../shared/schemas/proposal-status";
 import { proposalSpeakerPatchResponseSchema, type ProposalSpeaker } from "../../../shared/schemas/proposal-speakers";
 import { proposalSpeakerRemovalResponseSchema } from "../../../shared/schemas/proposal-management";
+import { headshotUrlResponseSchema } from "../../../shared/schemas/registration";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { Badge } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
+import { PictureTile } from "../PictureTile";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
 import { requestJson } from "../../shared/api-client";
+import { cropHeadshot } from "../../shared/headshot/crop";
+import { confirmHeadshotUsage } from "../../shared/headshot/controller";
+import { ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { formatDateTime, type ToastType } from "../../shared/ui";
 import { Badge as ToneBadge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { Dialog } from "../../ui/Dialog";
 import { Field } from "../../ui/Field";
 import { LinkList } from "../../ui/LinkList";
+import { Menu, type MenuItem } from "../../ui/Menu";
 import { Panel, PanelBody } from "../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../ui/TextControl";
-import { ProposalSpeakerHeadshotManager } from "./ProposalSpeakerHeadshotManager";
+import { Select, TextInput } from "../../ui/TextControl";
 // `pk-answer-pre` is written here as a class name rather than reached through a
 // component, so this module has to pull its stylesheet into its own chunk.
 import "../../ui/Content.css";
+import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
 
 export type { ProposalSpeaker };
 
@@ -41,6 +60,8 @@ export interface ProposalSpeakerEndpointConfig {
   gravatarBody?: unknown;
 }
 
+const quiet: (message: string, type: ToastType) => void = () => {};
+
 export function ProposalSpeakerCard({
   speaker,
   proposalId,
@@ -53,7 +74,7 @@ export function ProposalSpeakerCard({
   endpoints,
   onSaved,
   onRemoved,
-  notify,
+  notify = quiet,
 }: {
   speaker: ProposalSpeaker;
   proposalId: string;
@@ -77,6 +98,10 @@ export function ProposalSpeakerCard({
   const [role, setRole] = useState(speaker.role);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // The proposer cannot simply be removed: the proposal has to pass to
+  // another speaker first, and that choice is asked for in a dialog of its
+  // own rather than a select standing open beside the name.
+  const [choosingReplacement, setChoosingReplacement] = useState(false);
   const [replacementProposerUserId, setReplacementProposerUserId] = useState("");
   const linksRef = useRef<ProfileLinksHandle>(null);
   // ProfileLinksInput labels its own controls, so the group takes its name from
@@ -84,6 +109,7 @@ export function ProposalSpeakerCard({
   const linksLabelId = `${useId()}-profile-links`;
   const name = [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
   const speakerPath = (suffix = "") => endpoints.speakerPath(proposalId, speaker.userId, suffix);
+  const assetPath = (asset: "headshot" | "gravatar") => endpoints.assetPath(proposalId, speaker.userId, asset);
 
   useEffect(() => {
     setRole(speaker.role);
@@ -120,9 +146,9 @@ export function ProposalSpeakerCard({
       });
       onSaved(speaker.userId, { ...patch, hasBio: Boolean(bio.trim()) });
       setEditing(false);
-      notify?.("Speaker profile updated", "success");
+      notify("Speaker profile updated", "success");
     } catch (caught) {
-      notify?.((caught as Error).message, "error");
+      notify((caught as Error).message, "error");
     } finally {
       setSaving(false);
     }
@@ -140,139 +166,180 @@ export function ProposalSpeakerCard({
           ...(reminderBody === undefined ? {} : { body: JSON.stringify(reminderBody) }),
         },
       );
-      notify?.(`${kind === "profile" ? "Profile" : "Presentation"} reminder sent`, "success");
+      notify(`${kind === "profile" ? "Profile" : "Presentation"} reminder sent`, "success");
     } catch (caught) {
-      notify?.((caught as Error).message, "error");
+      notify((caught as Error).message, "error");
     }
   }
 
-  async function removeSpeaker() {
-    const confirmed = await confirmAction({
-      title: `Remove ${name} from this proposal?`,
-      consequences: [
-        "The user profile and audit history are kept",
-        ...(isCurrentProposer ? ["Proposal ownership transfers to the selected replacement"] : []),
-      ],
-      confirmLabel: "Remove speaker",
-      tone: "danger",
-    });
-    if (!confirmed) return;
+  async function useGravatar() {
+    try {
+      const data = await requestJson(assetPath("gravatar"), headshotUrlResponseSchema, {
+        method: "POST",
+        ...(endpoints.gravatarBody === undefined ? {} : { body: JSON.stringify(endpoints.gravatarBody) }),
+      });
+      onSaved(speaker.userId, { headshotUrl: data.headshotUrl, hasHeadshot: Boolean(data.headshotUrl) });
+      notify("Gravatar imported successfully", "success");
+    } catch (caught) {
+      notify((caught as Error).message, "error");
+    }
+  }
+
+  async function remove(replacementUserId?: string) {
     setRemoving(true);
     try {
       await requestJson(speakerPath(), proposalSpeakerRemovalResponseSchema, {
         method: "DELETE",
-        body: JSON.stringify({ replacementProposerUserId: isCurrentProposer ? replacementProposerUserId : undefined }),
+        body: JSON.stringify({ replacementProposerUserId: replacementUserId }),
       });
-      notify?.("Speaker removed", "success");
+      notify("Speaker removed", "success");
       onRemoved();
     } catch (caught) {
-      notify?.((caught as Error).message, "error");
+      notify((caught as Error).message, "error");
     } finally {
       setRemoving(false);
     }
   }
 
+  async function removeSpeaker() {
+    if (isCurrentProposer) {
+      setReplacementProposerUserId("");
+      setChoosingReplacement(true);
+      return;
+    }
+    const confirmed = await confirmAction({
+      title: `Remove ${name} from this proposal?`,
+      consequences: ["The user profile and audit history are kept"],
+      confirmLabel: "Remove speaker",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    await remove();
+  }
+
+  const canRemove = Boolean(canFinalize) && (!isCurrentProposer || replacementSpeakers.length > 0);
+  const actions: MenuItem[] = [];
+  if (canEdit) {
+    actions.push({
+      id: "edit",
+      label: editing ? "Cancel editing" : "Edit profile",
+      onSelect: () => setEditing((current) => !current),
+    });
+    actions.push({ id: "gravatar", label: "Use Gravatar photo", onSelect: () => void useGravatar() });
+  }
+  if (canFinalize) {
+    actions.push({
+      id: "remind-profile",
+      label: "Send profile reminder",
+      separatorBefore: actions.length > 0,
+      onSelect: () => void sendReminder("profile"),
+    });
+    if (requiresPresentation && decisionStatus === "accepted") {
+      actions.push({
+        id: "remind-presentation",
+        label: "Send presentation reminder",
+        onSelect: () => void sendReminder("presentation"),
+      });
+    }
+  }
+  if (canRemove) {
+    actions.push({
+      id: "remove",
+      label: removing ? "Removing…" : "Remove speaker",
+      danger: true,
+      disabled: removing,
+      separatorBefore: true,
+      onSelect: () => void removeSpeaker(),
+    });
+  }
+
   const profileLinks = normalizeProfileLinks(speaker.links);
   return (
     <div class="pk">
-      <Panel>
+      <Panel aria-label={`Speaker ${name}`}>
         <PanelBody class="pk-stack pk-stack--snug">
-          <div class="pk-cluster pk-cluster--start">
-            <ProposalSpeakerHeadshotManager
-              speaker={speaker}
-              proposalId={proposalId}
-              name={name}
-              canEdit={canEdit}
-              assetPath={endpoints.assetPath}
-              gravatarBody={endpoints.gravatarBody}
-              onSaved={onSaved}
-              notify={notify}
-            />
-            <div class="pk-stack pk-stack--tight">
-              <div class="pk-cluster">
-                <strong>{name}</strong>
-                {name !== speaker.email && <span class="pk-small">{speaker.email}</span>}
-                <Badge status={speaker.role} />
-                <Badge status={speaker.status} />
-              </div>
-              {(speaker.organizationName || speaker.jobTitle) && (
-                <div class="pk-small">{[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}</div>
-              )}
-              {/* The lifecycle badge beside the name already carries the state
-                  and its tone; these lines only say when it happened, so they
-                  stay plain text instead of repeating the colour. */}
-              <div class="pk-cluster">
-                {speaker.confirmedAt && <span class="pk-small">Confirmed {formatDateTime(speaker.confirmedAt)}</span>}
-                {speaker.declinedAt && <span class="pk-small">Declined {formatDateTime(speaker.declinedAt)}</span>}
-                {speaker.status === "invited" && speaker.inviteExpiresAt && (
-                  <span class="pk-small">Invitation expires {formatDateTime(speaker.inviteExpiresAt)}</span>
+          <div class="pk-cluster pk-cluster--start pk-cluster--between pk-cluster--nowrap">
+            <div class="pk-cluster pk-cluster--start pk-cluster--nowrap">
+              <PictureTile
+                name={name}
+                noun="photo"
+                shape="round"
+                size="mark"
+                canChange={canEdit}
+                imageUrl={speaker.headshotUrl ?? null}
+                alt={name}
+                hint="JPEG, PNG or WebP."
+                removeConfirmation={`Remove ${name}'s photo?`}
+                removeLabel="Remove photo"
+                onUpload={async (file) => {
+                  // The same two steps a user's portrait takes before it is
+                  // stored: the uploader asserts they may publish it, and the
+                  // image is cropped square.
+                  const accepted = await confirmHeadshotUsage({
+                    title: "Before uploading a photo",
+                    texts: ADMIN_HEADSHOT_DISCLAIMER,
+                    confirmText: "Proceed",
+                  });
+                  if (!accepted) return false;
+                  const cropped = await cropHeadshot(file);
+                  if (!cropped) return false;
+                  const data = await requestJson(assetPath("headshot"), headshotUrlResponseSchema, {
+                    method: "PUT",
+                    headers: { "Content-Type": cropped.type || "image/jpeg" },
+                    body: cropped,
+                  });
+                  onSaved(speaker.userId, {
+                    headshotUrl: data.headshotUrl ?? null,
+                    hasHeadshot: Boolean(data.headshotUrl),
+                  });
+                  return true;
+                }}
+                onRemove={async () => {
+                  await requestJson(assetPath("headshot"), successResponseSchema, { method: "DELETE" });
+                  onSaved(speaker.userId, { headshotUrl: null, hasHeadshot: false });
+                }}
+                onChanged={() => {}}
+                toast={notify}
+              />
+              <div class="pk-stack pk-stack--tight">
+                <div class="pk-cluster">
+                  <strong>{name}</strong>
+                  {name !== speaker.email && <span class="pk-small">{speaker.email}</span>}
+                  <Badge status={speaker.role} />
+                  <Badge status={speaker.status} />
+                </div>
+                {(speaker.organizationName || speaker.jobTitle) && (
+                  <div class="pk-small">{[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}</div>
                 )}
+                {/* The lifecycle badge beside the name already carries the state
+                    and its tone; these lines only say when it happened, so they
+                    stay plain text instead of repeating the colour. */}
+                <div class="pk-cluster">
+                  {speaker.confirmedAt && <span class="pk-small">Confirmed {formatDateTime(speaker.confirmedAt)}</span>}
+                  {speaker.declinedAt && <span class="pk-small">Declined {formatDateTime(speaker.declinedAt)}</span>}
+                  {speaker.status === "invited" && speaker.inviteExpiresAt && (
+                    <span class="pk-small">Invitation expires {formatDateTime(speaker.inviteExpiresAt)}</span>
+                  )}
+                </div>
+                {speaker.declineReason && <div class="pk-small">Decline reason: {speaker.declineReason}</div>}
               </div>
-              {speaker.declineReason && <div class="pk-small">Decline reason: {speaker.declineReason}</div>}
             </div>
-            <div class="pk-cluster pk-cluster--end pk-push">
+            <div class="pk-cluster pk-cluster--nowrap">
               {!speaker.hasBio && <ToneBadge tone="warn">No bio</ToneBadge>}
               {!speaker.hasHeadshot && <ToneBadge tone="warn">No headshot</ToneBadge>}
-              {canEdit && (
-                <Button size="sm" onClick={() => setEditing((current) => !current)}>
-                  {editing ? "Cancel" : "Edit profile"}
-                </Button>
-              )}
-              {canFinalize && (
-                <Button size="sm" title="Send profile completion reminder" onClick={() => void sendReminder("profile")}>
-                  ✉ Profile reminder
-                </Button>
-              )}
-              {canFinalize && requiresPresentation && decisionStatus === "accepted" && (
-                <Button
-                  size="sm"
-                  title="Send presentation upload reminder"
-                  onClick={() => void sendReminder("presentation")}
-                >
-                  ✉ Presentation reminder
-                </Button>
-              )}
-              {canFinalize && replacementSpeakers.length > 0 && (
-                <>
-                  {isCurrentProposer && (
-                    <Select
-                      data-replacement-proposer
-                      aria-label="Replacement proposer"
-                      value={replacementProposerUserId}
-                      onChange={(event) => setReplacementProposerUserId((event.target as HTMLSelectElement).value)}
-                    >
-                      <option value="">Choose replacement proposer…</option>
-                      {replacementSpeakers.map((replacement) => (
-                        <option key={replacement.userId} value={replacement.userId}>
-                          {replacement.label}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="danger-quiet"
-                    data-remove-proposal-speaker
-                    disabled={removing || (isCurrentProposer && !replacementProposerUserId)}
-                    onClick={() => void removeSpeaker()}
-                  >
-                    {removing ? "Removing…" : "Remove speaker"}
-                  </Button>
-                </>
-              )}
-              {canFinalize && replacementSpeakers.length === 0 && (
-                <span class="pk-small">
-                  Add an invited or confirmed replacement speaker. Otherwise, ask the proposer to use the separate
-                  Withdraw proposal action; every proposal must retain its speaker roster.
-                </span>
-              )}
+              {actions.length > 0 && <Menu label={`Actions for ${name}`} align="end" items={actions} />}
             </div>
           </div>
           {!editing && speaker.biography && <p class="pk-small pk-answer-pre">{speaker.biography}</p>}
           {/* The speaker's own profile links, in the one marked vocabulary
-              every other record uses. This was a stack of raw addresses —
-              issue #13's defect, on a surface the issue never named. */}
+              every other record uses. */}
           {!editing && <LinkList links={profileLinks} ownerName={name} />}
+          {canFinalize && isCurrentProposer && replacementSpeakers.length === 0 && (
+            <p class="pk-small pk-muted">
+              The proposer can only be removed once an invited or confirmed replacement speaker exists. Otherwise, ask
+              the proposer to use the separate Withdraw proposal action; every proposal must retain its speaker roster.
+            </p>
+          )}
           {editing && (
             <form onSubmit={(event) => void handleSave(event)} class="pk-stack">
               <div class="pk-grid pk-grid--tight">
@@ -337,12 +404,13 @@ export function ProposalSpeakerCard({
               </Field>
               <Field label="Biography">
                 {(control) => (
-                  <Textarea
+                  <MarkdownEditor
                     {...control}
-                    rows={4}
-                    value={bio}
-                    onInput={(event) => setBio((event.target as HTMLTextAreaElement).value)}
-                    placeholder="Speaker biography…"
+                    variant="compact"
+                    name="biography"
+                    label="Biography"
+                    initialValue={bio}
+                    onChange={setBio}
                   />
                 )}
               </Field>
@@ -366,6 +434,39 @@ export function ProposalSpeakerCard({
           )}
         </PanelBody>
       </Panel>
+      {choosingReplacement && (
+        <Dialog
+          open
+          destructive
+          title={`Remove ${name} from this proposal?`}
+          description="The proposal passes to another speaker; the user profile and audit history are kept."
+          confirmLabel="Remove speaker"
+          confirmDisabled={!replacementProposerUserId}
+          onCancel={() => setChoosingReplacement(false)}
+          onConfirm={() => {
+            setChoosingReplacement(false);
+            void remove(replacementProposerUserId);
+          }}
+        >
+          <Field label="Replacement proposer" required>
+            {(control) => (
+              <Select
+                {...control}
+                data-replacement-proposer
+                value={replacementProposerUserId}
+                onChange={(event) => setReplacementProposerUserId((event.target as HTMLSelectElement).value)}
+              >
+                <option value="">Choose replacement proposer…</option>
+                {replacementSpeakers.map((replacement) => (
+                  <option key={replacement.userId} value={replacement.userId}>
+                    {replacement.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </Dialog>
+      )}
     </div>
   );
 }

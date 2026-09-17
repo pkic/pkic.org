@@ -321,6 +321,94 @@ describe("system email template endpoints", () => {
     expect(missingPayload.error?.code).toBe("EMAIL_TEMPLATE_VERSION_NOT_FOUND");
   });
 
+  it("archives a template as one lifecycle word, and deletes it only once nothing is in use", async () => {
+    const { adminId } = await setupSystemTemplates();
+    const key = "registration_confirm_email";
+    const listed = async () => {
+      const response = await callSystem(`/api/v1/email/templates?q=${key}`);
+      const payload = (await response.json()) as { templates: Array<{ template_key: string; status: string }> };
+      return payload.templates.find((template) => template.template_key === key)?.status;
+    };
+    expect(await listed()).toBe("active");
+
+    // In use: the template may be retired, not removed.
+    const deleteInUse = await callSystem(`/api/v1/email/templates/${key}`, { method: "DELETE" });
+    expect(deleteInUse.status).toBe(409);
+    expect(((await deleteInUse.json()) as { error: { code: string } }).error.code).toBe("EMAIL_TEMPLATE_IN_USE");
+
+    const archive = await callSystem(`/api/v1/email/templates/${key}/archive`, { method: "POST" });
+    expect(archive.status).toBe(200);
+    expect(
+      await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT DISTINCT status FROM email_template_versions WHERE template_key = ?",
+        key,
+      ),
+    ).toEqual([{ status: "archived" }]);
+    expect(await listed()).toBe("archived");
+    expect(
+      await queryAll<{ actor_id: string | null; entity_id: string | null }>(
+        env.DB,
+        "SELECT actor_id, entity_id FROM audit_log WHERE action = 'email_template_archived'",
+      ),
+    ).toEqual([{ actor_id: adminId, entity_id: key }]);
+    await expect(resolveTemplate(env.DB, key)).rejects.toMatchObject({ code: "EMAIL_TEMPLATE_NOT_FOUND" });
+
+    const removed = await callSystem(`/api/v1/email/templates/${key}`, { method: "DELETE" });
+    expect(removed.status).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM email_template_versions WHERE template_key = ?", key)).toEqual([]);
+    expect(await listed()).toBeUndefined();
+    const gone = await callSystem(`/api/v1/email/templates/${key}`, { method: "DELETE" });
+    expect(gone.status).toBe(404);
+  });
+
+  it("stores the sender a version names and resolves it with the template", async () => {
+    await setupSystemTemplates();
+    const created = await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
+      method: "POST",
+      body: JSON.stringify({
+        content: "From a named sender",
+        contentType: "markdown",
+        fromEmail: "Membership@PKIC.org",
+        fromName: "PKIC Membership",
+      }),
+    });
+    expect(created.status).toBe(200);
+    const version = ((await created.json()) as { version: { version: number; from_email: string; from_name: string } })
+      .version;
+    expect(version).toMatchObject({ from_email: "membership@pkic.org", from_name: "PKIC Membership" });
+    const activated = await callSystem("/api/v1/email/templates/registration_confirm_email/activate", {
+      method: "POST",
+      body: JSON.stringify({ version: version.version }),
+    });
+    expect(activated.status).toBe(200);
+    await expect(resolveTemplate(env.DB, "registration_confirm_email")).resolves.toMatchObject({
+      fromEmail: "membership@pkic.org",
+      fromName: "PKIC Membership",
+    });
+    const refused = await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {
+      method: "POST",
+      body: JSON.stringify({ content: "Bad sender", contentType: "markdown", fromEmail: "not-an-address" }),
+    });
+    expect(refused.status).toBe(400);
+  });
+
+  it("keeps archiving and deleting behind email-templates:manage", async () => {
+    await setupSystemTemplates();
+    const writeToken = await createStaffSession("email-templates:write");
+    const manageToken = await createStaffSession("email-templates:manage");
+    const key = "registration_confirm_email";
+
+    expect((await callWithToken(writeToken, `/api/v1/email/templates/${key}/archive`, { method: "POST" })).status).toBe(
+      403,
+    );
+    expect((await callWithToken(writeToken, `/api/v1/email/templates/${key}`, { method: "DELETE" })).status).toBe(403);
+    expect(
+      (await callWithToken(manageToken, `/api/v1/email/templates/${key}/archive`, { method: "POST" })).status,
+    ).toBe(200);
+    expect((await callWithToken(manageToken, `/api/v1/email/templates/${key}`, { method: "DELETE" })).status).toBe(200);
+  });
+
   it("rolls back activation when its audit row cannot be written", async () => {
     await setupSystemTemplates();
     const createResponse = await callSystem("/api/v1/email/templates/registration_confirm_email/versions", {

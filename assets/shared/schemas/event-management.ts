@@ -182,6 +182,7 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
     viewer: eventViewerStateSchema.nullable(),
+    registrationPath: z.string().nullable().optional(),
   });
 export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
 
@@ -192,6 +193,7 @@ export type EventAudienceDetail = z.infer<typeof eventAudienceDetailSchema>;
  * instead of restating the event identity in a separate management contract.
  */
 export const eventManagementSummarySchema = eventResourceCoreSchema.extend({
+  location: z.string().nullable().optional(),
   ownerGroupId: groupIdSchema.nullable(),
   ownerGroupName: z.string().nullable(),
   sourcePath: z.string().nullable(),

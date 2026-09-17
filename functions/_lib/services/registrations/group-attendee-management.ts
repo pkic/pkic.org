@@ -15,6 +15,7 @@ import {
 import { getEventRegistrationAttendanceDetail } from "./detail";
 import { admitRegistration } from "./admission";
 import { updateRegistrationDayAttendance } from "./day-attendance-management";
+import { updateRegistrationByIdWithNotification } from "./update";
 
 async function requireManagedEvent(
   db: DatabaseLike,
@@ -66,6 +67,44 @@ export async function updateGroupManagedEventRegistrationDayAttendance(
     commitBatch: (statements) =>
       commitEventResourceManagementBatch(db, actor, context, "manage_attendance", statements),
   });
+}
+
+/**
+ * Cancels a registration as a whole (#113). The event manage capability,
+ * since ending somebody's place is stronger than moving their days; the
+ * canonical registration transition releases the days, drops the waitlist
+ * rows and queues the attendee's notice.
+ */
+export async function cancelGroupManagedEventRegistration(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  eventId: string,
+  registrationId: string,
+  appBaseUrl: string,
+): Promise<{ registration: EventRegistrationAttendanceDetailResponse; outboxId: string | null }> {
+  const { event, context } = await requireManagedEvent(db, actor, groupIdOrSlug, eventId);
+  const result = await updateRegistrationByIdWithNotification(
+    db,
+    {
+      eventId: event.id,
+      registrationId,
+      action: "cancel",
+      auditActor: { type: "admin", id: actor.id, action: "registration_cancelled_by_manager" },
+      notification: {
+        event,
+        appBaseUrl,
+        templateKey: "registration_updated",
+        subject: `Registration cancelled for ${event.name}`,
+      },
+    },
+    actor.id,
+    undefined,
+    (statements) => commitEventResourceManagementBatch(db, actor, context, "manage", statements),
+  );
+  const registration = await getEventRegistrationAttendanceDetail(db, event.id, result.registration.id);
+  if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found for this event");
+  return { registration, outboxId: result.outboxId };
 }
 
 /**

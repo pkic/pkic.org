@@ -11,10 +11,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST,
-  individualMembershipGrantSchema,
-} from "../../assets/shared/schemas/membership-management";
+import { individualMembershipGrantSchema } from "../../assets/shared/schemas/membership-management";
 import type { MembershipCategoryCatalogEntry } from "../../assets/shared/schemas/membership-categories";
 import { GrantIndividualMembershipForm } from "../../assets/ts/member-flows/portal/sections/membership-members/GrantIndividualMembershipForm";
 
@@ -36,7 +33,10 @@ function catalogEntry(code: string, label: string): MembershipCategoryCatalogEnt
     description: null,
     displayOrder: 0,
     isIndividual: true,
+    requiresUniversityEmail: false,
     isVoting: false,
+    active: true,
+    workflowVersionId: null,
     revision: 0,
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -52,15 +52,22 @@ afterEach(() => {
 });
 
 describe("granting an individual membership", () => {
-  it("offers every category the grant contract accepts", () => {
+  it("offers configured individual categories and excludes organization categories", () => {
     const root = mount(
-      <GrantIndividualMembershipForm categories={[]} onGranted={() => undefined} onCancel={() => undefined} />,
+      <GrantIndividualMembershipForm
+        categories={[
+          catalogEntry("COMMUNITY", "Community users"),
+          { ...catalogEntry("PARTNER", "Partner organizations"), isIndividual: false },
+        ]}
+        onGranted={() => undefined}
+        onCancel={() => undefined}
+      />,
     );
 
     const offered = [...root.querySelectorAll("option")].map((option) => option.value);
     // Exactly the contract's set, in the contract's order — not a subset, and
     // not a superset the route would refuse.
-    expect(offered).toEqual([...INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST]);
+    expect(offered).toEqual(["COMMUNITY"]);
     // The contract is the same one the route parses, so this is the set the
     // API accepts rather than a second opinion about it.
     for (const category of offered) {
@@ -74,8 +81,8 @@ describe("granting an individual membership", () => {
     }
   });
 
-  it("names each category by the catalog's words, and by its code when the catalog is silent", () => {
-    const [first, ...rest] = INDIVIDUAL_MEMBERSHIP_CATEGORIES_LIST;
+  it("uses configured labels without offering removed categories", () => {
+    const first = "RESEARCH";
     const root = mount(
       <GrantIndividualMembershipForm
         categories={[catalogEntry(first, "PhD students researching PKI or cryptography")]}
@@ -88,9 +95,8 @@ describe("granting an individual membership", () => {
       [...root.querySelectorAll("option")].map((option) => [option.value, option.textContent ?? ""]),
     );
     expect(labels.get(first)).toBe(`PhD students researching PKI or cryptography (${first})`);
-    // A category the catalog has not described yet is still offered, under the
-    // durable key. A missing label must not cost a member their category.
-    for (const category of rest) expect(labels.get(category)).toBe(category);
+    // Removed baseline categories must not reappear as grant options.
+    expect([...labels.keys()]).toEqual([first]);
   });
 
   it("refuses to submit without the person the membership is granted to", async () => {

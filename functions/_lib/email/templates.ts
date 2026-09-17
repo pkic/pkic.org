@@ -12,6 +12,9 @@ export interface ResolvedEmailTemplate {
   contentType: string;
   subjectTemplate: string | null;
   messageType: EmailMessageType;
+  /** The sender the template names; null leaves the environment's configured sender (#106). */
+  fromEmail: string | null;
+  fromName: string | null;
 }
 
 export type EmailTemplateResolution =
@@ -35,11 +38,13 @@ export interface TemplateVersionRow {
   status: "draft" | "active" | "archived";
   created_by_user_id: string | null;
   created_at: string;
+  from_email: string | null;
+  from_name: string | null;
 }
 
 const TEMPLATE_VERSION_COLUMNS =
   "id, template_key, version, subject_template, body, content_type, message_type, r2_object_key, " +
-  "checksum_sha256, status, created_by_user_id, created_at";
+  "checksum_sha256, status, created_by_user_id, created_at, from_email, from_name";
 
 export async function listTemplateVersions(db: DatabaseLike): Promise<TemplateVersionRow[]> {
   return all<TemplateVersionRow>(
@@ -73,6 +78,8 @@ export interface TemplateVersionCreateInput {
   contentType?: EmailContentType;
   subjectTemplate?: string | null;
   messageType?: EmailMessageType | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
   createdByUserId: string | null;
 }
 
@@ -96,15 +103,17 @@ export async function buildTemplateVersionCreate(
     status: "draft",
     created_by_user_id: payload.createdByUserId,
     created_at: nowIso(),
+    from_email: payload.fromEmail ?? null,
+    from_name: payload.fromName ?? null,
   };
 
   const statement = db
     .prepare(
       `INSERT INTO email_template_versions (
         id, template_key, version, subject_template, body, content_type, message_type, r2_object_key,
-        checksum_sha256, status, created_by_user_id, created_at
+        checksum_sha256, status, created_by_user_id, created_at, from_email, from_name
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE COALESCE((
          SELECT MAX(version) FROM email_template_versions WHERE template_key = ?
        ), 0) = ?`,
@@ -122,6 +131,8 @@ export async function buildTemplateVersionCreate(
       row.status,
       row.created_by_user_id,
       row.created_at,
+      row.from_email,
+      row.from_name,
       row.template_key,
       row.version - 1,
     );
@@ -190,14 +201,14 @@ export async function resolveTemplateSet(
        ranked AS (
          SELECT etv.id, etv.template_key, etv.version, etv.subject_template, etv.body,
                 etv.content_type, etv.message_type, etv.r2_object_key, etv.checksum_sha256,
-                etv.status, etv.created_by_user_id, etv.created_at,
+                etv.status, etv.created_by_user_id, etv.created_at, etv.from_email, etv.from_name,
                 ROW_NUMBER() OVER (PARTITION BY etv.template_key ORDER BY etv.version DESC) AS active_rank
          FROM email_template_versions etv
          JOIN requested r ON r.template_key = etv.template_key
          WHERE etv.status = 'active'
        )
        SELECT id, template_key, version, subject_template, body, content_type, message_type,
-              r2_object_key, checksum_sha256, status, created_by_user_id, created_at
+              r2_object_key, checksum_sha256, status, created_by_user_id, created_at, from_email, from_name
        FROM ranked WHERE active_rank = 1`,
       [JSON.stringify(templateKeys)],
     );
@@ -224,6 +235,8 @@ export async function resolveTemplateSet(
           contentType: active.content_type ?? "markdown",
           subjectTemplate: active.subject_template,
           messageType: active.message_type ?? "transactional",
+          fromEmail: active.from_email ?? null,
+          fromName: active.from_name ?? null,
         };
         resolutions.set(templateKey, { ok: true, template });
       }

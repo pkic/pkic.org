@@ -174,7 +174,7 @@ SELECT ${sqlString(randomUUID())}, u.id, o.id, NULL,
        ${toSqlNullableText(jobTitle)}, ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
        'migration', ${showOnOrgProfile ? 1 : 0}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM organizations o
-JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
+JOIN users u ON u.id = ${ownerUserIdForEmail(normalizedEmail)}
 WHERE o.normalized_name = ${sqlString(normalizedOrgName)}
 ON CONFLICT(user_id, organization_id)
   WHERE organization_id IS NOT NULL
@@ -203,7 +203,7 @@ SELECT ${sqlString(randomUUID())}, u.id, ${sqlString(roleId)}, 'organization', m
        identity.id, NULL, 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM members m
 JOIN organizations o ON o.id = m.organization_id
-JOIN users u ON u.normalized_email = ${sqlString(normalizedEmail)}
+JOIN users u ON u.id = ${ownerUserIdForEmail(normalizedEmail)}
 JOIN identities identity
   ON identity.user_id = u.id
  AND identity.organization_id = o.id
@@ -214,7 +214,65 @@ WHERE o.normalized_name = ${sqlString(normalizedOrgName)};
 `;
 }
 
-export function buildUpsertUserStatement({
+/**
+ * One address is one reservation across the whole account namespace:
+ * `users.normalized_email`, `user_emails.normalized_email` and
+ * `users.pending_email` all draw from it, and the reservation triggers
+ * added by consolidated migration 0035 abort any statement that crosses
+ * another account's claim. Every statement that needs "the account this
+ * member's address belongs to" resolves it through this one scalar
+ * subquery instead of assuming the address is always a primary login:
+ * an address already held as an alternate belongs to that same person,
+ * so their identity, membership, role and group rows attach to the
+ * account that owns it rather than silently matching nothing.
+ *
+ * Two kinds of claim deliberately resolve to no account at all, because
+ * neither is a person the importer may write to:
+ *   - a pending (unconfirmed) email change only reserves the address;
+ *   - a redacted or merged account is not a live account any more, and
+ *     re-populating a redacted name or biography from the YAML directory
+ *     would undo an erasure.
+ * Both surface in the post-import reservation check instead — see
+ * scripts/migrate-members/email-reservations.mjs.
+ */
+export function ownerUserIdForEmail(normalizedEmail) {
+  return ownerUserIdForEmailExpression(sqlString(normalizedEmail));
+}
+
+/**
+ * The same resolution over a SQL expression rather than a known address,
+ * so a correlated query — "does this reserved address already have a live
+ * account behind it?" — asks exactly what the import itself asked, from
+ * one definition.
+ */
+export function ownerUserIdForEmailExpression(emailExpression) {
+  return `(SELECT live.id FROM users live
+            WHERE live.normalized_email = ${emailExpression}
+              AND live.pii_redacted_at IS NULL AND live.merged_into_user_id IS NULL
+           UNION ALL
+           SELECT alternate.user_id FROM user_emails alternate
+             JOIN users owner ON owner.id = alternate.user_id
+              AND owner.pii_redacted_at IS NULL AND owner.merged_into_user_id IS NULL
+            WHERE alternate.normalized_email = ${emailExpression}
+            LIMIT 1)`;
+}
+
+/**
+ * Creates the account for an address nothing has claimed yet, then fills
+ * the profile gaps of whichever live account owns that address.
+ *
+ * This is deliberately not an `ON CONFLICT(normalized_email)` upsert.
+ * `trg_users_primary_email_reservation_insert` fires *before* SQLite
+ * detects the conflict, so a plain upsert aborts the entire import file
+ * with `EMAIL_TAKEN` as soon as one directory address is held elsewhere
+ * in the namespace — as an alternate address, or (the case a production
+ * database really produces) as some account's unconfirmed pending email
+ * change. Guarding the insert keeps one reserved address a single
+ * reported record instead of a failed migration, and the separate update
+ * keeps the previous COALESCE fill-the-gaps semantics for the owner,
+ * including the account reached through an alternate address.
+ */
+export function buildUpsertUserStatements({
   email,
   firstName,
   lastName,
@@ -224,23 +282,30 @@ export function buildUpsertUserStatement({
   headshotR2Key,
 }) {
   const normalizedEmail = normalizeEmail(email);
-  const statement = `
+  const emailLiteral = sqlString(normalizedEmail);
+  const createAccount = `
 INSERT INTO users (
   id, email, normalized_email, first_name, last_name, job_title, biography, links_json,
   headshot_r2_key, role, active, created_at, updated_at
-) VALUES (
-  ${sqlString(randomUUID())}, ${sqlString(email)}, ${sqlString(normalizedEmail)},
+)
+SELECT ${sqlString(randomUUID())}, ${sqlString(email)}, ${emailLiteral},
   ${toSqlNullableText(firstName)}, ${toSqlNullableText(lastName)}, ${toSqlNullableText(jobTitle)},
   ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
   ${toSqlNullableText(headshotR2Key)},
   'user', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-)
-ON CONFLICT(normalized_email) DO UPDATE SET
-  first_name = COALESCE(users.first_name, excluded.first_name),
-  last_name = COALESCE(users.last_name, excluded.last_name),
-  job_title = COALESCE(users.job_title, excluded.job_title),
-  biography = COALESCE(users.biography, excluded.biography),
-  links_json = COALESCE(users.links_json, excluded.links_json),
+WHERE NOT EXISTS (
+  SELECT 1 FROM users WHERE normalized_email = ${emailLiteral} OR pending_email = ${emailLiteral}
+) AND NOT EXISTS (
+  SELECT 1 FROM user_emails WHERE normalized_email = ${emailLiteral}
+);
+`;
+  const fillProfileGaps = `
+UPDATE users SET
+  first_name = COALESCE(first_name, ${toSqlNullableText(firstName)}),
+  last_name = COALESCE(last_name, ${toSqlNullableText(lastName)}),
+  job_title = COALESCE(job_title, ${toSqlNullableText(jobTitle)}),
+  biography = COALESCE(biography, ${toSqlNullableText(biography)}),
+  links_json = COALESCE(links_json, ${linksJson ? sqlString(linksJson) : "NULL"}),
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   -- 'headshots/...' keys are hand-uploaded via the admin self-service headshot
   -- endpoint (SPEAKER_UPLOADS_BUCKET) and must never be clobbered by a rerun.
@@ -260,11 +325,12 @@ ON CONFLICT(normalized_email) DO UPDATE SET
   -- (--remote uploads the raw file for server-side ingestion instead, so
   -- real preview/production imports are unaffected).
   headshot_r2_key = CASE
-    WHEN users.headshot_r2_key LIKE 'headshots/%' THEN users.headshot_r2_key
-    ELSE COALESCE(excluded.headshot_r2_key, users.headshot_r2_key)
-  END;
+    WHEN headshot_r2_key LIKE 'headshots/%' THEN headshot_r2_key
+    ELSE COALESCE(${toSqlNullableText(headshotR2Key)}, headshot_r2_key)
+  END
+WHERE id = ${ownerUserIdForEmail(normalizedEmail)};
 `;
-  return { statement, normalizedEmail };
+  return { statements: [createAccount, fillProfileGaps], normalizedEmail };
 }
 
 /**
@@ -286,11 +352,11 @@ export function buildIndividualMemberAggregateStatements(
     `
 INSERT OR IGNORE INTO members (id, member_type, user_id, status, member_since, created_at, updated_at)
 SELECT ${sqlString(randomUUID())}, 'individual', u.id, 'active', ${toSqlNullableText(memberSince)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-FROM users u WHERE u.normalized_email = ${sqlString(normalizedEmail)};
+FROM users u WHERE u.id = ${ownerUserIdForEmail(normalizedEmail)};
 `,
     `
 UPDATE members SET member_since = COALESCE(member_since, ${toSqlNullableText(memberSince)}), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedEmail)})
+WHERE user_id = ${ownerUserIdForEmail(normalizedEmail)}
   AND member_since IS NULL;
 `,
   ];
@@ -299,7 +365,7 @@ WHERE user_id = (SELECT id FROM users WHERE normalized_email = ${sqlString(norma
 INSERT OR IGNORE INTO member_category_assignments (member_id, category_code, created_at, updated_at)
 SELECT m.id, ${sqlString(categoryCode)}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM members m JOIN users u ON u.id = m.user_id
-WHERE u.normalized_email = ${sqlString(normalizedEmail)};
+WHERE u.id = ${ownerUserIdForEmail(normalizedEmail)};
 `);
     statements.push(`
 INSERT INTO identities
@@ -311,7 +377,7 @@ SELECT ${sqlString(randomUUID())}, u.id, NULL, NULL, NULL,
   FROM users u
   JOIN members member ON member.user_id = u.id AND member.member_type = 'individual'
   JOIN member_category_assignments category ON category.member_id = member.id
- WHERE u.normalized_email = ${sqlString(normalizedEmail)}
+ WHERE u.id = ${ownerUserIdForEmail(normalizedEmail)}
    AND category.category_code IN ('H5', 'H6', 'H7')
 ON CONFLICT(user_id)
   WHERE organization_id IS NULL
@@ -405,9 +471,9 @@ WHERE e.slug = ${sqlString(alias.slug)}
   ];
 }
 
-export function buildGroupMembershipStatement(groupSlug, email) {
+export function buildGroupMembershipStatement(groupSlug, email, groupType = "working_group", joinedAt = null) {
   const capacitiesCte = activeUserCapacitiesCte(
-    `SELECT id FROM users WHERE normalized_email = ${sqlString(email)} AND active = 1`,
+    `SELECT id FROM users WHERE id = ${ownerUserIdForEmail(email)} AND active = 1`,
   );
   return `
 ${capacitiesCte}
@@ -416,11 +482,54 @@ INSERT OR IGNORE INTO group_memberships
    joined_at, left_at, created_at, updated_at)
 SELECT lower(hex(randomblob(16))), group_row.id, capacity.user_id,
        capacity.identity_id, capacity.member_id, 'migration', NULL,
-       strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+       ${joinedAt ? sqlString(joinedAt) : "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"}, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   FROM active_user_capacities capacity
   JOIN groups group_row
     ON group_row.slug = ${sqlString(groupSlug)}
-   AND group_row.type_key = 'working_group'
+   AND group_row.type_key = ${sqlString(groupType)}
    AND group_row.active = 1;
+${
+  joinedAt
+    ? `UPDATE group_memberships SET joined_at = ${sqlString(joinedAt)}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+ WHERE source = 'migration' AND left_at IS NULL AND joined_at <> ${sqlString(joinedAt)}
+   AND user_id = ${ownerUserIdForEmail(email)}
+   AND group_id IN (SELECT id FROM groups WHERE slug = ${sqlString(groupSlug)} AND type_key = ${sqlString(groupType)} AND active = 1);`
+    : ""
+}
+`;
+}
+
+/**
+ * Every imported member's automatic group memberships — the All Members
+ * community group and any other category-enrolling group — written the way
+ * the portal writes them when a capacity changes. The roster statements
+ * above only seat the working groups the Google Groups exports name; without
+ * this the community group stayed empty after an import, so its mailing list
+ * subscribed nobody by default (#86, #103).
+ */
+export function buildAutomaticEnrollmentStatement() {
+  const now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')";
+  return `
+${activeUserCapacitiesCte("SELECT id FROM users WHERE active = 1")}
+INSERT OR IGNORE INTO group_memberships
+  (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
+   joined_at, left_at, created_at, updated_at)
+SELECT lower(hex(randomblob(16))), group_row.id, capacity.user_id, capacity.identity_id, capacity.member_id,
+       'automatic_policy', NULL, ${now}, NULL, ${now}, ${now}
+  FROM active_user_capacities capacity
+  JOIN group_membership_category_rules rule
+    ON rule.membership_category_code = capacity.membership_category
+   AND rule.permits_join = 1 AND rule.automatic_enrollment = 1
+  JOIN groups group_row
+    ON group_row.id = rule.group_id AND group_row.active = 1
+   AND group_row.parent_group_id IS NULL AND group_row.automatic_enrollment_mode = 'category'
+  LEFT JOIN group_automatic_enrollment_opt_outs opt_out
+    ON opt_out.group_id = group_row.id AND opt_out.user_id = capacity.user_id
+ WHERE (group_row.allow_automatic_opt_out = 0 OR opt_out.user_id IS NULL)
+   AND NOT EXISTS (
+     SELECT 1 FROM group_memberships existing
+      WHERE existing.group_id = group_row.id AND existing.user_id = capacity.user_id
+        AND existing.member_id = capacity.member_id AND existing.left_at IS NULL
+   );
 `;
 }

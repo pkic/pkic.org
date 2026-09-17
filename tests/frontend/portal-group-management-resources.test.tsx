@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
+import { eventSeriesCreateSchema } from "../../assets/shared/schemas/event-series";
 import { groupMemberAddBodySchema } from "../../assets/shared/schemas/groups";
 import {
   buttonNamed,
@@ -164,29 +165,29 @@ describe("portal group management resources", () => {
     const list = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
     await settle();
 
-    expect(list.textContent).toContain("No meeting series yet");
-    // "New series" is a place: it navigates to the create page rather than
+    expect(list.textContent).toContain("No meetings yet");
+    // "New meeting" is a place: it navigates to the create page rather than
     // unfolding a form over the list.
     expect(labelNames(list)).not.toContain("Meeting name");
-    await act(async () => buttonNamed(list, "New series").click());
+    await act(async () => buttonNamed(list, "New meeting").click());
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/new`);
 
     const createPage = mount(<GroupMeetings groupId={GROUP_ID} canManage seriesSegment="new" />);
     expect(labelNames(createPage)).toContain("Meeting name");
     await typeInto(controlFor(createPage, "Meeting name"), "Architecture call");
     await settle();
-    await act(async () => buttonNamed(createPage, "Create meeting series").click());
+    await act(async () => buttonNamed(createPage, "Create meeting").click());
     await settle();
     await settle();
 
     const request = requests.find(({ method }) => method === "POST");
     expect(request?.url.pathname).toBe(`/api/v1/groups/${GROUP_ID}/meetings/series`);
-    expect(request?.body).toMatchObject({
+    expect(eventSeriesCreateSchema.parse(request?.body)).toMatchObject({
       eventName: "Architecture call",
       eventSlug: "architecture-call",
       profileKey: "meeting",
       policy: {
-        registrationPolicy: "no_registration",
+        registrationPolicy: "automatic",
         memberEligibility: "owner_group",
         guestPolicy: "occurrence_invitation",
       },
@@ -195,6 +196,43 @@ describe("portal group management resources", () => {
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/meetings/${SERIES_ID}`);
     expect(requests.some(({ url }) => url.pathname.includes("working-groups"))).toBe(false);
     expect(requests.some(({ url }) => url.pathname.includes("/admin/"))).toBe(false);
+  });
+
+  it("shows one list at a time: the meetings, or — by its tab — those still awaiting a schedule", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        requests.push(url);
+        if (url.pathname.endsWith("/events")) {
+          return json({ events: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+        }
+        return json({ series: [MEETING_SERIES], page: SERIES_PAGE });
+      }),
+    );
+
+    const list = mount(<GroupMeetings groupId={GROUP_ID} canManage />);
+    await settle();
+    // Two tables used to stand under each other, the first captioned as
+    // events; now the tab strip names both views and one table shows (#101).
+    expect([...list.querySelectorAll("caption")].map((caption) => caption.textContent)).toEqual(["Meetings"]);
+    const tabs = [...list.querySelectorAll('[aria-label="Meeting views"] a')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Meetings", "Awaiting a schedule"]);
+    expect(tabs[1]?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/meetings/unscheduled`);
+    expect(requests.some((url) => url.pathname.endsWith("/events"))).toBe(false);
+
+    const unscheduled = mount(<GroupMeetings groupId={GROUP_ID} canManage seriesSegment="unscheduled" />);
+    await settle();
+    expect([...unscheduled.querySelectorAll("caption")].map((caption) => caption.textContent)).toEqual([
+      "Meetings awaiting a schedule",
+    ]);
+    expect(requests.some((url) => url.pathname.endsWith("/events"))).toBe(true);
+
+    // A participant has nothing to schedule, so no strip and just the list.
+    const reader = mount(<GroupMeetings groupId={GROUP_ID} canManage={false} />);
+    await settle();
+    expect(reader.querySelector('[aria-label="Meeting views"]')).toBeNull();
   });
 
   it("sends a reader without the manage capability from the create page back to the list", async () => {
@@ -306,6 +344,7 @@ describe("portal group management resources", () => {
                   memberType: "organization",
                   userName: "Member Person",
                   email: "member@example.test",
+                  headshotUrl: null,
                   organizationName: "Member Organization",
                   membershipCategory: "A",
                   source: "staff",

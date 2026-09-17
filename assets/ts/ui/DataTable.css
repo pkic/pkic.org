@@ -114,6 +114,25 @@
   }
 
   /*
+   * Directly under a panel's header, with no body padding around it, the
+   * list is flush: its rows run to the panel's edges and its regions
+   * separate with rules, exactly as they do in the list panel itself. A
+   * message above the rows keeps a row's inset so it does not touch the
+   * frame.
+   */
+  .pk-panel > .pk-table-list {
+    gap: 0;
+  }
+
+  .pk-panel > .pk-table-list > .pk-bulk-bar {
+    border-bottom: 1px solid var(--pk-line);
+  }
+
+  .pk-panel > .pk-table-list > .pk-alert {
+    margin: var(--pk-3) var(--pk-4);
+  }
+
+  /*
    * A data table is denser and quieter than a table in prose: more rows on a
    * screen, headers that read as column labels rather than sentences, and a
    * ground it can rely on because it is always drawn inside a `Panel`.
@@ -137,7 +156,15 @@
    * need", not a real percentage; content keeps it from collapsing the rest.
    */
   .pk-table__col--primary {
-    width: 99%;
+    /*
+     * A preferential share, not the whole of it. At 99% the subject column
+     * took every pixel a wide screen had and the columns beside it were
+     * crushed to their narrowest wrap — a place name on three lines, a
+     * group name on five (issue 125). Four tenths keeps the subject the
+     * widest column while the rest share the remainder in proportion to
+     * what they hold; a `fit` column still hugs its content and never wraps.
+     */
+    width: 40%;
     /*
      * The floor. `table-layout: auto` treats the 99% as a preference and can
      * still crush this column toward its minimum when every other column's
@@ -318,8 +345,9 @@
   }
 
   .pk-table__head-end {
-    display: inline-flex;
-    margin-left: auto;
+    display: flex;
+    float: inline-end;
+    margin-inline-start: var(--pk-3);
   }
 
   /*

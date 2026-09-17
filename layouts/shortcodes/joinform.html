@@ -1,9 +1,13 @@
-<div data-member-application data-module="member-flows/join-form" class="pk pk-form join-flow">
+{{/* `pk-form` — the measured column a form reads well in — sits on each form,
+     not on the flow's root: the success panel that replaces a submitted form
+     is not a form, and on the root the column kept it anchored to the left
+     of a wide page (#102). */}}
+<div data-member-application data-module="member-flows/join-form" class="pk pk-stack join-flow">
   <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
 
   <div data-join-start>
     <p class="pk-lede">First, tell us whether an organization is connected to your participation.</p>
-    <form data-join-start-form class="pk-stack needs-validation" novalidate>
+    <form data-join-start-form class="pk-form needs-validation" novalidate>
       {{/* `pk-field` on the group, not just `pk-fieldset`: the modifier that
            the validator sets carries the state variables, and for a choice
            group the fieldset is the element that owns the message. */}}
@@ -128,7 +132,7 @@
     <a class="pk-btn pk-btn--secondary" href="/contact/">Contact the PKI Consortium</a>
   </section>
 
-  <form data-join-application-form class="pk-stack needs-validation" novalidate hidden>
+  <form data-join-application-form class="pk-form needs-validation" novalidate hidden>
     <div>
       <div class="membership-verified-context">
         <p>

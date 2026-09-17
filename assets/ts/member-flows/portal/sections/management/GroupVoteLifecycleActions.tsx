@@ -6,7 +6,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { postJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
-import { Textarea } from "../../../../ui/TextControl";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 interface GroupVoteLifecycleActionsProps {
   groupId: string;
@@ -118,12 +118,13 @@ export function GroupVoteLifecycleActions({ groupId, vote, onChanged }: GroupVot
           <fieldset class="pk-fieldset" disabled={busy}>
             <Field label="Cancellation reason" required help="Sent to members with the cancellation notice.">
               {(control) => (
-                <Textarea
+                <MarkdownEditor
+                  variant="compact"
                   {...control}
-                  rows={3}
-                  maxLength={1000}
-                  value={cancellationReason}
-                  onInput={(event) => setCancellationReason(event.currentTarget.value)}
+                  name="cancellationReason"
+                  label="Cancellation reason"
+                  initialValue={cancellationReason}
+                  onChange={setCancellationReason}
                 />
               )}
             </Field>

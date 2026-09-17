@@ -1,3 +1,4 @@
+import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 /**
  * membership-settings-endpoints.test.ts
  *
@@ -50,12 +51,131 @@ describe("Membership workflow settings", () => {
     adminToken = await createAdminSession(env.DB, adminId, "settings-admin-token");
   });
 
+  it.each([false, true])("creates and deletes an unused category with individual=%s", async (isIndividual) => {
+    const created = await call(adminToken, "/api/v1/membership/categories", {
+      method: "POST",
+      body: JSON.stringify({
+        code: "COMMUNITY",
+        label: "Community participants",
+        description: null,
+        displayOrder: 200,
+        isVoting: false,
+        isIndividual,
+        requiresUniversityEmail: isIndividual,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const category = await getMembershipCategory(env.DB, "COMMUNITY");
+    expect(category).toMatchObject({ isIndividual, requiresUniversityEmail: isIndividual, revision: 0 });
+    const deleted = await call(adminToken, "/api/v1/membership/categories/COMMUNITY", {
+      method: "DELETE",
+      body: JSON.stringify({ expectedRevision: 0 }),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await getMembershipCategory(env.DB, "COMMUNITY")).toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT action FROM audit_log WHERE entity_id = 'COMMUNITY' ORDER BY action"),
+    ).toEqual([{ action: "membership_category_created" }, { action: "membership_category_deleted" }]);
+  });
+
+  it("grants a newly configured individual category and rejects an organization category", async () => {
+    const created = await call(adminToken, "/api/v1/membership/categories", {
+      method: "POST",
+      body: JSON.stringify({
+        code: "COMMUNITY",
+        label: "Community users",
+        description: null,
+        displayOrder: 200,
+        isVoting: false,
+        isIndividual: true,
+        requiresUniversityEmail: false,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const userId = await insertUser(env.DB, "community-user@example.test");
+    const grant = (membershipCategory: string) =>
+      call(adminToken, "/api/v1/members/capacities", {
+        method: "POST",
+        body: JSON.stringify({ userId, membershipCategory, activationReason: "Approved community membership" }),
+      });
+    expect((await grant("H1")).status).toBe(422);
+    expect((await grant("COMMUNITY")).status).toBe(201);
+    expect(await queryAll(env.DB, "SELECT member_type FROM members WHERE user_id = ?", [userId])).toEqual([
+      { member_type: "individual" },
+    ]);
+  });
+
+  it("keeps an assigned category and its group rules when deletion is refused", async () => {
+    const organization = await insertOrganization(env.DB, "Example community organization");
+    await seedOrganizationAggregate(env.DB, organization, "H1");
+    const rulesBefore = await queryAll(
+      env.DB,
+      "SELECT group_id, membership_category_code FROM group_membership_category_rules WHERE membership_category_code = 'H1' ORDER BY group_id",
+    );
+    const current = await getMembershipCategory(env.DB, "H1");
+    const response = await call(adminToken, "/api/v1/membership/categories/H1", {
+      method: "DELETE",
+      body: JSON.stringify({ expectedRevision: current!.revision }),
+    });
+    expect(response.status).toBe(409);
+    expect(await getMembershipCategory(env.DB, "H1")).toEqual(current);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT group_id, membership_category_code FROM group_membership_category_rules WHERE membership_category_code = 'H1' ORDER BY group_id",
+      ),
+    ).toEqual(rulesBefore);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'membership_category_deleted'")).toEqual([]);
+  });
+
+  it("preserves categories referenced by a voting proposal", async () => {
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO vote_proposals
+      (id, title, description, vote_type, owner_group_id, proposed_by_user_id, eligible_categories, status, created_at, updated_at)
+      VALUES (?, 'Community participation', 'Example proposal for organizations', 'motion',
+        '20000000-0000-4000-8000-000000000001', ?, '["H1"]', 'open_for_endorsement', ?, ?)`,
+    )
+      .bind(crypto.randomUUID(), adminId, now, now)
+      .run();
+    const category = await getMembershipCategory(env.DB, "H1");
+    const response = await call(adminToken, "/api/v1/membership/categories/H1", {
+      method: "DELETE",
+      body: JSON.stringify({ expectedRevision: category!.revision }),
+    });
+    expect(response.status).toBe(409);
+    expect(await getMembershipCategory(env.DB, "H1")).toEqual(category);
+  });
+
+  it("refuses duplicate category codes and stale deletion without changing the catalog", async () => {
+    const category = await getMembershipCategory(env.DB, "H1");
+    const duplicate = await call(adminToken, "/api/v1/membership/categories", {
+      method: "POST",
+      body: JSON.stringify({
+        code: "H1",
+        label: "Duplicate",
+        description: null,
+        displayOrder: 0,
+        isVoting: false,
+        isIndividual: true,
+        requiresUniversityEmail: false,
+      }),
+    });
+    expect(duplicate.status).toBe(409);
+    const stale = await call(adminToken, "/api/v1/membership/categories/H1", {
+      method: "DELETE",
+      body: JSON.stringify({ expectedRevision: category!.revision + 1 }),
+    });
+    expect(stale.status).toBe(409);
+    expect(await getMembershipCategory(env.DB, "H1")).toEqual(category);
+  });
+
   it("GET returns the seeded defaults", async () => {
     const response = await call(adminToken, "/api/v1/membership/settings");
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { consultationWindowDays: number; ecReviewWindowDays: number };
-    expect(body.consultationWindowDays).toBe(7);
-    expect(body.ecReviewWindowDays).toBe(7);
+    const body = (await response.json()) as { onHoldResponseDeadlineDays: number; autoReminderOnHolds: boolean };
+    expect(body.onHoldResponseDeadlineDays).toBe(7);
+    expect(body.autoReminderOnHolds).toBe(true);
   });
 
   it("removes the legacy admin membership-settings API", async () => {
@@ -72,18 +192,18 @@ describe("Membership workflow settings", () => {
     const current = await getMembershipSettings(env.DB);
     const response = await call(adminToken, "/api/v1/membership/settings", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: current.revision, consultationWindowDays: 10 }),
+      body: JSON.stringify({ expectedRevision: current.revision, onHoldResponseDeadlineDays: 10 }),
     });
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { consultationWindowDays: number; ecReviewWindowDays: number };
-    expect(body.consultationWindowDays).toBe(10);
-    expect(body.ecReviewWindowDays).toBe(7);
+    const body = (await response.json()) as { onHoldResponseDeadlineDays: number; autoReminderOnHolds: boolean };
+    expect(body.onHoldResponseDeadlineDays).toBe(10);
+    expect(body.autoReminderOnHolds).toBe(true);
 
-    const rows = await queryAll<{ consultation_window_days: number; updated_by_user_id: string | null }>(
+    const rows = await queryAll<{ on_hold_response_deadline_days: number; updated_by_user_id: string | null }>(
       env.DB,
-      "SELECT consultation_window_days, updated_by_user_id FROM membership_settings WHERE id = 'default'",
+      "SELECT on_hold_response_deadline_days, updated_by_user_id FROM membership_settings WHERE id = 'default'",
     );
-    expect(rows[0].consultation_window_days).toBe(10);
+    expect(rows[0].on_hold_response_deadline_days).toBe(10);
     expect(rows[0].updated_by_user_id).toBe(adminId);
     expect(
       await queryAll<{ actor_id: string | null }>(
@@ -97,7 +217,7 @@ describe("Membership workflow settings", () => {
     const apiKey = env.ADMIN_API_KEY ?? "test-admin-key";
     const settingsResponse = await call(apiKey, "/api/v1/membership/settings", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: 0, consultationWindowDays: 12 }),
+      body: JSON.stringify({ expectedRevision: 0, onHoldResponseDeadlineDays: 12 }),
     });
     expect(settingsResponse.status).toBe(403);
     expect((await call(apiKey, "/api/v1/membership/categories")).status).toBe(403);
@@ -131,7 +251,7 @@ describe("Membership workflow settings", () => {
 
     const patchResponse = await call(staffToken, "/api/v1/membership/settings", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: current.revision, ecReviewWindowDays: 14 }),
+      body: JSON.stringify({ expectedRevision: current.revision, onHoldResponseDeadlineDays: 14 }),
     });
     expect(patchResponse.status).toBe(403);
     const category = await getMembershipCategory(env.DB, "H1");
@@ -140,7 +260,31 @@ describe("Membership workflow settings", () => {
       body: JSON.stringify({ expectedRevision: category!.revision, label: "This must not save" }),
     });
     expect(categoryPatchResponse.status).toBe(403);
-    expect((await getMembershipSettings(env.DB)).ec_review_window_days).toBe(7);
+    expect(
+      (
+        await call(staffToken, "/api/v1/membership/categories", {
+          method: "POST",
+          body: JSON.stringify({
+            code: "STAFF_ONLY",
+            label: "Staff users",
+            description: null,
+            displayOrder: 0,
+            isVoting: false,
+            isIndividual: true,
+            requiresUniversityEmail: false,
+          }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await call(staffToken, "/api/v1/membership/categories/H1", {
+          method: "DELETE",
+          body: JSON.stringify({ expectedRevision: category!.revision }),
+        })
+      ).status,
+    ).toBe(403);
+    expect((await getMembershipSettings(env.DB)).on_hold_response_deadline_days).toBe(7);
     expect((await getMembershipCategory(env.DB, "H1"))!.label).toBe(category!.label);
   });
 
@@ -203,7 +347,7 @@ describe("Membership workflow settings", () => {
   it("enforces the shared settings and category boundaries at the mounted API", async () => {
     const settings = await getMembershipSettings(env.DB);
     for (const invalidSettings of [
-      { consultationWindowDays: MEMBERSHIP_WINDOW_DAY_LIMITS.consultationWindowDays.max + 1 },
+      { onHoldResponseDeadlineDays: MEMBERSHIP_WINDOW_DAY_LIMITS.onHoldResponseDeadlineDays.max + 1 },
       { consultationEmailRecipients: "x".repeat(MEMBERSHIP_EMAIL_RECIPIENTS_MAX_LENGTH + 1) },
     ]) {
       const response = await call(adminToken, "/api/v1/membership/settings", {
@@ -234,15 +378,15 @@ describe("Membership workflow settings", () => {
     const settings = await getMembershipSettings(env.DB);
     const first = await call(adminToken, "/api/v1/membership/settings", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: settings.revision, consultationWindowDays: 9 }),
+      body: JSON.stringify({ expectedRevision: settings.revision, onHoldResponseDeadlineDays: 9 }),
     });
     expect(first.status).toBe(200);
     const stale = await call(adminToken, "/api/v1/membership/settings", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: settings.revision, ecReviewWindowDays: 20 }),
+      body: JSON.stringify({ expectedRevision: settings.revision, onHoldResponseDeadlineDays: 20 }),
     });
     expect(stale.status).toBe(409);
-    expect((await getMembershipSettings(env.DB)).ec_review_window_days).toBe(7);
+    expect((await getMembershipSettings(env.DB)).on_hold_response_deadline_days).toBe(9);
 
     const category = await getMembershipCategory(env.DB, "A");
     const categoryFirst = await call(adminToken, "/api/v1/membership/categories/A", {
@@ -272,11 +416,11 @@ describe("Membership workflow settings", () => {
     await expect(
       updateMembershipSettings(
         racedSettingsDb,
-        { expectedRevision: settings.revision, consultationWindowDays: 11 },
+        { expectedRevision: settings.revision, onHoldResponseDeadlineDays: 11 },
         actor,
       ),
     ).rejects.toMatchObject({ status: 409, code: "MEMBERSHIP_CONFIGURATION_CHANGED" });
-    expect((await getMembershipSettings(env.DB)).consultation_window_days).toBe(7);
+    expect((await getMembershipSettings(env.DB)).on_hold_response_deadline_days).toBe(7);
 
     const category = await getMembershipCategory(env.DB, "H2");
     const racedCategoryDb = mutateBeforeNextBatch(env.DB, () =>

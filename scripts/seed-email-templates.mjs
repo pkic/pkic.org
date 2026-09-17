@@ -775,6 +775,24 @@ Your profile can be updated at any time up until the event.
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Profile reminders are independent from proposal decisions.
+  {
+    key: "speaker_profile_reminder",
+    subjectTemplate: "Please review your speaker profile — {{eventName}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+
+{{#if eq proposalDecisionStatus "accepted"}}Your session **{{proposalTitle}}** has been accepted for **{{eventName}}**. Please review your speaker profile so we can prepare the program.{{else}}
+{{#if eq proposalDecisionStatus "waitlisted"}}Your proposal **{{proposalTitle}}** is on the waitlist for **{{eventName}}**. Please review your speaker profile while we check program availability. This reminder does not confirm a place in the program.{{else}}
+{{#if eq proposalDecisionStatus "needs-work"}}Updates are requested for your proposal **{{proposalTitle}}** for **{{eventName}}**. Please address the committee's feedback and review your speaker profile. The proposal has not been accepted.{{else}}Your proposal **{{proposalTitle}}** is awaiting a decision for **{{eventName}}**. Please review your speaker profile to help the committee assess the submission. This reminder is not an acceptance.{{/if}}
+{{/if}}
+{{/if}}
+
+{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please check that your biography and headshot are up to date.{{/if}}
+
+[Review my speaker profile]({{profileUrl}})
+`,
+  },
+
   // 13. Presentation upload request
   // Sent to all speakers when a proposal is accepted.
   // Variables: eventName, firstName, proposalTitle, uploadUrl, deadline

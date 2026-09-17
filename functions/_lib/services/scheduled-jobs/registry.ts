@@ -1,17 +1,17 @@
+import { runMembershipWorkflows } from "../membership/workflows/scheduled";
+import { processMembershipFeeCheckouts } from "../membership/workflows/fee-checkout";
+import { dispatchEventEmailCampaignPage, cleanExpiredCampaignSnapshots } from "../event-email-campaign/dispatch";
 import { refreshMemberNews } from "../member-news/refresh";
 import { getConfig } from "../../config";
-import {
-  runConsultationBatch,
-  runEcReviewBatch,
-  runEcWindowAutoApprove,
-  runGoogleGroupsSyncPass,
-} from "../membership/scheduled-jobs";
+import { runGoogleGroupsSyncPass } from "../membership/scheduled-jobs";
 import { runOnHoldReminders } from "../membership/on-hold-reminders";
 import { runRetentionJob } from "../retention";
 import { runScheduledDueWork } from "../scheduled-due-work";
 import { runSponsorshipDueWork } from "../sponsorship-scheduled-jobs";
 import { runVotesDueWork } from "../votes-scheduled-jobs";
 import { runWeeklyWgChairDigest } from "../wg-chair-digest";
+import { runAutomaticMeetingInvitations } from "../event-series/automatic-invitations";
+import { resolveAppBaseUrl } from "../../config";
 import {
   boundedNextRunAt,
   earliestRetentionDue,
@@ -44,6 +44,28 @@ const VOTES_INTERVAL_SECONDS = 900;
  */
 export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
   {
+    key: "membership_workflows",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:approve"],
+    run: async ({ env, d1QueryBudget }) => runMembershipWorkflows(env.DB, resolveAppBaseUrl(env), d1QueryBudget),
+  },
+  {
+    key: "membership_fee_checkouts",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["membership:approve"],
+    run: async ({ env }) => ({ summary: await processMembershipFeeCheckouts(env.DB, env, resolveAppBaseUrl(env)) }),
+  },
+  {
+    key: "event_email_campaigns",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["email:manage"],
+    run: async ({ env }) => {
+      const summary = await dispatchEventEmailCampaignPage(env.DB);
+      await cleanExpiredCampaignSnapshots(env.DB);
+      return { summary };
+    },
+  },
+  {
     key: "member_news_refresh",
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["organizations:write"],
@@ -65,20 +87,28 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
       await runOnHoldReminders(env.DB, env, getConfig(env).scheduledOnHoldReminderLimit, d1QueryBudget);
     },
   },
-  {
-    key: "ec_auto_approve",
-    leaseSeconds: DEFAULT_LEASE_SECONDS,
-    requiredPermissions: ["membership:approve"],
-    run: async ({ env, d1QueryBudget }) => {
-      await runEcWindowAutoApprove(env.DB, env, getConfig(env).scheduledEcAutoApproveLimit, d1QueryBudget);
-    },
-  },
+
   {
     key: "google_groups_sync",
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["membership:write"],
     run: async ({ env, d1QueryBudget }) => {
       await runGoogleGroupsSyncPass(env.DB, env, getConfig(env).scheduledGoogleGroupsSyncLimit, d1QueryBudget);
+    },
+  },
+  {
+    key: "meeting_invitations",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["events:manage"],
+    run: async ({ env, d1QueryBudget }) => {
+      const { queued } = await runAutomaticMeetingInvitations(
+        env.DB,
+        resolveAppBaseUrl(env),
+        getConfig(env).scheduledMeetingInvitationLimit,
+        d1QueryBudget,
+        { signingSecret: env.INTERNAL_SIGNING_SECRET, rsvpEmail: env.RSVP_EMAIL },
+      );
+      return { summary: { queued } };
     },
   },
   {
@@ -120,22 +150,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
       return { nextRunAt: boundedNextRunAt(await earliestRetentionDue(env.DB), RETENTION_INTERVAL_SECONDS) };
     },
   },
-  {
-    key: "consultation_batch",
-    leaseSeconds: DEFAULT_LEASE_SECONDS,
-    requiredPermissions: ["membership:write"],
-    run: async ({ env }) => {
-      await runConsultationBatch(env.DB, env, getConfig(env).scheduledConsultationBatchLimit);
-    },
-  },
-  {
-    key: "ec_review_batch",
-    leaseSeconds: DEFAULT_LEASE_SECONDS,
-    requiredPermissions: ["membership:approve"],
-    run: async ({ env }) => {
-      await runEcReviewBatch(env.DB, env);
-    },
-  },
+
   {
     key: "working_group_chair_digest",
     leaseSeconds: DEFAULT_LEASE_SECONDS,

@@ -21,7 +21,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const db = c.env.DB;
   const [form, categories] = await Promise.all([
     getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY),
-    listMembershipCategories(db),
+    listMembershipCategories(db, true),
   ]);
   if (form) requireMembershipApplicationPolicyFields(form.fields);
   return jsonNoStore(memberApplicationFormResponseSchema.parse({ form, categories }));

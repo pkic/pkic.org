@@ -14,7 +14,9 @@ import { Badge, statusLabel } from "../../../../components/Badge";
 import { Badge as ToneBadge } from "../../../../ui/Badge";
 import { BulkBar } from "../../../../ui/BulkBar";
 import { Button } from "../../../../ui/Button";
+import { Menu } from "../../../../ui/Menu";
 import { PageHeader } from "../../../../ui/PageHeader";
+import { PersonCell } from "../../../../ui/PersonCell";
 import { getJson, postJson } from "../../../../shared/api-client";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { fmt, toast } from "../../ui";
@@ -28,6 +30,9 @@ import {
   type EmailOutboxRow,
 } from "../../../../../shared/schemas/email-outbox";
 import "../../../../ui/Content.css";
+// `pk-table__clamp` is defined in the table's own stylesheet, which rides a
+// lazy chunk: a surface that writes the class name pulls the sheet in itself.
+import "../../../../ui/Table.css";
 
 /** The largest selection the process/reset endpoints accept in one request. */
 const MAX_SELECTION = 100;
@@ -37,39 +42,49 @@ const MESSAGE_TYPE_OPTIONS = emailMessageTypeSchema.options;
 
 const loadPortalCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
+/**
+ * One fact per column. The list used to stack four facts into each of five
+ * cells — name over address over event, subject over template over type —
+ * so a row was a paragraph and the subject, the one line a reader scans for,
+ * was cramped into a fifth of the width (#124). Every column here can be
+ * sorted or filtered on its own, and the two that are only ever wanted while
+ * chasing a failure start hidden.
+ */
 const rowColumns: Column<EmailOutboxRow>[] = [
   {
     header: "Recipient",
     cell: (row) => (
-      <div class="pk-stack pk-stack--tight">
-        <div class="pk-strong">{row.recipientName || row.recipientEmail}</div>
-        {/* The address is the second line only when the first line is a
-            name; a row without a name already leads with the address, and
-            repeating it said nothing twice. */}
-        {row.recipientName && <div class="pk-mono pk-small pk-break">{row.recipientEmail}</div>}
-        {row.eventName && <div class="pk-small">{row.eventName}</div>}
-      </div>
+      <PersonCell
+        name={row.recipientName || row.recipientEmail}
+        // The address is the second line only when the first line is a name;
+        // a row without a name already leads with the address.
+        email={row.recipientName ? row.recipientEmail : undefined}
+        size="sm"
+      />
     ),
     sort: { asc: "recipient", desc: "-recipient" },
   },
   {
-    header: "Message",
+    header: "Subject",
     cell: (row) => (
-      <div class="pk-stack pk-stack--tight">
-        <div class="pk-strong">{row.subject || "PKI Consortium Update"}</div>
-        <div class="pk-cluster">
-          <span class="pk-small">
-            {row.templateKey}
-            {row.templateVersion !== null ? ` v${row.templateVersion}` : ""}
-          </span>
-          <Badge status={row.messageType} />
+      <>
+        <a class="pk-strong" href={`#/settings/email-outbox/${encodeURIComponent(row.id)}`}>
+          {row.subject || "Email delivery details"}
+        </a>
+        <div class="pk-small pk-muted">
+          {row.templateKey}
+          {row.templateVersion !== null ? ` v${row.templateVersion}` : ""}
+          {row.eventName ? ` · ${row.eventName}` : ""}
         </div>
-      </div>
+      </>
     ),
+    width: "primary",
     sort: { asc: "template", desc: "-template" },
-    // Both filters already exist on the list contract; each lives in the
-    // column that shows the value it narrows, so status is not a concept the
-    // reader must express through search syntax.
+  },
+  {
+    header: "Type",
+    cell: (row) => <Badge status={row.messageType} />,
+    width: "fit",
     filter: {
       param: "messageType",
       options: [
@@ -79,16 +94,9 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     },
   },
   {
-    header: "Queue",
-    cell: (row) => (
-      <div class="pk-stack pk-stack--tight">
-        <div class="pk-cluster">
-          <Badge status={row.status} />
-          <span class="pk-small">Attempts {row.attempts}</span>
-        </div>
-        <div class="pk-small">Updated {fmt(row.updatedAt)}</div>
-      </div>
-    ),
+    header: "Status",
+    cell: (row) => <Badge status={row.status} />,
+    width: "fit",
     sort: { asc: "status", desc: "-status" },
     filter: {
       param: "status",
@@ -99,42 +107,53 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     },
   },
   {
-    header: "Timing",
-    cell: (row) => (
-      <div class="pk-stack pk-stack--tight">
-        <div>Queued {fmt(row.createdAt)}</div>
-        <div>Due {fmt(row.sendAfter)}</div>
-        {row.sentAt && <div>Sent {fmt(row.sentAt)}</div>}
-      </div>
-    ),
-    className: "pk-small",
+    // Wanted while chasing a failure, not while reading the queue: hidden
+    // until asked for. Every fit column here is a timestamp or a badge that
+    // cannot wrap, and at eight of them the subject was squeezed to its
+    // narrowest before the reader had touched anything.
+    header: "Attempts",
+    cell: (row) => row.attempts,
+    className: "pk-center",
+    width: "fit",
+    hideable: true,
+    defaultHidden: true,
+  },
+  {
+    header: "Queued",
+    cell: (row) => fmt(row.createdAt),
+    className: "pk-small pk-nowrap",
+    width: "fit",
+    sort: { asc: "createdAt", desc: "-createdAt", defaultDirection: "desc" },
+  },
+  {
+    header: "Due",
+    cell: (row) => fmt(row.sendAfter),
+    className: "pk-small pk-nowrap",
     width: "fit",
     sort: { asc: "sendAfter", desc: "-sendAfter" },
   },
   {
-    header: "Details",
+    header: "Sent",
+    cell: (row) => (row.sentAt ? fmt(row.sentAt) : "—"),
+    className: "pk-small pk-nowrap",
+    width: "fit",
+    hideable: true,
+    defaultHidden: true,
+  },
+  {
+    // The identifiers are for support work against the provider's logs, not
+    // for reading the queue, so the column starts hidden and comes back from
+    // the columns menu when it is wanted.
+    header: "References",
     cell: (row) => (
-      <div class="pk-stack pk-stack--tight">
-        {/* A failure is the one detail worth a row's attention, and "failure"
-            is in the words, so the row does not depend on a tone nobody can
-            rely on to say that something went wrong. The identifiers stay one
-            click away for support work instead of wrapping a UUID down the
-            column; a healthy row does not narrate the absence of an error. */}
-        {row.lastError && (
-          <details>
-            <summary class="pk-small">Failure details</summary>
-            <div class="pk-small pk-break">{row.lastError}</div>
-          </details>
-        )}
-        <details>
-          <summary class="pk-small">References</summary>
-          <div class="pk-stack pk-stack--tight">
-            <div class="pk-mono pk-small pk-break">{row.id}</div>
-            {row.providerMessageId && <div class="pk-mono pk-small pk-break">{row.providerMessageId}</div>}
-          </div>
-        </details>
-      </div>
+      <>
+        <div class="pk-mono pk-small">{row.id}</div>
+        {row.providerMessageId && <div class="pk-mono pk-small pk-muted">{row.providerMessageId}</div>}
+      </>
     ),
+    width: "fit",
+    hideable: true,
+    defaultHidden: true,
   },
 ];
 
@@ -184,7 +203,28 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
     // bucket that held the outbox, the due queue and the job registry at
     // once and named none of them (#40).
     <div class="pk pk-stack pk-stack--snug">
-      <PageHeader title="Email outbox" />
+      <PageHeader
+        title="Email outbox"
+        actions={
+          /* A command on the page as a whole — the next due batch, whatever
+             is selected — is the page's, and lives in its menu rather than
+             standing open in the table's toolbar (#124). */
+          canManage ? (
+            <Menu
+              label="Email outbox actions"
+              align="end"
+              items={[
+                {
+                  id: "process-due",
+                  label: "Process next 20 due",
+                  disabled: busy,
+                  onSelect: () => void process("/api/v1/email/outbox/process", { limit: 20 }, false),
+                },
+              ]}
+            />
+          ) : undefined
+        }
+      />
       {!canManage && (
         <div class="pk-cluster pk-cluster--end">
           <ToneBadge tone="neutral">Read only</ToneBadge>
@@ -238,19 +278,6 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         initialSort="-createdAt"
         searchPlaceholder="Search recipient, subject, template, event, or error…"
         actionsRef={actionsRef}
-        toolbar={
-          canManage
-            ? () => (
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => void process("/api/v1/email/outbox/process", { limit: 20 }, false)}
-                >
-                  Process next 20 due
-                </Button>
-              )
-            : undefined
-        }
         selection={canManage ? { selected, onChange: setSelected, rowLabel } : undefined}
         load={loadPortalCollection}
         empty="No outbox rows match the current filters."

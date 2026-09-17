@@ -35,9 +35,8 @@ export const ApplicationStagePatch = openApiRoute(
       onHoldSubtype: body.onHoldSubtype ?? null,
       note: body.note ?? null,
       notification: {
-        statusUrl: `${config.appBaseUrl}/application-status/?id=${applicationId}`,
+        appBaseUrl: config.appBaseUrl,
         deadlineDays: settings.on_hold_response_deadline_days,
-        consultationWindowDays: settings.consultation_window_days,
         requestDetails: body.note ?? "",
         reason: body.note ?? "",
       },

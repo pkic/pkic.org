@@ -145,24 +145,30 @@ test("permitted staff filter, sort, and manage columns in the users list", async
   // "Represents" column filter — narrowing to "Members" still shows the row;
   // narrowing to "Event attendees" hides it.
   await page.getByRole("button", { name: "Represents column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "Members" }).click();
   await expect(row).toBeVisible();
   await page.getByRole("button", { name: "Represents column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "Event attendees" }).click();
   await expect(row).toHaveCount(0);
   await page.getByRole("button", { name: "Represents column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "Everyone" }).click();
   await expect(row).toBeVisible();
 
   // "Role" column filter — narrowing to "Users" still shows the row (its
   // role is the plain default); narrowing to "Administrators" hides it.
   await page.getByRole("button", { name: "Role column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "Users" }).click();
   await expect(row).toBeVisible();
   await page.getByRole("button", { name: "Role column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "Administrators" }).click();
   await expect(row).toHaveCount(0);
   await page.getByRole("button", { name: "Role column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: "All roles" }).click();
   await expect(row).toBeVisible();
 
@@ -343,4 +349,27 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
   expect(Math.abs(imageBox.width - imageBox.height), "photo stays square").toBeLessThan(1);
   expect(Math.abs(frameBox.width - imageBox.width), "photo fills its circular frame").toBeLessThanOrEqual(2);
   await expect(portrait).toHaveCSS("object-fit", "cover");
+  // #85: the standing must surround only the photo, never editor actions.
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const ring = page.locator(".pk-avatar-standing__ring").filter({ has: frame });
+    const ringBox = (await ring.boundingBox())!;
+    const pictureBox = (await frame.boundingBox())!;
+    expect(Math.abs(ringBox.width - ringBox.height), "standing stays circular").toBeLessThan(1);
+    expect(ringBox.width - pictureBox.width, "ring hugs the photo").toBeCloseTo(6, 0);
+    await expect(ring.getByRole("button", { name: "Remove photo", exact: true })).toHaveCount(0);
+    await frame.focus();
+    await expect(page.getByRole("button", { name: "Remove photo", exact: true })).toBeVisible();
+    const badge = page.locator(".pk-avatar-standing").filter({ has: frame }).locator(".pk-avatar-standing__label");
+    expect(
+      await badge.evaluate((label) => {
+        const box = label.getBoundingClientRect();
+        return label.contains(document.elementFromPoint(box.x + box.width / 2, box.y + 2));
+      }),
+      "badge paints above the photo where they overlap",
+    ).toBe(true);
+    const removeBox = (await page.getByRole("button", { name: "Remove photo", exact: true }).boundingBox())!;
+    expect(removeBox.y, "remove is at the portrait corner, not a separate row").toBeLessThan(pictureBox.y + 10);
+    await page.screenshot({ path: `test-results/issue-85-portrait-${width}.png` });
+  }
 });

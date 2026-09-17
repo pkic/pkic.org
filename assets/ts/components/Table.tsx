@@ -76,6 +76,12 @@ export interface Column<T> {
    * is not a list — so those default to false; everything else to true.
    */
   hideable?: boolean;
+  /**
+   * Starts the visit hidden; the reader can show it from the columns menu.
+   * For a column worth having but not worth the width on every visit — a
+   * job title beside an organization, say (#119).
+   */
+  defaultHidden?: boolean;
 }
 
 export interface ColumnFilter {
@@ -85,6 +91,8 @@ export interface ColumnFilter {
    * option is the open state — "All stages" — and carries the empty value.
    */
   options?: readonly FilterOption[];
+  /** Bounded server option pages expose navigation and retry in the same menu. */
+  optionNavigation?: readonly MenuItem[];
   /**
    * The open-vocabulary alternative, declared instead of `options` when the
    * value set is a name or an organization rather than a short known list.
@@ -231,7 +239,9 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   // Hidden columns are the reader's choice for this visit; they are keyed by
   // header so the choice survives a re-render that rebuilds the column list.
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(
+    () => new Set(columns.filter((column) => column.defaultHidden).map((column) => headLabel(column.header))),
+  );
   // Which column's typed filter is open, by query parameter. One at a time:
   // the row appears above the rows it narrows, and two of them would push the
   // table further from the control acting on it.
@@ -287,15 +297,22 @@ export function DataTable<T>({
     const columnFilter = column.filter;
     if (columnFilter && onFilterChange) {
       const current = filters[columnFilter.param] ?? "";
-      columnFilter.options?.forEach((option, position) => {
+      if (columnFilter.options) {
         items.push({
-          id: `${id}-filter-${option.value || "all"}`,
-          label: option.label,
-          checked: current === option.value,
-          separatorBefore: position === 0 && items.length > 0,
-          onSelect: () => onFilterChange(columnFilter.param, option.value),
+          id: `${id}-filter`,
+          label: "Filter",
+          onSelect: () => {},
+          children: [
+            ...columnFilter.options.map((option) => ({
+              id: `${id}-filter-${option.value || "all"}`,
+              label: option.label,
+              checked: current === option.value,
+              onSelect: () => onFilterChange(columnFilter.param, option.value),
+            })),
+            ...(columnFilter.optionNavigation ?? []),
+          ],
         });
-      });
+      }
       if (columnFilter.text) {
         // An open vocabulary cannot be listed, so the menu offers the control
         // that can take one. "Edit" rather than "Filter" once something is in

@@ -3,10 +3,12 @@
  * routes and group-context routes consume this one query and projection.
  */
 import { all, first } from "../../db/queries";
+import { publicUserHeadshotPath } from "../user-headshot";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
 import { getAttendanceStatusByType } from "./attendance-statistics";
+import { activeDayWaitlistExistsSql, loadRegistrationDayStates } from "./day-states";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import {
   eventRegistrationSummarySchema,
@@ -29,17 +31,14 @@ interface RegistrationRow {
   updated_at: string;
   user_email: string | null;
   display_name: string | null;
+  headshot_r2_key: string | null;
+  organization_name: string | null;
+  job_title: string | null;
   referral_code: string | null;
   rsvp_events_json: string | null;
   has_bounced: number;
   sponsor_consent: number;
   custom_answers_json: string | null;
-}
-
-interface WaitlistSummaryRow {
-  registration_id: string;
-  summary: string | null;
-  count: number;
 }
 
 interface AttendanceChangeRow {
@@ -83,6 +82,9 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
   } else if (params.bounced === "false") {
     conditions.push(`COALESCE(${latestOutboxStatusForRegistrationSql}, '') <> 'bounced'`);
   }
+
+  if (params.waitlisted === "true") conditions.push(activeDayWaitlistExistsSql("r"));
+  else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
 
   if (params.consent === "true") {
     conditions.push(
@@ -145,6 +147,8 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
       selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
+              u.headshot_r2_key AS headshot_r2_key,
+              u.organization_name AS organization_name, u.job_title AS job_title,
               ${registrationReferralCodeSql} AS referral_code,
               COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
               EXISTS(SELECT 1 FROM consent_acceptances ca
@@ -200,27 +204,11 @@ export async function listEventRegistrations(
   );
 
   const registrationIds = registrationRows.map((row) => row.id);
-  const registrationFilter = buildD1JsonMembershipFilter("w.registration_id", registrationIds);
   const historyRegistrationFilter = buildD1JsonMembershipFilter("h.registration_id", registrationIds);
-  const [waitlistSummaries, attendanceChangeRows] =
+  const [dayStates, attendanceChangeRows] =
     registrationIds.length > 0
       ? await Promise.all([
-          all<WaitlistSummaryRow>(
-            db,
-            `SELECT
-           w.registration_id,
-           GROUP_CONCAT(CASE
-             WHEN ed.label IS NOT NULL AND ed.label <> '' THEN ed.label || ' (' || w.status || ')'
-             ELSE ed.day_date || ' (' || w.status || ')'
-           END, ' · ') AS summary,
-           COUNT(*) AS count
-         FROM event_day_waitlist_entries w
-         LEFT JOIN event_days ed ON ed.id = w.event_day_id
-         WHERE ${registrationFilter.sql}
-           AND w.status IN ('waiting', 'offered')
-         GROUP BY w.registration_id`,
-            registrationFilter.bindings,
-          ),
+          loadRegistrationDayStates(db, registrationIds),
           all<AttendanceChangeRow>(
             db,
             `SELECT h.registration_id,
@@ -238,9 +226,8 @@ export async function listEventRegistrations(
             historyRegistrationFilter.bindings,
           ),
         ])
-      : [[], []];
+      : [new Map(), []];
 
-  const waitlistByRegistrationId = new Map(waitlistSummaries.map((row) => [row.registration_id, row]));
   const attendanceChangesByRegistrationId = new Map<string, AttendanceChangeHistoryEntry[]>();
   for (const row of attendanceChangeRows) {
     let history = attendanceChangesByRegistrationId.get(row.registration_id);
@@ -262,14 +249,13 @@ export async function listEventRegistrations(
   }
 
   const registrations = registrationRows.map((row) => {
-    const summary = waitlistByRegistrationId.get(row.id);
     const attendanceChangeHistory = attendanceChangesByRegistrationId.get(row.id) ?? [];
     return {
       ...row,
+      headshot_url: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
       has_bounced: !!row.has_bounced,
       sponsor_consent: !!row.sponsor_consent,
-      dayWaitlistSummary: summary?.summary ?? null,
-      dayWaitlistCount: summary?.count ?? 0,
+      days: dayStates.get(row.id) ?? [],
       attendanceChangeHistory,
       lastAttendanceChange: attendanceChangeHistory.at(-1) ?? null,
     };

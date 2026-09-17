@@ -3,6 +3,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
 
@@ -98,10 +99,13 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   });
 
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
-  await expect(page.getByRole("heading", { name: "Proposal program", exact: true })).toBeVisible();
+  // The catalogue is the one list panel, not a titled panel restating the trail.
+  await expect(page.getByRole("table", { name: "Event proposals" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(row).toBeVisible();
-  await row.click();
+  // A row is a link to the proposal's own page, so the address bar follows.
+  await openRow(row, "Open Canonical portal proposal journey");
+  await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events/${event.id}/proposals/${proposalId}$`));
   await expect(page.getByRole("heading", { name: "Canonical portal proposal journey", exact: true })).toBeVisible();
   const auditResponse = page.waitForResponse(
     (response) =>
@@ -110,18 +114,25 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   );
   // Scoped to the proposal's own tab strip: the group workspace around it
   // carries an "Audit log" tab of its own, and an unscoped lookup names both.
-  const proposalTabs = page.getByRole("tablist", { name: "Proposal sections" });
-  await tab(proposalTabs, "Audit Log").click();
+  // The facets are URLs, so the strip is navigation rather than a tablist.
+  const proposalTabs = page.getByRole("navigation", { name: "Proposal sections" });
+  await tab(proposalTabs, "Audit log").click();
   expect((await auditResponse).status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "Audit Log", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/audit-log$/);
+  await expect(page.getByRole("heading", { name: "Audit log", exact: true })).toBeVisible();
   await tab(proposalTabs, "Speakers").click();
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Proposal speakers").getByText("Portal Proposer", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Edit profile" }).click();
+  const speakerPanel = page.getByRole("region", { name: "Proposal speakers" });
+  await expect(speakerPanel.getByText("Portal Proposer", { exact: true })).toBeVisible();
+  // A speaker's commands sit behind the card's own menu; editing turns the
+  // card's values into inputs in place.
+  await page.getByRole("button", { name: "Actions for Portal Proposer" }).click();
+  await page.getByRole("menuitem", { name: "Edit profile" }).click();
   await page.getByRole("textbox", { name: "Biography" }).fill("Updated through the canonical group portal.");
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.getByText("Updated through the canonical group portal.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Profile reminder/ }).click();
+  await page.getByRole("button", { name: "Actions for Portal Proposer" }).click();
+  await page.getByRole("menuitem", { name: "Send profile reminder" }).click();
   await expect(page.getByText("Profile reminder sent", { exact: true })).toBeVisible();
 
   const coSpeakerEmail = `portal-co-speaker-${unique}@pkic.org`;
@@ -130,22 +141,27 @@ test("portal proposal detail uses canonical proposal resources without admin fal
     (response) =>
       response.request().method() === "POST" && response.url().includes(`/api/v1/proposals/${proposalId}/speakers`),
   );
-  const speakerPanel = page.getByLabel("Proposal speakers");
-  await speakerPanel.getByLabel("Email address").fill(coSpeakerEmail);
-  await speakerPanel.getByLabel("First name").fill("Portal");
-  await speakerPanel.getByLabel("Last name").fill("Co Speaker");
-  await speakerPanel.getByLabel("Proposal role").selectOption("co_speaker");
-  await speakerPanel.getByLabel("Invitation deadline").fill(coSpeakerDeadline);
-  await speakerPanel.getByRole("button", { name: "Invite co-speaker" }).click();
+  // Inviting is a page of its own under the roster, with its own address.
+  await speakerPanel.getByRole("link", { name: "Invite co-speaker" }).click();
+  await expect(page).toHaveURL(/\/speakers\/new$/);
+  const invitePage = page.getByRole("region", { name: "Invite a co-speaker" });
+  await invitePage.getByLabel("Email address").fill(coSpeakerEmail);
+  await invitePage.getByLabel("First name").fill("Portal");
+  await invitePage.getByLabel("Last name").fill("Co Speaker");
+  await invitePage.getByLabel("Proposal role").selectOption("co_speaker");
+  await invitePage.getByLabel("Invitation deadline").fill(coSpeakerDeadline);
+  await invitePage.getByRole("button", { name: "Invite co-speaker" }).click();
   const invitation = (await coSpeakerInviteResponse).json() as Promise<{
     email: string;
     expiresAt: string;
     role: string;
     queued: boolean;
   }>;
+  await expect(page.getByText(`Invitation queued for ${coSpeakerEmail}`, { exact: true })).toBeVisible();
+  // Sending returns to the roster, which now lists the invitee.
+  await expect(page).toHaveURL(/\/speakers$/);
   await expect(speakerPanel.locator("strong").filter({ hasText: /^Portal Co Speaker$/ })).toBeVisible();
   await expect(speakerPanel.getByText(coSpeakerEmail, { exact: true })).toBeVisible();
-  await expect(page.getByText(`Invitation queued for ${coSpeakerEmail}`, { exact: true })).toBeVisible();
   await expect(invitation).resolves.toEqual({
     success: true,
     email: coSpeakerEmail,
@@ -157,7 +173,6 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(proposalRequests).toEqual(
     expect.arrayContaining([
-      "GET /api/v1/proposals/programs",
       `GET /api/v1/events/${event.slug}/proposals`,
       `GET /api/v1/proposals/${proposalId}`,
       `GET /api/v1/proposals/${proposalId}/audit-log`,

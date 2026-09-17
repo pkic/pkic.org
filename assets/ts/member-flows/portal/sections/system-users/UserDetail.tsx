@@ -15,6 +15,7 @@ import {
 } from "./UserMemberProfilePanels";
 import { UserAdministrationSection } from "./UserAdministrationSection";
 import { UserAffiliationsPanel } from "./UserAffiliationsPanel";
+import { UserIdentityGrantForm } from "./UserIdentityGrantForm";
 import { UserParticipationHistory } from "./UserParticipationHistory";
 import { UserProfileEditor } from "./UserProfileEditor";
 import { CURRENT_USER_API, SelfProfilePanel } from "./SelfProfilePanel";
@@ -23,7 +24,7 @@ import { myProfileSchema } from "../../../../../shared/schemas/me";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { usePortalHashLocation } from "../../hash-location";
 import { Alert } from "../../../../ui/Alert";
-import { Avatar, AvatarStanding } from "../../../../ui/Avatar";
+import { Avatar } from "../../../../ui/Avatar";
 import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import {
@@ -77,14 +78,22 @@ export interface UserPermissions {
 
 export function UserDetail({
   userId,
+  section,
+  segment,
   permissions,
   viewerUserId,
 }: {
   userId: string;
+  /** A page under the record: `affiliations` with segment `new` is the identity grant (#107). */
+  section?: string;
+  segment?: string;
   permissions: UserPermissions;
   /** Who is reading, so the record knows when its subject is them. */
   viewerUserId?: string;
 }) {
+  const [, navigate] = usePortalHashLocation();
+  const recordPath = `/users/${encodeURIComponent(userId)}`;
+  const grantingIdentity = section === "affiliations" && segment === "new" && permissions.canManageMembership;
   // Participation is its own resource: it is the expensive half of the record
   // and answers a different question from the detail, so it loads separately
   // and the rest of the page does not wait on it.
@@ -273,7 +282,14 @@ export function UserDetail({
         person is, and keeping it out of the header is what lets the same
         header carry an organization on the organization record.
       */}
-      <Breadcrumb items={[{ label: "Users", href: usePortalHashLocation.hrefs("/users") }, { label: displayName }]} />
+      <Breadcrumb
+        items={[
+          { label: "Users", href: usePortalHashLocation.hrefs("/users") },
+          ...(grantingIdentity
+            ? [{ label: displayName, href: usePortalHashLocation.hrefs(recordPath) }, { label: "Add identity" }]
+            : [{ label: displayName }]),
+        ]}
+      />
       <ProfileHeader
         media={
           /*
@@ -287,23 +303,27 @@ export function UserDetail({
             `neutral` desaturating it for a deactivated account so the
             standing reads as held-before without a second badge saying so.
           */
-          <AvatarStanding status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}>
-            {portraitEditable ? (
-              <UserPortrait
-                userId={user.id}
-                displayName={displayName}
-                headshotUrl={user.headshotUrl ?? null}
-                isSelf={isSelf}
-                canEdit
-                /* The subject's own portrait is read by the rest of the portal
+          portraitEditable ? (
+            <UserPortrait
+              status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}
+              userId={user.id}
+              displayName={displayName}
+              headshotUrl={user.headshotUrl ?? null}
+              isSelf={isSelf}
+              canEdit
+              /* The subject's own portrait is read by the rest of the portal
                    from the stored profile, so their change re-reads that as
                    well as the record; everybody else's is only the record. */
-                onChanged={isSelf ? refreshSelfProfile : load}
-              />
-            ) : (
-              <Avatar name={displayName} src={user.headshotUrl ?? undefined} size="xl" />
-            )}
-          </AvatarStanding>
+              onChanged={isSelf ? refreshSelfProfile : load}
+            />
+          ) : (
+            <Avatar
+              name={displayName}
+              src={user.headshotUrl ?? undefined}
+              size="xl"
+              status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}
+            />
+          )
         }
         title={displayName}
         pill={user.active ? undefined : <Badge status="inactive" />}
@@ -377,9 +397,20 @@ export function UserDetail({
         this page is arranged the same way every other subject record is —
         one column under 60rem, main plus a measured aside above it.
       */}
-      <div class="pk-record">
-        <div class="pk-stack">
-          {/*
+      {grantingIdentity ? (
+        <UserIdentityGrantForm
+          user={user}
+          canActivate={permissions.canActivateIdentity}
+          onGranted={() => {
+            void load();
+            navigate(recordPath);
+          }}
+          cancelHref={recordPath}
+        />
+      ) : (
+        <div class="pk-record">
+          <div class="pk-stack">
+            {/*
             About speaks from the identity marked as default.
 
             The only prose this system stores is `identity.biography`, which
@@ -390,52 +421,51 @@ export function UserDetail({
             page. With nothing marked the record falls back to the first
             affiliation, which is what it did before the flag existed.
           */}
-          {identity?.biography && (
-            <Panel aria-label="About">
-              <PanelHeader title="About" />
-              <PanelBody>
-                <p class="pk-affiliation__summary">{identity.biography}</p>
-              </PanelBody>
-            </Panel>
-          )}
+            {identity?.biography && (
+              <Panel aria-label="About">
+                <PanelHeader title="About" />
+                <PanelBody>
+                  <p class="pk-affiliation__summary">{identity.biography}</p>
+                </PanelBody>
+              </Panel>
+            )}
 
-          <MemberSkillsPanel userId={user.id} canRead={canRead} canVouch={!isSelf} />
+            <MemberSkillsPanel userId={user.id} canRead={canRead} canVouch={!isSelf} />
 
-          {participationGroups.length > 0 && (
-            <div class="pk-table-list">
-              <DataTable
-                caption="Group participation"
-                showCaption
-                columns={groupColumns}
-                rows={participationGroups}
-                rowKey={(row) => row.group.id}
-                /*
-                 * A row here names another record, so it goes to that record
-                 * (#45). An href rather than a handler, because it is a
-                 * navigation: it opens in a new tab if the reader asks it to.
-                 */
-                rowAction={(row) => ({
-                  label: `Open ${row.group.name}`,
-                  href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(row.group.id)}`),
-                })}
-              />
-            </div>
-          )}
+            {participationGroups.length > 0 && (
+              <div class="pk-table-list">
+                <DataTable
+                  caption="Group participation"
+                  showCaption
+                  columns={groupColumns}
+                  rows={participationGroups}
+                  rowKey={(row) => row.group.id}
+                  /*
+                   * A row here names another record, so it goes to that record
+                   * (#45). An href rather than a handler, because it is a
+                   * navigation: it opens in a new tab if the reader asks it to.
+                   */
+                  rowAction={(row) => ({
+                    label: `Open ${row.group.name}`,
+                    href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(row.group.id)}`),
+                  })}
+                />
+              </div>
+            )}
 
-          {/* One panel for the ties themselves: it states each affiliation and
+            {/* One panel for the ties themselves: it states each affiliation and
               carries the controls that manage it, rather than stating them
               here and restating them as management cards below. */}
-          <UserAffiliationsPanel
-            user={user}
-            onChanged={load}
-            canManage={permissions.canManageMembership}
-            canActivate={permissions.canActivateIdentity}
-            summarizedIdentityId={identity?.identityId}
-          />
+            <UserAffiliationsPanel
+              user={user}
+              onChanged={load}
+              canManage={permissions.canManageMembership}
+              summarizedIdentityId={identity?.identityId}
+            />
 
-          {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
+            {permissions.canRead && <UserParticipationHistory userId={user.id} canRead={permissions.canRead} />}
 
-          {/*
+            {/*
             Who edits this record, and as what. Its subject edits it as
             themselves, through the member contract — nobody administers
             themselves, and a role or a deactivation is somebody else's
@@ -446,54 +476,59 @@ export function UserDetail({
             across a migration wrong is exactly who somebody opens this page to
             fix, and they should not have to find "account administration".
           */}
-          {isSelf && selfProfile ? (
-            <SelfProfilePanel
-              profile={selfProfile}
-              editing={editingProfile}
-              onEdit={() => setEditingProfile(true)}
-              onClose={() => setEditingProfile(false)}
-              onSaved={refreshSelfProfile}
-            />
-          ) : null}
+            {isSelf && selfProfile ? (
+              <SelfProfilePanel
+                profile={selfProfile}
+                editing={editingProfile}
+                onEdit={() => setEditingProfile(true)}
+                onClose={() => setEditingProfile(false)}
+                onSaved={refreshSelfProfile}
+              />
+            ) : null}
 
-          {/* Operations on the account rather than statements about the
+            {/* Operations on the account rather than statements about the
               person, so they are disclosed under the record instead of
               reading as three more things it says. */}
-          {permissions.canRead && (
-            <UserAdministrationSection>
-              <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
-            </UserAdministrationSection>
-          )}
-        </div>
+            {permissions.canRead && (
+              <UserAdministrationSection>
+                <UserEmailAddressesPanel userId={user.id} primaryEmail={user.email} canWrite={permissions.canWrite} />
+              </UserAdministrationSection>
+            )}
+          </div>
 
-        <aside class="pk-stack">
-          <MemberAvailabilityPanel userId={user.id} canRead={canRead} canWrite={editable} contactEmail={contactEmail} />
-          <MemberStandingPanel userId={user.id} canRead={canRead} />
+          <aside class="pk-stack">
+            <MemberAvailabilityPanel
+              userId={user.id}
+              canRead={canRead}
+              canWrite={editable}
+              contactEmail={contactEmail}
+            />
+            <MemberStandingPanel userId={user.id} canRead={canRead} />
 
-          <Panel aria-label="At a glance">
-            <PanelHeader title="At a glance" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              {/* `pk-figure-row`, not `pk-grid`: three figures in an 18rem
+            <Panel aria-label="At a glance">
+              <PanelHeader title="At a glance" />
+              <PanelBody class="pk-stack pk-stack--snug">
+                {/* `pk-figure-row`, not `pk-grid`: three figures in an 18rem
                   aside fall under any sensible track minimum, and a grid that
                   folds turns a glance into a column three tiles tall. */}
-              <div class="pk-figure-row">
-                <StatCard
-                  density="compact"
-                  label="groups"
-                  value={String(participation?.summary.groupCount ?? identityCount)}
-                />
-                <StatCard density="compact" label="events" value={String(participation?.summary.eventCount ?? 0)} />
-                <StatCard density="compact" label="attendance" value={attendanceHeadline(participation)} />
-              </div>
-              {participation && participation.summary.meetingsHeld > 0 && (
-                <p class="pk-small pk-muted pk-footnote">
-                  {participation.summary.meetingsAttended} of {participation.summary.meetingsHeld} meetings attended
-                </p>
-              )}
-            </PanelBody>
-          </Panel>
+                <div class="pk-figure-row">
+                  <StatCard
+                    density="compact"
+                    label="groups"
+                    value={String(participation?.summary.groupCount ?? identityCount)}
+                  />
+                  <StatCard density="compact" label="events" value={String(participation?.summary.eventCount ?? 0)} />
+                  <StatCard density="compact" label="attendance" value={attendanceHeadline(participation)} />
+                </div>
+                {participation && participation.summary.meetingsHeld > 0 && (
+                  <p class="pk-small pk-muted pk-footnote">
+                    {participation.summary.meetingsAttended} of {participation.summary.meetingsHeld} meetings attended
+                  </p>
+                )}
+              </PanelBody>
+            </Panel>
 
-          {/*
+            {/*
             The record's account fields, read and written in the one place.
 
             Editing used to open a whole second panel further down the page
@@ -504,60 +539,61 @@ export function UserDetail({
             same fields, in the same order — a list while nobody is editing,
             the fields themselves once somebody is.
           */}
-          <Panel aria-label="Account">
-            <PanelHeader title="Account">
-              {/* The quiet second way in that #46 asked for, beside the facts
+            <Panel aria-label="Account">
+              <PanelHeader title="Account">
+                {/* The quiet second way in that #46 asked for, beside the facts
                   it edits. The record's actions menu still carries the same
                   command in words; this is the shortcut, not the only door,
                   so it is an icon and it disappears while the fields are
                   open. */}
-              {editable && !editingProfile && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon
-                  aria-label="Edit profile"
-                  title="Edit profile"
-                  onClick={() => setEditingProfile(true)}
-                >
-                  <IconPencil />
-                </Button>
-              )}
-            </PanelHeader>
-            <PanelBody>
-              {editable && editingProfile ? (
-                <UserProfileEditor
-                  user={user}
-                  canGrantAccess={permissions.canGrantAccess}
-                  editing={editingProfile}
-                  onClose={() => setEditingProfile(false)}
-                  onSaved={load}
-                />
-              ) : (
-                /* One record's fields as a description list rather than an
+                {editable && !editingProfile && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon
+                    aria-label="Edit profile"
+                    title="Edit profile"
+                    onClick={() => setEditingProfile(true)}
+                  >
+                    <IconPencil />
+                  </Button>
+                )}
+              </PanelHeader>
+              <PanelBody>
+                {editable && editingProfile ? (
+                  <UserProfileEditor
+                    user={user}
+                    canGrantAccess={permissions.canGrantAccess}
+                    editing={editingProfile}
+                    onClose={() => setEditingProfile(false)}
+                    onSaved={load}
+                  />
+                ) : (
+                  /* One record's fields as a description list rather than an
                    unnamed table, on a page that already has several tables. */
-                <DescriptionList density="compact" items={accountFacts} />
-              )}
-            </PanelBody>
-          </Panel>
+                  <DescriptionList density="compact" items={accountFacts} />
+                )}
+              </PanelBody>
+            </Panel>
 
-          <Panel aria-label="Contact">
-            <PanelHeader title="Contact" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              {/*
+            <Panel aria-label="Contact">
+              <PanelHeader title="Contact" />
+              <PanelBody class="pk-stack pk-stack--snug">
+                {/*
                 The address is stated because a reader holding Users access can
                 already see it. What the design offers instead — reaching
                 someone through the portal without being handed their address —
                 needs the messaging domain that does not exist yet.
               */}
-              <DescriptionList density="compact" items={contactFacts} />
-              <LinkList links={identity?.links ?? []} />
-            </PanelBody>
-          </Panel>
+                <DescriptionList density="compact" items={contactFacts} />
+                <LinkList links={identity?.links ?? []} />
+              </PanelBody>
+            </Panel>
 
-          <MemberPrivacyPanel identities={user.identities} availability={null} canWrite={editable} />
-        </aside>
-      </div>
+            <MemberPrivacyPanel identities={user.identities} availability={null} canWrite={editable} />
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

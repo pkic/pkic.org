@@ -81,6 +81,9 @@ function guestOccurrence(overrides: Partial<EventOccurrence> = {}): EventOccurre
     attendanceVerifiedCount: 0,
     invitationsRound: 0,
     invitationsSentAt: null,
+    invitedCount: 0,
+    calendarSequence: 0,
+    rsvp: { accepted: 0, declined: 0, tentative: 0 },
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-25T10:00:00.000Z",
     ...overrides,
@@ -135,7 +138,7 @@ describe("portal group meeting management", () => {
     );
     const onChanged = vi.fn(async () => {});
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={onChanged} />);
-    await beginRecordEdit(container, "Meeting series actions");
+    await beginRecordEdit(container, "Meeting actions");
     expect(container.textContent).toContain("recurring schedule is locked");
     // Every control is inside a `Field`, which pairs label and control by
     // generated id, so each is resolved through that pair — the lookup then
@@ -186,6 +189,9 @@ describe("portal group meeting management", () => {
       attendanceVerifiedCount: 0,
       invitationsRound: 0,
       invitationsSentAt: null,
+      invitedCount: 0,
+      calendarSequence: 0,
+      rsvp: { accepted: 0, declined: 0, tentative: 0 },
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-25T10:00:00.000Z",
     };
@@ -243,6 +249,9 @@ describe("portal group meeting management", () => {
       attendanceVerifiedCount: 0,
       invitationsRound: 0,
       invitationsSentAt: null,
+      invitedCount: 0,
+      calendarSequence: 0,
+      rsvp: { accepted: 0, declined: 0, tentative: 0 },
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-25T10:00:00.000Z",
     };
@@ -437,7 +446,7 @@ describe("portal group meeting management", () => {
     expect(controlFor(container, "Affiliation").required).toBe(false);
   });
 
-  it("draws the series' active switch as a real check block, and names the generate panel", async () => {
+  it("draws the series' active switch as a real check block and explains automatic scheduling", async () => {
     const series = baseSeries();
     vi.stubGlobal(
       "fetch",
@@ -445,7 +454,7 @@ describe("portal group meeting management", () => {
     );
 
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
-    await beginRecordEdit(container, "Meeting series actions");
+    await beginRecordEdit(container, "Meeting actions");
 
     // All three parts, or the browser draws its own box in its own accent —
     // which no gate can see and which looks like a bug beside our controls.
@@ -454,15 +463,9 @@ describe("portal group meeting management", () => {
     expect(active.querySelector("span.pk-check__label")?.textContent).toBe("Active series");
     expect(container.querySelector<HTMLInputElement>(`#meeting-series-active-${series.id}`)).not.toBeNull();
 
-    // The generation panel is a named region, not an unlabelled box among the
-    // several this editor stacks up.
-    const panel = [...container.querySelectorAll("section.pk-panel")].at(-1);
-    const headingId = panel?.getAttribute("aria-labelledby");
-    expect(headingId).toBeTruthy();
-    expect(container.querySelector(`[id="${headingId!}"]`)?.textContent).toBe("Generate recurring occurrences");
-
-    // And its one control is named by a real for/id pair.
-    expect(controlFor(container, "Generate through").tagName.toLowerCase()).toBe("input");
+    expect(container.textContent).toContain("Occurrences are generated automatically through year-end");
+    expect(container.textContent).toContain("October 1");
+    expect(container.textContent).not.toContain("Generate through");
   });
 
   it("keeps the series form open and announces a rejected save as an alert", async () => {
@@ -479,7 +482,7 @@ describe("portal group meeting management", () => {
     );
 
     const container = mount(<MeetingSeriesSettings groupId={GROUP_ID} series={series} onChanged={() => {}} />);
-    await beginRecordEdit(container, "Meeting series actions");
+    await beginRecordEdit(container, "Meeting actions");
     await typeInto(controlFor(container, "Meeting name"), "Renamed call");
     await act(async () => {
       container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));

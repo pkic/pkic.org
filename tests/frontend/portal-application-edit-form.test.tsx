@@ -8,9 +8,19 @@
  * than merely coloured, and that what the surface finally sends satisfies the
  * canonical request contract rather than a literal copy of itself.
  */
-import { render, type ComponentChild } from "preact";
+import { render, type ComponentChild, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+// The record's facets are routed links; rendered as anchors here so the view
+// mounts without a router.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 import { applicationUpdateSchema } from "../../assets/shared/schemas/membership-application-management";
 import type { MembershipCategoryCatalogEntry } from "../../assets/shared/schemas/membership-categories";
@@ -19,7 +29,15 @@ import {
   type ApplicationEditFormValue,
 } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationEditForm";
 import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
-import { buttonNamed, buttonNames, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import {
+  buttonNamed,
+  buttonNames,
+  controlFor,
+  labelNames,
+  markdownControl,
+  typeInto,
+} from "./helpers/labelled-control";
+import { menuItemNamed } from "./helpers/row-actions";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000301";
 const NOW = "2026-08-31T09:00:00.000Z";
@@ -31,7 +49,10 @@ function category(overrides: Partial<MembershipCategoryCatalogEntry> = {}): Memb
     description: null,
     displayOrder: 60,
     isIndividual: false,
+    requiresUniversityEmail: false,
     isVoting: true,
+    active: true,
+    workflowVersionId: null,
     revision: 0,
     updatedAt: NOW,
     ...overrides,
@@ -105,7 +126,7 @@ function mountForm(props: Partial<Parameters<typeof ApplicationEditForm>[0]> = {
 }
 
 describe("membership-application edit form", () => {
-  it("names every control through its own label, and marks the fields the contract requires", () => {
+  it("names every control through its own label, and marks the fields the contract requires", async () => {
     const page = mountForm();
 
     expect(labelNames(page)).toEqual([
@@ -126,7 +147,9 @@ describe("membership-application edit form", () => {
     expect(controlFor(page, "Applicant name").value).toBe("Example Applicant");
     expect(controlFor(page, "Email").type).toBe("email");
     expect(controlFor<HTMLSelectElement>(page, "Category").value).toBe("F");
-    expect(controlFor<HTMLTextAreaElement>(page, "Reason for joining").tagName).toBe("TEXTAREA");
+    // The prose answers are the shared Markdown editor (#114), reached through
+    // the same label once its lazy chunk is on the page.
+    expect((await markdownControl(page, "Reason for joining")).closest(".pk-markdown-editor")).not.toBeNull();
 
     // The three fields PATCH /members/applications/:id cannot accept as empty
     // are the three the markup announces as required.
@@ -159,8 +182,9 @@ describe("membership-application edit form", () => {
     expect(labelNames(page)).toContain("Organization website");
   });
 
-  it("takes every control out of play with one disabled group while a save is in flight", () => {
+  it("takes every control out of play with one disabled group while a save is in flight", async () => {
     const page = mountForm({ disabled: true, saving: true });
+    await markdownControl(page, "Reason for joining");
 
     const group = page.querySelector("fieldset");
     expect(group?.disabled).toBe(true);
@@ -170,6 +194,10 @@ describe("membership-application edit form", () => {
     const controls = [...page.querySelectorAll("fieldset input, fieldset select, fieldset textarea")];
     expect(controls).toHaveLength(10);
     expect(controls.every((control) => control.matches(":disabled"))).toBe(true);
+    // The editors are not native controls, so they say it themselves.
+    const editors = [...page.querySelectorAll('fieldset [role="textbox"]')];
+    expect(editors).toHaveLength(3);
+    expect(editors.every((editor) => editor.getAttribute("aria-disabled") === "true")).toBe(true);
 
     const save = buttonNamed(page, "Saving…");
     expect(save.getAttribute("aria-busy")).toBe("true");
@@ -215,7 +243,7 @@ describe("membership-application edit form, end to end", () => {
     organizationName: "Example Organization",
     membershipCategory: "F",
     membershipCategoryLabel: "General Member",
-    stage: "ec_review" as const,
+    stage: "processing" as const,
     onHoldSubtype: null,
     assignedToUserId: null,
     createdAt: NOW,
@@ -225,8 +253,6 @@ describe("membership-application edit form, end to end", () => {
     requestedWorkingGroups: [],
     events: [],
     communications: [],
-    concerns: [],
-    ecDecisions: [],
   };
 
   function stub(bodies: unknown[], failSave = false) {
@@ -260,7 +286,13 @@ describe("membership-application edit form, end to end", () => {
       <ApplicationDetailView applicationId={APPLICATION_ID} categories={[category()]} canWrite canApprove={false} />,
     );
     await settle();
-    await act(() => buttonNamed(page, "Edit").click());
+    // Editing is a command in the record's actions menu, never open by
+    // default (#109).
+    const commands = page.querySelector<HTMLButtonElement>('button[aria-label="Application actions"]');
+    if (!commands) throw new Error("the record offers no actions menu");
+    await act(async () => commands.click());
+    await act(async () => menuItemNamed(page, "Edit application…")!.click());
+    await settle();
     return page;
   }
 

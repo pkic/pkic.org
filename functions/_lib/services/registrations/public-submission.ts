@@ -52,7 +52,9 @@ function requireRegistrationPolicy(
   registrationMode: string,
   access: { invited: boolean; authorizedByGroup: boolean },
 ): void {
-  if (registrationMode === "no_registration") {
+  // An automatic meeting invites its group's members itself (#103); like a
+  // meeting without registration, it takes no registrations.
+  if (registrationMode === "no_registration" || registrationMode === "automatic") {
     throw new AppError(403, "EVENT_REGISTRATION_DISABLED", "This event does not use registration");
   }
   if (registrationMode === "public" || registrationMode === "open" || registrationMode === "invite_or_open") return;

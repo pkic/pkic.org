@@ -1,5 +1,11 @@
-import { eventSeriesListResponseSchema } from "../../../../../shared/schemas/event-series";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { useRef } from "preact/hooks";
+import { eventSeriesListResponseSchema, type GroupEventSeries } from "../../../../../shared/schemas/event-series";
+import { eventSeriesCancelResponseSchema } from "../../../../../shared/schemas/meeting-invitations";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { postJson } from "../../../../shared/api-client";
+import { usePortalHashLocation } from "../../hash-location";
+import { useMeetingCancellation } from "./useMeetingCancellation";
+import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
@@ -13,21 +19,42 @@ export function GroupMeetingSeriesList({
   createAction?: { label: string; onSelect: () => void; disabled?: boolean };
 }) {
   const meetingsPath = `/groups/${encodeURIComponent(groupId)}/meetings`;
+  const [, navigate] = usePortalHashLocation();
+  const actions = useRef<ApiTableActions | null>(null);
+  const cancellation = useMeetingCancellation<GroupEventSeries>({
+    wholeSeries: true,
+    label: (series) => series.eventName,
+    canCancel: (series) => series.active && series.capabilities.includes("manage"),
+    cancel: (series) =>
+      postJson(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}/cancel`,
+        { expectedUpdatedAt: series.updatedAt },
+        eventSeriesCancelResponseSchema,
+      ),
+    reload: async () => actions.current?.reload(),
+  });
 
   return (
     <ApiDataTable
-      caption="Meeting series"
+      caption="Meetings"
       endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series`}
       responseSchema={eventSeriesListResponseSchema}
       resolve={(response) => response.series}
       resolvePage={(response) => response.page}
       paginate
+      actionsRef={actions}
+      onData={(response) => cancellation.onRows(response.series)}
+      selection={cancellation.selection}
+      bulkBar={cancellation.bulkBar}
       createAction={createAction}
       searchPlaceholder="Search meeting name or location…"
       initialSort="next_occurrence_at"
       columns={[
         {
-          header: "Meeting series",
+          // A meeting, whether it happens once or repeats: the portal draws
+          // the line between meetings and events, not between one meeting and
+          // a series of them (#101).
+          header: "Meeting",
           cell: (series) => (
             <div class="pk-stack pk-stack--tight">
               <span class="pk-strong">{series.eventName}</span>
@@ -64,16 +91,24 @@ export function GroupMeetingSeriesList({
                 {
                   id: "calendar",
                   label: "Download calendar",
-                  onSelect: () => {
-                    // A same-tab navigation to the calendar file. `window.open`
-                    // rather than `location.assign` because jsdom lets a test
-                    // observe the former; both navigate identically here.
-                    window.open(
-                      `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}/calendar.ics`,
-                      "_self",
-                    );
-                  },
+                  onSelect: () => downloadMeetingCalendar(groupId, series.id),
                 },
+                ...(series.capabilities.includes("manage")
+                  ? [
+                      {
+                        id: "settings",
+                        label: "Change meeting…",
+                        onSelect: () => navigate(`${meetingsPath}/${encodeURIComponent(series.id)}/settings`),
+                      },
+                      {
+                        id: "cancel",
+                        label: "Cancel meeting…",
+                        danger: true,
+                        disabled: cancellation.busy || !series.active,
+                        onSelect: () => void cancellation.cancelRows([series]),
+                      },
+                    ]
+                  : []),
               ]}
             />
           ),
@@ -84,9 +119,9 @@ export function GroupMeetingSeriesList({
           // The same `createAction` is already the toolbar's button, so this
           // state names it rather than rendering it a second time under the
           // same accessible name.
-          <EmptyState title="No meeting series yet" body={`Use ${createAction.label} above to get started.`} />
+          <EmptyState title="No meetings yet" body={`Use ${createAction.label} above to get started.`} />
         ) : (
-          "No matching meeting series."
+          "No matching meetings."
         )
       }
       rowKey={(series) => series.id}

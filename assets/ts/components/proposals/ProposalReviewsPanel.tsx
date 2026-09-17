@@ -14,8 +14,9 @@ import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../ui/TextControl";
+import { Select, TextInput } from "../../ui/TextControl";
 import { ProposalReviewCard } from "./ProposalReviewCard";
+import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
 
 /**
  * How the reviewer's verdicts are worded. Total on the contract's vocabulary,
@@ -188,26 +189,28 @@ export function ProposalReviewsPanel({
               </fieldset>
 
               <fieldset class="pk-fieldset pk-stack" disabled={saving}>
-                <Field label="Internal review notes" help="Private · Markdown supported">
+                <Field label="Internal review notes" help="Private">
                   {(control) => (
-                    <Textarea
+                    <MarkdownEditor
                       {...control}
-                      rows={3}
-                      value={reviewerComment}
-                      onInput={(event) => setReviewerComment((event.target as HTMLTextAreaElement).value)}
-                      placeholder="Private notes for the organizing team…"
+                      variant="compact"
+                      name="reviewerComment"
+                      label="Internal review notes"
+                      initialValue={reviewerComment}
+                      onChange={setReviewerComment}
                     />
                   )}
                 </Field>
 
-                <Field label="Suggested note to applicant" help="Optional · private draft · Markdown supported">
+                <Field label="Suggested note to applicant" help="Optional · private draft">
                   {(control) => (
-                    <Textarea
+                    <MarkdownEditor
                       {...control}
-                      rows={3}
-                      value={applicantNote}
-                      onInput={(event) => setApplicantNote((event.target as HTMLTextAreaElement).value)}
-                      placeholder="Feedback or clarification request for the applicant…"
+                      variant="compact"
+                      name="applicantNote"
+                      label="Suggested note to applicant"
+                      initialValue={applicantNote}
+                      onChange={setApplicantNote}
                     />
                   )}
                 </Field>

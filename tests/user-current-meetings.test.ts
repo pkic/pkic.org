@@ -1,9 +1,10 @@
+import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { currentUserMeetingsListResponseSchema } from "../assets/shared/schemas/member-meetings";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
-import { createGroupEventSeries, createSeriesOccurrence } from "../functions/_lib/services/event-series";
+import { createGroupEventSeries } from "../functions/_lib/services/event-series";
 import { buildMemberMeetingsPageQuery } from "../functions/_lib/services/event-series/member-read-model";
 import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
@@ -33,12 +34,12 @@ async function createSeriesWithOccurrence(
     profileKey: "meeting",
     policy: { registrationPolicy: "no_registration", memberEligibility: "owner_group", guestPolicy: "none" },
     startsAt,
-    recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+    recurrenceRule: "FREQ=WEEKLY;COUNT=1",
     timezone: "UTC",
     durationMinutes: 60,
     providerType: null,
   });
-  const occurrence = await createSeriesOccurrence(
+  const occurrence = await configureMeetingOccurrence(
     env.DB,
     admin,
     ownerGroupId,

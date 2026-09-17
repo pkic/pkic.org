@@ -25,9 +25,17 @@ export function openColumnMenu(container: ParentNode, column: string): HTMLEleme
   return popup;
 }
 
+/** Opens the filter choices nested inside a column menu. */
+export function openColumnFilterMenu(container: ParentNode, column: string): HTMLElement {
+  const popup = openColumnMenu(container, column);
+  const filter = popup.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+  if (filter) void act(() => filter.click());
+  return popup;
+}
+
 /** The labels of the filter choices a column's menu offers, in order. */
 export function columnFilterOptions(container: ParentNode, column: string): string[] {
-  const popup = openColumnMenu(container, column);
+  const popup = openColumnFilterMenu(container, column);
   return [...popup.querySelectorAll('[role="menuitemradio"]')]
     .filter((item) => !labelOf(item).startsWith("Sort "))
     .map(labelOf);
@@ -35,7 +43,7 @@ export function columnFilterOptions(container: ParentNode, column: string): stri
 
 /** Narrows a column to one of its filter choices, by the choice's label. */
 export async function chooseColumnFilter(container: ParentNode, column: string, option: string): Promise<void> {
-  const popup = openColumnMenu(container, column);
+  const popup = openColumnFilterMenu(container, column);
   const item = [...popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
     (candidate) => labelOf(candidate) === option,
   );

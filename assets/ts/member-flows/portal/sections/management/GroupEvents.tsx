@@ -1,9 +1,10 @@
+import { HashRedirect } from "../../HashRedirect";
 import { useEffect, useRef } from "preact/hooks";
 import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
 } from "../../../../../shared/schemas/group-events";
-import { EVENT_SOURCE_MODES, type EventSourceMode } from "../../../../../shared/schemas/event-series";
+import { EVENT_SOURCE_MODE_LABELS, EVENT_SOURCE_MODES } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
@@ -17,13 +18,6 @@ import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventWorkspace } from "./GroupEventWorkspace";
 
-/** Where an event is authored, in product language rather than schema keys. */
-const EVENT_SOURCE_LABELS: Record<EventSourceMode, string> = {
-  hugo: "Website content",
-  portal: "Portal",
-  integration: "Integration",
-};
-
 /** Reserved event segment that routes to the create page instead of a record. */
 const NEW_EVENT_SEGMENT = "new";
 
@@ -35,16 +29,24 @@ function GroupEventsRedirect({ onNavigate }: { onNavigate: () => void }) {
 
 export function GroupEvents({
   groupId,
+  collection = "events",
   canManage = false,
   initialEventId,
   initialEventTab,
   initialEventDetailId,
+  initialEventDetailTab,
+  initialEventDetailSegment,
 }: {
   groupId: string;
+  collection?: "events" | "unscheduled_meetings";
   canManage?: boolean;
   initialEventId?: string;
   initialEventTab?: string;
   initialEventDetailId?: string;
+  /** The facet of the tab's resource: a proposal's own tab. */
+  initialEventDetailTab?: string;
+  /** A page under that facet: the co-speaker invitation under a proposal's Speakers. */
+  initialEventDetailSegment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const eventsPath = `/groups/${encodeURIComponent(groupId)}/events`;
@@ -87,6 +89,18 @@ export function GroupEvents({
     );
   }
 
+  if (
+    selectedEventId &&
+    canManage &&
+    detail.data?.event.id === selectedEventId &&
+    !detail.data.event.seriesId &&
+    ["meeting", "board_meeting"].includes(detail.data.event.profileKey ?? "")
+  ) {
+    return (
+      <HashRedirect to={`/groups/${encodeURIComponent(groupId)}/meetings/new/${encodeURIComponent(selectedEventId)}`} />
+    );
+  }
+
   if (selectedEventId) {
     return (
       <div class="pk pk-stack">
@@ -98,6 +112,8 @@ export function GroupEvents({
             groupId={groupId}
             tab={initialEventTab}
             detailId={initialEventDetailId}
+            detailTab={initialEventDetailTab}
+            detailSegment={initialEventDetailSegment}
             onUpdated={detail.reload}
           />
         )}
@@ -108,7 +124,8 @@ export function GroupEvents({
   return (
     <div class="pk pk-stack">
       <ApiDataTable
-        caption="Group events"
+        caption={collection === "events" ? "Group events" : "Meetings awaiting a schedule"}
+        params={{ collection }}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
         responseSchema={groupEventsListResponseSchema}
         resolve={(response) => response.events}
@@ -116,11 +133,11 @@ export function GroupEvents({
         paginate
         actionsRef={tableActions}
         createAction={
-          canManage
+          canManage && collection === "events"
             ? { label: "Create event", onSelect: () => navigate(`${eventsPath}/${NEW_EVENT_SEGMENT}`) }
             : undefined
         }
-        searchPlaceholder="Search events…"
+        searchPlaceholder={collection === "events" ? "Search events…" : "Search meetings…"}
         initialSort="next_occurrence_at"
         columns={[
           {
@@ -144,13 +161,13 @@ export function GroupEvents({
             // it, instead of a select above the table filtering by something
             // no column said.
             header: "Source",
-            cell: (event) => (event.sourceMode ? EVENT_SOURCE_LABELS[event.sourceMode] : "—"),
+            cell: (event) => (event.sourceMode ? EVENT_SOURCE_MODE_LABELS[event.sourceMode] : "—"),
             width: "fit",
             filter: {
               param: "sourceMode",
               options: [
                 { value: "", label: "All sources" },
-                ...EVENT_SOURCE_MODES.map((mode) => ({ value: mode as string, label: EVENT_SOURCE_LABELS[mode] })),
+                ...EVENT_SOURCE_MODES.map((mode) => ({ value: mode as string, label: EVENT_SOURCE_MODE_LABELS[mode] })),
               ],
             },
           },
@@ -158,13 +175,18 @@ export function GroupEvents({
             // A date has a bounded length; the column says so instead of
             // wearing `pk-nowrap` while still claiming slack.
             header: "Next",
-            cell: (event) => fmt(event.nextOccurrenceAt ?? event.startsAt),
+            cell: (event) =>
+              event.nextOccurrenceAt || event.startsAt
+                ? fmt(event.nextOccurrenceAt ?? event.startsAt)
+                : "Not scheduled",
             width: "fit",
             sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
           },
         ]}
         empty={
-          canManage ? (
+          collection === "unscheduled_meetings" ? (
+            "No meetings awaiting a schedule."
+          ) : canManage ? (
             <EmptyState title="No events yet" body="Create an event to get started." />
           ) : (
             "No events are available through this group."
@@ -176,7 +198,10 @@ export function GroupEvents({
         // the button repeated once per row with the same accessible name.
         rowAction={(event) => ({
           label: `Open ${event.name}`,
-          href: `#/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`,
+          href:
+            collection === "unscheduled_meetings"
+              ? `#/groups/${encodeURIComponent(groupId)}/meetings/new/${encodeURIComponent(event.id)}`
+              : `#/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}`,
         })}
       />
     </div>

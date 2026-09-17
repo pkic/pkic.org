@@ -13,7 +13,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupVoteProposalCreateSchema } from "../../assets/shared/schemas/group-vote-proposals";
 import { GroupVoteProposalForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposalForm";
 import { voteTypeSchema } from "../../assets/shared/schemas/votes";
-import { buttonNamed, controlFor, labelNames, optionValues, typeInto } from "./helpers/labelled-control";
+import {
+  buttonNamed,
+  controlFor,
+  labelNames,
+  markdownControl,
+  optionValues,
+  typeInto,
+  typeMarkdown,
+} from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -41,7 +49,7 @@ afterEach(() => {
 });
 
 describe("group vote proposal form", () => {
-  it("names every control through a for/id pair and marks only the required ones", () => {
+  it("names every control through a for/id pair and marks only the required ones", async () => {
     const container = mount(<GroupVoteProposalForm groupId={GROUP_ID} onCreated={() => Promise.resolve()} />);
 
     expect(labelNames(container)).toEqual([
@@ -54,7 +62,7 @@ describe("group vote proposal form", () => {
     // Resolving through the pair means the lookup fails exactly when the
     // labelling is broken, which is the part worth asserting.
     expect(controlFor(container, "Title").required).toBe(true);
-    expect(controlFor<HTMLTextAreaElement>(container, "Description").required).toBe(true);
+    expect((await markdownControl(container, "Description")).getAttribute("aria-required")).toBe("true");
     // "(optional)" used to live in the label. The help text says it instead,
     // and it is wired to the control it describes rather than floating beside
     // it, so a screen reader reads the two together.
@@ -91,7 +99,7 @@ describe("group vote proposal form", () => {
 
     const container = mount(<GroupVoteProposalForm groupId={GROUP_ID} onCreated={() => Promise.resolve()} />);
     await typeInto(controlFor(container, "Title"), "Architecture proposal");
-    await typeInto(controlFor<HTMLTextAreaElement>(container, "Description"), "Adopt the architecture.");
+    await typeMarkdown(container, "Description", "Adopt the architecture.");
     await act(() => buttonNamed(container, "Submit proposal").click());
 
     // One disabled fieldset rather than a `disabled` prop on each control, so
@@ -120,7 +128,7 @@ describe("group vote proposal form", () => {
     const created = vi.fn(() => Promise.resolve());
     const container = mount(<GroupVoteProposalForm groupId={GROUP_ID} onCreated={created} />);
     await typeInto(controlFor(container, "Title"), "Architecture proposal");
-    await typeInto(controlFor<HTMLTextAreaElement>(container, "Description"), "Adopt the architecture.");
+    await typeMarkdown(container, "Description", "Adopt the architecture.");
     await act(() => buttonNamed(container, "Submit proposal").click());
     await settle();
 

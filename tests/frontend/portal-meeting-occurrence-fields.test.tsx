@@ -13,7 +13,6 @@ import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { EVENT_OCCURRENCE_STATUSES } from "../../assets/shared/schemas/event-series";
 import {
   MeetingOccurrenceFields,
   type MeetingOccurrenceDraft,
@@ -24,7 +23,6 @@ function draft(overrides: Partial<MeetingOccurrenceDraft> = {}): MeetingOccurren
   return {
     startsAt: "2026-09-01T15:00",
     endsAt: "2026-09-01T16:00",
-    status: "scheduled",
     location: "Room 1",
     providerUrlAction: "keep",
     providerJoinUrl: "",
@@ -61,7 +59,6 @@ describe("meeting occurrence fields", () => {
     // when a label and its control stop agreeing.
     expect(controlFor(page, "Starts").type).toBe("datetime-local");
     expect(controlFor(page, "Ends").type).toBe("datetime-local");
-    expect(controlFor<HTMLSelectElement>(page, "Status").tagName).toBe("SELECT");
     expect(controlFor(page, "Location override").type).toBe("text");
     expect(controlFor<HTMLSelectElement>(page, "Meeting-provider URL").tagName).toBe("SELECT");
   });
@@ -117,12 +114,9 @@ describe("meeting occurrence fields", () => {
     expect(url.checkValidity()).toBe(false);
   });
 
-  it("offers a status only on an occurrence that already exists", () => {
+  it("offers no status control: cancelling and reinstating are commands on the record, not a setting", () => {
     expect(labelNames(mountFields())).not.toContain("Status");
-
-    const existing = mountFields({ existing: true });
-    const status = controlFor<HTMLSelectElement>(existing, "Status");
-    expect([...status.options].map((option) => option.value)).toEqual([...EVENT_OCCURRENCE_STATUSES]);
+    expect(labelNames(mountFields({ existing: true }))).not.toContain("Status");
   });
 
   it("offers the keep/replace/remove choice only once a provider URL is configured", () => {
@@ -165,7 +159,7 @@ describe("meeting occurrence fields", () => {
   it("takes every control out of play while the form that holds it is saving", () => {
     const page = mountFields({ existing: true, providerConfigured: true, disabled: true });
 
-    for (const label of ["Starts", "Ends", "Status", "Location override", "Meeting-provider URL"]) {
+    for (const label of ["Starts", "Ends", "Location override", "Meeting-provider URL"]) {
       expect(controlFor(page, label).matches(":disabled")).toBe(true);
     }
   });

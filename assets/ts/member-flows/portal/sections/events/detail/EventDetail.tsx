@@ -113,7 +113,7 @@ export function EventDetailView({
           <Proposals slug={slug} subTab={subTab} canWrite={event.capabilities.includes("write")} />
         )}
         {tab === "promoters" && <Promoters slug={slug} subTab={subTab} />}
-        {tab === "stats" && <EventStats slug={slug} />}
+        {tab === "stats" && <EventStats slug={slug} section={subTab} />}
         {tab === "settings" && (
           <Settings event={event} onUpdated={handleUpdated} subTab={subTab} detailSegment={detailSegment} />
         )}

@@ -1,3 +1,4 @@
+import { normalizeEventRegistrationPolicy } from "./detail";
 import {
   GROUP_EVENTS_SORT_COLUMNS,
   groupEventDetailResponseSchema,
@@ -95,7 +96,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
     endsAt: row.event_ends_at,
     profileKey: row.profile_key,
     sourceMode: row.source_mode,
-    registrationPolicy: row.registration_policy,
+    registrationPolicy: normalizeEventRegistrationPolicy(row.registration_policy),
     visibility: row.visibility,
     inviteLimitAttendee: row.invite_limit_attendee,
     location: row.location,
@@ -127,6 +128,11 @@ export function buildGroupEventsPageQuery(
   const managerAccess = live ? "group_access.manager_access" : access.manager ? "1" : "0";
   const conditions = ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR ${audience.sql})`];
   const bindings: unknown[] = [...accessibleEvents.bindings, groupId, ...audience.bindings];
+  if (query.collection === "events") {
+    conditions.push("COALESCE(event.profile_key, '') NOT IN ('meeting', 'board_meeting')");
+  } else if (query.collection === "unscheduled_meetings") {
+    conditions.push("event.profile_key IN ('meeting', 'board_meeting')", "series.id IS NULL");
+  }
   if (query.profileKey) {
     conditions.push("event.profile_key = ?");
     bindings.push(query.profileKey);

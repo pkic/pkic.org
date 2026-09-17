@@ -15,26 +15,36 @@
  * written to once per seat, at the address that seat acts under, because
  * those are two participations and each is a different person to the record.
  */
-import { prepareQueueEmailStatement } from "../../email/outbox";
+import { prepareBulkQueueEmailChunkStatements } from "../../email/outbox";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLogAfterOneChange } from "../audit";
+import { buildOccurrenceCalendarPayload } from "./invite-calendar";
 import { commitEventResourceManagementBatch } from "./management";
+import {
+  occurrenceJoinUrl,
+  occurrenceOrganizerAddress,
+  PARTICIPANT_INVITATION_TEMPLATE_KEY,
+  type OccurrenceNotificationOptions,
+} from "./occurrence-notifications";
 import { getManagedSeriesOccurrence } from "./occurrences";
 
 /**
  * The largest group this may be sent to in one request.
  *
- * A round is one D1 batch and one outbox insert per recipient, so it has to
- * be bounded by something rather than by the size of the largest group
- * anybody happens to create. Refusing past the cap is deliberate: silently
- * writing to the first N participants would leave the rest waiting for an
- * invitation that a manager believes they sent.
+ * A round is one D1 batch; the recipients go in as a handful of JSON chunk
+ * inserts (`prepareBulkQueueEmailChunkStatements`), not one statement each,
+ * so a group of thousands is a few statements rather than thousands. What
+ * still bounds a round is the request that reads the roster and the batch's
+ * own byte budget, hence a cap far above any group the consortium has.
+ * Refusing past it is deliberate: silently writing to the first N
+ * participants would leave the rest waiting for an invitation that a manager
+ * believes they sent (#100).
  */
-const MAX_PARTICIPANTS_PER_ROUND = 400;
+export const MAX_PARTICIPANTS_PER_ROUND = 10_000;
 
 interface ParticipantRow {
   user_id: string;
@@ -91,6 +101,8 @@ export async function sendMeetingParticipantInvitations(
   seriesId: string,
   occurrenceId: string,
   appBaseUrl: string,
+  /** Signs the organizer address; without it the invitation carries no RSVP route. */
+  calendar: Pick<OccurrenceNotificationOptions, "signingSecret" | "rsvpEmail"> = {},
 ): Promise<SendMeetingParticipantInvitationsResult> {
   const { context, series, occurrence } = await getManagedSeriesOccurrence(
     db,
@@ -130,13 +142,23 @@ export async function sendMeetingParticipantInvitations(
   }
 
   const round = occurrence.invitationsRound + 1;
-  const joinUrl = `${appBaseUrl}/meetings/join/?occurrence=${encodeURIComponent(occurrenceId)}`;
-  const deliveries = participants.map((participant) =>
-    prepareQueueEmailStatement(db, {
+  const joinUrl = occurrenceJoinUrl(appBaseUrl, occurrenceId);
+  // The invitation is a calendar entry as well as a link (#126): it lands on
+  // the recipient's calendar, and the accept or decline their calendar sends
+  // back reaches the occurrence through the signed organizer address.
+  const organizerEmail = await occurrenceOrganizerAddress(occurrenceId, calendar);
+  const deliveries = prepareBulkQueueEmailChunkStatements(
+    db,
+    participants.map((participant) => ({
       outboxId: uuid(),
-      idempotencyKey: `meeting-participant-invitation:${occurrenceId}:${participant.user_id}:${String(round)}`,
-      templateKey: "meeting-participant-invitation",
+      idempotencyKey: `${PARTICIPANT_INVITATION_TEMPLATE_KEY}:${occurrenceId}:${participant.user_id}:${String(round)}`,
+      templateKey: PARTICIPANT_INVITATION_TEMPLATE_KEY,
+      eventId: series.eventId,
+      recipientUserId: participant.user_id,
       recipientEmail: participant.recipient_email,
+      // The template carries the subject; the row's own is only the fallback
+      // the outbox uses when a template has none.
+      subject: null,
       messageType: "transactional",
       data: {
         recipientName: participant.recipient_name,
@@ -145,7 +167,24 @@ export async function sendMeetingParticipantInvitations(
         joinUrl,
       },
       capabilityLinkValues: [joinUrl],
-    }),
+      calendar: buildOccurrenceCalendarPayload(
+        {
+          occurrenceId,
+          eventId: series.eventId,
+          eventName: series.eventName,
+          startsAt: occurrence.startsAt,
+          endsAt: occurrence.endsAt,
+          location: occurrence.location,
+          joinUrl,
+          sequence: occurrence.calendarSequence,
+          organizerEmail,
+          attendeeEmail: participant.recipient_email,
+        },
+        "REQUEST",
+      ),
+      bounceAddress: organizerEmail,
+    })),
+    sentAt,
   );
   const statements: StatementLike[] = [
     /*
@@ -184,5 +223,5 @@ export async function sendMeetingParticipantInvitations(
   ];
 
   await commitEventResourceManagementBatch(db, actor, context, "manage", statements);
-  return { round, recipientCount: deliveries.length, sentAt };
+  return { round, recipientCount: participants.length, sentAt };
 }

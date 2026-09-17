@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { authErrors, ok, requiresPermissions } from "./route-contract";
 import { booleanQueryFlagSchema, emailMessageTypeSchema, successResponseSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -140,5 +141,17 @@ export const emailOutboxResetFailedRouteSchema = {
     "401": { description: "Staff session required." },
     "403": { description: "email:read and email:manage permissions required." },
     "409": { description: "Authorization changed while processing." },
+  },
+};
+
+export const emailOutboxDetailResponseSchema = z.object({ message: emailOutboxRowSchema });
+export const emailOutboxDetailRouteSchema = {
+  tags: ["Email"],
+  ...requiresPermissions("email:read"),
+  summary: "Read email delivery details",
+  request: { params: z.object({ id: databaseIdSchema }) },
+  responses: {
+    ...ok("Email delivery details.", emailOutboxDetailResponseSchema),
+    ...authErrors({ notFound: "Email message not found." }),
   },
 };

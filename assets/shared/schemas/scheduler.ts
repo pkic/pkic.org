@@ -117,3 +117,26 @@ export const schedulerJobStateUpdateRouteSchema = {
     }),
   },
 };
+
+export const schedulerJobScheduleUpdateSchema = z.object({
+  intervalSeconds: z
+    .number()
+    .int("Use a whole number of seconds")
+    .min(60, "Use an interval of at least 1 minute")
+    .max(2592000, "Use an interval of no more than 30 days"),
+  expectedIntervalSeconds: z.number().int().positive(),
+});
+export type ScheduledJobScheduleUpdate = z.infer<typeof schedulerJobScheduleUpdateSchema>;
+export const schedulerJobScheduleUpdateRouteSchema = {
+  tags: ["Scheduler"],
+  ...requiresPermissions("scheduler:read", "scheduler:manage"),
+  summary: "Update a scheduled job interval",
+  request: {
+    params: schedulerJobParamsSchema,
+    body: { required: true, content: { "application/json": { schema: schedulerJobScheduleUpdateSchema } } },
+  },
+  responses: {
+    ...ok("Updated scheduled job.", schedulerJobStateResponseSchema),
+    ...authErrors({ notFound: "Unknown job.", conflict: "The interval changed or the job is running." }),
+  },
+};

@@ -97,7 +97,7 @@ describe("atomic service audit boundaries", () => {
     );
     const response = await call("/api/v1/membership/settings", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: current.revision, consultationWindowDays: 31 }),
+      body: JSON.stringify({ expectedRevision: current.revision, onHoldResponseDeadlineDays: 31 }),
     });
     expect(response.status).toBe(500);
     const [settings] = await queryAll<{ consultation_window_days: number }>(

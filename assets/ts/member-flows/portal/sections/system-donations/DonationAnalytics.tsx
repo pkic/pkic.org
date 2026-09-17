@@ -134,7 +134,7 @@ function AnalyticsViews({ data, active }: { data: DonationAnalyticsData; active:
     <>
       {/* The totals belong to every view, so they stay above the strip: the
           reader keeps the overview while looking at one period. */}
-      <div class="pk-grid">
+      <div class="pk-stat-row">
         <StatCard
           label="Total Gross (USD)"
           value={fmtMoney(donations.totals.grossUsd, "usd")}

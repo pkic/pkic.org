@@ -89,6 +89,7 @@ test("signing out revokes the session rather than only clearing the view", async
     return response.status;
   });
   expect(before).toBe(200);
+  const originalCookies = (await page.context().cookies()).map(({ name, value }) => `${name}=${value}`).join("; ");
 
   // Sign out now lives in the sidebar footer's account menu rather than as a
   // standalone button.
@@ -96,12 +97,10 @@ test("signing out revokes the session rather than only clearing the view", async
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
 
-  // A cleared UI is not a revoked session: ask the API directly.
-  const after = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
-    return response.status;
-  });
-  expect(after, "sign out must revoke the session, not just the rendered state").toBe(401);
+  // Replay the original cookie to prove server revocation. The request context
+  // survives the sign-out navigation and does not confuse a cleared cookie with revocation.
+  const after = await page.request.get("/api/v1/auth/session", { headers: { cookie: originalCookies } });
+  expect(after.status(), "sign out must revoke the session, not just the rendered state").toBe(401);
 });
 
 test("a membership join capability cannot be redeemed as a portal sign-in", async ({ page }) => {

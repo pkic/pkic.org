@@ -122,23 +122,32 @@ async function manageInvitation(
   const detail = page.getByRole("region", { name: `${event.name} workspace` });
   await tab(detail, "Invitations").click();
   const label = type === "attendee" ? "Attendee" : "Speaker";
-  await expect(detail.getByRole("heading", { name: `${label} invitations` })).toBeVisible();
-  // Exact: the panel holds a "Send <type> invitations" composer of its own,
-  // whose name contains this one.
+  const audience = `${type}s`;
+  // Two audiences are offered as sub-views; the speaker list is its own address.
+  if (type === "speaker") await tab(detail, "Speakers").click();
+  // Exact: the list panel is named after its set; the composer page below it
+  // carries a "Send <type> invitations" region of its own.
   const invitations = detail.getByRole("region", { name: `${label} invitations`, exact: true });
-  await invitations.getByRole("textbox", { name: /Paste emails and names/i }).fill(`${inviteeName} <${inviteeEmail}>`);
-  await invitations.getByRole("button", { name: "Parse" }).click();
-  await invitations.getByRole("button", { name: "Preview email" }).click();
-  await expect(invitations.getByText("Review and confirm below.")).toBeVisible();
-  await invitations.getByRole("checkbox").check();
+  await expect(invitations).toBeVisible();
+  // Composing is a page of its own under the list, not a form standing open
+  // above the rows.
+  await invitations.getByRole("button", { name: `Invite ${audience}` }).click();
+  await expect(page).toHaveURL(new RegExp(`/invitations(/speakers)?/new$`));
+  const composer = detail.getByRole("region", { name: `Send ${type} invitations` });
+  await composer.getByRole("textbox", { name: /Paste emails and names/i }).fill(`${inviteeName} <${inviteeEmail}>`);
+  await composer.getByRole("button", { name: "Parse" }).click();
+  await composer.getByRole("button", { name: "Preview email" }).click();
+  await expect(composer.getByText("Review and confirm below.")).toBeVisible();
+  await composer.getByRole("checkbox").check();
   const created = page.waitForResponse(
     (response) => response.url().endsWith(`/invites/${type}s/bulk`) && response.request().method() === "POST",
   );
-  await invitations.getByRole("button", { name: `Send ${label.toLowerCase()} invites` }).click();
+  await composer.getByRole("button", { name: `Send ${label.toLowerCase()} invites` }).click();
   expect((await created).status()).toBe(200);
-  await expect(invitations.getByText("Sent 1 invites")).toBeVisible();
+  // Sending returns to the list it added to.
+  await expect(invitations).toBeVisible();
 
-  const invitationSearch = invitations.getByPlaceholder("Search invitations…");
+  const invitationSearch = invitations.getByRole("searchbox", { name: `Search ${label.toLowerCase()} invitations` });
   /*
    * The narrowed list is awaited, not merely watched for a matching row. The
    * table renders the unfiltered page first and replaces it when the filtered
@@ -170,6 +179,11 @@ async function manageInvitation(
   const resendAction = page.getByRole("menuitem", { name: "Resend invitation" });
   await expect(resendAction).toBeVisible();
   await resendAction.click();
+  // Resending asks for its deadline in a dialog of its own; the default is
+  // the event start, so confirming as-is is the common case.
+  const resendDialog = page.getByRole("dialog", { name: `Resend the invitation to ${inviteeName}?` });
+  await expect(resendDialog.getByLabel(`${label} resend deadline`)).toBeVisible();
+  await resendDialog.getByRole("button", { name: "Resend invitation" }).click();
   expect((await resent).status()).toBe(200);
   await expect(detail.getByText(`Invitation resent to ${inviteeName}.`)).toBeVisible();
 

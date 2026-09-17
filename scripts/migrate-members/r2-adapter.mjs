@@ -64,6 +64,36 @@ export function runWranglerD1(root, envConfig, cli, sql) {
   }
 }
 
+/**
+ * Read-only companion to `runWranglerD1`, for the checks the importer runs
+ * against the database it just wrote to. `--json` keeps wrangler's banner
+ * off stdout so the result parses directly; every other flag matches the
+ * execute path so both always address the same environment and state.
+ */
+export function queryWranglerD1(root, envConfig, cli, sql) {
+  const args = [
+    "wrangler",
+    "d1",
+    "execute",
+    cli.database,
+    "--env",
+    envConfig.wranglerEnv,
+    envConfig.wranglerFlag,
+    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
+    "--json",
+    "--command",
+    sql,
+  ];
+  // stdout is parsed; wrangler's own diagnostics stay on the terminal.
+  const raw = execFileSync("pnpm", ["exec", ...args], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  const parsed = JSON.parse(raw);
+  return parsed[0]?.results ?? [];
+}
+
 function runInheritedCommand(command, args, options) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { ...options, stdio: "inherit" });

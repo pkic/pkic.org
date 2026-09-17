@@ -35,8 +35,27 @@ export const eventRegistrationsQuerySchema = searchableListQuerySchema(
   status: eventRegistrationStatusSchema.optional(),
   bounced: booleanQueryValueSchema.optional(),
   consent: booleanQueryValueSchema.optional(),
+  /** Whether the registration holds an active waitlist entry for at least one day. */
+  waitlisted: booleanQueryValueSchema.optional(),
   attendance_change: eventRegistrationAttendanceChangeFilterSchema.optional(),
 });
+
+/**
+ * What one event day holds for a registration: the attendance chosen for it
+ * and, when that choice is in-person on a day that was full, where the
+ * attendee stands on the day's waitlist. The whole-registration
+ * `attendance_type` is a derivation — in-person wins over virtual wins over
+ * on-demand — so a list that showed only it read a three-day registration
+ * with one confirmed day and two waitlisted ones as plainly "in-person".
+ */
+export const registrationDayStateSchema = z.object({
+  dayDate: z.string(),
+  label: z.string().nullable(),
+  attendanceType: z.string(),
+  /** An active waitlist entry for the day, or null when the day is confirmed. */
+  waitlistStatus: z.enum(["waiting", "offered"]).nullable(),
+});
+export type RegistrationDayState = z.infer<typeof registrationDayStateSchema>;
 export type EventRegistrationsQuery = z.infer<typeof eventRegistrationsQuerySchema>;
 
 export const eventRegistrationAttendanceChangeSchema = z.object({
@@ -53,6 +72,11 @@ export type EventRegistrationAttendanceChange = z.infer<typeof eventRegistration
 export const eventRegistrationSummarySchema = registrationRecordContextSchema.extend({
   id: z.string(),
   user_id: z.string(),
+  /** The attendee's portrait, so a roster row shows the person (#90). */
+  headshot_url: z.string().nullable(),
+  /** Who they represent and what they do, as the account states it (#119). */
+  organization_name: z.string().nullable(),
+  job_title: z.string().nullable(),
   status: eventRegistrationStatusSchema,
   attendance_type: z.string().nullable(),
   source_type: z.string().nullable(),
@@ -60,8 +84,7 @@ export const eventRegistrationSummarySchema = registrationRecordContextSchema.ex
   has_bounced: z.boolean(),
   sponsor_consent: z.boolean(),
   custom_answers_json: z.string().nullable(),
-  dayWaitlistSummary: z.string().nullable(),
-  dayWaitlistCount: z.number(),
+  days: z.array(registrationDayStateSchema),
   attendanceChangeHistory: z.array(eventRegistrationAttendanceChangeSchema),
   lastAttendanceChange: eventRegistrationAttendanceChangeSchema.nullable(),
 });
@@ -94,6 +117,7 @@ export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySc
   offset: true,
   sort: true,
   status: true,
+  waitlisted: true,
 });
 export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRegistrationsQuerySchema>;
 
@@ -102,10 +126,12 @@ export const eventAttendanceRegistrationSummarySchema = registrationRecordContex
   .extend({
     id: z.string(),
     user_id: z.string(),
+    headshot_url: z.string().nullable(),
+    organization_name: z.string().nullable(),
+    job_title: z.string().nullable(),
     status: eventRegistrationStatusSchema,
     attendance_type: z.string().nullable(),
-    dayWaitlistSummary: z.string().nullable(),
-    dayWaitlistCount: z.number(),
+    days: z.array(registrationDayStateSchema),
   });
 export type EventAttendanceRegistrationSummary = z.infer<typeof eventAttendanceRegistrationSummarySchema>;
 

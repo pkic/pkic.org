@@ -31,6 +31,7 @@ import { toast } from "../../ui";
 import { linksToText, textToLinks } from "../../../../shared/links-text";
 import { myProfileSchema, myProfileUpdateSchema } from "../../../../../shared/schemas/me";
 import type { MyProfile } from "../../types";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 export const CURRENT_USER_API = "/api/v1/users/current";
 
@@ -258,12 +259,13 @@ export function SelfProfilePanel({
 
             <Field label="Biography" {...profileForm.of("biography")}>
               {(control) => (
-                <Textarea
+                <MarkdownEditor
                   {...control}
-                  rows={5}
+                  variant="compact"
                   name="biography"
-                  value={form.biography}
-                  onInput={(event) => setForm((f) => ({ ...f, biography: event.currentTarget.value }))}
+                  label="Biography"
+                  initialValue={form.biography}
+                  onChange={(biography) => setForm((f) => ({ ...f, biography }))}
                 />
               )}
             </Field>

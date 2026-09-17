@@ -87,4 +87,16 @@ describe("migrate:members CLI", () => {
     expect(generatedFiles.some((file) => file.endsWith(".json"))).toBe(true);
     expect(output).toContain("--dry-run: skipping wrangler execution and logo upload.");
   });
+  it("refuses a zero-match import instead of treating it as success", () => {
+    const fixtureRoot = createFixture();
+    fixtures.push(fixtureRoot);
+    writeRoster(path.join(fixtureRoot, "csv", "pkic.csv"), [["alice@rewritten.example"]]);
+    expect(() =>
+      execFileSync(process.execPath, ["--experimental-strip-types", ENTRYPOINT, "--dry-run", "--skip-logos"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    ).toThrow("No roster addresses matched any member domain");
+  });
 });

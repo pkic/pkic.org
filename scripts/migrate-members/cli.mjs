@@ -33,36 +33,51 @@ export function parseArgs(argv, root) {
     logoBucket: null,
     logoConcurrency: 4,
     outDir: path.join(root, "ignore"),
+    rosterTimeZone: null,
+    manualMappingPath: null,
   };
 
+  const environmentFlags = {
+    "--local": "local",
+    "--preview": "preview",
+    "--production": "production",
+    "--remote": "production",
+  };
+  const valueFlags = {
+    "--db": "database",
+    "--persist-to": "persistTo",
+    "--state": "persistTo",
+    "--logo-bucket": "logoBucket",
+    "--logo-concurrency": "logoConcurrency",
+    "--out": "outDir",
+    "--roster-time-zone": "rosterTimeZone",
+    "--manual-mapping": "manualMappingPath",
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    const next = argv[i + 1];
-
-    if (arg === "--local") parsed.env = "local";
-    else if (arg === "--preview") parsed.env = "preview";
-    else if (arg === "--production" || arg === "--remote") parsed.env = "production";
-    else if (arg === "--db" && next) {
-      parsed.database = next;
-      i += 1;
-    } else if (arg === "--persist-to" && next) {
-      parsed.persistTo = next;
-      i += 1;
+    if (arg === "--") continue; // pnpm's optional argument separator
+    const equals = arg.indexOf("=");
+    const flag = equals < 0 ? arg : arg.slice(0, equals);
+    const property = valueFlags[flag];
+    if (property) {
+      const value = equals < 0 ? argv[++i] : arg.slice(equals + 1);
+      if (!value || value.startsWith("--")) throw new Error(`Missing value for ${flag}`);
+      const normalized =
+        property === "persistTo" || property === "outDir" || property === "manualMappingPath"
+          ? path.resolve(root, value)
+          : value;
+      if (property === "persistTo" && parsed.persistTo && parsed.persistTo !== normalized) {
+        throw new Error("Conflicting --state/--persist-to paths");
+      }
+      parsed[property] = property === "logoConcurrency" ? Number(value) : normalized;
+    } else if (environmentFlags[arg]) {
+      const environment = environmentFlags[arg];
+      if (parsed.env && parsed.env !== environment) throw new Error("Choose only one target environment");
+      parsed.env = environment;
     } else if (arg === "--dry-run") parsed.dryRun = true;
-    // --upload-logos is now the default; kept as an accepted no-op flag so
-    // existing invocations (docs, muscle memory) don't break.
     else if (arg === "--upload-logos") parsed.uploadLogos = true;
     else if (arg === "--skip-logos") parsed.uploadLogos = false;
-    else if (arg === "--logo-bucket" && next) {
-      parsed.logoBucket = next;
-      i += 1;
-    } else if (arg === "--logo-concurrency" && next) {
-      parsed.logoConcurrency = Number(next);
-      i += 1;
-    } else if (arg === "--out" && next) {
-      parsed.outDir = path.isAbsolute(next) ? next : path.join(root, next);
-      i += 1;
-    }
+    else throw new Error(`Unknown option: ${arg}`);
   }
 
   if (!parsed.env && !parsed.dryRun) {
@@ -70,6 +85,7 @@ export function parseArgs(argv, root) {
     process.exit(1);
   }
   parsed.env = parsed.env ?? "local";
+  if (parsed.persistTo && parsed.env !== "local") throw new Error("--state/--persist-to can only be used with --local");
   parsed.logoBucket = parsed.logoBucket ?? LOGO_BUCKET_BY_ENV[parsed.env];
   if (!Number.isInteger(parsed.logoConcurrency) || parsed.logoConcurrency < 1 || parsed.logoConcurrency > 16) {
     console.error("--logo-concurrency must be an integer from 1 through 16.");

@@ -10,17 +10,14 @@ import {
   organizationProfileExtendedFieldsSchema,
   organizationProfileSummaryFieldsSchema,
 } from "./organization-profile";
-import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "./membership-management";
-import { MEMBER_STATUSES, memberStatusSchema } from "./membership-categories";
+
+import { MEMBER_STATUSES, memberStatusSchema, membershipCategorySchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 
 export { MEMBER_STATUSES, memberStatusSchema };
 
-export const ORG_TIED_MEMBERSHIP_CATEGORIES = MEMBERSHIP_CATEGORIES.filter(
-  (c) => !INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(c),
-) as [string, ...string[]];
-export const orgTiedMembershipCategorySchema = z.enum(ORG_TIED_MEMBERSHIP_CATEGORIES);
+export const orgTiedMembershipCategorySchema = membershipCategorySchema;
 
 export { individualMembershipCategorySchema } from "./membership-management";
 

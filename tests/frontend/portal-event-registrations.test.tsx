@@ -45,6 +45,9 @@ function registration(overrides: Partial<EventRegistrationSummary> = {}): Record
     updated_at: NOW,
     user_email: "ada@example.test",
     display_name: "Ada Lovelace",
+    headshot_url: null,
+    organization_name: null,
+    job_title: null,
     referral_code: null,
     status: "registered",
     attendance_type: "in_person",
@@ -53,8 +56,7 @@ function registration(overrides: Partial<EventRegistrationSummary> = {}): Record
     has_bounced: false,
     sponsor_consent: true,
     custom_answers_json: null,
-    dayWaitlistSummary: null,
-    dayWaitlistCount: 0,
+    days: [],
     attendanceChangeHistory: [],
     lastAttendanceChange: null,
     ...overrides,
@@ -280,10 +282,16 @@ describe("event registrations list", () => {
 
     const strip = page.querySelector("[role='group']");
     expect(strip?.getAttribute("aria-label")).toBe("Registration totals");
-    expect(strip?.textContent).toContain("1 accepted");
-    expect(strip?.textContent).toContain("2 pending");
-    expect(strip?.textContent).toContain("3 bounced");
-    // Nothing in the strip relies on a colour class to say which is which.
+    // Each figure is a card whose label says what it counts (#110); the tone
+    // a card wears repeats the label for readers who see colour and is not
+    // what says which figure is which.
+    const figures = Object.fromEntries(
+      [...(strip?.querySelectorAll(".pk-stat-card") ?? [])].map((card) => [
+        card.querySelector(".pk-stat-card__label")?.textContent?.trim(),
+        card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
+      ]),
+    );
+    expect(figures).toMatchObject({ registered: "1", "pending confirmation": "2", "in-person": "1", bounced: "3" });
     expect(strip?.querySelector("[class*='text-']")).toBeNull();
   });
 

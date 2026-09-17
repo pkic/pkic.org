@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from "preact/hooks";
+import { useContractForm } from "../../hooks/useContractForm";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
-import { Button } from "../../ui/Button";
+import { Button, ButtonLink } from "../../ui/Button";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../ui/TextControl";
-import { highlightTemplateSyntax } from "../../shared/email-template-syntax";
+import { Select, TextInput } from "../../ui/TextControl";
+import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
+import type { MarkdownEditorHandle } from "../markdown-editor/MarkdownEditor";
 import {
   eventEmailCampaignDayWaitlistFilterSchema,
+  eventEmailCampaignPreviewInputSchema,
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
   eventEmailCampaignSendModeSchema,
@@ -43,9 +46,6 @@ import { ServerSearchSelect } from "../ServerSearchSelect";
 import { requestJson } from "../../shared/api-client";
 import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../shared/email-template-catalog";
 
-// The syntax-highlight backdrop rides this chunk rather than the entry
-// stylesheet, because only the two template editors use it.
-import "../../ui/OverlayEditor.css";
 import "../../ui/Content.css";
 
 /**
@@ -88,11 +88,17 @@ export function EventEmailCampaign({
   daysPath,
   audience: defaultAudience = "attendees",
   notify = () => {},
+  cancelHref,
+  onSent,
 }: {
   campaignsPath: string;
   daysPath: string;
   audience?: "attendees" | "speakers";
   notify?: (message: string, type: "success" | "error") => void;
+  /** The way back, when the composer is a page of its own. */
+  cancelHref?: string;
+  /** Told once the campaign is queued, so a page can return to where it came from. */
+  onSent?: () => void;
 }) {
   const days = useDays(daysPath);
 
@@ -121,44 +127,31 @@ export function EventEmailCampaign({
   const [status, setStatus] = useState("Preview required before sending.");
   const [sending, setSending] = useState(false);
 
-  // backdrop ref for textarea highlight
-  const bodyPreRef = useRef<HTMLPreElement>(null);
+  const bodyEditor = useRef<MarkdownEditorHandle>(null);
+  const [bodyRevision, setBodyRevision] = useState(0);
   const templateRequestIdRef = useRef(0);
   const availableHelperLabels = availableHelperLabelsForAudience(audience);
   const availablePartials = availablePartialsForAudience(audience);
 
-  // Sync highlight backdrop
   useEffect(() => {
-    if (bodyPreRef.current) bodyPreRef.current.innerHTML = `${highlightTemplateSyntax(body)}\n`;
-  }, [body]);
-
-  /**
-   * The body control. `Textarea` is a function component, and a ref on one
-   * resolves to the component rather than the DOM node, so the element is
-   * reached from the backdrop it shares a control box with.
-   */
-  function bodyControl(): HTMLTextAreaElement | null {
-    return bodyPreRef.current?.parentElement?.querySelector("textarea") ?? null;
-  }
-
-  function handleBodyScroll() {
-    const ta = bodyControl();
-    if (bodyPreRef.current && ta) {
-      bodyPreRef.current.scrollTop = ta.scrollTop;
-    }
-  }
+    setPreview(null);
+    setPreviewConfirmed(false);
+  }, [
+    subject,
+    body,
+    templateKey,
+    mode,
+    messageType,
+    batchSize,
+    attendeeStatus,
+    attendanceType,
+    dayFilter,
+    dayWaitlistStatus,
+    speakerStatus,
+  ]);
 
   function insertSnippet(snippet: string) {
-    const ta = bodyControl();
-    if (!ta) return;
-    const start = ta.selectionStart ?? 0;
-    const end = ta.selectionEnd ?? 0;
-    const newVal = body.substring(0, start) + snippet + body.substring(end);
-    setBody(newVal);
-    requestAnimationFrame(() => {
-      ta.selectionStart = ta.selectionEnd = start + snippet.length;
-      ta.focus();
-    });
+    bodyEditor.current?.insertText(snippet);
   }
 
   async function handleTemplateChange(key: string) {
@@ -177,6 +170,7 @@ export function EventEmailCampaign({
       if (!version) return;
       setSubject(version.subject_template ?? "");
       setBody(version.body ?? "");
+      setBodyRevision((revision) => revision + 1);
       setMessageType(version.message_type ?? "promotional");
     } catch (e) {
       notify((e as Error).message, "error");
@@ -207,9 +201,12 @@ export function EventEmailCampaign({
     return base;
   }
 
+  const form = useContractForm(eventEmailCampaignPreviewInputSchema, buildPayload());
+
   async function handlePreview() {
-    if (!subject.trim() || !body.trim()) {
-      notify("Subject and body are required.", "error");
+    const checked = form.submit();
+    if (!checked.data) {
+      notify(checked.message, "error");
       return;
     }
     setStatus("Generating preview…");
@@ -218,7 +215,7 @@ export function EventEmailCampaign({
     try {
       const res = await requestJson(`${campaignsPath}/previews`, eventEmailCampaignPreviewResponseSchema, {
         method: "POST",
-        body: JSON.stringify(buildPayload()),
+        body: JSON.stringify(checked.data),
       });
       setPreview(res);
       setStatus(`Preview ready — ${res.recipientCount} recipients.`);
@@ -236,7 +233,7 @@ export function EventEmailCampaign({
     }
     if (!preview) return;
     setSending(true);
-    setStatus("Sending…");
+    setStatus("Queueing campaign…");
     try {
       const res = await requestJson(campaignsPath, eventEmailCampaignResponseSchema, {
         method: "POST",
@@ -244,13 +241,15 @@ export function EventEmailCampaign({
       });
       const count = res.queuedRecipients;
       notify(`Email queued for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
-      setStatus(`✓ Sent to ${count} recipients.`);
+      setStatus(`Queued for ${count} recipients. Delivery continues in the background; you can leave this page.`);
       setPreview(null);
       setPreviewConfirmed(false);
       setSubject("");
       setBody("");
+      setBodyRevision((revision) => revision + 1);
       setTemplateKey("");
       setMessageType("promotional");
+      onSent?.();
     } catch (e) {
       const msg = (e as Error).message;
       setStatus(msg);
@@ -271,7 +270,7 @@ export function EventEmailCampaign({
   }
 
   return (
-    <div class="pk pk-stack">
+    <div class="pk pk-stack" {...form.handlers}>
       {/* Template + mode */}
       <div class="pk-grid">
         <Field label="Template">
@@ -334,11 +333,12 @@ export function EventEmailCampaign({
       </div>
 
       {/* Subject */}
-      <Field label="Subject">
+      <Field label="Subject" {...form.of("subjectOverride")}>
         {(control) => (
           <TextInput
             {...control}
             type="text"
+            name="subjectOverride"
             placeholder="Email subject"
             value={subject}
             onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
@@ -346,34 +346,25 @@ export function EventEmailCampaign({
         )}
       </Field>
 
-      {/* Body + variables sidebar */}
-      <div class="pk-grid pk-grid--roomy">
-        {/* The field's control box is the backdrop's positioning context —
-            both want `position: relative` — so the backdrop and the control
-            sit directly in the box the Field provides rather than in a second
-            box of their own. */}
-        <Field label="Message" help="Markdown, {{variables}}">
+      {/* Body + variables sidebar: the message takes the width and the
+          helpers keep the column beside it. */}
+      <div class="pk-record">
+        <Field label="Message" help="Markdown, {{variables}}" {...form.of("bodyContent")}>
           {(control) => (
-            <>
-              <pre
-                ref={bodyPreRef}
-                aria-hidden="true"
-                class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
-              />
-              <Textarea
-                {...control}
-                class="pk-mono pk-overlay-editor__input"
-                rows={14}
-                placeholder="Write your message here, or load a template above."
-                value={body}
-                onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-                onScroll={handleBodyScroll}
-              />
-            </>
+            <MarkdownEditor
+              {...control}
+              key={bodyRevision}
+              name="bodyContent"
+              label="Message"
+              initialValue={body}
+              initialMode="source"
+              editorRef={bodyEditor}
+              onChange={setBody}
+            />
           )}
         </Field>
-        <Panel>
-          <PanelHeader title="Template helpers" />
+        <Panel aria-label="Template helpers">
+          <PanelHeader title="Template helpers" headingLevel={4} />
           <PanelBody class="pk-stack pk-stack--snug">
             {HELPER_CATEGORIES.map((category) => {
               const items = TEMPLATE_HELPERS.filter((item) => item.category === category && isHelperVisible(item));
@@ -517,30 +508,6 @@ export function EventEmailCampaign({
         </div>
       )}
 
-      {/* Action bar */}
-      <div class="pk-cluster">
-        <Button size="sm" onClick={() => void handlePreview()}>
-          Preview Email
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => void handleSend()}
-          disabled={sending || !previewConfirmed}
-          loading={sending}
-        >
-          Send Email
-        </Button>
-        {/*
-         * The only account of what the last preview or send did, so it is a
-         * live region: a screen-reader user who has tabbed past the buttons is
-         * told the result instead of having to go looking for it.
-         */}
-        <span class="pk-small" role="status">
-          {status}
-        </span>
-      </div>
-
       {/* Preview panel */}
       {preview && (
         <Panel>
@@ -568,15 +535,47 @@ export function EventEmailCampaign({
               />
             )}
             {previewTab === "text" && <pre class="pk-code-block pk-small pk-break">{preview.text}</pre>}
-            <Checkbox
-              class="pk-small"
-              checked={previewConfirmed}
-              onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
-              label="I reviewed this email preview and confirm sending."
-            />
           </PanelBody>
         </Panel>
       )}
+      {/* Action bar */}
+      <div class="pk-stack pk-stack--snug">
+        {preview && (
+          <Checkbox
+            class="pk-small"
+            checked={previewConfirmed}
+            onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
+            label="I reviewed this email preview and confirm sending."
+          />
+        )}
+        <div class="pk-cluster">
+          <Button size="sm" onClick={() => void handlePreview()}>
+            Preview Email
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => void handleSend()}
+            disabled={sending || !previewConfirmed}
+            loading={sending}
+          >
+            Send Email
+          </Button>
+          {cancelHref && (
+            <ButtonLink size="sm" variant="ghost" href={cancelHref}>
+              Cancel
+            </ButtonLink>
+          )}
+          {/*
+           * The only account of what the last preview or send did, so it is a
+           * live region: a screen-reader user who has tabbed past the buttons is
+           * told the result instead of having to go looking for it.
+           */}
+          <span class="pk-small" role="status">
+            {status}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

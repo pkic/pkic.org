@@ -80,3 +80,9 @@ export const RepresentedOrganizations = lazy(() =>
 export const SponsorWorkspace = lazy(() =>
   import("../sections/sponsors").then((module) => ({ default: module.SponsorWorkspace })),
 );
+
+export const WorkflowReviewPage = lazy(() =>
+  import("../sections/membership-applications/WorkflowReviewPage").then((module) => ({
+    default: module.WorkflowReviewPage,
+  })),
+);

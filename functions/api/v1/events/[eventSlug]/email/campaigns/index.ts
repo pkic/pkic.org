@@ -28,7 +28,6 @@ export const EventEmailCampaignCreate = openApiRoute(
       actorId: authorization.actor.id,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
       signingSecret: requireInternalSecret(c.env),
-      maxRecipients: getConfig(c.env).eventCampaignMaxRecipients,
     });
     const rawDb = requestDb(c);
     c.executionCtx.waitUntil(

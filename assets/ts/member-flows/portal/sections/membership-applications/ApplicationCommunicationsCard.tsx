@@ -18,6 +18,7 @@ import { Textarea, TextInput } from "../../../../ui/TextControl";
 // `pk-mono` is written here as a class name rather than reached through a
 // component, so this module has to pull its stylesheet into its own chunk.
 import "../../../../ui/Content.css";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 /** What a record on this timeline is. The word carries it; the tone repeats it. */
 const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
@@ -40,12 +41,13 @@ const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
  * is reported on the control it belongs to, and a failed request is announced
  * instead of discarded.
  *
- * There is no template to choose here, and under
- * applicationCommunicationCreateSchema that is what makes the message the
- * message: the subject and body typed into this form are the subject and body
- * the applicant receives. So the form sends no `templateKey`, and the help
- * text under the message promises exactly the delivery the contract gives.
+ * The message goes out through the `application_request_information`
+ * template (#108): the subject typed here is the subject the applicant
+ * receives — the template carries none of its own — and the body is set into
+ * the template's greeting and sign-off, so the shell and wording around it
+ * are managed with the other application emails.
  */
+export const APPLICATION_REQUEST_INFORMATION_TEMPLATE_KEY = "application_request_information";
 export function ApplicationCommunicationsCard({
   detail,
   canWrite,
@@ -59,11 +61,14 @@ export function ApplicationCommunicationsCard({
 }) {
   const [commSubject, setCommSubject] = useState("");
   const [commBody, setCommBody] = useState("");
+  // The editor is uncontrolled; a sent message clears it by remounting it.
+  const [bodyGeneration, setBodyGeneration] = useState(0);
   const [commSending, setCommSending] = useState(false);
   const [commError, setCommError] = useState("");
   const communication = useContractForm(applicationCommunicationCreateSchema, {
     subject: commSubject,
     body: commBody,
+    templateKey: APPLICATION_REQUEST_INFORMATION_TEMPLATE_KEY,
   });
 
   const [noteBody, setNoteBody] = useState("");
@@ -87,6 +92,7 @@ export function ApplicationCommunicationsCard({
       await onSendCommunication(checked.data);
       setCommSubject("");
       setCommBody("");
+      setBodyGeneration((generation) => generation + 1);
       communication.reset();
     } catch (error) {
       setCommError(communication.refuse(error));
@@ -182,16 +188,18 @@ export function ApplicationCommunicationsCard({
                   <Field
                     label="Message"
                     required
-                    help="Emailed to the applicant exactly as written, and recorded on this timeline."
+                    help="Emailed to the applicant inside the application_request_information template, and recorded on this timeline."
                     {...communication.of("body")}
                   >
                     {(control) => (
-                      <Textarea
+                      <MarkdownEditor
+                        key={bodyGeneration}
                         {...control}
+                        variant="compact"
                         name="body"
-                        rows={2}
-                        value={commBody}
-                        onInput={(event) => setCommBody((event.target as HTMLTextAreaElement).value)}
+                        label="Message"
+                        initialValue={commBody}
+                        onChange={setCommBody}
                       />
                     )}
                   </Field>

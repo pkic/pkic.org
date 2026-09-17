@@ -21,8 +21,9 @@ import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody } from "../../../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { activeGroupTypeCatalog, managedGroupCatalog } from "./catalog";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 interface GroupCreateDraft {
   typeKey: string | null;
@@ -213,11 +214,13 @@ export function GroupCreateForm({
               </div>
               <Field label="Description">
                 {(control) => (
-                  <Textarea
+                  <MarkdownEditor
+                    variant="compact"
                     {...control}
-                    rows={3}
-                    value={draft.description}
-                    onInput={(event) => setField("description", event.currentTarget.value)}
+                    name="description"
+                    label="Description"
+                    initialValue={draft.description}
+                    onChange={(value) => setField("description", value)}
                   />
                 )}
               </Field>

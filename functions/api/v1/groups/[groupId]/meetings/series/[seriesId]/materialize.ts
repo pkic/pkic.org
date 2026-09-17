@@ -1,3 +1,4 @@
+import { deliverSeriesCalendar } from "../../../../../../../_lib/services/event-series/automatic-invitations";
 import {
   eventSeriesMaterializeResponseSchema,
   eventSeriesMaterializeRouteSchema,
@@ -14,6 +15,7 @@ export const GroupMeetingSeriesMaterialize = openApiRoute(
     const db = requestDb(c);
     const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
     const result = await materializeSeriesOccurrences(db, actor, data.params.groupId, data.params.seriesId, data.body);
+    c.executionCtx.waitUntil(deliverSeriesCalendar(db, c.env, c.req.raw, data.params.seriesId));
     return json(eventSeriesMaterializeResponseSchema.parse(result));
   },
 );

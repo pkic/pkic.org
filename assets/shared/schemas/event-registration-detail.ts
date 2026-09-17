@@ -76,6 +76,20 @@ export const eventRegistrationDayAttendanceChangeSchema = z.object({
 
 export const eventRegistrationDayAttendanceResponseSchema = successResponseSchema;
 
+/**
+ * The commands a manager has on the registration as a whole (#113). Cancelling
+ * ends it: every held day is released, the waitlist rows go, and the attendee
+ * is told. Changing the attendance method for every held day goes through the
+ * day-attendance contract instead, since a day is where attendance lives.
+ */
+export const eventRegistrationManagerUpdateSchema = z.object({
+  action: z.literal("cancel"),
+});
+export type EventRegistrationManagerUpdate = z.infer<typeof eventRegistrationManagerUpdateSchema>;
+export const eventRegistrationManagerUpdateResponseSchema = successResponseSchema.merge(
+  eventRegistrationAttendanceDetailResponseSchema,
+);
+
 export const eventRegistrationAdmitResponseSchema = successResponseSchema.extend({
   registration: eventRegistrationAttendanceDetailSchema,
   admittedDayDates: z.array(dayDateSchema),

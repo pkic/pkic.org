@@ -2,20 +2,24 @@ import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
 import { EmptyState } from "../../../../../components/EmptyState";
-import { ErrorAlert } from "../../../../../components/ErrorAlert";
+import { PersonCell, personDisplayName } from "../../../../../components/PersonCell";
+import { UserPicker, type PickedUser } from "../../../../../components/UserPicker";
 import { RowActions } from "../../../../../ui/RowActions";
 import { Badge as StatusBadge } from "../../../../../components/Badge";
+import { Alert } from "../../../../../ui/Alert";
 import { Badge } from "../../../../../ui/Badge";
-import { Button } from "../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { Select, TextInput } from "../../../../../ui/TextControl";
 import { usePortalHashLocation } from "../../../hash-location";
+import { useContractForm } from "../../../../../hooks/useContractForm";
 import { deleteJson, postJson } from "../../../../../shared/api-client";
 import { fmt } from "../../../ui";
 import {
   EVENT_TEAM_ROLES,
   eventTeamRoleCreateResponseSchema,
+  eventTeamRoleCreateSchema,
   eventTeamRolesResponseSchema,
   type EventTeamRole,
   type EventTeamRoleAssignment,
@@ -36,24 +40,133 @@ const ROLE_LABELS: Record<EventTeamRole, string> = {
 /** Reserved team segment that routes to the add page instead of the list. */
 const NEW_TEAM_MEMBER_SEGMENT = "new";
 
-export function Team({ slug, teamSegment }: { slug: string; teamSegment?: string }) {
+/**
+ * Adding a team member: a page of its own under the roster, never a form
+ * unfolding above it. The person is found with the user picker — a team
+ * member is an existing user, linked, not an address that becomes an account
+ * (#88) — and the way back is the roster's own address.
+ */
+function AddTeamMemberPage({ slug, teamPath }: { slug: string; teamPath: string }) {
   const [, navigate] = usePortalHashLocation();
-  const teamPath = `/events/${encodeURIComponent(slug)}/settings/team`;
-  const showAddForm = teamSegment === NEW_TEAM_MEMBER_SEGMENT;
-  const tableRef = useRef<ApiTableActions | null>(null);
-  const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<EventTeamRole>("organizer");
-  const [newExpiresAt, setNewExpiresAt] = useState("");
+  const [picked, setPicked] = useState<PickedUser | null>(null);
+  const [role, setRole] = useState<EventTeamRole>("organizer");
+  const [expiresAt, setExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState("");
+  const [error, setError] = useState("");
+  // One basis for validation: the assignment contract the route parses checks
+  // the draft as it is built and is the only thing that may refuse it.
+  const form = useContractForm(eventTeamRoleCreateSchema, {
+    userId: picked?.id ?? "",
+    role,
+    ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+  });
+
+  async function handleAdd(event: Event): Promise<void> {
+    event.preventDefault();
+    setError("");
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
+    await performAction({
+      setBusy: setAdding,
+      request: () =>
+        postJson(`/api/v1/events/${encodeURIComponent(slug)}/roles`, checked.data, eventTeamRoleCreateResponseSchema),
+      successMessage: "Team member added",
+      // Back to the roster, which fetches on its own when it mounts.
+      afterSuccess: () => navigate(teamPath),
+      onError: setError,
+    });
+  }
+
+  return (
+    <Panel aria-label="Add team member">
+      <PanelHeader title="Add team member" breadcrumb />
+      <PanelBody>
+        <form
+          class="pk-stack"
+          aria-label="Add team member"
+          noValidate
+          {...form.handlers}
+          onSubmit={(event) => void handleAdd(event)}
+        >
+          {/* One `disabled` on the group rather than one per control: the
+              picker is a child component that takes no disabled prop of its
+              own. */}
+          <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={adding}>
+            <Field
+              label="Person"
+              required
+              help="Search by name or email for someone the portal knows."
+              {...form.of("userId")}
+            >
+              {(control) => <UserPicker value={picked} onChange={setPicked} inputProps={control} />}
+            </Field>
+            <Field label="Role" {...form.of("role")}>
+              {(control) => (
+                <Select
+                  {...control}
+                  name="role"
+                  value={role}
+                  onChange={(e) => setRole(e.currentTarget.value as EventTeamRole)}
+                >
+                  {EVENT_TEAM_ROLES.map((option) => (
+                    <option key={option} value={option}>
+                      {ROLE_LABELS[option]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Expires" help="Leave empty for an assignment that never expires." {...form.of("expiresAt")}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name="expiresAt"
+                  type="datetime-local"
+                  value={expiresAt}
+                  onInput={(e) => setExpiresAt(e.currentTarget.value)}
+                />
+              )}
+            </Field>
+          </fieldset>
+          {error && <Alert tone="danger">{error}</Alert>}
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" loading={adding} disabled={adding}>
+              {adding ? "Adding…" : "Add team member"}
+            </Button>
+            <ButtonLink href={usePortalHashLocation.hrefs(teamPath)} variant="ghost">
+              Cancel
+            </ButtonLink>
+          </div>
+        </form>
+      </PanelBody>
+    </Panel>
+  );
+}
+
+export function Team({
+  slug,
+  teamSegment,
+  teamPath = `/events/${encodeURIComponent(slug)}/settings/team`,
+}: {
+  slug: string;
+  teamSegment?: string;
+  /** Where the list lives, so the add page below it stays inside the workspace that rendered it. */
+  teamPath?: string;
+}) {
+  const [, navigate] = usePortalHashLocation();
+  const tableRef = useRef<ApiTableActions | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   async function handleRevoke(assignment: EventTeamRoleAssignment) {
     const roleLabel = ROLE_LABELS[assignment.role];
+    const person = personDisplayName(assignment.userFirstName, assignment.userLastName, assignment.userEmail);
     if (
       !(await confirmAction({
-        title: `Revoke the ${roleLabel} role from ${assignment.userEmail}?`,
-        consequences: [`${assignment.userEmail} loses ${roleLabel.toLowerCase()} access to this event`],
+        title: `Revoke the ${roleLabel} role from ${person}?`,
+        consequences: [`${person} loses ${roleLabel.toLowerCase()} access to this event`],
         confirmLabel: "Revoke role",
       }))
     )
@@ -67,109 +180,8 @@ export function Team({ slug, teamSegment }: { slug: string; teamSegment?: string
     });
   }
 
-  async function handleAdd(e: Event) {
-    e.preventDefault();
-    if (!newEmail.trim()) return;
-    setAddError("");
-    await performAction({
-      setBusy: setAdding,
-      request: () =>
-        postJson(
-          `/api/v1/events/${encodeURIComponent(slug)}/roles`,
-          {
-            userEmail: newEmail.trim(),
-            role: newRole,
-            expiresAt: newExpiresAt ? new Date(newExpiresAt).toISOString() : undefined,
-          },
-          eventTeamRoleCreateResponseSchema,
-        ),
-      successMessage: "Role assigned",
-      afterSuccess: async () => {
-        setNewEmail("");
-        setNewExpiresAt("");
-        setAddError("");
-        // Back to the list, which fetches on its own when it mounts; there is
-        // no table on this page to reload.
-        navigate(teamPath);
-      },
-      onError: setAddError,
-    });
-  }
-
-  function leaveAddPage(): void {
-    setAddError("");
-    navigate(teamPath);
-  }
-
-  if (showAddForm) {
-    return (
-      <div class="pk pk-stack">
-        {/* The page's way back: adding has its own address, so leaving it is
-            navigation rather than the disappearance of a layer. */}
-        <div class="pk-cluster">
-          <Button size="sm" onClick={leaveAddPage} disabled={adding}>
-            ← All team members
-          </Button>
-        </div>
-        <Panel aria-label="Add team member">
-          <PanelHeader title="Add team member" headingLevel={2} />
-          <PanelBody>
-            <form class="pk-stack" aria-label="Add team member" onSubmit={(e) => void handleAdd(e)}>
-              {/* One `disabled` on the group rather than one per control: the
-                  controls are rendered by a child component that takes no
-                  disabled prop of its own. */}
-              <fieldset class="pk-fieldset pk-grid pk-grid--tight" disabled={adding}>
-                <Field label="Email" required>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      type="email"
-                      value={newEmail}
-                      placeholder="user@example.com"
-                      onInput={(e) => setNewEmail(e.currentTarget.value)}
-                    />
-                  )}
-                </Field>
-                <Field label="Role">
-                  {(control) => (
-                    <Select
-                      {...control}
-                      value={newRole}
-                      onChange={(e) => setNewRole(e.currentTarget.value as EventTeamRole)}
-                    >
-                      {EVENT_TEAM_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {ROLE_LABELS[role]}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-                <Field label="Expires" help="Leave empty for an assignment that never expires.">
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      type="datetime-local"
-                      value={newExpiresAt}
-                      onInput={(e) => setNewExpiresAt(e.currentTarget.value)}
-                    />
-                  )}
-                </Field>
-              </fieldset>
-              {addError && <ErrorAlert error={addError} />}
-              <div class="pk-cluster">
-                <Button type="submit" variant="primary" size="sm" loading={adding}>
-                  {adding ? "Adding…" : "Add"}
-                </Button>
-                <Button size="sm" onClick={leaveAddPage} disabled={adding}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </PanelBody>
-        </Panel>
-      </div>
-    );
+  if (teamSegment === NEW_TEAM_MEMBER_SEGMENT) {
+    return <AddTeamMemberPage slug={slug} teamPath={teamPath} />;
   }
 
   return (
@@ -188,7 +200,21 @@ export function Team({ slug, teamSegment }: { slug: string; teamSegment?: string
         }}
         actionsRef={tableRef}
         columns={[
-          { header: "Email", cell: (role) => role.userEmail, sort: { asc: "userEmail", desc: "-userEmail" } },
+          {
+            // A person, not an address (#88, #90): the same face-then-name
+            // cell every roster uses, and the row opens their record.
+            header: "Person",
+            cell: (role) => (
+              <PersonCell
+                firstName={role.userFirstName}
+                lastName={role.userLastName}
+                email={role.userEmail}
+                headshotUrl={role.headshotUrl}
+              />
+            ),
+            width: "primary",
+            sort: { asc: "userEmail", desc: "-userEmail" },
+          },
           {
             header: "Role",
             cell: (assignment) => <StatusBadge status={assignment.role} label={ROLE_LABELS[assignment.role]} />,
@@ -223,7 +249,7 @@ export function Team({ slug, teamSegment }: { slug: string; teamSegment?: string
             className: "pk-end",
             cell: (role) => (
               <RowActions
-                subject={role.userEmail}
+                subject={personDisplayName(role.userFirstName, role.userLastName, role.userEmail)}
                 actions={[
                   {
                     id: "revoke",
@@ -238,6 +264,10 @@ export function Team({ slug, teamSegment }: { slug: string; teamSegment?: string
         ]}
         empty={<EmptyState title="No team members yet" body="Add a team member to get started." />}
         rowKey={(role) => role.id}
+        rowAction={(role) => ({
+          label: `Open ${personDisplayName(role.userFirstName, role.userLastName, role.userEmail)}`,
+          href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(role.userId)}`),
+        })}
       />
     </div>
   );

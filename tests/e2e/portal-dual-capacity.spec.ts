@@ -1,3 +1,4 @@
+import { completeSyntheticMembershipReview } from "./helpers/member-provisioning";
 /**
  * One person representing two organizations.
  *
@@ -38,29 +39,7 @@ async function approveMemberFor(page: Page, email: string, organizationName: str
     category: "F",
     organizationName,
   });
-  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
-    const status = await page.evaluate(
-      async ({ applicationId, toStage }) => {
-        const response = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ toStage }),
-        });
-        return response.status;
-      },
-      { applicationId: application.applicationId, toStage },
-    );
-    expect(status).toBe(200);
-  }
-  const approved = await page.evaluate(async (applicationId) => {
-    const response = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
-    return { status: response.status, body: await response.json() };
-  }, application.applicationId);
-  expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+  await completeSyntheticMembershipReview(page.request, application.applicationId);
 }
 
 test("a person representing two organizations can switch between both contexts", async ({ page }) => {
@@ -189,7 +168,8 @@ test("a person representing two organizations can switch between both contexts",
   await expect(page.getByRole("textbox", { name: "Job title for this organization", exact: true })).toHaveValue(
     "Security lead in the first capacity",
   );
-  await expect(page.getByRole("textbox", { name: "Biography", exact: true })).toHaveValue(
+  // The biography is a Markdown editor now (#114): its text, not a value.
+  await expect(page.getByRole("textbox", { name: "Biography", exact: true })).toHaveText(
     "Biography written only for the first represented organization.",
   );
   await expect(page.getByRole("textbox", { name: "Social / profile links", exact: true })).toHaveValue(

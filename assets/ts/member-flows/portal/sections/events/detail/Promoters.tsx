@@ -1,10 +1,20 @@
-import { usePortalHashLocation } from "../../../hash-location";
-import { Spinner } from "../../../../../components/Spinner";
-import { ErrorAlert } from "../../../../../components/ErrorAlert";
+/**
+ * Who is bringing people to the event, and through which links.
+ *
+ * Two server collections — the ranked promoters and the referral codes —
+ * each drawn as the one list panel every collection in the portal uses,
+ * with the summary figures in a panel of their own above them. The version
+ * this replaces laid the stat cards and two bare tables straight onto the
+ * page with a hand-rolled pager under them.
+ */
+import { useState } from "preact/hooks";
+import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import { Tabs } from "../../../../../components/Tabs";
-import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
+import type { Column } from "../../../../../components/Table";
 import { EmptyState } from "../../../../../ui/EmptyState";
-import { Meter } from "../../../../../ui/Meter";
+import { svgSegmentBar } from "../../../../../ui/chart";
+import { usePortalHashLocation } from "../../../hash-location";
+import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { PersonCell } from "../../../../../ui/PersonCell";
 import { StatCard } from "../../../../../ui/StatCard";
 // `pk-mono` and `pk-strong` are written here as class names rather than
@@ -12,176 +22,200 @@ import { StatCard } from "../../../../../ui/StatCard";
 // `pk-mono` into its own chunk.
 import "../../../../../ui/Content.css";
 import {
-  buildCollectionResetKey,
-  useCollectionOffset,
-  useServerCollection,
-  type CollectionLoader,
-} from "../../../../../hooks/useServerCollection";
-import { Pager } from "../../../../../components/Pager";
-import {
   eventPromotersListResponseSchema,
   type EventPromoter,
+  type EventPromotersListResponse,
   type EventReferralCode,
 } from "../../../../../../shared/schemas/event-promoters";
-import { useOffsetPager } from "../../../../../hooks/useOffsetPager";
-import { getJson } from "../../../../../shared/api-client";
 
-const loadEventPromoters: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
+type PromotionView = "promoters" | "codes";
 
-/** One promoter, with the rank the server's ordering gives them on this page. */
-interface RankedPromoter extends EventPromoter {
-  rank: number;
-}
+const VIEWS: ReadonlyArray<{ key: PromotionView; label: string }> = [
+  { key: "promoters", label: "Active promoters" },
+  { key: "codes", label: "Referral codes" },
+];
 
 function promoterName(promoter: EventPromoter): string {
-  return [promoter.firstName, promoter.lastName].filter(Boolean).join(" ") || promoter.email || "Unknown promoter";
+  return [promoter.firstName, promoter.lastName].filter(Boolean).join(" ") || "Unnamed promoter";
 }
 
-/**
- * The leaderboard as a table rather than a column of cards.
- *
- * Every figure on the card carried a two- or three-letter label — "Sent",
- * "Rate", "lbl" — that only made sense beside its neighbours, and the top
- * three places were signalled by a gold/silver/bronze tint that nobody who
- * cannot separate those hues could read. A captioned table gives each number
- * a real column header, and the rank is a number in its own column instead of
- * a colour.
- */
-const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoter>> = [
-  { id: "rank", header: "Rank", align: "end", cell: (row) => row.rank, cellClass: "pk-nowrap" },
-  {
-    id: "promoter",
-    header: "Promoter",
-    cell: (row) => (
-      <div class="pk-stack pk-stack--tight">
-        <PersonCell name={promoterName(row)} avatarSrc={row.headshotUrl ?? undefined} size="sm" />
-        {row.email && <a href={`mailto:${row.email}`}>{row.email}</a>}
-        {[row.jobTitle, row.organization].filter(Boolean).length > 0 && (
-          <span class="pk-small">{[row.jobTitle, row.organization].filter(Boolean).join(" · ")}</span>
-        )}
-      </div>
-    ),
-  },
-  { id: "invitesSent", header: "Invites sent", align: "end", cell: (row) => row.invitesSent },
-  { id: "invitesAccepted", header: "Invites accepted", align: "end", cell: (row) => row.invitesAccepted },
-  {
-    id: "conversion",
-    header: "Invite conversion",
-    cell: (row) => {
-      const conversion = row.inviteConversionRate ?? 0;
-      return (
-        // The bar repeats what the figure beside it says; a reader who cannot
-        // judge the fill still gets the number.
-        <Meter
-          value={Math.min(conversion, 100)}
-          label={`${String(conversion)}% invite conversion for ${promoterName(row)}`}
-          showValue
+function promoterColumns(pageOffset: number): Array<Column<EventPromoter>> {
+  return [
+    {
+      header: "Promoter",
+      cell: (row, index) => (
+        <PersonCell
+          name={promoterName(row)}
+          avatarSrc={row.headshotUrl ?? undefined}
+          avatarStatus={{ label: `#${pageOffset + index + 1}` }}
+          detail={[row.jobTitle, row.organization].filter(Boolean).join(" · ")}
         />
-      );
+      ),
+      width: "primary",
     },
-  },
-  { id: "invitesDeclined", header: "Declined", align: "end", cell: (row) => row.invitesDeclined },
-  { id: "invitesExpired", header: "Expired", align: "end", cell: (row) => row.invitesExpired },
-  { id: "referralClicks", header: "Link clicks", align: "end", cell: (row) => row.referralClicks },
-  { id: "referralConversions", header: "Link registrations", align: "end", cell: (row) => row.referralConversions },
-  {
-    id: "impactScore",
-    header: "Impact",
-    align: "end",
-    cell: (row) => <span class="pk-strong">{row.impactScore.toFixed(0)}</span>,
-  },
-];
+    {
+      header: "Invitations",
+      cell: (row) => (
+        <div class="pk-stack pk-stack--tight">
+          <span>{row.invitesSent} sent</span>
+          <div
+            dangerouslySetInnerHTML={{
+              __html: svgSegmentBar(
+                [
+                  { label: "Accepted", value: row.invitesAccepted, color: "var(--pk-ok)" },
+                  {
+                    label: "Pending",
+                    value: Math.max(
+                      0,
+                      row.invitesSent - row.invitesAccepted - row.invitesDeclined - row.invitesExpired,
+                    ),
+                    color: "var(--pk-info)",
+                  },
+                  { label: "Declined", value: row.invitesDeclined, color: "var(--pk-ink-muted)" },
+                  { label: "Expired", value: row.invitesExpired, color: "var(--pk-line)" },
+                ],
+                row.invitesSent,
+                { caption: `Invitations from ${promoterName(row)}` },
+              ),
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      header: "Referral links",
+      cell: (row) => (
+        <div class="pk-stack pk-stack--tight">
+          <span>
+            {row.referralClicks} clicks · {row.referralConversions} registrations
+          </span>
+          <div
+            dangerouslySetInnerHTML={{
+              __html: svgSegmentBar(
+                [
+                  { label: "Registrations", value: row.referralConversions, color: "var(--pk-ok)" },
+                  {
+                    label: "Other clicks",
+                    value: Math.max(0, row.referralClicks - row.referralConversions),
+                    color: "var(--pk-info)",
+                  },
+                ],
+                Math.max(row.referralClicks, row.referralConversions),
+                { caption: `Referral activity for ${promoterName(row)}` },
+              ),
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      header: "Impact",
+      cell: (row) => <span class="pk-record-title">{row.impactScore.toFixed(0)}</span>,
+      className: "pk-end",
+      width: "fit",
+      sort: { asc: "impact", desc: "-impact", defaultDirection: "desc" },
+    },
+  ];
+}
 
-const REFERRAL_CODE_COLUMNS: ReadonlyArray<DataTableColumn<EventReferralCode>> = [
-  { id: "code", header: "Code", cell: (row) => row.code, cellClass: "pk-mono pk-nowrap" },
+const REFERRAL_CODE_COLUMNS: Array<Column<EventReferralCode>> = [
+  { header: "Code", cell: (row) => row.code, className: "pk-mono", width: "primary" },
   {
-    id: "owner",
     header: "Owner",
-    cell: (row) => [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") || row.ownerEmail || "—",
+    cell: (row) => [row.ownerFirstName, row.ownerLastName].filter(Boolean).join(" ") || "Unnamed user",
   },
-  { id: "clicks", header: "Clicks", align: "end", cell: (row) => row.clicks },
-  { id: "conversions", header: "Conversions", align: "end", cell: (row) => row.conversions },
+  { header: "Clicks", cell: (row) => row.clicks, className: "pk-end", width: "fit" },
   {
-    id: "createdAt",
-    header: "Created",
-    cell: (row) => row.createdAt.substring(0, 10),
-    cellClass: "pk-mono pk-small pk-nowrap",
+    header: "Conversions",
+    cell: (row) => row.conversions,
+    className: "pk-end",
+    width: "fit",
+    sort: { asc: "conversions", desc: "-conversions", defaultDirection: "desc" },
   },
+  { header: "Created", cell: (row) => row.createdAt.substring(0, 10), className: "pk-mono pk-small", width: "fit" },
 ];
 
-export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
-  const [, navigate] = usePortalHashLocation();
-  const tab = subTab === "codes" ? "codes" : "promoters";
-  const pager = useOffsetPager();
-  const { offset, pageSize } = pager;
+export function Promoters({
+  slug,
+  subTab,
+  basePath = `/events/${encodeURIComponent(slug)}/promoters`,
+}: {
+  slug: string;
+  subTab?: string;
+  /** Where the views live, so the tabs stay inside the workspace that rendered them. */
+  basePath?: string;
+}) {
+  const view: PromotionView = subTab === "codes" ? "codes" : "promoters";
+  const [summary, setSummary] = useState<EventPromotersListResponse["summary"] | null>(null);
+  const [pageOffset, setPageOffset] = useState(0);
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/promoters`;
-  const sort = tab === "promoters" ? "-impact" : "-conversions";
-  const resetKey = buildCollectionResetKey(endpoint, { view: tab, sort });
-  const requestOffset = useCollectionOffset(resetKey, offset, pager.resetPage);
-  const { data, loading, error } = useServerCollection({
-    endpoint,
-    params: {
-      view: tab,
-      limit: String(pageSize),
-      offset: String(requestOffset),
-      sort,
-    },
-    responseSchema: eventPromotersListResponseSchema,
-    load: loadEventPromoters,
-  });
-
-  if (loading)
-    return (
-      <div class="pk">
-        <Spinner label="Loading promoters…" />
-      </div>
-    );
-  if (error) return <ErrorAlert error={error} />;
-  if (!data) return null;
-
-  const { promoters, referralCodes, summary, page } = data;
-  const ranked: RankedPromoter[] = promoters.map((promoter, index) => ({
-    ...promoter,
-    rank: page.offset + index + 1,
-  }));
+  const viewPath = (key: string) => (key === "promoters" ? basePath : `${basePath}/${key}`);
   const inviteConversion =
-    summary.totalInvitesSent > 0
+    summary && summary.totalInvitesSent > 0
       ? `${((summary.totalInvitesAccepted / summary.totalInvitesSent) * 100).toFixed(0)}% conversion`
       : undefined;
 
   return (
     <div class="pk pk-stack">
-      {tab === "promoters" && summary.activePromoters > 0 && (
-        <div class="pk-grid pk-grid--tight">
-          <StatCard
-            label="Active promoters"
-            value={String(summary.activePromoters)}
-            note={`${String(summary.promotersWithRegistrations)} with registrations`}
-          />
-          <StatCard label="Invites sent" value={String(summary.totalInvitesSent)} />
-          <StatCard label="Invites accepted" value={String(summary.totalInvitesAccepted)} note={inviteConversion} />
-          <StatCard label="Link clicks" value={String(summary.totalReferralClicks)} />
-          <StatCard label="Link registrations" value={String(summary.totalReferralConversions)} />
-        </div>
+      {/* Nothing to summarize is nothing to draw: a row of zeroes says less
+          than the empty list below it. */}
+      {summary && summary.activePromoters > 0 && (
+        <Panel aria-label="Promotion summary">
+          <PanelHeader title="Promotion" />
+          <PanelBody>
+            <div class="pk-stat-row">
+              <StatCard
+                label="Active promoters"
+                value={String(summary.activePromoters)}
+                note={`${String(summary.promotersWithRegistrations)} with registrations`}
+              />
+              <StatCard label="Invites sent" value={String(summary.totalInvitesSent)} />
+              <StatCard
+                label="Invites accepted"
+                value={String(summary.totalInvitesAccepted)}
+                note={inviteConversion}
+                tone="ok"
+              />
+              <StatCard label="Link clicks" value={String(summary.totalReferralClicks)} />
+              <StatCard label="Link registrations" value={String(summary.totalReferralConversions)} />
+            </div>
+          </PanelBody>
+        </Panel>
       )}
 
       <Tabs
         label="Promotion views"
-        items={[
-          { key: "promoters", label: `Active promoters (${String(summary.activePromoters)})` },
-          { key: "codes", label: `Referral codes (${String(summary.referralCodeCount)})` },
-        ]}
-        active={tab}
-        onChange={(key) => navigate(`/events/${slug}/promoters/${key === "promoters" ? "" : key}`)}
-        hrefFor={(key) => `/events/${slug}/promoters/${key === "promoters" ? "" : key}`}
+        items={VIEWS.map(({ key, label }) => ({
+          key,
+          label: summary
+            ? `${label} (${String(key === "promoters" ? summary.activePromoters : summary.referralCodeCount)})`
+            : label,
+        }))}
+        active={view}
+        hrefFor={viewPath}
       />
 
-      {tab === "promoters" && (
-        <DataTable
+      {view === "promoters" ? (
+        <ApiDataTable
+          key="promoters"
           caption="Promoters, ranked by impact"
-          columns={PROMOTER_COLUMNS}
-          rows={ranked}
+          endpoint={endpoint}
+          params={{ view: "promoters" }}
+          responseSchema={eventPromotersListResponseSchema}
+          resolve={(response) => response.promoters}
+          resolvePage={(response) => response.page}
+          onData={(response) => {
+            setSummary(response.summary);
+            setPageOffset(response.page.offset);
+          }}
+          paginate
+          initialSort="-impact"
+          columns={promoterColumns(pageOffset)}
           rowKey={(row) => row.userId}
+          rowAction={(row) => ({
+            label: `Open ${promoterName(row)}`,
+            href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(row.userId)}`),
+          })}
           empty={
             <EmptyState
               title="No promoter activity yet"
@@ -189,13 +223,19 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
             />
           }
         />
-      )}
-
-      {tab === "codes" && (
-        <DataTable
+      ) : (
+        <ApiDataTable
+          key="codes"
           caption="Referral codes"
+          endpoint={endpoint}
+          params={{ view: "codes" }}
+          responseSchema={eventPromotersListResponseSchema}
+          resolve={(response) => response.referralCodes}
+          resolvePage={(response) => response.page}
+          onData={(response) => setSummary(response.summary)}
+          paginate
+          initialSort="-conversions"
           columns={REFERRAL_CODE_COLUMNS}
-          rows={referralCodes}
           rowKey={(row) => row.code}
           empty={
             <EmptyState
@@ -205,15 +245,6 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
           }
         />
       )}
-
-      <Pager
-        {...pager.pagerProps({
-          hasMore: page.hasMore,
-          rowCount: promoters.length + referralCodes.length,
-          total: page.total,
-          serverOffset: page.offset,
-        })}
-      />
     </div>
   );
 }

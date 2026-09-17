@@ -125,20 +125,15 @@ describe("the event promoter leaderboard", () => {
     // A page holding several tables announces several anonymous ones without
     // this; and the rank is a number, not a gold tint.
     expect(container.querySelector("caption")?.textContent).toBe("Promoters, ranked by impact");
-    expect([...container.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual([
-      "Rank",
-      "Promoter",
-      "Invites sent",
-      "Invites accepted",
-      "Invite conversion",
-      "Declined",
-      "Expired",
-      "Link clicks",
-      "Link registrations",
-      "Impact",
-    ]);
+    // The sort marker on a sortable head is not part of its name.
+    expect(
+      [...container.querySelectorAll(".pk-table > thead th")].map((cell) =>
+        (cell.textContent ?? "").replace(/[↑↓↕]/g, "").trim(),
+      ),
+    ).toEqual(["Promoter", "Invitations", "Referral links", "Impact"]);
     expect(container.querySelector("tbody tr")?.textContent).toContain("Ada Lovelace");
     expect(container.textContent).toContain("Engineer · Analytical Engines");
+    expect(container.querySelector(".pk-avatar-standing__label")?.textContent).toBe("#1");
   });
 
   it("gives the conversion bar a value and a name rather than a bare fill", async () => {
@@ -146,11 +141,11 @@ describe("the event promoter leaderboard", () => {
     const container = mount(<Promoters slug="summit" />);
     await settle();
 
-    const meter = container.querySelector('[role="meter"]');
-    expect(meter?.getAttribute("aria-label")).toBe("75% invite conversion for Ada Lovelace");
-    expect(meter?.getAttribute("aria-valuenow")).toBe("75");
-    // The figure is also written out, so the bar is never the only carrier.
-    expect(meter?.textContent).toContain("75%");
+    const chart = container.querySelector('figure[aria-label="Invitations from Ada Lovelace"]');
+    expect(chart).not.toBeNull();
+    expect(chart?.textContent).toContain("Accepted: 6");
+    expect(chart?.textContent).toContain("Declined: 1");
+    expect(chart?.querySelector("svg")).not.toBeNull();
   });
 
   it("reaches the promoter by a real link rather than a clickable cell", async () => {
@@ -158,8 +153,9 @@ describe("the event promoter leaderboard", () => {
     const container = mount(<Promoters slug="summit" />);
     await settle();
 
-    const mailto = container.querySelector<HTMLAnchorElement>('a[href^="mailto:"]');
-    expect(mailto?.getAttribute("href")).toBe("mailto:ada@example.test");
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
+    expect(container.textContent).not.toContain(PROMOTER.email);
+    expect(container.querySelector(`a[href="#/users/${PROMOTER.userId}"]`)).not.toBeNull();
   });
 
   it("says why the leaderboard is empty instead of showing a blank table", async () => {
@@ -214,6 +210,10 @@ describe("the event promoter leaderboard", () => {
     stub(() => json(body()));
     const container = mount(<Promoters slug="summit" />);
 
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("Loading promoters…");
+    // The list panel stays mounted while it loads — the caption and the
+    // columns are already there, with skeleton rows announced as busy — so
+    // the region never collapses to a spinner between one view and the next.
+    expect(container.querySelector("caption")?.textContent).toBe("Promoters, ranked by impact");
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
   });
 });

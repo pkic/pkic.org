@@ -29,6 +29,7 @@ interface EventParticipationRow {
   event_id: string;
   event_slug: string;
   event_name: string;
+  location: string | null;
   starts_at: string | null;
   roles: string;
   occurred_at: string;
@@ -52,6 +53,7 @@ export function buildUserEventParticipationPageQuery(
   return buildParticipationHistoryPageQuery(query, {
     selectSql: `SELECT event.id AS event_id, event.slug AS event_slug, event.name AS event_name,
          event.starts_at,
+         CASE WHEN json_valid(event.settings_json) THEN json_extract(event.settings_json, '$.location') END AS location,
          group_concat(DISTINCT participant.role) AS roles,
          ${EVENT_OCCURRED_AT} AS occurred_at`,
     fromSql: EVENT_PARTICIPATION_FROM,
@@ -80,6 +82,7 @@ function toEventParticipation(row: EventParticipationRow): UserEventParticipatio
     eventId: row.event_id,
     eventSlug: row.event_slug,
     eventName: row.event_name,
+    location: row.location ?? null,
     roles: participantRoles(row.roles),
     startsAt: row.starts_at,
     occurredAt: row.occurred_at,

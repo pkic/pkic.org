@@ -59,6 +59,25 @@ function press(element: Element, key: string) {
 }
 
 describe("Menu", () => {
+  it("keeps paginated choices open and moves focus when the next page is shorter", () => {
+    const next = vi.fn();
+    const container = mount(
+      <Menu
+        label="Choices"
+        items={[...items(), { id: "next", label: "More choices", keepOpen: true, onSelect: next }]}
+      />,
+    );
+    void act(() => trigger(container).click());
+    press(menuItems(container)[0], "End");
+    void act(() => menuItems(container).at(-1)!.click());
+    expect(next).toHaveBeenCalledOnce();
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+    void act(() =>
+      render(<Menu label="Choices" items={[{ id: "user", label: "User updated", onSelect: vi.fn() }]} />, container),
+    );
+    expect(document.activeElement).toBe(menuItems(container)[0]);
+  });
+
   it("announces itself as a closed menu button before it is opened", () => {
     const container = mount(<Menu label="Actions for Marit" items={items()} />);
     expect(trigger(container).getAttribute("aria-haspopup")).toBe("menu");
@@ -331,5 +350,35 @@ describe("Menu", () => {
     press(trigger(container), "ArrowDown");
     const tabbable = menuItems(container).filter((item) => item.tabIndex === 0);
     expect(tabbable).toHaveLength(1);
+  });
+  it("opens a filter submenu with the keyboard and returns to its parent", () => {
+    const selected = vi.fn();
+    const container = mount(
+      <Menu
+        label="Actions"
+        items={[
+          { id: "sort", label: "Sort", onSelect() {} },
+          {
+            id: "filter",
+            label: "Filter",
+            onSelect() {},
+            children: [{ id: "organization", label: "Organizations", onSelect: selected }],
+          },
+        ]}
+      />,
+    );
+    press(trigger(container), "ArrowDown");
+    press(menuItems(container)[0], "ArrowDown");
+    press(menuItems(container)[1], "ArrowRight");
+    expect(menuItems(container).map((item) => item.textContent?.trim())).toEqual(["Back", "Organizations"]);
+    expect(document.activeElement?.textContent).toBe("Organizations");
+    press(menuItems(container)[1], "ArrowLeft");
+    expect(document.activeElement).toBe(menuItems(container)[1]);
+    expect(menuItems(container)[1].textContent).toContain("Filter");
+    press(menuItems(container)[1], "ArrowRight");
+    void act(() => menuItems(container)[1].click());
+    expect(selected).toHaveBeenCalledOnce();
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger(container));
   });
 });

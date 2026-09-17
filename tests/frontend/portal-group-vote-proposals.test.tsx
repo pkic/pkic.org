@@ -18,9 +18,12 @@ import {
 } from "../../assets/shared/schemas/group-vote-proposals";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupVoteProposalForm } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposalForm";
-import { GroupVoteProposals } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
+import {
+  GroupVoteProposalRecord,
+  GroupVoteProposals,
+} from "../../assets/ts/member-flows/portal/sections/management/GroupVoteProposals";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
-import { buttonNamed, controlFor as labeledControl } from "./helpers/labelled-control";
+import { buttonNamed, controlFor as labeledControl, markdownControl, typeMarkdown } from "./helpers/labelled-control";
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
@@ -28,6 +31,13 @@ vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigat
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const PROPOSAL_ID = "d0000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
+const LIST_PATH = `/groups/${GROUP_ID}/votes/proposals`;
+const recordPath = (proposalId: string) => `${LIST_PATH}/${proposalId}`;
+
+/** The proposal's own page (#126), mounted the way the votes section mounts it. */
+function record() {
+  return <GroupVoteProposalRecord groupId={GROUP_ID} proposalId={PROPOSAL_ID} listPath={LIST_PATH} />;
+}
 
 /** The vote an approved proposal becomes; only its identity matters here. */
 function convertedVote() {
@@ -140,7 +150,10 @@ describe("selected-group vote proposals", () => {
       vi.fn(async () => empty()),
     );
     await act(async () => {
-      render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} />, container);
+      render(
+        <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} recordPath={recordPath} />,
+        container,
+      );
     });
     // The table renders its head first and its empty state once the page has
     // come back, so this waits for the answer rather than for one tick.
@@ -189,7 +202,12 @@ describe("selected-group vote proposals", () => {
      * itself is mounted for what it submits.
      */
     const proposed = vi.fn();
-    await act(() => render(<GroupVoteProposals groupId={GROUP_ID} canParticipate onPropose={proposed} />, container));
+    await act(() =>
+      render(
+        <GroupVoteProposals groupId={GROUP_ID} canParticipate onPropose={proposed} recordPath={recordPath} />,
+        container,
+      ),
+    );
     await settle();
     await act(() =>
       (
@@ -209,8 +227,8 @@ describe("selected-group vote proposals", () => {
     // longer hand-writes ids, and the pair is what a reader actually gets.
     await act(() => {
       setValue(labeledControl(container, "Title"), "Architecture proposal");
-      setValue(labeledControl<HTMLTextAreaElement>(container, "Description"), "Adopt the architecture.");
     });
+    await typeMarkdown(container, "Description", "Adopt the architecture.");
     await act(() => buttonNamed(container, "Submit proposal").click());
     await settle();
 
@@ -254,19 +272,12 @@ describe("selected-group vote proposals", () => {
       render(
         <>
           <ConfirmDialogHost />
-          <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} />
+          {record()}
         </>,
         container,
       ),
     );
     await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
-          (button) => button.textContent === "Show details for Architecture proposal",
-        ) as HTMLButtonElement
-      ).click(),
-    );
     await settle();
     expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Endorse")).toBe(
       false,
@@ -316,19 +327,12 @@ describe("selected-group vote proposals", () => {
       render(
         <>
           <ConfirmDialogHost />
-          <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} />
+          {record()}
         </>,
         container,
       ),
     );
     await settle();
-    await act(() =>
-      (
-        Array.from(container.querySelectorAll("button.pk-table__row-link")).find(
-          (button) => button.textContent === "Show details for Architecture proposal",
-        ) as HTMLButtonElement
-      ).click(),
-    );
     await settle();
     await act(() =>
       (
@@ -343,7 +347,7 @@ describe("selected-group vote proposals", () => {
     expect(requests.some((request) => request.method === "DELETE")).toBe(false);
   });
 
-  it("names the proposal list and the region an expanded proposal opens", async () => {
+  it("names the proposal list, and sends a row to the proposal's own page", async () => {
     const managedProposal = proposal(["view", "reject"]);
     vi.stubGlobal(
       "fetch",
@@ -363,25 +367,34 @@ describe("selected-group vote proposals", () => {
     const container = document.createElement("div");
     document.body.append(container);
     await act(() =>
-      render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} />, container),
+      render(
+        <GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} recordPath={recordPath} />,
+        container,
+      ),
     );
     await settle();
 
     // Four unnamed tables on a page are announced as four tables.
     expect(container.querySelector("table caption")?.textContent).toBe("Vote proposals");
 
-    // The row itself opens the detail; its activation names the proposal.
-    const details = buttonNamed(container, "Show details for Architecture proposal");
-    await act(() => details.click());
-    await settle();
+    // The row is a link to the proposal's own address (#126), never an
+    // expansion between the rows, and it names what it opens.
+    const open = container.querySelector<HTMLAnchorElement>("a.pk-table__row-link");
+    expect(open?.textContent).toBe("Open Architecture proposal");
+    expect(open?.getAttribute("href")).toBe(`#${LIST_PATH}/${PROPOSAL_ID}`);
+    expect(container.querySelector('[role="region"]')).toBeNull();
 
-    // The expanded detail is a region named after the proposal it belongs
-    // to, so it can be reached without depending on a styling class.
+    // The page heads itself with the proposal, under the list's trail, and
+    // its region is named after the proposal it belongs to.
+    await act(() => render(record(), container));
+    await settle();
+    await settle();
+    expect(container.querySelector("h2")?.textContent).toBe(managedProposal.title);
+    expect(container.querySelector('nav[aria-label="Breadcrumb"]')?.textContent).toContain("Proposals");
     expect(namedRegion(container, managedProposal.title)).toBeTruthy();
-    expect(buttonNamed(container, "Hide details for Architecture proposal")).toBeTruthy();
     // The rejection reason is a required, described control, not a bare box.
-    const reason = labeledControl<HTMLTextAreaElement>(container, "Rejection reason");
-    expect(reason.required).toBe(true);
+    const reason = await markdownControl(container, "Rejection reason");
+    expect(reason.getAttribute("aria-required")).toBe("true");
     expect(container.querySelector(`[id="${String(reason.getAttribute("aria-describedby"))}"]`)?.textContent).toContain(
       "Sent to the proposer",
     );
@@ -411,18 +424,13 @@ describe("selected-group vote proposals", () => {
     );
     const container = document.createElement("div");
     document.body.append(container);
-    await act(() =>
-      render(<GroupVoteProposals groupId={GROUP_ID} canParticipate={false} onPropose={() => {}} />, container),
-    );
+    await act(() => render(record(), container));
     await settle();
-    await act(() => buttonNamed(container, "Show details for Architecture proposal").click());
     await settle();
 
     // The control is refused until there is a reason to send.
     expect(buttonNamed(container, "Reject proposal").disabled).toBe(true);
-    await act(() => {
-      setValue(labeledControl<HTMLTextAreaElement>(container, "Rejection reason"), "Outside this group's remit.");
-    });
+    await typeMarkdown(container, "Rejection reason", "Outside this group's remit.");
     await act(() => buttonNamed(container, "Reject proposal").click());
     await settle();
 

@@ -5,7 +5,14 @@ import { act } from "preact/test-utils";
 import { finalizeProposalSchema } from "../../assets/shared/schemas/proposal-management";
 import { ProposalDecisionPanel } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalDecisionPanel";
 import type { ProposalDetailRecord } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/model";
-import { chooseOption, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import {
+  chooseOption,
+  controlFor,
+  markdownControl,
+  markdownValue,
+  submitForm,
+  typeMarkdown,
+} from "./helpers/labelled-control";
 
 const proposal: ProposalDetailRecord = {
   id: "proposal-1",
@@ -128,7 +135,7 @@ function messageOf(root: ParentNode, control: HTMLElement): HTMLElement | null {
 /** Chooses the decision, previews it and confirms the preview. */
 async function previewAndConfirm(root: HTMLElement, status: string, note?: string): Promise<void> {
   await chooseOption(controlFor<HTMLSelectElement>(root, "Decision"), status);
-  if (note !== undefined) await typeInto(controlFor<HTMLTextAreaElement>(root, "Note to applicant"), note);
+  if (note !== undefined) await typeMarkdown(root, "Note to applicant", note);
   await act(() => buttonNamed(root, "Preview emails").click());
   await settle();
   const confirmation = root.querySelector("#proposal-decision-preview-confirm") as HTMLInputElement;
@@ -148,7 +155,7 @@ afterEach(() => {
 });
 
 describe("proposal decision panel", () => {
-  it("reads a recorded decision as a decision, with correcting it a deliberate act", () => {
+  it("reads a recorded decision as a decision, with correcting it a deliberate act", async () => {
     const root = mount(proposal);
 
     expect(root.textContent).toContain("Decision recorded:");
@@ -158,7 +165,7 @@ describe("proposal decision panel", () => {
     expect(buttonNamed(root, "Change decision")).not.toBeNull();
   });
 
-  it("reopens the form on request, offering every decision the shared policy allows", () => {
+  it("reopens the form on request, offering every decision the shared policy allows", async () => {
     const root = mount(proposal);
     void act(() => buttonNamed(root, "Change decision").click());
 
@@ -171,7 +178,7 @@ describe("proposal decision panel", () => {
     expect(root.querySelector('button[type="submit"]')?.textContent).toContain("Record Decision");
   });
 
-  it("lets an accepted decision be corrected too, and shows it as recorded until then", () => {
+  it("lets an accepted decision be corrected too, and shows it as recorded until then", async () => {
     const root = mount({ ...proposal, status: "accepted", decision_status: "accepted" });
 
     expect(root.textContent).toContain("Decision recorded:");
@@ -231,14 +238,30 @@ describe("proposal decision panel", () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a browser selection when input fires before change", async () => {
+    stubApi(() => json({ success: true }));
+    const root = mount(editableProposal);
+    const decision = controlFor<HTMLSelectElement>(root, "Decision");
+    await act(() => {
+      decision.value = "accepted";
+      decision.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => {
+      decision.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(decision.value).toBe("accepted");
+    expect(decision.getAttribute("aria-invalid")).toBeNull();
+    expect(buttonNamed(root, "Preview emails").disabled).toBe(false);
+  });
+
   it("refuses a needs-work decision without a note on the note itself, and sends nothing", async () => {
     const requests = stubApi(() => json({ success: true }));
     const root = mount(editableProposal);
 
     await chooseOption(controlFor<HTMLSelectElement>(root, "Decision"), "needs-work");
     // The contract requires the note for this decision; the buttons wait for it.
-    const note = controlFor<HTMLTextAreaElement>(root, "Note to applicant");
-    expect(note.required).toBe(true);
+    const note = await markdownControl(root, "Note to applicant");
+    expect(note.getAttribute("aria-required")).toBe("true");
     expect(buttonNamed(root, "Preview emails").disabled).toBe(true);
 
     // Submitting the form anyway is refused at the field, not at the server.
@@ -251,9 +274,9 @@ describe("proposal decision panel", () => {
     expect(requests).toHaveLength(0);
 
     // The contract also has a floor for the note; too short is still refused.
-    await typeInto(note, "ok");
+    await typeMarkdown(root, "Note to applicant", "ok");
     expect(fieldOf(note).classList.contains("pk-field--invalid")).toBe(true);
-    await typeInto(note, "Please expand the evaluation section.");
+    await typeMarkdown(root, "Note to applicant", "Please expand the evaluation section.");
     expect(fieldOf(note).classList.contains("pk-field--ok")).toBe(true);
     expect(buttonNamed(root, "Preview emails").disabled).toBe(false);
   });
@@ -277,8 +300,8 @@ describe("proposal decision panel", () => {
     await act(() => (root.querySelector('button[type="submit"]') as HTMLButtonElement).click());
     await settle();
 
-    const note = controlFor<HTMLTextAreaElement>(root, "Note to applicant");
-    expect(note.value).toBe("See proposal 12 instead.");
+    const note = await markdownControl(root, "Note to applicant");
+    expect(await markdownValue(root, "Note to applicant")).toBe("See proposal 12 instead.");
     expect(fieldOf(note).classList.contains("pk-field--invalid")).toBe(true);
     expect(messageOf(root, note)?.getAttribute("role")).toBe("alert");
     expect(messageOf(root, note)?.textContent).toContain("The note may not mention other proposals.");

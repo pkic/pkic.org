@@ -9,7 +9,6 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { createMember } from "./helpers/member-provisioning";
 import { signInToPortal } from "./helpers/portal-auth";
 import { tab } from "./helpers/tabs";
-import { openRow } from "./helpers/data-table";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -49,9 +48,13 @@ for (const conversion of ["endorsement", "approval"] as const) {
       await form.getByLabel("Title").fill(title);
       await form.getByLabel("Description").fill("A participant request that reaches a usable ballot.");
       await form.getByRole("button", { name: "Submit proposal" }).click();
-      await expect(participant).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes$`));
-      await tab(participant, "Proposals").click();
-      await openRow(participant.getByRole("row").filter({ hasText: title }), `Show details for ${title}`);
+      await expect(participant).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/votes/proposals$`));
+      // The row opens the proposal's own page (#126), never an expansion.
+      await participant
+        .getByRole("row")
+        .filter({ hasText: title })
+        .getByRole("link", { name: `Open ${title}` })
+        .click();
       const detail = participant.getByRole("region", { name: title, exact: true });
       const endorsed = participant.waitForResponse(
         (response) => response.url().endsWith("/endorsement") && response.request().method() === "POST",
@@ -69,7 +72,11 @@ for (const conversion of ["endorsement", "approval"] as const) {
         await tab(page, "Proposals").click();
         await expect(page.getByText("You are not participating in this group", { exact: false })).toBeVisible();
         await expect(page.getByRole("button", { name: "Propose a vote" })).toHaveCount(0);
-        await openRow(page.getByRole("row").filter({ hasText: title }), `Show details for ${title}`);
+        await page
+          .getByRole("row")
+          .filter({ hasText: title })
+          .getByRole("link", { name: `Open ${title}` })
+          .click();
         const managed = page.getByRole("region", { name: title, exact: true });
         await expect(managed).toContainText("1 of 2 required endorsements");
         await managed.getByRole("button", { name: "Approve and create vote" }).click();

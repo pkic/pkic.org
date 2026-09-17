@@ -620,3 +620,18 @@ describe("email renderer", () => {
     expect(rendered.html).toContain("color:#ffffff!important");
   });
 });
+
+describe("Markdown callout interpolation", () => {
+  it("keeps paragraphs and lists inside the committee note", async () => {
+    const { html } = await renderEmail(
+      "Note:\n\n> {{note}}\n\nAfter the note.",
+      { note: "Sorry, that was an **error!**\n\nYour talk is accepted.\n\n- Give a great talk\n- Have fun" },
+      "{{{body_html}}}",
+    );
+    const quote = html.match(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/)?.[1];
+    expect(quote).toContain("<strong>error!</strong>");
+    expect(quote).toContain("Your talk is accepted.");
+    expect(quote).toContain("<li>Have fun</li>");
+    expect(quote).not.toContain("After the note.");
+  });
+});

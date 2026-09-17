@@ -1,3 +1,4 @@
+import { completeSyntheticMembershipReview } from "./helpers/member-provisioning";
 /**
  * Portal access for a member who actually became one.
  *
@@ -28,29 +29,7 @@ test("an approved applicant can sign in to the portal as a member", async ({ pag
   });
 
   await signInToPortal(page, e2eAdminEmail("portal-member-access"));
-  for (const toStage of ["in_review", "in_consultation", "ec_review"]) {
-    const status = await page.evaluate(
-      async ({ applicationId, toStage }) => {
-        const response = await fetch(`/api/v1/members/applications/${applicationId}/stage`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ toStage }),
-        });
-        return response.status;
-      },
-      { applicationId: application.applicationId, toStage },
-    );
-    expect(status, `stage transition to ${toStage}`).toBe(200);
-  }
-  const approved = await page.evaluate(async (applicationId) => {
-    const response = await fetch(`/api/v1/members/applications/${applicationId}/approve`, {
-      method: "POST",
-      credentials: "same-origin",
-    });
-    return { status: response.status, body: await response.json() };
-  }, application.applicationId);
-  expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+  await completeSyntheticMembershipReview(page.request, application.applicationId);
 
   // Sign out of the staff identity completely: the member sign-in below must
   // establish its own session, not inherit staff capabilities.

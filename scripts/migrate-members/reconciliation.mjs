@@ -74,8 +74,11 @@ export function matchRepsToCandidates(reps, candidates) {
   }
   scored.sort((a, b) => b.score - a.score);
 
-  const assignment = new Array(reps.length).fill(null);
-  const usedCandidates = new Set();
+  const assignment = reps.map((rep) =>
+    rep.confirmedEmail ? candidates.findIndex((candidate) => candidate.email === rep.confirmedEmail) : null,
+  );
+  if (assignment.includes(-1)) throw new Error("Confirmed representative email missing from candidates");
+  const usedCandidates = new Set(assignment.filter((index) => index !== null));
   for (const { ri, ci } of scored) {
     if (assignment[ri] !== null || usedCandidates.has(ci)) continue;
     assignment[ri] = ci;

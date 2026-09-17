@@ -129,7 +129,7 @@ describe("portal event list", () => {
     await settle();
 
     const row = container.querySelector("tbody tr")!;
-    expect(row.querySelector("a")).toBeNull();
+    expect(row.querySelector("a")?.getAttribute("href")).toBe("#/events/pqc-2026");
     expect(row.textContent).toContain("—");
   });
 
@@ -183,7 +183,7 @@ describe("portal event list", () => {
     const row = container.querySelector("tbody tr")!;
     expect(row.textContent).toContain("Registered");
     expect(row.textContent).toContain("In person");
-    const viewerLink = [...row.querySelectorAll("a")].find((a) => a.getAttribute("href") === "#/participation");
+    const viewerLink = [...row.querySelectorAll("a")].find((a) => a.getAttribute("href") === "#/events/pqc-2026");
     expect(viewerLink).toBeTruthy();
   });
 
@@ -214,6 +214,29 @@ describe("portal event list", () => {
     expect(navigateMock).toHaveBeenCalledWith(
       "/groups/20000000-0000-4000-8000-000000000001/events/e0000000-0000-4000-8000-000000000009",
     );
+  });
+
+  it.each([
+    [null, "/events/pqc-2026/register/"],
+    [
+      { registrationStatus: "registered", attendanceType: "in_person", waitlisted: false, days: [] },
+      "#/events/pqc-2026",
+    ],
+  ])("opens the audience's registration destination", async (viewer, expected) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [audienceEventRow({ viewer, registrationPath: "/events/pqc-2026/register/", location: "Amsterdam" })],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+    expect(container.querySelector("tbody tr a")?.getAttribute("href")).toBe(expected);
+    expect(container.textContent).toContain("Amsterdam");
   });
 
   it("shows no workspace menu action for an audience entry", async () => {

@@ -41,7 +41,7 @@ test("public join preserves input on cancel and submits once after verification"
   const dialog = page.getByRole("dialog", { name: "Verify to continue" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
-  await page.screenshot({ path: "/Volumes/ScanDisk/mac-caches/tmp/pkic-turnstile-dialog.png", fullPage: true });
+  await page.screenshot({ path: test.info().outputPath("pkic-turnstile-dialog.png"), fullPage: true });
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(email).not.toHaveValue("");

@@ -1,3 +1,5 @@
+import { membershipWorkflowVersionResponseSchema } from "../../../assets/shared/schemas/membership-workflows";
+import { membershipWorkflowReviewResponseSchema } from "../../../assets/shared/schemas/membership-review-routes";
 /**
  * Real Worker/D1 member provisioning through the public HTTP APIs and the
  * normal mailbox capability flow: no route interception and no D1 files. A
@@ -80,37 +82,8 @@ export async function createMember(
       warranted_authority: true,
     },
   });
-  expect(stringProperty(application, "stage")).toBe("pending");
-
-  await jsonResponse(
-    page.request,
-    "PATCH",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
-    {
-      toStage: "in_review",
-    },
-  );
-  await jsonResponse(
-    page.request,
-    "PATCH",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
-    {
-      toStage: "in_consultation",
-    },
-  );
-  await jsonResponse(
-    page.request,
-    "PATCH",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/stage`,
-    {
-      toStage: "ec_review",
-    },
-  );
-  const approved = await jsonResponse(
-    page.request,
-    "POST",
-    `/api/v1/members/applications/${stringProperty(application, "applicationId")}/approve`,
-  );
+  expect(stringProperty(application, "stage")).toBe("submitted");
+  const approved = await completeSyntheticMembershipReview(page.request, stringProperty(application, "applicationId"));
   const userId = stringProperty(approved, "userId");
   const userDetail = recordProperty(await jsonResponse(page.request, "GET", `/api/v1/users/${userId}`), "user");
   const identities = arrayProperty(userDetail, "identities");
@@ -120,5 +93,74 @@ export async function createMember(
     userId,
     memberId: stringProperty(approved, "memberId"),
     identityId: stringProperty(identities[0] as JsonRecord, "identityId"),
+  };
+}
+
+let staffWorkflowVersion: Promise<string> | null = null;
+
+/** Adopt a purpose-created staff-only policy through the same explicit preview used by staff. */
+export async function prepareSyntheticMembershipReview(request: APIRequestContext, applicationId: string) {
+  staffWorkflowVersion ??= (async () => {
+    const created = membershipWorkflowVersionResponseSchema.parse(
+      await jsonResponse(request, "POST", "/api/v1/membership/workflows/versions", {
+        definition: {
+          name: "Synthetic organization and user review",
+          policyReference: "Browser fixture admission policy",
+          steps: [
+            {
+              id: crypto.randomUUID(),
+              kind: "staff_review",
+              label: "Review organization and user",
+              reviewerGroupId: null,
+              instructions: "Verify the submitted application form and the user's authority.",
+            },
+          ],
+        },
+      }),
+    );
+    await jsonResponse(request, "POST", `/api/v1/membership/workflows/versions/${created.workflow.id}/publication`, {
+      expectedRevision: created.workflow.revision,
+      reason: "Adopt a purpose-created policy for browser fixtures.",
+    });
+    return created.workflow.id;
+  })();
+  const versionId = await staffWorkflowVersion;
+  const base = `/api/v1/members/applications/${applicationId}`;
+  const preview = await jsonResponse(request, "GET", `${base}/workflow/migration?versionId=${versionId}`);
+  await jsonResponse(request, "POST", `${base}/workflow/migration`, {
+    versionId,
+    previewFingerprint: preview.fingerprint,
+    acknowledgeRestart: true,
+    reason: "Apply the synthetic policy to this browser fixture without bypassing review evidence.",
+  });
+  await jsonResponse(request, "POST", "/api/v1/scheduler/jobs/membership_workflows/runs", {});
+  return membershipWorkflowReviewResponseSchema.parse(await jsonResponse(request, "GET", `${base}/reviews/current`));
+}
+
+export async function completeSyntheticMembershipReview(request: APIRequestContext, applicationId: string) {
+  const review = await prepareSyntheticMembershipReview(request, applicationId);
+  const completion = await jsonResponse(
+    request,
+    "POST",
+    `/api/v1/members/applications/${applicationId}/reviews/completion`,
+    {
+      expectedRevision: review.workflow.revision,
+      reason: "Verified the synthetic organization, user, and application form.",
+    },
+  );
+  expect(completion.approved).toBe(true);
+  const users = arrayProperty(
+    await jsonResponse(request, "GET", `/api/v1/users?q=${encodeURIComponent(review.application.applicantEmail)}`),
+    "users",
+  ) as JsonRecord[];
+  const user = users.find((item) => item.email === review.application.applicantEmail)!;
+  expect(user).toBeTruthy();
+  const userId = stringProperty(user, "id");
+  const detail = recordProperty(await jsonResponse(request, "GET", `/api/v1/users/${userId}`), "user");
+  const identity = arrayProperty(detail, "identities")[0] as JsonRecord;
+  return {
+    userId,
+    memberId: stringProperty(identity, "memberId"),
+    organizationId: identity.organizationId === null ? null : stringProperty(identity, "organizationId"),
   };
 }

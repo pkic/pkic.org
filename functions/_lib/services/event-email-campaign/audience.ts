@@ -60,15 +60,15 @@ function assertCampaignRecipientLimit(rows: unknown[], maxRecipients: number): v
   );
 }
 
-async function listAttendeeRecipients(
-  db: DatabaseLike,
+export function attendeeCampaignSelection(
   event: CampaignEvent,
   filter: CampaignAudienceFilter,
-  maxRecipients: number,
-): Promise<CampaignRecipient[]> {
+  maxRecipients: number | null,
+  recipientEmails?: string[],
+) {
   const attendeeStatus = filter.attendeeStatus ?? "registered";
   const dayWaitlistStatus = filter.dayWaitlistStatus ?? "all";
-  const fetchLimit = maxRecipients + 1;
+  const fetchLimit = maxRecipients === null ? -1 : maxRecipients + 1;
   const dayFilter = filter.dayDate ? "AND ed.day_date = ?" : "";
   const dayJoin = filter.dayDate
     ? "JOIN registration_day_attendance rda ON rda.registration_id = r.id JOIN event_days ed ON ed.id = rda.event_day_id"
@@ -76,9 +76,9 @@ async function listAttendeeRecipients(
   const attendanceFilter = filter.dayDate
     ? "AND (? = 'all' OR rda.attendance_type = ?)"
     : "AND (? = 'all' OR r.attendance_type = ?)";
-  const rows = await all<AttributedAttendeeCampaignRow>(
-    db,
-    `WITH ranked_recipients AS (
+
+  return {
+    sql: `WITH ranked_recipients AS (
            SELECT r.id AS registration_id, r.manage_link_secret, u.id AS user_id,
                   u.email, u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
                   r.status, r.attendance_type, r.custom_answers_json, r.form_placement_id,
@@ -96,6 +96,7 @@ async function listAttendeeRecipients(
              ${attendanceFilter}
              AND u.email IS NOT NULL
              ${dayWaitlistFilterSql(filter.dayDate ? "day" : "registration")}
+             AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
          )
          SELECT registration_id, manage_link_secret, user_id, email, first_name, last_name, organization_name,
                 job_title, status, attendance_type, custom_answers_json, form_placement_id
@@ -103,7 +104,7 @@ async function listAttendeeRecipients(
          WHERE recipient_rank = 1
          ORDER BY lower(email) ASC
          LIMIT ?`,
-    [
+    bindings: [
       event.id,
       attendeeStatus,
       attendeeStatus,
@@ -111,9 +112,22 @@ async function listAttendeeRecipients(
       filter.attendanceType ?? "all",
       filter.attendanceType ?? "all",
       ...dayWaitlistFilterParams(dayWaitlistStatus),
+      recipientEmails ? JSON.stringify(recipientEmails) : null,
+      recipientEmails ? JSON.stringify(recipientEmails) : null,
       fetchLimit,
     ],
-  );
+  };
+}
+
+async function listAttendeeRecipients(
+  db: DatabaseLike,
+  event: CampaignEvent,
+  filter: CampaignAudienceFilter,
+  maxRecipients: number,
+  recipientEmails?: string[],
+): Promise<CampaignRecipient[]> {
+  const selection = attendeeCampaignSelection(event, filter, maxRecipients, recipientEmails);
+  const rows = await all<AttributedAttendeeCampaignRow>(db, selection.sql, selection.bindings);
 
   assertCampaignRecipientLimit(rows, maxRecipients);
   const [projections, formResponses] = await Promise.all([
@@ -138,20 +152,20 @@ async function listAttendeeRecipients(
   );
 }
 
-async function listSpeakerRecipients(
-  db: DatabaseLike,
+export function speakerCampaignSelection(
   event: CampaignEvent,
   filter: CampaignAudienceFilter,
-  maxRecipients: number,
-): Promise<CampaignRecipient[]> {
+  maxRecipients: number | null,
+  recipientEmails?: string[],
+) {
   if (filter.dayDate) {
     throw new AppError(400, "CAMPAIGN_DAY_FILTER_UNSUPPORTED", "Day filter is only supported for attendee audience.");
   }
 
   const speakerStatus = filter.speakerStatus ?? "confirmed";
-  const rows = await all<AttributedSpeakerCampaignRow>(
-    db,
-    `WITH ranked_recipients AS (
+
+  return {
+    sql: `WITH ranked_recipients AS (
        SELECT sp.id AS proposal_id, sp.form_placement_id,
               u.email,
               ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} AS first_name,
@@ -179,6 +193,7 @@ async function listSpeakerRecipients(
          AND ps.status != 'declined'
          AND (? = 'all' OR ps.status = ?)
          AND u.email IS NOT NULL
+         AND (? IS NULL OR lower(trim(u.email)) IN (SELECT value FROM json_each(?)))
      )
      SELECT proposal_id, form_placement_id, email, first_name, last_name, organization_name, job_title,
             speaker_status, proposal_title, proposal_abstract, proposal_type,
@@ -187,8 +202,26 @@ async function listSpeakerRecipients(
      WHERE recipient_rank = 1
      ORDER BY lower(email) ASC
      LIMIT ?`,
-    [event.id, speakerStatus, speakerStatus, maxRecipients + 1],
-  );
+    bindings: [
+      event.id,
+      speakerStatus,
+      speakerStatus,
+      recipientEmails ? JSON.stringify(recipientEmails) : null,
+      recipientEmails ? JSON.stringify(recipientEmails) : null,
+      maxRecipients === null ? -1 : maxRecipients + 1,
+    ],
+  };
+}
+
+async function listSpeakerRecipients(
+  db: DatabaseLike,
+  event: CampaignEvent,
+  filter: CampaignAudienceFilter,
+  maxRecipients: number,
+  recipientEmails?: string[],
+): Promise<CampaignRecipient[]> {
+  const selection = speakerCampaignSelection(event, filter, maxRecipients, recipientEmails);
+  const rows = await all<AttributedSpeakerCampaignRow>(db, selection.sql, selection.bindings);
 
   assertCampaignRecipientLimit(rows, maxRecipients);
   const proposalInputs = [...new Map(rows.map((row) => [row.proposal_id, row])).values()];
@@ -218,10 +251,10 @@ export async function listCampaignRecipients(
   event: CampaignEvent,
   _appBaseUrl: string,
   filter: CampaignAudienceFilter,
-  options: { maxRecipients?: number } = {},
+  options: { maxRecipients?: number; recipientEmails?: string[] } = {},
 ): Promise<CampaignRecipient[]> {
   const maxRecipients = Math.max(1, Math.floor(options.maxRecipients ?? 2_000));
   return filter.audience === "attendees"
-    ? listAttendeeRecipients(db, event, filter, maxRecipients)
-    : listSpeakerRecipients(db, event, filter, maxRecipients);
+    ? listAttendeeRecipients(db, event, filter, maxRecipients, options.recipientEmails)
+    : listSpeakerRecipients(db, event, filter, maxRecipients, options.recipientEmails);
 }

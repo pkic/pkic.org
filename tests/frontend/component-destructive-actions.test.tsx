@@ -8,7 +8,7 @@ import { PasskeySettings } from "../../assets/ts/components/passkey-settings";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import type { ProposalSpeaker } from "../../assets/shared/schemas/proposal-speakers";
 import { controlFor, labelNames } from "./helpers/labelled-control";
-import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
+import { rowActionControlNames, runCardAction, runRowAction } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
@@ -336,9 +336,9 @@ describe("ProposalSpeakerCard confirmation", () => {
       </>,
     );
 
-    const removeButton = container.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]");
-    if (!removeButton) throw new Error("missing remove-speaker button");
-    await act(() => removeButton.click());
+    // Removal is a command in the card's own actions menu, not a button in
+    // its body.
+    await runCardAction(container, "Dana Yu", "Remove speaker");
 
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Remove Dana Yu from this proposal?");
@@ -377,9 +377,9 @@ describe("ProposalSpeakerCard confirmation", () => {
       </>,
     );
 
-    const removeButton = container.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]");
-    if (!removeButton) throw new Error("missing remove-speaker button");
-    await act(() => removeButton.click());
+    // Removal is a command in the card's own actions menu, not a button in
+    // its body.
+    await runCardAction(container, "Dana Yu", "Remove speaker");
     await act(() => dialogButton(container, "Cancel").click());
     await settle();
 

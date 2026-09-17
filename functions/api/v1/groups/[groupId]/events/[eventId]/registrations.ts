@@ -3,6 +3,7 @@ import {
   groupEventRegistrationAdmissionCreateRouteSchema,
   groupEventRegistrationDayAttendancePatchRouteSchema,
   groupEventRegistrationDetailRouteSchema,
+  groupEventRegistrationManagerUpdateRouteSchema,
   groupEventRegistrationsListRouteSchema,
 } from "../../../../../../../assets/shared/schemas/group-events";
 import { eventAttendanceRegistrationsListResponseSchema } from "../../../../../../../assets/shared/schemas/event-registrations";
@@ -10,6 +11,7 @@ import {
   eventRegistrationAdmitResponseSchema,
   eventRegistrationAttendanceDetailResponseSchema,
   eventRegistrationDayAttendanceResponseSchema,
+  eventRegistrationManagerUpdateResponseSchema,
 } from "../../../../../../../assets/shared/schemas/event-registration-detail";
 import { registrationSubmissionResponseSchema } from "../../../../../../../assets/shared/schemas/registration";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../_lib/config";
@@ -21,6 +23,7 @@ import { submitGroupEventRegistration } from "../../../../../../_lib/services/ev
 import { listGroupManagedEventRegistrations } from "../../../../../../_lib/services/events/group-management";
 import {
   admitGroupManagedEventRegistration,
+  cancelGroupManagedEventRegistration,
   getGroupManagedEventRegistration,
   updateGroupManagedEventRegistrationDayAttendance,
 } from "../../../../../../_lib/services/registrations/group-attendee-management";
@@ -113,6 +116,26 @@ export const GroupEventRegistrationDayAttendancePatch = openApiRoute(
       c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
     }
     return json(eventRegistrationDayAttendanceResponseSchema.parse({ success: true }));
+  },
+);
+
+export const GroupEventRegistrationManagerUpdate = openApiRoute(
+  groupEventRegistrationManagerUpdateRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const result = await cancelGroupManagedEventRegistration(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.params.registrationId,
+      resolveAppBaseUrl(c.env, c.req.raw),
+    );
+    if (result.outboxId) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
+    }
+    return json(eventRegistrationManagerUpdateResponseSchema.parse({ success: true, ...result.registration }));
   },
 );
 

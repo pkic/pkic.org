@@ -35,7 +35,7 @@ export interface FieldPresentation {
   message?: string;
 }
 
-type ControlEvent = { target: EventTarget | null };
+type ControlEvent = { target: EventTarget | null; type?: string };
 
 export interface ContractForm<Output> {
   /** The presentation for the field named `name`. */
@@ -94,6 +94,15 @@ export function useContractForm<Schema extends z.ZodType>(
   const touch = useCallback((event: ControlEvent) => {
     const control = event.target;
     if (!isControl(control) || !control.name) return;
+    // Selects and checkboxes commit in change handlers. An input event comes
+    // first; rerendering there restores the old controlled value before the
+    // change handler can read the user's selection.
+    if (
+      event.type === "input" &&
+      (control instanceof HTMLSelectElement ||
+        (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
+    )
+      return;
     const name = control.name;
     setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
     // A field being retyped is no longer the field the server refused.

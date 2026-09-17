@@ -1,9 +1,14 @@
+import ICAL from "ical.js";
+import { zonedDateTimeToDate } from "../../../assets/shared/timezone";
+import { recordSeriesRsvp } from "./event-series/series-rsvps";
+import { nowIso } from "../utils/time";
 import type { z } from "zod";
 import {
   calendarRsvpEventInputSchema,
   calendarRsvpIngestSchema,
   type CalendarRsvpEventInput,
 } from "../../../assets/shared/schemas/calendar-rsvp";
+import { isOccurrenceId, recordOccurrenceRsvp } from "./event-series/rsvps";
 import { run } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
@@ -26,6 +31,7 @@ function eventDayDateFromUid(uid: string, registrationId: string): string | null
 
 export interface ParsedCalendarRsvp {
   icsUid: string | null;
+  recurrenceId?: string;
   attendeeEmail: string;
   responseStatus: "accepted" | "declined" | "tentative";
 }
@@ -50,8 +56,35 @@ export function parseCalendarRsvp(calendarIcs: string, fallbackEmail?: string): 
   if (!/^\S+@\S+\.\S+$/.test(attendeeEmail) || attendeeEmail.length > 254) {
     throw new AppError(400, "INVALID_CALENDAR", "Calendar reply must contain a valid attendee email address");
   }
+  let recurrenceId: string | undefined;
+  if (lines.some((line) => /^RECURRENCE-ID[;:]/i.test(line))) {
+    try {
+      const component = new ICAL.Component(ICAL.parse(calendarIcs)).getFirstSubcomponent("vevent");
+      const property = component?.getFirstProperty("recurrence-id");
+      const value = property?.getFirstValue() as ICAL.Time | undefined;
+      if (!value || value.isDate) throw new Error("A timed recurrence is required");
+      const timezone = property?.getParameter("tzid");
+      if (!timezone && value.zone.tzid !== "UTC") throw new Error("A recurrence timezone is required");
+      recurrenceId = timezone
+        ? zonedDateTimeToDate(
+            {
+              year: value.year,
+              month: value.month,
+              day: value.day,
+              hour: value.hour,
+              minute: value.minute,
+              second: value.second,
+            },
+            String(timezone),
+          ).toISOString()
+        : value.toJSDate().toISOString();
+    } catch {
+      throw new AppError(400, "INVALID_CALENDAR", "Calendar reply has an invalid recurrence identifier");
+    }
+  }
   return {
     icsUid: uidMatch?.[1].trim() || null,
+    recurrenceId,
     attendeeEmail: attendeeEmail.toLowerCase(),
     responseStatus: statusMatch![1].toLowerCase() as "accepted" | "declined" | "tentative",
   };
@@ -77,6 +110,7 @@ export function normalizeCalendarRsvp(input: CalendarRsvpInput): CalendarRsvpEve
       registrationId,
       eventDayDate: eventDayDateFromUid(input.uid, registrationId),
       icsUid: input.uid,
+      recurrenceId: input.recurrenceId,
       attendeeEmail: input.attendeeEmail,
       responseStatus: input.partstat.toLowerCase() as "accepted" | "declined" | "tentative",
     };
@@ -94,6 +128,24 @@ export async function recordCalendarRsvpEvent(db: DatabaseLike, input: CalendarR
   const parsed = calendarRsvpEventInputSchema.safeParse(input);
   if (!parsed.success) throw new AppError(400, "INVALID_RSVP_EVENT", "Invalid calendar RSVP event");
   const event = parsed.data;
+  if (await recordSeriesRsvp(db, event)) return;
+  /*
+   * A meeting invitation is signed over its occurrence id the way a
+   * registration invitation is signed over the registration's (#126); the
+   * address and the UID carry the same shape, so the id decides which record
+   * the answer belongs to.
+   */
+  if (await isOccurrenceId(db, event.registrationId)) {
+    await recordOccurrenceRsvp(db, {
+      occurrenceId: event.registrationId,
+      attendeeEmail: event.attendeeEmail,
+      responseStatus: event.responseStatus,
+      provider: event.provider,
+      sourceMessageId: event.sourceMessageId,
+      receivedAt: event.receivedAt,
+    });
+    return;
+  }
   const registration = await db
     .prepare(
       `SELECT r.id,
@@ -135,13 +187,13 @@ export async function recordCalendarRsvpEvent(db: DatabaseLike, input: CalendarR
       ? [event.provider, event.registrationId, event.icsUid, event.sourceMessageId]
       : [event.provider, event.registrationId, event.sourceMessageId],
   );
-  const receivedAt = event.receivedAt ?? new Date().toISOString();
+  const receivedAt = event.receivedAt ?? nowIso();
   const { changes } = await run(
     db,
     `INSERT INTO calendar_rsvp_events
        (id, registration_id, event_day_id, ics_uid, attendee_email, response_status, provider,
         source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
      ON CONFLICT(dedupe_key) DO UPDATE SET
        event_day_id = COALESCE(excluded.event_day_id, calendar_rsvp_events.event_day_id),
        response_status = excluded.response_status,
@@ -163,7 +215,7 @@ export async function recordCalendarRsvpEvent(db: DatabaseLike, input: CalendarR
          WHEN calendar_rsvp_events.response_status = excluded.response_status
           AND calendar_rsvp_events.event_day_id IS COALESCE(excluded.event_day_id, calendar_rsvp_events.event_day_id)
          THEN calendar_rsvp_events.action_taken ELSE NULL END,
-       updated_at = datetime('now')`,
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
     [
       crypto.randomUUID(),
       event.registrationId,

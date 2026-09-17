@@ -11,7 +11,7 @@ import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { assertCategoryCompatible } from "./categories";
+import { assertCategoryCompatible, prepareMembershipCategoryGuard } from "./categories";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface MemberAggregate {
@@ -49,9 +49,9 @@ export function buildGetOrCreateOrganizationMemberAggregateStatements(
   categoryCode: string,
   now: string,
 ): { proposedId: string; statements: StatementLike[] } {
-  assertCategoryCompatible(categoryCode, false);
   const proposedId = uuid();
   const statements: StatementLike[] = [
+    prepareMembershipCategoryGuard(db, categoryCode, false),
     db
       .prepare(
         `INSERT OR IGNORE INTO members (id, member_type, organization_id, status, created_at, updated_at)
@@ -114,6 +114,7 @@ export async function getOrCreateOrganizationMemberAggregate(
   categoryCode: string,
   now: string = nowIso(),
 ): Promise<MemberAggregate> {
+  await assertCategoryCompatible(db, categoryCode, false);
   const { statements } = buildGetOrCreateOrganizationMemberAggregateStatements(db, organizationId, categoryCode, now);
   await db.batch(statements);
 
@@ -140,7 +141,6 @@ export function buildCreateIndividualMemberStatements(
   now: string,
   targetEligibility?: { sql: string; bindings: readonly unknown[] },
 ): { memberId: string; statements: StatementLike[] } {
-  assertCategoryCompatible(categoryCode, true);
   const memberId = uuid();
   const memberInsert = targetEligibility
     ? db
@@ -157,6 +157,7 @@ export function buildCreateIndividualMemberStatements(
         )
         .bind(memberId, userId, now, now);
   const statements: StatementLike[] = [
+    prepareMembershipCategoryGuard(db, categoryCode, true),
     memberInsert,
     db
       .prepare(

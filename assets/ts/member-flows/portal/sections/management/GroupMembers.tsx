@@ -209,7 +209,14 @@ function GroupMembersManager({
             // lands here.
             width: "primary",
             cell: (membership: GroupMembership) => (
-              <PersonCell name={membership.userName} email={membership.email} size="sm" />
+              <PersonCell
+                name={membership.userName}
+                // A person with no name on file is named by the address; it is
+                // not then repeated as a second line (#117).
+                email={membership.userName === membership.email ? undefined : membership.email}
+                avatarSrc={membership.headshotUrl ?? undefined}
+                size="sm"
+              />
             ),
             sort: { asc: "user_name", desc: "-user_name", defaultDirection: "asc" },
           },
@@ -233,12 +240,13 @@ function GroupMembersManager({
             sort: { asc: "membership_category", desc: "-membership_category", defaultDirection: "asc" },
           },
           {
-            header: "Source",
+            header: "Joined through",
             cell: (membership: GroupMembership) => SOURCE_LABELS[membership.source] ?? membership.source,
             hideable: true,
+            defaultHidden: true,
           },
           {
-            header: "Seat",
+            header: "Membership dates",
             width: "fit",
             cell: (membership: GroupMembership) =>
               membership.leftAt
@@ -250,8 +258,8 @@ function GroupMembersManager({
             filter: {
               param: "active",
               options: [
-                { value: "true", label: "Current seats" },
-                { value: "false", label: "Former seats" },
+                { value: "true", label: "Current members" },
+                { value: "false", label: "Former members" },
               ],
             },
           },
@@ -284,6 +292,12 @@ function GroupMembersManager({
             ),
           },
         ]}
+        // The row is the person, so the row opens their record (#90); the
+        // seat's own commands stay in its menu.
+        rowAction={(membership: GroupMembership) => ({
+          label: `Open ${membership.userName}`,
+          href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(membership.userId)}`),
+        })}
         empty={
           view === "current" ? (
             <EmptyState
@@ -291,7 +305,10 @@ function GroupMembersManager({
               body="Add the people who take part in this group, or record who served before."
             />
           ) : (
-            <EmptyState title="No former members" body="Seats that end stay here as the group's history." />
+            <EmptyState
+              title="No former members"
+              body="People whose participation ended remain in the group’s history."
+            />
           )
         }
       />

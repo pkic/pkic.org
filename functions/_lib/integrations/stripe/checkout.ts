@@ -17,11 +17,23 @@ export interface StripeCheckoutSessionCreated {
 export async function createStripeCheckoutSession(
   secretKey: string,
   params: URLSearchParams,
-  options: { idempotencyKey: string; fetcher?: typeof fetch },
+  options: { idempotencyKey: string; fetcher?: typeof fetch; apiBase?: string },
 ): Promise<StripeCheckoutSessionCreated> {
+  const endpoint = options.apiBase
+    ? new URL("/v1/checkout/sessions", options.apiBase)
+    : new URL(STRIPE_CHECKOUT_SESSIONS_URL);
+  if (
+    endpoint.origin !== "https://api.stripe.com" &&
+    !(
+      secretKey.startsWith("sk_test_") &&
+      endpoint.protocol === "http:" &&
+      ["localhost", "127.0.0.1"].includes(endpoint.hostname)
+    )
+  )
+    throw new AppError(500, "STRIPE_CONFIGURATION_INVALID", "Stripe checkout configuration is invalid");
   let response: Response;
   try {
-    response = await (options.fetcher ?? fetch)(STRIPE_CHECKOUT_SESSIONS_URL, {
+    response = await (options.fetcher ?? fetch)(endpoint.toString(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${secretKey}`,

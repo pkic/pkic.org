@@ -1,19 +1,17 @@
 /**
  * Membership application read models and the staff-only communications/
- * notes/concerns log. Split out of the former member-applications.ts
+ * notes log. Split out of the former member-applications.ts
  * (PR #1 review §1.5) — create.ts owns submission, transition.ts owns the
  * stage machine, this file owns everything that reads an application back
  * or records something against it without changing its stage.
  */
+import { verifyCapabilityToken } from "../../../auth/capability-links";
 import { all, first } from "../../../db/queries";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { sha256Hex } from "../../../utils/crypto";
 import { parseJsonSafe } from "../../../utils/json";
-import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
-import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
-import { ACTIVE_VOTING_MEMBER_CAPACITY_SELECT, isActiveVotingMemberCapacity } from "../categories";
 
 export interface MemberApplicationRow {
   id: string;
@@ -56,16 +54,29 @@ export async function getMemberApplicationById(db: DatabaseLike, id: string): Pr
  * callers should treat both "not found" and "bad token" as a generic 401 to
  * avoid leaking whether a given application id exists.
  */
-export async function verifyApplicationManageToken(
+export async function verifyApplicationStatusToken(
   db: DatabaseLike,
   applicationId: string,
   token: string,
+  signingSecret?: string,
 ): Promise<MemberApplicationRow | null> {
   const application = await getMemberApplicationById(db, applicationId);
   if (!application) return null;
   const hash = await sha256Hex(token);
-  if (hash !== application.manage_token_hash) return null;
-  return application;
+  if (hash === application.manage_token_hash) return application;
+  if (!signingSecret) return null;
+  const verified = await verifyCapabilityToken({
+    signingSecret,
+    linkSecret: `${application.manage_token_hash}\n${application.applicant_email}`,
+    purpose: "application_status",
+    token,
+  });
+  return verified.ok && verified.resourceId === application.id ? application : null;
+}
+
+/** Document management requires the original token, never a status-only email link. */
+export function verifyApplicationManageToken(db: DatabaseLike, applicationId: string, token: string) {
+  return verifyApplicationStatusToken(db, applicationId, token);
 }
 
 /**
@@ -225,101 +236,18 @@ export async function listApplicationCommunications(
   );
 }
 
-// ── Member consultation concerns ──────────────────────────────────
-//
-// Visible only to staff/processors, never to the applicant — enforced by
-// omission: no public/token-gated endpoint reads this table.
-
-export interface ApplicationConcernRow {
-  id: string;
-  application_id: string;
-  submitted_by_user_id: string;
-  concern_text: string;
-  created_at: string;
-}
-
-export async function submitApplicationConcern(
-  db: DatabaseLike,
-  params: { applicationId: string; submittedByUserId: string; submittedByMemberId: string; concernText: string },
-): Promise<ApplicationConcernRow> {
-  const application = await getMemberApplicationById(db, params.applicationId);
-  if (!application) {
-    throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
-  }
-  if (application.stage !== "in_consultation") {
-    throw new AppError(409, "APPLICATION_NOT_IN_CONSULTATION", "Concerns can only be submitted during consultation");
-  }
-  if (!(await isActiveVotingMemberCapacity(db, params.submittedByMemberId, params.submittedByUserId))) {
-    throw new AppError(
-      403,
-      "PERMISSION_REQUIRED",
-      "Only members in a voting membership category may submit a consultation concern",
-    );
-  }
-
-  const id = uuid();
-  const now = nowIso();
-  try {
-    await db.batch([
-      db
-        .prepare(
-          `INSERT INTO application_concerns
-             (id, application_id, submitted_by_user_id, concern_text, created_at)
-           SELECT ?, application.id, ?, ?, ?
-             FROM member_applications application
-            WHERE application.id = ?
-              AND application.stage = 'in_consultation'
-              AND EXISTS (${ACTIVE_VOTING_MEMBER_CAPACITY_SELECT})`,
-        )
-        .bind(
-          id,
-          params.submittedByUserId,
-          params.concernText,
-          now,
-          params.applicationId,
-          params.submittedByUserId,
-          params.submittedByMemberId,
-        ),
-      prepareAuditLogAfterOneChange(
-        db,
-        "member",
-        params.submittedByUserId,
-        "membership_application_concern_submitted",
-        "membership_application",
-        params.applicationId,
-        { concernId: id },
-        now,
-      ),
-    ]);
-  } catch (error) {
-    if (isAuditChangeGuardFailure(error)) {
-      throw new AppError(
-        409,
-        "CONCERN_ELIGIBILITY_CHANGED",
-        "The application or your voting eligibility changed; reload and retry",
-      );
-    }
-    throw error;
-  }
-  return {
-    id,
-    application_id: params.applicationId,
-    submitted_by_user_id: params.submittedByUserId,
-    concern_text: params.concernText,
-    created_at: now,
-  };
-}
-
-export async function listApplicationConcerns(
-  db: DatabaseLike,
-  applicationId: string,
-): Promise<ApplicationConcernRow[]> {
-  return all<ApplicationConcernRow>(
+export async function getRequestedApplicationGroups(db: DatabaseLike, answers: Record<string, unknown>) {
+  const raw = answers.working_groups ?? answers.workingGroups;
+  const requested = Array.isArray(raw)
+    ? [...new Set(raw.filter((value): value is string => typeof value === "string"))].slice(0, 200)
+    : [];
+  if (!requested.length) return [];
+  const rows = await all<{ id: string; slug: string; name: string }>(
     db,
-    `SELECT id, application_id, submitted_by_user_id, concern_text, created_at
-     FROM application_concerns
-     WHERE application_id = ?
-     ORDER BY created_at ASC, id ASC`,
-    [applicationId],
+    `SELECT id, slug, name FROM groups WHERE type_key = 'working_group'
+    AND (slug IN (SELECT value FROM json_each(?)) OR id IN (SELECT value FROM json_each(?)))`,
+    [JSON.stringify(requested), JSON.stringify(requested)],
   );
+  const labels = new Map(rows.flatMap((row) => [[row.id, row] as const, [row.slug, row] as const]));
+  return requested.map((value) => ({ slug: labels.get(value)?.slug ?? value, name: labels.get(value)?.name ?? value }));
 }

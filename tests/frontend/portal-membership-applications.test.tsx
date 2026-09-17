@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
-import { render, type ComponentChild } from "preact";
+import { render, type ComponentChild, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+// The record's facets are routed links; the mock renders them as anchors so
+// the test can read their addresses without a router.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
 import { ApplicationsList } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList";
 import { ApplicationTimelineCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationTimelineCard";
-import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
+import { menuItemNamed } from "./helpers/row-actions";
 
 const APPLICATION_ID = "00000000-0000-4000-8000-000000000201";
 const NOW = "2026-08-27T12:00:00.000Z";
@@ -17,8 +27,9 @@ const detail = {
   applicantName: "Example Applicant",
   organizationName: "Example Organization",
   membershipCategory: "F",
+  currentRequirement: null,
   membershipCategoryLabel: "General Member",
-  stage: "ec_review" as const,
+  stage: "processing" as const,
   onHoldSubtype: null,
   assignedToUserId: null,
   createdAt: NOW,
@@ -28,8 +39,6 @@ const detail = {
   requestedWorkingGroups: [],
   events: [],
   communications: [],
-  concerns: [],
-  ecDecisions: [],
 };
 
 const categories = [
@@ -39,13 +48,17 @@ const categories = [
     description: null,
     displayOrder: 60,
     isIndividual: false,
+    requiresUniversityEmail: false,
     isVoting: true,
+    active: true,
+    workflowVersionId: null,
     revision: 0,
     updatedAt: NOW,
   },
 ];
 
 let container: HTMLElement | null = null;
+const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), {
@@ -63,16 +76,22 @@ async function settle(): Promise<void> {
 function mount(node: ComponentChild): HTMLElement {
   container = document.createElement("div");
   document.body.append(container);
+  mounted.push(container);
   void act(() => render(node, container!));
   return container;
 }
 
+/** The record at one of its facets, with the fetch stub the test installed. */
+function mountDetail(props: { canWrite: boolean; canApprove: boolean; tab?: string }): HTMLElement {
+  return mount(<ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} {...props} />);
+}
+
 afterEach(() => {
-  if (container) {
-    void act(() => render(null, container!));
-    container.remove();
-    container = null;
+  for (const node of mounted.splice(0)) {
+    void act(() => render(null, node));
+    node.remove();
   }
+  container = null;
   vi.unstubAllGlobals();
 });
 
@@ -102,15 +121,12 @@ describe("portal membership-application management", () => {
     expect(page.textContent).toContain("(F)");
     // Two reads of the same collection: the list itself, and the consultation
     // queue's one-row count probe beside it. Nothing else.
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(1);
     const list = requests.find((url) => !url.searchParams.has("stage"));
     expect(list?.pathname).toBe("/api/v1/members/applications");
     expect(list?.searchParams.get("limit")).toBe("50");
     expect(list?.searchParams.get("offset")).toBe("0");
     expect(list?.searchParams.get("sort")).toBe("-created_at");
-    const probe = requests.find((url) => url.searchParams.get("stage") === "in_consultation");
-    expect(probe?.pathname).toBe("/api/v1/members/applications");
-    expect(probe?.searchParams.get("limit")).toBe("1");
     expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
 
     // The row's control, not the row: the `<tr>` click handler this replaced
@@ -119,7 +135,7 @@ describe("portal membership-application management", () => {
     expect(open).toHaveBeenCalledWith(APPLICATION_ID);
   });
 
-  it("narrows by stage from the Stage column, sends it to the collection query, and states the consultation queue", async () => {
+  it("narrows by stage from the Stage column, sends it to the collection query, without a separate consultation queue", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -146,17 +162,14 @@ describe("portal membership-application management", () => {
     // The default view is the server default: no `stage` on the list request.
     expect(requests.some((url) => !url.searchParams.has("stage"))).toBe(true);
 
-    await chooseColumnFilter(page, "Stage", "In consultation");
+    await chooseColumnFilter(page, "Stage", "Processing");
     await settle();
 
-    expect(requests.at(-1)?.searchParams.get("stage")).toBe("in_consultation");
+    expect(requests.at(-1)?.searchParams.get("stage")).toBe("processing");
     expect(requests.at(-1)?.searchParams.get("limit")).toBe("50");
     expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
-    expect(columnFilterSummary(page, "Stage")).toBe("In consultation");
-    // The consultation queue is a status region above the list, stating the
-    // probe's count in words, announced without stealing focus.
-    const banner = page.querySelector('[role="status"].pk-alert');
-    expect(banner?.textContent).toContain("3 applications currently queued for member consultation");
+    expect(columnFilterSummary(page, "Stage")).toBe("Processing");
+    expect(page.querySelector('[role="status"].pk-alert')).toBeNull();
   });
 
   it("says nothing about the consultation queue while it is empty", async () => {
@@ -289,10 +302,12 @@ describe("portal membership-application management", () => {
     expect(page.textContent).toContain("Example Applicant");
     expect(page.textContent).toContain("General Member");
     expect(page.textContent).not.toContain("Approve & run onboarding");
-    expect(page.textContent).not.toContain("Send communication");
-    expect(page.textContent).not.toContain("Add internal note");
-    expect(page.textContent).not.toContain("staff override");
-    expect([...page.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Edit")).toBe(false);
+    // No commands at all: the record offers a reader no actions menu (#109).
+    expect(page.querySelector('button[aria-label="Application actions"]')).toBeNull();
+    const correspondence = mountDetail({ canWrite: false, canApprove: false, tab: "communications" });
+    await settle();
+    expect(correspondence.textContent).not.toContain("Send communication");
+    expect(correspondence.textContent).not.toContain("Add internal note");
     expect(requests.every((url) => url.pathname.startsWith("/api/v1/members/applications"))).toBe(true);
   });
 
@@ -316,65 +331,19 @@ describe("portal membership-application management", () => {
     );
     await settle();
 
-    expect(page.textContent).toContain("Approve & run onboarding");
-    expect(page.textContent).toContain("Send communication");
-    expect(page.textContent).toContain("Add internal note");
-    expect(page.textContent).toContain("staff override");
-    expect([...page.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Edit")).toBe(true);
-  });
-
-  it("only approves an application through the confirm dialog when the approval is confirmed", async () => {
-    const requests: Array<{ method: string; pathname: string }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        const method = init?.method ?? "GET";
-        requests.push({ method, pathname: url.pathname });
-        if (url.pathname.endsWith("/documents")) {
-          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
-        }
-        if (url.pathname.endsWith("/approve") && method === "POST") {
-          return json({ success: true, memberId: "member-1" });
-        }
-        return json(detail);
-      }),
-    );
-
-    const page = mount(
-      <>
-        <ConfirmDialogHost />
-        <ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} canWrite canApprove />
-      </>,
-    );
+    expect(page.textContent).toContain("Review workflow and objections");
+    // Editing is a command in the record's menu; correspondence and the
+    // council's decisions are facets of their own, reached by tab (#109).
+    const commands = page.querySelector<HTMLButtonElement>('button[aria-label="Application actions"]');
+    expect(commands).not.toBeNull();
+    await act(async () => commands!.click());
+    expect(menuItemNamed(page, "Edit application…")).not.toBeNull();
+    const tabs = [...page.querySelectorAll('[aria-label="Application sections"] a')].map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Application", "Communications"]);
+    const correspondence = mountDetail({ canWrite: true, canApprove: true, tab: "communications" });
     await settle();
-
-    function dialogButton(label: string): HTMLButtonElement {
-      const button = [...page.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-      if (!button) throw new Error(`missing button: ${label}`);
-      return button;
-    }
-
-    await act(() => dialogButton("Approve & run onboarding").click());
-    expect(page.textContent).toContain("Approve Example Applicant's application and run onboarding?");
-
-    // Cancel: no approve request is sent.
-    await act(() => dialogButton("Cancel").click());
-    await settle();
-    expect(requests.some((r) => r.pathname.endsWith("/approve"))).toBe(false);
-
-    // Confirm: the dialog's own button runs the approval.
-    await act(() => dialogButton("Approve & run onboarding").click());
-    await act(() => dialogButton("Approve & run onboarding").click());
-    await settle();
-    const approveRequest = requests.find((r) => r.pathname.endsWith("/approve"));
-    expect(approveRequest).toMatchObject({
-      method: "POST",
-      pathname: `/api/v1/members/applications/${APPLICATION_ID}/approve`,
-    });
+    expect(correspondence.textContent).toContain("Send communication");
+    expect(correspondence.textContent).toContain("Add internal note");
   });
 });
 
@@ -385,10 +354,10 @@ describe("the application timeline card", () => {
         detail={{
           ...detail,
           events: [
-            { fromStage: null, toStage: "pending", actorUserId: null, note: null, createdAt: NOW },
+            { fromStage: null, toStage: "submitted", actorUserId: null, note: null, createdAt: NOW },
             {
-              fromStage: "in_review",
-              toStage: "ec_review",
+              fromStage: "processing",
+              toStage: "processing",
               actorUserId: null,
               note: "Escalated",
               createdAt: NOW,
@@ -400,10 +369,10 @@ describe("the application timeline card", () => {
 
     const entries = [...card.querySelectorAll("li")].map((item) => item.textContent);
     expect(entries[0]).toContain("Not yet in a stage");
-    expect(entries[0]).toContain("Pending");
-    expect(entries[1]).toContain("In review");
-    expect(entries[1]).toContain("EC review");
-    expect(card.textContent).not.toContain("ec_review");
+    expect(entries[0]).toContain("Submitted");
+    expect(entries[1]).toContain("Processing");
+    expect(entries[1]).toContain("Processing");
+    expect(card.textContent).not.toContain("processing");
     // The arrow is decorative; a word carries the direction for anyone who
     // cannot see it.
     expect(card.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe("→");

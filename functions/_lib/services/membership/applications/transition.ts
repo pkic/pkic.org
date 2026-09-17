@@ -1,3 +1,4 @@
+import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../../db/authorization-guard";
 /**
  * Membership application stage machine. Split out of the former
  * member-applications.ts (PR #1 review §1.5).
@@ -8,6 +9,7 @@
  * not just a status flip, so it's excluded from this generic transition
  * function to make that impossible to bypass.
  */
+import { queuedCapabilityTokenBoundToSecret } from "../../../auth/capability-links";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
 import { AppError } from "../../../errors";
@@ -36,7 +38,6 @@ export const ON_HOLD_SUBTYPE_EMAIL_TEMPLATES: Record<OnHoldSubtype, string> = {
 };
 
 const STAGE_EMAIL_TEMPLATES: Partial<Record<string, string>> = {
-  in_consultation: "application-in-consultation",
   declined: "application-declined",
 };
 
@@ -66,7 +67,6 @@ export interface StageTransitionResult {
 export interface StageTransitionNotification {
   statusUrl: string;
   deadlineDays: number;
-  consultationWindowDays: number;
   requestDetails?: string;
   reason?: string;
 }
@@ -142,11 +142,11 @@ export function prepareApplicationStageTransition(
           recipientEmail: application.applicant_email,
           messageType: "transactional" as const,
           subject: "Update on your PKI Consortium membership application",
+          capabilityLinkValues: [params.notification.statusUrl],
           data: {
             applicantName: application.applicant_name,
             statusUrl: params.notification.statusUrl,
             deadlineDays: params.notification.deadlineDays,
-            consultationWindowDays: params.notification.consultationWindowDays,
             requestDetails: params.notification.requestDetails ?? "",
             reason: params.notification.reason ?? "",
           },
@@ -159,23 +159,10 @@ export function prepareApplicationStageTransition(
         `UPDATE member_applications
          SET stage = ?, stage_entered_at = ?, transition_revision = transition_revision + 1,
              on_hold_subtype = ?, updated_at = ?,
-             on_hold_reminder_sent_at = NULL,
-             consultation_notified_at = CASE
-               WHEN ? = 'in_consultation' THEN NULL
-               ELSE consultation_notified_at
-             END
+             on_hold_reminder_sent_at = NULL
          WHERE id = ? AND stage = ? AND transition_revision = ?`,
       )
-      .bind(
-        params.toStage,
-        now,
-        nextOnHoldSubtype,
-        now,
-        params.toStage,
-        application.id,
-        fromStage,
-        application.transition_revision,
-      ),
+      .bind(params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage, application.transition_revision),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -183,6 +170,24 @@ export function prepareApplicationStageTransition(
       )
       .bind(uuid(), application.id, fromStage, params.toStage, databaseActorUserId, params.note ?? null, now),
   ];
+
+  if (params.toStage === "processing") {
+    statements.push(
+      prepareAuthorizationGuard(db, {
+        sql: "SELECT 1 FROM membership_application_workflows WHERE application_id = ? AND superseded_at IS NULL",
+        bindings: [application.id],
+      }),
+    );
+  }
+  statements.push(
+    db
+      .prepare(
+        `UPDATE membership_application_workflows
+       SET revision = revision + 1, next_evaluation_at = ?
+       WHERE application_id = ? AND superseded_at IS NULL`,
+      )
+      .bind(params.toStage === "processing" ? now : null, application.id),
+  );
 
   const outboxIds: string[] = [];
   if (params.toStage === "declined" || params.toStage === "withdrawn") {
@@ -246,6 +251,13 @@ export async function executePreparedApplicationStageTransition(
   try {
     results = await db.batch(prepared.statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "MEMBERSHIP_WORKFLOW_CHANGED",
+        "The application's workflow changed or is missing. Reload the application before resuming its review.",
+      );
+    }
     const current = await getMemberApplicationById(db, application.id);
     if (current && (current.stage !== fromStage || current.transition_revision !== application.transition_revision)) {
       throw new AppError(
@@ -277,12 +289,30 @@ export async function executePreparedApplicationStageTransition(
  */
 export async function transitionApplicationStage(
   db: DatabaseLike,
-  params: StageTransitionParams,
+  params: Omit<StageTransitionParams, "notification"> & {
+    notification?: Omit<StageTransitionNotification, "statusUrl"> & { appBaseUrl: string };
+  },
 ): Promise<StageTransitionResult> {
   const application = await getMemberApplicationById(db, params.applicationId);
   if (!application) {
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
   }
 
-  return transitionLoadedApplicationStage(db, application, params);
+  const notification = params.notification;
+  const token = notification
+    ? await queuedCapabilityTokenBoundToSecret(
+        "application_status",
+        application.id,
+        `${application.manage_token_hash}\n${application.applicant_email}`,
+      )
+    : null;
+  return transitionLoadedApplicationStage(db, application, {
+    ...params,
+    notification: notification
+      ? {
+          ...notification,
+          statusUrl: `${notification.appBaseUrl}/application-status/?id=${encodeURIComponent(application.id)}&token=${encodeURIComponent(token!)}`,
+        }
+      : undefined,
+  });
 }

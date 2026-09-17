@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
+vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
+  useMembershipCategoryCatalog: () => exampleMembershipCategories,
+}));
 /**
  * One affiliation row: what the tie states, and the commands it offers.
  *
@@ -9,12 +13,14 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
+// The affiliations panel routes its add command; the mock keeps the router out.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";
 import { UserAffiliationRow } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationRow";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { identityUpdateSchema } from "../../assets/shared/schemas/identity";
 import { memberCapacityUpdateSchema } from "../../assets/shared/schemas/membership-management";
-import { buttonNamed, chooseOption, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseOption, controlFor, typeInto, typeMarkdown } from "./helpers/labelled-control";
 import { menuItemNamed } from "./helpers/row-actions";
 import {
   IDENTITY_ID,
@@ -36,7 +42,7 @@ import {
 } from "./helpers/affiliation-fixtures";
 
 describe("UserAffiliationRow", () => {
-  it("renders every organization capacity with the terms of its own tie", () => {
+  it("renders every organization capacity with the terms of its own tie", async () => {
     const user = userWith([
       membership(),
       membership({
@@ -57,7 +63,7 @@ describe("UserAffiliationRow", () => {
     ]);
     const container = mount();
 
-    void act(() => render(<UserAffiliationsPanel user={user} onChanged={vi.fn()} canManage canActivate />, container));
+    void act(() => render(<UserAffiliationsPanel user={user} onChanged={vi.fn()} canManage />, container));
 
     expect(container.textContent).toContain("Organization A");
     expect(container.textContent).toContain("Organization B");
@@ -74,7 +80,7 @@ describe("UserAffiliationRow", () => {
     expect(container.querySelectorAll("select")).toHaveLength(0);
   });
 
-  it("states the terms of the tie and names the change its visibility action makes", () => {
+  it("states the terms of the tie and names the change its visibility action makes", async () => {
     const container = mount();
     void act(() =>
       render(<UserAffiliationRow membership={membership()} onChanged={async () => {}} canManage />, container),
@@ -94,7 +100,7 @@ describe("UserAffiliationRow", () => {
     expect(menuItemNamed(container, "Hide from Organization A's public profile")).not.toBeNull();
   });
 
-  it("states a membership rather than opening it for editing", () => {
+  it("states a membership rather than opening it for editing", async () => {
     /*
      * Issue #47, on the surface my first pass at it missed. The category and
      * the standing are already on the row as two badges; they were *also* a
@@ -152,13 +158,60 @@ describe("UserAffiliationRow", () => {
 
     await chooseOption(controlFor<HTMLSelectElement>(container, "Category"), "H6");
     await settle();
+    // Choosing writes nothing: the row is a draft until it is saved (#91).
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+    await press(container, "Save membership");
 
+    // The capacity route is keyed by the identity, not the member aggregate:
+    // sending the member id came back as "Active identity not found" (#91).
     expect(requests.find((request) => request.method === "PATCH")?.pathname).toBe(
-      `/api/v1/members/capacities/${MEMBER_ID}`,
+      `/api/v1/members/capacities/${IDENTITY_ID}`,
     );
     expect(memberCapacityUpdateSchema.parse(requests.find((request) => request.method === "PATCH")?.body)).toEqual({
       membershipCategory: "H6",
     });
+  });
+
+  it("edits an individual capacity's own profile through the capacity route", async () => {
+    const requests = stubFetch(() =>
+      jsonResponse({
+        member: {
+          id: MEMBER_ID,
+          userId: USER_ID,
+          organizationId: null,
+          membershipCategory: "H5",
+          status: "active",
+          showOnOrgProfile: false,
+        },
+      }),
+    );
+    const individual = membership({
+      membershipCategory: "H5",
+      organizationId: null,
+      organizationName: null,
+      showOnOrgProfile: false,
+      jobTitle: null,
+      biography: "Independent researcher.",
+    });
+    const container = mount();
+    void act(() =>
+      render(<UserAffiliationRow membership={individual} onChanged={async () => {}} canManage />, container),
+    );
+
+    // An individual member has nobody's organization to write the profile
+    // through: the row edits it on the capacity itself (#91). A job title is
+    // a role at an organization, so the editor does not ask for one.
+    runRowMenuAction(container, "Individual member", "Edit identity profile…");
+    expect(container.textContent).not.toContain("Job title for");
+    await typeMarkdown(container, "Biography for this membership", "Cryptography consultant.");
+    await press(container, "Save identity profile");
+
+    const patch = requests.find((request) => request.method === "PATCH");
+    expect(patch?.pathname).toBe(`/api/v1/members/capacities/${IDENTITY_ID}`);
+    expect(memberCapacityUpdateSchema.parse(patch?.body)).toEqual({
+      profile: { biography: "Cryptography consultant.", links: [] },
+    });
+    expect(container.textContent).not.toContain("Save identity profile");
   });
 
   it("renders and edits organization-specific profile fields through the identity route", async () => {

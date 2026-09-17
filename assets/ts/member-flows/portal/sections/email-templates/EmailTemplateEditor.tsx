@@ -1,15 +1,16 @@
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
+import type { MarkdownEditorHandle } from "../../../../components/markdown-editor/MarkdownEditor";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Tabs } from "../../../../components/Tabs";
-import { statusLabel } from "../../../../components/Badge";
-import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { Alert } from "../../../../ui/Alert";
-import { Badge, type BadgeTone } from "../../../../ui/Badge";
+import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { Menu } from "../../../../ui/Menu";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 import { postJson } from "../../../../shared/api-client";
-import { formatDateTime } from "../../../../shared/ui";
 import { toast } from "../../ui";
 import { highlightTemplateSyntax } from "../../../../shared/email-template-syntax";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
@@ -20,7 +21,6 @@ import {
   type TemplateHelperCategory,
 } from "../../../../shared/email-template-helpers";
 import {
-  emailTemplateVersionsListResponseSchema,
   emailTemplatePreviewResponseSchema,
   emailTemplateVersionCreateResponseSchema,
   type EmailContentType,
@@ -30,6 +30,7 @@ import { successResponseSchema } from "../../../../../shared/schemas/api-common"
 import { EMAIL_CONTENT_TYPE_OPTIONS, EMAIL_MESSAGE_TYPE_OPTIONS } from "../../../../shared/email-type-options";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../../../shared/email-preview-tabs";
 import { EMAIL_TEMPLATES_API } from "../../../../shared/email-template-catalog";
+import { EmailTemplateVersionHistory } from "./EmailTemplateVersionHistory";
 
 // The syntax-highlight backdrop rides this chunk rather than the entry
 // stylesheet, because only the two template editors use it.
@@ -38,11 +39,6 @@ import "../../../../ui/Content.css";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
-
-/** Only the version actually in use carries a tone; a draft is not a status. */
-function versionTone(status: string): BadgeTone {
-  return status === "active" ? "ok" : "neutral";
-}
 
 // ────────────────────────────────────────────────────────
 // Template editor component
@@ -65,6 +61,8 @@ export function TemplateEditor({
   const [contentType, setContentType] = useState<EmailContentType>(current?.content_type ?? "markdown");
   const [messageType, setMessageType] = useState<EmailMessageType>(current?.message_type ?? "transactional");
   const [subject, setSubject] = useState(current?.subject_template ?? "");
+  const [fromEmail, setFromEmail] = useState(current?.from_email ?? "");
+  const [fromName, setFromName] = useState(current?.from_name ?? "");
   const [body, setBody] = useState(current?.body ?? "");
   const [previewData, setPreviewData] = useState(JSON.stringify(PREVIEW_DEFAULTS, null, 2));
   const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
@@ -77,6 +75,8 @@ export function TemplateEditor({
 
   const subjectPreRef = useRef<HTMLPreElement>(null);
   const bodyPreRef = useRef<HTMLPreElement>(null);
+  const bodyEditor = useRef<MarkdownEditorHandle>(null);
+  const [bodyRevision, setBodyRevision] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorFocusRef = useRef<"subject" | "body">("body");
   const historyRef = useRef<ApiTableActions | null>(null);
@@ -129,6 +129,8 @@ export function TemplateEditor({
     if (target === "subject") {
       setSubject((s) => s + snippet);
       editorFocusRef.current = "subject";
+    } else if (contentType === "markdown") {
+      bodyEditor.current?.insertText(snippet);
     } else {
       setBody((b) => {
         const el = bodyControl();
@@ -150,7 +152,10 @@ export function TemplateEditor({
   function loadVersion(version: EmailTemplateVersion) {
     const newBody = version.body ?? "";
     setSubject(version.subject_template ?? "");
+    setFromEmail(version.from_email ?? "");
+    setFromName(version.from_name ?? "");
     setBody(newBody);
+    setBodyRevision((revision) => revision + 1);
     setContentType(version.content_type ?? "markdown");
     setMessageType(version.message_type ?? "transactional");
     const control = bodyControl();
@@ -224,6 +229,8 @@ export function TemplateEditor({
           subjectTemplate: subject || undefined,
           contentType: effectiveContentType,
           messageType: isLayout ? undefined : messageType,
+          fromEmail: fromEmail.trim() || undefined,
+          fromName: fromName.trim() || undefined,
         },
         emailTemplateVersionCreateResponseSchema,
       );
@@ -315,6 +322,34 @@ export function TemplateEditor({
                 </div>
               )}
 
+              {!isLayout && (
+                // The sender a template's messages carry. Empty means the
+                // environment's configured address and name, as before (#106).
+                <div class="pk-grid">
+                  <Field label="From name" help="Shown beside the address; leave empty for the configured name.">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={fromName}
+                        disabled={!canWrite}
+                        onInput={(e) => setFromName((e.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                  <Field label="From address" help="Leave empty to send from the configured sender.">
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        type="email"
+                        value={fromEmail}
+                        disabled={!canWrite}
+                        onInput={(e) => setFromEmail((e.target as HTMLInputElement).value)}
+                      />
+                    )}
+                  </Field>
+                </div>
+              )}
+
               {/* Subject with highlight backdrop. The field's control box is
                   the backdrop's positioning context — both want
                   `position: relative` — so the backdrop and the control sit
@@ -343,88 +378,139 @@ export function TemplateEditor({
               </Field>
 
               {/* Body with highlight backdrop */}
+              {contentType === "markdown" && (
+                <Menu
+                  label="Insert subject variable"
+                  variant="plain"
+                  items={TEMPLATE_HELPERS.filter((item) => item.category === "Variables").map((item) => ({
+                    id: item.label,
+                    label: item.label,
+                    disabled: !canWrite,
+                    onSelect: () => insertSnippet(item.snippet, "subject"),
+                  }))}
+                >
+                  Insert subject variable
+                </Menu>
+              )}
               <Field label="Body" help="Supports {{variables}}, {{#if}}...{{/if}}, {{#each}}...{{/each}}.">
-                {(control) => (
-                  <>
-                    <pre
-                      ref={bodyPreRef}
-                      aria-hidden="true"
-                      class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
-                    ></pre>
-                    <Textarea
+                {(control) =>
+                  contentType === "markdown" ? (
+                    <MarkdownEditor
                       {...control}
-                      class="pk-mono pk-overlay-editor__input"
-                      rows={16}
-                      defaultValue={body}
-                      readOnly={!canWrite}
-                      onInput={(e) => {
-                        setBody((e.target as HTMLTextAreaElement).value);
-                        hasPreviewedRef.current = false;
-                      }}
+                      key={bodyRevision}
+                      name="content"
+                      label="Body"
+                      initialValue={body}
+                      initialMode="source"
+                      templateInsertions={[
+                        ...TEMPLATE_HELPERS.map((item) => ({
+                          id: item.label,
+                          label: item.label,
+                          disabled: !canWrite,
+                          onSelect: () => insertSnippet(item.snippet, "body"),
+                        })),
+                        ...TEMPLATE_PARTIALS.map((partial, index) => ({
+                          id: `partial-${partial.name}`,
+                          label: `${partial.name} — ${partial.description}`,
+                          separatorBefore: index === 0,
+                          disabled: !canWrite,
+                          onSelect: () => insertSnippet(`{{> ${partial.name}}}`, "body"),
+                        })),
+                      ]}
+                      editorRef={bodyEditor}
+                      disabled={!canWrite}
                       onFocus={() => {
                         editorFocusRef.current = "body";
                       }}
-                      onScroll={handleBodyScroll}
+                      onChange={(value) => {
+                        setBody(value);
+                        hasPreviewedRef.current = false;
+                      }}
                     />
-                  </>
-                )}
+                  ) : (
+                    <>
+                      <pre
+                        ref={bodyPreRef}
+                        aria-hidden="true"
+                        class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
+                      ></pre>
+                      <Textarea
+                        {...control}
+                        class="pk-mono pk-overlay-editor__input"
+                        rows={16}
+                        defaultValue={body}
+                        readOnly={!canWrite}
+                        onInput={(e) => {
+                          setBody((e.target as HTMLTextAreaElement).value);
+                          hasPreviewedRef.current = false;
+                        }}
+                        onFocus={() => {
+                          editorFocusRef.current = "body";
+                        }}
+                        onScroll={handleBodyScroll}
+                      />
+                    </>
+                  )
+                }
               </Field>
 
-              <details>
-                <summary class="pk-small pk-strong">Insert variables and reusable content</summary>
-                <div class="pk-stack">
-                  {/* Partials */}
-                  <Field label="Insert partial">
-                    {(control) => (
-                      <Select
-                        {...control}
-                        disabled={!canWrite}
-                        onChange={(e) => {
-                          const sel = e.target as HTMLSelectElement;
-                          if (!sel.value) return;
-                          insertSnippet(`{{> ${sel.value}}}`, "body");
-                          sel.value = "";
-                        }}
-                      >
-                        <option value="">— select partial to insert —</option>
-                        {TEMPLATE_PARTIALS.map((p) => (
-                          <option key={p.name} value={p.name}>
-                            {p.name} — {p.description}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
+              {contentType !== "markdown" && (
+                <details>
+                  <summary class="pk-small pk-strong">Insert variables and reusable content</summary>
+                  <div class="pk-stack">
+                    {/* Partials */}
+                    <Field label="Insert partial">
+                      {(control) => (
+                        <Select
+                          {...control}
+                          disabled={!canWrite}
+                          onChange={(e) => {
+                            const sel = e.target as HTMLSelectElement;
+                            if (!sel.value) return;
+                            insertSnippet(`{{> ${sel.value}}}`, "body");
+                            sel.value = "";
+                          }}
+                        >
+                          <option value="">— select partial to insert —</option>
+                          {TEMPLATE_PARTIALS.map((p) => (
+                            <option key={p.name} value={p.name}>
+                              {p.name} — {p.description}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </Field>
 
-                  {/* Template helpers */}
-                  <div class="pk-stack pk-stack--snug">
-                    {/* A heading over a row of buttons, not the label of a control:
+                    {/* Template helpers */}
+                    <div class="pk-stack pk-stack--snug">
+                      {/* A heading over a row of buttons, not the label of a control:
                     `pk-field__label` outside a `pk-field` names nothing and can
                     never carry a state. */}
-                    <div class="pk-stack pk-stack--tight">
-                      <span class="pk-small pk-strong">Template helpers</span>
-                      <span class="pk-small">Click to insert into the active field.</span>
-                    </div>
-                    {HELPER_CATEGORIES.map((cat) => (
-                      <div key={cat} class="pk-stack pk-stack--tight">
-                        <span class="pk-small pk-strong">{cat}</span>
-                        <div class="pk-cluster">
-                          {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
-                            <Button
-                              key={item.label}
-                              size="sm"
-                              disabled={!canWrite}
-                              onClick={() => insertSnippet(item.snippet, item.target)}
-                            >
-                              {item.label}
-                            </Button>
-                          ))}
-                        </div>
+                      <div class="pk-stack pk-stack--tight">
+                        <span class="pk-small pk-strong">Template helpers</span>
+                        <span class="pk-small">Click to insert into the active field.</span>
                       </div>
-                    ))}
+                      {HELPER_CATEGORIES.map((cat) => (
+                        <div key={cat} class="pk-stack pk-stack--tight">
+                          <span class="pk-small pk-strong">{cat}</span>
+                          <div class="pk-cluster">
+                            {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
+                              <Button
+                                key={item.label}
+                                size="sm"
+                                disabled={!canWrite}
+                                onClick={() => insertSnippet(item.snippet, item.target)}
+                              >
+                                {item.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </details>
+                </details>
+              )}
 
               <p class="pk-small">
                 {canWrite
@@ -501,63 +587,13 @@ export function TemplateEditor({
         </PanelBody>
       </Panel>
 
-      {/* Version history */}
-      <Panel>
-        <PanelHeader title="Version History" />
-        <PanelBody>
-          <ApiDataTable
-            caption="Email template versions"
-            endpoint={`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`}
-            responseSchema={emailTemplateVersionsListResponseSchema}
-            resolve={(response) => response.versions}
-            resolvePage={(response) => response.page}
-            paginate
-            initialPageSize={25}
-            initialSort="-version"
-            actionsRef={historyRef}
-            columns={[
-              { header: "Version", cell: (v) => <code>v{v.version}</code> },
-              {
-                header: "Status",
-                cell: (v) => <Badge tone={versionTone(v.status)}>{statusLabel(v.status)}</Badge>,
-              },
-              {
-                header: "Type",
-                cell: (v) => (v.message_type ? <Badge tone="neutral">{statusLabel(v.message_type)}</Badge> : "—"),
-              },
-              {
-                header: "Checksum",
-                cell: (v) => <code>{v.checksum_sha256.substring(0, 12)}…</code>,
-                className: "pk-small",
-              },
-              {
-                header: "Created",
-                cell: (v) => formatDateTime(v.created_at),
-                className: "pk-small",
-              },
-              {
-                header: "",
-                cell: (v) => (
-                  <div class="pk-cluster">
-                    {canWrite && v.status !== "active" ? (
-                      <Button size="sm" onClick={() => void doActivate(v.version)}>
-                        Activate
-                      </Button>
-                    ) : v.status === "active" ? (
-                      <Badge tone="ok">In use</Badge>
-                    ) : null}
-                    <Button size="sm" onClick={() => loadVersion(v)}>
-                      Load
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-            empty="No versions yet"
-            rowKey={(v) => v.id}
-          />
-        </PanelBody>
-      </Panel>
+      <EmailTemplateVersionHistory
+        templateKey={templateKey}
+        canWrite={canWrite}
+        historyRef={historyRef}
+        onLoad={loadVersion}
+        onActivate={doActivate}
+      />
     </div>
   );
 }

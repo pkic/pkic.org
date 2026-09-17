@@ -13,65 +13,7 @@ export function normalizeEmail(email) {
   return String(email).trim().toLowerCase();
 }
 
-/**
- * Each roster export has a non-CSV title line, then a real header line,
- * then data rows. Nickname (column 2) is occasionally quoted with an
- * embedded comma (e.g. "Dholakia, Sandip") — a tiny quote-aware splitter
- * handles that.
- */
-export function parseCsvLine(line) {
-  const fields = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i += 1;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      fields.push(current);
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  fields.push(current);
-  return fields;
-}
-
-/** Returns a Map<normalizedEmail, { joinSortKey: string }> for one roster CSV. */
-export function loadRosterCsv(filePath) {
-  const raw = fs.readFileSync(filePath, "utf8");
-  const lines = raw.split(/\r?\n/).filter((l) => l.length > 0);
-  // lines[0] = title ("Members for group X"), lines[1] = header, lines[2+] = data
-  const byEmail = new Map();
-
-  for (let i = 2; i < lines.length; i += 1) {
-    const fields = parseCsvLine(lines[i]);
-    const email = normalizeEmail(fields[0] ?? "");
-    if (!email || !email.includes("@")) continue;
-
-    const [, , , , , , year, month, day, hour, minute, second] = fields;
-    const joinSortKey = [year, month, day, hour, minute, second]
-      .map((v) => String(Number.parseInt(v ?? "0", 10) || 0).padStart(4, "0"))
-      .join("-");
-
-    // Last-write-wins is fine: duplicate emails in an export are the same
-    // person; we just need *a* join timestamp for ordering purposes.
-    byEmail.set(email, { joinSortKey });
-  }
-
-  return byEmail;
-}
+export { parseCsvLine, loadRosterCsv } from "./roster-csv.mjs";
 
 /**
  * Excludes hidden files (dotfiles, including macOS AppleDouble sidecar

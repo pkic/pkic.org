@@ -1,3 +1,7 @@
+import {
+  dispatchEventEmailCampaignPage,
+  cleanExpiredCampaignSnapshots,
+} from "../functions/_lib/services/event-email-campaign/dispatch";
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -240,13 +244,13 @@ describe("event email campaign recipients", () => {
     expect(enrichmentQueryCounts).toEqual({ dayAttendance: 0, dayWaitlist: 0 });
   });
 
-  it("queues a large personal campaign in bounded D1 batches", async () => {
+  it("accepts over 10,000 recipients before delivery and resumes bounded pages without duplicate sends", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     if (!admin) throw new Error("Expected the seeded admin to exist");
     const rawToken = await createAdminSession(env.DB, admin.id, "campaign-bulk-test-token");
     await seedCampaignTemplates(admin.id);
-    const users = Array.from({ length: 251 }, (_, index) => ({
+    const users = Array.from({ length: 10_001 }, (_, index) => ({
       id: `campaign-send-user-${index}`,
       email: `campaign-send-user-${index}@example.test`,
       registrationId: `campaign-send-registration-${index}`,
@@ -296,8 +300,33 @@ describe("event email campaign recipients", () => {
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
-    const preview = (await previewResponse.json()) as { previewToken: string };
+    const preview = (await previewResponse.json()) as {
+      previewToken: string;
+      recipientCount: number;
+      sampleRecipients: string[];
+    };
+    expect(preview.recipientCount).toBe(users.length);
+    expect(preview.sampleRecipients).toHaveLength(10);
     expect(previewResponse.status).toBe(200);
+
+    const changedSettings = await app.fetch(
+      makeRequest({ ...body, subjectOverride: "Changed after review", previewToken: preview.previewToken }, "create"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(changedSettings.status).toBe(409);
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?")
+      .bind(users[0].registrationId)
+      .run();
+    const changedAudience = await app.fetch(
+      makeRequest({ ...body, previewToken: preview.previewToken }, "create"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(changedAudience.status).toBe(409);
+    await env.DB.prepare("UPDATE registrations SET status = 'registered' WHERE id = ?")
+      .bind(users[0].registrationId)
+      .run();
 
     let batchCalls = 0;
     const batchDb: DatabaseLike = {
@@ -328,6 +357,31 @@ describe("event email campaign recipients", () => {
     expect(sendBody.queuedBatches).toBe(users.length);
     expect(batchCalls).toBeLessThanOrEqual(12);
     expect(backgroundCalls).toBe(1);
+    expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(0);
+    const retryResponse = await app.fetch(
+      makeRequest({ ...body, previewToken: preview.previewToken }, "create"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(retryResponse.status).toBe(202);
+    expect(await queryAll(env.DB, "SELECT id FROM event_email_campaigns WHERE status = 'queued'")).toHaveLength(1);
+    let firstPage = { processed: 0, queued: 0 };
+    const racedPageDb = mutateBeforeMatchingBatch(env.DB, "INSERT INTO email_outbox", async () => {
+      firstPage = await dispatchEventEmailCampaignPage(env.DB);
+    });
+    expect(await dispatchEventEmailCampaignPage(racedPageDb)).toEqual({ processed: 0, queued: 0 });
+    expect(firstPage).toEqual({ processed: 100, queued: 100 });
+    // A new invocation resumes the persisted cursor, including the final partial page.
+    for (let remaining = users.length - firstPage.processed; remaining > 0;) {
+      const page = await dispatchEventEmailCampaignPage(env.DB);
+      expect(page.processed).toBeGreaterThan(0);
+      expect(page.processed).toBeLessThanOrEqual(100);
+      remaining -= page.processed;
+    }
+    expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 0, queued: 0 });
+    expect(await queryAll(env.DB, "SELECT id FROM event_email_campaigns WHERE status = 'complete'")).toHaveLength(1);
+    for (let pass = 0; pass < Math.ceil(users.length / 1000); pass += 1) await cleanExpiredCampaignSnapshots(env.DB);
+    expect(await queryAll(env.DB, "SELECT email FROM event_email_campaign_recipients")).toHaveLength(0);
     expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
       users.length,
     );
@@ -339,6 +393,50 @@ describe("event email campaign recipients", () => {
         )
       )[0]?.count,
     ).toBe(users.length);
+  }, 30_000);
+
+  it("keeps BCC pages within the reviewed size and skips recipients who no longer match", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    await seedCampaignTemplates(admin.id);
+    const token = await createAdminSession(env.DB, admin.id, "campaign-bcc-pages");
+    for (let index = 0; index < 5; index += 1) {
+      const userId = await insertUser(env.DB, `bcc-${index}@example.test`);
+      await env.DB.prepare(
+        `INSERT INTO registrations
+        (id, event_id, user_id, status, attendance_type, source_type, manage_link_secret, created_at, updated_at)
+        VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+      )
+        .bind(`bcc-registration-${index}`, eventId, userId, crypto.randomUUID())
+        .run();
+    }
+    const input = {
+      subjectOverride: "Event update",
+      bodyContent: "The event starts soon.",
+      sendMode: "bcc_batch",
+      batchSize: 2,
+      filter: { audience: "attendees" },
+    };
+    const preview = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", input);
+    const reviewed = (await preview.json()) as { previewToken: string; recipientCount: number; batchCount: number };
+    expect(reviewed).toMatchObject({ recipientCount: 5, batchCount: 3 });
+    const create = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
+      ...input,
+      previewToken: reviewed.previewToken,
+    });
+    expect(create.status).toBe(202);
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = 'bcc-registration-4'").run();
+    expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 2, queued: 2 });
+    expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 2, queued: 2 });
+    expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 1, queued: 0 });
+    const queued = await queryAll<{ recipient_email: string; payload_json: string }>(
+      env.DB,
+      "SELECT recipient_email, payload_json FROM email_outbox ORDER BY recipient_email",
+    );
+    expect(queued.map((row) => [row.recipient_email, ...JSON.parse(row.payload_json).__bccRecipients])).toEqual([
+      ["bcc-0@example.test", "bcc-1@example.test"],
+      ["bcc-2@example.test", "bcc-3@example.test"],
+    ]);
   });
 
   it("supports event-scoped writers and atomically rejects permission revocation before queue commit", async () => {
@@ -377,7 +475,7 @@ describe("event email campaign recipients", () => {
     expect(preview.status, await preview.clone().text()).toBe(200);
     const previewBody = (await preview.json()) as { previewToken: string };
 
-    const racedDb = mutateBeforeMatchingBatch(env.DB, "INSERT INTO email_outbox", () =>
+    const racedDb = mutateBeforeMatchingBatch(env.DB, "UPDATE event_email_campaigns SET status", () =>
       env.DB.prepare(
         `UPDATE permission_grants
             SET revoked_at = datetime('now')

@@ -20,7 +20,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { IconInfoCircle, IconLinkedIn, IconXTwitter } from "../../assets/ts/components/icons";
 import { GroupVoteLifecycleActions } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteLifecycleActions";
 import { OperationActions } from "../../assets/ts/member-flows/portal/sections/system-operations/OperationActions";
-import { buttonNamed, buttonNames, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, buttonNames, markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "40000000-0000-4000-8000-000000000001";
@@ -92,9 +92,9 @@ describe("vote lifecycle actions", () => {
 
     // The reason used to be a bare `<textarea>` under a label; it is reached
     // through the `for`/`id` pair now, and marked required in the markup.
-    const reason = controlFor<HTMLTextAreaElement>(page, "Cancellation reason");
-    expect(reason.tagName.toLowerCase()).toBe("textarea");
-    expect(reason.required).toBe(true);
+    const reason = await markdownControl(page, "Cancellation reason");
+    expect(reason.closest(".pk-markdown-editor")).not.toBeNull();
+    expect(reason.getAttribute("aria-required")).toBe("true");
     const describedBy = reason.getAttribute("aria-describedby");
     expect(page.querySelector(`[id="${describedBy!}"]`)?.textContent).toContain("cancellation notice");
 
@@ -103,7 +103,7 @@ describe("vote lifecycle actions", () => {
 
     // Confirming is blocked until a reason is typed.
     expect(buttonNamed(page, "Confirm cancellation").disabled).toBe(true);
-    await typeInto(reason, "Superseded by a later proposal.");
+    await typeMarkdown(page, "Cancellation reason", "Superseded by a later proposal.");
     expect(buttonNamed(page, "Confirm cancellation").disabled).toBe(false);
   });
 
@@ -115,7 +115,7 @@ describe("vote lifecycle actions", () => {
     const page = mount(<GroupVoteLifecycleActions groupId={GROUP_ID} vote={vote(["cancel"])} onChanged={vi.fn()} />);
 
     await act(() => buttonNamed(page, "Cancel vote").click());
-    await typeInto(controlFor(page, "Cancellation reason"), "Superseded.");
+    await typeMarkdown(page, "Cancellation reason", "Superseded.");
     await act(async () => {
       page.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -124,7 +124,7 @@ describe("vote lifecycle actions", () => {
     const alert = page.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("The vote already closed.");
     // The form stays open with what was typed, so nothing has to be retyped.
-    expect(controlFor<HTMLTextAreaElement>(page, "Cancellation reason").value).toBe("Superseded.");
+    expect(await markdownValue(page, "Cancellation reason")).toBe("Superseded.");
   });
 });
 
@@ -160,13 +160,8 @@ describe("system operation commands", () => {
         reload={vi.fn(async () => undefined)}
       />,
     );
-    expect(buttonNames(staff)).toEqual([
-      "Preview reminders",
-      "Queue reminders",
-      "Run consultation batch",
-      "Run EC review batch",
-      "Queue chair digest",
-    ]);
+    expect(buttonNames(staff)).toEqual(["Preview reminders", "Queue reminders"]);
+    expect(staff.textContent).toContain("Settings → Scheduled jobs");
     expect(staff.textContent).not.toContain("Reminder preview is read-only.");
   });
 

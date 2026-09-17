@@ -87,7 +87,7 @@ describe("portal group statistics", () => {
       ),
     );
     const container = mount();
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("Loading group statistics");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("Loading group analytics");
 
     resolveResponse(json(baseStats));
     await settle();

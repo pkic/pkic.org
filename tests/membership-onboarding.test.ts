@@ -1,3 +1,4 @@
+import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
 /**
  * membership-onboarding.test.ts
  *
@@ -20,7 +21,7 @@ import {
 } from "./helpers/member-applications";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { approveApplication } from "../functions/_lib/services/membership/applications/approve";
-import { recordEcDecision } from "../functions/_lib/services/ec-review";
+import { evaluateMembershipApplication } from "../functions/_lib/services/membership/workflows/evaluate";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -63,7 +64,7 @@ async function seedWorkingGroup(slug: string, mailingListEmail: string | null = 
   await env.DB.batch(statements);
 }
 
-async function createEcReviewApplication(
+async function createReviewedApplication(
   overrides: Record<string, unknown> = {},
   answers: Record<string, unknown> = { working_groups: ["pqc"] },
 ): Promise<{ id: string }> {
@@ -76,8 +77,9 @@ async function createEcReviewApplication(
       "organization_domain" in overrides ? (overrides.organization_domain as string | null) : "acme.test",
     membershipCategory: (overrides.membership_category as string) ?? "F",
     formSubmissionId,
-    stage: "ec_review",
+    stage: "processing",
   });
+  await pinReviewedStaffWorkflow(env.DB, id, (overrides.membership_category as string) ?? "F");
   return { id };
 }
 
@@ -98,7 +100,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("approves an org-tied application: creates org/user/member, sets primary contact, writes the domain", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { organizationId: string; memberId: string; userId: string };
@@ -162,41 +164,35 @@ describe("Post-approval onboarding", () => {
     expect(appRows[0].member_id).toBe(body.memberId);
   });
 
-  it("preserves explicit staff approval as an override when an EC decline already exists", async () => {
-    const { id } = await createEcReviewApplication();
-    const ecUserId = crypto.randomUUID();
+  it("rejects explicit approval until a recorded objection is resolved", async () => {
+    const { id } = await createReviewedApplication();
+    const objectionId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, is_ec_member, created_at, updated_at)
-       VALUES (?, 'staff-override-ec@example.test', 'staff-override-ec@example.test', 'user', 1, 1,
-               datetime('now'), datetime('now'))`,
+      `INSERT INTO membership_application_objections
+      (id, application_id, generation, step_position, author_user_id, recorded_by_user_id, body, state, created_at)
+      VALUES (?, ?, 1, 0, ?, ?, 'Confirm organization ownership', 'unresolved', ?)`,
     )
-      .bind(ecUserId)
+      .bind(objectionId, id, adminId, adminId, new Date().toISOString())
       .run();
-    await recordEcDecision(env.DB, {
-      applicationId: id,
-      ecMemberUserId: ecUserId,
-      decision: "decline",
-      reason: "Staff will resolve this decline manually",
+    const blocked = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(blocked.status).toBe(409);
+    expect(
+      await queryAll(env.DB, "SELECT member_id FROM member_applications WHERE id = ? AND member_id IS NOT NULL", id),
+    ).toHaveLength(0);
+    const resolved = await call(adminToken, `/api/v1/members/applications/${id}/objections/${objectionId}/resolution`, {
+      method: "POST",
+      body: JSON.stringify({
+        expectedRevision: 0,
+        resolution: "resolved",
+        reason: "The organization supplied ownership evidence.",
+      }),
     });
-
-    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
-
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { memberId: string };
-    expect(
-      await queryAll(env.DB, "SELECT stage, transition_revision FROM member_applications WHERE id = ?", id),
-    ).toEqual([{ stage: "approved", transition_revision: 2 }]);
-    expect(await queryAll(env.DB, "SELECT decision FROM ec_decisions WHERE application_id = ?", id)).toEqual([
-      { decision: "decline" },
-    ]);
-    expect(
-      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?", id),
-    ).toHaveLength(1);
-    expect(await queryAll(env.DB, "SELECT id FROM members WHERE id = ?", body.memberId)).toHaveLength(1);
+    expect(resolved.status, await resolved.clone().text()).toBe(200);
+    expect(await resolved.json()).toMatchObject({ approved: true });
   });
 
   it("carries job_title/linkedin from the application's answers into the provisioned representation", async () => {
-    const { id } = await createEcReviewApplication(
+    const { id } = await createReviewedApplication(
       {},
       {
         working_groups: ["pqc"],
@@ -228,7 +224,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("creates no organization for an individual (H6) application", async () => {
-    const { id } = await createEcReviewApplication(
+    const { id } = await createReviewedApplication(
       { organization_name: null, membership_category: "H6" },
       { working_groups: [] },
     );
@@ -242,7 +238,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("adds the requested group capacity and reconciles mailing-list subscriptions", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; memberId: string };
 
@@ -271,8 +267,29 @@ describe("Post-approval onboarding", () => {
     expect(groupEmails).toContain("pqc@lists.pkic.org");
   });
 
+  it("enrols the applicant in a working group the form named by id", async () => {
+    const pqc = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM groups WHERE slug = 'pqc'"))[0];
+    const { id } = await createReviewedApplication({}, { working_groups: [pqc.id] });
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { userId: string; workingGroupSlugs: string[] };
+    // The option catalog behind the public form emits ids; approval used to
+    // match them against slugs and quietly enrol nobody (#105).
+    expect(body.workingGroupSlugs).toContain("pqc");
+    expect(
+      await queryAll(
+        env.DB,
+        `SELECT 1
+           FROM group_memberships membership
+           JOIN groups g ON g.id = membership.group_id
+          WHERE membership.user_id = ? AND g.slug = 'pqc' AND membership.left_at IS NULL`,
+        body.userId,
+      ),
+    ).toHaveLength(1);
+  });
+
   it("omits a requested group when its configured category rule is not satisfied", async () => {
-    const { id } = await createEcReviewApplication({ membership_category: "B" }, { working_groups: ["ca", "pqc"] });
+    const { id } = await createReviewedApplication({ membership_category: "B" }, { working_groups: ["ca", "pqc"] });
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { userId: string; workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).not.toContain("ca");
@@ -290,14 +307,14 @@ describe("Post-approval onboarding", () => {
   });
 
   it("allows category A into the CA working group", async () => {
-    const { id } = await createEcReviewApplication({ membership_category: "A" }, { working_groups: ["ca"] });
+    const { id } = await createReviewedApplication({ membership_category: "A" }, { working_groups: ["ca"] });
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
     const body = (await response.json()) as { workingGroupSlugs: string[] };
     expect(body.workingGroupSlugs).toContain("ca");
   });
 
   it("queues member-account-claim and application-approved-welcome emails", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
 
     const claimEmails = await queryAll(
@@ -318,7 +335,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("writes the audit-log entry and queues the emails in the same commit as membership provisioning (PR #1 review blocker 4)", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
 
     const auditRows = await queryAll<{ actor_type: string; actor_id: string; entity_id: string; created_at: string }>(
@@ -327,7 +344,7 @@ describe("Post-approval onboarding", () => {
       id,
     );
     expect(auditRows).toHaveLength(1);
-    expect(auditRows[0]!.actor_type).toBe("admin");
+    expect(auditRows[0]!.actor_type).toBe("user");
     expect(auditRows[0]!.actor_id).toBe(adminId);
     expect(
       await queryAll<{ actor_user_id: string | null }>(
@@ -355,7 +372,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("rejects API-key approval without side effects", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}/approve`, {
       method: "POST",
     });
@@ -378,22 +395,17 @@ describe("Post-approval onboarding", () => {
     ).toEqual([]);
   });
 
-  it("does not write an audit-log entry for the unattended EC-window auto-approve path (no admin actor)", async () => {
-    const { id } = await createEcReviewApplication();
-    await env.DB.prepare(`UPDATE member_applications SET stage_entered_at = datetime('now', '-30 days') WHERE id = ?`)
-      .bind(id)
-      .run();
-
-    const { runEcWindowAutoApprove } = await import("../functions/_lib/services/membership/scheduled-jobs");
-    const result = await runEcWindowAutoApprove(env.DB, env as any);
-    expect(result.autoApproved).toBe(1);
+  it("records a system audit entry when completed requirements trigger unattended approval", async () => {
+    const { id } = await createReviewedApplication();
+    const result = await evaluateMembershipApplication(env.DB, id, "https://app.test");
+    expect(result.approved).toBe(true);
 
     const auditRows = await queryAll(
       env.DB,
       "SELECT id FROM audit_log WHERE action = 'application_approved' AND entity_id = ?",
       id,
     );
-    expect(auditRows).toHaveLength(0);
+    expect(auditRows).toHaveLength(1);
 
     const claimEmails = await queryAll(
       env.DB,
@@ -402,14 +414,14 @@ describe("Post-approval onboarding", () => {
     expect(claimEmails).toHaveLength(1);
   });
 
-  it("rejects approval when the application is not in ec_review", async () => {
+  it("refuses approval if the pinned workflow is missing", async () => {
     const id = await seedMemberApplication({
       applicantEmail: "x@acme.test",
       applicantName: "X",
       organizationName: "Acme",
       organizationDomain: "acme.test",
       membershipCategory: "F",
-      stage: "pending",
+      stage: "submitted",
     });
 
     const response = await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
@@ -417,7 +429,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("a newly approved member's duplicate-domain check catches a later application from the same org domain", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     await call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" });
 
     const response = await app.fetch(
@@ -444,7 +456,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("atomicity (PR #1 review §5 correction): two concurrent approvals of the same application produce exactly one success, one 409, and no duplicate provisioning/event/audit/email rows", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
 
     const [first, second] = await Promise.all([
       call(adminToken, `/api/v1/members/applications/${id}/approve`, { method: "POST" }),
@@ -510,7 +522,7 @@ describe("Post-approval onboarding", () => {
   });
 
   it("rolls back every approval side effect when a concurrent transition to a different stage wins", async () => {
-    const { id } = await createEcReviewApplication();
+    const { id } = await createReviewedApplication();
     const baseDb: DatabaseLike = env.DB;
     let injectedWinningTransition = false;
     const racingDb: DatabaseLike = {
@@ -523,14 +535,14 @@ describe("Post-approval onboarding", () => {
               .prepare(
                 `UPDATE member_applications
                  SET stage = 'declined', stage_entered_at = datetime('now'), updated_at = datetime('now')
-                 WHERE id = ? AND stage = 'ec_review'`,
+                 WHERE id = ? AND stage = 'processing'`,
               )
               .bind(id),
             baseDb
               .prepare(
                 `INSERT INTO member_application_events
                    (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
-                 VALUES (?, ?, 'ec_review', 'declined', NULL, 'Concurrent decline', datetime('now'))`,
+                 VALUES (?, ?, 'processing', 'declined', NULL, 'Concurrent decline', datetime('now'))`,
               )
               .bind(crypto.randomUUID(), id),
             baseDb.prepare("DELETE FROM organization_domain_claims WHERE application_id = ?").bind(id),
@@ -544,7 +556,6 @@ describe("Post-approval onboarding", () => {
       approveApplication(racingDb, {
         applicationId: id,
         actor: adminActor,
-        approvalMode: "staff_override",
         loginUrl: "https://pkic.org/members/login/",
       }),
     ).rejects.toMatchObject({ status: 409 });
@@ -572,7 +583,7 @@ describe("Post-approval onboarding", () => {
     expect(await queryAll(env.DB, "SELECT id FROM google_groups_sync_queue")).toHaveLength(0);
   });
 
-  it("atomicity (PR #1 review blocker 4): a provisioning failure leaves the application in ec_review, with no partial event/queue rows", async () => {
+  it("atomicity (PR #1 review blocker 4): a provisioning failure leaves the application processing, with no partial event/queue rows", async () => {
     // Seed an organization whose aggregate already has a *different*
     // category than the application requests — forces
     // buildProvisionOrganizationMembership to throw MEMBER_CATEGORY_CONFLICT
@@ -582,13 +593,13 @@ describe("Post-approval onboarding", () => {
     // ever occur *after* provisioning already committed (since the old
     // conflict check ran inside provisioning's own post-batch re-read),
     // which would have left a member/organization created for an
-    // application still sitting in ec_review. Now the conflict is
+    // application still awaiting onboarding. Now the conflict is
     // detected before anything is built at all, so this assertion holds
     // for both designs — the real regression coverage is the "nothing
     // partial" checks below, not just the 409 itself.
     const orgId = await insertOrganization(env.DB, "Conflicting Category Org");
     await seedOrganizationAggregate(env.DB, orgId, "F");
-    const { id } = await createEcReviewApplication({
+    const { id } = await createReviewedApplication({
       organization_name: "Conflicting Category Org",
       organization_domain: "conflicting.test",
       membership_category: "G",
@@ -602,7 +613,7 @@ describe("Post-approval onboarding", () => {
       "SELECT stage FROM member_applications WHERE id = ?",
       id,
     );
-    expect(applications[0]).toMatchObject({ stage: "ec_review" });
+    expect(applications[0]).toMatchObject({ stage: "processing" });
 
     const events = await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id);
     expect(events).toHaveLength(0);

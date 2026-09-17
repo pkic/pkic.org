@@ -287,7 +287,7 @@ describe("URL-addressed group sub-resources", () => {
     const responsesTab = tabs(container).find((item) => item.textContent?.trim() === "Responses");
     expect(isCurrentTab(responsesTab)).toBe(true);
 
-    const statisticsTab = tabs(container).find((item) => item.textContent?.trim() === "Statistics")!;
+    const statisticsTab = tabs(container).find((item) => item.textContent?.trim() === "Analytics")!;
     expect(statisticsTab.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/forms/${placementId}/statistics`);
     await act(async () => {
       statisticsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));

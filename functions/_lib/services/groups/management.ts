@@ -28,6 +28,7 @@ import {
   requireGlobalGroupManagement,
   requireGroupManagement,
 } from "./governance";
+import { listMembershipCategories } from "../membership/categories";
 import { getGroup } from "./read-model";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
 
@@ -375,6 +376,9 @@ export async function replaceGroupCategoryRules(
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, actor, group.id);
+  const categories = new Set((await listMembershipCategories(db)).map((category) => category.code));
+  if (input.rules.some((rule) => !categories.has(rule.membershipCategory)))
+    throw new AppError(422, "INVALID_MEMBERSHIP_CATEGORY", "Choose categories from the current membership catalog");
   const at = nowIso();
   const statements: StatementLike[] = [
     prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
@@ -410,6 +414,8 @@ export async function replaceGroupCategoryRules(
   try {
     await db.batch(statements);
   } catch (error) {
+    if (error instanceof Error && error.message.includes("FOREIGN KEY constraint failed"))
+      throw new AppError(409, "MEMBERSHIP_CATEGORY_CHANGED", "The membership catalog changed; reload and retry");
     translateGroupWriteError(error);
   }
   const updated = await getGroup(db, group.id);

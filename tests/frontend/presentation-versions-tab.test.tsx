@@ -5,6 +5,7 @@ import { act } from "preact/test-utils";
 import { PresentationVersionsTab } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/PresentationVersionsTab";
 import type { PresentationVersion } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/model";
 import { presentationVersionReviewRequestSchema } from "../../assets/shared/schemas/presentation-versions";
+import { markdownControl, typeMarkdown, controlFor } from "./helpers/labelled-control";
 
 // Identifiers are the shape `databaseIdSchema` accepts, because the saved
 // review is parsed back through the shared response schema.
@@ -90,13 +91,10 @@ async function settle(): Promise<void> {
   });
 }
 
+/** Types into the shared Markdown editor and hands back its source control, the one the label then points at. */
 async function typeNote(root: HTMLElement, value: string): Promise<HTMLTextAreaElement> {
-  const textarea = root.querySelector("textarea") as HTMLTextAreaElement;
-  await act(() => {
-    textarea.value = value;
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  return textarea;
+  await typeMarkdown(root, "Note for the speaker", value);
+  return controlFor<HTMLTextAreaElement>(root, "Note for the speaker");
 }
 
 function fieldOf(control: HTMLElement): HTMLElement {
@@ -153,6 +151,9 @@ describe("presentation versions tab", () => {
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).not.toBeNull();
     expect(buttonNamed(root, "Review").getAttribute("aria-expanded")).toBe("true");
 
+    // The note is the shared Markdown editor, a lazy chunk; its label points
+    // at nothing until it is on the page.
+    const note = await markdownControl(root, "Note for the speaker");
     const labels = [...root.querySelectorAll("label.pk-field__label")];
     expect(labels.map((label) => label.textContent)).toEqual(["Review outcome", "Note for the speaker"]);
     for (const label of labels) {
@@ -165,11 +166,10 @@ describe("presentation versions tab", () => {
     expect([...select.options].map((option) => option.value)).toEqual(["approved", "needs_revision", "rejected"]);
 
     // Help text is wired to the control it explains, not merely placed near it.
-    const textarea = root.querySelector("textarea") as HTMLTextAreaElement;
-    const helpId = textarea.getAttribute("aria-describedby");
+    const helpId = note.getAttribute("aria-describedby");
     expect(helpId).toBeTruthy();
     expect(root.querySelector(`#${helpId}`)?.textContent).toContain("The speaker sees this");
-    expect(textarea.hasAttribute("aria-invalid")).toBe(false);
+    expect(note.getAttribute("aria-invalid")).not.toBe("true");
   });
 
   it("sends the review the shared request schema describes", async () => {
@@ -262,7 +262,7 @@ describe("presentation versions tab", () => {
     // marked, and the refusal is announced where the reviewer is working.
     const form = root.querySelector(`#${REVIEW_FORM_ID}`) as HTMLElement;
     expect(form).not.toBeNull();
-    expect(form.querySelector("textarea")?.getAttribute("aria-invalid")).toBeNull();
+    expect((await markdownControl(form, "Note for the speaker")).getAttribute("aria-invalid")).not.toBe("true");
     const alert = form.querySelector('[role="alert"]') as HTMLElement;
     expect(alert.textContent).toContain("You cannot review this version.");
   });

@@ -7,41 +7,27 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 
-interface CalendarOccurrenceRow {
-  event_name: string;
-  id: string | null;
-  starts_at: string | null;
-  ends_at: string | null;
-  status: "scheduled" | "cancelled" | "completed" | null;
-  location: string | null;
-  updated_at: string | null;
-}
+import { MEETING_CALENDAR_OCCURRENCE_LIMIT } from "../../../../assets/shared/meeting-calendar-policy";
+import { CALENDAR_OCCURRENCE_WINDOW_SQL } from "./calendar-schedule";
+import { nowIso } from "../../utils/time";
+import { buildSeriesCalendarPayload, type SeriesCalendar, type SeriesCalendarOccurrence } from "./series-calendar";
+import { buildOccurrenceInviteIcs } from "./invite-calendar";
+import { occurrenceJoinUrl } from "./occurrence-notifications";
+import { meetingCalendarFilename } from "./calendar-filename";
 
 interface CalendarGroupContext {
   id: string;
   slug: string;
 }
-
-function escapeIcs(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
-}
-
-function utcTimestamp(value: string): string {
-  return new Date(value)
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}Z$/, "Z");
-}
-
-function fold(line: string): string {
-  const chunks: string[] = [];
-  let remaining = line;
-  while (remaining.length > 75) {
-    chunks.push(remaining.slice(0, 75));
-    remaining = ` ${remaining.slice(75)}`;
-  }
-  chunks.push(remaining);
-  return chunks.join("\r\n");
+interface CalendarRow extends SeriesCalendar {
+  active: number;
+  occurrence_id: string | null;
+  occurrence_starts_at: string | null;
+  recurrence_id: string | null;
+  ends_at: string | null;
+  status: string | null;
+  occurrence_location: string | null;
+  calendar_sequence: number | null;
 }
 
 export async function generateGroupSeriesIcs(
@@ -50,62 +36,87 @@ export async function generateGroupSeriesIcs(
   throughGroup: CalendarGroupContext,
   seriesId: string,
   baseUrl: string,
-): Promise<string> {
+  occurrenceId?: string,
+): Promise<{ content: string; filename: string }> {
   const access = liveGroupResourceContextAccess(viewer, throughGroup.id);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", throughGroup.id, access, "view");
-  const rows = await all<CalendarOccurrenceRow>(
+  const rows = await all<CalendarRow>(
     db,
     `WITH ${accessibleEvents.sql}
-     SELECT event.name AS event_name, occurrence.id, occurrence.starts_at, occurrence.ends_at, occurrence.status,
-            COALESCE(occurrence.location_override, series.location) AS location,
-            occurrence.updated_at
+     SELECT series.id, series.event_id, event.owner_group_id, owner.slug AS owner_group_slug, event.name AS event_name,
+            series.starts_at, series.recurrence_rule, series.duration_minutes, series.timezone,
+            series.location, series.calendar_revision, series.calendar_through, series.active,
+            occurrence.id AS occurrence_id, occurrence.starts_at AS occurrence_starts_at,
+            COALESCE(occurrence.recurrence_id, occurrence.starts_at) AS recurrence_id,
+            occurrence.ends_at, occurrence.status, occurrence.calendar_sequence,
+            COALESCE(occurrence.location_override, series.location) AS occurrence_location
        FROM accessible_resource accessible
        JOIN events event ON event.id = accessible.resource_id
+       JOIN groups owner ON owner.id = event.owner_group_id
        JOIN event_series series ON series.event_id = event.id
        CROSS JOIN group_access
   LEFT JOIN event_occurrences occurrence ON occurrence.series_id = series.id
-        AND occurrence.starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')
+        AND ${occurrenceId ? "occurrence.id = ?" : CALENDAR_OCCURRENCE_WINDOW_SQL}
       WHERE series.id = ? AND (group_access.manager_access = 1 OR series.active = 1)
       ORDER BY occurrence.starts_at, occurrence.id
-      LIMIT 500`,
-    [...accessibleEvents.bindings, seriesId],
+      LIMIT ?`,
+    [
+      ...accessibleEvents.bindings,
+      occurrenceId ?? new Date(Date.now() - 30 * 86400_000).toISOString(),
+      seriesId,
+      MEETING_CALENDAR_OCCURRENCE_LIMIT + 1,
+    ],
   );
   if (rows.length === 0) {
     throw new AppError(404, "EVENT_SERIES_NOT_FOUND", "Meeting series is not available through this group");
   }
-  const eventName = rows[0].event_name;
-  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//PKI Consortium//Group Meetings//EN",
-    "CALSCALE:GREGORIAN",
-    `X-WR-CALNAME:${escapeIcs(eventName)}`,
-  ];
-  for (const occurrence of rows) {
-    if (
-      !occurrence.id ||
-      !occurrence.starts_at ||
-      !occurrence.ends_at ||
-      !occurrence.status ||
-      !occurrence.updated_at
-    ) {
-      continue;
+  if (rows.length > MEETING_CALENDAR_OCCURRENCE_LIMIT)
+    throw new AppError(422, "MEETING_CALENDAR_TOO_LARGE", "The calendar exceeds the supported occurrence horizon");
+  const filename = meetingCalendarFilename(rows[0].event_name, rows[0].owner_group_slug);
+  if (occurrenceId) {
+    const row = rows[0];
+    if (!row.occurrence_id || !row.occurrence_starts_at || !row.ends_at) {
+      throw new AppError(404, "EVENT_OCCURRENCE_NOT_FOUND", "Meeting occurrence is not available in this series");
     }
-    const joinUrl = `${normalizedBaseUrl}/meetings/join/?occurrence=${encodeURIComponent(occurrence.id)}`;
-    lines.push(
-      "BEGIN:VEVENT",
-      `UID:${occurrence.id}@pkic.org`,
-      `DTSTAMP:${utcTimestamp(occurrence.updated_at)}`,
-      `DTSTART:${utcTimestamp(occurrence.starts_at)}`,
-      `DTEND:${utcTimestamp(occurrence.ends_at)}`,
-      `SUMMARY:${escapeIcs(eventName)}`,
-      `URL:${escapeIcs(joinUrl)}`,
-    );
-    if (occurrence.location) lines.push(`LOCATION:${escapeIcs(occurrence.location)}`);
-    if (occurrence.status === "cancelled") lines.push("STATUS:CANCELLED");
-    lines.push("END:VEVENT");
+    return {
+      filename,
+      content: buildOccurrenceInviteIcs(
+        {
+          occurrenceId: row.occurrence_id,
+          eventId: row.event_id,
+          eventName: row.event_name,
+          startsAt: row.occurrence_starts_at,
+          endsAt: row.ends_at,
+          location: row.occurrence_location,
+          joinUrl: occurrenceJoinUrl(baseUrl, row.occurrence_id),
+          sequence: row.calendar_sequence ?? 0,
+        },
+        undefined,
+        row.status === "cancelled" || row.active !== 1,
+      ),
+    };
   }
-  lines.push("END:VCALENDAR");
-  return `${lines.map(fold).join("\r\n")}\r\n`;
+  const occurrences: SeriesCalendarOccurrence[] = rows.flatMap((row) =>
+    row.occurrence_id && row.occurrence_starts_at && row.recurrence_id && row.ends_at && row.status
+      ? [
+          {
+            id: row.occurrence_id,
+            starts_at: row.occurrence_starts_at,
+            recurrence_id: row.recurrence_id,
+            ends_at: row.ends_at,
+            status: row.status,
+            location: row.occurrence_location,
+          },
+        ]
+      : [],
+  );
+  return {
+    filename,
+    content: buildSeriesCalendarPayload(rows[0], occurrences, {
+      baseUrl,
+      cancelled: rows[0].active !== 1,
+      now: nowIso(),
+      published: true,
+    }).inlineContent!,
+  };
 }

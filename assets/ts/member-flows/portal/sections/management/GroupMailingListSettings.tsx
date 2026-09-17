@@ -130,7 +130,6 @@ function SettingsSection({
         <PanelHeader title={title} headingLevel={compact ? 3 : 4}>
           <EditActions
             label={`${title} actions`}
-            direct
             editLabel="Edit"
             editing={editing}
             saving={saving}

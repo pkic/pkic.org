@@ -118,8 +118,9 @@ test("staff manage the Board of Directors roster from its group workspace", asyn
    * buttons above the table. This spec drove the old buttons and hung on one
    * that no longer exists.
    */
-  await members.getByRole("button", { name: "Seat column options" }).click();
-  await page.getByRole("menuitemradio", { name: "Former seats" }).click();
+  await members.getByRole("button", { name: "Membership dates column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
+  await page.getByRole("menuitemradio", { name: "Former members" }).click();
   await expect(members.getByRole("row").filter({ hasText: director.email })).toBeVisible();
 
   expect(removedRequests).toEqual([]);

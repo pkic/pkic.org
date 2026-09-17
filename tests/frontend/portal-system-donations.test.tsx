@@ -1,3 +1,4 @@
+import { openColumnFilterMenu } from "./helpers/column-menu";
 // @vitest-environment jsdom
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
@@ -286,10 +287,7 @@ describe("portal system donations", () => {
     expect(container.querySelector("button[aria-pressed]")).toBeNull();
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Status column options"]');
     expect(trigger).not.toBeNull();
-    await act(async () => {
-      trigger!.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    openColumnFilterMenu(container, "Status");
     // The column sorts as well, so its menu opens with the two sort
     // directions; the six statuses ("All" first) follow, each with its count.
     const choices = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')).filter(

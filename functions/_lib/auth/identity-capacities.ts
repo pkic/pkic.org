@@ -4,6 +4,7 @@ import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
+import { executiveCouncilSeatSql } from "./executive-council";
 
 export const STAFF_ACCESS_CONDITION = `(
   u.role = 'admin'
@@ -85,7 +86,7 @@ export const MEMBER_ELIGIBLE_USER_COLUMNS =
 export const MEMBER_ELIGIBLE_USER_SELECT = `
   SELECT u.id, COALESCE(selected_email.email, u.email) AS email,
          COALESCE(selected_email.normalized_email, u.normalized_email) AS normalized_email,
-         u.active, u.is_ec_member, identity.id AS identity_id,
+         u.active, ${executiveCouncilSeatSql("u.id")} AS is_ec_member, identity.id AS identity_id,
          m.id AS member_id, NULL AS organization_id, NULL AS organization_name,
          mca.category_code AS membership_category,
          '0_' || identity.started_at AS sort_key
@@ -107,7 +108,7 @@ export const MEMBER_ELIGIBLE_USER_SELECT = `
 
   SELECT u.id, COALESCE(selected_email.email, u.email) AS email,
          COALESCE(selected_email.normalized_email, u.normalized_email) AS normalized_email,
-         u.active, u.is_ec_member, identity.id AS identity_id,
+         u.active, ${executiveCouncilSeatSql("u.id")} AS is_ec_member, identity.id AS identity_id,
          m.id AS member_id, m.organization_id, o.name AS organization_name,
          mca.category_code AS membership_category,
          '1_' || identity.started_at AS sort_key

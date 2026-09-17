@@ -1,4 +1,4 @@
-import { consumeRsvpEmails, enqueueRsvpEmail, usesRsvpEmailQueue } from "./_lib/services/calendar-rsvp-email-queue";
+import { AppError } from "./_lib/errors";
 import { withDependencyHandling } from "./_lib/dependency-bindings";
 import { handleError } from "./_lib/http";
 import { availabilityResponse, getAvailability } from "./_lib/availability";
@@ -112,21 +112,11 @@ export default {
       return handleError(error);
     }
   },
-  async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
-    await consumeRsvpEmails(batch, withDependencyHandling(env));
-  },
   async email(message: ForwardableEmailMessage, env: Env, _ctx: ExecutionContext): Promise<void> {
-    if (usesRsvpEmailQueue(env)) {
-      await enqueueRsvpEmail(message, withDependencyHandling(env));
-      return;
-    }
     if (getAvailability(env, Date.now(), "email").mode !== "normal") {
-      if (env.PAUSED_EMAIL_FORWARD_TO) await message.forward(env.PAUSED_EMAIL_FORWARD_TO);
-      else
-        message.setReject(
-          "Online RSVP processing is paused. Your response was not recorded. Please contact the meeting organizer or resend after service resumes.",
-        );
-      return;
+      // Email Routing maps an exception to temporary SMTP 421; setReject is permanent.
+      // Verified with live SMTP and recovery in issue #81. Retry ownership stays with the sender.
+      throw new AppError(503, "SERVICE_UNAVAILABLE", "Online RSVP processing is temporarily paused");
     }
     // Inbound acceptance must wait for processing; waitUntil could acknowledge mail before D1 succeeds.
     await processIncomingEmail(message, withDependencyHandling(env));

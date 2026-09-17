@@ -36,10 +36,22 @@ interface MailingListSubscriberRow {
  * A list whose eligibility follows group membership can only ever reach the
  * owning group, the groups it was shared with, and whoever has already
  * answered for it. A list whose eligibility follows membership category is
- * open to every member, so its candidate set is every active account — the
- * same set the reconciler walks.
+ * open to every member, so its candidate set is everyone standing in a
+ * Member capacity — not every account: the accounts behind event
+ * registrations are not members, and listing thousands of them as "not
+ * eligible" read as the list being broken (#103). Eligibility itself is
+ * still decided per row by the canonical predicate.
  */
 function candidateUsersSql(listId: string, purpose: string): { sql: string; bindings: unknown[] } {
+  const memberAccounts = `SELECT identity.user_id
+            FROM identities identity
+            JOIN members member
+              ON member.status = 'active'
+             AND (
+               member.organization_id = identity.organization_id
+               OR (identity.organization_id IS NULL AND member.user_id = identity.user_id)
+             )
+           WHERE identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL`;
   return {
     bindings: [listId, listId, listId],
     sql: `SELECT membership.user_id
@@ -57,7 +69,7 @@ function candidateUsersSql(listId: string, purpose: string): { sql: string; bind
               ON shared_membership.group_id = grant_row.group_id
              AND shared_membership.left_at IS NULL
            WHERE grant_row.mailing_list_id = ? AND grant_row.capability = 'subscribe'
-           ${purpose === "group" ? "" : "UNION SELECT id FROM users WHERE active = 1"}`,
+           ${purpose === "group" ? "" : `UNION ${memberAccounts}`}`,
   };
 }
 

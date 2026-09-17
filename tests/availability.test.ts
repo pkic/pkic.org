@@ -75,15 +75,40 @@ describe("availability across Worker entry points", () => {
     });
     expect(await processPendingOutbox(environment.DB, environment)).toEqual({ processed: 0, failed: 0 });
   });
-  it("explicitly rejects paused inbound mail or forwards to the configured mailbox", async () => {
-    const message = { setReject: vi.fn(), forward: vi.fn(async () => undefined) } as unknown as ForwardableEmailMessage;
-    const environment = paused();
-    await app.email(message, environment, createExecutionContext());
-    expect(message.setReject).toHaveBeenCalledOnce();
-    expect(message.forward).not.toHaveBeenCalled();
-    environment.PAUSED_EMAIL_FORWARD_TO = "backup@example.test";
-    await app.email(message, environment, createExecutionContext());
-    expect(message.forward).toHaveBeenCalledWith("backup@example.test");
+  it.each(["maintenance", "emergency"])(
+    "defers inbound mail during %s without permanent rejection or forwarding",
+    async (mode) => {
+      const message = { setReject: vi.fn(), forward: vi.fn() } as unknown as ForwardableEmailMessage;
+      await expect(app.email(message, paused(mode), createExecutionContext())).rejects.toMatchObject({
+        code: "SERVICE_UNAVAILABLE",
+      });
+      expect(message.setReject).not.toHaveBeenCalled();
+      expect(message.forward).not.toHaveBeenCalled();
+    },
+  );
+  it("defers email-only scheduled maintenance while HTTP remains available", async () => {
+    const environment = {
+      ...paused("normal"),
+      MAINTENANCE_SCHEDULE: JSON.stringify({
+        version: 1,
+        windows: [
+          {
+            id: "email-upgrade",
+            message: "Email maintenance",
+            policy: "pause",
+            channels: ["email"],
+            startsAt: new Date(Date.now() - 60_000).toISOString(),
+            endsAt: new Date(Date.now() + 60_000).toISOString(),
+          },
+        ],
+      }),
+    };
+    expect(getAvailability(environment).mode).toBe("normal");
+    const message = { setReject: vi.fn() } as unknown as ForwardableEmailMessage;
+    await expect(app.email(message, environment, createExecutionContext())).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+    });
+    expect(message.setReject).not.toHaveBeenCalled();
   });
   it("uses exact UTC window boundaries and never expires emergency mode", () => {
     const environment = {

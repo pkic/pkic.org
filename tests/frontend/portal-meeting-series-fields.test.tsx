@@ -104,7 +104,7 @@ describe("meeting series fields", () => {
     expect(visibility.selectedOptions[0]?.textContent).toBe(EVENT_VISIBILITY_LABELS.group_members);
 
     const eligibility = controlFor<HTMLSelectElement>(page, "Attendee eligibility");
-    expect(eligibility.selectedOptions[0]?.textContent).toBe("Owning group");
+    expect(eligibility.selectedOptions[0]?.textContent).toBe("Members of this group");
 
     const guests = controlFor<HTMLSelectElement>(page, "External guests");
     expect(guests.selectedOptions[0]?.textContent).toBe("Invite per occurrence");

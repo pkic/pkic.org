@@ -214,7 +214,7 @@ describe("portal landing", () => {
     await settle();
 
     const events = panelNamed(container, "Upcoming events");
-    const link = events.querySelector<HTMLAnchorElement>("a[href='/events/pqc-2026']");
+    const link = events.querySelector<HTMLAnchorElement>("a[href='#/events/pqc-2026']");
     expect(link?.textContent).toBe("PQC Conference 2026");
     expect(events.textContent).toContain("Amsterdam");
     expect(events.querySelector("ul")?.getAttribute("aria-label")).toBe("Upcoming events");

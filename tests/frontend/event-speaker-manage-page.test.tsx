@@ -158,6 +158,16 @@ async function boot(): Promise<void> {
     await import("../../assets/ts/event-flows/speaker-manage-page");
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  // The first visit loads the shared editor chunk before revealing the form.
+  await vi.waitFor(
+    async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(document.querySelector<HTMLElement>("[data-speaker-loading]")?.hidden).toBe(true);
+    },
+    { timeout: 5_000 },
+  );
 }
 
 function panel(root: ParentNode, name: string): HTMLElement {

@@ -45,7 +45,6 @@ export const GroupEventEmailCampaignPreviewCreate = openApiRoute(
         actorId: context.actor.id,
         appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         signingSecret: requireInternalSecret(c.env),
-        maxRecipients: getConfig(c.env).eventCampaignMaxRecipients,
       }),
     );
   },
@@ -59,7 +58,6 @@ export const GroupEventEmailCampaignCreate = openApiRoute(
       actorId: context.actor.id,
       appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
       signingSecret: requireInternalSecret(c.env),
-      maxRecipients: getConfig(c.env).eventCampaignMaxRecipients,
     });
     c.executionCtx.waitUntil(
       processPendingOutboxBackground(

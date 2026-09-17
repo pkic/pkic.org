@@ -11,9 +11,13 @@ export interface SendgridMessage {
   html: string;
   text: string;
   calendarIcsContent?: string;
+  /** The iTIP method of the inline calendar part; REQUEST when not said. */
+  calendarMethod?: "REQUEST" | "CANCEL";
   categories?: string[];
   replyTo?: string;
   attachments?: Array<{ filename: string; contentType: string; base64Content: string }>;
+  /** The sender the template names; absent, the environment's configured sender (#106). */
+  from?: { email: string; name?: string | null };
 }
 
 function toSendgridMimeType(contentType: string): string {
@@ -25,8 +29,8 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     throw new AppError(500, "SENDGRID_NOT_CONFIGURED", "SENDGRID_API_KEY is not configured");
   }
 
-  const fromEmail = env.FROM_EMAIL ?? env.SENDGRID_FROM_EMAIL ?? "noreply@pkic.org";
-  const fromName = env.FROM_NAME ?? env.SENDGRID_FROM_NAME ?? "PKI Consortium";
+  const fromEmail = message.from?.email ?? env.FROM_EMAIL ?? env.SENDGRID_FROM_EMAIL ?? "noreply@pkic.org";
+  const fromName = message.from?.name ?? env.FROM_NAME ?? env.SENDGRID_FROM_NAME ?? "PKI Consortium";
 
   const payload: Record<string, unknown> = {
     personalizations: [
@@ -48,7 +52,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
       ...(message.calendarIcsContent
         ? [
             {
-              type: "text/calendar; method=REQUEST",
+              type: `text/calendar; method=${message.calendarMethod ?? "REQUEST"}`,
               value: message.calendarIcsContent,
             },
           ]

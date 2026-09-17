@@ -26,6 +26,7 @@ import { NotFoundPanel } from "../components/NotFoundPanel";
 import { Badge as StatusBadge } from "../components/Badge";
 import { Badge } from "../ui/Badge";
 import { publicVoteGetResponseSchema, type PublicVoteGetResponse } from "../../shared/schemas/votes";
+import { Markdown } from "../components/Markdown";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -159,7 +160,7 @@ export function VoteDetailView({ vote, indexHref }: { vote: PublicVote; indexHre
       </div>
       <div class="pk-stack pk-stack--tight">
         <h1>{vote.title}</h1>
-        {vote.description && <p class="pk-lede">{vote.description}</p>}
+        {vote.description && <Markdown className="pk-lede" markdown={vote.description} />}
         <p class="pk-small">
           Opens {formatDateTime(vote.opensAt)} · Closes {formatDateTime(vote.closesAt)}
         </p>

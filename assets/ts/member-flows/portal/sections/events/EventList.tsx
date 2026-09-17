@@ -12,6 +12,7 @@ import {
 } from "../../../../../shared/schemas/event-management";
 import { usePortalHashLocation } from "../../hash-location";
 import { formatEventWhen, formatRelativeDays } from "../../ui";
+import { eventDestination } from "./event-destination";
 import { ViewerEventState } from "./ViewerEventState";
 
 // ────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ function isAudienceEvent(event: EventRow): event is AudienceEventRow {
 }
 
 function eventWhen(event: EventRow): string {
-  const location = isAudienceEvent(event) ? event.location : null;
+  const location = null;
   const attendanceType = isAudienceEvent(event) ? (event.viewer?.attendanceType ?? null) : null;
   return formatEventWhen(event.startsAt, event.timezone, location, attendanceType);
 }
@@ -108,7 +109,7 @@ export function EventList() {
         columns={[
           {
             header: "Event",
-            cell: (e) => <strong class="adm-cell-name">{e.name}</strong>,
+            cell: (e) => <strong>{e.name}</strong>,
             sort: { asc: "name", desc: "-name" },
           },
           {
@@ -126,6 +127,10 @@ export function EventList() {
             },
             width: "fit",
             sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: scope === "past" ? "desc" : "asc" },
+          },
+          {
+            header: "Location",
+            cell: (e) => e.location ?? "—",
           },
           {
             header: "Group",
@@ -148,7 +153,10 @@ export function EventList() {
             cell: (e) => <RowActions subject={e.name} actions={workspaceActions(e, navigate)} />,
           },
         ]}
-        rowAction={(e) => (e.basePath ? { label: `Open ${e.name}`, href: e.basePath } : undefined)}
+        rowAction={(e) => {
+          const href = eventDestination(e);
+          return href ? { label: `Open ${e.name}`, href } : undefined;
+        }}
         empty={
           <EmptyState
             title={scope === "past" ? "No past events" : "No upcoming events"}

@@ -83,6 +83,14 @@ async function requireJobRow(db: DatabaseLike, jobKey: string): Promise<Schedule
   return row;
 }
 
+export async function getScheduledJobForActor(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  jobKey: string,
+): Promise<ScheduledJobResource> {
+  return toScheduledJobResource(toScheduledJob(await requireJobRow(db, jobKey)), actor);
+}
+
 function schedulerAuthorizationChanged(): AppError {
   return new AppError(
     409,

@@ -288,7 +288,7 @@ describe("membership provisioning and capacities", () => {
       method: "POST",
       body: JSON.stringify(orgMemberBody({ membershipCategory: "H6" })),
     });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(422);
   });
 
   it("reuses an existing organization when the normalized name already exists", async () => {
@@ -431,7 +431,7 @@ describe("membership provisioning and capacities", () => {
       });
       expect(response.status).toBe(422);
       expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
-        "MEMBERSHIP_CATEGORY_KIND_MISMATCH",
+        "MEMBERSHIP_CATEGORY_TYPE_MISMATCH",
       );
       expect(
         await queryAll<{ category_code: string }>(

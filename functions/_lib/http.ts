@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception";
 import { dependencyFailure } from "./dependency-failure";
 import { isAppError } from "./errors";
 
@@ -95,6 +96,15 @@ export function handleError(error: unknown): Response {
       error.status,
     );
   }
+
+  /*
+   * A request the framework already refused — chanfana's contract validation
+   * throws Hono's HTTPException carrying the 400 it wants sent — is not a
+   * crash. It used to fall through to here, be logged as unhandled with a
+   * full stack, and reach the client as a 500 "Internal server error" in
+   * place of the validation details the exception was carrying (#87).
+   */
+  if (error instanceof HTTPException) return error.getResponse();
 
   console.error("[handleError] Unhandled error:", error);
   return json(

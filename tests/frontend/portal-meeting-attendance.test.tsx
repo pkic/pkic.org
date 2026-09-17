@@ -17,9 +17,8 @@ import {
   type GroupEventSeries,
 } from "../../assets/shared/schemas/event-series";
 import { MeetingAttendance } from "../../assets/ts/member-flows/portal/sections/management/MeetingAttendance";
-import { MeetingOccurrenceDetail } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceDetail";
+import { MeetingOccurrenceRecord } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceRecord";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
-import { isCurrentTab, tabs } from "./helpers/tabs";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
@@ -103,6 +102,9 @@ function guestOccurrence(overrides: Partial<EventOccurrence> = {}): EventOccurre
     attendanceVerifiedCount: 0,
     invitationsRound: 0,
     invitationsSentAt: null,
+    invitedCount: 0,
+    calendarSequence: 0,
+    rsvp: { accepted: 0, declined: 0, tentative: 0 },
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-25T10:00:00.000Z",
     ...overrides,
@@ -220,32 +222,41 @@ describe("meeting occurrence attendance", () => {
     expect(container.querySelector("table")).toBeNull();
   });
 
-  it("opens the occurrence as a named panel whose tab points at the panel it controls", async () => {
+  it("opens the occurrence as a page of its own, with routed facets and the attendance list under one", async () => {
+    const occurrence = guestOccurrence();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => attendancePage([])),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (href.endsWith(`/occurrences/${occurrence.id}`)) return json({ occurrence });
+        return attendancePage([]);
+      }),
     );
 
-    const occurrence = guestOccurrence();
     const container = mount(
-      <MeetingOccurrenceDetail
-        base={BASE}
-        occurrence={occurrence}
-        series={baseSeries()}
-        canManage={false}
-        canManageAttendance
-        onChanged={vi.fn()}
+      <MeetingOccurrenceRecord
+        groupId={GROUP_ID}
+        series={baseSeries({ capabilities: ["manage_attendance"] })}
+        occurrenceId={occurrence.id}
+        onSeriesChanged={vi.fn()}
       />,
     );
     await settle();
+    await settle();
 
-    const panel = container.querySelector(`#meeting-occurrence-detail-${occurrence.id}`);
-    expect(panel?.getAttribute("aria-label")).toBe("Occurrence of Architecture call");
-    const tab = tabs(container).find(isCurrentTab)!;
-    expect(tab.textContent).toBe("Attendance");
-    // The tab names the region it swaps in, rather than promising a panel that
-    // is not there.
-    const controlled = tab.getAttribute("aria-controls")!;
-    expect(container.querySelector(`#${controlled}`)?.getAttribute("role")).toBe("tabpanel");
+    // The record heads itself with the occurrence, not the series (#126).
+    expect(container.querySelector("h3")?.textContent).toContain("2026");
+    // A reader who may only take attendance gets that facet alone — one
+    // section, no tab strip, and calendar download without management commands.
+    expect(container.querySelector('[aria-label="Occurrence sections"]')).toBeNull();
+    expect(container.querySelector('section[aria-label="Occurrence attendance"] caption')?.textContent).toBe(
+      "Meeting attendance",
+    );
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Occurrence actions"]')!.click(),
+    );
+    expect([...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).toEqual([
+      "Download calendar",
+    ]);
   });
 });

@@ -14,6 +14,7 @@ import { isElectionResult, isMotionResult } from "./shared";
 import { BallotForm } from "./BallotForm";
 import { ConsultationResponseForm } from "./ConsultationForm";
 import { MotionResultView, ElectionResultView } from "./VoteResults";
+import { Markdown } from "../../../../components/Markdown";
 
 export function VoteDetails({
   vote,
@@ -26,7 +27,7 @@ export function VoteDetails({
 }) {
   return (
     <div class="pk pk-stack">
-      {vote.description && <p>{vote.description}</p>}
+      {vote.description && <Markdown markdown={vote.description} />}
       {vote.eligibleCategories && vote.eligibleCategories.length > 0 && (
         <p class="pk-small">Eligible categories: {vote.eligibleCategories.join(", ")}</p>
       )}

@@ -31,7 +31,16 @@ import {
 } from "../../assets/shared/schemas/membership-application-management";
 import { ApplicationCommunicationsCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationCommunicationsCard";
 import { ApiClientError } from "../../assets/ts/shared/api-client";
-import { buttonNamed, buttonNames, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import {
+  buttonNamed,
+  buttonNames,
+  controlFor,
+  labelNames,
+  markdownControl,
+  markdownValue,
+  typeInto,
+  typeMarkdown,
+} from "./helpers/labelled-control";
 
 const NOW = "2026-08-31T09:00:00.000Z";
 
@@ -59,8 +68,9 @@ function detail(communications: MembershipApplicationCommunication[] = []): Memb
     applicantName: "Example Applicant",
     organizationName: "Example Organization",
     membershipCategory: "F",
+    currentRequirement: null,
     membershipCategoryLabel: "General Member",
-    stage: "ec_review",
+    stage: "processing",
     onHoldSubtype: null,
     assignedToUserId: null,
     createdAt: NOW,
@@ -70,8 +80,6 @@ function detail(communications: MembershipApplicationCommunication[] = []): Memb
     requestedWorkingGroups: [],
     events: [],
     communications,
-    concerns: [],
-    ecDecisions: [],
   } as MembershipApplicationDetail;
 }
 
@@ -138,7 +146,7 @@ function mountCard(props: Partial<Parameters<typeof ApplicationCommunicationsCar
 }
 
 describe("membership application communications card", () => {
-  it("names itself and its record table, and says an empty timeline in words", () => {
+  it("names itself and its record table, and says an empty timeline in words", async () => {
     const page = mountCard();
 
     const region = page.querySelector("section");
@@ -153,7 +161,7 @@ describe("membership application communications card", () => {
     expect(page.textContent).toContain("Nothing has been emailed or noted on this application yet.");
   });
 
-  it("shows each record with the word for its kind, not only a colour", () => {
+  it("shows each record with the word for its kind, not only a colour", async () => {
     const page = mountCard({
       detail: detail([
         communication(),
@@ -176,16 +184,19 @@ describe("membership application communications card", () => {
     expect(rows[1]?.textContent).not.toContain("Emailed");
   });
 
-  it("names every control through its own label", () => {
+  it("names every control through its own label", async () => {
     const page = mountCard();
 
     expect(labelNames(page)).toEqual(["Subject", "Message", "Internal note"]);
     expect(controlFor(page, "Subject").value).toBe("");
-    expect(controlFor<HTMLTextAreaElement>(page, "Message").tagName).toBe("TEXTAREA");
+    // The message is the shared Markdown editor (#114), a textbox canvas.
+    expect((await markdownControl(page, "Message")).getAttribute("role")).toBe("textbox");
     expect(controlFor<HTMLTextAreaElement>(page, "Internal note").tagName).toBe("TEXTAREA");
     // The help text is the promise the contract keeps: what is typed is what
     // is sent.
-    expect(page.textContent).toContain("Emailed to the applicant exactly as written, and recorded on this timeline.");
+    expect(page.textContent).toContain(
+      "Emailed to the applicant inside the application_request_information template, and recorded on this timeline.",
+    );
     expect(page.textContent).toContain("Never emailed. Visible to staff only.");
   });
 
@@ -206,7 +217,7 @@ describe("membership application communications card", () => {
     // A blocking error interrupts rather than waiting its turn.
     expect(message?.getAttribute("role")).toBe("alert");
 
-    const body = controlFor<HTMLTextAreaElement>(page, "Message");
+    const body = await markdownControl(page, "Message");
     expect(body.getAttribute("aria-invalid")).toBe("true");
     expect(describedBy(page, body)?.textContent).toContain("Enter the message to send.");
 
@@ -223,24 +234,24 @@ describe("membership application communications card", () => {
     });
 
     await typeInto(controlFor(page, "Subject"), "  Decision on your application  ");
-    await typeInto(controlFor<HTMLTextAreaElement>(page, "Message"), "  The EC has reviewed it.  ");
+    await typeMarkdown(page, "Message", "  The EC has reviewed it.  ");
     await submit(formUnder(page, "Send communication"));
 
     expect(sent).toHaveLength(1);
     // Checked against the shared contract, not against a literal copy of what
     // the component just sent.
     const parsed = applicationCommunicationCreateSchema.parse(sent[0]);
-    expect(parsed).toEqual({ subject: "Decision on your application", body: "The EC has reviewed it." });
-
-    // No template is chosen here, and the contract reads that absence as
-    // "deliver this verbatim". The request must therefore carry no
-    // `templateKey` at all — an empty or placeholder one the contract would
-    // have to interpret is exactly what put a canned subject on these emails.
-    expect(parsed.templateKey).toBeUndefined();
-    expect(Object.keys(sent[0] as object)).toEqual(["subject", "body"]);
+    // The message rides the application's own request-information template
+    // (#108): the typed subject and body, and the one template key.
+    expect(parsed).toEqual({
+      subject: "Decision on your application",
+      body: "The EC has reviewed it.",
+      templateKey: "application_request_information",
+    });
+    expect(Object.keys(sent[0] as object)).toEqual(["subject", "body", "templateKey"]);
 
     expect(controlFor(page, "Subject").value).toBe("");
-    expect(controlFor<HTMLTextAreaElement>(page, "Message").value).toBe("");
+    expect(await markdownValue(page, "Message")).toBe("");
   });
 
   it("announces a rejected send and keeps what was typed", async () => {
@@ -251,7 +262,7 @@ describe("membership application communications card", () => {
     });
 
     await typeInto(controlFor(page, "Subject"), "Decision");
-    await typeInto(controlFor<HTMLTextAreaElement>(page, "Message"), "The EC has reviewed it.");
+    await typeMarkdown(page, "Message", "The EC has reviewed it.");
     await submit(formUnder(page, "Send communication"));
 
     const alert = [...page.querySelectorAll('[role="alert"]')].find((node) =>
@@ -260,7 +271,7 @@ describe("membership application communications card", () => {
     expect(alert).toBeDefined();
     // A failed send is a retry, not a restart.
     expect(controlFor(page, "Subject").value).toBe("Decision");
-    expect(controlFor<HTMLTextAreaElement>(page, "Message").value).toBe("The EC has reviewed it.");
+    expect(await markdownValue(page, "Message")).toBe("The EC has reviewed it.");
     expect(buttonNamed(page, "Send")).toBeDefined();
   });
 
@@ -272,7 +283,7 @@ describe("membership application communications card", () => {
     });
 
     await typeInto(controlFor(page, "Subject"), "Decision");
-    await typeInto(controlFor<HTMLTextAreaElement>(page, "Message"), "The EC has reviewed it.");
+    await typeMarkdown(page, "Message", "The EC has reviewed it.");
     await submit(formUnder(page, "Send communication"));
 
     // The refusal lands on the field the server named, the way the
@@ -312,7 +323,7 @@ describe("membership application communications card", () => {
     expect(controlFor<HTMLTextAreaElement>(page, "Internal note").getAttribute("aria-invalid")).toBeNull();
   });
 
-  it("offers a reader without write access the record, and no way to add to it", () => {
+  it("offers a reader without write access the record, and no way to add to it", async () => {
     const page = mountCard({ canWrite: false, detail: detail([communication()]) });
 
     expect(page.querySelector("caption")?.textContent).toBe("Communication and note history");

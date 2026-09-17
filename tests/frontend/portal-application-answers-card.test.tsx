@@ -26,7 +26,7 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     organizationName: "Example Organization",
     membershipCategory: "F",
     membershipCategoryLabel: "General Member",
-    stage: "ec_review",
+    stage: "processing",
     onHoldSubtype: null,
     assignedToUserId: null,
     createdAt: NOW,
@@ -36,8 +36,6 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     requestedWorkingGroups: [],
     events: [],
     communications: [],
-    concerns: [],
-    ecDecisions: [],
     ...overrides,
   } as MembershipApplicationDetail;
 }

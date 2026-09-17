@@ -5,12 +5,13 @@ import { Button } from "../ui/Button";
 import { Radio } from "../ui/Checkbox";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 import { Field, type FieldControlProps } from "../ui/Field";
-import { Textarea, TextInput } from "../ui/TextControl";
+import { TextInput } from "../ui/TextControl";
+import { MarkdownEditor } from "./markdown-editor/MarkdownInput";
 // `pk-field`, `pk-field__label`, `pk-field__help` and `pk-field__message` are
 // written here as class names rather than reached through a component, so
-// this module has to pull their stylesheet into its own chunk. `TextInput`,
-// `Textarea` and `Radio` already import it; naming it here keeps the file
-// honest if those are ever swapped for plain elements.
+// this module has to pull their stylesheet into its own chunk. `TextInput`
+// and `Radio` already import it; naming it here keeps the file honest if
+// those are ever swapped for plain elements.
 import "../ui/Field.css";
 
 export interface SpeakerFieldNames {
@@ -147,7 +148,21 @@ export function SpeakerFormCard({
           </div>
 
           <SpeakerField id={`${idPrefix}-bio`} label="Bio" help={bioHelp} errorPath={errorPaths?.bio}>
-            {(control) => <Textarea {...control} name={fields.bio} rows={4} required minLength={40} maxLength={5000} />}
+            {/* The shared Markdown editor (#114). It posts the Markdown through
+                a hidden input under the field's name, so the form still reads
+                it the way it reads every other field; the length rule is the
+                server's, reported against the field. */}
+            {(control) => (
+              <MarkdownEditor
+                variant="compact"
+                {...control}
+                required
+                name={fields.bio}
+                label="Bio"
+                initialValue=""
+                onChange={() => {}}
+              />
+            )}
           </SpeakerField>
 
           {roleField && (

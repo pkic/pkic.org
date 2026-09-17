@@ -161,6 +161,33 @@ describe("Google Groups sync", () => {
     vi.unstubAllGlobals();
   });
 
+  it("rechecks the group's pause before each provider request in an already claimed batch", async () => {
+    const [list] = await queryAll<{ email: string; group_id: string }>(
+      env.DB,
+      "SELECT email, group_id FROM mailing_lists WHERE group_id IS NOT NULL LIMIT 1",
+    );
+    for (const email of ["first@example.test", "second@example.test"])
+      await enqueueGoogleGroupsSync(env.DB, {
+        userId: await insertUser(email),
+        googleGroupEmail: list.email,
+        action: "add_to_list",
+      });
+    const configured = await fakeServiceAccountEnv();
+    const { fetchMock, directoryStarted, releaseDirectory } = stubGoogleFetchWithFirstDirectoryCallPaused();
+    const processing = processGoogleGroupsSyncQueue(env.DB, configured, 2);
+    await directoryStarted;
+    await env.DB.prepare(
+      "INSERT INTO group_mailing_sync_settings (group_id, enabled, revision, updated_at) VALUES (?, 0, 1, ?)",
+    )
+      .bind(list.group_id, new Date().toISOString())
+      .run();
+    releaseDirectory();
+    const result = await processing;
+    expect(result.succeeded).toBe(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url !== "https://oauth2.googleapis.com/token")).toHaveLength(1);
+    expect(await listPendingGoogleGroupsSync(env.DB)).toHaveLength(0);
+  });
+
   it("enqueues a pending sync row", async () => {
     const userId = await insertUser("gg-enqueue@example.test");
     const id = await enqueueGoogleGroupsSync(env.DB, {

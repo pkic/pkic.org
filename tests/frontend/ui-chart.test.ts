@@ -21,6 +21,7 @@ import {
   svgLineChart,
   svgStackedBarChart,
   svgStatusSegmentBar,
+  svgSegmentBar,
   recentActivityChart,
 } from "../../assets/ts/ui/chart";
 
@@ -50,7 +51,7 @@ describe("chart accessibility", () => {
 
     const table = host.querySelector("table");
     expect(table).not.toBeNull();
-    expect(table?.className).toContain("pk-sr-only");
+    expect(table?.parentElement?.className).toContain("pk-sr-only");
     expect(table?.querySelector("caption")?.textContent).toBe("Registrations per day");
     expect([...table!.querySelectorAll("th[scope='col']")].map((th) => th.textContent)).toEqual([
       "Period",
@@ -134,6 +135,24 @@ describe("chart accessibility", () => {
       "Confirmed770%",
       "Cancelled330%",
     ]);
+  });
+
+  it("keeps tiny segments inside the plot and labels each promoter outcome", () => {
+    const host = parse(
+      svgSegmentBar(
+        [
+          { label: "Accepted", value: 1, color: "var(--pk-ok)" },
+          { label: "Pending", value: 1999, color: "var(--pk-info)" },
+        ],
+        2000,
+        { caption: "Invitation outcomes" },
+      ),
+    );
+    for (const rect of host.querySelectorAll("rect")) {
+      expect(Number(rect.getAttribute("x"))).toBeGreaterThanOrEqual(0);
+      expect(Number(rect.getAttribute("width"))).toBeGreaterThan(0);
+    }
+    expect(host.querySelector("tbody")?.textContent).toContain("Accepted1");
   });
 
   it("says so plainly when there is nothing to plot, rather than drawing an empty frame", () => {

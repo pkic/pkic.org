@@ -16,13 +16,11 @@ import { eventProposalDetailViewPath } from "./proposal-paths";
 import { ButtonLink } from "../../../../../ui/Button";
 
 function ProposalsList({ slug }: { slug: string }) {
-  const [, navigate] = usePortalHashLocation();
-
   return (
     <EventProposalsTable
       endpoint={`/api/v1/events/${encodeURIComponent(slug)}/proposals`}
-      storageKey={`adm_proposal_filters_${slug}`}
-      onSelect={(proposal) => navigate(eventProposalDetailViewPath(slug, proposal.id))}
+      urlState="proposals"
+      rowHref={(proposal) => usePortalHashLocation.hrefs(eventProposalDetailViewPath(slug, proposal.id))}
       toolbarPrefix={(_, access) =>
         access?.canRead ? (
           <div class="pk-cluster" role="group" aria-label="Download event presentations">

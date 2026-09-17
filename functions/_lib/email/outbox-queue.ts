@@ -9,11 +9,20 @@ import type { QueuedEmailAttachment } from "./attachments";
 import type { EmailMessageType } from "../../../assets/shared/schemas/email-templates";
 
 export interface CalendarPayload {
-  registrationId: string;
+  /** The registration the invite belongs to; a meeting invite names its occurrence instead. */
+  registrationId?: string;
+  /** The meeting occurrence the invite belongs to. */
+  occurrenceId?: string;
   eventId: string;
   icsUid: string;
   icsFiles: Array<{ uid: string; filename: string; content: string }>;
   inlineContent?: string;
+  /**
+   * The iTIP method the inline part is sent under. A calendar client only
+   * shows the accept/decline prompt for a REQUEST and only removes an entry
+   * for a CANCEL, so the transport has to say which this is.
+   */
+  method?: "REQUEST" | "CANCEL";
 }
 
 export interface QueueEmailPayload {
@@ -173,9 +182,14 @@ export interface BulkEmailQueueRow {
   recipientEmail: string;
   recipientUserId?: string | null;
   templateKey: string;
-  subject: string;
+  /** The subject when the template has none; null leaves it to the template. */
+  subject: string | null;
   data: Record<string, unknown>;
   attachments?: QueuedEmailAttachment[];
+  /** A calendar invitation delivered with the message, as the single-row queue takes it. */
+  calendar?: CalendarPayload;
+  /** The Return-Path for bounces and, for a calendar invite, the organizer replies go to. */
+  bounceAddress?: string;
   capabilityLinkValues?: unknown[];
   messageType: EmailMessageType;
   /** Only insert this outbox row if the same D1 batch inserted this invite. */
@@ -205,7 +219,7 @@ interface SerializedBulkEmailQueueRow {
   templateKey: string;
   recipientUserId: string | null;
   recipientEmail: string;
-  subject: string;
+  subject: string | null;
   payloadJson: string;
   messageType: EmailMessageType;
   sendAfter: string;
@@ -219,7 +233,12 @@ interface SerializedBulkEmailQueueRow {
 }
 
 function serializeBulkEmailQueueRow(row: BulkEmailQueueRow, queuedAt: string): SerializedBulkEmailQueueRow {
-  const data = row.attachments?.length ? { ...row.data, __attachments: row.attachments } : row.data;
+  // The same reserved keys the single-row queue writes, so the sender reads
+  // one payload shape whichever way the row was queued.
+  const data: Record<string, unknown> = { ...row.data };
+  if (row.attachments?.length) data.__attachments = row.attachments;
+  if (row.calendar) data.__calendarInvite = row.calendar;
+  if (row.bounceAddress) data.__bounceAddress = row.bounceAddress;
   return {
     id: resolveOutboxId(row),
     eventId: row.eventId ?? null,
@@ -250,11 +269,21 @@ export function prepareBulkQueueEmailChunkStatements(
   db: DatabaseLike,
   rows: BulkEmailQueueRow[],
   queuedAt = nowIso(),
+  condition?: { sql: string; bindings: unknown[] },
 ): PreparedBulkEmailQueueChunk[] {
   const serializedRows = rows.map((row) => serializeBulkEmailQueueRow(row, queuedAt));
   return chunkJsonRows(serializedRows).map((chunk) => ({
     ids: chunk.rows.map((row) => row.id),
-    statement: db.prepare(BULK_EMAIL_OUTBOX_INSERT_SQL).bind(chunk.json),
+    statement: db
+      .prepare(
+        condition
+          ? BULK_EMAIL_OUTBOX_INSERT_SQL.replace(
+              EMAIL_OUTBOX_CONFLICT_SQL,
+              `AND EXISTS (${condition.sql}) ${EMAIL_OUTBOX_CONFLICT_SQL}`,
+            )
+          : BULK_EMAIL_OUTBOX_INSERT_SQL,
+      )
+      .bind(chunk.json, ...(condition?.bindings ?? [])),
   }));
 }
 

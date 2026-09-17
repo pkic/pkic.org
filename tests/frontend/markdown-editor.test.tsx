@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
+import { TemplateHighlighting } from "../../assets/ts/components/markdown-editor/template-highlighting";
 import { Editor } from "@tiptap/core";
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -97,5 +98,24 @@ describe("author content remains data", () => {
       markdownMediaInsertSchema.safeParse({ kind: "video", url: "https://example.test/video", description: "" })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("visual template highlighting", () => {
+  it("highlights nested conditions and variables without serializing decorations", () => {
+    const content =
+      "{{#if hasBio}}\n\nHello {{firstName}}.\n\n{{#unless hasHeadshot}}Upload a photo.{{/unless}}\n\n{{/if}}";
+    const instance = new Editor({
+      injectCSS: false,
+      extensions: [...editorExtensions(), TemplateHighlighting],
+      content,
+      contentType: "markdown",
+    });
+    editors.push(instance);
+    expect(instance.view.dom.querySelector(".adm-template-token-var")?.textContent).toBe("{{firstName}}");
+    expect(instance.view.dom.querySelectorAll(".adm-template-token-depth-0")).toHaveLength(2);
+    expect(instance.view.dom.querySelectorAll(".adm-template-token-depth-1")).toHaveLength(2);
+    expect(instance.getMarkdown()).toBe(content);
+    expect(instance.getHTML()).not.toContain("adm-template-token");
   });
 });

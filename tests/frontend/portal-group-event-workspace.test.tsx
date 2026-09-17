@@ -190,6 +190,9 @@ describe("group event workspace", () => {
                 id: "10000000-0000-4000-8000-000000000009",
                 userEmail: "crew@example.test",
                 userId: "10000000-0000-4000-8000-000000000010",
+                userFirstName: null,
+                userLastName: null,
+                headshotUrl: null,
                 role: "volunteer",
                 grantedByUserId: null,
                 expiresAt: null,
@@ -285,14 +288,19 @@ describe("group event workspace", () => {
     expect(regions).toContain("Architecture workshop workspace");
     expect(regions).toContain("Overview — Architecture workshop");
 
-    // The overview is a term/value list, so every value is announced with the
-    // term it belongs to rather than as a loose run of text.
+    // The overview is a record: the schedule takes the width and the event's
+    // facts keep the column beside it, each a term/value list so every value
+    // is announced with the term it belongs to rather than as loose text.
     expect(Array.from(container.querySelectorAll("dl dt")).map((term) => term.textContent)).toEqual([
-      "When",
+      "Starts",
       "Ends",
+      "Time zone",
+      "Location",
       "Profile",
       "Registration",
-      "Location",
+      "Visibility",
+      "Source",
+      "Slug",
     ]);
 
     // A link that leaves the page says so in words, not by an icon alone —
@@ -379,6 +387,6 @@ describe("group event workspace", () => {
     await settle();
 
     expect(isCurrentTab(tab(container, "Proposals"))).toBe(true);
-    expect(container.textContent).toContain("Proposal program");
+    expect(container.querySelector("caption")?.textContent).toBe("Event proposals");
   });
 });

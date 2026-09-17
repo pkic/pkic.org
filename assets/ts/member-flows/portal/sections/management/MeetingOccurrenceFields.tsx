@@ -14,7 +14,6 @@
  */
 
 import { useId } from "preact/hooks";
-import { EVENT_OCCURRENCE_STATUSES, type EventOccurrenceStatus } from "../../../../../shared/schemas/event-series";
 import { Field } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
 
@@ -23,7 +22,6 @@ export type ProviderUrlAction = "keep" | "replace" | "remove";
 export interface MeetingOccurrenceDraft {
   startsAt: string;
   endsAt: string;
-  status: EventOccurrenceStatus;
   location: string;
   providerUrlAction: ProviderUrlAction;
   providerJoinUrl: string;
@@ -80,27 +78,6 @@ export function MeetingOccurrenceFields({
           />
         )}
       </Field>
-
-      {existing && (
-        <Field label="Status">
-          {(control) => (
-            <Select
-              {...control}
-              value={draft.status}
-              disabled={disabled}
-              onChange={(event) =>
-                updateDraft(draft, onChange, "status", event.currentTarget.value as EventOccurrenceStatus)
-              }
-            >
-              {EVENT_OCCURRENCE_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-      )}
 
       <Field label="Location override">
         {(control) => (

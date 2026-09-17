@@ -98,9 +98,10 @@
         // (exact frontend hostnames), and the TURNSTILE_SECRET Worker secret.
         // Keep preview and production configuration separate. False disables the gate.
         "TURNSTILE_ENABLED": "false",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAE6XHgcF51m-GKnM",
+        "TURNSTILE_HOSTNAMES": "pkic.org",
         // Emergency mode never expires. Planned windows require both UTC instants.
         "SERVICE_MODE": "normal",
-        "RSVP_EMAIL_QUEUE_ENABLED": "false",
         // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
         "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "APP_BASE_URL": "https://pkic.org",
@@ -125,11 +126,8 @@
         "SCHEDULED_DUE_WORK_MAX_PASSES": "50",
         "SCHEDULED_DUE_WORK_MAX_MS": "600000",
         "SCHEDULED_D1_QUERY_BUDGET": "900",
-        "SCHEDULED_CONSULTATION_BATCH_LIMIT": "100",
         "SCHEDULED_ON_HOLD_REMINDER_LIMIT": "100",
-        "SCHEDULED_EC_AUTO_APPROVE_LIMIT": "25",
         "SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT": "25",
-        "EVENT_CAMPAIGN_MAX_RECIPIENTS": "2000",
         "CSV_EXPORT_MAX_ROWS": "5000",
         "CSV_EXPORT_MAX_BYTES": "8388608",
         "APPLICATION_DOCUMENT_MAX_BYTES": "20971520",
@@ -226,9 +224,10 @@
         // (exact frontend hostnames), and the TURNSTILE_SECRET Worker secret.
         // Keep preview and production configuration separate. False disables the gate.
         "TURNSTILE_ENABLED": "false",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAE6XfYe1tYFi5T0U",
+        "TURNSTILE_HOSTNAMES": "pkic-org-preview.pkic.workers.dev",
         // Emergency mode never expires. Planned windows require both UTC instants.
         "SERVICE_MODE": "normal",
-        "RSVP_EMAIL_QUEUE_ENABLED": "false",
         // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
         "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev",
@@ -253,11 +252,8 @@
         "SCHEDULED_DUE_WORK_MAX_PASSES": "50",
         "SCHEDULED_DUE_WORK_MAX_MS": "600000",
         "SCHEDULED_D1_QUERY_BUDGET": "900",
-        "SCHEDULED_CONSULTATION_BATCH_LIMIT": "100",
         "SCHEDULED_ON_HOLD_REMINDER_LIMIT": "100",
-        "SCHEDULED_EC_AUTO_APPROVE_LIMIT": "25",
         "SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT": "25",
-        "EVENT_CAMPAIGN_MAX_RECIPIENTS": "2000",
         "CSV_EXPORT_MAX_ROWS": "5000",
         "CSV_EXPORT_MAX_BYTES": "8388608",
         "APPLICATION_DOCUMENT_MAX_BYTES": "20971520",
@@ -319,20 +315,7 @@
           "migrations_dir": "migrations",
         },
       ],
-      "queues": {
-        "producers": [{ "binding": "RSVP_EMAIL_QUEUE", "queue": "pkic-rsvp-email-local" }],
-        "consumers": [
-          {
-            "queue": "pkic-rsvp-email-local",
-            "max_batch_size": 5,
-            "max_retries": 100,
-            "retry_delay": 3600,
-            "dead_letter_queue": "pkic-rsvp-email-dead-local",
-          },
-        ],
-      },
       "r2_buckets": [
-        { "binding": "RSVP_EMAIL_BUCKET", "bucket_name": "pkic-rsvp-email-local" },
         {
           "binding": "ASSETS_BUCKET",
           "bucket_name": "pkic-assets",
@@ -373,7 +356,6 @@
         "TURNSTILE_ENABLED": "false",
         // Emergency mode never expires. Planned windows require both UTC instants.
         "SERVICE_MODE": "normal",
-        "RSVP_EMAIL_QUEUE_ENABLED": "false",
         // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
         "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
@@ -398,11 +380,8 @@
         "SCHEDULED_DUE_WORK_MAX_PASSES": "50",
         "SCHEDULED_DUE_WORK_MAX_MS": "600000",
         "SCHEDULED_D1_QUERY_BUDGET": "900",
-        "SCHEDULED_CONSULTATION_BATCH_LIMIT": "100",
         "SCHEDULED_ON_HOLD_REMINDER_LIMIT": "100",
-        "SCHEDULED_EC_AUTO_APPROVE_LIMIT": "25",
         "SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT": "25",
-        "EVENT_CAMPAIGN_MAX_RECIPIENTS": "2000",
         "CSV_EXPORT_MAX_ROWS": "5000",
         "CSV_EXPORT_MAX_BYTES": "8388608",
         "APPLICATION_DOCUMENT_MAX_BYTES": "20971520",

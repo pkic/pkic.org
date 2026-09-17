@@ -1,13 +1,12 @@
 /**
  * Staff membership application management — list/detail, stage
- * transitions, communications/notes, EC decision staff override, approval.
+ * transitions, communications/notes, and evidence-based approval.
  */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
-import { ecDecisionCreateSchema, ecDecisionValueSchema } from "./ec-review";
 import { httpUrlSchema } from "./urls";
 import { groupLabelSchema } from "./groups";
 import { requiresPermissions } from "./route-contract";
@@ -32,6 +31,7 @@ export const membershipApplicationSummarySchema = z.object({
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
   membershipCategoryLabel: z.string(),
+  currentRequirement: z.string().nullable().default(null),
   stage: applicationStageSchema,
   onHoldSubtype: onHoldSubtypeSchema.nullable(),
   assignedToUserId: z.string().nullable(),
@@ -64,31 +64,12 @@ export const membershipApplicationCommunicationSchema = z.object({
   createdAt: z.string(),
 });
 
-export const membershipApplicationConcernSchema = z.object({
-  id: z.string(),
-  applicationId: z.string(),
-  submittedByUserId: z.string(),
-  concernText: z.string(),
-  createdAt: z.string(),
-});
-
-export const membershipApplicationEcDecisionSchema = z.object({
-  id: z.string(),
-  applicationId: z.string(),
-  ecMemberUserId: z.string(),
-  decision: ecDecisionValueSchema,
-  reason: z.string().nullable(),
-  createdAt: z.string(),
-});
-
 export const membershipApplicationDetailSchema = membershipApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
   requestedWorkingGroups: z.array(groupLabelSchema.pick({ slug: true, name: true })),
   events: z.array(membershipApplicationEventSchema),
   communications: z.array(membershipApplicationCommunicationSchema),
-  concerns: z.array(membershipApplicationConcernSchema),
-  ecDecisions: z.array(membershipApplicationEcDecisionSchema),
 });
 export const applicationStageTransitionResponseSchema = z.object({
   id: databaseIdSchema,
@@ -97,7 +78,6 @@ export const applicationStageTransitionResponseSchema = z.object({
 });
 export const applicationCommunicationCreateResponseSchema = z.object({ id: databaseIdSchema, createdAt: z.string() });
 export const applicationNoteCreateResponseSchema = applicationCommunicationCreateResponseSchema;
-export const ecDecisionRecordResponseSchema = membershipApplicationEcDecisionSchema;
 export const applicationApproveResponseSchema = z.object({
   applicationId: databaseIdSchema,
   memberId: databaseIdSchema,
@@ -108,8 +88,6 @@ export const applicationApproveResponseSchema = z.object({
 export type MembershipApplicationDetail = z.infer<typeof membershipApplicationDetailSchema>;
 export type MembershipApplicationEvent = z.infer<typeof membershipApplicationEventSchema>;
 export type MembershipApplicationCommunication = z.infer<typeof membershipApplicationCommunicationSchema>;
-export type MembershipApplicationConcern = z.infer<typeof membershipApplicationConcernSchema>;
-export type MembershipApplicationEcDecision = z.infer<typeof membershipApplicationEcDecisionSchema>;
 
 export const membershipApplicationsListRouteSchema = {
   ...requiresPermissions("membership:read"),
@@ -140,16 +118,21 @@ export const membershipApplicationDetailRouteSchema = {
   },
 };
 
-export const applicationStageTransitionSchema = z.object({
-  // "pending" and "approved" are deliberately excluded: pending is only a
-  // starting state, and reaching approved requires the full onboarding
-  // orchestration in approveApplication() (approve.ts), not a bare stage
-  // flip — see isValidStageTransition() in
-  // functions/_lib/services/membership/applications/transition.ts.
-  toStage: applicationStageSchema.exclude(["pending", "approved"]),
-  onHoldSubtype: onHoldSubtypeSchema.optional(),
-  note: z.string().trim().max(2000).optional(),
-});
+export const applicationStageTransitionSchema = z
+  .object({
+    // Submission and approval belong to their evidence-owning use cases.
+    toStage: applicationStageSchema.extract(["processing", "on_hold", "declined", "withdrawn"]),
+    onHoldSubtype: onHoldSubtypeSchema.optional(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.toStage === "on_hold" && !input.onHoldSubtype)
+      context.addIssue({
+        code: "custom",
+        path: ["onHoldSubtype"],
+        message: "Choose the information needed from the applicant.",
+      });
+  });
 
 export const applicationStageTransitionRouteSchema = {
   ...requiresPermissions("membership:write"),
@@ -232,33 +215,6 @@ export const applicationNoteCreateRouteSchema = {
   },
 };
 
-export const ecDecisionRecordSchema = ecDecisionCreateSchema.safeExtend({
-  ecMemberUserId: databaseIdSchema.optional(),
-});
-export type EcDecisionRecordInput = z.infer<typeof ecDecisionRecordSchema>;
-
-export const ecDecisionRecordRouteSchema = {
-  tags: ["Membership"],
-  "x-pkic-auth": { required: true },
-  summary: "Record an Executive Council decision",
-  description:
-    "An Executive Council member records their own decision by omitting ecMemberUserId. Staff with membership:approve may name an EC member only as an exceptional override. Both paths use the same application decision resource and audit trail.",
-  request: {
-    params: z.object({ id: z.string() }),
-    body: { content: { "application/json": { schema: ecDecisionRecordSchema } }, required: true },
-  },
-  responses: {
-    "201": {
-      description: "Decision recorded.",
-      content: { "application/json": { schema: ecDecisionRecordResponseSchema } },
-    },
-    "403": { description: "EC membership or membership:approve permission required." },
-    "404": { description: "Application not found." },
-    "409": { description: "Application is not currently in EC review." },
-    "400": { description: "Missing required reason for a decline." },
-  },
-};
-
 export const applicationApproveRouteSchema = {
   ...requiresPermissions("membership:approve"),
   tags: ["Membership"],
@@ -270,7 +226,7 @@ export const applicationApproveRouteSchema = {
       content: { "application/json": { schema: applicationApproveResponseSchema } },
     },
     "404": { description: "Application not found." },
-    "409": { description: "Application must be in ec_review to approve." },
+    "409": { description: "Every required workflow step must be satisfied before approval." },
   },
 };
 

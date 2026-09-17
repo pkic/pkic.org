@@ -1,3 +1,4 @@
+import { openColumnFilterMenu } from "./helpers/column-menu";
 // @vitest-environment jsdom
 import { beginRecordEdit } from "./helpers/record-edit";
 import { render } from "preact";
@@ -324,10 +325,7 @@ describe("portal sponsorship pipeline filters", () => {
 
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Stages column options"]');
     if (!trigger) throw new Error("the stages column menu is not rendered");
-    await act(async () => {
-      trigger.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    openColumnFilterMenu(container, "Stages");
     const contacted = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
       item.textContent?.includes("Contacted"),
     );

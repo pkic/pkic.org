@@ -74,9 +74,11 @@ function mount(node: ComponentChild): HTMLElement {
   return container;
 }
 
-/** Every disclosure's summary text, in document order. */
-function disclosureNames(root: ParentNode): string[] {
-  return [...root.querySelectorAll("summary")].map((summary) => summary.textContent ?? "");
+/** Every settings panel's name, in document order. */
+function panelNames(root: ParentNode): string[] {
+  return [...root.querySelectorAll("section.pk-panel[aria-label]")].map(
+    (panel) => panel.getAttribute("aria-label") ?? "",
+  );
 }
 
 afterEach(() => {
@@ -99,18 +101,19 @@ describe("group event registration configuration", () => {
     expect(section?.getAttribute("aria-label")).toBe("Configure PQC Conference 2026 registration");
   });
 
-  it("gives every disclosure a name and opens the two that always apply", () => {
+  it("draws every setting as a named panel that is open on arrival", () => {
     const config = mount(<GroupEventConfiguration event={event()} groupId="g1" />);
 
-    expect(disclosureNames(config)).toEqual([
+    expect(panelNames(config)).toEqual([
       "Terms and conditions",
-      "Policy and registration questions",
+      "Registration policy and questions",
       "Proposal submission questions",
       "Attendance days",
     ]);
-    // A disclosure is a real control, not a div with a handler: the platform
-    // owns its state, and the two that always apply start open.
-    expect([...config.querySelectorAll("details")].map((details) => details.open)).toEqual([true, true, false, false]);
+    // Nothing is folded away: the attendance days — the setting a manager
+    // most often comes here for — used to start closed.
+    expect(config.querySelector("details")).toBeNull();
+    expect(config.textContent).toContain("days editor");
   });
 
   it("hides the proposal-questions panel for an event the portal does not own", () => {
@@ -120,9 +123,9 @@ describe("group event registration configuration", () => {
     // portal and integration.)
     const config = mount(<GroupEventConfiguration event={event({ sourceMode: "hugo" })} groupId="g1" />);
 
-    expect(disclosureNames(config)).toEqual([
+    expect(panelNames(config)).toEqual([
       "Terms and conditions",
-      "Policy and registration questions",
+      "Registration policy and questions",
       "Attendance days",
     ]);
     expect(config.textContent).not.toContain("form placement editor");

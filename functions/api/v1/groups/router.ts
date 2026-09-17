@@ -1,3 +1,8 @@
+import {
+  GroupMailingSyncGet,
+  GroupMailingSyncUpdate,
+  GroupMailingSyncRun,
+} from "./[groupId]/mailing-lists/synchronization";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../_lib/db/context";
@@ -34,13 +39,20 @@ import {
   GroupMeetingOccurrenceCreate,
   GroupMeetingOccurrencesList,
 } from "./[groupId]/meetings/series/[seriesId]/occurrences/index";
-import { GroupMeetingOccurrenceUpdate } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/index";
+import {
+  GroupMeetingOccurrenceGet,
+  GroupMeetingOccurrenceUpdate,
+} from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/index";
+import { GroupMeetingSeriesCancel } from "./[groupId]/meetings/series/[seriesId]/cancel";
 import {
   GroupMeetingGuestInvite,
   GroupMeetingGuestsList,
 } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/index";
 import { GroupMeetingGuestRevoke } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/guests/[guestId]";
-import { GroupMeetingParticipantInvitationsSend } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/invitations/index";
+import {
+  GroupMeetingParticipantInvitationsList,
+  GroupMeetingParticipantInvitationsSend,
+} from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/invitations/index";
 import { GroupMeetingAttendanceList } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/index";
 import { GroupMeetingAttendanceVerify } from "./[groupId]/meetings/series/[seriesId]/occurrences/[occurrenceId]/attendance/[confirmationId]";
 import { GroupFormCreate, GroupFormsList } from "./[groupId]/forms/index";
@@ -59,6 +71,7 @@ import {
   GroupEventRegistrationAdmissionCreate,
   GroupEventRegistrationCreate,
   GroupEventRegistrationDayAttendancePatch,
+  GroupEventRegistrationManagerUpdate,
   GroupEventRegistrationDetailGet,
   GroupEventRegistrationsList,
 } from "./[groupId]/events/[eventId]/registrations";
@@ -125,6 +138,9 @@ openapi.patch("/:groupId/leadership/:userRoleId", GroupLeadershipUpdate);
 openapi.delete("/:groupId/leadership/:userRoleId", GroupLeadershipRevoke);
 openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
 openapi.get("/:groupId/category-rules", GroupCategoryRulesGet);
+openapi.get("/:groupId/mailing-lists/synchronization", GroupMailingSyncGet);
+openapi.patch("/:groupId/mailing-lists/synchronization", GroupMailingSyncUpdate);
+openapi.post("/:groupId/mailing-lists/synchronization/runs", GroupMailingSyncRun);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.get("/:groupId/mailing-lists/management", GroupMailingListManagementList);
 openapi.post("/:groupId/mailing-lists", GroupMailingListCreate);
@@ -155,6 +171,7 @@ registerGroupEventEmailCampaignRoutes(openapi);
 openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
 openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
 openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);
+openapi.patch("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationManagerUpdate);
 openapi.patch(
   "/:groupId/events/:eventId/registrations/:registrationId/day-attendance",
   GroupEventRegistrationDayAttendancePatch,
@@ -204,14 +221,20 @@ openapi.get("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesGet);
 openapi.patch("/:groupId/meetings/series/:seriesId", GroupMeetingSeriesUpdate);
 openapi.get("/:groupId/meetings/series/:seriesId/calendar.ics", GroupMeetingSeriesCalendar);
 openapi.post("/:groupId/meetings/series/:seriesId/materialize", GroupMeetingSeriesMaterialize);
+openapi.post("/:groupId/meetings/series/:seriesId/cancel", GroupMeetingSeriesCancel);
 openapi.get("/:groupId/meetings/series/:seriesId/occurrences", GroupMeetingOccurrencesList);
 openapi.post("/:groupId/meetings/series/:seriesId/occurrences", GroupMeetingOccurrenceCreate);
+openapi.get("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId", GroupMeetingOccurrenceGet);
 openapi.patch("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId", GroupMeetingOccurrenceUpdate);
 openapi.get("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/guests", GroupMeetingGuestsList);
 openapi.post("/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/guests", GroupMeetingGuestInvite);
 openapi.delete(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/guests/:guestId",
   GroupMeetingGuestRevoke,
+);
+openapi.get(
+  "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/invitations",
+  GroupMeetingParticipantInvitationsList,
 );
 openapi.post(
   "/:groupId/meetings/series/:seriesId/occurrences/:occurrenceId/invitations",

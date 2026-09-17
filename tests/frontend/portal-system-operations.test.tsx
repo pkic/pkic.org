@@ -37,6 +37,21 @@ function button(root: ParentNode, label: string): HTMLButtonElement {
   return found;
 }
 
+/**
+ * The page's own commands live in its `…` menu (#124), so reaching one means
+ * opening the menu named for the page and picking the item by its label.
+ */
+async function pageMenuItem(root: ParentNode, menu: string, label: string): Promise<HTMLButtonElement> {
+  const trigger = root.querySelector<HTMLButtonElement>(`button[aria-label="${menu}"]`);
+  if (!trigger) throw new Error(`No page menu named ${menu}`);
+  await act(async () => trigger.click());
+  const item = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  if (!item) throw new Error(`No ${label} item in ${menu}`);
+  return item;
+}
+
 async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -229,11 +244,13 @@ describe("portal Operations outbox reads", () => {
     await act(() => render(<EmailOutbox canManage />, container!));
     await settle();
 
-    expect(container.textContent).toContain("Process next 20 due");
+    // The next-due batch is a command on the page as a whole, so it is in
+    // the page's menu rather than standing open in the table's toolbar.
+    expect(container.textContent).not.toContain("Process next 20 due");
+    const processItem = await pageMenuItem(container, "Email outbox actions", "Process next 20 due");
     expect(container.textContent).not.toContain("Process all due");
-    const processButton = button(container, "Process next 20 due");
     await act(() => {
-      processButton.click();
+      processItem.click();
     });
     await settle();
     for (let attempt = 0; attempt < 3; attempt += 1) await settle();
@@ -242,6 +259,20 @@ describe("portal Operations outbox reads", () => {
     // Through the shared request contract, not a literal: a body that the
     // endpoint would reject must fail here too.
     expect(emailOutboxProcessSchema.parse(processRequest.body).limit).toBe(20);
+
+    // One fact per column (#124): the subject has a column of its own, the
+    // queue standing is a badge column that can be filtered, and the
+    // identifiers start hidden rather than crowding every row.
+    // The sort glyph rides in the head cell's text, so the head is matched by
+    // its start rather than its whole content.
+    const headers = [...container.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim() ?? "");
+    for (const header of ["Recipient", "Subject", "Type", "Status", "Queued", "Due"]) {
+      expect(headers.some((candidate) => candidate.startsWith(header))).toBe(true);
+    }
+    for (const header of ["Attempts", "Sent", "References"]) {
+      expect(headers.some((candidate) => candidate.startsWith(header))).toBe(false);
+    }
+    expect(container.textContent).not.toContain(failedId);
 
     // Selection is the design system's own checkbox column — the outbox is
     // the one list whose API takes row ids — and each box is named after the
@@ -305,15 +336,18 @@ describe("portal Operations outbox reads", () => {
     await act(() => render(<EmailOutbox canManage />, container!));
     await settle();
 
+    const processItem = await pageMenuItem(container, "Email outbox actions", "Process next 20 due");
     await act(() => {
-      button(container!, "Process next 20 due").click();
+      processItem.click();
     });
     for (let attempt = 0; attempt < 3; attempt += 1) await settle();
 
     expect(toasts.textContent).toContain("The email provider is not accepting messages.");
     // A failed command must hand the control back rather than stranding the
     // page in its busy state.
-    expect(button(container, "Process next 20 due").disabled).toBe(false);
+    const again = await pageMenuItem(container, "Email outbox actions", "Process next 20 due");
+    expect(again.disabled).toBe(false);
+    expect(again.getAttribute("aria-disabled")).not.toBe("true");
   });
 });
 
@@ -386,8 +420,8 @@ describe("portal Operations command visibility", () => {
       canWriteMembership: true,
       canApproveMembership: true,
     });
-    expect(container.textContent).toContain("Run consultation batch");
-    expect(container.textContent).toContain("Run EC review batch");
+    expect(container.textContent).toContain("Run membership workflows and chair digests");
+    expect(container.textContent).not.toContain("Run EC review batch");
     expect(container.textContent).toContain("Run retention redaction");
   });
 

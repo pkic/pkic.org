@@ -85,12 +85,15 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     // The Status column's own filter menu narrows by active/inactive, not a
     // select above the table.
     await page.getByRole("button", { name: "Status column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Active", exact: true }).click();
     await expect(pqcRow).toBeVisible();
     await page.getByRole("button", { name: "Status column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "Inactive", exact: true }).click();
     await expect(pqcRow).toHaveCount(0);
     await page.getByRole("button", { name: "Status column options" }).click();
+    await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
     await page.getByRole("menuitemradio", { name: "All statuses", exact: true }).click();
     await expect(pqcRow).toBeVisible();
 
@@ -325,6 +328,10 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await page.getByPlaceholder("Search name, email, organization, or category…").fill(name);
     const row = page.getByRole("row").filter({ hasText: name });
     await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("columnheader", { name: "Joined through" })).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "Membership dates" })).toBeVisible();
+    await page.getByRole("button", { name: "Choose columns" }).click();
+    await page.getByRole("menuitemradio", { name: "Joined through", exact: true }).click();
     await expect(row).toContainText("Added by staff");
 
     const removed = page.waitForResponse(
@@ -375,7 +382,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(page.getByRole("button", { name: "Add person" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Actions for /, exact: false })).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "Category" })).toHaveCount(0);
-    await expect(page.getByRole("columnheader", { name: "Source" })).toHaveCount(0);
+    await expect(page.getByRole("columnheader", { name: "Joined through" })).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "Member" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Represents" })).toBeVisible();
   });

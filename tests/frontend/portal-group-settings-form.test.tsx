@@ -15,6 +15,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupSchema, groupSettingsDetailSchema, groupUpdateSchema } from "../../assets/shared/schemas/groups";
 import { GroupSettingsForm } from "../../assets/ts/member-flows/portal/sections/management/GroupSettingsForm";
+import { markdownControl } from "./helpers/labelled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const GROUP_PATH = `/api/v1/groups/${GROUP_ID}`;
@@ -148,6 +149,9 @@ describe("group settings form", () => {
     await beginRecordEdit(container, "Group settings actions");
 
     expect(container.querySelector("form")?.classList.contains("pk")).toBe(true);
+    // The description is the shared Markdown editor, a lazy chunk; its label
+    // points at nothing until it is on the page.
+    await markdownControl(container, "Description");
 
     const labels = [...container.querySelectorAll<HTMLLabelElement>("label.pk-field__label")];
     expect(labels.length).toBeGreaterThan(0);

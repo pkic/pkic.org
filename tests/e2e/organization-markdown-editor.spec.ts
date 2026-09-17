@@ -35,13 +35,18 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await expect(page.getByRole("textbox", { name: "Member page content", exact: true })).toHaveCount(0);
   await edit();
   const canvas = page.getByRole("textbox", { name: "Member page content", exact: true });
+  // Two editors share the page since the description became one too (#114);
+  // the bar's commands are scoped to the content editor's own bar.
+  // Anchored on the editor's own hidden field rather than on the canvas,
+  // which is hidden — and so unmatchable — while the source view is open.
+  const contentEditor = page.locator(".pk-markdown-editor").filter({ has: page.locator('[name="contentMarkdown"]') });
   await canvas.fill("A draft to cancel.");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await edit();
   await expect(canvas).not.toContainText("A draft to cancel.");
   await canvas.fill("Security begins with clear information.");
   await canvas.press("ControlOrMeta+a");
-  await page.getByRole("button", { name: "Bold", exact: true }).click();
+  await contentEditor.getByRole("button", { name: "Bold", exact: true }).click();
   await expect(canvas.locator("strong")).toHaveText("Security begins with clear information.");
   await canvas.press("ControlOrMeta+End");
   await canvas.press("Enter");
@@ -97,19 +102,19 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await canvas.getByRole("heading", { name: "Section heading" }).click({ clickCount: 3 });
   await expect.poll(() => page.evaluate(() => getSelection()?.toString().trim())).toBe("Section heading");
   await page.keyboard.type("Learn more");
-  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
+  await contentEditor.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Member page content Markdown source", exact: true })).toHaveValue(
     /Built for interoperability\./,
   );
-  await page.getByRole("button", { name: "Visual editor", exact: true }).click();
+  await contentEditor.getByRole("button", { name: "Visual editor", exact: true }).click();
   await expect(canvas.locator("[style]")).toHaveCount(0);
   await page.setViewportSize({ width: 1440, height: 1100 });
   await canvas.scrollIntoViewIfNeeded();
-  await page.locator(".pk-markdown-editor").screenshot({ path: testInfo.outputPath("visual-editor-desktop.png") });
+  await contentEditor.screenshot({ path: testInfo.outputPath("visual-editor-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await canvas.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.locator(".pk-markdown-editor").screenshot({ path: testInfo.outputPath("visual-editor-phone.png") });
+  await contentEditor.screenshot({ path: testInfo.outputPath("visual-editor-phone.png") });
   await page.setViewportSize({ width: 1440, height: 1100 });
   const saved = page.waitForResponse(
     (response) =>

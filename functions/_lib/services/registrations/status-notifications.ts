@@ -37,10 +37,13 @@ export interface RegistrationStatusEmailEvent {
   settings_json: string;
 }
 
+/** What an email says about a held day; a builder passing its own rows need not carry timestamps. */
+type DayAttendanceForEmail = Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+
 interface RegistrationEmailOverrides {
   registration?: RegistrationRecord;
   profilePatch?: UserProfilePatch;
-  dayAttendance?: Awaited<ReturnType<typeof getRegistrationDayAttendance>>;
+  dayAttendance?: DayAttendanceForEmail;
   dayWaitlist?: Awaited<ReturnType<typeof listDayWaitlistForRegistration>>;
 }
 
@@ -52,7 +55,7 @@ async function loadRegistrationEmailContext(
 ): Promise<{
   registration: RegistrationRecord;
   user: UserRow;
-  dayAttendance: Awaited<ReturnType<typeof getRegistrationDayAttendance>>;
+  dayAttendance: DayAttendanceForEmail;
   dayWaitlist: Awaited<ReturnType<typeof listDayWaitlistForRegistration>>;
   customAnswerRows: Awaited<ReturnType<typeof getCustomAnswerRows>>;
   acceptedTermsText: string;

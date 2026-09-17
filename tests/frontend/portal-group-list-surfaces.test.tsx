@@ -23,6 +23,8 @@ import { GroupVotes } from "../../assets/ts/member-flows/portal/sections/managem
 import { ProposalPrograms } from "../../assets/ts/member-flows/portal/sections/management/ProposalPrograms";
 import { controlFor } from "./helpers/labelled-control";
 
+import { isCurrentTab, tabNamed, tabNames } from "./helpers/tabs";
+
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
 }));
@@ -167,7 +169,7 @@ describe("the meeting series list", () => {
     const page = mount(<GroupMeetingSeriesList groupId={GROUP_ID} />);
     await settle();
 
-    expect(page.querySelector("caption")?.textContent).toBe("Meeting series");
+    expect(page.querySelector("caption")?.textContent).toBe("Meetings");
 
     // The row is a link to the series' own page; the calendar download lives
     // behind the row's menu, whose trigger names the series.
@@ -409,34 +411,30 @@ describe("the group forms and votes collections", () => {
     expect(rowLink?.getAttribute("href")).toContain(`/groups/${GROUP_ID}/forms/`);
   });
 
-  it("switches the votes sections as a tab set, with the panel pointing back at its tab", async () => {
+  it("routes the votes sections as tabs with addresses, each list under its own", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ votes: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+      vi.fn(async () => json({ votes: [], proposals: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
     );
     const container = mount(<GroupVotes groupId={GROUP_ID} canManage canParticipate />);
     await settle();
 
-    // The strip used to be a `<ul>` of buttons wearing `nav-link`, which
-    // announced a list and said nothing about which of the two was showing.
-    const strip = container.querySelector('[role="tablist"]')!;
-    expect(strip.getAttribute("aria-label")).toBe("Vote sections");
+    // The strip used to be a `<ul>` of buttons wearing `nav-link`; now each
+    // section is a place (#126) — the proposals list carries the proposal
+    // pages under it — so the tabs are links carrying `aria-current`.
+    const strip = container.querySelector('[aria-label="Vote sections"]')!;
+    expect(strip).not.toBeNull();
+    expect(tabNames(container)).toEqual(["All votes", "Proposals"]);
+    expect(isCurrentTab(tabNamed(container, "All votes"))).toBe(true);
+    expect(tabNamed(container, "All votes")?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/votes`);
+    expect(tabNamed(container, "Proposals")?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/votes/proposals`);
+    expect(container.querySelector("table caption")?.textContent).toBe("All votes");
 
-    const [allVotes, proposals] = [...container.querySelectorAll<HTMLElement>('[role="tab"]')];
-    expect(allVotes.getAttribute("aria-selected")).toBe("true");
-    expect(proposals.getAttribute("aria-selected")).toBe("false");
-
-    // Exactly one tab is in the tab order; the arrows move within the set.
-    expect(allVotes.tabIndex).toBe(0);
-    expect(proposals.tabIndex).toBe(-1);
-
-    const panel = container.querySelector('[role="tabpanel"]')!;
-    expect(panel.getAttribute("aria-labelledby")).toBe(allVotes.id);
-    expect(allVotes.getAttribute("aria-controls")).toBe(panel.id);
-
-    await act(() => proposals.click());
+    // Arriving at the proposals address selects that tab and shows that list.
+    const proposals = mount(<GroupVotes groupId={GROUP_ID} canManage canParticipate voteSegment="proposals" />);
     await settle();
-    expect(container.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe(proposals.id);
+    expect(isCurrentTab(tabNamed(proposals, "Proposals"))).toBe(true);
+    expect(proposals.querySelector("table caption")?.textContent).toBe("Vote proposals");
   });
 
   it("replaces the votes table with the failure rather than claiming there are none", async () => {

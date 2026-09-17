@@ -116,3 +116,26 @@ export async function rowActionIsDisabled(root: ParentNode, subject: string, act
   if (!item) throw new Error(`the row for "${subject}" offers no "${action}"`);
   return item.disabled;
 }
+
+/**
+ * Opens a card's `…` menu — the one named "Actions for <subject>" — and
+ * returns its items. A record card keeps its commands behind that menu, so a
+ * test reaches them the way a reader does rather than through buttons that
+ * no longer stand on the card.
+ */
+export async function openCardMenu(root: ParentNode, subject: string): Promise<HTMLButtonElement[]> {
+  const trigger = root.querySelector<HTMLButtonElement>(`button[aria-label="Actions for ${subject}"]`);
+  if (!trigger) throw new Error(`no card offers actions for ${subject}`);
+  await act(async () => trigger.click());
+  return [
+    ...root.querySelectorAll<HTMLButtonElement>(`[role="menu"][aria-label="Actions for ${subject}"] [role="menuitem"]`),
+  ];
+}
+
+/** Picks one of a card's menu commands by its label. */
+export async function runCardAction(root: ParentNode, subject: string, label: string): Promise<void> {
+  const items = await openCardMenu(root, subject);
+  const item = items.find((candidate) => candidate.textContent?.trim() === label);
+  if (!item) throw new Error(`the card for ${subject} offers no "${label}" command`);
+  await act(async () => item.click());
+}

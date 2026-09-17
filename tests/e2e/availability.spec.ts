@@ -44,7 +44,7 @@ test("maintenance refusal preserves a public form and recovery never replays it"
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   expect(attempts).toBe(1);
   await page.getByText("Maintenance in progress", { exact: true }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "/Volumes/ScanDisk/mac-caches/tmp/pkic-maintenance-notice.png" });
+  await page.screenshot({ path: test.info().outputPath("pkic-maintenance-notice.png") });
   paused = false;
   await page.getByRole("button", { name: "Check again", exact: true }).click();
   await expect(page.getByText("Online services restored", { exact: true })).toBeVisible();
@@ -84,7 +84,7 @@ test("a temporary data outage preserves loaded user rows and recovers on explici
   ).toBeVisible();
   await expect(table.getByRole("row").nth(1)).toHaveText(firstRow, { useInnerText: true });
   expect(failures).toBe(1);
-  await page.screenshot({ path: "/Volumes/ScanDisk/mac-caches/tmp/pkic-81-cached-users.png" });
+  await page.screenshot({ path: test.info().outputPath("pkic-81-cached-users.png") });
   outage = false;
   await page.getByRole("button", { name: "Refresh", exact: true }).first().click();
   await expect(

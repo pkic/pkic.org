@@ -1345,6 +1345,17 @@ describe("group route contracts", () => {
     expect(replace.status, await replace.clone().text()).toBe(200);
     await expect(replace.json()).resolves.toMatchObject({ group: { revision: 2 } });
 
+    const unknownCategory = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, {
+      method: "PUT",
+      headers: { ...sessionHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        expectedRevision: 2,
+        rules: [{ membershipCategory: "REMOVED_CATEGORY", permitsJoin: true, automaticEnrollment: false }],
+      }),
+    });
+    expect(unknownCategory.status).toBe(422);
+    await expect(unknownCategory.json()).resolves.toMatchObject({ error: { code: "INVALID_MEMBERSHIP_CATEGORY" } });
+
     const read = await callApi(testEnv, `/api/v1/groups/${group.id}/category-rules`, { headers: sessionHeaders });
     expect(read.status, await read.clone().text()).toBe(200);
     expect(groupCategoryRulesResponseSchema.parse(await read.json())).toMatchObject({

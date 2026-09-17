@@ -24,24 +24,21 @@ import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { UserAffiliationRow } from "./UserAffiliationRow";
-import { UserIdentityGrantForm } from "./UserIdentityGrantForm";
 import type { UserDetail } from "./model";
 
 export function UserAffiliationsPanel({
   user,
   onChanged,
   canManage,
-  canActivate,
   summarizedIdentityId,
 }: {
   user: UserDetail;
   onChanged: () => Promise<void> | void;
   canManage: boolean;
-  canActivate: boolean;
   /** The identity whose biography the record already states as its About. */
   summarizedIdentityId?: string;
 }) {
-  const [showGrantForm, setShowGrantForm] = useState(false);
+  const [, navigate] = usePortalHashLocation();
   const [historyOpen, setHistoryOpen] = useState(false);
 
   /*
@@ -75,12 +72,11 @@ export function UserAffiliationsPanel({
             align="end"
             items={[
               {
+                // A create action is a page of its own under the record,
+                // never a form unfolding inside this panel (#107).
                 id: "add",
                 label: "Add identity…",
-                disabled: showGrantForm,
-                onSelect: () => {
-                  setShowGrantForm(true);
-                },
+                onSelect: () => navigate(`/users/${encodeURIComponent(user.id)}/affiliations/new`),
               },
             ]}
           />
@@ -88,7 +84,7 @@ export function UserAffiliationsPanel({
       </PanelHeader>
 
       <PanelBody class="pk-stack">
-        {user.identities.length === 0 && !showGrantForm && (
+        {user.identities.length === 0 && (
           <EmptyState
             title="No active identities."
             body="This user can sign in but acts in no membership capacity yet."
@@ -120,18 +116,6 @@ export function UserAffiliationsPanel({
               )}
             />
           ))}
-
-        {canManage && showGrantForm && (
-          <UserIdentityGrantForm
-            user={user}
-            canActivate={canActivate}
-            onGranted={() => {
-              setShowGrantForm(false);
-              void onChanged();
-            }}
-            onCancel={() => setShowGrantForm(false)}
-          />
-        )}
       </PanelBody>
 
       {formerIdentities.length > 0 && (

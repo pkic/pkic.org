@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { env } from "cloudflare:workers";
-import { dispatchRequestMethod, methodNotAllowed } from "../functions/_lib/http";
+import { HTTPException } from "hono/http-exception";
+import { dispatchRequestMethod, handleError, methodNotAllowed } from "../functions/_lib/http";
 import worker from "../functions/router";
 import { onRequest as registrationHeadshotDispatch } from "../functions/api/v1/registrations/access/[token]/headshot";
 
@@ -127,5 +128,33 @@ describe("HTTP method dispatch", () => {
     await expect(response.json()).resolves.toEqual({
       error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" },
     });
+  });
+});
+
+describe("handleError", () => {
+  it("passes a framework refusal through as the response it carries, without logging it as a crash", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refused = new HTTPException(400, {
+      res: Response.json({ error: { code: "VALIDATION_ERROR", message: "Invalid request" } }, { status: 400 }),
+    });
+
+    const response = handleError(refused);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: "VALIDATION_ERROR", message: "Invalid request" },
+    });
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("still turns an unknown failure into a logged internal error", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = handleError(new Error("boom"));
+
+    expect(response.status).toBe(500);
+    expect(consoleError).toHaveBeenCalledOnce();
+    consoleError.mockRestore();
   });
 });

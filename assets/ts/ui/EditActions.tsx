@@ -10,7 +10,6 @@ export function EditActions({
   onCancel,
   saveLabel = "Save changes",
   editLabel = "Edit settings",
-  direct = false,
 }: {
   label: string;
   editing: boolean;
@@ -19,8 +18,6 @@ export function EditActions({
   onCancel: () => void;
   saveLabel?: string;
   editLabel?: string;
-  /** Expose the edit action directly when it is the section's only command. */
-  direct?: boolean;
 }) {
   return editing ? (
     <>
@@ -31,10 +28,6 @@ export function EditActions({
         {saveLabel}
       </Button>
     </>
-  ) : direct ? (
-    <Button size="sm" variant="ghost" onClick={onEdit}>
-      {editLabel}
-    </Button>
   ) : (
     <Menu label={label} align="end" items={[{ id: "edit", label: editLabel, onSelect: onEdit }]} />
   );

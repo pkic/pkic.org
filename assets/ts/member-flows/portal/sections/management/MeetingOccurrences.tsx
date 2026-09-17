@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
+  EVENT_OCCURRENCE_STATUSES,
   eventOccurrenceCreateSchema,
   eventOccurrenceResponseSchema,
   eventOccurrencesListResponseSchema,
-  type EventOccurrence,
   type GroupEventSeries,
+  type EventOccurrence,
 } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { Badge } from "../../../../components/Badge";
+import { Badge, statusLabel } from "../../../../components/Badge";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { postJson } from "../../../../shared/api-client";
+import { patchJson, postJson } from "../../../../shared/api-client";
+import { RowActions } from "../../../../ui/RowActions";
+import { useMeetingCancellation } from "./useMeetingCancellation";
+import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 import { Button } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt, toast } from "../../ui";
-import { MeetingOccurrenceDetail } from "./MeetingOccurrenceDetail";
 import { usePortalHashLocation } from "../../hash-location";
 import { MeetingOccurrenceFields, type MeetingOccurrenceDraft } from "./MeetingOccurrenceFields";
 import { defaultFutureDate, isoDateTimeValue } from "./meeting-form-utils";
@@ -25,7 +28,6 @@ function initialOccurrenceDraft(timeZone: string): MeetingOccurrenceDraft {
     location: "",
     providerUrlAction: "replace",
     providerJoinUrl: "",
-    status: "scheduled",
   };
 }
 
@@ -54,13 +56,22 @@ export function MeetingOccurrences({
   const occurrencesPath = `/groups/${encodeURIComponent(groupId)}/meetings/${encodeURIComponent(series.id)}/occurrences`;
   const showCreate = occurrenceSegment === NEW_OCCURRENCE_SEGMENT;
   const actions = useRef<ApiTableActions | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState(() => initialOccurrenceDraft(series.timezone));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}`;
   const canManage = series.capabilities.includes("manage");
-  const canManageAttendance = series.capabilities.includes("manage_attendance");
+  const cancellation = useMeetingCancellation<EventOccurrence>({
+    label: (row) => `${series.eventName} — ${fmt(row.startsAt)}`,
+    canCancel: (row) => canManage && row.status === "scheduled",
+    cancel: (row) =>
+      patchJson(
+        `${base}/occurrences/${encodeURIComponent(row.id)}`,
+        { expectedUpdatedAt: row.updatedAt, status: "cancelled" },
+        eventOccurrenceResponseSchema,
+      ),
+    reload: async () => Promise.all([actions.current?.reload(), onSeriesChanged()]),
+  });
 
   useEffect(() => {
     setDraft(initialOccurrenceDraft(series.timezone));
@@ -145,6 +156,9 @@ export function MeetingOccurrences({
         paginate
         initialSort="starts_at"
         actionsRef={actions}
+        onData={(response) => cancellation.onRows(response.occurrences)}
+        selection={canManage ? cancellation.selection : undefined}
+        bulkBar={canManage ? cancellation.bulkBar : undefined}
         createAction={
           canManage
             ? { label: "Add occurrence", onSelect: () => navigate(`${occurrencesPath}/${NEW_OCCURRENCE_SEGMENT}`) }
@@ -167,6 +181,25 @@ export function MeetingOccurrences({
             cell: (occurrence) => <Badge status={occurrence.status} />,
             width: "fit",
             sort: { asc: "status", desc: "-status" },
+            filter: {
+              param: "status",
+              options: [
+                { value: "", label: "All statuses" },
+                ...EVENT_OCCURRENCE_STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
+              ],
+            },
+          },
+          // Who was told and what their calendars answered (#126), read from
+          // the end like the other counts.
+          {
+            header: { label: "Invited", className: "pk-end" },
+            cell: (occurrence) => occurrence.invitedCount,
+            width: "fit",
+          },
+          {
+            header: { label: "Accepted", className: "pk-end" },
+            cell: (occurrence) => occurrence.rsvp.accepted,
+            width: "fit",
           },
           // Counts are compared down the column, so they read from the end
           // and hug their content instead of claiming slack.
@@ -185,38 +218,46 @@ export function MeetingOccurrences({
             cell: (occurrence) => occurrence.attendanceVerifiedCount,
             width: "fit",
           },
+          {
+            header: "",
+            cell: (occurrence) => (
+              <RowActions
+                subject={fmt(occurrence.startsAt)}
+                actions={[
+                  {
+                    id: "calendar",
+                    label: "Download calendar",
+                    onSelect: () => downloadMeetingCalendar(groupId, series.id, occurrence.id),
+                  },
+                  ...(canManage
+                    ? [
+                        {
+                          id: "edit",
+                          label: "Change occurrence…",
+                          onSelect: () => navigate(`${occurrencesPath}/${encodeURIComponent(occurrence.id)}/settings`),
+                        },
+                        {
+                          id: "cancel",
+                          label: "Cancel occurrence…",
+                          danger: true,
+                          disabled: cancellation.busy || occurrence.status !== "scheduled",
+                          onSelect: () => void cancellation.cancelRows([occurrence]),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            ),
+          },
         ]}
         empty="No meeting occurrences have been generated."
         rowKey={(occurrence) => occurrence.id}
-        // Activating a row opens its management detail in place — the same
-        // rule as every other list. The "Manage" button column this replaces
-        // left the row itself inert.
-        rowAction={
-          canManage || canManageAttendance
-            ? (occurrence: EventOccurrence) => ({
-                label:
-                  selectedId === occurrence.id
-                    ? `Hide management for the occurrence starting ${fmt(occurrence.startsAt)}`
-                    : `Manage the occurrence starting ${fmt(occurrence.startsAt)}`,
-                onSelect: () => setSelectedId((current) => (current === occurrence.id ? null : occurrence.id)),
-              })
-            : undefined
-        }
-        detailRow={(occurrence) =>
-          selectedId === occurrence.id ? (
-            <MeetingOccurrenceDetail
-              base={base}
-              occurrence={occurrence}
-              series={series}
-              canManage={canManage}
-              canManageAttendance={canManageAttendance}
-              onChanged={async () => {
-                await actions.current?.reload();
-                await onSeriesChanged();
-              }}
-            />
-          ) : null
-        }
+        // Activating a row opens the occurrence's own page (#126) — a record
+        // with facets, never an expansion between the rows.
+        rowAction={(occurrence) => ({
+          label: `Open the occurrence starting ${fmt(occurrence.startsAt)}`,
+          href: usePortalHashLocation.hrefs(`${occurrencesPath}/${encodeURIComponent(occurrence.id)}`),
+        })}
       />
     </div>
   );

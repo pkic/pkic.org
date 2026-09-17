@@ -9,7 +9,8 @@ import { postJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
+import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 
 /**
  * An election cannot be proposed: it needs candidates the proposal has no way
@@ -105,12 +106,13 @@ export function GroupVoteProposalForm({ groupId, onCreated }: { groupId: string;
                 row: a four-row textarea in a half column is unusable. */}
             <Field label="Description" required>
               {(control) => (
-                <Textarea
+                <MarkdownEditor
+                  variant="compact"
                   {...control}
-                  rows={4}
-                  maxLength={10000}
-                  value={description}
-                  onInput={(event) => setDescription(event.currentTarget.value)}
+                  name="description"
+                  label="Description"
+                  initialValue={description}
+                  onChange={setDescription}
                 />
               )}
             </Field>

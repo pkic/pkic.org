@@ -46,10 +46,10 @@ describe("membership_categories seed table", () => {
       expect(row!.is_voting === 1, `is_voting mismatch for ${code}`).toBe(INITIAL_SEEDED_VOTING_CATEGORIES.has(code));
     }
     const columns = await queryAll<{ name: string }>(env.DB, "PRAGMA table_info(membership_categories)");
-    expect(columns.map((column) => column.name)).not.toContain("is_individual");
+    expect(columns.map((column) => column.name)).toContain("is_individual");
   });
 
-  it("derives individual policy from the shared contract while reading D1 configuration", async () => {
+  it("reads the seeded individual policy from D1 configuration", async () => {
     const entries = await listMembershipCategories(env.DB);
     const byCode = new Map(entries.map((e) => [e.code, e]));
 
@@ -174,18 +174,14 @@ describe("getOrCreateOrganizationMemberAggregate", () => {
 });
 
 describe("buildCreateIndividualMemberStatements — category compatibility", () => {
-  it("rejects an organization-tied category for an individual (org-less) aggregate", () => {
-    expect(() =>
-      buildCreateIndividualMemberStatements(env.DB, crypto.randomUUID(), "A", new Date().toISOString()),
-    ).toThrow(AppError);
-    try {
-      buildCreateIndividualMemberStatements(env.DB, crypto.randomUUID(), "A", new Date().toISOString());
-      expect.unreachable("expected AppError for an org-tied category on an individual aggregate");
-    } catch (err) {
-      expect(err).toBeInstanceOf(AppError);
-      expect((err as AppError).status).toBe(422);
-      expect((err as AppError).code).toBe("MEMBERSHIP_CATEGORY_TYPE_MISMATCH");
-    }
+  it("rejects an organization-tied category atomically for an individual aggregate", async () => {
+    const { statements } = buildCreateIndividualMemberStatements(
+      env.DB,
+      crypto.randomUUID(),
+      "A",
+      new Date().toISOString(),
+    );
+    await expect(env.DB.batch(statements)).rejects.toThrow("AUTHORIZATION_CONTEXT_CHANGED");
   });
 
   it("accepts every individual-only category (H5/H6/H7)", () => {

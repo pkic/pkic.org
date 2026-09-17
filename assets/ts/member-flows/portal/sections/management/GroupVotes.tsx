@@ -1,6 +1,6 @@
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { lazy, Suspense } from "preact/compat";
-import { useId, useRef, useState } from "preact/hooks";
+import { useId, useRef } from "preact/hooks";
 import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../../../../../shared/schemas/group-votes";
 import { VOTE_STATUSES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
@@ -18,7 +18,7 @@ import { fmt } from "../../ui";
 import { VoteDetails } from "../Votes/VoteDetails";
 import { GroupVoteCreateForm } from "./GroupVoteCreateForm";
 import { GroupVoteBallots, GroupVoteSettings } from "./GroupVoteManagementControls";
-import { GroupVoteProposals } from "./GroupVoteProposals";
+import { GroupVoteProposalRecord, GroupVoteProposals } from "./GroupVoteProposals";
 import { GroupVoteProposalForm } from "./GroupVoteProposalForm";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
 
@@ -35,11 +35,16 @@ const NEW_GROUP_VOTE_SEGMENT = "new";
  * reach. Arriving here also selects the tab the proposal belongs to.
  */
 const PROPOSE_GROUP_VOTE_SEGMENT = "propose";
+/**
+ * The proposals list is addressable — `votes/proposals` — and a proposal's
+ * own page sits under it (#126): `votes/proposals/<id>`.
+ */
+const PROPOSALS_SEGMENT = "proposals";
 
 /** The vote record's facets. Each one loads its data when it is opened. */
 const VOTE_RECORD_TABS = [
   { key: "overview", label: "Overview", manage: false },
-  { key: "statistics", label: "Statistics", manage: true },
+  { key: "statistics", label: "Analytics", manage: true },
   { key: "ballots", label: "Ballots", manage: true },
   { key: "settings", label: "Settings", manage: true },
   { key: "sharing", label: "Sharing", manage: true },
@@ -128,7 +133,7 @@ function GroupVoteRecord({
             />
           )}
           {tab === "statistics" && canManage && (
-            <Suspense fallback={<Spinner label="Loading vote statistics…" />}>
+            <Suspense fallback={<Spinner label="Loading vote analytics…" />}>
               <GroupVoteStatistics groupId={groupId} voteId={voteId} />
             </Suspense>
           )}
@@ -171,9 +176,11 @@ export function GroupVotes({
   const [, navigate] = usePortalHashLocation();
   const creating = voteSegment === NEW_GROUP_VOTE_SEGMENT;
   const proposing = voteSegment === PROPOSE_GROUP_VOTE_SEGMENT;
-  const [tab, setTab] = useState<"votes" | "proposals">(proposing ? "proposals" : "votes");
+  const listingProposals = voteSegment === PROPOSALS_SEGMENT;
+  const tab: "votes" | "proposals" = listingProposals ? "proposals" : "votes";
   const tableActions = useRef<ApiTableActions | null>(null);
   const votesPath = `/groups/${encodeURIComponent(groupId)}/votes`;
+  const proposalsPath = `${votesPath}/${PROPOSALS_SEGMENT}`;
 
   function leaveCreatePage(): void {
     navigate(votesPath);
@@ -201,12 +208,18 @@ export function GroupVotes({
       // Proposing is a page of its own, the way creating a vote is: a way
       // back, and the form alone rather than layered over the proposals list.
       <div class="pk pk-stack">
-        <GroupVoteProposalForm groupId={groupId} onCreated={async () => leaveCreatePage()} />
+        <GroupVoteProposalForm groupId={groupId} onCreated={async () => navigate(proposalsPath)} />
       </div>
     );
   }
 
-  if (voteSegment) {
+  if (listingProposals && voteTab) {
+    // A proposal is a record with commands, so it gets its own page rather
+    // than an expansion between the list's rows (#126).
+    return <GroupVoteProposalRecord groupId={groupId} proposalId={voteTab} listPath={proposalsPath} />;
+  }
+
+  if (voteSegment && !listingProposals) {
     // A vote is a record with facets, so it gets its own page rather than an
     // expansion between the list's rows.
     return <GroupVoteRecord groupId={groupId} voteId={voteSegment} initialTab={voteTab} />;
@@ -214,18 +227,18 @@ export function GroupVotes({
 
   return (
     <div class="pk pk-stack">
-      {/* Nothing here navigates — both collections live on this page — so it
-          is the WAI-ARIA tab pattern, with the panel pointing back at the tab
-          that opened it. The tabs stand above the list panel the way the
-          workspace's own tabs stand above its content. */}
+      {/* Each collection has an address — the proposals list carries the
+          proposal pages under it — so the tabs navigate, as links carrying
+          `aria-current`, rather than swapping a panel in place. */}
       <Tabs
         label="Vote sections"
         idPrefix={tabIdPrefix}
         active={tab}
-        onChange={(key) => setTab(key as "votes" | "proposals")}
+        onChange={(key) => navigate(key === "proposals" ? proposalsPath : votesPath)}
+        hrefFor={(key) => (key === "proposals" ? proposalsPath : votesPath)}
         items={[
-          { key: "votes", label: "All votes", panelId },
-          { key: "proposals", label: "Proposals", panelId },
+          { key: "votes", label: "All votes" },
+          { key: "proposals", label: "Proposals" },
         ]}
       />
       {/*
@@ -242,12 +255,13 @@ export function GroupVotes({
           ? "A proposal is a participant's request for a vote. Reaching the required endorsements creates a vote automatically; leadership can also approve it directly."
           : "A vote is a ballot this group runs. Leadership can create one directly, or a participant proposal can become a vote."}
       </p>
-      <div id={panelId} role="tabpanel" aria-labelledby={`${tabIdPrefix}-${tab}`} class="pk-stack">
+      <div id={panelId} class="pk-stack">
         {tab === "proposals" ? (
           <GroupVoteProposals
             groupId={groupId}
             canParticipate={canParticipate}
             onPropose={() => navigate(`${votesPath}/${PROPOSE_GROUP_VOTE_SEGMENT}`)}
+            recordPath={(proposalId) => `${proposalsPath}/${encodeURIComponent(proposalId)}`}
           />
         ) : (
           <ApiDataTable

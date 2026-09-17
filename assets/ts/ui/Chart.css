@@ -23,6 +23,13 @@
     max-width: 44rem;
   }
 
+  /* A chart that is the panel's whole content — a hundred days of
+     registrations, say — takes the panel's width rather than the reading
+     measure that suits a small figure beside prose. */
+  .pk-chart-wide .pk-chart__plot {
+    max-width: none;
+  }
+
   .pk-chart__legend {
     display: flex;
     flex-wrap: wrap;

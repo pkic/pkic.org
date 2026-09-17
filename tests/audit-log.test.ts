@@ -16,6 +16,7 @@ import { createAdminSession } from "./helpers/auth";
 import { auditLogListQuerySchema } from "../assets/shared/schemas/audit-log";
 import { buildGlobalAuditLogPageQuery } from "../functions/_lib/services/audit-log-read";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { listFilterOptionsResponseSchema } from "../assets/shared/schemas/list-filter-options";
 
 async function callAppGet(path: string, token: string): Promise<Response> {
   return app.fetch(
@@ -77,6 +78,28 @@ async function getAdminUserId(): Promise<string> {
 describe("GET /api/v1/audit-log", () => {
   let adminToken: string;
   let adminUserId: string;
+
+  it("pages distinct filter choices independently from log rows and validates the field", async () => {
+    for (const action of ["form_created", "organization_updated", "user_updated", "form_created"]) {
+      await insertAuditLogRow({ actorType: "system", action, entityType: "form", secondsAgo: 1 });
+    }
+    const first = await callAppGet("/api/v1/audit-log/filters?field=action&limit=2", adminToken);
+    expect(first.status).toBe(200);
+    const page = listFilterOptionsResponseSchema.parse(await first.json());
+    expect(page.options.map((option) => option.value)).toEqual(["form_created", "organization_updated"]);
+    expect(page.page).toMatchObject({ total: 3, hasMore: true });
+    const last = await callAppGet("/api/v1/audit-log/filters?field=action&limit=2&offset=2", adminToken);
+    expect(listFilterOptionsResponseSchema.parse(await last.json()).options.map((option) => option.value)).toEqual([
+      "user_updated",
+    ]);
+    const search = await callAppGet("/api/v1/audit-log/filters?field=action&q=organization", adminToken);
+    expect(listFilterOptionsResponseSchema.parse(await search.json()).options).toEqual([
+      { value: "organization_updated", label: "organization updated" },
+    ]);
+    expect((await callAppGet("/api/v1/audit-log/filters?field=details_json", adminToken)).status).toBe(400);
+    expect((await callAppGet("/api/v1/audit-log/filters?field=action&limit=201", adminToken)).status).toBe(400);
+    expect((await callAppGet("/api/v1/audit-log/filters?field=action", "invalid")).status).toBe(401);
+  });
 
   beforeEach(async () => {
     await resetDb();

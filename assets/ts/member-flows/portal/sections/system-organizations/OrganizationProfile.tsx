@@ -1,3 +1,4 @@
+import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * The organization account page's cards, each readable and — in the page's
@@ -11,10 +12,7 @@ import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCate
  * and a bad one says so as it is typed. The page owns one draft and one
  * Save; a card only reads and updates the draft.
  */
-import {
-  orgTiedMembershipCategorySchema,
-  type OrganizationDetail,
-} from "../../../../../shared/schemas/organization-management";
+import { type OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { ORGANIZATION_CONTENT_MARKDOWN_HELP } from "../../../../shared/organization-content";
@@ -23,12 +21,11 @@ import { DescriptionList, type DescriptionListItem } from "../../../../ui/Descri
 import { Field } from "../../../../ui/Field";
 import { LinkList } from "../../../../ui/LinkList";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, Textarea, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt, fmtDate } from "../../ui";
 import type { OrganizationDraft, OrganizationTextField } from "./OrganizationDraft";
 import "../../../../ui/Content.css";
-
-const ORG_TIED_MEMBERSHIP_CATEGORIES = orgTiedMembershipCategorySchema.options;
+import { Markdown } from "../../../../components/Markdown";
 
 /** What a card needs to read the record and, while the page edits, the draft. */
 export interface OrganizationCardProps {
@@ -109,14 +106,14 @@ export function OrganizationAbout(props: OrganizationCardProps) {
           <TextField field="slogan" label="Slogan" maxLength={300} {...edit} />
           <Field label="Description" {...fields("description")}>
             {(control) => (
-              <Textarea
+              <MarkdownEditor
+                variant="compact"
                 {...control}
                 name="description"
-                rows={3}
-                maxLength={2000}
-                value={draft.description}
+                label="Description"
+                initialValue={draft.description}
                 disabled={busy}
-                onInput={(event) => onDraft({ description: (event.target as HTMLTextAreaElement).value })}
+                onChange={(description) => onDraft({ description })}
               />
             )}
           </Field>
@@ -143,7 +140,7 @@ export function OrganizationAbout(props: OrganizationCardProps) {
       <PanelHeader title="About" />
       <PanelBody class="pk-stack pk-stack--snug">
         {organization.description ? (
-          <p class="pk-prose-block">{organization.description}</p>
+          <Markdown className="pk-prose-block" markdown={organization.description} />
         ) : (
           <p class="pk-muted">Nothing written about this organization yet.</p>
         )}
@@ -219,6 +216,7 @@ export function OrganizationMembershipCard(props: OrganizationCardProps) {
   const { organization } = props;
   const edit = editor(props);
   const categories = useMembershipCategoryLabels();
+  const catalog = useMembershipCategoryCatalog();
   const created: DescriptionListItem = { term: "Created", value: fmt(organization.createdAt) };
   return (
     <Panel aria-label="Membership">
@@ -235,11 +233,13 @@ export function OrganizationMembershipCard(props: OrganizationCardProps) {
                   disabled={edit.busy}
                   onChange={(event) => edit.onDraft({ membershipCategory: (event.target as HTMLSelectElement).value })}
                 >
-                  {ORG_TIED_MEMBERSHIP_CATEGORIES.map((category) => (
-                    <option key={category} value={category}>
-                      {categories.label(category)}
-                    </option>
-                  ))}
+                  {catalog
+                    .filter((entry) => !entry.isIndividual)
+                    .map(({ code: category }) => (
+                      <option key={category} value={category}>
+                        {categories.label(category)}
+                      </option>
+                    ))}
                 </Select>
               )}
             </Field>

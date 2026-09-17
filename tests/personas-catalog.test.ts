@@ -133,7 +133,7 @@ describe("seeded personas hold the authority the catalog claims", () => {
     const moved = await call(
       personaRequest(reader, "/api/v1/members/applications/00000000000000000000000000000000/stage", {
         method: "PATCH",
-        body: JSON.stringify({ toStage: "in_review" }),
+        body: JSON.stringify({ toStage: "withdrawn" }),
       }),
     );
     expect(moved.status, "a read-only grant must not move an application").toBe(403);

@@ -25,6 +25,14 @@ vi.mock("wouter/use-hash-location", () => ({
 const ROLE_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "10000000-0000-4000-8000-000000000002";
 const GRANTER_ID = "10000000-0000-4000-8000-000000000003";
+/** The person the add page finds through the user picker. */
+const CANDIDATE = {
+  id: "10000000-0000-4000-8000-000000000006",
+  email: "organizer@example.test",
+  first_name: "Olive",
+  last_name: "Organizer",
+  organization_name: null,
+};
 const mounted: HTMLElement[] = [];
 
 interface CapturedRequest {
@@ -42,6 +50,9 @@ function roleRow(overrides: Record<string, unknown> = {}) {
     id: ROLE_ID,
     userEmail: "moderator@example.test",
     userId: USER_ID,
+    userFirstName: null,
+    userLastName: null,
+    headshotUrl: null,
     role: "moderator",
     grantedByUserId: GRANTER_ID,
     expiresAt: null,
@@ -89,6 +100,9 @@ function stubFetch({
       requests.push({ path: url.pathname, method, body });
       if (method === "POST") return Promise.resolve(post());
       if (method === "DELETE") return Promise.resolve(json({ success: true }));
+      if (url.pathname === "/api/v1/users") {
+        return Promise.resolve(json({ users: [CANDIDATE], page: { limit: 8, offset: 0, total: 1, hasMore: false } }));
+      }
       return Promise.resolve(json(roles));
     }),
   );
@@ -141,6 +155,26 @@ async function openAddForm(container: HTMLElement): Promise<HTMLElement> {
   return page;
 }
 
+/** Drives the debounced user picker to the candidate, as a reader would. */
+async function pickPerson(container: HTMLElement): Promise<void> {
+  vi.useFakeTimers();
+  const search = container.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
+  void act(() => {
+    search.value = "olive";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250);
+  });
+  vi.useRealTimers();
+  await settle();
+  const option = [...container.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes(CANDIDATE.email),
+  );
+  if (!option) throw new Error("the user picker offered no match");
+  await act(async () => option.click());
+}
+
 async function submitAddForm(container: HTMLElement): Promise<void> {
   await act(async () => {
     container
@@ -191,14 +225,20 @@ describe("event team role management", () => {
       body: undefined,
     });
 
-    expect(container.querySelector('input[type="email"]')).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
     const addPage = await openAddForm(container);
+    // Nothing leads back to the list but the breadcrumb and Cancel: the tab
+    // above already is the list (#88).
+    expect([...addPage.querySelectorAll("button")].some((b) => b.textContent?.includes("All team members"))).toBe(
+      false,
+    );
 
-    const email = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
+    // A team member is an existing person, found with the picker (#88); the
+    // page has no address field to type an unknown person into.
+    expect(addPage.querySelector('input[type="email"]')).toBeNull();
+    await pickPerson(addPage);
     const role = addPage.querySelector<HTMLSelectElement>("select")!;
     await act(async () => {
-      email.value = "organizer@example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
       role.value = "organizer";
       role.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -210,7 +250,7 @@ describe("event team role management", () => {
     // than a literal, so a schema change cannot leave this asserting a shape
     // the server no longer accepts.
     expect(eventTeamRoleCreateSchema.parse(posted?.body)).toEqual({
-      userEmail: "organizer@example.test",
+      userId: CANDIDATE.id,
       role: "organizer",
     });
 
@@ -233,10 +273,10 @@ describe("event team role management", () => {
     const form = addPage.querySelector<HTMLFormElement>("form")!;
     expect(form.getAttribute("aria-label")).toBe("Add team member");
 
-    const email = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
-    expect(email.id).not.toBe("");
-    expect(labelFor(addPage, "Email").getAttribute("for")).toBe(email.id);
-    expect(email.required).toBe(true);
+    const person = addPage.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
+    expect(person.id).not.toBe("");
+    expect(labelFor(addPage, "Person").getAttribute("for")).toBe(person.id);
+    expect(person.required).toBe(true);
 
     const role = addPage.querySelector<HTMLSelectElement>("select")!;
     expect(labelFor(addPage, "Role").getAttribute("for")).toBe(role.id);
@@ -263,11 +303,7 @@ describe("event team role management", () => {
     // From here on, any navigation is the submit's own.
     navigate.mockClear();
 
-    const email = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
-    await act(async () => {
-      email.value = "organizer@example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await pickPerson(addPage);
     await submitAddForm(addPage);
 
     expect(requests.some(({ method }) => method === "POST")).toBe(true);
@@ -275,11 +311,11 @@ describe("event team role management", () => {
     const alert = addPage.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("That person already holds this role.");
 
-    // The page survives the failure with the typed value intact, so the fix is
-    // one edit away rather than a re-entry from scratch — and the reader is
+    // The page survives the failure with the picked person intact, so the fix
+    // is one edit away rather than a re-entry from scratch — and the reader is
     // not sent back to the list with nothing to correct.
-    const stillThere = addPage.querySelector<HTMLInputElement>('input[type="email"]')!;
-    expect(stillThere.value).toBe("organizer@example.test");
+    const stillThere = addPage.querySelector<HTMLInputElement>('input[placeholder="Search by email or name…"]')!;
+    expect(stillThere.value).toBe(CANDIDATE.email);
     expect(navigate).not.toHaveBeenCalled();
   });
 

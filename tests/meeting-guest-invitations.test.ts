@@ -1,3 +1,4 @@
+import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../functions/router";
@@ -8,11 +9,7 @@ import {
 } from "../functions/_lib/auth/meeting-guest-challenge";
 import { processOutboxById } from "../functions/_lib/email/outbox";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
-import {
-  createGroupEventSeries,
-  createSeriesOccurrence,
-  inviteOccurrenceGuest,
-} from "../functions/_lib/services/event-series";
+import { createGroupEventSeries, inviteOccurrenceGuest } from "../functions/_lib/services/event-series";
 import type { AuthAdmin, DatabaseLike, Env, StatementLike } from "../functions/_lib/types";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -63,7 +60,7 @@ async function fixture() {
     location: "Online",
     providerType: "external_url",
   });
-  const occurrence = await createSeriesOccurrence(
+  const occurrence = await configureMeetingOccurrence(
     env.DB,
     admin,
     GROUP_ID,

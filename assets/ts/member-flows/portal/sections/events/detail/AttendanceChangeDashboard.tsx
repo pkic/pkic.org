@@ -1,8 +1,9 @@
 import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
+import { PersonCell } from "../../../../../ui/PersonCell";
 import { StatCard } from "../../../../../ui/StatCard";
-import { attendanceTypeLabel } from "../attendance";
+import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import type { EventStatsResponse } from "../types";
 import { fmt } from "../../../ui";
 import { eventRegistrationViewPath } from "./registration-paths";
@@ -42,19 +43,18 @@ const BY_TRANSITION_COLUMNS: ReadonlyArray<DataTableColumn<AttendanceChangeTrans
   { id: "days", header: "Days", align: "end", cell: (row) => <span class="pk-muted">{row.day_changes}</span> },
 ];
 
-/** The slug is part of every attendee link, so these columns are built per event. */
-function recentColumns(slug: string): ReadonlyArray<DataTableColumn<AttendanceChangeRecentRow>> {
+/** The recent-changes columns; the row itself opens the registration. */
+function recentColumns(): ReadonlyArray<DataTableColumn<AttendanceChangeRecentRow>> {
   return [
     {
       id: "attendee",
       header: "Attendee",
       cell: (row) => (
-        <>
-          <a class="pk-strong" href={`#${eventRegistrationViewPath(slug, row.registration_id)}`}>
-            {row.display_name ?? row.user_email ?? row.registration_id}
-          </a>
-          {row.display_name && row.user_email && <div class="pk-small">{row.user_email}</div>}
-        </>
+        <PersonCell
+          name={row.display_name ?? row.user_email ?? row.registration_id}
+          email={row.display_name && row.user_email ? row.user_email : undefined}
+          size="sm"
+        />
       ),
     },
     {
@@ -96,7 +96,7 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
       <PanelBody class="pk-stack">
         <p class="pk-small">Attendee totals count each person once. Day changes count each affected event day.</p>
 
-        <div class="pk-grid pk-grid--tight">
+        <div class="pk-stat-row">
           <StatCard
             label="Attendees changed"
             value={String(changes.changedAttendees)}
@@ -122,7 +122,7 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
 
         {changes.changedAttendees > 0 ? (
           <>
-            <div class="pk-grid pk-grid--roomy">
+            <div class="pk-stack">
               <DataTable
                 caption="Where attendance changed"
                 showCaption
@@ -144,9 +144,14 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
             <DataTable
               caption="Recent attendee changes"
               showCaption
-              columns={recentColumns(slug)}
+              columns={recentColumns()}
               rows={changes.recent}
               rowKey={recentRowKey}
+              // The row is the attendee, so the row opens their registration.
+              rowAction={(row) => ({
+                label: `Open ${row.display_name ?? row.user_email ?? row.registration_id}`,
+                href: `#${eventRegistrationViewPath(slug, row.registration_id)}`,
+              })}
               empty={<EmptyState title="No recent change to show." />}
             />
           </>

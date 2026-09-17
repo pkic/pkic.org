@@ -169,9 +169,9 @@ describe("group vote statistics", () => {
 
     // A section with no name is announced as nothing at all, and a table with
     // no caption is announced as "table" beside every other table on the page.
-    const region = container.querySelector("section[aria-label='Vote statistics']");
+    const region = container.querySelector("section[aria-label='Vote analytics']");
     expect(region).not.toBeNull();
-    expect(region?.querySelector("h3")?.textContent).toBe("Vote statistics");
+    expect(region?.querySelector("h3")?.textContent).toBe("Vote analytics");
     expect(container.querySelector("table caption")?.textContent).toBe("Election candidates");
   });
 
@@ -189,7 +189,7 @@ describe("group vote statistics", () => {
     const alert = container.querySelector("[role='alert']");
     expect(alert?.textContent).toContain("You don't have access to this.");
     expect(alert?.textContent).not.toContain("HTTP 403");
-    expect(container.querySelector("section[aria-label='Vote statistics']")).toBeNull();
+    expect(container.querySelector("section[aria-label='Vote analytics']")).toBeNull();
   });
 
   it("does not request statistics from the settings facet — statistics are their own tab", async () => {

@@ -5,13 +5,10 @@ import { Button, type ButtonVariant } from "../../../../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { toast } from "../../ui";
 import { emailReminderRunResponseSchema } from "../../../../../shared/schemas/email-reminders";
-import {
-  membershipBatchRunResponseSchema,
-  type MembershipBatchKey,
-} from "../../../../../shared/schemas/membership-batches";
+
 import { retentionRunResponseSchema } from "../../../../../shared/schemas/retention";
 
-type CommandKey = "preview" | "reminders" | "retention" | MembershipBatchKey;
+type CommandKey = "preview" | "reminders" | "retention";
 
 /**
  * Each command targets the domain that owns the work, so its availability is
@@ -79,13 +76,6 @@ export function OperationActions({
     });
   }
 
-  async function membershipBatch(batchKey: MembershipBatchKey): Promise<string> {
-    const result = await postJson(`/api/v1/membership/batches/${batchKey}/runs`, {}, membershipBatchRunResponseSchema);
-    if (batchKey === "consultation") return `${result.applicationsNotified ?? 0} consultation application(s) notified.`;
-    if (batchKey === "ec-review") return `${result.transitioned ?? 0} application(s) moved to EC review.`;
-    return `${result.emailsSent ?? 0} chair digest email(s) queued.`;
-  }
-
   const canRunAnything = canManageEmail || canWriteMembership || canApproveMembership || canRunRetention;
 
   /**
@@ -113,27 +103,6 @@ export function OperationActions({
       variant: "secondary",
       visible: canManageEmail,
       activate: () => void run("reminders", () => reminders("execute")),
-    },
-    {
-      key: "consultation",
-      label: "Run consultation batch",
-      variant: "secondary",
-      visible: canWriteMembership,
-      activate: () => void run("consultation", () => membershipBatch("consultation")),
-    },
-    {
-      key: "ec-review",
-      label: "Run EC review batch",
-      variant: "secondary",
-      visible: canApproveMembership,
-      activate: () => void run("ec-review", () => membershipBatch("ec-review")),
-    },
-    {
-      key: "wg-chair-digest",
-      label: "Queue chair digest",
-      variant: "secondary",
-      visible: canWriteMembership,
-      activate: () => void run("wg-chair-digest", () => membershipBatch("wg-chair-digest")),
     },
     {
       key: "retention",
@@ -172,6 +141,9 @@ export function OperationActions({
                 </Button>
               ))}
           </div>
+          {(canWriteMembership || canApproveMembership) && (
+            <p class="pk-small">Membership workflows and chair digests run through Settings → Scheduled jobs.</p>
+          )}
           {!canRunAnything && <p class="pk-small">Reminder preview is read-only.</p>}
         </PanelBody>
       </Panel>

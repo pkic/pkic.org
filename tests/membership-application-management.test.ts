@@ -5,7 +5,6 @@
  *  - PATCH /api/v1/members/applications/:id (Fix 3: correct applicant-submitted
  *    fields without transitioning stage)
  *  - GET /api/v1/members/applications?sort=... (Fix 4: sortable columns)
- *  - POST /api/v1/membership/batches/:batchKey/runs
  *    (manual off-cycle triggers for the twice-weekly membership batches)
  *
  * Structure mirrors tests/admin-members.test.ts and
@@ -17,19 +16,16 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
-import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { gateBatchGroup, gateNextBatch } from "./helpers/d1-batch-gate";
 import { updateMembershipSettings } from "../functions/_lib/services/membership-settings";
-import { runOnHoldReminders } from "../functions/_lib/services/membership/scheduled-jobs";
+import { runOnHoldReminders } from "../functions/_lib/services/membership/on-hold-reminders";
 import { updateMembershipApplication } from "../functions/_lib/services/membership/applications/management";
-import { submitApplicationConcern } from "../functions/_lib/services/membership/applications/queries";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { membershipApplicationsListResponseSchema } from "../assets/shared/schemas/membership-application-management";
 import { membershipCategoryCatalogResponseSchema } from "../assets/shared/schemas/membership-categories";
-import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
@@ -81,7 +77,7 @@ async function createApplication(overrides: Record<string, unknown> = {}): Promi
     organizationDomain: (overrides.organization_domain as string) ?? "example.test",
     membershipCategory: (overrides.membership_category as string) ?? "F",
     formSubmissionId: (overrides.form_submission_id as string | null) ?? null,
-    stage: (overrides.stage as string) ?? "pending",
+    stage: (overrides.stage as string) ?? "submitted",
     createdAt: (overrides.created_at as string) ?? new Date().toISOString(),
   });
   return { id };
@@ -132,7 +128,7 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     expect(body.answers.job_title).toBe("Senior Engineer");
     expect(body.answers.reason).toBe("Updated reason");
     // Stage is untouched by an edit.
-    expect(body.stage).toBe("pending");
+    expect(body.stage).toBe("submitted");
 
     const rows = await queryAll<{
       applicant_name: string;
@@ -149,7 +145,7 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     // organization_domain is kept in lockstep with applicantEmail so
     // duplicate-application detection (Fix 1's subject) doesn't desync.
     expect(rows[0].organization_domain).toBe("newdomain.test");
-    expect(rows[0].stage).toBe("pending");
+    expect(rows[0].stage).toBe("submitted");
   });
 
   it("fails closed when answer edits encounter a weakened workflow policy field", async () => {
@@ -263,73 +259,26 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     ]);
   });
 
-  it("uses the editable D1 voting policy for consultation concerns", async () => {
-    const { id } = await createApplication({ stage: "in_consultation" });
-    const userId = await insertUser("h1-member@example.test");
-    const organizationId = await insertOrganization(env.DB, "H1 Member Organization");
-    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "H1");
-    await addRepresentative(env.DB, memberId, userId);
-    const memberToken = await createMemberSession(env.DB, userId, "h1-concern-member-token");
-
-    const denied = await call(memberToken, `/api/v1/members/applications/${id}/concerns`, {
-      method: "POST",
-      body: JSON.stringify({ concernText: "This should initially be denied." }),
+  it("resolves working groups the public form named by id, the way its option catalog emits them", async () => {
+    const pqc = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM groups WHERE slug = 'pqc'"))[0];
+    const formSubmissionId = await createApplicationFormSubmission({
+      working_groups: [pqc.id, "ca"],
     });
-    expect(denied.status).toBe(403);
+    const { id } = await createApplication({ form_submission_id: formSubmissionId });
 
-    await env.DB.prepare(
-      "UPDATE membership_categories SET is_voting = 1, revision = revision + 1 WHERE code = 'H1'",
-    ).run();
-    const accepted = await call(memberToken, `/api/v1/members/applications/${id}/concerns`, {
-      method: "POST",
-      body: JSON.stringify({ concernText: "This now follows the configured voting policy." }),
-    });
-    expect(accepted.status).toBe(201);
-    expect(
-      await queryAll<{ submitted_by_user_id: string; concern_text: string }>(
-        env.DB,
-        "SELECT submitted_by_user_id, concern_text FROM application_concerns WHERE application_id = ?",
-        id,
-      ),
-    ).toEqual([
-      {
-        submitted_by_user_id: userId,
-        concern_text: "This now follows the configured voting policy.",
-      },
-    ]);
-  });
-
-  it("rolls a concern back when voting eligibility changes before its D1 batch", async () => {
-    const { id } = await createApplication({ stage: "in_consultation" });
-    const userId = await insertUser("raced-concern-member@example.test");
-    const organizationId = await insertOrganization(env.DB, "Raced Concern Organization");
-    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "H1");
-    await addRepresentative(env.DB, memberId, userId);
-    await env.DB.prepare("UPDATE membership_categories SET is_voting = 1 WHERE code = 'H1'").run();
-
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE membership_categories SET is_voting = 0 WHERE code = 'H1'").run(),
-    );
-    await expect(
-      submitApplicationConcern(racedDb, {
-        applicationId: id,
-        submittedByUserId: userId,
-        submittedByMemberId: memberId,
-        concernText: "This must not survive the eligibility race.",
-      }),
-    ).rejects.toMatchObject({ status: 409, code: "CONCERN_ELIGIBILITY_CHANGED" });
-    expect(await queryAll(env.DB, "SELECT id FROM application_concerns WHERE application_id = ?", id)).toHaveLength(0);
-    expect(
-      await queryAll(
-        env.DB,
-        "SELECT id FROM audit_log WHERE action = 'membership_application_concern_submitted' AND entity_id = ?",
-        id,
-      ),
-    ).toHaveLength(0);
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`);
+    const body = (await response.json()) as {
+      requestedWorkingGroups: Array<{ slug: string; name: string }>;
+    };
+    expect(response.status, JSON.stringify(body)).toBe(200);
+    // Each request reads as the group, whichever way the answer named it (#105).
+    expect(body.requestedWorkingGroups.map((group) => group.slug)).toEqual(["pqc", "ca"]);
+    expect(body.requestedWorkingGroups[0].name).toBe("Post-Quantum Cryptography Working Group");
+    expect(body.requestedWorkingGroups[1].name).not.toBe("ca");
   });
 
   it("records a member_application_events row for the edit, distinct from a stage transition (fromStage === toStage)", async () => {
-    const { id } = await createApplication({ stage: "in_review" });
+    const { id } = await createApplication({ stage: "processing" });
 
     const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
       method: "PATCH",
@@ -343,15 +292,15 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
       id,
     );
     expect(events).toHaveLength(1);
-    expect(events[0].from_stage).toBe("in_review");
-    expect(events[0].to_stage).toBe("in_review");
+    expect(events[0].from_stage).toBe("processing");
+    expect(events[0].to_stage).toBe("processing");
     expect(events[0].note).toContain("edited");
     expect(events[0].note).toContain("applicantName");
     expect(events[0].actor_user_id).toBe(adminId);
   });
 
   it("rejects API-key edits without side effects", async () => {
-    const { id } = await createApplication({ stage: "in_review" });
+    const { id } = await createApplication({ stage: "processing" });
     const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ applicantName: "API Key Correction" }),
@@ -647,70 +596,6 @@ describe("GET /api/v1/members/applications?sort=... (Fix 4 — sortable columns)
   });
 });
 
-describe("POST /api/v1/membership/batches/:batchKey/runs", () => {
-  let adminToken: string;
-
-  beforeEach(async () => {
-    await resetDb();
-    await seedEventAndAdmin(env.DB);
-    const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
-    adminToken = await createAdminSession(env.DB, adminRow.id, "operations-membership-batch-token");
-  });
-
-  it("runConsultationBatch queues a consultation-batch email for applications in_consultation", async () => {
-    await createApplication({ stage: "in_consultation" });
-
-    const response = await call(adminToken, "/api/v1/membership/batches/consultation/runs", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { applicationsNotified: number };
-    expect(body.applicationsNotified).toBe(1);
-
-    const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
-    expect(outbox).toHaveLength(1);
-  });
-
-  it("runEcReviewBatch transitions eligible applications to ec_review", async () => {
-    const { id } = await createApplication({
-      stage: "in_consultation",
-      created_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
-    });
-    // Backdate stage_entered_at past the (default 7-day) consultation window.
-    await env.DB.prepare("UPDATE member_applications SET stage_entered_at = ? WHERE id = ?")
-      .bind(new Date(Date.now() - 10 * 86_400_000).toISOString(), id)
-      .run();
-
-    const response = await call(adminToken, "/api/v1/membership/batches/ec-review/runs", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { transitioned: number };
-    expect(body.transitioned).toBe(1);
-
-    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
-    expect(rows[0].stage).toBe("ec_review");
-  });
-
-  it("rejects an unknown batch kind without running another batch", async () => {
-    await createApplication({ stage: "in_consultation" });
-
-    const response = await call(adminToken, "/api/v1/membership/batches/everything/runs", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    // One parameterised route validates the batch key against the shared
-    // catalog, so an unknown key is a contract violation rather than a
-    // missing route.
-    expect(response.status).toBe(400);
-
-    const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'consultation-batch'");
-    expect(outbox).toHaveLength(0);
-  });
-});
-
 describe("POST /api/v1/members/applications/:id/communications", () => {
   let adminToken: string;
 
@@ -725,15 +610,25 @@ describe("POST /api/v1/members/applications/:id/communications", () => {
     const { id } = await createApplication({ applicant_email: "communication@example.test" });
     const response = await call(adminToken, `/api/v1/members/applications/${id}/communications`, {
       method: "POST",
-      body: JSON.stringify({ subject: "Additional information", body: "Please provide more detail." }),
+      body: JSON.stringify({
+        subject: "Additional information",
+        body: "Please provide more detail.",
+        templateKey: "application_request_information",
+      }),
     });
     expect(response.status).toBe(201);
     expect(
       await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
     ).toHaveLength(1);
+    // Sent through the application's own template rather than as a direct
+    // body, so the shell around the message is managed with the rest (#108).
     expect(
-      await queryAll(env.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", "communication@example.test"),
-    ).toHaveLength(1);
+      await queryAll<{ template_key: string; subject: string | null }>(
+        env.DB,
+        "SELECT template_key, subject FROM email_outbox WHERE recipient_email = ?",
+        "communication@example.test",
+      ),
+    ).toEqual([{ template_key: "application_request_information", subject: "Additional information" }]);
     expect(
       await queryAll(
         env.DB,

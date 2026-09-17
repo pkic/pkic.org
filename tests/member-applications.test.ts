@@ -5,7 +5,11 @@ import { createContext, createTestRateLimiter, queryAll } from "./helpers/contex
 import { handleError } from "../functions/_lib/http";
 import { onRequestPost as createApplication } from "../functions/api/v1/members/applications";
 import { onRequestGet as getApplicationForm } from "../functions/api/v1/members/applications/form";
-import { onRequestGet as getApplicationStatus } from "../functions/api/v1/members/applications/[id]/status";
+import app from "../functions/router";
+
+function getApplicationStatus(context: ReturnType<typeof createContext>) {
+  return app.fetch(context.req.raw, context.env, { waitUntil() {}, passThroughOnException() {} } as any);
+}
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
   requiredMembershipApplicationAnswers,
@@ -68,7 +72,7 @@ describe("POST /api/v1/members/applications", () => {
     await seedMembershipApplicationForm();
   });
 
-  it("creates a member_applications record with stage=pending", async () => {
+  it("creates a member_applications record with stage=submitted", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(
       createApplication,
@@ -77,7 +81,7 @@ describe("POST /api/v1/members/applications", () => {
 
     expect(response.status).toBe(201);
     const body = memberApplicationCreateResponseSchema.parse(await response.json());
-    expect(body.stage).toBe("pending");
+    expect(body.stage).toBe("submitted");
     expect(body.manageToken).toBeTruthy();
 
     const rows = await queryAll<{ stage: string; applicant_email: string }>(
@@ -86,7 +90,7 @@ describe("POST /api/v1/members/applications", () => {
       [body.applicationId],
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].stage).toBe("pending");
+    expect(rows[0].stage).toBe("submitted");
     expect(rows[0].applicant_email).toBe("alice@example-corp.test");
   });
 
@@ -122,7 +126,7 @@ describe("POST /api/v1/members/applications", () => {
     expect(response.status).toBe(422);
     const body = (await response.json()) as { error: { details?: { fieldErrors?: Record<string, string[]> } } };
     expect(body.error.details?.fieldErrors?.applicantEmail).toEqual([
-      "Category H5 requires a university email address; personal email providers are not accepted",
+      "This category requires a university email address; personal email providers are not accepted",
     ]);
     expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toHaveLength(0);
   });
@@ -501,7 +505,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
 
     expect(response.status).toBe(200);
     const body = memberApplicationStatusResponseSchema.parse(await response.json());
-    expect(body.stage).toBe("pending");
+    expect(body.stage).toBe("submitted");
   });
 
   it("returns 401 for an invalid token", async () => {
@@ -522,7 +526,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
     expect(response.status).toBe(401);
   });
 
-  it("returns 401 for a missing token", async () => {
+  it("returns 400 for a missing token", async () => {
     const testEnv = makeEnv();
     const created = await createTestApplication(testEnv);
 
@@ -537,7 +541,7 @@ describe("GET /api/v1/members/applications/:id/status", () => {
       ),
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(400);
   });
 });
 

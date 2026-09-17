@@ -6,7 +6,11 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
-import { emailOutboxQuerySchema, emailOutboxResponseSchema } from "../assets/shared/schemas/email-outbox";
+import {
+  emailOutboxDetailResponseSchema,
+  emailOutboxQuerySchema,
+  emailOutboxResponseSchema,
+} from "../assets/shared/schemas/email-outbox";
 import { buildEmailOutboxQueryStatements } from "../functions/_lib/services/email-outbox/query";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 
@@ -42,6 +46,32 @@ async function setupAdmin(): Promise<{ eventId: string; adminId: string }> {
 describe("GET /api/v1/email/outbox", () => {
   beforeEach(async () => {
     await resetDb();
+  });
+
+  it("reads a single delivery failure without exposing the queued capability payload", async () => {
+    const { eventId } = await setupAdmin();
+    const id = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "user_magic_link",
+      recipientEmail: "alex@example.test",
+      data: { token: "private-capability" },
+      messageType: "transactional",
+    });
+    await env.DB.prepare("UPDATE email_outbox SET status = 'failed', last_error = ? WHERE id = ?")
+      .bind("Provider refused delivery", id)
+      .run();
+    const response = await callAdmin(`/api/v1/email/outbox/${id}`);
+    expect(response.status).toBe(200);
+    const body = emailOutboxDetailResponseSchema.parse(await response.json());
+    expect(body.message.lastError).toBe("Provider refused delivery");
+    expect(JSON.stringify(body)).not.toContain("private-capability");
+    expect((await callAdmin("/api/v1/email/outbox/ffffffffffffffffffffffffffffffff")).status).toBe(404);
+    const anonymous = await app.fetch(
+      new Request(`https://app.test/api/v1/email/outbox/${id}`),
+      env as any,
+      { waitUntil() {}, passThroughOnException() {} } as any,
+    );
+    expect(anonymous.status).toBe(401);
   });
 
   it("filters by status, messageType, dueNow, and q via the validated query schema", async () => {

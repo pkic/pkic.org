@@ -755,7 +755,13 @@ describe("registration workflows", () => {
     expect(confirmResponse.status).toBe(200);
     const payload = (await confirmResponse.json()) as {
       status: string;
-      dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+      dayAttendance: Array<{
+        dayDate: string;
+        attendanceType: string;
+        label: string | null;
+        heldSince?: string;
+        changedAt?: string;
+      }>;
       dayWaitlist: Array<{
         dayDate: string;
         status: string;
@@ -766,7 +772,12 @@ describe("registration workflows", () => {
     };
 
     expect(payload.status).toBe("registered");
-    expect(payload.dayAttendance).toEqual([{ dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" }]);
+    // Each held day also says when it was first held and last changed (#113).
+    expect(payload.dayAttendance).toMatchObject([
+      { dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" },
+    ]);
+    expect(payload.dayAttendance[0].heldSince).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(payload.dayAttendance[0].changedAt).toBe(payload.dayAttendance[0].heldSince);
     expect(payload.dayWaitlist).toEqual([
       {
         dayDate: "2026-12-01",

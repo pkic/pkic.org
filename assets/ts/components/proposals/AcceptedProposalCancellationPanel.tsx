@@ -5,8 +5,9 @@ import { Button } from "../../ui/Button";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
-import { Textarea } from "../../ui/TextControl";
 import "../../ui/Content.css";
+import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
+import { Markdown } from "../Markdown";
 
 export interface CancellableProposal {
   status: string;
@@ -41,7 +42,7 @@ export function AcceptedProposalCancellationPanel({
       <Panel class="pk">
         <PanelHeader title="Session canceled" />
         <PanelBody class="pk-stack pk-stack--snug">
-          {proposal.cancellation_comment && <p class="pk-answer-pre">{proposal.cancellation_comment}</p>}
+          {proposal.cancellation_comment && <Markdown markdown={proposal.cancellation_comment} />}
           {proposal.canceled_at && <p class="pk-small">Canceled {formatDateTime(proposal.canceled_at)}</p>}
         </PanelBody>
       </Panel>
@@ -75,15 +76,15 @@ export function AcceptedProposalCancellationPanel({
             Canceling removes the session from the program, deactivates its speaker capacity, and emails every speaker
             linked to the proposal. The accepted decision remains in the audit history.
           </Alert>
-          <Field label="Comment to speakers" required>
+          <Field label="Comment to speakers" required help="Explain why this accepted session is being canceled.">
             {(control) => (
-              <Textarea
+              <MarkdownEditor
+                variant="compact"
                 {...control}
-                rows={4}
-                maxLength={5000}
-                value={comment}
-                onInput={(event) => setComment((event.target as HTMLTextAreaElement).value)}
-                placeholder="Explain why this accepted session is being canceled."
+                name="comment"
+                label="Comment to speakers"
+                initialValue={comment}
+                onChange={setComment}
               />
             )}
           </Field>

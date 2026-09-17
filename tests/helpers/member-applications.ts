@@ -76,7 +76,7 @@ export async function seedMemberApplication(options: SeedMemberApplicationOption
   const applicantEmail = options.applicantEmail ?? "applicant@example.test";
   const organizationDomain =
     options.organizationDomain === undefined ? (applicantEmail.split("@")[1] ?? null) : options.organizationDomain;
-  const stage = options.stage ?? "pending";
+  const stage = options.stage ?? "submitted";
   const stageEnteredAt = options.stageEnteredAt ?? new Date().toISOString();
   const createdAt = options.createdAt ?? new Date().toISOString();
 

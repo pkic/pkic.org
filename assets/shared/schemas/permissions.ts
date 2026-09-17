@@ -13,6 +13,7 @@ export const PERMISSIONS = [
   "groups:write",
   "email-templates:read",
   "email-templates:write",
+  "email-templates:manage",
   "forms:read",
   "forms:write",
   "email:read",

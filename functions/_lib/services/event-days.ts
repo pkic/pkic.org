@@ -110,10 +110,27 @@ export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventI
 export async function getRegistrationDayAttendance(
   db: DatabaseLike,
   registrationId: string,
-): Promise<Array<{ dayDate: string; attendanceType: DayAttendanceType; label: string | null }>> {
-  return all<{ dayDate: string; attendanceType: DayAttendanceType; label: string | null }>(
+): Promise<
+  Array<{
+    dayDate: string;
+    attendanceType: DayAttendanceType;
+    label: string | null;
+    /** When the day was first held on this registration. */
+    heldSince: string;
+    /** When the day's attendance last changed. */
+    changedAt: string;
+  }>
+> {
+  return all<{
+    dayDate: string;
+    attendanceType: DayAttendanceType;
+    label: string | null;
+    heldSince: string;
+    changedAt: string;
+  }>(
     db,
-    `SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label
+    `SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
+            rda.created_at AS heldSince, rda.updated_at AS changedAt
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id = ?
@@ -248,22 +265,40 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     return [];
   }
 
+  // Only the days that change are written. Rewriting the whole roster —
+  // delete every row, insert every row — gave each day the timestamp of the
+  // registration's last change rather than its own, so a record could not
+  // say when one day was added or last moved (#113). A day that stays as it
+  // was keeps its row, its `created_at` (when it was first held) and its
+  // `updated_at` (when it last changed).
   const now = nowIso();
-  const statements = [
-    db.prepare("DELETE FROM registration_day_attendance WHERE registration_id = ?").bind(payload.registrationId),
-  ];
-  for (const selection of selections) {
-    const day = dayMap.get(selection.dayDate);
-    if (!day) continue;
-
+  const statements: StatementLike[] = [];
+  for (const dayId of previousByDayId.keys()) {
+    if (nextByDayId.has(dayId)) continue;
     statements.push(
       db
-        .prepare(
-          `INSERT INTO registration_day_attendance (
-             id, registration_id, event_day_id, attendance_type, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(uuid(), payload.registrationId, day.id, selection.attendanceType, now, now),
+        .prepare("DELETE FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?")
+        .bind(payload.registrationId, dayId),
+    );
+  }
+  for (const [dayId, attendanceType] of nextByDayId) {
+    const previous = previousByDayId.get(dayId);
+    if (previous === attendanceType) continue;
+    statements.push(
+      previous === undefined
+        ? db
+            .prepare(
+              `INSERT INTO registration_day_attendance (
+                 id, registration_id, event_day_id, attendance_type, created_at, updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(uuid(), payload.registrationId, dayId, attendanceType, now, now)
+        : db
+            .prepare(
+              `UPDATE registration_day_attendance SET attendance_type = ?, updated_at = ?
+                WHERE registration_id = ? AND event_day_id = ?`,
+            )
+            .bind(attendanceType, now, payload.registrationId, dayId),
     );
   }
 
@@ -293,6 +328,5 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     }
   }
 
-  if (statements.length === 1 && selections.length === 0 && previousByDayId.size === 0) return [];
   return statements;
 }

@@ -19,9 +19,10 @@ import { sponsorshipResponseSchema, type Sponsorship } from "../../../../../../s
 import { useSponsorshipTierCatalog } from "../../../../../hooks/useSponsorshipTierCatalog";
 import { Button } from "../../../../../ui/Button";
 import { Field } from "../../../../../ui/Field";
-import { Select, TextInput, Textarea } from "../../../../../ui/TextControl";
+import { Select, TextInput } from "../../../../../ui/TextControl";
 import { UserPicker, type PickedUser } from "../../../../../components/UserPicker";
 import { toast } from "../../../ui";
+import { MarkdownEditor } from "../../../../../components/markdown-editor/MarkdownInput";
 
 /** The tiers on offer, plus whatever this sponsorship already holds. */
 function tierOptions(catalog: readonly string[], current: string | null): readonly string[] {
@@ -33,10 +34,12 @@ function tierOptions(catalog: readonly string[], current: string | null): readon
 export function SponsorshipRecordForm({
   sponsorship,
   onSaved,
+  onCancel,
 }: {
   sponsorship: Sponsorship;
-  /** Closing the form is the panel header's Edit/Cancel toggle, not a second control down here. */
   onSaved: () => Promise<void>;
+  /** Leaves the form without saving; the record's menu is what opened it. */
+  onCancel?: () => void;
 }) {
   const [tier, setTier] = useState(sponsorship.tier ?? "");
   const [contactName, setContactName] = useState(sponsorship.contactName ?? "");
@@ -186,16 +189,23 @@ export function SponsorshipRecordForm({
       </fieldset>
       <Field label="Notes">
         {(control) => (
-          <Textarea
+          <MarkdownEditor
+            variant="compact"
             {...control}
-            rows={3}
-            value={notes}
+            name="notes"
+            label="Notes"
+            initialValue={notes}
             disabled={busy}
-            onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+            onChange={setNotes}
           />
         )}
       </Field>
       <div class="pk-cluster">
+        {onCancel && (
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
         <Button type="submit" variant="primary" size="sm" loading={busy}>
           Save
         </Button>

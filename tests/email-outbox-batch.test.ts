@@ -97,6 +97,32 @@ describe("email outbox batch processing", () => {
     expect(rows.every((r) => r.status === "sent")).toBe(true);
   });
 
+  it("sends from the sender the template names, and from the configured sender otherwise", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const named = await createTemplateVersion(env.DB, {
+      templateKey: "attendee_invite",
+      content: "Hello {{firstName}} from membership",
+      subjectTemplate: "From membership",
+      fromEmail: "membership@pkic.org",
+      fromName: "PKIC Membership",
+      createdByUserId: adminId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "attendee_invite", version: named.version });
+    await queueN(env.DB, eventId, 1);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    const [, namedInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(namedInit.body)).from).toEqual({ email: "membership@pkic.org", name: "PKIC Membership" });
+
+    // Back to a version with no sender of its own: the configured one again.
+    await activateTemplateVersion(env.DB, { templateKey: "attendee_invite", version: 1 });
+    await queueN(env.DB, eventId, 1);
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    const [, plainInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(plainInit.body)).from.email).not.toBe("membership@pkic.org");
+  });
+
   it("fails an unsafe template expansion terminally without calling SendGrid", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);

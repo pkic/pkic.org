@@ -74,7 +74,7 @@ export function SubjectAnalytics<Row>({
     <div class="pk pk-stack">
       <PageHeader title={title} description={lede} />
 
-      <div class="pk-grid pk-grid--tight">
+      <div class="pk-stat-row">
         {figures.map((figure) => (
           <StatCard key={figure.label} label={figure.label} value={String(figure.value)} note={figure.note} />
         ))}

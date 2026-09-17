@@ -14,7 +14,16 @@ import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/Propos
 import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/event-flows/proposal-manage-page";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
-import { buttonNamed, controlFor, labelNames, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
+import {
+  controlFor,
+  labelNames,
+  markdownControl,
+  markdownValue,
+  optionValues,
+  submitForm,
+  typeMarkdown,
+} from "./helpers/labelled-control";
+import { openCardMenu, runCardAction } from "./helpers/row-actions";
 
 let container: HTMLElement | null = null;
 
@@ -90,7 +99,7 @@ function mount(node: Parameters<typeof render>[0]): HTMLElement {
 }
 
 describe("proposal speaker removal UI", () => {
-  it("keeps admin headshot operations scoped to the proposal speaker", () => {
+  it("keeps admin headshot operations scoped to the proposal speaker", async () => {
     expect(proposalSpeakerAssetPath("proposal/1", "user/1", "headshot")).toBe(
       "/api/v1/proposals/proposal%2F1/speakers/user%2F1/headshot",
     );
@@ -99,7 +108,7 @@ describe("proposal speaker removal UI", () => {
     );
   });
 
-  it("shows proposal reviewers the headshot without mutation controls", () => {
+  it("shows proposal reviewers the headshot without mutation controls", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker({ headshotUrl: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot" })}
@@ -146,9 +155,8 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    await act(() =>
-      (root.querySelector('button[title="Send profile completion reminder"]') as HTMLButtonElement).click(),
-    );
+    // The commands sit behind the card's own menu, named for the speaker.
+    await runCardAction(root, "Casey Speaker", "Send profile reminder");
     await settle();
     expect(requests[0]).toMatchObject({
       url: "/api/v1/proposals/proposal-1/speakers/speaker-1/reminders",
@@ -156,14 +164,9 @@ describe("proposal speaker removal UI", () => {
       body: JSON.stringify({ kind: "profile" }),
     });
 
-    // Located by the name the reader hears, not by the layout class the button
-    // used to carry: the class is gone and a name cannot silently disappear
-    // without the control becoming unusable anyway.
-    const fetchGravatar = [...root.querySelectorAll("button")].find(
-      (button) => button.textContent === "Fetch from Gravatar",
-    );
-    expect(fetchGravatar).toBeDefined();
-    await act(() => fetchGravatar!.click());
+    // The Gravatar import is a command on the same menu; the photo itself is
+    // the shared picture tile, which carries the upload and the remove.
+    await runCardAction(root, "Casey Speaker", "Use Gravatar photo");
     await settle();
     expect(requests[1]).toMatchObject({
       url: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
@@ -173,7 +176,7 @@ describe("proposal speaker removal UI", () => {
     expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
   });
 
-  it("lets a proposer remove only non-proposer speakers", () => {
+  it("lets a proposer remove only non-proposer speakers", async () => {
     const nonProposer = mount(
       <ProposalManageSpeakerCard
         speaker={managedSpeaker()}
@@ -222,7 +225,7 @@ describe("proposal speaker removal UI", () => {
     ).toEqual(expect.arrayContaining(["moderator", "speaker"]));
   });
 
-  it("offers admin proposer transfer only to invited or confirmed speakers", () => {
+  it("offers admin proposer transfer only to invited or confirmed speakers", async () => {
     const speakers = [
       proposalSpeaker({ userId: "proposer-1", role: "proposer" }),
       proposalSpeaker({ userId: "invited-1", status: "invited", firstName: "Invited" }),
@@ -248,11 +251,18 @@ describe("proposal speaker removal UI", () => {
         onRemoved={() => {}}
       />,
     );
-    expect(root.querySelector("[data-replacement-proposer]")).not.toBeNull();
-    expect(root.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]")?.disabled).toBe(true);
+    // Removing the proposer asks for the replacement in a dialog of its own,
+    // and the confirmation stays closed until one is chosen.
+    await runCardAction(root, "Casey Speaker", "Remove speaker");
+    const dialog = root.querySelector<HTMLDialogElement>("dialog");
+    expect(dialog?.querySelector("[data-replacement-proposer]")).not.toBeNull();
+    const confirm = [...(dialog?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent?.trim() === "Remove speaker",
+    );
+    expect(confirm?.disabled).toBe(true);
   });
 
-  it("surfaces final-speaker guidance instead of an admin removal action", () => {
+  it("surfaces final-speaker guidance instead of an admin removal action", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker({ userId: "proposer-1", role: "proposer" })}
@@ -266,7 +276,8 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    expect(root.querySelector("[data-remove-proposal-speaker]")).toBeNull();
+    const items = await openCardMenu(root, "Casey Speaker");
+    expect(items.map((item) => item.textContent?.trim())).not.toContain("Remove speaker");
     expect(root.textContent).toContain("every proposal must retain its speaker roster");
   });
 
@@ -276,7 +287,7 @@ describe("proposal speaker removal UI", () => {
    * unnamed. Assert the association rather than the appearance: that is the
    * half a visual review cannot see.
    */
-  it("gives every editable speaker field a name a screen reader can reach", () => {
+  it("gives every editable speaker field a name a screen reader can reach", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker()}
@@ -289,24 +300,27 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    void act(() => buttonNamed(root, "Edit profile").click());
+    await runCardAction(root, "Casey Speaker", "Edit profile");
 
     const form = root.querySelector("form")!;
     expect(labelNames(form)).toEqual(["First name", "Last name", "Organization", "Job title", "Role", "Biography"]);
     // Resolving through the `for`/`id` pair fails exactly when the pair is
     // broken, so this asserts the contract rather than the markup.
     expect(controlFor(form, "Role").tagName.toLowerCase()).toBe("select");
-    expect(controlFor(form, "Biography").tagName.toLowerCase()).toBe("textarea");
+    // The biography is the shared Markdown editor (#114), a textbox canvas.
+    expect((await markdownControl(form, "Biography")).getAttribute("role")).toBe("textbox");
 
     // ProfileLinksInput names its own controls, so the surrounding group is
     // named by the heading beside it rather than by an orphaned `for`.
-    const group = form.querySelector<HTMLElement>('[role="group"]');
+    // The editor's toolbar is a group of its own; the links group is the
+    // one the form names.
+    const group = form.querySelector<HTMLElement>('[role="group"][aria-labelledby]');
     const groupName = group?.getAttribute("aria-labelledby");
     expect(groupName).toBeTruthy();
     expect(root.ownerDocument.getElementById(groupName!)?.textContent?.trim()).toBe("Profile links");
   });
 
-  it("offers a co-speaker every role in the contract except the proposer's", () => {
+  it("offers a co-speaker every role in the contract except the proposer's", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker()}
@@ -319,7 +333,7 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    void act(() => buttonNamed(root, "Edit profile").click());
+    await runCardAction(root, "Casey Speaker", "Edit profile");
 
     // Derived from the vocabulary rather than listed here: a role added to the
     // contract becomes available to every speaker but the proposer, whose role
@@ -329,7 +343,7 @@ describe("proposal speaker removal UI", () => {
     );
   });
 
-  it("holds the proposer's own card to the proposer role", () => {
+  it("holds the proposer's own card to the proposer role", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker({ role: "proposer" })}
@@ -342,7 +356,7 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    void act(() => buttonNamed(root, "Edit profile").click());
+    await runCardAction(root, "Casey Speaker", "Edit profile");
 
     expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(["proposer"]);
   });
@@ -372,8 +386,8 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    void act(() => buttonNamed(root, "Edit profile").click());
-    await typeInto(controlFor(root, "Biography"), "A biography the server will refuse.");
+    await runCardAction(root, "Casey Speaker", "Edit profile");
+    await typeMarkdown(root, "Biography", "A biography the server will refuse.");
     await submitForm(root);
 
     // The request is checked against the canonical contract rather than a
@@ -386,10 +400,10 @@ describe("proposal speaker removal UI", () => {
     });
     expect(notify).toHaveBeenCalledWith("Another editor saved first", "error");
     // The form stays open, so the refused edit is still there to correct.
-    expect((controlFor(root, "Biography") as HTMLTextAreaElement).value).toBe("A biography the server will refuse.");
+    expect(await markdownValue(root, "Biography")).toBe("A biography the server will refuse.");
   });
 
-  it("names the managed speaker's card and ties its biography guidance to the control", () => {
+  it("names the managed speaker's card and ties its biography guidance to the control", async () => {
     const root = mount(
       <ProposalManageSpeakerCard
         speaker={managedSpeaker()}
@@ -407,7 +421,7 @@ describe("proposal speaker removal UI", () => {
     expect(card?.getAttribute("aria-label")).toBe("Speaker Casey Speaker");
     expect(labelNames(root)).toEqual(["First name", "Last name", "Role", "Organization", "Job title", "Biography"]);
 
-    const biography = controlFor<HTMLTextAreaElement>(root, "Biography");
+    const biography = await markdownControl(root, "Biography");
     const help = root.querySelector(`#${biography.getAttribute("aria-describedby")!}`);
     expect(help?.textContent).toBe("Visible to attendees on the event program.");
   });
@@ -450,7 +464,7 @@ describe("proposal speaker removal UI", () => {
     await settle();
   });
 
-  it("says the roster is empty in words rather than rendering nothing", () => {
+  it("says the roster is empty in words rather than rendering nothing", async () => {
     const root = mount(
       <SpeakerList
         speakers={[]}

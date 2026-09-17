@@ -35,7 +35,11 @@ export function measurePopupPosition(anchor: DOMRect, popup: DOMRect, align: "st
   const preferred = align === "end" ? anchor.right - popup.width : anchor.left;
   const left = Math.max(margin, Math.min(preferred, window.innerWidth - popup.width - margin));
 
-  return { top: Math.max(margin, top), left, minWidth: anchor.width };
+  return {
+    top: Math.max(margin, Math.min(top, window.innerHeight - popup.height - margin)),
+    left,
+    minWidth: anchor.width,
+  };
 }
 
 /** Writes a measured position onto the popup element. */

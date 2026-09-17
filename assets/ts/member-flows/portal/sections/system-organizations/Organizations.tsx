@@ -1,11 +1,10 @@
-import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 import { useEffect } from "preact/hooks";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../components/EmptyState";
 import type { Column } from "../../../../components/Table";
-import { Badge } from "../../../../ui/Badge";
+import { PersonCell } from "../../../../ui/PersonCell";
 import {
   organizationsListResponseSchema,
   type OrganizationSummary,
@@ -43,7 +42,6 @@ export function Organizations({
   organizationSegment?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
-  const categories = useMembershipCategoryLabels(canRead && !organizationSegment);
 
   function openCreatePage(): void {
     navigate(`${ORGANIZATIONS_PATH}/${NEW_ORGANIZATION_SEGMENT}`);
@@ -79,33 +77,25 @@ export function Organizations({
 
   const columns: Column<OrganizationSummary>[] = [
     {
-      header: "Name",
+      // The row leads with the organization's mark, as a person's row leads
+      // with their portrait: the logo is what a reader scanning the directory
+      // recognises before the name. Initials stand in while there is none.
+      header: "Organization",
       cell: (organization) => (
-        <>
-          <strong>{organization.name}</strong>
-          {organization.slogan && <div class="pk-small">{organization.slogan}</div>}
-        </>
+        <PersonCell
+          name={organization.name}
+          detail={organization.slogan ?? undefined}
+          avatarSrc={organization.logoUrl ?? undefined}
+          shape="square"
+          size="sm"
+        />
       ),
+      width: "primary",
       sort: { asc: "name", desc: "-name" },
     },
-    {
-      header: "Category",
-      /*
-       * The category is a label, not a healthy status, so it takes the neutral
-       * tone rather than the green this cell used to paint every value. An
-       * absent one reads as absent in words — "Not set" — instead of resting
-       * on red text nobody can rely on seeing.
-       */
-      cell: (organization) =>
-        organization.membershipCategory ? (
-          <Badge tone="neutral" dot={false}>
-            {categories.label(organization.membershipCategory)}
-          </Badge>
-        ) : (
-          <em class="pk-muted">Not a member</em>
-        ),
-      sort: { asc: "membership_category", desc: "-membership_category" },
-    },
+    // No membership column. This is the directory of organizations, not the
+    // members list: not every organization is a member, and the ones that are
+    // are listed as members — with their category — under Membership.
     {
       header: "Primary contact",
       cell: (organization) =>

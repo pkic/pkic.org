@@ -86,6 +86,7 @@ test("permitted staff filter donations by status and open the donation's badge a
       (response) => new URL(response.url()).pathname === "/api/v1/donations" && response.request().method() === "GET",
     );
   await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   let filtered = statusFilterRequest();
   await page.getByRole("menuitemradio", { name: /^Completed \(\d+\)$/ }).click();
   const completedUrl = new URL((await filtered).url());
@@ -93,6 +94,7 @@ test("permitted staff filter donations by status and open the donation's badge a
   await expect(donorRow).toBeVisible();
 
   await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   filtered = statusFilterRequest();
   await page.getByRole("menuitemradio", { name: /^Pending \(\d+\)$/ }).click();
   const pendingUrl = new URL((await filtered).url());
@@ -100,6 +102,7 @@ test("permitted staff filter donations by status and open the donation's badge a
   await expect(donorRow).toHaveCount(0);
 
   await page.getByRole("button", { name: "Status column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: /^All \(\d+\)$/ }).click();
   await expect(donorRow).toBeVisible();
 

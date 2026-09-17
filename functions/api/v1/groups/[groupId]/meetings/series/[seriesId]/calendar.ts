@@ -15,11 +15,13 @@ export const GroupMeetingSeriesCalendar = openApiRoute(
       group,
       data.params.seriesId,
       new URL(c.req.raw.url).origin,
+      data.query.occurrenceId,
     );
-    return new Response(calendar, {
+    return new Response(calendar.content, {
       headers: {
         "content-type": "text/calendar; charset=UTF-8",
-        "content-disposition": `attachment; filename="${data.params.seriesId}.ics"`,
+        "content-disposition": `attachment; filename="${calendar.filename}"`,
+        "cache-control": "private, no-store",
       },
     });
   },
