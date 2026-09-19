@@ -101,6 +101,7 @@ function stubApi(
       }
       if (method === "GET" && url.pathname.endsWith("/grants")) return json({ grants: [], page: PAGE });
       if (method === "GET" && url.pathname === "/api/v1/groups") return json({ groups: [], page: PAGE });
+      if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled: true, revision: 0 } });
       if (method === "GET") return json({ mailingList: list });
       return write(url, method);
     }),
@@ -225,7 +226,7 @@ describe("group mailing-list record", () => {
     // The settings tab opens on the record's own values.
     expect(container.querySelector('input[type="email"]')).toBeNull();
     expect(container.textContent).toContain(activeList.email);
-    expect(container.querySelector('button[type="submit"]')).toBeNull();
+    expect(container.querySelector('button[type="submit"]:not(:disabled)')).toBeNull();
 
     // An unrecognized segment falls back to the default rather than showing
     // an empty page.

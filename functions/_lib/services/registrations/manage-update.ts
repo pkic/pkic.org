@@ -11,6 +11,7 @@ import {
 import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
+import type { ParticipantAuthority } from "../participant-authority";
 import {
   updateRegistrationByIdWithEmailChange,
   updateRegistrationByIdWithNotification,
@@ -22,7 +23,7 @@ type RegistrationManageBody = z.infer<typeof registrationManageSchema>;
 
 export interface ManageRegistrationUpdateInput {
   registration: RegistrationRecord;
-  manageToken: string;
+  manageToken: ParticipantAuthority;
   isAdminManageJwt: boolean;
   authenticatedActor: { kind: "user"; id: string } | null;
   actorUserId: string;

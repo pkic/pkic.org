@@ -1,4 +1,4 @@
-import type { ValidatedData } from "chanfana";
+import type { ParticipantRouteData } from "../../../../../../../_lib/routes/participant-authority";
 import { json } from "../../../../../../../_lib/http";
 import { getProposalByManageToken } from "../../../../../../../_lib/services/proposals";
 import { remindProposalSpeakerByProposer } from "../../../../../../../_lib/services/proposal-reminders";
@@ -10,15 +10,15 @@ import { proposalAccessSpeakerReminderCreateRouteSchema } from "../../../../../.
 import type { AdminContext } from "../../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../../_lib/openapi/route";
 
-type ProposalAccessSpeakerContext = AdminContext<{ token: string; userId: string }>;
+type ProposalAccessSpeakerContext = AdminContext;
 
 function markProposalAccessSensitive(c: ProposalAccessSpeakerContext): void {
   c.set?.("sensitive", true);
 }
 
-async function handleProposalSpeakerReminder(
+export async function handleProposalSpeakerReminder(
   c: ProposalAccessSpeakerContext,
-  data: ValidatedData<typeof proposalAccessSpeakerReminderCreateRouteSchema>,
+  data: ParticipantRouteData<typeof proposalAccessSpeakerReminderCreateRouteSchema>,
 ): Promise<Response> {
   const proposal = await getProposalByManageToken(c.env.DB, data.params.token, requireInternalSecret(c.env));
   const result = await remindProposalSpeakerByProposer(c.env.DB, {

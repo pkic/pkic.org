@@ -217,12 +217,12 @@ describe("portal event list", () => {
   });
 
   it.each([
-    [null, "/events/pqc-2026/register/"],
+    [null, "#/events/pqc-2026"],
     [
       { registrationStatus: "registered", attendanceType: "in_person", waitlisted: false, days: [] },
       "#/events/pqc-2026",
     ],
-  ])("opens the audience's registration destination", async (viewer, expected) => {
+  ])("opens the event overview for every audience row", async (viewer, expected) => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>

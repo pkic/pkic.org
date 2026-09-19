@@ -1,4 +1,4 @@
-import { googleGroupsSyncEnabledSql } from "./group-policy";
+import { googleGroupsSyncEnabledSql } from "./mailing-list-policy";
 import { all, first, run } from "../../db/queries";
 import { createDurableJobLease } from "../../jobs/lease";
 import { requestJobWake } from "../scheduled-jobs/dispatcher";

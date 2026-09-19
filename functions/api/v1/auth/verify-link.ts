@@ -1,3 +1,4 @@
+import { publicUserSession } from "../../../_lib/auth/public-user-session";
 import { prepareMagicLinkVerificationHttp, createSessionEstablishedResponse } from "../../../_lib/auth/http-flow";
 import {
   redeemSponsorSignInCapability,
@@ -30,12 +31,7 @@ export const UserAuthVerifyLink = openApiRoute(userAuthVerifyRouteSchema, async 
   const response = createSessionEstablishedResponse(
     userAuthEstablishedResponseSchema.parse({
       success: true,
-      expiresAt: result.session.expiresAt,
-      identity: result.session.identity,
-      ...(result.session.staff ? { staff: result.session.staff } : {}),
-      ...(result.session.member ? { member: result.session.member } : {}),
-      sponsors: result.session.sponsors,
-      pendingIdentityCount: result.session.pendingIdentityCount,
+      ...publicUserSession(result.session),
     }),
     serializeUserSessionCookie(result.token, c.req.raw),
   );

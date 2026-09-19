@@ -162,9 +162,9 @@ describe("Google Groups sync", () => {
   });
 
   it("rechecks the group's pause before each provider request in an already claimed batch", async () => {
-    const [list] = await queryAll<{ email: string; group_id: string }>(
+    const [list] = await queryAll<{ id: string; email: string; group_id: string }>(
       env.DB,
-      "SELECT email, group_id FROM mailing_lists WHERE group_id IS NOT NULL LIMIT 1",
+      "SELECT id, email, group_id FROM mailing_lists WHERE group_id IS NOT NULL LIMIT 1",
     );
     for (const email of ["first@example.test", "second@example.test"])
       await enqueueGoogleGroupsSync(env.DB, {
@@ -177,9 +177,9 @@ describe("Google Groups sync", () => {
     const processing = processGoogleGroupsSyncQueue(env.DB, configured, 2);
     await directoryStarted;
     await env.DB.prepare(
-      "INSERT INTO group_mailing_sync_settings (group_id, enabled, revision, updated_at) VALUES (?, 0, 1, ?)",
+      "INSERT INTO mailing_list_sync_settings (mailing_list_id, enabled, revision, updated_at) VALUES (?, 0, 1, ?)",
     )
-      .bind(list.group_id, new Date().toISOString())
+      .bind(list.id, new Date().toISOString())
       .run();
     releaseDirectory();
     const result = await processing;

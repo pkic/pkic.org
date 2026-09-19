@@ -220,8 +220,19 @@ export function WorkflowVersionEditor({
               </p>
               <WorkflowReviewSummary step={step} />
               {step.instructions && <p>{step.instructions}</p>}
-              {(published || editingStep === position) && (
-                <fieldset class="pk-fieldset" disabled={!canWrite || busy || published}>
+              {form.errorsWithin(`definition.steps.${position}`).length > 0 && (
+                <ErrorAlert
+                  error={`Step ${position + 1} needs attention: ${form.errorsWithin(`definition.steps.${position}`).join(" ")}`}
+                />
+              )}
+              {(published ||
+                editingStep === position ||
+                form.errorsWithin(`definition.steps.${position}`).length > 0) && (
+                <fieldset
+                  class="pk-fieldset"
+                  disabled={!canWrite || busy || published}
+                  onFocusIn={() => setEditingStep(position)}
+                >
                   <WorkflowStepFields
                     step={step}
                     position={position}

@@ -1,4 +1,3 @@
-import { ButtonLink } from "../../../../ui/Button";
 import { BreadcrumbScope } from "../../../../ui/BreadcrumbScope";
 /**
  * The selected-group workspace: one URL-addressed context whose tabs derive
@@ -50,17 +49,10 @@ const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => 
 const OVERVIEW_VIEW = "overview";
 
 /** The group owns the page title at its root and becomes navigation context inside a record. */
-function GroupContextHeader({ group, canManage }: { group: AuthenticatedGroup; canManage: boolean }) {
+function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
     <PageHeader
       title={group.name}
-      actions={
-        canManage ? (
-          <ButtonLink size="sm" href={usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}/settings`)}>
-            Group settings
-          </ButtonLink>
-        ) : undefined
-      }
       context={
         <>
           <Badge tone="neutral">{group.type.singularLabel}</Badge>
@@ -200,7 +192,7 @@ export function GroupWorkspace({
           items={trail}
           label="Group navigation"
         >
-          <GroupContextHeader group={group} canManage={canManage} />
+          <GroupContextHeader group={group} />
           <Tabs
             items={views.map((item) => ({ key: item.key, label: item.label }))}
             active={view}

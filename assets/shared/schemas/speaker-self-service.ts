@@ -26,6 +26,7 @@ export const speakerSelfServiceAccessSchema = z.object({
 });
 
 export const speakerSelfServiceProposalSchema = z.object({
+  eventId: databaseIdSchema.optional(),
   id: databaseIdSchema,
   title: z.string(),
   proposalType: proposalTypeSchema,

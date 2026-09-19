@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "./participant-authority";
 import type { z } from "zod";
 import type {
   proposalAccessPatchResponseSchema,
@@ -24,6 +25,7 @@ type ProposalAccessPatchResponse = z.infer<typeof proposalAccessPatchResponseSch
 function toAccessibleProposal(proposal: ProposalRecord): ProposalAccessPatchResponse["proposal"] {
   return {
     id: proposal.id,
+    event_id: proposal.event_id,
     proposer_user_id: proposal.proposer_user_id,
     status: proposal.status,
     proposal_type: proposal.proposal_type,
@@ -35,7 +37,7 @@ function toAccessibleProposal(proposal: ProposalRecord): ProposalAccessPatchResp
 
 export async function loadProposalAccessView(
   db: DatabaseLike,
-  input: { token: string; signingSecret: string; appBaseUrl: string },
+  input: { token: ParticipantAuthority; signingSecret: string; appBaseUrl: string },
 ): Promise<ProposalAccessReadResponse> {
   const proposal = await getProposalByManageToken(db, input.token, input.signingSecret);
   const speakers = await listProposalSpeakersWithStatus(db, proposal.id);
@@ -67,7 +69,7 @@ export async function loadProposalAccessView(
 
 export async function saveProposalAccessChanges(
   db: DatabaseLike,
-  input: { token: string; signingSecret: string; body: ProposalAccessInput },
+  input: { token: ParticipantAuthority; signingSecret: string; body: ProposalAccessInput },
 ): Promise<ProposalAccessPatchResponse> {
   const proposal = await getProposalByManageToken(db, input.token, input.signingSecret);
   const event = await getEventById(db, proposal.event_id);

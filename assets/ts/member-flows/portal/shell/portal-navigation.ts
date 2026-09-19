@@ -129,7 +129,9 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     label: "Events",
     sidebar: true,
     access: (session) =>
-      portalHasPermissionAtAnyScope(session, "events:read") || portalHasPermissionAtAnyScope(session, "proposals:read"),
+      Boolean(session?.eventParticipation) ||
+      portalHasPermissionAtAnyScope(session, "events:read") ||
+      portalHasPermissionAtAnyScope(session, "proposals:read"),
     children: [
       {
         path: "/events/analytics",
@@ -254,7 +256,8 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     path: "/participation",
     label: "My participation",
     sidebar: false,
-    access: (session) => Boolean(session?.member || session?.staff || session?.sponsors.length),
+    access: (session) =>
+      Boolean(session?.member || session?.staff || session?.sponsors.length || session?.eventParticipation),
   },
   {
     // Superseded by the organization workspaces; the route redirects there.
@@ -363,7 +366,8 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     path: "/account",
     label: "Account Settings",
     sidebar: false,
-    access: (session) => Boolean(session?.member || session?.staff || session?.pendingIdentityCount),
+    access: (session) =>
+      Boolean(session?.member || session?.staff || session?.pendingIdentityCount || session?.eventParticipation),
   },
 ];
 
@@ -452,6 +456,7 @@ export function portalNavigationItems(session: PortalSession | null): PortalNavI
 
 export function portalDefaultPath(session: PortalSession | null): string {
   if (session?.member || session?.staff) return "/home";
+  if (session?.eventParticipation) return "/events";
   if (session?.sponsors.length) return "/sponsors";
   if (session?.pendingIdentityCount) return "/account";
   return "/";

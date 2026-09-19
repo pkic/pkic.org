@@ -29,9 +29,9 @@
  */
 
 import type { ComponentChildren } from "preact";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 
-import { usePopupPlacement } from "./popup-placement";
+import { MenuLevel } from "./MenuLevel";
 import "./Menu.css";
 
 export interface MenuItem {
@@ -81,171 +81,23 @@ export interface MenuProps {
 export function Menu({ label, items, heading, align = "start", variant = "icon", children }: MenuProps) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [submenuPath, setSubmenuPath] = useState<string[]>([]);
-  function returnToParent() {
-    const parentPath = submenuPath.slice(0, -1);
-    let parentItems = items;
-    for (const id of parentPath) parentItems = parentItems.find((item) => item.id === id)?.children ?? [];
-    const parentIndex = parentItems.findIndex((item) => item.id === submenuPath[submenuPath.length - 1]);
-    setSubmenuPath(parentPath);
-    setActiveIndex(Math.max(0, parentIndex) + (parentPath.length ? 1 : 0));
-  }
-  let visibleItems = items;
-  for (const id of submenuPath) visibleItems = visibleItems.find((item) => item.id === id)?.children ?? [];
-  const displayedItems: readonly MenuItem[] = submenuPath.length
-    ? [
-        {
-          id: "menu-back",
-          label: "Back",
-          keepOpen: true,
-          onSelect: returnToParent,
-        },
-        ...visibleItems,
-      ]
-    : visibleItems;
-
+  const [initialLast, setInitialLast] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  // Indexes into the rendered list, so `activeIndex` and the DOM agree even
-  // though disabled items are rendered but never focused.
-  const reachable = displayedItems.flatMap((item, index) => (item.disabled ? [] : [index]));
-  const firstReachable = reachable[0] ?? -1;
-  const lastReachable = reachable[reachable.length - 1] ?? -1;
-  const itemRevision = displayedItems.map((item) => `${item.id}:${Boolean(item.disabled)}`).join("|");
-
-  function step(from: number, delta: number): number {
-    if (reachable.length === 0) return -1;
-    const at = reachable.indexOf(from);
-    if (at === -1) return delta > 0 ? firstReachable : lastReachable;
-    return reachable[(at + delta + reachable.length) % reachable.length];
-  }
-
-  const close = useCallback(
-    (returnFocus: boolean) => {
-      setOpen(false);
-      setSubmenuPath([]);
-      setActiveIndex(-1);
-      if (returnFocus) triggerRef.current?.focus({ preventScroll: true });
-    },
-    [setOpen, setActiveIndex],
-  );
-
-  const openAt = useCallback(
-    (index: number) => {
-      setOpen(true);
-      setActiveIndex(index);
-    },
-    [setOpen, setActiveIndex],
-  );
-
-  /** One placement policy, and one lifetime for it — see `popup-placement.ts`. */
-  usePopupPlacement({
-    open,
-    anchorRef: triggerRef,
-    popupRef,
-    align,
-    revision: `${displayedItems.length}:${submenuPath.join("/")}:${heading ?? ""}`,
-  });
-
-  // Focus follows the active index rather than being set at each call site, so
-  // there is one place where focus can go wrong.
-  useLayoutEffect(() => {
-    if (!open) return;
-    if (!reachable.includes(activeIndex)) {
-      setActiveIndex(firstReachable);
-      return;
-    }
-    const item = itemRefs.current[activeIndex];
-    item?.focus({ preventScroll: true });
-    const popup = popupRef.current;
-    if (item && popup) {
-      const row = item.getBoundingClientRect();
-      const bounds = popup.getBoundingClientRect();
-      if (row.bottom > bounds.bottom) popup.scrollTop += row.bottom - bounds.bottom;
-      else if (row.top < bounds.top) popup.scrollTop -= bounds.top - row.top;
-    }
-  }, [open, activeIndex, itemRevision]);
-
+  const rootRef = useRef<HTMLDivElement>(null);
+  const close = useCallback((returnFocus: boolean) => {
+    setOpen(false);
+    if (returnFocus) triggerRef.current?.focus({ preventScroll: true });
+  }, []);
   useEffect(() => {
     if (!open) return;
-
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (popupRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
-      close(false);
+    const outside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) close(false);
     };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
   }, [open, close]);
-
-  function onTriggerKeyDown(event: KeyboardEvent) {
-    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openAt(firstReachable);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      openAt(lastReachable);
-    }
-  }
-
-  function onMenuKeyDown(event: KeyboardEvent) {
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        setActiveIndex((current) => step(current, 1));
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        setActiveIndex((current) => step(current, -1));
-        break;
-      case "Home":
-        event.preventDefault();
-        setActiveIndex(firstReachable);
-        break;
-      case "End":
-        event.preventDefault();
-        setActiveIndex(lastReachable);
-        break;
-      case "ArrowRight":
-        if (displayedItems[activeIndex]?.children) {
-          event.preventDefault();
-          select(displayedItems[activeIndex]);
-        }
-        break;
-      case "ArrowLeft":
-        if (submenuPath.length) {
-          event.preventDefault();
-          returnToParent();
-        }
-        break;
-      case "Escape":
-        event.preventDefault();
-        close(true);
-        break;
-      case "Tab":
-        close(false);
-        break;
-      default:
-        break;
-    }
-  }
-
-  function select(item: MenuItem) {
-    if (item.disabled) return;
-    if (item.children) {
-      setSubmenuPath((path) => [...path, item.id]);
-      setActiveIndex(1);
-      return;
-    }
-    if (!item.keepOpen) close(true);
-    item.onSelect();
-  }
-
   return (
-    <div class="pk-menu">
+    <div class="pk-menu" ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
@@ -254,52 +106,32 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
         aria-haspopup="menu"
         aria-expanded={open ? "true" : "false"}
         aria-controls={open ? menuId : undefined}
-        onClick={() => (open ? close(true) : openAt(firstReachable))}
-        onKeyDown={onTriggerKeyDown}
+        onClick={() => {
+          setInitialLast(false);
+          if (open) close(true);
+          else setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (["Enter", " ", "ArrowDown", "ArrowUp"].includes(event.key)) {
+            event.preventDefault();
+            setInitialLast(event.key === "ArrowUp");
+            setOpen(true);
+          }
+        }}
       >
         {children ?? <span aria-hidden="true">⋯</span>}
       </button>
-
       {open && (
-        <div ref={popupRef} id={menuId} role="menu" aria-label={label} class="pk-menu__popup" onKeyDown={onMenuKeyDown}>
-          {heading && <p class="pk-menu__heading">{heading}</p>}
-          {displayedItems.map((item, index) => (
-            <button
-              key={item.id}
-              ref={(element) => {
-                itemRefs.current[index] = element;
-              }}
-              type="button"
-              role={item.checked === undefined ? "menuitem" : "menuitemradio"}
-              aria-haspopup={item.children ? "menu" : undefined}
-              aria-checked={item.checked === undefined ? undefined : item.checked ? "true" : "false"}
-              disabled={item.disabled}
-              tabIndex={index === activeIndex ? 0 : -1}
-              class={[
-                "pk-menu__item",
-                item.danger ? "pk-menu__item--danger" : null,
-                item.checked !== undefined ? "pk-menu__item--choice" : null,
-                item.separatorBefore ? "pk-menu__item--separated" : null,
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() => select(item)}
-            >
-              {item.checked !== undefined && (
-                <span class="pk-menu__check" aria-hidden="true">
-                  {item.checked ? "✓" : ""}
-                </span>
-              )}
-              {item.icon && (
-                <span class="pk-menu__item-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-              )}
-              {item.label}
-              {item.children && <span aria-hidden="true"> ›</span>}
-            </button>
-          ))}
-        </div>
+        <MenuLevel
+          id={menuId}
+          label={label}
+          items={items}
+          heading={heading}
+          anchorRef={triggerRef}
+          align={align}
+          initialLast={initialLast}
+          close={close}
+        />
       )}
     </div>
   );

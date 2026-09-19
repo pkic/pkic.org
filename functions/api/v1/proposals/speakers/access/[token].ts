@@ -15,7 +15,7 @@
  *   PUT /api/v1/proposals/speakers/access/[token]/presentation
  */
 import { handleError, json } from "../../../../../_lib/http";
-import type { ValidatedData } from "chanfana";
+import type { ParticipantRouteData } from "../../../../../_lib/routes/participant-authority";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import {
   confirmSpeakerParticipation,
@@ -48,7 +48,7 @@ import { proposalSpeakerAccessPath } from "../../../../../../assets/shared/propo
 
 export async function onRequestGet(
   c: any,
-  data: ValidatedData<typeof proposalSpeakerSelfServiceReadRouteSchema>,
+  data: ParticipantRouteData<typeof proposalSpeakerSelfServiceReadRouteSchema>,
 ): Promise<Response> {
   try {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
@@ -63,7 +63,8 @@ export async function onRequestGet(
       getEventById(db, proposal.event_id),
     ]);
 
-    const presentationUrl = event ? speakerPresentationPageUrl(appBaseUrl, event, token) : null;
+    const presentationUrl =
+      event && typeof token === "string" ? speakerPresentationPageUrl(appBaseUrl, event, token) : null;
 
     return json(
       speakerSelfServiceReadResponseSchema.parse({
@@ -76,6 +77,7 @@ export async function onRequestGet(
         },
         proposal: {
           id: proposal.id,
+          eventId: proposal.event_id,
           title: proposal.title,
           proposalType: proposal.proposal_type,
           status: proposal.status,
@@ -110,7 +112,7 @@ export async function onRequestGet(
 
 export async function onRequestParticipationPatch(
   c: any,
-  data: ValidatedData<typeof proposalSpeakerParticipationRouteSchema>,
+  data: ParticipantRouteData<typeof proposalSpeakerParticipationRouteSchema>,
 ): Promise<Response> {
   try {
     const body = data.body;
@@ -136,7 +138,7 @@ export async function onRequestParticipationPatch(
 
 export async function onRequestProfilePatch(
   c: any,
-  data: ValidatedData<typeof proposalSpeakerProfileUpdateRouteSchema>,
+  data: ParticipantRouteData<typeof proposalSpeakerProfileUpdateRouteSchema>,
 ): Promise<Response> {
   try {
     const body = data.body;

@@ -95,7 +95,9 @@ describe("canonical user authentication", () => {
 
     const session = await call("/api/v1/auth/session", { headers: { cookie } });
     expect(session.status).toBe(200);
+    const [persistedSession] = await queryAll<{ expires_at: string }>(env.DB, "SELECT expires_at FROM sessions");
     expect(await session.json()).toMatchObject({
+      expiresAt: persistedSession.expires_at,
       identity: { email: "admin@pkic.org" },
       staff: expect.any(Object),
       member: expect.any(Object),

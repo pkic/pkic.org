@@ -68,9 +68,7 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     header: "Subject",
     cell: (row) => (
       <>
-        <a class="pk-strong" href={`#/settings/email-outbox/${encodeURIComponent(row.id)}`}>
-          {row.subject || "Email delivery details"}
-        </a>
+        <span class="pk-strong">{row.subject || "Email delivery details"}</span>
         <div class="pk-small pk-muted">
           {row.templateKey}
           {row.templateVersion !== null ? ` v${row.templateVersion}` : ""}
@@ -282,6 +280,10 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
         load={loadPortalCollection}
         empty="No outbox rows match the current filters."
         rowKey={(row) => row.id}
+        rowAction={(row) => ({
+          label: `Open ${row.subject || "email delivery details"}`,
+          href: `#/settings/email-outbox/${encodeURIComponent(row.id)}`,
+        })}
       />
     </div>
   );

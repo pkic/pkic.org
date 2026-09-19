@@ -1,3 +1,4 @@
+import { useMailingListSync, MailingListSyncSettings } from "./MailingListSync";
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { useState } from "preact/hooks";
 import {
@@ -58,6 +59,7 @@ export function GroupMailingListRecord({
   onLeave: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const sync = useMailingListSync(groupId, listId);
   const [commandError, setCommandError] = useState<Error | null>(null);
   const detail = useData(
     () =>
@@ -90,6 +92,8 @@ export function GroupMailingListRecord({
       {detail.loading && !list && <Spinner label="Loading mailing list…" />}
       {detail.error && <ErrorAlert error={detail.error} />}
       {commandError && <ErrorAlert error={commandError} />}
+      {sync.error && <ErrorAlert error={sync.error} />}
+      {sync.notice && <p role="status">{sync.notice}</p>}
       {list && (
         <BreadcrumbBranch
           items={[
@@ -122,17 +126,28 @@ export function GroupMailingListRecord({
                   label={`Mailing list actions for ${list.label}`}
                   heading={list.label}
                   align="end"
-                  items={mailingListLifecycleActions({
-                    groupId,
-                    list,
-                    onChanged: async () => {
-                      setCommandError(null);
-                      await detail.reload();
+                  items={[
+                    {
+                      id: "sync",
+                      label: "Sync now",
+                      disabled:
+                        !sync.settings?.enabled ||
+                        sync.busy ||
+                        (sync.enabled !== null && sync.enabled !== sync.settings?.enabled),
+                      onSelect: () => void sync.sync(),
                     },
-                    // A deleted record has no page left to stand on.
-                    onDeleted: onLeave,
-                    onError: setCommandError,
-                  })}
+                    ...mailingListLifecycleActions({
+                      groupId,
+                      list,
+                      onChanged: async () => {
+                        setCommandError(null);
+                        await detail.reload();
+                      },
+                      // A deleted record has no page left to stand on.
+                      onDeleted: onLeave,
+                      onError: setCommandError,
+                    }),
+                  ]}
                 />
               }
               navigation={
@@ -155,6 +170,7 @@ export function GroupMailingListRecord({
               {tab === "settings" && (
                 <section aria-label={`${list.label} settings`}>
                   <GroupMailingListSettings key={list.id} groupId={groupId} list={list} onSaved={detail.reload} />
+                  <MailingListSyncSettings sync={sync} />
                 </section>
               )}
               {tab === "sharing" && (

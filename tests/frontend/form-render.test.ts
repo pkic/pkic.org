@@ -1,8 +1,13 @@
+import { h, render } from "preact";
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { act } from "preact/test-utils";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../../assets/ts/shared/widgets/consents";
-import { renderCustomFields, readCustomFieldValues } from "../../assets/ts/shared/widgets/custom-fields";
+import {
+  CustomFieldList,
+  renderCustomFields,
+  readCustomFieldValues,
+} from "../../assets/ts/shared/widgets/custom-fields";
 import { findFieldErrorTarget } from "../../assets/ts/shared/form/validation-map";
 import { installLiveValidation } from "../../assets/ts/shared/form/validation";
 import { controlFor } from "./helpers/labelled-control";
@@ -78,6 +83,47 @@ describe("frontend field rendering", () => {
     expect(consent.getAttribute("aria-invalid")).toBe("true");
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("You need to agree");
     form.remove();
+  });
+
+  it("prefills submitted answers when the shared field list is rendered directly", () => {
+    const form = document.createElement("form");
+    const answers = {
+      country: "US",
+      note: "Saved note",
+      opted_in: true,
+      dates: { start: "2026-12-01", end: "2026-12-03" },
+      selection: ["a"],
+    };
+    void act(() =>
+      render(
+        h(CustomFieldList, {
+          fields: [
+            { ...base("country", "Country"), validation: { format: "iso_country" } },
+            base("note", "Note"),
+            { ...base("opted_in", "Opt in"), fieldType: "boolean" },
+            { ...base("dates", "Dates"), validation: { format: "date_range" } },
+            {
+              ...base("selection", "Selection"),
+              fieldType: "multi_select",
+              options: [option("a"), option("b")],
+              validation: { uiWidget: "checkboxes" },
+            },
+          ],
+          context: { dayAttendance: [] },
+          initialValues: answers,
+        }),
+        form,
+      ),
+    );
+    expect(readCustomFieldValues(form)).toEqual(answers);
+    const note = controlFor(form, "Note");
+    note.value = "Unsaved edit";
+    // A parent rerender must not replace an in-progress answer with its initial value.
+    void act(() => {
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(note.value).toBe("Unsaved edit");
+    void act(() => render(null, form));
   });
 
   it("renders custom widgets and serializes values", () => {

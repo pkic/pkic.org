@@ -1,5 +1,6 @@
+import { publicUserSession } from "../../../_lib/auth/public-user-session";
 import { json } from "../../../_lib/http";
-import { resolveUserSessionFromRequest, publicUserSession } from "../../../_lib/auth/user-session";
+import { resolveUserSessionFromRequest } from "../../../_lib/auth/user-session";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";
 import { userAuthSessionResponseSchema, userAuthSessionRouteSchema } from "../../../../assets/shared/schemas/user-auth";

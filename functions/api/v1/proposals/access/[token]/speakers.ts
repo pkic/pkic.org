@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "../../../../../_lib/services/participant-authority";
 /**
  * Proposer-only: invite a co-speaker to an existing proposal.
  *
@@ -22,8 +23,16 @@ import { requireInternalSecret } from "../../../../../_lib/request";
 import { inviteProposalSpeaker } from "../../../../../_lib/services/proposal-speaker-invitations";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
 
-export async function handleCoSpeakerInvite(c: any, body: z.infer<typeof coSpeakerInviteSchema>) {
-  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env));
+export async function handleCoSpeakerInvite(
+  c: any,
+  body: z.infer<typeof coSpeakerInviteSchema>,
+  authority?: ParticipantAuthority,
+) {
+  const proposal = await getProposalByManageToken(
+    c.env.DB,
+    authority ?? c.req.param("token"),
+    requireInternalSecret(c.env),
+  );
 
   if (!isProposalSpeakerRosterEditableStatus(proposal.status)) {
     return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot invite speakers to a closed proposal" } }, 400);

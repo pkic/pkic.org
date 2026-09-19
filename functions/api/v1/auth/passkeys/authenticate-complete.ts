@@ -1,3 +1,4 @@
+import { publicUserSession } from "../../../../_lib/auth/public-user-session";
 /**
  * POST /api/v1/auth/passkeys/authenticate/complete.
  *
@@ -6,7 +7,7 @@
  * simultaneously; the same verified assertion establishes one shared session.
  */
 import { createSessionEstablishedResponse } from "../../../../_lib/auth/http-flow";
-import { publicUserSession, serializeUserSessionCookie } from "../../../../_lib/auth/user-session";
+import { serializeUserSessionCookie } from "../../../../_lib/auth/user-session";
 import { completePasskeyAuthentication } from "../../../../_lib/services/passkeys";
 import {
   passkeyAuthenticateCompleteResponseSchema,
@@ -29,7 +30,6 @@ export const PasskeyAuthenticateComplete = openApiRoute(
     const response = createSessionEstablishedResponse(
       passkeyAuthenticateCompleteResponseSchema.parse({
         success: true,
-        expiresAt: verified.session.expiresAt,
         ...publicUserSession(verified.session),
       }),
       serializeUserSessionCookie(verified.token, c.req.raw),

@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "./participant-authority";
 import { first } from "../db/queries";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
@@ -26,9 +27,18 @@ export interface SpeakerWithContext {
 
 export async function getSpeakerByManageToken(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   signingSecret: string,
 ): Promise<SpeakerWithContext> {
+  if (typeof manageToken !== "string") {
+    const owned = await first<{ id: string }>(
+      db,
+      "SELECT id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [manageToken.resourceId, manageToken.userId],
+    );
+    if (!owned) throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker participation not found");
+    return getSpeakerById(db, owned.id, manageToken.userId);
+  }
   const verified = await verifyDatabaseCapability({ db, signingSecret, purpose: "speaker_manage", token: manageToken });
   if (!verified.ok) {
     throw new AppError(
@@ -38,6 +48,10 @@ export async function getSpeakerByManageToken(
     );
   }
 
+  return getSpeakerById(db, verified.resourceId);
+}
+
+async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: string): Promise<SpeakerWithContext> {
   const row = await first<{
     ps_id: string;
     ps_proposal_id: string;
@@ -140,10 +154,10 @@ export async function getSpeakerByManageToken(
      JOIN events e                ON e.id  = sp.event_id
      JOIN users u              ON u.id  = ps.user_id
      WHERE ps.id = ?`,
-    [verified.resourceId],
+    [speakerId],
   );
 
-  if (!row) {
+  if (!row || (userId !== undefined && row.ps_user_id !== userId)) {
     throw new AppError(404, "SPEAKER_TOKEN_NOT_FOUND", "Invalid or expired speaker token");
   }
   if (row.ps_invite_expired === 1) {

@@ -225,6 +225,7 @@ export function MarkdownEditor({
     disabled?: boolean;
     pressed?: boolean;
     run: () => void;
+    choices?: MenuItem[];
   };
   const groups: ToolbarCommand[][] = [
     [
@@ -232,7 +233,27 @@ export function MarkdownEditor({
         label: "Heading",
         icon: <IconHeading />,
         active: "heading",
-        run: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+        run: () => {},
+        choices: [
+          {
+            id: "paragraph",
+            label: "Paragraph",
+            checked: Boolean(editor?.isActive("paragraph")),
+            disabled: locked,
+            onSelect: () => {
+              editor?.chain().focus().setParagraph().run();
+            },
+          },
+          ...([2, 3, 4] as const).map((level) => ({
+            id: `heading-${level}`,
+            label: `Heading ${level}`,
+            disabled: locked,
+            checked: Boolean(editor?.isActive("heading", { level })),
+            onSelect: () => {
+              editor?.chain().focus().setHeading({ level }).run();
+            },
+          })),
+        ],
       },
       { label: "Bold", icon: <IconBold />, active: "bold", run: () => editor?.chain().focus().toggleBold().run() },
       {
@@ -292,6 +313,7 @@ export function MarkdownEditor({
     disabled: locked || command.disabled,
     checked: command.active ? Boolean(editor?.isActive(command.active)) : undefined,
     onSelect: command.run,
+    children: command.choices,
   }));
   return (
     <div ref={root} class="pk-markdown-editor" data-variant={variant} onFocusIn={onFocus}>
@@ -305,23 +327,32 @@ export function MarkdownEditor({
             hidden={groups.slice(0, index).flat().length >= visibleCommands}
           >
             {group.map((command, commandIndex) => (
-              <Button
+              <span
                 key={command.label}
                 data-command={groups.slice(0, index).flat().length + commandIndex}
                 data-section-start={commandIndex === 0}
                 hidden={groups.slice(0, index).flat().length + commandIndex >= visibleCommands}
-                size="sm"
-                variant="ghost"
-                icon
-                aria-label={command.label}
-                title={command.label}
-                disabled={locked || command.disabled}
-                aria-pressed={command.active ? Boolean(editor?.isActive(command.active)) : undefined}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={command.run}
               >
-                {command.icon}
-              </Button>
+                {command.choices ? (
+                  <Menu label={command.label} items={command.choices}>
+                    {command.icon}
+                  </Menu>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon
+                    aria-label={command.label}
+                    title={command.label}
+                    disabled={locked || command.disabled}
+                    aria-pressed={command.active ? Boolean(editor?.isActive(command.active)) : undefined}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={command.run}
+                  >
+                    {command.icon}
+                  </Button>
+                )}
+              </span>
             ))}
           </div>
         ))}

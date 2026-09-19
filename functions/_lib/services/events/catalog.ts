@@ -1,3 +1,4 @@
+import { fetchEventParticipation } from "./participation";
 import { resolveEventFrontendRoutes } from "../event-presentation";
 import {
   EVENT_LIST_SORT_COLUMNS,
@@ -133,13 +134,21 @@ function isAudienceSortColumn(sort: string): boolean {
 
 export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceViewer, query: EventsListQuery) {
   const page = await queryPage<EventAudienceRow>(db, buildEventsPageQuery(viewer, query));
+  const participation = await fetchEventParticipation(
+    db,
+    viewer.userId,
+    page.rows.map((row) => row.id),
+  );
   const viewerStates = await fetchViewerEventStates(
     db,
     viewer.userId,
     page.rows.map((row) => row.id),
   );
   return {
-    events: page.rows.map((row) => mapEventAudience(row, viewerStates.get(row.id) ?? null)),
+    events: page.rows.map((row) => ({
+      ...mapEventAudience(row, viewerStates.get(row.id) ?? null),
+      participation: participation.get(row.id),
+    })),
     total: page.total,
   };
 }
@@ -254,6 +263,11 @@ interface EventStatsRow {
 
 export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceViewer, query: EventsListQuery) {
   const page = await queryPage<EventManagementRow>(db, buildManagedEventsPageQuery(viewer, query));
+  const participation = await fetchEventParticipation(
+    db,
+    viewer.userId,
+    page.rows.map((row) => row.id),
+  );
   const statsByEvent = new Map<string, EventStatsRow>();
   if (page.rows.length > 0) {
     const stats = buildEventRegistrationStatsQuery(page.rows.map((row) => row.id));
@@ -265,6 +279,7 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
   }
   const events = page.rows.map((row) =>
     eventManagementSummarySchema.parse({
+      participation: participation.get(row.id),
       id: row.id,
       slug: row.slug,
       name: row.name,

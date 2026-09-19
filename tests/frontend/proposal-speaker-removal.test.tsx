@@ -12,7 +12,7 @@ import {
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
-import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/event-flows/proposal-manage-page";
+import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/components/proposals/ProposerSpeakerList";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
 import {
   controlFor,

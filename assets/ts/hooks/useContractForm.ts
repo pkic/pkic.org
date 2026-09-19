@@ -40,6 +40,8 @@ type ControlEvent = { target: EventTarget | null; type?: string };
 export interface ContractForm<Output> {
   /** The presentation for the field named `name`. */
   of: (name: string) => FieldPresentation;
+  /** Visible contract or server errors within an object or collection item. */
+  errorsWithin: (name: string) => string[];
   /** Spread on the form (or any ancestor of its controls). */
   handlers: {
     onInput: (event: ControlEvent) => void;
@@ -147,6 +149,13 @@ export function useContractForm<Schema extends z.ZodType>(
 
   return {
     of,
+    errorsWithin: (name) =>
+      Object.keys({ ...issues, ...refused })
+        .filter((key) => key === name || key.startsWith(`${name}.`))
+        .flatMap((key) => {
+          const presentation = of(key);
+          return presentation.message ? [presentation.message] : [];
+        }),
     handlers: { onInput: touch, onChange: touch, onFocusOut: touch },
     valid: result.success,
     submit,

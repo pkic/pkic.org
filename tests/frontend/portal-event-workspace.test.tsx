@@ -42,8 +42,8 @@ describe("event workspace list view proposal-programs gating", () => {
     expect(eventListShowsProposalPrograms(portalSessionFixture({ staff: true }))).toBe(false);
   });
 
-  it("shows proposal programs when there is no session at all", () => {
-    expect(eventListShowsProposalPrograms(null)).toBe(true);
+  it("hides proposal programs when there is no session at all", () => {
+    expect(eventListShowsProposalPrograms(null)).toBe(false);
   });
 });
 

@@ -1,8 +1,8 @@
 import {
-  GroupMailingSyncGet,
-  GroupMailingSyncUpdate,
-  GroupMailingSyncRun,
-} from "./[groupId]/mailing-lists/synchronization";
+  MailingListSyncGet,
+  MailingListSyncUpdate,
+  MailingListSyncRun,
+} from "./[groupId]/mailing-lists/[listId]/synchronization";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../_lib/db/context";
@@ -138,9 +138,9 @@ openapi.patch("/:groupId/leadership/:userRoleId", GroupLeadershipUpdate);
 openapi.delete("/:groupId/leadership/:userRoleId", GroupLeadershipRevoke);
 openapi.put("/:groupId/category-rules", GroupCategoryRulesReplace);
 openapi.get("/:groupId/category-rules", GroupCategoryRulesGet);
-openapi.get("/:groupId/mailing-lists/synchronization", GroupMailingSyncGet);
-openapi.patch("/:groupId/mailing-lists/synchronization", GroupMailingSyncUpdate);
-openapi.post("/:groupId/mailing-lists/synchronization/runs", GroupMailingSyncRun);
+openapi.get("/:groupId/mailing-lists/:listId/synchronization", MailingListSyncGet);
+openapi.patch("/:groupId/mailing-lists/:listId/synchronization", MailingListSyncUpdate);
+openapi.post("/:groupId/mailing-lists/:listId/synchronization/runs", MailingListSyncRun);
 openapi.get("/:groupId/mailing-lists", GroupMailingListSubscriptions);
 openapi.get("/:groupId/mailing-lists/management", GroupMailingListManagementList);
 openapi.post("/:groupId/mailing-lists", GroupMailingListCreate);

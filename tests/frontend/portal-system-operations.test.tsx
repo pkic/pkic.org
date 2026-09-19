@@ -420,7 +420,9 @@ describe("portal Operations command visibility", () => {
       canWriteMembership: true,
       canApproveMembership: true,
     });
-    expect(container.textContent).toContain("Run membership workflows and chair digests");
+    expect(container.textContent).toContain(
+      "Membership workflows and chair digests run through Settings → Scheduled jobs.",
+    );
     expect(container.textContent).not.toContain("Run EC review batch");
     expect(container.textContent).toContain("Run retention redaction");
   });

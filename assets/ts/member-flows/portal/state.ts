@@ -39,6 +39,10 @@ export function clearMemberProfile(): void {
 }
 
 export function savePortalSession(next: PortalSession): void {
+  if (Date.parse(next.expiresAt) <= Date.now()) {
+    expirePortalSession();
+    return;
+  }
   portalSession.value = next;
   authStatus.value = "authenticated";
   restoreReturnPath();
@@ -116,7 +120,7 @@ function restoreReturnPath(): void {
  * — since recording the path is a plain sessionStorage write and clearAuth
  * only resets signals to values they may already hold.
  */
-function handleUnauthorizedResponse(): void {
+export function expirePortalSession(): void {
   recordReturnPath();
   clearAuth();
 }
@@ -134,6 +138,6 @@ function mapPortalErrorPayload(payload: ApiErrorPayload): ApiErrorPayload {
  * SCOPE_REQUIRED handling without each call site opting in.
  */
 export function installPortalApiInterceptors(): void {
-  setUnauthorizedHandler(handleUnauthorizedResponse);
+  setUnauthorizedHandler(expirePortalSession);
   setErrorPayloadInterceptor(mapPortalErrorPayload);
 }

@@ -233,7 +233,7 @@ function CreateTemplate({
                     name="content"
                     label="Body"
                     initialValue={body}
-                    initialMode="source"
+                    initialMode="visual"
                     onChange={setBody}
                   />
                 ) : (

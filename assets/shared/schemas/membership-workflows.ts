@@ -17,7 +17,7 @@ export const membershipNoticeDestinationSchema = z.discriminatedUnion("kind", [
 ]);
 const workflowStepBaseSchema = z.object({
   id: databaseIdSchema,
-  label: trimmedString(1, 120),
+  label: trimmedString(1, 120, "Enter a step name."),
   instructions: z.string().trim().max(2000),
 });
 export const membershipWorkflowStepSchema = z.discriminatedUnion("kind", [

@@ -1,3 +1,4 @@
+import { eventParticipantSignInEvidence } from "../auth/event-participation";
 /**
  * Passkey (WebAuthn) registration and authentication.
  *
@@ -401,11 +402,12 @@ export async function completePasskeyAuthentication(
     resolved.identity.id,
     resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
   );
-  const capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation"> = [
+  const capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation" | "event_participant"> = [
     ...(resolved.staff ? ["admin" as const] : []),
     ...(resolved.member ? ["member" as const] : []),
     ...(resolved.sponsors.length > 0 ? ["sponsor" as const] : []),
     ...(resolved.pendingIdentityCount > 0 ? ["identity_invitation" as const] : []),
+    ...(resolved.eventParticipation ? ["event_participant" as const] : []),
   ];
 
   const lastUsedAt = nowIso();
@@ -415,7 +417,7 @@ export async function completePasskeyAuthentication(
     actorId: string;
     auditSessionId: string;
     expiresAt: string;
-    capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation">;
+    capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation" | "event_participant">;
   }) => {
     try {
       await db.batch([
@@ -472,6 +474,14 @@ export async function completePasskeyAuthentication(
               ),
             ]
           : []),
+        ...(resolved.eventParticipation
+          ? [
+              prepareAuthorizationGuard(
+                db,
+                eventParticipantSignInEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
+              ),
+            ]
+          : []),
         prepared.statement,
         prepareExpiredPasskeyChallengeCleanup(db, lastUsedAt),
       ]);
@@ -520,6 +530,7 @@ export async function completePasskeyAuthentication(
       : {}),
     sponsors: resolved.sponsors,
     pendingIdentityCount: resolved.pendingIdentityCount,
+    eventParticipation: resolved.eventParticipation,
   };
   const token = await signUserSessionToken(signingSecret, {
     sub: resolved.identity.id,

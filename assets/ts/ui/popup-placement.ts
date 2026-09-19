@@ -24,21 +24,34 @@ export interface PopupPosition {
   minWidth: number;
 }
 
-export function measurePopupPosition(anchor: DOMRect, popup: DOMRect, align: "start" | "end" = "start"): PopupPosition {
-  const gap = 4;
+export function measurePopupPosition(
+  anchor: DOMRect,
+  popup: DOMRect,
+  align: "start" | "end" = "start",
+  side: "bottom" | "right" = "bottom",
+): PopupPosition {
+  const gap = side === "right" ? 8 : 4;
   const margin = 8;
 
   const fitsBelow = anchor.bottom + gap + popup.height <= window.innerHeight - margin;
   const fitsAbove = anchor.top - gap - popup.height >= margin;
-  const top = !fitsBelow && fitsAbove ? anchor.top - gap - popup.height : anchor.bottom + gap;
+  const top =
+    side === "right" ? anchor.top : !fitsBelow && fitsAbove ? anchor.top - gap - popup.height : anchor.bottom + gap;
 
-  const preferred = align === "end" ? anchor.right - popup.width : anchor.left;
+  const preferred =
+    side === "right"
+      ? anchor.right + gap + popup.width <= window.innerWidth - margin
+        ? anchor.right + gap
+        : anchor.left - gap - popup.width
+      : align === "end"
+        ? anchor.right - popup.width
+        : anchor.left;
   const left = Math.max(margin, Math.min(preferred, window.innerWidth - popup.width - margin));
 
   return {
     top: Math.max(margin, Math.min(top, window.innerHeight - popup.height - margin)),
     left,
-    minWidth: anchor.width,
+    minWidth: side === "right" ? 0 : anchor.width,
   };
 }
 
@@ -87,11 +100,13 @@ export function usePopupPlacement({
   popupRef,
   align = "start",
   revision,
+  side = "bottom",
 }: {
   open: boolean;
   anchorRef: RefObject<HTMLElement>;
   popupRef: RefObject<HTMLElement>;
   align?: "start" | "end";
+  side?: "bottom" | "right";
   /** Changes whenever the popup's measured size can have changed. */
   revision?: string | number;
 }): void {
@@ -100,9 +115,9 @@ export function usePopupPlacement({
     const popup = popupRef.current;
     if (!anchor || !popup) return;
     const anchorRect = anchor.getBoundingClientRect();
-    popup.style.setProperty("min-width", `${anchorRect.width}px`);
-    applyPopupPosition(popup, measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align));
-  }, [align, anchorRef, popupRef]);
+    popup.style.setProperty("min-width", `${side === "right" ? 0 : anchorRect.width}px`);
+    applyPopupPosition(popup, measurePopupPosition(anchorRect, popup.getBoundingClientRect(), align, side));
+  }, [align, anchorRef, popupRef, side]);
 
   useLayoutEffect(() => {
     if (!open) return;

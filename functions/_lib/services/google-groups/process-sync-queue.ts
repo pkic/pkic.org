@@ -1,4 +1,4 @@
-import { isGroupMailingSyncEnabled } from "./group-policy";
+import { isMailingListSyncEnabled } from "./mailing-list-policy";
 import { isGoogleGroupsSuppressed } from "./observe-membership";
 import { supersedeSuppressedGoogleGroupsAdd } from "./sync-queue";
 import { logError, logInfo } from "../../logging";
@@ -92,7 +92,7 @@ export async function processGoogleGroupsSyncQueue(
       continue;
     }
 
-    if (!(await isGroupMailingSyncEnabled(db, claim.google_group_email))) continue;
+    if (!(await isMailingListSyncEnabled(db, claim.google_group_email))) continue;
     try {
       await directoryClient.applyMembership({
         action: claim.action,

@@ -145,8 +145,14 @@ export async function recordJobOutcome(
 }
 
 /** Marks a job for the next dispatcher pass without waiting for its interval. */
+export function prepareJobWake(db: DatabaseLike, jobKey: ScheduledJobKey): StatementLike {
+  return db
+    .prepare(`UPDATE scheduled_jobs SET wake_requested = 1, updated_at = ${NOW_SQL} WHERE job_key = ?`)
+    .bind(jobKey);
+}
+
 export async function requestJobWake(db: DatabaseLike, jobKey: ScheduledJobKey): Promise<void> {
-  await run(db, `UPDATE scheduled_jobs SET wake_requested = 1, updated_at = ${NOW_SQL} WHERE job_key = ?`, [jobKey]);
+  await prepareJobWake(db, jobKey).run();
 }
 
 /**

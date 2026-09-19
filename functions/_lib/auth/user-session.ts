@@ -1,3 +1,4 @@
+import { hasEventParticipation, eventParticipantSignInEvidence } from "./event-participation";
 /**
  * Canonical human identity session.
  *
@@ -6,7 +7,6 @@
  * The token only identifies the user/session and carries non-authoritative
  * context hints used by the read-replica and membership-context adapters.
  */
-import type { PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
 import { all, first } from "../db/queries";
@@ -14,7 +14,7 @@ import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { createUserBackedAuthAdmin, publicStaffCapacity } from "./admin-identity";
+import { createUserBackedAuthAdmin } from "./admin-identity";
 import {
   findEligibleStaffUserById,
   staffSignInAuthorizationEvidence,
@@ -79,6 +79,7 @@ export interface UserSessionResult {
   member?: AuthMember;
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
+  eventParticipation?: boolean;
 }
 
 export interface PreparedUserSession {
@@ -271,19 +272,20 @@ export async function resolveUserSessionFromRequest(
     await fetchSessionRow(db, USER_SESSIONS, verified.claims.sid, verified.claims.sub),
     "user",
   );
-  const [identity, staff, member, sponsors, pendingIdentityCount] = await Promise.all([
+  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
     findActiveIdentity(db, verified.claims.sub),
     findEligibleStaffUserById(db, verified.claims.sub),
     findEligibleMemberById(db, verified.claims.sub, verified.claims.iid),
     findActiveSponsorCapacitiesByUserId(db, verified.claims.sub),
     countPendingIdentitiesForUser(db, verified.claims.sub),
+    hasEventParticipation(db, verified.claims.sub),
   ]);
-  if (!identity || (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0)) {
+  if (!identity || (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation)) {
     throw new AppError(401, "AUTH_INVALID", "This user session no longer has an active capacity");
   }
   const elevatedStaffExpiry = userStaffExpiresAt(row.createdAt, row.expiresAt);
   const staffActive = new Date(elevatedStaffExpiry).getTime() > Date.now();
-  if (!staffActive && !member && sponsors.length === 0 && pendingIdentityCount === 0) {
+  if (!staffActive && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account has no active portal capacity");
   }
   const staffActor =
@@ -298,22 +300,7 @@ export async function resolveUserSessionFromRequest(
     ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
     sponsors,
     pendingIdentityCount,
-  };
-}
-
-export function publicUserSession(result: UserSessionResult): {
-  identity: { id: string; email: string };
-  staff?: PublicStaffCapacity;
-  member?: AuthMember;
-  sponsors: SponsorCapacity[];
-  pendingIdentityCount: number;
-} {
-  return {
-    identity: result.identity,
-    ...(result.staff ? { staff: publicStaffCapacity(result.staff) } : {}),
-    ...(result.member ? { member: result.member } : {}),
-    sponsors: result.sponsors,
-    pendingIdentityCount: result.pendingIdentityCount,
+    eventParticipation,
   };
 }
 
@@ -362,17 +349,18 @@ export async function queueUserSignInCapability(payload: {
 }): Promise<{
   queuedToken: string;
   identity: { id: string; email: string };
-  capacities: Array<"staff" | "member" | "sponsor" | "identity_invitation">;
+  capacities: Array<"staff" | "member" | "sponsor" | "identity_invitation" | "event_participant">;
 } | null> {
   const identity = await findActiveIdentityBySignInEmail(payload.db, payload.email);
   if (!identity) return null;
-  const [staff, member, sponsors, pendingIdentityCount] = await Promise.all([
+  const [staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
     findEligibleStaffUserById(payload.db, identity.id),
     findEligibleMemberById(payload.db, identity.id),
     findActiveSponsorCapacitiesByUserId(payload.db, identity.id),
     countPendingIdentitiesForUser(payload.db, identity.id),
+    hasEventParticipation(payload.db, identity.id),
   ]);
-  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0) return null;
+  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) return null;
   const capability = await queueEmailAuthCapability({
     signingSecret: payload.signingSecret,
     purpose: "user_sign_in",
@@ -390,6 +378,7 @@ export async function queueUserSignInCapability(payload: {
       ...(member ? ["member" as const] : []),
       ...(sponsors.length > 0 ? ["sponsor" as const] : []),
       ...(pendingIdentityCount > 0 ? ["identity_invitation" as const] : []),
+      ...(eventParticipation ? ["event_participant" as const] : []),
     ],
   };
 }
@@ -423,13 +412,14 @@ export async function redeemUserSignInCapability(
     email: signInIdentity.email,
     normalized_email: signInIdentity.normalized_email,
   };
-  const [staff, member, sponsors, pendingIdentityCount] = await Promise.all([
+  const [staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
     findEligibleStaffUserById(db, capability.subjectId),
     findEligibleMemberById(db, capability.subjectId),
     findActiveSponsorCapacitiesByUserId(db, capability.subjectId),
     countPendingIdentitiesForUser(db, capability.subjectId),
+    hasEventParticipation(db, capability.subjectId),
   ]);
-  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0) {
+  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has portal access");
   }
   await assertEmailAuthCapabilityEmail({
@@ -440,6 +430,9 @@ export async function redeemUserSignInCapability(
   const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
   const authorizationEvidence = [
+    ...(eventParticipation
+      ? [eventParticipantSignInEvidence(identity.id, signInIdentity.normalized_sign_in_email)]
+      : []),
     ...(staff ? [staffSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)] : []),
     ...(member ? [memberSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)] : []),
     ...(sponsors.length > 0
@@ -463,6 +456,7 @@ export async function redeemUserSignInCapability(
         ...(member ? ["member"] : []),
         ...(sponsors.length > 0 ? ["sponsor"] : []),
         ...(pendingIdentityCount > 0 ? ["identity_invitation"] : []),
+        ...(eventParticipation ? ["event_participant"] : []),
       ],
       expiresAt: prepared.expiresAt,
     },
@@ -493,6 +487,7 @@ export async function redeemUserSignInCapability(
     ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
     sponsors,
     pendingIdentityCount,
+    eventParticipation,
   };
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: identity.id,
@@ -569,6 +564,7 @@ export async function redeemSponsorSignInCapability(
     throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has sponsor access");
   }
   const pendingIdentityCount = await countPendingIdentitiesForUser(db, preparedUser.user.id);
+  const eventParticipation = await hasEventParticipation(db, preparedUser.user.id);
   const staffExpiry = staff ? userStaffExpiresAt(prepared.createdAt, prepared.expiresAt) : null;
   const session: UserSessionResult = {
     identity: { id: preparedUser.user.id, email: preparedUser.user.email },
@@ -580,6 +576,7 @@ export async function redeemSponsorSignInCapability(
     ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
     sponsors,
     pendingIdentityCount,
+    eventParticipation,
   };
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: preparedUser.user.id,

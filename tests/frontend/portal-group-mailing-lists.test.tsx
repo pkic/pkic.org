@@ -118,7 +118,7 @@ describe("portal group mailing lists", () => {
     });
     expect(collectionRequests[0].searchParams.get("limit")).toBe("50");
     expect(collectionRequests[0].searchParams.get("sort")).toBe("label");
-    expect(container.textContent).toContain("Enable Google Groups synchronization");
+    expect(container.textContent).not.toContain("Enable Google Groups synchronization");
   });
   it("renders the manager empty state", async () => {
     vi.stubGlobal(

@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "../../../../../../_lib/services/participant-authority";
 /**
  * Current proposal-speaker presentation resource.
  *
@@ -32,7 +33,7 @@ import {
 } from "../../../../../../../assets/shared/schemas/speaker-self-service";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 
-export async function onRequestGet(c: any, token: string): Promise<Response> {
+export async function onRequestGet(c: any, token: ParticipantAuthority): Promise<Response> {
   const { speaker, proposal } = await getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
 
   if (speaker.status !== "confirmed") {
@@ -66,10 +67,10 @@ export async function onRequestGet(c: any, token: string): Promise<Response> {
   return presentationDownloadResponse(object, version);
 }
 
-export async function onRequestPut(c: any): Promise<Response> {
+export async function onRequestPut(c: any, authority?: ParticipantAuthority): Promise<Response> {
   const { speaker, proposal } = await getSpeakerByManageToken(
     requestDb(c),
-    c.req.param("token"),
+    authority ?? c.req.param("token"),
     requireInternalSecret(c.env),
   );
 

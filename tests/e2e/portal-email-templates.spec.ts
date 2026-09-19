@@ -33,7 +33,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await page.getByLabel("Template key").fill(templateKey);
   await expect(page.getByText("Key is available", { exact: true })).toBeVisible();
   await page.getByLabel("Subject template").fill("System template for {{firstName}}");
-  await page.getByRole("textbox", { name: "Body Markdown source", exact: true }).fill(initialBody);
+  await page.getByRole("textbox", { name: "Body", exact: true }).fill(initialBody);
 
   const createResponse = page.waitForResponse(
     (response) =>
@@ -44,6 +44,8 @@ test("permitted staff create, preview, activate, and reopen an email template th
   expect((await createResponse).status()).toBe(200);
   await expect(page.getByText(`Edit: ${templateKey}`, { exact: false })).toBeVisible();
 
+  await expect(page.getByRole("textbox", { name: "Body", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Body Markdown source", exact: true });
   const editor = page.locator(".pk-markdown-editor").filter({ has: source });
   await source.fill("{{#if firstName}}Hello {{firstName}}{{else}}Hello user{{/if}}");
@@ -58,7 +60,11 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(source).toBeFocused();
   await editor.getByRole("button", { name: "Visual editor", exact: true }).click();
   const visual = page.getByRole("textbox", { name: "Body", exact: true });
+  await page.getByRole("button", { name: "Heading", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Heading 3", exact: true }).click();
+  await expect(visual.locator("h3")).toBeVisible();
   await expect(visual.locator(".adm-template-token-var")).toHaveCount(2);
+  await visual.screenshot({ path: test.info().outputPath("template-visual-highlighting.png") });
   await page.getByRole("button", { name: "Insert reusable templates", exact: true }).click();
   await expect(page.getByRole("menuitem").first()).toBeVisible();
   await page.keyboard.press("Escape");
@@ -96,6 +102,9 @@ test("permitted staff create, preview, activate, and reopen an email template th
   );
   await page.screenshot({ path: test.info().outputPath("email-editor-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
+  for (const command of await page.locator("[data-command][hidden]").all()) {
+    await expect(command).toBeHidden();
+  }
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
     0,
   );
@@ -140,7 +149,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
     .filter({ hasText: templateKey })
     .getByRole("button", { name: "Edit", exact: false })
     .click();
-  await expect(page.getByRole("textbox", { name: "Body Markdown source", exact: true })).toHaveValue(revisedBody);
+  await expect(page.getByRole("textbox", { name: "Body", exact: true })).toHaveText(revisedBody);
   await expect(
     page
       .getByRole("row")

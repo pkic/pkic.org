@@ -68,12 +68,12 @@ export function buildCurrentUserProposalsPageQuery(
             CASE WHEN sp.proposer_user_id = ? THEN 'submitter' ELSE 'speaker' END AS role
           FROM session_proposals sp
           JOIN events e ON e.id = sp.event_id
-          WHERE sp.proposer_user_id = ?
+          WHERE sp.deleted_at IS NULL AND (? IS NULL OR sp.event_id = ?) AND (sp.proposer_user_id = ?
              OR EXISTS (
                   SELECT 1 FROM proposal_speakers ps
                    WHERE ps.proposal_id = sp.id AND ps.user_id = ?
-                )`,
-    bindings: [userId, userId, userId],
+                ))`,
+    bindings: [userId, query.eventId ?? null, query.eventId ?? null, userId, userId],
     orderBy: "ORDER BY strftime('%Y-%m-%dT%H:%M:%fZ', sp.updated_at) DESC, sp.id ASC",
     limit: query.limit,
     offset: query.offset,

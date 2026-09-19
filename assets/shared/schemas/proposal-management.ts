@@ -129,6 +129,7 @@ export const proposalAccessPatchSchema = boundedJsonObject(
 export const proposalAccessTokenParamsSchema = z.object({ token: tokenSchema });
 
 export const proposalAccessRecordSchema = z.object({
+  event_id: databaseIdSchema.optional(),
   id: databaseIdSchema,
   proposer_user_id: databaseIdSchema,
   status: proposalStatusSchema,

@@ -33,6 +33,7 @@ import type { PortalSession } from "./types";
 import { McpAuthorization } from "./shell/McpAuthorization";
 import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation";
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
+import { useSessionExpiry } from "./use-session-expiry";
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
@@ -41,6 +42,7 @@ async function verifyMagicLink(token: string): Promise<PortalSession> {
 }
 
 export function App() {
+  useSessionExpiry();
   const isMcpAuthorization = portalHashPath(window.location.hash) === "/auth/oauth";
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -53,7 +55,8 @@ export function App() {
       if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
       savePortalSession(session);
       if (session.member) {
-        saveProfile(await getJson("/api/v1/users/current", myProfileSchema));
+        const nextProfile = await getJson("/api/v1/users/current", myProfileSchema);
+        if (portalSession.value === session) saveProfile(nextProfile);
       } else {
         clearMemberProfile();
       }

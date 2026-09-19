@@ -16,7 +16,16 @@ test("publishes a workflow, assigns a new organization category, and completes i
   await page.getByRole("button", { name: "New workflow", exact: true }).click();
   await page.getByLabel("Workflow name").fill(name);
   await page.getByLabel("Policy reference").fill("Synthetic policy for Example Organization browser verification");
+  await page.getByLabel("Step name").fill("");
+  await page.getByRole("button", { name: "Done editing", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText(/Step 1 needs attention:/)).toBeVisible();
+  await expect(page.getByText("Step 1 needs attention: Enter a step name.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Step name")).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("workflow-step-validation.png"), fullPage: true });
   await page.getByLabel("Step name").fill("Review the application form");
+  await expect(page.getByText(/Step 1 needs attention:/)).toHaveCount(0);
   await page
     .getByLabel("Applicant instructions")
     .fill("Staff check the organization and the user who submitted the form.");
@@ -37,9 +46,16 @@ test("publishes a workflow, assigns a new organization category, and completes i
   await page.getByLabel("Code").fill(code);
   await page.getByLabel("Label").fill("Example organization category");
   const picker = page.getByRole("combobox", { name: "Membership workflow" });
+  await picker.fill("Standard membership");
+  await page.getByRole("option").filter({ hasText: "Standard membership" }).click();
+  await page.getByRole("button", { name: "Create category", exact: true }).click();
+  await expect(page).toHaveURL(/membership-categories$/);
+  await page.goto(`/portal/#/settings/membership-categories/${code}`);
+  await expect(page.getByRole("combobox", { name: "Membership workflow" })).toBeVisible();
+  await expect(picker).toHaveValue(/Standard membership/);
   await picker.fill(name);
   await page.getByRole("option").filter({ hasText: name }).click();
-  await page.getByRole("button", { name: "Create category", exact: true }).click();
+  await page.getByRole("button", { name: `Save category ${code}`, exact: true }).click();
   await expect(page).toHaveURL(/membership-categories$/);
   const application = await submitMembershipApplication(page, {
     email: `user@organization-${suffix}.test`,

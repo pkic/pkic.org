@@ -1,4 +1,4 @@
-import { markdownControl } from "./helpers/labelled-control";
+import { markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -134,6 +134,11 @@ async function click(label: string): Promise<void> {
 
 /** Types into the control the given label names, resolved through the for/id pair. */
 async function typeInto(label: string, value: string): Promise<void> {
+  if (label === "Body") {
+    await typeMarkdown(container!, label, value);
+    await settle();
+    return;
+  }
   const field = controlFor<HTMLTextAreaElement | HTMLInputElement>(container!, label);
   field.value = value;
   await act(() => {
@@ -175,7 +180,8 @@ describe("portal email template editor", () => {
     const root = container!.firstElementChild!;
     expect(root.classList.contains("pk")).toBe(true);
     const source = await markdownControl(container!, "Body");
-    expect((source as HTMLTextAreaElement).value).toContain("firstName");
+    expect(source.getAttribute("contenteditable")).toBe("true");
+    expect(source.textContent).toContain("firstName");
     // The preview is untrusted rendered HTML and stays fully sandboxed.
     expect(previewFrame()!.getAttribute("sandbox")).toBe("");
   });
@@ -302,7 +308,7 @@ describe("portal email template editor", () => {
 
     expect(toastMessages()).toContain("Version conflict");
     // Still previewed, still editable — a failed save must not clear the draft.
-    expect(controlFor<HTMLTextAreaElement>(container!, "Body").value).toBe("Hello {{firstName}}, again.");
+    expect(await markdownValue(container!, "Body")).toBe("Hello {{firstName}}, again.");
     expect(button("Save as Draft")!.disabled).toBe(false);
   });
 
@@ -310,7 +316,7 @@ describe("portal email template editor", () => {
     stubApi();
     await mount({ canWrite: false });
 
-    expect(controlFor<HTMLTextAreaElement>(container!, "Body").disabled).toBe(true);
+    expect(controlFor<HTMLElement>(container!, "Body").getAttribute("aria-disabled")).toBe("true");
     expect(labelNames(container!)).not.toContain("Preview data (JSON)");
     expect(previewFrame()).toBeNull();
     expect(button("Render Preview")).toBeUndefined();

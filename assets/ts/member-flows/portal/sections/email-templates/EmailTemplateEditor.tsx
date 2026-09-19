@@ -401,7 +401,7 @@ export function TemplateEditor({
                       name="content"
                       label="Body"
                       initialValue={body}
-                      initialMode="source"
+                      initialMode="visual"
                       templateInsertions={[
                         ...TEMPLATE_HELPERS.map((item) => ({
                           id: item.label,

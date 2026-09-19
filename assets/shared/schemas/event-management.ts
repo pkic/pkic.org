@@ -1,3 +1,4 @@
+import { eventParticipationSchema } from "./event-participation";
 import { z } from "zod";
 import { httpOrSameOriginUrlSchema, httpUrlSchema } from "./urls";
 import { proposalSessionTypesSchema } from "./proposal-management";
@@ -129,6 +130,7 @@ export type EventCreateInput = z.infer<typeof eventCreateSchema>;
  * identity and scheduling shape.
  */
 export const eventResourceCoreSchema = z.object({
+  participation: eventParticipationSchema.optional(),
   id: eventIdSchema,
   slug: z.string(),
   name: z.string(),

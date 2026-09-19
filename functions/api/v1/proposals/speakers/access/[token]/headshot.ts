@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "../../../../../../_lib/services/participant-authority";
 import { requireProfileImageBucket } from "../../../../../../_lib/services/profile-image-storage";
 import { OpenAPIRoute } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
@@ -19,12 +20,12 @@ import {
 } from "../../../../../../../assets/shared/schemas/route-contracts";
 import { proposalSpeakerAccessPath } from "../../../../../../../assets/shared/proposal-access-paths";
 
-async function loadContext(c: AdminContext, token: string) {
+async function loadContext(c: AdminContext, token: ParticipantAuthority) {
   c.set?.("sensitive", true);
   return getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
 }
 
-async function onGet(c: AdminContext, token: string): Promise<Response> {
+export async function onGet(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
   const { user } = await loadContext(c, token);
   if (!user.headshot_r2_key) {
     return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
@@ -32,7 +33,7 @@ async function onGet(c: AdminContext, token: string): Promise<Response> {
   return privateUserHeadshotResponse(requireProfileImageBucket(c.env, user.headshot_r2_key), user.headshot_r2_key);
 }
 
-async function onPut(c: AdminContext, token: string): Promise<Response> {
+export async function onPut(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
   const { proposal, speaker, user } = await loadContext(c, token);
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
@@ -65,7 +66,7 @@ async function onPut(c: AdminContext, token: string): Promise<Response> {
   });
 }
 
-async function onDelete(c: AdminContext, token: string): Promise<Response> {
+export async function onDelete(c: AdminContext, token: ParticipantAuthority): Promise<Response> {
   const { proposal, speaker, user } = await loadContext(c, token);
   if (speaker.status === "declined") {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);

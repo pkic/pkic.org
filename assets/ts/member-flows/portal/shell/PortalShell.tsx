@@ -1,3 +1,4 @@
+import { portalEventParticipantRoutes } from "./portal-event-participant-routes";
 /** Capability-derived portal shell shared by member and management identities. */
 import type { ComponentChildren } from "preact";
 import { Suspense } from "preact/compat";
@@ -116,6 +117,7 @@ export function PortalShell() {
                 )}
               />
             )}
+            {access.hasEventWorkspace && portalEventParticipantRoutes()}
             {access.hasEventWorkspace && (
               // A team member is added on a page below the Team tab, which is
               // one segment deeper than the generic route reaches — the same

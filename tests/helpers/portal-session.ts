@@ -12,6 +12,7 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
   const identity = { id: "00000000-0000-4000-8000-000000000001", email: "person@example.test" };
   return {
     success: true,
+    expiresAt: "2099-01-01T00:00:00.000Z",
     identity,
     sponsors: [],
     pendingIdentityCount: capacities.pendingIdentityCount ?? 0,

@@ -357,7 +357,7 @@ export function EventEmailCampaign({
               name="bodyContent"
               label="Message"
               initialValue={body}
-              initialMode="source"
+              initialMode="visual"
               editorRef={bodyEditor}
               onChange={setBody}
             />

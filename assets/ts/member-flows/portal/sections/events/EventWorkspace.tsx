@@ -13,6 +13,13 @@ import { portalSession } from "../../state";
 import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
 import type { PortalSession } from "../../types";
 
+const ParticipantEvent = lazy(() =>
+  import("./ParticipantEvent").then((module) => ({ default: module.ParticipantEvent })),
+);
+const ParticipantEventPage = lazy(() =>
+  import("./ParticipantEvent").then((module) => ({ default: module.ParticipantEventPage })),
+);
+
 const EventList = lazy(() => import("./EventList").then((module) => ({ default: module.EventList })));
 const ProposalPrograms = lazy(() =>
   import("../management/ProposalPrograms").then((module) => ({ default: module.ProposalPrograms })),
@@ -29,6 +36,7 @@ const RegistrationDetailPage = lazy(() =>
 
 type EventWorkspaceProps =
   | { view: "list" }
+  | { view: "participant"; slug: string; kind: "registration" | "proposal"; resourceId: string; tab?: string }
   | { view: "detail"; slug: string; tab?: string; subTab?: string; detailSegment?: string }
   | { view: "proposal"; slug: string; resourceId: string; tab?: string; segment?: string }
   | { view: "registration"; slug: string; resourceId: string };
@@ -44,11 +52,13 @@ function OwnerGroupGate({
   mapPath,
   children,
   audienceFallback = false,
+  audienceTab,
 }: {
   slug: string;
   mapPath: (base: string) => string;
   children: ComponentChildren;
   audienceFallback?: boolean;
+  audienceTab?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
   const detail = useData(
@@ -58,8 +68,13 @@ function OwnerGroupGate({
   const event = detail.data?.event;
   const ownerGroupId = event && "ownerGroupId" in event ? event.ownerGroupId : null;
   const eventId = detail.data?.event.id ?? null;
+  const personal =
+    audienceFallback &&
+    Boolean(
+      event?.participation?.registrationId || event?.participation?.proposals || event?.participation?.speakerProposals,
+    );
   const target =
-    ownerGroupId && eventId
+    !personal && ownerGroupId && eventId
       ? mapPath(`/groups/${encodeURIComponent(ownerGroupId)}/events/${encodeURIComponent(eventId)}`)
       : null;
 
@@ -69,6 +84,7 @@ function OwnerGroupGate({
 
   if (detail.loading) return <Spinner label="Loading event…" />;
   if (target) return null;
+  if (personal && event) return <ParticipantEvent event={event} tab={audienceTab} />;
   if (audienceFallback && event && "viewer" in event) return <EventAudienceView event={event} />;
   return <>{children}</>;
 }
@@ -80,10 +96,20 @@ function OwnerGroupGate({
  * here would duplicate the same proposals twice.
  */
 export function eventListShowsProposalPrograms(session: PortalSession | null): boolean {
-  return !portalHasPermissionAtAnyScope(session, "events:read");
+  return (
+    portalHasPermissionAtAnyScope(session, "proposals:read") && !portalHasPermissionAtAnyScope(session, "events:read")
+  );
 }
 
 export function EventWorkspace(props: EventWorkspaceProps) {
+  if (props.view === "participant")
+    return (
+      <div class="pk pk-stack portal-section">
+        <Suspense fallback={<Spinner />}>
+          <ParticipantEventPage slug={props.slug} kind={props.kind} resourceId={props.resourceId} tab={props.tab} />
+        </Suspense>
+      </div>
+    );
   if (props.view === "list") {
     // The list is a page of its own, so it opens with the anatomy's first
     // region rather than the workspace's legacy heading.
@@ -142,6 +168,7 @@ export function EventWorkspace(props: EventWorkspaceProps) {
       <OwnerGroupGate
         slug={props.slug}
         audienceFallback
+        audienceTab={props.tab}
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;
           if (tab === "promoters" && subTab) return `${base}/promoters/${encodeURIComponent(subTab)}`;

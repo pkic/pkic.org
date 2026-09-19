@@ -1,4 +1,4 @@
-import type { ValidatedData } from "chanfana";
+import type { ParticipantRouteData } from "../../../../../../_lib/routes/participant-authority";
 import { json } from "../../../../../../_lib/http";
 import type { AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
@@ -15,11 +15,11 @@ import {
 } from "../../../../../../../assets/shared/schemas/route-contracts-public-proposals";
 import { removeProposalSpeakerByProposer } from "../../../../../../_lib/services/proposal-speaker-removal";
 
-type ProposalAccessSpeakerContext = AdminContext<{ token: string; userId: string }>;
+type ProposalAccessSpeakerContext = AdminContext;
 
-async function handleProposalSpeakerPatch(
+export async function handleProposalSpeakerPatch(
   c: ProposalAccessSpeakerContext,
-  data: ValidatedData<typeof proposalAccessSpeakerPatchRouteSchema>,
+  data: ParticipantRouteData<typeof proposalAccessSpeakerPatchRouteSchema>,
 ): Promise<Response> {
   const { proposal, speaker } = await getProposerManagedSpeakerContext(
     c.env.DB,
@@ -47,7 +47,7 @@ async function handleProposalSpeakerPatch(
 
 export async function onRequestDelete(
   c: any,
-  data: ValidatedData<typeof proposalAccessSpeakerDeleteRouteSchema>,
+  data: ParticipantRouteData<typeof proposalAccessSpeakerDeleteRouteSchema>,
 ): Promise<Response> {
   c.set?.("sensitive", true);
   const params = data.params;

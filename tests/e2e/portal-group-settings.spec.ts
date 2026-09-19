@@ -13,6 +13,13 @@ test("group configuration requires editing and preserves only saved changes", as
   await create.getByLabel(/^Name/).fill(name);
   await create.getByRole("button", { name: "Create group", exact: true }).click();
   await expect(page).toHaveURL(/#\/groups\/[^/]+\/settings$/);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Group actions", exact: true })).toHaveCount(0);
+  await page
+    .getByRole("navigation", { name: `${name} sections`, exact: true })
+    .getByRole("link", { name: "Settings", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/groups\/[^/]+\/settings$/);
   const general = page.getByRole("tabpanel");
   await expect(general.locator("input,select,textarea")).toHaveCount(0);
   async function edit(label: string) {

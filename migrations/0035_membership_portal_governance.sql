@@ -6856,10 +6856,10 @@ INSERT INTO scheduled_jobs (job_key, interval_seconds, next_run_at) VALUES
   ('membership_workflows', 60, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   ('membership_fee_checkouts', 60, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
--- Group owners may pause provider synchronization without losing subscription intent.
-CREATE TABLE group_mailing_sync_settings (
-  group_id TEXT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  revision INTEGER NOT NULL DEFAULT 0,
+-- Mailing list managers may pause provider synchronization without losing subscription intent.
+CREATE TABLE mailing_list_sync_settings (
+  mailing_list_id TEXT NOT NULL PRIMARY KEY REFERENCES mailing_lists(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
   updated_at TEXT NOT NULL
 );

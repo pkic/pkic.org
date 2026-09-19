@@ -2,7 +2,12 @@ import { protectsPublicAction } from "./abuse-protection";
 /** Neutral user identity authentication contracts used by every human UI. */
 import { z } from "zod";
 import { authMemberSchema } from "./member-auth";
-import { emailRecoveryRequestSchema, magicLinkVerifySchema, successResponseSchema } from "./api-common";
+import {
+  emailRecoveryRequestSchema,
+  magicLinkVerifySchema,
+  successResponseSchema,
+  utcInstantSchema,
+} from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { publicOperation, requiresSession } from "./route-contract";
 import { sponsorCapacitySchema } from "./sponsor-access";
@@ -29,10 +34,12 @@ export const userIdentitySchema = z.object({
 });
 
 const userCapacityFields = {
+  expiresAt: utcInstantSchema,
   identity: userIdentitySchema,
   staff: publicStaffCapacitySchema.optional(),
   member: authMemberSchema.optional(),
   sponsors: z.array(sponsorCapacitySchema).default([]),
+  eventParticipation: z.boolean().optional(),
   pendingIdentityCount: z.number().int().nonnegative().default(0),
 };
 
@@ -44,8 +51,10 @@ function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
         member?: unknown;
         sponsors?: unknown[];
         pendingIdentityCount?: number;
+        eventParticipation?: boolean;
       };
       return (
+        capacities.eventParticipation === true ||
         capacities.staff !== undefined ||
         capacities.member !== undefined ||
         (capacities.sponsors?.length ?? 0) > 0 ||
@@ -57,9 +66,7 @@ function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
 }
 
 export const userAuthSessionResponseSchema = requireCapacity(successResponseSchema.extend(userCapacityFields));
-export const userAuthEstablishedResponseSchema = requireCapacity(
-  successResponseSchema.extend({ expiresAt: z.string(), ...userCapacityFields }),
-);
+export const userAuthEstablishedResponseSchema = userAuthSessionResponseSchema;
 
 export const userAuthRequestRouteSchema = {
   ...protectsPublicAction("login_email", "email:manage"),

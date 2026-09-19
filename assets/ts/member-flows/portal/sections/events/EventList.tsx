@@ -1,3 +1,5 @@
+import { eventParticipantRecordPath } from "./event-participant-paths";
+import { Badge } from "../../../../components/Badge";
 import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
@@ -143,7 +145,39 @@ export function EventList() {
           },
           {
             header: "Your status",
-            cell: (e) => (isAudienceEvent(e) && e.viewer ? <ViewerEventState viewer={e.viewer} /> : null),
+            cell: (e) => (
+              <div class="pk-stack pk-stack--snug">
+                {isAudienceEvent(e) && e.viewer ? (
+                  <ViewerEventState
+                    viewer={e.viewer}
+                    href={
+                      e.participation?.registrationId
+                        ? eventParticipantRecordPath(e.slug, "registration", e.participation.registrationId)
+                        : undefined
+                    }
+                  />
+                ) : e.participation?.registrationStatus ? (
+                  <Badge status={e.participation.registrationStatus} />
+                ) : null}
+                {Boolean(e.participation?.proposals) && (
+                  <span>
+                    {e.participation?.proposals} {e.participation?.proposals === 1 ? "proposal" : "proposals"}
+                  </span>
+                )}
+                {Boolean(e.participation?.speakerProposals) && (
+                  <span>
+                    Speaker in {e.participation?.speakerProposals}{" "}
+                    {e.participation?.speakerProposals === 1 ? "proposal" : "proposals"}
+                  </span>
+                )}
+                {e.participation?.proposalStates.map((status) => (
+                  <Badge key={status} status={status} label={`Proposal: ${status.replaceAll("_", " ")}`} />
+                ))}
+                {e.participation?.speakerStates.map((status) => (
+                  <Badge key={status} status={status} label={`Speaker: ${status}`} />
+                ))}
+              </div>
+            ),
             // A badge has a bounded length; the slack belongs to the event
             // name, not spread between it and a column of short states.
             width: "fit",

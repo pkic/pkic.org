@@ -4,12 +4,25 @@ import { verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 import { REGISTRATION_COLUMNS } from "./types";
+import type { ParticipantAuthority } from "../participant-authority";
 
 export async function getRegistrationByManageToken(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   signingSecret: string,
 ): Promise<RegistrationRecord> {
+  if (typeof manageToken !== "string") {
+    const registration = await first<RegistrationRecord>(
+      db,
+      `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ? AND user_id = ?
+       AND EXISTS (SELECT 1 FROM users WHERE users.id = registrations.user_id AND users.pii_redacted_at IS NULL)`,
+      [manageToken.resourceId, manageToken.userId],
+    );
+    if (!registration) {
+      throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
+    }
+    return registration;
+  }
   const verified = await verifyDatabaseCapability({
     db,
     signingSecret,

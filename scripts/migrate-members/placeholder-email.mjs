@@ -8,21 +8,18 @@ const eligiblePlaceholder = `u.pii_redacted_at IS NULL AND u.merged_into_user_id
 
 export function placeholderPreflightQuery(mappings) {
   if (!mappings.length) return null;
-  return mappings
-    .map(
-      ({ previousEmail, email }) => `
-SELECT ${sqlString(previousEmail)} AS placeholder, ${sqlString(email)} AS email,
+  const values = mappings.map(({ previousEmail, email }) => `(${sqlString(previousEmail)}, ${sqlString(email)})`);
+  return `WITH mappings(placeholder, email) AS (VALUES ${values.join(",\n")})
+SELECT mappings.placeholder, mappings.email,
   CASE WHEN NOT (${eligiblePlaceholder}) THEN 'placeholder is no longer an active migration account'
        ELSE 'confirmed email is already reserved; reconcile the accounts before importing' END AS reason
-FROM users u WHERE u.normalized_email = ${sqlString(previousEmail)}
-  AND (NOT (${eligiblePlaceholder}) OR EXISTS (
+FROM mappings JOIN users u ON u.normalized_email = mappings.placeholder
+  WHERE NOT (${eligiblePlaceholder}) OR EXISTS (
     SELECT 1 FROM users other WHERE other.id <> u.id
-      AND (other.normalized_email = ${sqlString(email)} OR other.pending_email = ${sqlString(email)})
+      AND (other.normalized_email = mappings.email OR other.pending_email = mappings.email)
   ) OR EXISTS (
-    SELECT 1 FROM user_emails alternate WHERE alternate.normalized_email = ${sqlString(email)}
-  ))`,
-    )
-    .join("\nUNION ALL\n");
+    SELECT 1 FROM user_emails alternate WHERE alternate.normalized_email = mappings.email
+  )`;
 }
 
 export function buildPlaceholderEmailStatement({ previousEmail, email }) {

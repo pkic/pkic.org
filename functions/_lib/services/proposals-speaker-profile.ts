@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "./participant-authority";
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
@@ -66,7 +67,7 @@ export async function getPresentationUploader(
 
 export async function confirmSpeakerParticipation(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   signingSecret: string,
   payload: {
     consents: Array<{ termKey: string; version: string }>;
@@ -172,7 +173,7 @@ export async function confirmSpeakerParticipation(
 
 export async function declineSpeakerParticipation(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   signingSecret: string,
   payload: { reason?: string | null },
 ): Promise<void> {

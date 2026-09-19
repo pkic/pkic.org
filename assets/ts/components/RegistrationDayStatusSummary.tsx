@@ -56,8 +56,9 @@ export function RegistrationDayStatusSummary({
 
   const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
 
+  const pending = hasPendingRegistrationDayWaitlist(dayWaitlist);
   return (
-    <Alert tone="warn" title="What is confirmed right now">
+    <Alert tone={pending ? "warn" : "ok"} title="What is confirmed right now">
       <div class="pk-stack pk-stack--snug">
         <dl class="pk-datalist">
           {dayAttendance.map((entry) => {
@@ -72,10 +73,12 @@ export function RegistrationDayStatusSummary({
             );
           })}
         </dl>
-        <p class="pk-small">
-          If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move to
-          on-demand, or cancel the registration.
-        </p>
+        {pending && (
+          <p class="pk-small">
+            If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move
+            to on-demand, or cancel the registration.
+          </p>
+        )}
       </div>
     </Alert>
   );

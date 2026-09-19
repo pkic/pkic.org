@@ -1,3 +1,4 @@
+import { fetchEventParticipation } from "../../../../_lib/services/events/participation";
 import { eventDetailResponseSchema } from "../../../../../assets/shared/schemas/event-management";
 import { eventDetailRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-events";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
@@ -14,16 +15,24 @@ export const EventDetailGet = openApiRoute(eventDetailRouteSchema, async (c: Adm
   const session = await resolveOptionalEventUserSession(c);
   const eventId = session?.staff ? await getEventIdBySlug(db, data.params.eventSlug) : null;
   const context = eventId ? { type: "event", id: eventId } : null;
+  const withParticipation = async <T extends { id: string }>(event: T) => ({
+    ...event,
+    participation: (await fetchEventParticipation(db, session?.identity.id ?? null, [event.id])).get(event.id),
+  });
   if (session?.staff && context && hasPermission(session.staff, "events:read", context)) {
     return json(
       eventDetailResponseSchema.parse({
-        event: await getEventDetail(db, data.params.eventSlug, eventManagementCapabilities(session.staff, context)),
+        event: await withParticipation(
+          await getEventDetail(db, data.params.eventSlug, eventManagementCapabilities(session.staff, context)),
+        ),
       }),
     );
   }
   return json(
     eventDetailResponseSchema.parse({
-      event: await getVisibleEventAudienceDetail(db, eventAudienceViewer(session), data.params.eventSlug),
+      event: await withParticipation(
+        await getVisibleEventAudienceDetail(db, eventAudienceViewer(session), data.params.eventSlug),
+      ),
     }),
   );
 });

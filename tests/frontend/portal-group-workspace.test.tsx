@@ -174,6 +174,7 @@ describe("portal selected-group workspace", () => {
 
     expect(container.textContent).toContain("Architecture Committee");
     expect(container.textContent).toContain("Part of Parent Group");
+    expect(container.querySelector('button[aria-label="Group actions"]')).toBeNull();
     // The headline counts live on the overview's about panel now, not in the
     // page header repeated above every view.
     expect(container.textContent).not.toContain("Members represented");

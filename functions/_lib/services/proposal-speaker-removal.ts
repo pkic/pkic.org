@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "./participant-authority";
 import {
   isEligibleReplacementProposerStatus,
   isProposalSpeakerRosterEditableStatus,
@@ -398,7 +399,7 @@ async function removeProposalSpeaker(
 
 export async function removeProposalSpeakerByProposer(
   db: DatabaseLike,
-  input: { manageToken: string; signingSecret: string; userId: string },
+  input: { manageToken: ParticipantAuthority; signingSecret: string; userId: string },
 ): Promise<ProposalSpeakerRemovalResult> {
   const proposal = await getProposalByManageToken(db, input.manageToken, input.signingSecret);
   const context = await getSpeakerRemovalContext(db, proposal.id, input.userId);

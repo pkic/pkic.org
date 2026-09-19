@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "./participant-authority";
 import { parseLinksJson } from "../../../assets/shared/schemas/links";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { first } from "../db/queries";
@@ -57,7 +58,7 @@ export interface ProposerSpeakerProfilePatch {
 
 export async function getProposerManagedSpeakerContext(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   userId: string,
   signingSecret: string,
 ): Promise<{ proposal: ProposalRecord; speaker: ProposerManagedSpeaker }> {

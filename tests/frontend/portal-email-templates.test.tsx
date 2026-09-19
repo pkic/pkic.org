@@ -17,7 +17,7 @@ import { emailTemplateCreateSchema, emailTemplateVersionSchema } from "../../ass
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { menuItemNamed, openRowMenu, rowMenuTrigger } from "./helpers/row-actions";
 import { EmailTemplates } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplates";
-import { optionValues, submitForm, markdownControl } from "./helpers/labelled-control";
+import { optionValues, submitForm, markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -63,6 +63,10 @@ function labelled<T extends HTMLElement>(root: HTMLElement, text: string): T {
 }
 
 async function typeInto(control: HTMLInputElement | HTMLTextAreaElement, value: string): Promise<void> {
+  if (control.closest(".pk-markdown-editor")) {
+    await typeMarkdown(container!, "Body", value);
+    return;
+  }
   control.value = value;
   await act(() => {
     control.dispatchEvent(new Event("input", { bubbles: true }));
@@ -144,7 +148,7 @@ describe("portal email templates", () => {
     // The asterisk is decorative; the word behind it is what is announced.
     expect(labels.find((label) => (label.textContent ?? "").startsWith("Body"))?.textContent).toContain("(required)");
     expect(keyInput.required).toBe(true);
-    expect(bodyInput.required).toBe(true);
+    expect(bodyInput.getAttribute("aria-required")).toBe("true");
 
     await typeInto(keyInput, templateKey);
     await typeInto(bodyInput, "Write-only template body");
@@ -252,7 +256,7 @@ describe("portal email templates", () => {
     await settle();
 
     expect(container!.textContent).toContain(`Edit: ${templateKey}`);
-    expect(labelled<HTMLTextAreaElement>(container!, "Body").value).toBe(version.body);
+    expect(await markdownValue(container!, "Body")).toBe(version.body);
   });
 
   it("blocks and announces a key the catalog already holds", async () => {
@@ -471,7 +475,7 @@ describe("portal email templates", () => {
     await settle();
 
     expect(requests.every((url) => url.pathname.startsWith("/api/v1/email/templates"))).toBe(true);
-    expect(labelled<HTMLTextAreaElement>(container!, "Body").disabled).toBe(true);
+    expect(labelled<HTMLElement>(container!, "Body").getAttribute("aria-disabled")).toBe("true");
     expect(fieldLabels(container!).some((label) => label.textContent?.startsWith("Preview data"))).toBe(false);
     expect(container!.textContent).not.toContain("Render Preview");
     expect(container!.textContent).not.toContain("Save as Draft");

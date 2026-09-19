@@ -1,3 +1,4 @@
+import { hasEventParticipation } from "./event-participation";
 import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
 import { all, first } from "../db/queries";
 import type { AuthorizationEvidence } from "../db/authorization-guard";
@@ -281,20 +282,22 @@ export interface IdentityCapacityResolution {
   member: AuthMember | null;
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
+  eventParticipation: boolean;
 }
 
 export async function resolveIdentityCapacities(
   db: DatabaseLike,
   userId: string,
 ): Promise<IdentityCapacityResolution | null> {
-  const [identity, staff, member, sponsors, pendingIdentityCount] = await Promise.all([
+  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
     first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
     findEligibleStaffUserById(db, userId),
     findEligibleMemberById(db, userId),
     findActiveSponsorCapacitiesByUserId(db, userId),
     countPendingIdentitiesForUser(db, userId),
+    hasEventParticipation(db, userId),
   ]);
-  return identity && (staff || member || sponsors.length > 0 || pendingIdentityCount > 0)
-    ? { identity, staff, member, sponsors, pendingIdentityCount }
+  return identity && (staff || member || sponsors.length > 0 || pendingIdentityCount > 0 || eventParticipation)
+    ? { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation }
     : null;
 }

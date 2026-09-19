@@ -370,13 +370,13 @@ describe("Menu", () => {
     press(trigger(container), "ArrowDown");
     press(menuItems(container)[0], "ArrowDown");
     press(menuItems(container)[1], "ArrowRight");
-    expect(menuItems(container).map((item) => item.textContent?.trim())).toEqual(["Back", "Organizations"]);
+    expect(menuItems(container).map((item) => item.textContent?.trim())).toEqual(["Sort", "Filter ›", "Organizations"]);
     expect(document.activeElement?.textContent).toBe("Organizations");
-    press(menuItems(container)[1], "ArrowLeft");
+    press(menuItems(container)[2], "ArrowLeft");
     expect(document.activeElement).toBe(menuItems(container)[1]);
     expect(menuItems(container)[1].textContent).toContain("Filter");
     press(menuItems(container)[1], "ArrowRight");
-    void act(() => menuItems(container)[1].click());
+    void act(() => menuItems(container)[2].click());
     expect(selected).toHaveBeenCalledOnce();
     expect(container.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(trigger(container));

@@ -14,7 +14,7 @@
  * matches appear as you type) and must render no button of its own — a picker
  * with a button in it is a picker that makes you press something.
  *
- * `ui/Menu.tsx` renders the same popup surface for a menu of commands rather
+ * `ui/Menu.tsx` and `ui/MenuLevel.tsx` render the same popup surface for a menu of commands rather
  * than for a search, so it is named here rather than filtered by a pattern
  * that would quietly stop covering a real picker.
  */
@@ -26,7 +26,7 @@ import { REPOSITORY_ROOT } from "./helpers/source-files";
 /** The shared popup surface. Rendering it is what makes a module a candidate. */
 const POPUP_SURFACE = "pk-menu__popup";
 /** Renders the surface for a menu of commands, not for choosing a search result. */
-const COMMAND_MENU = "assets/ts/ui/Menu.tsx";
+const COMMAND_MENUS = new Set(["assets/ts/ui/Menu.tsx", "assets/ts/ui/MenuLevel.tsx"]);
 
 function listComponentFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -42,7 +42,7 @@ function pickerModules(): Array<{ path: string; source: string }> {
       path: relative(REPOSITORY_ROOT, path).replaceAll("\\", "/"),
       source: readFileSync(path, "utf8"),
     }))
-    .filter(({ path, source }) => source.includes(POPUP_SURFACE) && path !== COMMAND_MENU);
+    .filter(({ path, source }) => source.includes(POPUP_SURFACE) && !COMMAND_MENUS.has(path));
 }
 
 describe("pickers", () => {

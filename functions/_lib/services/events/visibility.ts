@@ -99,6 +99,12 @@ export function buildEventAudiencePredicate(
           )
         )
       )
+      OR EXISTS (SELECT 1 FROM registrations own_registration
+        WHERE own_registration.event_id = ${eventAlias}.id AND own_registration.user_id = ?)
+      OR EXISTS (SELECT 1 FROM session_proposals own_proposal
+        WHERE own_proposal.event_id = ${eventAlias}.id AND own_proposal.deleted_at IS NULL
+          AND (own_proposal.proposer_user_id = ? OR EXISTS (
+            SELECT 1 FROM proposal_speakers own_speaker WHERE own_speaker.proposal_id = own_proposal.id AND own_speaker.user_id = ?)))
       OR EXISTS (
         SELECT 1
           FROM user_roles audience_role
@@ -126,6 +132,9 @@ export function buildEventAudiencePredicate(
       )
     )`,
     bindings: [
+      viewer.userId,
+      viewer.userId,
+      viewer.userId,
       viewer.userId,
       viewer.userId,
       viewer.userId,

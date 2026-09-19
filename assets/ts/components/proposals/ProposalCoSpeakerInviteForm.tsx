@@ -34,6 +34,7 @@ export function ProposalCoSpeakerInviteForm({
   notify,
   onInvited,
   cancelHref,
+  allowUserSearch = true,
 }: {
   endpoint: string;
   event: EventInviteWindow;
@@ -41,6 +42,7 @@ export function ProposalCoSpeakerInviteForm({
   onInvited: () => void | Promise<void>;
   /** The way back to the roster, when the form is a page under it. */
   cancelHref?: string;
+  allowUserSearch?: boolean;
 }) {
   const [picked, setPicked] = useState<PickedUser | null>(null);
   const [email, setEmail] = useState("");
@@ -106,11 +108,17 @@ export function ProposalCoSpeakerInviteForm({
           <fieldset class="pk-fieldset pk-stack" disabled={submitting}>
             <FormSection
               title="Who"
-              description="Find someone the portal already knows, or invite a new person by address."
+              description={
+                allowUserSearch
+                  ? "Find someone the portal already knows, or invite a new person by address."
+                  : "Invite a co-speaker by email address."
+              }
             >
-              <Field label="Existing user" help="Search by name or email; their details fill in below.">
-                {(control) => <UserPicker value={picked} onChange={pickUser} inputProps={control} />}
-              </Field>
+              {allowUserSearch && (
+                <Field label="Existing user" help="Search by name or email; their details fill in below.">
+                  {(control) => <UserPicker value={picked} onChange={pickUser} inputProps={control} />}
+                </Field>
+              )}
               <div class="pk-grid pk-grid--tight">
                 <Field label="Email address" required {...form.of("email")}>
                   {(control) => (

@@ -56,6 +56,22 @@ function reservePending(database: DatabaseSync, userId: string) {
 }
 
 describe("approved placeholder email replacement", () => {
+  it("checks mappings beyond the compound SELECT limit without losing conflicts", () => {
+    const database = setup();
+    const mappings = Array.from({ length: 600 }, (_, index) => ({
+      previousEmail: `unmatched-user-${index}@members.invalid`,
+      email: `user-${index}@users.example`,
+    }));
+    database.exec("UPDATE users SET active = 0");
+    const rows = database.prepare(placeholderPreflightQuery([...mappings, mapping])!).all();
+    expect(rows).toEqual([
+      {
+        placeholder: mapping.previousEmail,
+        email: mapping.email,
+        reason: "placeholder is no longer an active migration account",
+      },
+    ]);
+  });
   it("preserves user and membership IDs and is idempotent", () => {
     const database = setup();
     const original = database.prepare("SELECT id FROM users").get();

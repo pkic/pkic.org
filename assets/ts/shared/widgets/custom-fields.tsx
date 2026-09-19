@@ -91,6 +91,10 @@ function CustomFieldRow({
     }
   }, [visible, describedBy]);
 
+  useLayoutEffect(() => {
+    if (visible && rowRef.current) writeValuesToDOM(rowRef.current, { [field.key]: initialValue });
+  }, [field.key, initialValue, visible]);
+
   const widget = <CustomFieldInput field={field} geoHint={geoHint} initialValue={initialValue} />;
   const controlId = `custom-${field.key}`;
 

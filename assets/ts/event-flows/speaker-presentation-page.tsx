@@ -1,6 +1,6 @@
 import { showHeadshotDisclaimer } from "../shared/headshot/upload";
 import { setStatus } from "./boot";
-import { presentationUploadRequest } from "../../shared/presentation-upload";
+import { presentationUploadRequest, DEFAULT_PRESENTATION_TERMS } from "../../shared/presentation-upload";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
 import { getJson, requestJson } from "../shared/api-client";
 import { formatDate, formatDateTime } from "../shared/ui";
@@ -10,14 +10,6 @@ import {
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
 import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
-
-const DEFAULT_PRESENTATION_TERMS = [
-  "I am authorized to share this presentation with the PKI Consortium.",
-  "The presentation does not contain confidential or commercially sensitive information that cannot be made public.",
-  "The presentation does not include unlicensed third-party material.",
-  "I accept that this presentation may be published on the event website and related materials.",
-  "The presentation does not contain unsolicited commercial messages or advertising.",
-];
 
 async function main(): Promise<void> {
   const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({

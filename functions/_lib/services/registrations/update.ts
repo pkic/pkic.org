@@ -5,6 +5,7 @@ import { dayWaitlistOfferUnavailableError, isDayWaitlistOfferUnavailable, withDa
 import { getRegistrationByIdForEvent, getRegistrationByManageToken } from "./queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailParams } from "./status-notifications";
 import type { RegistrationRecord } from "./types";
+import type { ParticipantAuthority } from "../participant-authority";
 import { buildRegistrationUpdate, type RegistrationUpdatePayload } from "./update-plan";
 import { isRegistrationTransitionConflict, registrationChangedError } from "./transition-guard";
 import { sha256Hex } from "../../utils/crypto";
@@ -102,7 +103,7 @@ async function commitUpdateWithEmailChange(
 
 export async function updateRegistrationByManageToken(
   db: DatabaseLike,
-  payload: { manageToken: string; signingSecret: string } & RegistrationUpdatePayload,
+  payload: { manageToken: ParticipantAuthority; signingSecret: string } & RegistrationUpdatePayload,
 ): Promise<RegistrationRecord> {
   return executeRegistrationUpdate(
     db,
@@ -119,7 +120,7 @@ export async function updateRegistrationByManageToken(
 export async function updateRegistrationByManageTokenWithNotification(
   db: DatabaseLike,
   payload: {
-    manageToken: string;
+    manageToken: ParticipantAuthority;
     signingSecret: string;
     notification: UpdateNotification;
   } & RegistrationUpdatePayload,
@@ -136,7 +137,7 @@ export async function updateRegistrationByManageTokenWithNotification(
 export async function updateRegistrationByManageTokenWithEmailChange(
   db: DatabaseLike,
   payload: {
-    manageToken: string;
+    manageToken: ParticipantAuthority;
     signingSecret: string;
     emailChange: UpdateEmailChange;
   } & RegistrationUpdatePayload,

@@ -1,3 +1,4 @@
+import type { ParticipantAuthority } from "../../../../../../../_lib/services/participant-authority";
 import { requireProfileImageBucket } from "../../../../../../../_lib/services/profile-image-storage";
 import { OpenAPIRoute } from "chanfana";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
@@ -24,7 +25,7 @@ import { SPEAKER_HEADSHOT_MAX_BYTES } from "../../../../../../../../assets/share
 import { proposalAccessPath } from "../../../../../../../../assets/shared/proposal-access-paths";
 
 interface HeadshotParams {
-  token: string;
+  token: ParticipantAuthority;
   userId: string;
 }
 
@@ -33,7 +34,7 @@ async function loadContext(c: AdminContext, params: HeadshotParams) {
   return getProposerManagedSpeakerContext(requestDb(c), params.token, params.userId, requireInternalSecret(c.env));
 }
 
-async function onGet(c: AdminContext, params: HeadshotParams): Promise<Response> {
+export async function onGet(c: AdminContext, params: HeadshotParams): Promise<Response> {
   const { speaker } = await loadContext(c, params);
   if (!speaker.headshot_r2_key) {
     return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
@@ -44,7 +45,7 @@ async function onGet(c: AdminContext, params: HeadshotParams): Promise<Response>
   );
 }
 
-async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response> {
+export async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response> {
   const { proposal, speaker } = await loadContext(c, params);
   const image = await readValidatedUploadedImage(c.req.raw, "Headshot", SPEAKER_HEADSHOT_MAX_BYTES);
   const r2Key = await replaceProposalSpeakerHeadshot({
@@ -75,7 +76,7 @@ async function onPut(c: AdminContext, params: HeadshotParams): Promise<Response>
   });
 }
 
-async function onDelete(c: AdminContext, params: HeadshotParams): Promise<Response> {
+export async function onDelete(c: AdminContext, params: HeadshotParams): Promise<Response> {
   const { proposal, speaker } = await loadContext(c, params);
   await removeProposalSpeakerHeadshot({
     db: requestDb(c),

@@ -6,6 +6,7 @@ import { prepareAuditLog } from "../audit";
 import {
   deriveEventAttendanceType,
   listEventDays,
+  getRegistrationDayAttendance,
   prepareReplaceRegistrationDayAttendanceStatements,
   type DayAttendanceSelection,
 } from "../event-days";
@@ -200,6 +201,17 @@ export async function buildRegistrationUpdate(
     };
   }
 
+  // Restoration must compete for capacity again, including when the caller
+  // preserves the saved selection by omitting dayAttendance.
+  if (isCancelled && payload.dayAttendance === undefined) {
+    const savedDays = await getRegistrationDayAttendance(db, registration.id);
+    if (savedDays.length)
+      payload = {
+        ...payload,
+        dayAttendance: savedDays.map(({ dayDate, attendanceType }) => ({ dayDate, attendanceType })),
+      };
+  }
+
   const [previousInPersonDayIds, previousConfirmedInPersonDayIds, configuredEventDays] = await Promise.all([
     listInPersonEventDayIdsForRegistration(db, registration.id),
     listConfirmedInPersonEventDayIdsForRegistration(db, registration.id),
@@ -252,10 +264,14 @@ export async function buildRegistrationUpdate(
   }
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance?.length);
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
-  let newStatus = isCancelled ? "registered" : registration.status;
+  let newStatus = isCancelled
+    ? registration.confirmed_at || changedBy !== "self"
+      ? "registered"
+      : "pending_email_confirmation"
+    : registration.status;
   // Profile and attendance edits must not double as email verification. The
   // confirmation capability is the only transition out of this state.
-  if (registration.status !== "pending_email_confirmation") {
+  if (newStatus !== "pending_email_confirmation") {
     if (hasPerDayAttendanceContext || capacityExemptReason) {
       newStatus = "registered";
     } else if (effectiveAttendanceType !== registration.attendance_type) {
@@ -265,6 +281,10 @@ export async function buildRegistrationUpdate(
     }
   }
   const now = nowIso();
+  const confirmationLinkSecret =
+    isCancelled && newStatus === "pending_email_confirmation"
+      ? newCapabilityLinkSecret()
+      : registration.confirmation_link_secret;
   const statements: StatementLike[] = [
     ...(payload.customAnswersJson !== undefined && payload.formRevisionGuard && !payload.formSubmissionStatements
       ? [payload.formRevisionGuard]
@@ -273,7 +293,7 @@ export async function buildRegistrationUpdate(
     db
       .prepare(
         `UPDATE registrations
-         SET attendance_type = ?, status = ?, cancellation_reason_code = NULL,
+         SET attendance_type = ?, status = ?, confirmation_link_secret = ?, cancellation_reason_code = NULL,
              custom_answers_json = CASE WHEN ? = 1 THEN ? ELSE custom_answers_json END,
              form_placement_id = CASE WHEN ? = 1 THEN ? ELSE form_placement_id END,
              source_ref = CASE WHEN ? = 1 THEN ? ELSE source_ref END,
@@ -283,6 +303,7 @@ export async function buildRegistrationUpdate(
       .bind(
         effectiveAttendanceType,
         newStatus,
+        confirmationLinkSecret,
         payload.customAnswersJson !== undefined ? 1 : 0,
         payload.customAnswersJson ?? null,
         payload.customAnswersJson !== undefined ? 1 : 0,
@@ -347,6 +368,7 @@ export async function buildRegistrationUpdate(
   const updated: RegistrationRecord = {
     ...registration,
     status: newStatus,
+    confirmation_link_secret: confirmationLinkSecret,
     attendance_type: effectiveAttendanceType,
     cancellation_reason_code: null,
     custom_answers_json:

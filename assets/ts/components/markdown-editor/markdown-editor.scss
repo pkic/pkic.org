@@ -6,6 +6,8 @@
   /* The bar's groups: the text's shape, its structure, the session, and the
      source view at the far end. A hairline between groups is the only
      separator a row of glyphs needs. */
+  .pk-markdown-editor [hidden] { display: none !important; }
+  .pk-markdown-editor__toolbar [data-command] { display: inline-flex; }
   .pk-markdown-editor__group { display: flex; align-items: center; gap: 2px; }
   .pk-markdown-editor__group + .pk-markdown-editor__group { padding-left: var(--pk-2); border-left: 1px solid var(--pk-line-soft); }
   .pk-markdown-editor__group--end { margin-left: auto; }

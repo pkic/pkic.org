@@ -1,27 +1,26 @@
 import { useState } from "preact/hooks";
 import {
-  groupMailingSyncResponseSchema,
-  groupMailingSyncUpdateSchema,
-  groupMailingSyncRunResponseSchema,
-} from "../../../../../shared/schemas/group-mailing-sync";
+  mailingListSyncResponseSchema,
+  mailingListSyncUpdateSchema,
+  mailingListSyncRunResponseSchema,
+} from "../../../../../shared/schemas/mailing-list-sync";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useData } from "../../../../hooks/useData";
 import { getJson, patchJson, postJson } from "../../../../shared/api-client";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelHeader, PanelBody } from "../../../../ui/Panel";
 
-export function GroupMailingSync({ groupId }: { groupId: string }) {
-  const endpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/synchronization`;
-  const state = useData(() => getJson(endpoint, groupMailingSyncResponseSchema), [endpoint]);
+export function useMailingListSync(groupId: string, listId: string) {
+  const endpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}/synchronization`;
+  const state = useData(() => getJson(endpoint, mailingListSyncResponseSchema), [endpoint]);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const settings = state.data?.synchronization;
-  const form = useContractForm(groupMailingSyncUpdateSchema, {
+  const form = useContractForm(mailingListSyncUpdateSchema, {
     enabled: enabled ?? settings?.enabled,
     expectedRevision: settings?.revision,
   });
@@ -33,7 +32,7 @@ export function GroupMailingSync({ groupId }: { groupId: string }) {
     setError("");
     setNotice("");
     try {
-      await patchJson(endpoint, checked.data, groupMailingSyncResponseSchema);
+      await patchJson(endpoint, checked.data, mailingListSyncResponseSchema);
       await state.reload();
       setEnabled(null);
       form.reset();
@@ -53,7 +52,7 @@ export function GroupMailingSync({ groupId }: { groupId: string }) {
       const result = await postJson(
         `${endpoint}/runs`,
         { expectedRevision: settings.revision },
-        groupMailingSyncRunResponseSchema,
+        mailingListSyncRunResponseSchema,
       );
       setNotice(
         result.queued
@@ -66,15 +65,19 @@ export function GroupMailingSync({ groupId }: { groupId: string }) {
       setBusy(false);
     }
   }
+  return { settings, enabled, setEnabled, busy, error: error || state.error, notice, form, save, sync };
+}
+
+export function MailingListSyncSettings({ sync }: { sync: ReturnType<typeof useMailingListSync> }) {
+  const { settings, enabled, setEnabled, busy, form, save } = sync;
   return (
     <Panel aria-label="Google Groups synchronization">
       <PanelHeader title="Google Groups synchronization" />
       <PanelBody class="pk-stack">
         <p>
-          Keep this group's mailing lists aligned with eligible users and their subscription preferences. Pausing
-          retains pending changes; a request already sent to Google may finish.
+          Keep this mailing list aligned with eligible users and their subscription preferences. Pausing retains pending
+          changes; a request already sent to Google may finish.
         </p>
-        <ErrorAlert error={error || state.error} />
         {settings && (
           <form noValidate {...form.handlers} onSubmit={(event) => void save(event)} class="pk-stack">
             <Field label="Synchronization" {...form.of("enabled")}>
@@ -92,17 +95,9 @@ export function GroupMailingSync({ groupId }: { groupId: string }) {
               <Button type="submit" loading={busy} disabled={enabled === null || enabled === settings.enabled}>
                 Save synchronization settings
               </Button>
-              <Button
-                type="button"
-                onClick={() => void sync()}
-                disabled={!settings.enabled || busy || (enabled !== null && enabled !== settings.enabled)}
-              >
-                Sync now
-              </Button>
             </div>
           </form>
         )}
-        {notice && <p role="status">{notice}</p>}
       </PanelBody>
     </Panel>
   );

@@ -1,4 +1,4 @@
-import type { ValidatedData } from "chanfana";
+import type { ParticipantRouteData } from "../../../../_lib/routes/participant-authority";
 import {
   proposalAccessPatchResponseSchema,
   proposalAccessReadResponseSchema,
@@ -14,7 +14,7 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { loadProposalAccessView, saveProposalAccessChanges } from "../../../../_lib/services/proposal-self-service";
 
-type ProposalAccessContext = AdminContext<{ token: string }>;
+type ProposalAccessContext = AdminContext;
 
 function markProposalAccessSensitive(c: ProposalAccessContext): void {
   c.set?.("sensitive", true);
@@ -22,7 +22,7 @@ function markProposalAccessSensitive(c: ProposalAccessContext): void {
 
 export async function onRequestGet(
   c: ProposalAccessContext,
-  data: ValidatedData<typeof proposalAccessReadRouteSchema>,
+  data: ParticipantRouteData<typeof proposalAccessReadRouteSchema>,
 ): Promise<Response> {
   const result = await loadProposalAccessView(c.env.DB, {
     token: data.params.token,
@@ -34,7 +34,7 @@ export async function onRequestGet(
 
 export async function onRequestPatch(
   c: ProposalAccessContext,
-  data: ValidatedData<typeof proposalAccessPatchRouteSchema>,
+  data: ParticipantRouteData<typeof proposalAccessPatchRouteSchema>,
 ): Promise<Response> {
   const result = await saveProposalAccessChanges(c.env.DB, {
     token: data.params.token,

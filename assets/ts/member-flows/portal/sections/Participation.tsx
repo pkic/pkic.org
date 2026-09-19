@@ -1,3 +1,4 @@
+import { eventParticipantRecordPath } from "./events/event-participant-paths";
 /**
  * The identity's complete participation record — the histories behind the
  * dashboard's attention items. Every panel is a bounded self-scoped server
@@ -145,7 +146,12 @@ function RegistrationsCard() {
       <ul class="pk-stack pk-stack--tight" aria-label="Event registrations">
         {rows.map((registration) => (
           <li key={registration.id} class="pk-cluster">
-            <span class="pk-strong">{registration.event.name}</span>
+            <Link
+              class="pk-strong"
+              href={eventParticipantRecordPath(registration.event.slug, "registration", registration.id)}
+            >
+              {registration.event.name}
+            </Link>
             <span class="pk-small">
               {formatDateRange(registration.event.startsAt, registration.event.endsAt, registration.event.timezone)}
             </span>
@@ -202,13 +208,13 @@ function ProposalsCard() {
       empty="No event proposals are linked to your account."
       count={rows.length}
     >
-      <p class="pk-muted pk-small">
-        Proposal editing works through the personal access link from your proposal emails; this list is your record.
-      </p>
+      <p class="pk-muted pk-small">Open a proposal to review your submission or manage your speaker participation.</p>
       <ul class="pk-stack pk-stack--tight" aria-label="Event proposals">
         {rows.map((proposal) => (
           <li key={proposal.id} class="pk-cluster">
-            <span class="pk-strong">{proposal.title}</span>
+            <Link class="pk-strong" href={eventParticipantRecordPath(proposal.event.slug, "proposal", proposal.id)}>
+              {proposal.title}
+            </Link>
             <span class="pk-small">{proposal.event.name}</span>
             <Badge status={proposal.status} />
             <span class="pk-small">{label(proposal.role)}</span>

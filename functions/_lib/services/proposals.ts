@@ -19,6 +19,7 @@ import {
   type ProposalDecisionStatus,
   type ProposalStatus,
 } from "../../../assets/shared/schemas/proposal-status";
+import type { ParticipantAuthority } from "./participant-authority";
 import type { ProposalType } from "../../../assets/shared/schemas/proposal-management";
 import { parseJsonSafe } from "../utils/json";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
@@ -184,9 +185,16 @@ export async function refreshProposalManageToken(
 
 export async function getProposalByManageToken(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   signingSecret: string,
 ): Promise<ProposalRecord> {
+  if (typeof manageToken !== "string") {
+    const proposal = await getProposalById(db, manageToken.resourceId);
+    if (proposal.proposer_user_id !== manageToken.userId) {
+      throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
+    }
+    return proposal;
+  }
   const verified = await verifyDatabaseCapability({
     db,
     signingSecret,
@@ -396,7 +404,6 @@ export async function updateProposalForVerifiedOwner(
           proposal.id,
           proposal.review_round,
         ),
-      ...(payload.formSubmissionStatements ?? []),
       prepareAuditLogAfterOneChange(
         db,
         "user",
@@ -407,6 +414,7 @@ export async function updateProposalForVerifiedOwner(
         changes,
         now,
       ),
+      ...(payload.formSubmissionStatements ?? []),
       db
         .prepare(
           `DELETE FROM proposal_decisions
