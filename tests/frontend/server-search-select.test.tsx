@@ -263,7 +263,7 @@ describe("ServerSearchSelect", () => {
 
   it("selects with the pointer and shows the chosen label in the closed input", async () => {
     vi.useFakeTimers();
-    stubFetch((url) => json(pagedItems(url, 3)));
+    const requests = stubFetch((url) => json(pagedItems(url, url.searchParams.has("q") ? 1 : 3)));
     function Harness() {
       const [value, setValue] = useState<string | null>(null);
       return (
@@ -292,6 +292,18 @@ describe("ServerSearchSelect", () => {
     const options = await openCombobox(container, "Working group");
     const selected = options.find((option) => option.getAttribute("aria-selected") === "true");
     expect(selected?.getAttribute("data-key")).toBe("item-1");
+    await typeSearch(input, "Item 0");
+    await elapse(300);
+    expect(optionLabels(container)).toEqual(["Select…", "Item 0"]);
+    await chooseComboboxOption(container, "Working group", "item-0");
+    await elapse(0);
+    await openCombobox(container, "Working group");
+    expect(optionLabels(container)).toEqual(["Select…", "Item 0", "Item 1", "Item 2"]);
+    expect(requests.at(-1)?.searchParams.has("q")).toBe(false);
+    await typeSearch(input, "Item 2");
+    await press(input, "Escape");
+    await elapse(400);
+    expect(requests.at(-1)?.searchParams.has("q")).toBe(false);
   });
 
   it("names the combobox through its Field's label and the listbox through aria-controls", async () => {

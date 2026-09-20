@@ -1,4 +1,4 @@
-import { hasAuthenticatedSessionCookie } from "../../_lib/auth/session-cookies";
+import { hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
@@ -41,9 +41,8 @@ function isSensitiveArchitecturePath(pathname: string): boolean {
 function applyResponsePolicy(request: Request, response: Response, sensitive?: boolean): void {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
   const method = request.method.toUpperCase();
-  const hasAuthHeader = Boolean(request.headers.get("authorization"));
-  const hasAuthCookie = hasAuthenticatedSessionCookie(request);
-  const isSensitive = hasAuthHeader || hasAuthCookie || isSensitiveArchitecturePath(pathname) || sensitive === true;
+  const isSensitive =
+    hasAuthenticationCredential(request) || isSensitiveArchitecturePath(pathname) || sensitive === true;
 
   if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);

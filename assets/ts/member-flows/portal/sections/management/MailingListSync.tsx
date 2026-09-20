@@ -1,19 +1,19 @@
+import { mailingListSyncPath, requestMailingListSync } from "./mailing-list-sync-request";
 import { useState } from "preact/hooks";
 import {
   mailingListSyncResponseSchema,
   mailingListSyncUpdateSchema,
-  mailingListSyncRunResponseSchema,
 } from "../../../../../shared/schemas/mailing-list-sync";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useData } from "../../../../hooks/useData";
-import { getJson, patchJson, postJson } from "../../../../shared/api-client";
+import { getJson, patchJson } from "../../../../shared/api-client";
 import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelHeader, PanelBody } from "../../../../ui/Panel";
 
 export function useMailingListSync(groupId: string, listId: string) {
-  const endpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}/synchronization`;
+  const endpoint = mailingListSyncPath(groupId, listId);
   const state = useData(() => getJson(endpoint, mailingListSyncResponseSchema), [endpoint]);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,16 +49,7 @@ export function useMailingListSync(groupId: string, listId: string) {
     setError("");
     setNotice("");
     try {
-      const result = await postJson(
-        `${endpoint}/runs`,
-        { expectedRevision: settings.revision },
-        mailingListSyncRunResponseSchema,
-      );
-      setNotice(
-        result.queued
-          ? `${result.queued} subscription changes queued for Google Groups. Delivery status is available in Scheduled jobs.`
-          : "No subscription changes need synchronization.",
-      );
+      setNotice(await requestMailingListSync(endpoint, settings.revision));
     } catch (cause) {
       setError(form.refuse(cause));
     } finally {
@@ -76,7 +67,8 @@ export function MailingListSyncSettings({ sync }: { sync: ReturnType<typeof useM
       <PanelBody class="pk-stack">
         <p>
           Keep this mailing list aligned with eligible users and their subscription preferences. Pausing retains pending
-          changes; a request already sent to Google may finish.
+          changes; a request already sent to Google may finish. To request a sync, choose “Sync now” from this mailing
+          list’s three-dot actions menu.
         </p>
         {settings && (
           <form noValidate {...form.handlers} onSubmit={(event) => void save(event)} class="pk-stack">

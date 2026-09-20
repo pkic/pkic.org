@@ -1,3 +1,4 @@
+import { mailingListSyncPath, requestMailingListSync } from "./mailing-list-sync-request";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useRef, useState } from "preact/hooks";
 import {
@@ -51,6 +52,9 @@ export function GroupMailingListManager({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState("");
+
   const form = useContractForm(groupMailingListCreateSchema, mailingListDraftToPayload(newDraft));
 
   async function createList(event: Event): Promise<void> {
@@ -88,20 +92,38 @@ export function GroupMailingListManager({
     if (created) navigate(listsPath);
   }
 
+  async function syncList(list: MailingList): Promise<void> {
+    if (syncing) return;
+    setSyncing(true);
+    setError(null);
+    setSyncNotice("");
+    try {
+      const notice = await requestMailingListSync(mailingListSyncPath(groupId, list.id));
+      setSyncNotice(`${list.label}: ${notice}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause : new Error("Could not request synchronization"));
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   function rowActions(list: MailingList) {
-    return mailingListLifecycleActions({
-      groupId,
-      list,
-      onChanged: async () => {
-        setError(null);
-        await actions.current?.reload();
-      },
-      onDeleted: async () => {
-        setError(null);
-        await actions.current?.reload();
-      },
-      onError: setError,
-    });
+    return [
+      { id: "sync", label: "Sync now", disabled: syncing, onSelect: () => void syncList(list) },
+      ...mailingListLifecycleActions({
+        groupId,
+        list,
+        onChanged: async () => {
+          setError(null);
+          await actions.current?.reload();
+        },
+        onDeleted: async () => {
+          setError(null);
+          await actions.current?.reload();
+        },
+        onError: setError,
+      }),
+    ];
   }
 
   if (showCreate) {
@@ -164,6 +186,7 @@ export function GroupMailingListManager({
     // so no second heading restates it above the table.
     <div class="pk pk-stack">
       {error && <ErrorAlert error={error} />}
+      {syncNotice && <p role="status">{syncNotice}</p>}
       <ApiDataTable
         caption="Managed mailing lists"
         actionsRef={actions}

@@ -62,7 +62,7 @@ export const MembershipWorkflowPublish = openApiRoute(
         staff,
         data.params.versionId,
         data.body,
-        Boolean(c.env.STRIPE_SECRET_KEY && c.env.MEMBERSHIP_STRIPE_WEBHOOK_SECRET),
+        Boolean(c.env.STRIPE_SECRET_KEY),
       ),
     });
   },

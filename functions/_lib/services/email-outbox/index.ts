@@ -13,15 +13,6 @@ export async function listEmailOutbox(db: DatabaseLike, query: EmailOutboxQuery)
 
   return {
     outbox,
-    summary: {
-      total: result.total,
-      byStatus: Object.fromEntries(result.statusCounts.map((row) => [row.status, Number(row.count)])),
-      byMessageType: Object.fromEntries(result.messageTypeCounts.map((row) => [row.message_type, Number(row.count)])),
-      topTemplates: result.templateCounts.map((row) => ({ ...row, count: Number(row.count) })),
-      dueNow: result.dueCounts.reduce((sum, row) => sum + Number(row.count), 0),
-      dueByStatus: Object.fromEntries(result.dueCounts.map((row) => [row.status, Number(row.count)])),
-      nextSendAfter: result.nextSendAfter,
-    },
     page: buildPageInfo(query.limit, query.offset, result.total, outbox.length),
   };
 }

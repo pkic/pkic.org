@@ -1,5 +1,6 @@
 import type { JSX, RefObject } from "preact";
 import { TemplateHighlighting } from "./template-highlighting";
+import { restoreTemplateMarkdown } from "./template-markdown";
 import { Editor } from "@tiptap/core";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Menu, type MenuItem } from "../../ui/Menu";
@@ -14,6 +15,9 @@ import {
   IconCode,
   IconHeading,
   IconItalic,
+  IconImage,
+  IconVideo,
+  IconTable,
   IconLink,
   IconNumberedList,
   IconQuote,
@@ -47,13 +51,12 @@ export interface MarkdownEditorProps extends FieldControlProps {
   disabled?: boolean;
   onChange: (markdown: string) => void;
   /**
-   * `full` is the page-content editor: the formatting bar, the block
-   * inserter, table editing, a tall canvas. `compact` is the same editor for
-   * a biography, a note or a message (issue 114): the same one-line bar of
-   * glyphs, no block inserter, and a canvas a few lines tall.
+   * `full` is the page-content editor with a tall canvas and block movement.
+   * `compact` uses the same formatting and insertion controls with a canvas
+   * a few lines tall for a biography, a note or a message.
    */
   variant?: "full" | "compact";
-  /** Templates start in source mode to preserve literal variables and block syntax. */
+  /** Choose the initial editing view; template tokens are preserved in either view. */
   initialMode?: "visual" | "source";
   /** Template source highlights variables and blocks and exposes insertion commands. */
   templateInsertions?: readonly MenuItem[];
@@ -123,7 +126,8 @@ export function MarkdownEditor({
         },
       },
       onUpdate({ editor: updated }) {
-        const next = updated.getMarkdown();
+        const serialized = updated.getMarkdown();
+        const next = templateInsertions ? restoreTemplateMarkdown(serialized) : serialized;
         setValue(next);
         current.current.onChange(next);
         if (input.current) {
@@ -226,6 +230,7 @@ export function MarkdownEditor({
     pressed?: boolean;
     run: () => void;
     choices?: MenuItem[];
+    block?: EditorBlock;
   };
   const groups: ToolbarCommand[][] = [
     [
@@ -263,9 +268,10 @@ export function MarkdownEditor({
         run: () => editor?.chain().focus().toggleItalic().run(),
       },
       {
-        label: "Quote",
+        label: "Callout",
         icon: <IconQuote />,
         active: "blockquote",
+        block: "callout",
         run: () => editor?.chain().focus().toggleBlockquote().run(),
       },
       { label: "Code", icon: <IconCode />, active: "code", run: () => editor?.chain().focus().toggleCode().run() },
@@ -288,6 +294,11 @@ export function MarkdownEditor({
         active: "orderedList",
         run: () => editor?.chain().focus().toggleOrderedList().run(),
       },
+    ],
+    [
+      { label: "Table", icon: <IconTable />, block: "table", run: () => addBlock.current("table", position()) },
+      { label: "Image", icon: <IconImage />, block: "image", run: () => addBlock.current("image", position()) },
+      { label: "Video", icon: <IconVideo />, block: "video", run: () => addBlock.current("video", position()) },
     ],
     [
       {
@@ -346,7 +357,15 @@ export function MarkdownEditor({
                     title={command.label}
                     disabled={locked || command.disabled}
                     aria-pressed={command.active ? Boolean(editor?.isActive(command.active)) : undefined}
-                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseDown={(event) => {
+                      if (!command.block) event.preventDefault();
+                    }}
+                    draggable={Boolean(command.block) && !locked}
+                    onDragStart={(event) => {
+                      if (!command.block || locked) return;
+                      event.dataTransfer?.setData(BLOCK_TRANSFER_TYPE, command.block);
+                      if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
+                    }}
                     onClick={command.run}
                   >
                     {command.icon}
@@ -395,27 +414,7 @@ export function MarkdownEditor({
           </Button>
         </div>
       </div>
-      {!source && !compact && (
-        <div class="pk-markdown-editor__blocks" role="group" aria-label="Content blocks">
-          <span class="pk-small pk-muted">Insert or drag a block</span>
-          {EDITOR_BLOCKS.map((kind) => (
-            <Button
-              key={kind}
-              size="sm"
-              disabled={locked}
-              draggable={!locked}
-              onDragStart={(event) => {
-                event.dataTransfer?.setData(BLOCK_TRANSFER_TYPE, kind);
-                if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
-              }}
-              onClick={() => addBlock.current(kind, position())}
-            >
-              {kind.charAt(0).toUpperCase() + kind.slice(1)}
-            </Button>
-          ))}
-        </div>
-      )}
-      {!source && !compact && editor?.isActive("table") && (
+      {!source && editor?.isActive("table") && (
         <div class="pk-markdown-editor__toolbar" role="group" aria-label="Table editing">
           <Button
             size="sm"

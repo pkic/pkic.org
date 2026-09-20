@@ -66,6 +66,7 @@ export async function handleSponsorshipCheckout(c: any, data: { body: Sponsorshi
   params.set("cancel_url", cancelUrl);
   params.set("customer_email", body.contactEmail);
   params.set("metadata[checkout_attempt_id]", body.checkoutAttemptId);
+  params.set("metadata[pkic_payment_type]", "sponsorship");
   params.set("metadata[tier]", body.tier);
   params.set("metadata[contact_name]", body.contactName);
   params.set("metadata[contact_email]", body.contactEmail);

@@ -55,7 +55,7 @@ describe("matchRepsToCandidates", () => {
   it("pairs a representative to the candidate whose email local-part contains their name", () => {
     const reps = [{ name: "Alice Anderson" }, { name: "Bob Baker" }];
     const candidates = [{ email: "bob.baker@acme.example" }, { email: "alice.anderson@acme.example" }];
-    const assignment = matchRepsToCandidates(reps, candidates);
+    const { assignment } = matchRepsToCandidates(reps, candidates);
     expect(candidates[assignment[0]].email).toBe("alice.anderson@acme.example");
     expect(candidates[assignment[1]].email).toBe("bob.baker@acme.example");
   });
@@ -63,14 +63,14 @@ describe("matchRepsToCandidates", () => {
   it("falls back to positional pairing for a representative with no name-matched candidate", () => {
     const reps = [{ name: "Nomatch Person" }];
     const candidates = [{ email: "random@acme.example" }];
-    const assignment = matchRepsToCandidates(reps, candidates);
+    const { assignment } = matchRepsToCandidates(reps, candidates);
     expect(assignment).toEqual([0]);
   });
 
   it("leaves a representative unassigned once every candidate is claimed", () => {
     const reps = [{ name: "Alice Anderson" }, { name: "Extra Person" }];
     const candidates = [{ email: "alice.anderson@acme.example" }];
-    const assignment = matchRepsToCandidates(reps, candidates);
+    const { assignment } = matchRepsToCandidates(reps, candidates);
     expect(assignment[0]).toBe(0);
     expect(assignment[1]).toBeNull();
   });

@@ -1,6 +1,6 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 
-export const EDITOR_BLOCKS = ["section", "callout", "table", "image", "video"] as const;
+export const EDITOR_BLOCKS = ["callout", "table", "image", "video"] as const;
 export type EditorBlock = (typeof EDITOR_BLOCKS)[number];
 export const BLOCK_TRANSFER_TYPE = "application/x-pkic-markdown-block";
 
@@ -18,13 +18,10 @@ export function insertEditorBlock(editor: Editor, kind: Exclude<EditorBlock, "im
     return;
   }
   const paragraph = (text: string): JSONContent => ({ type: "paragraph", content: [{ type: "text", text }] });
-  const content: JSONContent[] =
-    kind === "section"
-      ? [
-          { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Section heading" }] },
-          paragraph("Write your section here."),
-        ]
-      : [{ type: "blockquote", content: [paragraph("Write your callout here.")] }, { type: "paragraph" }];
+  const content: JSONContent[] = [
+    { type: "blockquote", content: [paragraph("Write your callout here.")] },
+    { type: "paragraph" },
+  ];
   editor.chain().focus().insertContentAt(position, content).run();
 }
 

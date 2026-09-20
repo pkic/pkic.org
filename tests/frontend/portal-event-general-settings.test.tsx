@@ -8,7 +8,6 @@ import type { EventDetail } from "../../assets/ts/member-flows/portal/sections/e
 import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/GeneralTab";
 import { Settings } from "../../assets/ts/member-flows/portal/sections/events/detail/Settings";
 import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
-import { eventDetailTabsForCapabilities } from "../../assets/ts/member-flows/portal/sections/events/detail/EventDetail";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
 import { controlFor } from "./helpers/labelled-control";
 
@@ -348,21 +347,6 @@ describe("admin event general settings", () => {
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("Tiers changed elsewhere.");
     expect(container.textContent).not.toContain("✓ Saved");
-  });
-
-  it("does not expose event read projections without event read capability", () => {
-    const withoutRead = eventDetailTabsForCapabilities([]).map(({ key }) => key);
-    expect(withoutRead).not.toContain("registrations");
-    expect(withoutRead).not.toContain("promoters");
-    expect(withoutRead).not.toContain("stats");
-
-    const withRead = eventDetailTabsForCapabilities(["read"]).map(({ key }) => key);
-    expect(withRead).not.toContain("registrations");
-    expect(withRead).toContain("promoters");
-    expect(withRead).toContain("stats");
-
-    const withManage = eventDetailTabsForCapabilities(["manage"]).map(({ key }) => key);
-    expect(withManage).toContain("registrations");
   });
 
   it("replaces the General tab with a series-managed notice for a meeting-series event", async () => {

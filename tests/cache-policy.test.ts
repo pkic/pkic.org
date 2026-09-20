@@ -98,6 +98,22 @@ describe("cache policy middleware", () => {
     },
   );
 
+  it.each(["/api/v1/events", "/api/v1/events/public-workshop"])(
+    "overrides public caching for x-user-token requests to %s",
+    async (pathname) => {
+      const response = await apiMiddlewareOnRequest(
+        createMiddlewareContext(
+          new Request(`https://app.test${pathname}`, {
+            headers: { "x-user-token": "session-token" },
+          }),
+          new Response("{}", { status: 200, headers: { "cache-control": "public, max-age=300" } }),
+        ),
+      );
+
+      expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    },
+  );
+
   it("does not disable public caching for unrelated cookies", async () => {
     const response = await apiMiddlewareOnRequest(
       createMiddlewareContext(

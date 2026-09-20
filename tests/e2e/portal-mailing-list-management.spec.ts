@@ -116,7 +116,11 @@ test("a portal group manager creates, edits, and archives a mailing list", async
   await expect(settings).not.toContainText("Primary discussion");
   await standing.getByRole("button", { name: "Standing actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
-  await expect(standing.getByRole("checkbox", { name: "Active", exact: true })).toBeChecked();
+  await expect(standing.getByRole("checkbox", { name: "List enabled", exact: true })).toBeChecked();
+  await expect(standing.getByRole("checkbox", { name: "List enabled", exact: true })).toHaveAccessibleDescription(
+    /queues removal of managed subscribers from Google Groups/,
+  );
+  await standing.screenshot({ path: test.info().outputPath("mailing-list-enabled-help.png") });
   await standing.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(standing.getByRole("checkbox")).toHaveCount(0);
 

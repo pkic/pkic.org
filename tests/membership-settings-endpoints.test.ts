@@ -1,3 +1,4 @@
+import { createCanonicalVote } from "./helpers/voting";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 /**
  * membership-settings-endpoints.test.ts
@@ -14,7 +15,11 @@ import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { getMembershipSettings, updateMembershipSettings } from "../functions/_lib/services/membership-settings";
-import { getMembershipCategory, updateMembershipCategory } from "../functions/_lib/services/membership/categories";
+import {
+  getMembershipCategory,
+  listMembershipCategories,
+  updateMembershipCategory,
+} from "../functions/_lib/services/membership/categories";
 import {
   MEMBERSHIP_CATEGORY_DESCRIPTION_MAX_LENGTH,
   MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH,
@@ -49,6 +54,95 @@ describe("Membership workflow settings", () => {
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
     adminToken = await createAdminSession(env.DB, adminId, "settings-admin-token");
+  });
+
+  it("renames a category atomically and retains organization assignments and eligibility", async () => {
+    const organizationId = await insertOrganization(env.DB, "Example Organization");
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+    const current = await getMembershipCategory(env.DB, "A");
+    const vote = await createCanonicalVote(
+      env.DB,
+      createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", role: "admin", grants: [] }),
+      { eligibleCategories: ["A", "B"] },
+    );
+    const beforeRules = await queryAll(
+      env.DB,
+      "SELECT group_id FROM group_membership_category_rules WHERE membership_category_code = 'A'",
+    );
+    const response = await call(adminToken, "/api/v1/membership/categories/A", {
+      method: "PATCH",
+      body: JSON.stringify({ expectedRevision: current!.revision, code: "ORG", label: "Organization members" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await getMembershipCategory(env.DB, "A")).toBeNull();
+    expect(await getMembershipCategory(env.DB, "ORG")).toMatchObject({
+      label: "Organization members",
+      revision: current!.revision + 1,
+    });
+    expect(
+      await queryAll(env.DB, "SELECT category_code FROM member_category_assignments WHERE category_code = 'ORG'"),
+    ).toHaveLength(1);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT group_id FROM group_membership_category_rules WHERE membership_category_code = 'ORG'",
+      ),
+    ).toEqual(beforeRules);
+    expect(await queryAll(env.DB, "PRAGMA foreign_key_check")).toEqual([]);
+    const voteRow = await env.DB.prepare("SELECT eligible_categories, transition_revision FROM votes WHERE id = ?")
+      .bind(vote.id)
+      .first<{ eligible_categories: string; transition_revision: number }>();
+    expect(JSON.parse(voteRow!.eligible_categories)).toEqual(["ORG", "B"]);
+    expect(voteRow!.transition_revision).toBeGreaterThan(0);
+    const mailing = await queryAll<{ auto_sync_categories_json: string }>(
+      env.DB,
+      "SELECT auto_sync_categories_json FROM mailing_lists WHERE subscription_default = 'eligible_categories'",
+    );
+    expect(mailing.some((row) => JSON.parse(row.auto_sync_categories_json).includes("ORG"))).toBe(true);
+  });
+
+  it("rejects duplicate codes and stale renames without changing the catalog", async () => {
+    const current = await getMembershipCategory(env.DB, "A");
+    for (const update of [
+      { code: "B", expectedRevision: current!.revision },
+      { code: "ORG", expectedRevision: current!.revision + 1 },
+    ]) {
+      const response = await call(adminToken, "/api/v1/membership/categories/A", {
+        method: "PATCH",
+        body: JSON.stringify(update),
+      });
+      expect(response.status).toBe(409);
+    }
+    expect(await getMembershipCategory(env.DB, "A")).toEqual(current);
+    expect(await getMembershipCategory(env.DB, "ORG")).toBeNull();
+  });
+
+  it("reorders the complete catalog and rejects stale, incomplete, and duplicate snapshots", async () => {
+    const original = await listMembershipCategories(env.DB);
+    const categories = [...original].reverse().map(({ code, revision }) => ({ code, expectedRevision: revision }));
+    const reorder = (entries: typeof categories) =>
+      call(adminToken, "/api/v1/membership/categories/order", {
+        method: "PUT",
+        body: JSON.stringify({ categories: entries }),
+      });
+    const response = await reorder(categories);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect((await listMembershipCategories(env.DB)).map(({ code }) => code)).toEqual(
+      categories.map(({ code }) => code),
+    );
+    expect((await reorder(categories)).status).toBe(409);
+    const current = (await listMembershipCategories(env.DB)).map(({ code, revision }) => ({
+      code,
+      expectedRevision: revision,
+    }));
+    expect((await reorder(current.slice(1))).status).toBe(409);
+    expect((await reorder([...current, current[0]])).status).toBe(400);
+    expect((await listMembershipCategories(env.DB)).map(({ code }) => code)).toEqual(
+      categories.map(({ code }) => code),
+    );
+    expect(
+      await queryAll(env.DB, "SELECT action FROM audit_log WHERE action = 'membership_categories_reordered'"),
+    ).toHaveLength(1);
   });
 
   it.each([false, true])("creates and deletes an unused category with individual=%s", async (isIndividual) => {
@@ -257,9 +351,19 @@ describe("Membership workflow settings", () => {
     const category = await getMembershipCategory(env.DB, "H1");
     const categoryPatchResponse = await call(staffToken, "/api/v1/membership/categories/H1", {
       method: "PATCH",
-      body: JSON.stringify({ expectedRevision: category!.revision, label: "This must not save" }),
+      body: JSON.stringify({ expectedRevision: category!.revision, code: "ORG", label: "This must not save" }),
     });
     expect(categoryPatchResponse.status).toBe(403);
+    const orderResponse = await call(staffToken, "/api/v1/membership/categories/order", {
+      method: "PUT",
+      body: JSON.stringify({
+        categories: (await listMembershipCategories(env.DB)).map(({ code, revision }) => ({
+          code,
+          expectedRevision: revision,
+        })),
+      }),
+    });
+    expect(orderResponse.status).toBe(403);
     expect(
       (
         await call(staffToken, "/api/v1/membership/categories", {
@@ -400,6 +504,22 @@ describe("Membership workflow settings", () => {
     });
     expect(categoryStale.status).toBe(409);
     expect((await getMembershipCategory(env.DB, "A"))!.isVoting).toBe(true);
+  });
+
+  it("rolls back a rename if the category changes before the atomic batch", async () => {
+    const actor = createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", role: "admin", grants: [] });
+    const category = await getMembershipCategory(env.DB, "A");
+    const racedDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE membership_categories SET revision = revision + 1 WHERE code = 'A'").run(),
+    );
+    await expect(
+      updateMembershipCategory(racedDb, actor, "A", { code: "ORG", expectedRevision: category!.revision }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await getMembershipCategory(env.DB, "ORG")).toBeNull();
+    expect(await getMembershipCategory(env.DB, "A")).not.toBeNull();
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'membership_category_updated'"),
+    ).toHaveLength(0);
   });
 
   it("rolls back if permission or configuration changes between preflight and the D1 batch", async () => {

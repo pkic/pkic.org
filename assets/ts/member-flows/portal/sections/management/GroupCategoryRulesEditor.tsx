@@ -154,9 +154,12 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
             />
           )}
         </PanelHeader>
-        <PanelBody class="pk-stack">
-          <p class="pk-small">The membership categories that may join this group and those enrolled automatically.</p>
-          {error && <ErrorAlert error={error} />}
+        <div>
+          {error && (
+            <PanelBody>
+              <ErrorAlert error={error} />
+            </PanelBody>
+          )}
           {categories.length > 0 && (
             <BulkBar count={selected.size} total={categories.length} onClear={() => setSelected(new Set())}>
               {(
@@ -241,8 +244,12 @@ export function GroupCategoryRulesEditor({ groupId, onUpdated }: { groupId: stri
               },
             ]}
           />
-          {saved && <Alert tone="ok">Membership category rules updated.</Alert>}
-        </PanelBody>
+          {saved && (
+            <PanelBody>
+              <Alert tone="ok">Membership category rules updated.</Alert>
+            </PanelBody>
+          )}
+        </div>
       </Panel>
     </form>
   );

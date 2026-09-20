@@ -62,7 +62,7 @@ const OUTBOX_ROW_COLUMNS = `id, event_id, template_key, template_version, recipi
 
 export const EMAIL_OUTBOX_DUE_QUERY = `
   SELECT ${OUTBOX_ROW_COLUMNS}
-    FROM email_outbox
+    FROM email_outbox INDEXED BY idx_email_outbox_due
    WHERE status IN ('queued', 'retrying') AND send_after <= ?
   ORDER BY send_after, created_at, id
   LIMIT ?`;
@@ -74,7 +74,7 @@ export const EMAIL_OUTBOX_EXPIRED_LEASE_QUERY = `
          processing_token = NULL, lease_expires_at = NULL, updated_at = ?
    WHERE id IN (
      SELECT id
-       FROM email_outbox
+       FROM email_outbox INDEXED BY idx_email_outbox_expired_lease
       WHERE status = 'sending' AND lease_expires_at <= ?
       ORDER BY lease_expires_at, created_at, id
       LIMIT ?

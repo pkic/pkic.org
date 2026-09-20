@@ -45,7 +45,7 @@ export function renderMarkdownReport(report) {
   );
   lines.push(`- Missing membership category (\`memberType\` blank in YAML): ${report.totals.missingCategory.length}`);
   lines.push(
-    `- Ambiguous representative/email pairing (needs staff confirmation): ${report.totals.ambiguousPairing.length}`,
+    `- Identity review entries (automatic guesses and unpaired representatives): ${report.totals.ambiguousPairing.length}`,
   );
   lines.push(
     `- Event sponsorships with an unrecognized event name (needs an EVENT_NAME_ALIASES entry): ${report.unmatchedEventSponsorships.length}`,
@@ -92,14 +92,19 @@ export function renderMarkdownReport(report) {
     lines.push(`- ${item.name} (\`${item.file}\`)`);
   }
   lines.push("");
-  lines.push("## Ambiguous pairing — confirm representative ↔ email assignment");
+  lines.push("## Identity review — confirm every automatic name ↔ email assignment");
+  lines.push(
+    "Every automatic assignment below is unconfirmed, including name matches and single-candidate matches. Review each guess and add or update its person decision in the manual mapping CSV. Use confirmed only after verifying the email; use unresolved to prevent guessing. Rerun with --manual-mapping before applying SQL. These flags do not prevent SQL generation.",
+  );
   for (const item of report.totals.ambiguousPairing) {
     if (item.note) {
       lines.push(`- **${item.name}** (\`${item.file}\`) — ${item.note}: ${item.unpaired.map(formatRep).join("; ")}`);
     } else {
-      lines.push(
-        `- **${item.name}** (\`${item.file}\`) — representatives [${item.representatives.join(", ")}] paired best-effort (listed order) against emails [${item.candidateEmails.join(", ")}]`,
-      );
+      for (const guess of item.guesses) {
+        lines.push(
+          `- **${item.name}** (\`${item.file}\`) — ${guess.representative} → \`${guess.email}\` — **unconfirmed ${guess.method}**. Candidate emails: [${item.candidateEmails.join(", ")}]`,
+        );
+      }
     }
   }
   lines.push("");

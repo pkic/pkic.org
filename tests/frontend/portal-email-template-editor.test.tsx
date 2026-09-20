@@ -173,6 +173,22 @@ afterEach(() => {
 });
 
 describe("portal email template editor", () => {
+  it("sends an inserted reusable template to preview without Markdown escaping its syntax", async () => {
+    const requests = stubApi();
+    await mount();
+    await act(async () =>
+      container!.querySelector<HTMLButtonElement>('button[aria-label="Insert reusable templates"]')!.click(),
+    );
+    const partial = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("about_pkic"),
+    );
+    expect(partial).toBeDefined();
+    await act(async () => partial!.click());
+    await click("Render Preview");
+    const request = requests.find((entry) => entry.pathname === PREVIEW_PATH)!;
+    expect(emailTemplatePreviewSchema.parse(request.body).content).toContain("{{> about_pkic}}");
+  });
+
   it("renders on the design system rather than the legacy stylesheet", async () => {
     stubApi();
     await mount();

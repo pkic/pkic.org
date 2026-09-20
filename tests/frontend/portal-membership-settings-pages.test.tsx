@@ -323,6 +323,18 @@ describe("membership application form page", () => {
 });
 
 describe("membership categories page", () => {
+  it("loads a fresh draft when navigating between existing categories with the same revision", async () => {
+    const individual = { ...category, code: "H4", label: "Individual users", isIndividual: true };
+    stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category, individual] }) : null));
+    const page = mount(<MembershipCategories canWrite categoryCode="H1" />);
+    await settle();
+    expect(controlFor(page, "Name").value).toBe(category.label);
+    await act(async () => render(<MembershipCategories canWrite categoryCode="H4" />, page));
+    await settle();
+    expect(controlFor(page, "Name").value).toBe(individual.label);
+    expect(controlFor(page, "Membership workflow").getAttribute("role")).toBe("combobox");
+  });
+
   it("heads itself and lists the catalog as a table, reading only the catalog", async () => {
     const requests = stubApi((url) => (url.pathname === CATEGORIES_API ? json({ categories: [category] }) : null));
 
@@ -335,7 +347,7 @@ describe("membership categories page", () => {
     // per category with a form folded inside it.
     expect(page.querySelector("table caption")?.textContent).toBe("Membership categories");
     const headers = [...page.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim());
-    expect(headers).toEqual(expect.arrayContaining(["Code", "Category", "Held by", "Voting", "Order", "Description"]));
+    expect(headers).toEqual(expect.arrayContaining(["Code", "Category", "Held by", "Voting", "Description"]));
     const row = page.querySelector("tbody tr");
     expect(row?.textContent).toContain("H1");
     expect(row?.textContent).toContain(category.label);
@@ -375,7 +387,9 @@ describe("membership categories page", () => {
     // The edit page heads itself with the category, under the list's trail.
     expect(page.querySelector("h2")?.textContent).toBe(`${category.label} (H1)`);
     expect(page.querySelector('nav[aria-label="Breadcrumb"]')?.textContent).toContain("Membership categories");
-    await typeInto(controlFor(page, "Label"), "Government PKI participants");
+    await typeInto(controlFor(page, "Code"), "ORG");
+    expect(page.querySelector('[name="displayOrder"]')).toBeNull();
+    await typeInto(controlFor(page, "Name"), "Government PKI participants");
     await act(async () => buttonNamed(page, "Save category H1").click());
     await settle();
 
@@ -383,6 +397,7 @@ describe("membership categories page", () => {
     expect(write?.path).toBe(`${CATEGORIES_API}/H1`);
     expect(membershipCategoryUpdateSchema.parse(write?.body)).toEqual({
       expectedRevision: 4,
+      code: "ORG",
       label: "Government PKI participants",
       active: true,
       workflowVersionId: null,

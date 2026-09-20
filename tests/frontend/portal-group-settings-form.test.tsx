@@ -179,6 +179,12 @@ describe("group settings form", () => {
       expect(check.querySelector(".pk-check__label")).not.toBeNull();
     }
     expect(container.querySelector(".form-check")).toBeNull();
+    const enabled = checks[3].querySelector<HTMLInputElement>("input")!;
+    expect(byId(container, enabled.getAttribute("aria-labelledby")!)?.textContent).toBe("Group enabled");
+    expect(byId(container, enabled.getAttribute("aria-describedby")!)?.textContent).toContain(
+      "ends automatically enrolled memberships",
+    );
+    expect(enabled.checked).toBe(true);
 
     // Automatic enrollment is off, so opting out cannot apply. The control is
     // dimmed AND the reason is stated, so the state is not carried by the

@@ -5,20 +5,20 @@
  *
  * D1 is now the source of truth (Step 2 has run). Search, sorting, and
  * pagination are sent to the API and performed in D1; the browser only
- * groups the current page into presentation buckets.
+ * groups the complete directory into presentation buckets.
  */
 import { render } from "preact";
 import { useMemo, useState } from "preact/hooks";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { EmptyState } from "../components/EmptyState";
-import { Pager } from "../components/Pager";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { memberProfileHref } from "../../shared/member-profile-url";
 import { publicMembersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { useApiPage } from "../hooks/useApiPage";
+import { useMemberDirectory } from "./use-member-directory";
 import { monogramFrom } from "../shared/initials";
 
 const API_BASE_FALLBACK = "/api/v1";
@@ -97,11 +97,17 @@ function DirectoryGrid({ members, prefix }: { members: DirectoryMember[]; prefix
             #
           </a>
         )}
-        {letters.map((l) => (
-          <a key={l} class={`az-sidebar-link${buckets.has(l) ? "" : " is-empty"}`} href={`#${prefix}-${l}`}>
-            {l}
-          </a>
-        ))}
+        {letters.map((l) =>
+          buckets.has(l) ? (
+            <a key={l} class="az-sidebar-link" href={`#${prefix}-${l}`}>
+              {l}
+            </a>
+          ) : (
+            <span key={l} class="az-sidebar-link is-empty" aria-disabled="true">
+              {l}
+            </span>
+          ),
+        )}
         {hasOther && (
           <a class="az-sidebar-link" href={`#${prefix}-OTHER`}>
             …
@@ -190,16 +196,11 @@ export function MemberDirectory({
 }) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const listing = useApiPage(
-    `${apiBase}/members`,
-    { group, sort: "name", ...(search ? { q: search } : {}) },
-    publicMembersListResponseSchema,
-    (data) => data.members,
-  );
+  const listing = useMemberDirectory(apiBase, group, search);
   const members = listing.data?.members;
 
   if (listing.error) return <ErrorAlert error={listing.error} />;
-  if (!members) return <Spinner />;
+  if (!members || listing.loading || listing.loadingMore || listing.page?.hasMore) return <Spinner />;
 
   function submitSearch(event: SubmitEvent): void {
     event.preventDefault();
@@ -239,7 +240,6 @@ export function MemberDirectory({
       </div>
       <div class="pk-container pk-container--wide">
         <DirectoryGrid members={members} prefix={prefix} />
-        {listing.pagerProps && <Pager {...listing.pagerProps} />}
       </div>
     </div>
   );

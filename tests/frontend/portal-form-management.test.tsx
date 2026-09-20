@@ -64,6 +64,33 @@ function formListResponse(): Response {
   );
 }
 
+function eventPlacementResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      event: { id: "e0000000-0000-4000-8000-000000000001", slug: "pqc-2026", name: "PQC 2026" },
+      purpose: "proposal_submission",
+      form: {
+        id: "00000000-0000-4000-8000-000000000002",
+        key: "community-survey",
+        title: "Community survey",
+        description: null,
+        fields: [],
+      },
+      requiredTerms: [],
+      allowedSessionTypes: [],
+      eventDays: [],
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function eventResponseRequest(url: URL): Response {
+  if (url.pathname.endsWith("/forms/placements/proposal_submission")) return eventPlacementResponse();
+  if (url.pathname.endsWith("/forms/community-survey/submissions/stats")) return emptyStatsResponse();
+  if (url.pathname.endsWith("/forms/community-survey")) return communityFormDetailResponse();
+  throw new Error(`Unexpected request: ${url.pathname}`);
+}
+
 function communityFormDetailResponse(): Response {
   return new Response(
     JSON.stringify(
@@ -263,7 +290,7 @@ describe("portal form management", () => {
     }
   });
 
-  it("uses the event-owned catalogue rather than the global form resource for event responses", async () => {
+  it("opens the event's one configured form directly", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -273,59 +300,15 @@ describe("portal form management", () => {
           location.origin,
         );
         requests.push(url);
-        return formListResponse();
+        return eventResponseRequest(url);
       }),
     );
-
-    mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
-    await settle();
-
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.pathname).toBe("/api/v1/events/pqc-2026/forms");
-    expect(requests[0]?.searchParams.get("purpose")).toBe("proposal_submission");
-  });
-
-  it("scopes the event catalogue to linked forms by default and widens it through the scope filter", async () => {
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(
-          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
-          location.origin,
-        );
-        requests.push(url);
-        return formListResponse();
-      }),
-    );
-
     const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
     await settle();
-
-    // The default view sends the contract's boolean value, not a bespoke "1".
-    expect(requests[0]?.searchParams.get("linkedOnly")).toBe("true");
-
-    // The scope is a column — it says where each form belongs — and its menu
-    // is where the catalogue widens. The only select left in a toolbar is the
-    // response filter above the list, which scopes submissions, not forms.
-    const toolbarSelects = [...container.querySelectorAll('[role="toolbar"] select')];
-    expect(toolbarSelects.map((select) => select.getAttribute("aria-label"))).toEqual(["Submission status"]);
-    expect(columnFilterOptions(container, "Scope")).toEqual(["Linked to this event", "Linked and global forms"]);
-
-    await chooseColumnFilter(container, "Scope", "Linked and global forms");
     await settle();
-
-    // Widening sends the contract's `false` in place of the page's default.
-    const last = requests.at(-1);
-    expect(last?.pathname).toBe("/api/v1/events/pqc-2026/forms");
-    expect(last?.searchParams.get("linkedOnly")).toBe("false");
-    expect(last?.searchParams.get("purpose")).toBe("proposal_submission");
-    expect(columnFilterSummary(container, "Scope")).toBe("Linked and global forms");
-
-    // And narrowing again restores the default rather than dropping the scope.
-    await chooseColumnFilter(container, "Scope", "Linked to this event");
-    await settle();
-    expect(requests.at(-1)?.searchParams.get("linkedOnly")).toBe("true");
+    expect(requests[0]?.pathname).toBe("/api/v1/events/pqc-2026/forms/placements/proposal_submission");
+    expect(container.textContent).not.toContain("Forms linked to this event");
+    expect(container.textContent).toContain("Community survey");
   });
 
   it("states a failed load as a sentence in an alert region rather than an empty panel", async () => {
@@ -406,7 +389,13 @@ describe("portal form management", () => {
   it("names the response filter bar and every control in it", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => formListResponse()),
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return eventResponseRequest(url);
+      }),
     );
 
     const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);

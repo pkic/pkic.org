@@ -158,6 +158,7 @@ export function buildMigration({
         name,
         memberType,
         domains,
+        confirmedEmail: confirmed?.confirmed_email,
         candidates: mappings.length ? (confirmed ? [{ email: confirmed.confirmed_email }] : []) : candidates,
       });
     } else {

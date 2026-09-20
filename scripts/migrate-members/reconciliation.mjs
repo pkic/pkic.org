@@ -58,8 +58,8 @@ function nameTokens(fullName) {
  * "best effort, flagged for staff confirmation" behavior as before this
  * matched on names at all.
  *
- * Returns an array parallel to `reps`: the matched candidate's index into
- * `candidates`, or null if every candidate is already claimed.
+ * Returns parallel assignment and method arrays. Candidate indexes are null
+ * when every candidate is claimed; only manual confirmations establish identity.
  */
 export function matchRepsToCandidates(reps, candidates) {
   const repTokens = reps.map((r) => nameTokens(r.name));
@@ -78,10 +78,12 @@ export function matchRepsToCandidates(reps, candidates) {
     rep.confirmedEmail ? candidates.findIndex((candidate) => candidate.email === rep.confirmedEmail) : null,
   );
   if (assignment.includes(-1)) throw new Error("Confirmed representative email missing from candidates");
+  const methods = assignment.map((index) => (index === null ? null : "manual confirmation"));
   const usedCandidates = new Set(assignment.filter((index) => index !== null));
   for (const { ri, ci } of scored) {
     if (assignment[ri] !== null || usedCandidates.has(ci)) continue;
     assignment[ri] = ci;
+    methods[ri] = "name match";
     usedCandidates.add(ci);
   }
 
@@ -91,11 +93,12 @@ export function matchRepsToCandidates(reps, candidates) {
     while (nextCandidate < candidates.length && usedCandidates.has(nextCandidate)) nextCandidate += 1;
     if (nextCandidate >= candidates.length) continue;
     assignment[ri] = nextCandidate;
+    methods[ri] = "join-order fallback";
     usedCandidates.add(nextCandidate);
     nextCandidate += 1;
   }
 
-  return assignment;
+  return { assignment, methods };
 }
 
 export function buildEmailsByDomain(pkicRoster) {

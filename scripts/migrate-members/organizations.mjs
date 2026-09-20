@@ -92,17 +92,20 @@ export function processOrganizationRecord(
     return;
   }
 
-  const assignment = matchRepsToCandidates(reps, candidates); // parallel to reps: candidate index or null
+  const { assignment, methods } = matchRepsToCandidates(reps, candidates);
   const unpairedReps = reps.filter((_, i) => assignment[i] === null);
 
-  const automaticReps = reps.filter((rep) => !rep.confirmedEmail);
-  const remainingCandidates = candidates.length - (reps.length - automaticReps.length);
-  if ((mappings.length ? automaticReps.length > 0 : reps.length > 1) && remainingCandidates > 1) {
+  const guesses = reps.flatMap((rep, index) =>
+    assignment[index] === null || rep.confirmedEmail
+      ? []
+      : [{ representative: rep.name, email: candidates[assignment[index]].email, method: methods[index] }],
+  );
+  if (guesses.length) {
     ctx.report.totals.ambiguousPairing.push({
       file: filename,
       name,
-      representatives: reps.map((r) => r.name),
-      candidateEmails: candidates.map((c) => c.email),
+      guesses,
+      candidateEmails: candidates.map((candidate) => candidate.email),
     });
   }
   if (unpairedReps.length > 0) {

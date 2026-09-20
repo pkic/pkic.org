@@ -228,10 +228,15 @@ describe("shared mailing-list form model", () => {
     expect(checks.slice(0, MEMBERSHIP_CATEGORIES.length).map((check) => check.textContent)).toEqual([
       ...exampleMembershipCategories.map(({ code, label }) => `${label} (${code})`),
     ]);
-    expect(checks.slice(-2).map((check) => check.textContent)).toEqual([
-      "Active",
+    expect(checks.slice(-2).map((check) => check.querySelector(".pk-check__label")?.textContent)).toEqual([
+      "List enabled",
       "The group's primary discussion list",
     ]);
+    const enabled = checks.at(-2)!.querySelector("input")!;
+    expect(document.getElementById(enabled.getAttribute("aria-labelledby")!)?.textContent).toBe("List enabled");
+    expect(document.getElementById(enabled.getAttribute("aria-describedby")!)?.textContent).toContain(
+      "queues removal of managed subscribers",
+    );
   });
 
   it("reports an edit that still satisfies the shared create contract", async () => {

@@ -84,17 +84,7 @@ export const emailOutboxRowSchema = z.object({
   hasCustomText: z.boolean(),
 });
 
-export const emailOutboxResponseSchema = paginatedResponseSchema("outbox", emailOutboxRowSchema).extend({
-  summary: z.object({
-    total: z.number().int().nonnegative(),
-    byStatus: z.partialRecord(emailOutboxStatusSchema, z.number().int().nonnegative()),
-    byMessageType: z.partialRecord(emailMessageTypeSchema, z.number().int().nonnegative()),
-    topTemplates: z.array(z.object({ template_key: z.string(), count: z.number().int().nonnegative() })),
-    dueNow: z.number().int().nonnegative(),
-    dueByStatus: z.partialRecord(emailOutboxStatusSchema, z.number().int().nonnegative()),
-    nextSendAfter: z.string().nullable(),
-  }),
-});
+export const emailOutboxResponseSchema = paginatedResponseSchema("outbox", emailOutboxRowSchema);
 
 export type EmailOutboxRow = z.infer<typeof emailOutboxRowSchema>;
 export type EmailOutboxResponse = z.infer<typeof emailOutboxResponseSchema>;

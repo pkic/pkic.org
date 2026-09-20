@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import { handleError } from "../functions/_lib/http";
-import { onRequestPost } from "../functions/api/v1/sponsors/checkouts/stripe";
-import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
+import app from "../functions/router";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { renderEmail } from "../functions/_lib/email/render";
 
@@ -25,26 +24,20 @@ async function stripeSignature(body: string): Promise<string> {
 
 async function callWebhook(event: unknown): Promise<Response> {
   const body = JSON.stringify(event);
-  const request = new Request("https://pkic.org/api/v1/sponsors/checkouts/stripe/events", {
+  const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
     method: "POST",
     headers: { "stripe-signature": await stripeSignature(body) },
     body,
   });
-  try {
-    return await onRequestPost(
-      createContext(
-        {
-          ...env,
-          STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
-          SPONSORSHIP_NOTIFICATION_EMAIL: "sponsorships-team@pkic.org",
-        },
-        request,
-        {},
-      ),
-    );
-  } catch (error) {
-    return handleError(error);
-  }
+  return app.fetch(
+    request,
+    {
+      ...env,
+      STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
+      SPONSORSHIP_NOTIFICATION_EMAIL: "sponsorships-team@pkic.org",
+    },
+    { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext,
+  );
 }
 
 function paidEvent(eventId: string, sessionId: string, eventDatabaseId: string, type = "checkout.session.completed") {
@@ -60,6 +53,7 @@ function paidEvent(eventId: string, sessionId: string, eventDatabaseId: string, 
         currency: "usd",
         metadata: {
           checkout_attempt_id: "123e4567-e89b-42d3-a456-426614174000",
+          pkic_payment_type: "sponsorship",
           tier: "Innovator",
           contact_name: "Casey Sponsor",
           contact_email: "casey@example.test",
@@ -74,7 +68,7 @@ function paidEvent(eventId: string, sessionId: string, eventDatabaseId: string, 
   };
 }
 
-describe("POST /api/v1/sponsors/checkouts/stripe/events", () => {
+describe("POST /api/v1/webhooks/stripe", () => {
   beforeEach(async () => {
     await resetDb();
   });

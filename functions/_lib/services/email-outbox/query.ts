@@ -1,20 +1,16 @@
-import {
-  batchFirst,
-  batchRows,
-  buildOffsetPageStatements,
-  decodeOffsetPageResults,
-  type OffsetPageQuery,
-} from "../../db/pagination";
+import { nowIso } from "../../utils/time";
+import { queryPage, type OffsetPageQuery } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import type { DatabaseLike } from "../../types";
 import type { EmailMessageType } from "../../../../assets/shared/schemas/api-common";
 import type { EmailOutboxQuery, EmailOutboxStatus } from "../../../../assets/shared/schemas/email-outbox";
 
-export const EMAIL_OUTBOX_SELECT = `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
+const EMAIL_OUTBOX_COLUMNS = `SELECT o.id, o.event_id, e.slug AS event_slug, e.name AS event_name,
   o.template_key, o.template_version, o.recipient_email, o.subject, o.payload_json,
   o.message_type, o.provider, o.provider_message_id, o.status, o.attempts, o.send_after,
-  o.last_error, o.created_at, o.updated_at, o.sent_at
+  o.last_error, o.created_at, o.updated_at, o.sent_at`;
+export const EMAIL_OUTBOX_SELECT = `${EMAIL_OUTBOX_COLUMNS}
   FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id`;
 
 export interface OutboxListRow {
@@ -39,36 +35,8 @@ export interface OutboxListRow {
   sent_at: string | null;
 }
 
-interface StatusCountRow {
-  status: EmailOutboxStatus;
-  count: number;
-}
-
-interface MessageTypeCountRow {
-  message_type: EmailMessageType;
-  count: number;
-}
-
-export interface TemplateCountRow {
-  template_key: string;
-  count: number;
-}
-
-export interface EmailOutboxQueryResult {
-  rows: OutboxListRow[];
-  total: number;
-  statusCounts: StatusCountRow[];
-  messageTypeCounts: MessageTypeCountRow[];
-  templateCounts: TemplateCountRow[];
-  dueCounts: StatusCountRow[];
-  nextSendAfter: string | null;
-}
-
 export interface EmailOutboxQueryStatements {
   page: OffsetPageQuery;
-  aggregateFrom: string;
-  where: string;
-  bindings: readonly unknown[];
 }
 
 function buildWhereClause(query: {
@@ -113,12 +81,15 @@ function buildWhereClause(query: {
 }
 
 /**
- * Builds the exact filtered page/count and aggregate source used by the API.
+ * Builds the exact filtered page/count source used by the API.
  * Keeping this pure lets D1 EXPLAIN tests inspect production SQL rather than a
  * simplified copy that can drift from the endpoint.
  */
 export function buildEmailOutboxQueryStatements(query: EmailOutboxQuery, now: string): EmailOutboxQueryStatements {
   const { where, bindings } = buildWhereClause({ ...query, now });
+  // The due-only partial index must win over the general status index for
+  // delivery work, even before SQLite has representative planner statistics.
+  const source = `FROM email_outbox o${query.dueNow ? " INDEXED BY idx_email_outbox_due" : ""}`;
   const orderBy = resolveMappedOrderBy(
     query.sort,
     {
@@ -128,72 +99,24 @@ export function buildEmailOutboxQueryStatements(query: EmailOutboxQuery, now: st
       sendAfter: "o.send_after",
       createdAt: "o.created_at",
     },
-    `CASE o.status
-       WHEN 'failed' THEN 0 WHEN 'delivery_unknown' THEN 1 WHEN 'retrying' THEN 2
-       WHEN 'queued' THEN 3 WHEN 'sending' THEN 4 ELSE 5
-     END ASC, COALESCE(o.sent_at, o.updated_at, o.created_at) DESC`,
+    "o.created_at DESC",
     "o.id ASC",
   );
   return {
     page: {
-      sql: `${EMAIL_OUTBOX_SELECT}           ${where}`,
-      bindings,
+      source: {
+        selectSql: EMAIL_OUTBOX_COLUMNS,
+        fromSql: `${source} LEFT JOIN events e ON e.id = o.event_id ${where}`,
+        countFromSql: `${source}${query.q ? " LEFT JOIN events e ON e.id = o.event_id" : ""} ${where}`,
+        bindings,
+      },
       orderBy,
       limit: query.limit,
       offset: query.offset,
     },
-    aggregateFrom: query.q ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o",
-    where,
-    bindings,
   };
 }
 
-export async function queryEmailOutbox(db: DatabaseLike, query: EmailOutboxQuery): Promise<EmailOutboxQueryResult> {
-  const now = new Date().toISOString();
-  const statements = buildEmailOutboxQueryStatements(query, now);
-  const [pageStatement, countStatement] = buildOffsetPageStatements(db, statements.page);
-  const [rowsResult, totalResult, statusResult, messageTypeResult, templateResult, dueResult, dueNextResult] =
-    await db.batch([
-      pageStatement,
-      countStatement,
-      db
-        .prepare(`SELECT o.status, COUNT(*) AS count ${statements.aggregateFrom} ${statements.where} GROUP BY o.status`)
-        .bind(...statements.bindings),
-      db
-        .prepare(
-          `SELECT o.message_type, COUNT(*) AS count ${statements.aggregateFrom} ${statements.where} GROUP BY o.message_type`,
-        )
-        .bind(...statements.bindings),
-      db
-        .prepare(
-          `SELECT o.template_key, COUNT(*) AS count
-           ${statements.aggregateFrom} ${statements.where}
-           GROUP BY o.template_key
-           ORDER BY count DESC, o.template_key ASC
-           LIMIT 5`,
-        )
-        .bind(...statements.bindings),
-      db
-        .prepare(
-          `SELECT status, COUNT(*) AS count
-           FROM email_outbox
-           WHERE status IN ('queued', 'retrying') AND send_after <= ?
-           GROUP BY status`,
-        )
-        .bind(now),
-      db.prepare(
-        `SELECT MIN(send_after) AS send_after
-         FROM email_outbox
-         WHERE status IN ('queued', 'retrying')`,
-      ),
-    ]);
-
-  return {
-    ...decodeOffsetPageResults<OutboxListRow>(rowsResult, totalResult),
-    statusCounts: batchRows<StatusCountRow>(statusResult),
-    messageTypeCounts: batchRows<MessageTypeCountRow>(messageTypeResult),
-    templateCounts: batchRows<TemplateCountRow>(templateResult),
-    dueCounts: batchRows<StatusCountRow>(dueResult),
-    nextSendAfter: batchFirst<{ send_after: string | null }>(dueNextResult)?.send_after ?? null,
-  };
+export async function queryEmailOutbox(db: DatabaseLike, query: EmailOutboxQuery) {
+  return queryPage<OutboxListRow>(db, buildEmailOutboxQueryStatements(query, nowIso()).page);
 }

@@ -1,3 +1,4 @@
+import { useId } from "preact/hooks";
 import {
   GROUP_AUTOMATIC_ENROLLMENT_MODES,
   GROUP_ELIGIBILITY_MODES,
@@ -28,6 +29,7 @@ export function GroupSettingsFields({
   function setField<Key extends keyof GroupSettingsDraft>(key: Key, value: GroupSettingsDraft[Key]): void {
     setDraft((current) => ({ ...current, [key]: value }));
   }
+  const enabledId = useId();
   const optOutUnavailable = draft.automaticEnrollmentMode === "none";
   return (
     <fieldset class="pk-fieldset pk-stack" disabled={saving}>
@@ -202,7 +204,15 @@ export function GroupSettingsFields({
         <Checkbox
           checked={draft.active}
           onChange={(event) => setField("active", (event.target as HTMLInputElement).checked)}
-          label="Active"
+          label={<span id={`${enabledId}-label`}>Group enabled</span>}
+          aria-labelledby={`${enabledId}-label`}
+          aria-describedby={`${enabledId}-help`}
+          hint={
+            <span id={`${enabledId}-help`}>
+              Disabling prevents users from joining or accessing the group as participants, stops automatic enrollment,
+              and ends automatically enrolled memberships. The group and its history are kept.
+            </span>
+          }
         />
       </div>
     </fieldset>

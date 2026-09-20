@@ -19,6 +19,21 @@
    * rather than restating numbers. Spacing utilities cannot express this:
    * the requirement is not a gap, it is two elements sharing one box.
    */
+  .pk-template-subject {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+
+  .pk-template-subject > .pk-overlay-editor {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pk-template-subject .pk-input {
+    width: 100%;
+  }
+
   .pk-overlay-editor {
     position: relative;
   }

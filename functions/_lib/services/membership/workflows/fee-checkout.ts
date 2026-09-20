@@ -37,8 +37,7 @@ export async function processMembershipFeeCheckouts(
   limit = 5,
   fetcher?: typeof fetch,
 ) {
-  if (!env.STRIPE_SECRET_KEY || !env.MEMBERSHIP_STRIPE_WEBHOOK_SECRET || !env.INTERNAL_SIGNING_SECRET)
-    return { processed: 0 };
+  if (!env.STRIPE_SECRET_KEY || !env.INTERNAL_SIGNING_SECRET) return { processed: 0 };
   const now = new Date().toISOString();
   const due = await all<{ fee_id: string }>(
     db,
@@ -136,6 +135,7 @@ export async function processMembershipFeeCheckouts(
           "line_items[0][quantity]": "1",
         });
         for (const [key, value] of Object.entries({
+          pkic_payment_type: "membership",
           membershipFeeId: fee.id,
           membershipCheckoutId: attempt.id,
           applicationId: fee.application_id,

@@ -33,10 +33,12 @@ const CATEGORIES_PATH = "/settings/membership-categories";
 export function MembershipCategoryForm({
   category,
   canWrite,
+  nextDisplayOrder = 0,
   onSaved,
 }: {
   category?: MembershipCategoryCatalogEntry;
   canWrite: boolean;
+  nextDisplayOrder?: number;
   onSaved: () => Promise<void>;
 }) {
   const [, navigate] = usePortalHashLocation();
@@ -45,7 +47,7 @@ export function MembershipCategoryForm({
       code: "",
       label: "",
       description: null,
-      displayOrder: 0,
+      displayOrder: nextDisplayOrder,
       isIndividual: false,
       requiresUniversityEmail: false,
       isVoting: false,
@@ -60,7 +62,8 @@ export function MembershipCategoryForm({
   const form = useContractForm(category ? membershipCategoryUpdateSchema : membershipCategoryCreateSchema, {
     ...(category
       ? { expectedRevision: category.revision }
-      : { code: draft.code, isIndividual: draft.isIndividual, requiresUniversityEmail: draft.requiresUniversityEmail }),
+      : { isIndividual: draft.isIndividual, requiresUniversityEmail: draft.requiresUniversityEmail }),
+    code: draft.code,
     label: draft.label,
     description: draft.description,
     displayOrder: draft.displayOrder,
@@ -126,112 +129,68 @@ export function MembershipCategoryForm({
                 reader without membership:write sees the values and no way to
                 change them. */}
             <fieldset class="pk-fieldset pk-stack" disabled={!canWrite || saving}>
-              {!category && (
-                <>
-                  <Field
-                    label="Code"
-                    required
-                    help="A permanent uppercase identifier, such as ORG_PAID or IND_PAID."
-                    {...form.of("code")}
-                  >
-                    {(control) => (
-                      <TextInput
-                        {...control}
-                        name="code"
-                        value={draft.code}
-                        maxlength={32}
-                        onInput={(event) => setDraft({ ...draft, code: event.currentTarget.value })}
-                      />
-                    )}
-                  </Field>
-                  <Field label="Held by" {...form.of("isIndividual")}>
-                    {(control) => (
-                      <Select
-                        {...control}
-                        name="isIndividual"
-                        value={draft.isIndividual ? "individual" : "organization"}
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            isIndividual: event.currentTarget.value === "individual",
-                            requiresUniversityEmail: false,
-                          })
-                        }
-                      >
-                        {memberJoinApplicantKindSchema.options.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {kind === "individual" ? "Individual users" : "Organizations"}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
-                  {draft.isIndividual && (
-                    <Checkbox
-                      name="requiresUniversityEmail"
-                      checked={draft.requiresUniversityEmail}
-                      label="Require a university email address"
-                      onChange={(event) => setDraft({ ...draft, requiresUniversityEmail: event.currentTarget.checked })}
-                    />
-                  )}
-                  <p class="pk-small pk-muted">
-                    The code and holder type stay fixed after creation. Configure group eligibility separately before
-                    enrolling members.
-                  </p>
-                </>
-              )}
               <Field
-                label="Membership workflow"
-                help="Select a published version for new applications. Existing applications retain their policy. Categories without a workflow are unavailable on the join form."
-                {...form.of("workflowVersionId")}
+                label="Code"
+                required
+                help="An uppercase identifier, such as ORG_PAID or IND_PAID."
+                {...form.of("code")}
               >
                 {(control) => (
-                  <MembershipWorkflowSelect
+                  <TextInput
                     {...control}
-                    name="workflowVersionId"
-                    value={draft.workflowVersionId}
-                    disabled={!canWrite || saving}
-                    onChange={(workflowVersionId) => setDraft({ ...draft, workflowVersionId })}
+                    name="code"
+                    value={draft.code}
+                    maxlength={32}
+                    onInput={(event) => setDraft({ ...draft, code: event.currentTarget.value })}
                   />
                 )}
               </Field>
-              <Checkbox
-                name="active"
-                label="Available for new applications"
-                checked={draft.active}
-                onChange={(event) => setDraft({ ...draft, active: event.currentTarget.checked })}
-              />
-              <div class="pk-grid pk-grid--tight">
-                <Field label="Label" required {...form.of("label")}>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      name="label"
-                      maxlength={MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH}
-                      value={draft.label}
-                      onInput={(event) => setDraft({ ...draft, label: (event.target as HTMLInputElement).value })}
-                    />
-                  )}
-                </Field>
-                <Field
-                  label="Display order"
-                  help="Where the category sits in every list of categories; lower comes first."
-                  {...form.of("displayOrder")}
-                >
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      name="displayOrder"
-                      type="number"
-                      min={0}
-                      value={draft.displayOrder}
-                      onInput={(event) =>
-                        setDraft({ ...draft, displayOrder: Number((event.target as HTMLInputElement).value) })
-                      }
-                    />
-                  )}
-                </Field>
-              </div>
+              <Field label="Name" required {...form.of("label")}>
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="label"
+                    maxlength={MEMBERSHIP_CATEGORY_LABEL_MAX_LENGTH}
+                    value={draft.label}
+                    onInput={(event) => setDraft({ ...draft, label: (event.target as HTMLInputElement).value })}
+                  />
+                )}
+              </Field>
+              <Field
+                label="Category"
+                help={category ? "The holder type is fixed after creation." : undefined}
+                {...form.of("isIndividual")}
+              >
+                {(control) => (
+                  <Select
+                    {...control}
+                    name="isIndividual"
+                    disabled={Boolean(category)}
+                    value={draft.isIndividual ? "individual" : "organization"}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        isIndividual: event.currentTarget.value === "individual",
+                        requiresUniversityEmail: false,
+                      })
+                    }
+                  >
+                    {memberJoinApplicantKindSchema.options.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind === "individual" ? "Individual users" : "Organizations"}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              {!category && draft.isIndividual && (
+                <Checkbox
+                  name="requiresUniversityEmail"
+                  checked={draft.requiresUniversityEmail}
+                  label="Require a university email address"
+                  onChange={(event) => setDraft({ ...draft, requiresUniversityEmail: event.currentTarget.checked })}
+                />
+              )}
               <Field
                 label="Description"
                 help="Shown to applicants choosing a category on the join form."
@@ -260,6 +219,27 @@ export function MembershipCategoryForm({
               <p class="pk-warning-note">
                 Caution: voting-right changes take effect immediately for consultation concerns and open ballots.
               </p>
+              <Field
+                label="Membership workflow"
+                help="Click to choose a published workflow, or type to search. Changes apply to new applications; existing applications retain their policy. Categories without a workflow are unavailable on the join form."
+                {...form.of("workflowVersionId")}
+              >
+                {(control) => (
+                  <MembershipWorkflowSelect
+                    {...control}
+                    name="workflowVersionId"
+                    value={draft.workflowVersionId}
+                    disabled={!canWrite || saving}
+                    onChange={(workflowVersionId) => setDraft({ ...draft, workflowVersionId })}
+                  />
+                )}
+              </Field>
+              <Checkbox
+                name="active"
+                label="Available for new applications"
+                checked={draft.active}
+                onChange={(event) => setDraft({ ...draft, active: event.currentTarget.checked })}
+              />
             </fieldset>
             <ErrorAlert error={error} />
             {canWrite && (

@@ -24,9 +24,21 @@ import { upsertMemberUser } from "./user-upsert.mjs";
  * placeholder email (see sentinelEmailForSlug), flagged `needsEmail: true`
  * for staff to attach a real address later.
  */
-export function processIndividualRecord(ctx, { filename, slug, doc, name, memberType, domains, candidates }) {
+export function processIndividualRecord(
+  ctx,
+  { filename, slug, doc, name, memberType, domains, candidates, confirmedEmail },
+) {
   const needsEmail = candidates.length === 0;
   const email = needsEmail ? sentinelEmailForSlug(slug) : candidates[0].email;
+
+  if (!needsEmail && !confirmedEmail) {
+    ctx.report.totals.ambiguousPairing.push({
+      file: filename,
+      name,
+      guesses: [{ representative: name, email, method: "join-order fallback" }],
+      candidateEmails: candidates.map((candidate) => candidate.email),
+    });
+  }
 
   if (needsEmail) {
     ctx.report.needsEmailIndividuals.push({

@@ -27,6 +27,7 @@ interface FeeEvidenceRow {
   status: string;
   handling_required: number;
   checkout_id: string;
+  request_params: string | null;
   provider_session_id: string | null;
   payment_intent_id: string | null;
 }
@@ -58,16 +59,21 @@ export async function handleMembershipPaymentEvent(
     db,
     `SELECT fee.id, fee.application_id, fee.generation, fee.step_position, fee.category_code,
     fee.version_id, fee.amount, fee.currency, fee.deadline_at, fee.status, fee.handling_required, fee.payment_intent_id,
-    checkout.id AS checkout_id, checkout.provider_session_id
+    checkout.id AS checkout_id, checkout.provider_session_id, checkout.request_params
     FROM membership_fee_intents fee JOIN membership_fee_checkouts checkout ON checkout.fee_id = fee.id
     WHERE fee.id = ? AND checkout.id = ?`,
     [metadata.membershipFeeId, metadata.membershipCheckoutId],
   );
   if (!fee) return { received: true, ignored: true };
+  // Compare the signed category to the exact request sent to Stripe. A catalog
+  // rename changes live foreign keys, but cannot change an issued checkout.
   const mappingMatches =
     metadata.applicationId === fee.application_id &&
     metadata.workflowVersionId === fee.version_id &&
-    metadata.categoryCode === fee.category_code &&
+    metadata.categoryCode ===
+      (fee.request_params === null
+        ? fee.category_code
+        : new URLSearchParams(fee.request_params).get("metadata[categoryCode]")) &&
     metadata.generation === String(fee.generation) &&
     fee.provider_session_id === session.id;
   // A webhook can arrive while the checkout worker is persisting its response.
@@ -98,13 +104,21 @@ export async function handleMembershipPaymentEvent(
       stale ||
       isApplicationTerminalStage(execution.application.stage) ||
       eventTime > fee.deadline_at);
+  const providerTerminalStatus =
+    valid && !paid
+      ? event.type === "checkout.session.async_payment_failed"
+        ? "failed"
+        : event.type === "checkout.session.expired"
+          ? "expired"
+          : null
+      : null;
   const outcome = !valid
     ? "rejected_mismatch"
     : paid
       ? handlingRequired
         ? "paid_requires_handling"
         : "paid"
-      : "unconfirmed";
+      : (providerTerminalStatus ?? "unconfirmed");
   const statements: StatementLike[] = [
     db
       .prepare(
@@ -142,6 +156,13 @@ export async function handleMembershipPaymentEvent(
           "UPDATE member_applications SET transition_revision = transition_revision + 1, updated_at = ? WHERE id = ?",
         )
         .bind(now, fee.application_id),
+    );
+  }
+  if (providerTerminalStatus && fee.status !== "paid" && fee.status !== providerTerminalStatus) {
+    statements.push(
+      db
+        .prepare("UPDATE membership_fee_intents SET status = ?, updated_at = ? WHERE id = ? AND status = ?")
+        .bind(providerTerminalStatus, now, fee.id, fee.status),
     );
   }
   try {

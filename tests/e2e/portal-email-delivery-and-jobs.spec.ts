@@ -38,15 +38,6 @@ test("staff inspect delivery failures and edit a scheduled job interval", async 
       json: emailOutboxResponseSchema.parse({
         outbox: [message],
         page: { total: 1, offset: 0, limit: 25, hasMore: false },
-        summary: {
-          total: 1,
-          byStatus: { failed: 1 },
-          byMessageType: { transactional: 1 },
-          topTemplates: [],
-          dueNow: 0,
-          dueByStatus: {},
-          nextSendAfter: null,
-        },
       }),
     }),
   );

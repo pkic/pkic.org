@@ -4,7 +4,7 @@
  * Covers:
  *  - GET  /api/v1/donations/session?session_id=...    (positive, negative)
  *  - POST /api/v1/donations/promoters                 (positive, negative)
- *  - POST /api/v1/donations/payments/stripe/webhook   (various event types)
+ *  - POST /api/v1/webhooks/stripe for donations   (various event types)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -12,7 +12,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext } from "./helpers/context";
 import { onRequestGet as donationSession } from "../functions/api/v1/donations/session";
-import { onRequestPost as stripeWebhook } from "../functions/api/v1/donations/payments/stripe/webhook";
+import { onRequestPost as stripeWebhook } from "../functions/api/v1/webhooks/stripe";
 import { handleDonationStripeEvent } from "../functions/_lib/services/donations/stripe-webhook";
 import app from "../functions/router";
 
@@ -229,7 +229,7 @@ describe("POST /api/v1/donations/promoters", () => {
   });
 });
 
-describe("POST /api/v1/donations/payments/stripe/webhook", () => {
+describe("POST /api/v1/webhooks/stripe for donations", () => {
   beforeEach(async () => {
     await resetDb();
   });
@@ -244,7 +244,7 @@ describe("POST /api/v1/donations/payments/stripe/webhook", () => {
     const response = await stripeWebhook(
       createContext(
         envWithoutSecret,
-        new Request("https://app.test/api/v1/donations/payments/stripe/webhook", {
+        new Request("https://app.test/api/v1/webhooks/stripe", {
           method: "POST",
           body: "{}",
         }),
@@ -259,7 +259,7 @@ describe("POST /api/v1/donations/payments/stripe/webhook", () => {
     const response = await stripeWebhook(
       createContext(
         env,
-        new Request("https://app.test/api/v1/donations/payments/stripe/webhook", {
+        new Request("https://app.test/api/v1/webhooks/stripe", {
           method: "POST",
           body: "{}",
         }),
@@ -274,7 +274,7 @@ describe("POST /api/v1/donations/payments/stripe/webhook", () => {
     const response = await stripeWebhook(
       createContext(
         env,
-        new Request("https://app.test/api/v1/donations/payments/stripe/webhook", {
+        new Request("https://app.test/api/v1/webhooks/stripe", {
           method: "POST",
           headers: { "stripe-signature": "t=12345,v1=fakesignature" },
           body: JSON.stringify({ type: "checkout.session.completed", data: { object: {} } }),

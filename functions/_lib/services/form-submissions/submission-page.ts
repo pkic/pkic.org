@@ -71,7 +71,7 @@ async function attachSubmissionAnswers(db: DatabaseLike, rows: MergedSubmissionR
 /** Build the canonical merged submission page/count pair for runtime and D1 plan regressions. */
 export function buildFormSubmissionsPageQuery(
   population: FormSubmissionPopulation,
-  params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset">,
+  params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset" | "responseId">,
 ): OffsetPageQuery {
   const orderBy = resolveOrderBy(
     params.sort,
@@ -79,7 +79,11 @@ export function buildFormSubmissionsPageQuery(
     "ORDER BY submitted_at DESC",
     "source ASC, source_id ASC",
   );
-  const pageQuery = selectFromSubmissionPopulation(population, `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged`);
+  const pageQuery = selectFromSubmissionPopulation(
+    population,
+    `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
+    params.responseId ? [params.responseId] : [],
+  );
   return {
     ...pageQuery,
     orderBy,

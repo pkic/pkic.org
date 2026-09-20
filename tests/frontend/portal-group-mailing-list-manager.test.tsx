@@ -217,6 +217,7 @@ describe("group mailing-list management surface", () => {
     });
     await settle();
     expect([...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent?.trim())).toEqual([
+      "Sync now",
       "Restore",
       "Delete",
     ]);

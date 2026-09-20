@@ -1,5 +1,6 @@
+import { prepareMembershipCategoryRename } from "../functions/_lib/services/membership/category-renaming";
 import { membershipWorkflowProgress } from "../functions/_lib/services/membership/workflows/progress";
-import { beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
@@ -13,15 +14,24 @@ import { getMembershipWorkflowVersion } from "../functions/_lib/services/members
 import { hmacSha256Hex } from "../functions/_lib/utils/crypto";
 import { membershipWorkflowDefinitionSchema } from "../assets/shared/schemas/membership-workflows";
 import type { Env } from "../functions/_lib/types";
+import { createAdminSession } from "./helpers/auth";
 
 const paymentEnv: Env = {
   ...env,
   STRIPE_SECRET_KEY: "sk_test_synthetic",
-  MEMBERSHIP_STRIPE_WEBHOOK_SECRET: "whsec_synthetic_membership",
+  STRIPE_WEBHOOK_SECRET: "whsec_synthetic_membership",
 };
 beforeEach(resetDb);
 
-async function prepareFeeApplication(options: { reviewAfterPayment?: boolean; failCheckout?: boolean } = {}) {
+it("creates membership checkout sessions without requiring a webhook secret", async () => {
+  const withoutWebhook = { ...paymentEnv, STRIPE_WEBHOOK_SECRET: undefined };
+  const prepared = await prepareFeeApplication({ paymentEnvironment: withoutWebhook });
+  expect(prepared.session.id).toBe("cs_test_membership");
+});
+
+async function prepareFeeApplication(
+  options: { reviewAfterPayment?: boolean; failCheckout?: boolean; paymentEnvironment?: Env } = {},
+) {
   const workflowId = crypto.randomUUID();
   const versionId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -86,9 +96,15 @@ async function prepareFeeApplication(options: { reviewAfterPayment?: boolean; fa
     if (options.failCheckout) throw new Error("Synthetic provider outage");
     return Response.json({ id: "cs_test_membership", url: "https://checkout.stripe.com/c/pay/cs_test_membership" });
   };
-  expect(await processMembershipFeeCheckouts(env.DB, paymentEnv, "https://app.test", 1, fetcher)).toEqual({
-    processed: options.failCheckout ? 0 : 1,
-  });
+  expect(
+    await processMembershipFeeCheckouts(
+      env.DB,
+      options.paymentEnvironment ?? paymentEnv,
+      "https://app.test",
+      1,
+      fetcher,
+    ),
+  ).toEqual({ processed: options.failCheckout ? 0 : 1 });
   const metadata = Object.fromEntries(
     [...checkoutBody].filter(([key]) => key.startsWith("metadata[")).map(([key, value]) => [key.slice(9, -1), value]),
   );
@@ -110,6 +126,53 @@ async function prepareFeeApplication(options: { reviewAfterPayment?: boolean; fa
     },
   };
 }
+afterEach(() => vi.unstubAllGlobals());
+
+it("reconciles a paid membership checkout manually without a webhook secret", async () => {
+  const prepared = await prepareFeeApplication({
+    paymentEnvironment: { ...paymentEnv, STRIPE_WEBHOOK_SECRET: undefined },
+  });
+  const fee = await env.DB.prepare("SELECT id FROM membership_fee_intents WHERE application_id = ?")
+    .bind(prepared.id)
+    .first<{ id: string }>();
+  const adminId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at) " +
+      "VALUES (?, 'sync@example.test', 'sync@example.test', 'Sync', 'admin', 1, datetime('now'), datetime('now'))",
+  )
+    .bind(adminId)
+    .run();
+  const token = await createAdminSession(env.DB, adminId, "membership-fee-sync");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(prepared.session)));
+
+  const response = await app.fetch(
+    new Request(`https://app.test/api/v1/membership/fees/${fee!.id}/sync`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    }),
+    { ...paymentEnv, STRIPE_WEBHOOK_SECRET: undefined },
+    { waitUntil() {}, passThroughOnException() {} } as any,
+  );
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    feeId: fee!.id,
+    sessionId: "cs_test_membership",
+    outcome: "paid",
+    status: "paid",
+    handlingRequired: false,
+  });
+  expect(await env.DB.prepare("SELECT stage FROM member_applications WHERE id = ?").bind(prepared.id).first()).toEqual({
+    stage: "approved",
+  });
+  expect(
+    await env.DB.prepare(
+      "SELECT status FROM payment_ledger_entries WHERE purpose = 'membership' AND provider_checkout_session_id = ?",
+    )
+      .bind("cs_test_membership")
+      .first(),
+  ).toEqual({ status: "paid" });
+});
 async function callback(
   object: unknown,
   type = "checkout.session.completed",
@@ -118,9 +181,9 @@ async function callback(
 ) {
   const timestamp = Math.floor(Date.now() / 1000);
   const body = JSON.stringify({ id: eventId, type, created: timestamp, data: { object } });
-  const signature = await hmacSha256Hex(paymentEnv.MEMBERSHIP_STRIPE_WEBHOOK_SECRET!, `${timestamp}.${body}`);
+  const signature = await hmacSha256Hex(paymentEnv.STRIPE_WEBHOOK_SECRET!, `${timestamp}.${body}`);
   return app.fetch(
-    new Request("https://app.test/api/v1/membership/payments/stripe/webhook", {
+    new Request("https://app.test/api/v1/webhooks/stripe", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -132,6 +195,100 @@ async function callback(
     { waitUntil() {}, passThroughOnException() {} } as any,
   );
 }
+
+it("records an idempotent offline membership settlement and advances the same workflow", async () => {
+  const { id, metadata, session } = await prepareFeeApplication();
+  const adminId = crypto.randomUUID();
+  await env.DB.prepare(
+    "INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at) " +
+      "VALUES (?, 'payments@example.test', 'payments@example.test', 'Payments', 'admin', 1, datetime('now'), datetime('now'))",
+  )
+    .bind(adminId)
+    .run();
+  const token = await createAdminSession(env.DB, adminId, "offline-membership-settlement");
+  const body = {
+    idempotencyKey: crypto.randomUUID(),
+    amount: 10000,
+    currency: "usd",
+    method: "bank_transfer",
+    settledAt: new Date().toISOString(),
+    reference: "BANK-2026-0915",
+    note: "Matched to the annual membership invoice.",
+  };
+  const settle = () =>
+    app.fetch(
+      new Request(
+        "https://app.test/api/v1/membership/fees/" + encodeURIComponent(metadata.membershipFeeId) + "/settlements",
+        {
+          method: "POST",
+          headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      ),
+      paymentEnv,
+      { waitUntil() {}, passThroughOnException() {} } as any,
+    );
+
+  const response = await settle();
+  expect(response.status, await response.clone().text()).toBe(201);
+  expect(await response.json()).toMatchObject({
+    purpose: "membership",
+    resourceId: metadata.membershipFeeId,
+    status: "paid",
+    method: "bank_transfer",
+    duplicate: false,
+    handlingRequired: false,
+  });
+  expect((await getMembershipExecution(env.DB, id)).application.stage).toBe("approved");
+
+  const duplicate = await settle();
+  expect(duplicate.status, await duplicate.clone().text()).toBe(200);
+  expect(await duplicate.json()).toMatchObject({ duplicate: true, status: "paid" });
+  expect(
+    await env.DB.prepare(
+      "SELECT source, event_type, actor_user_id, reference FROM payment_ledger_events WHERE external_event_id = ?",
+    )
+      .bind("offline:" + body.idempotencyKey)
+      .first(),
+  ).toEqual({
+    source: "staff",
+    event_type: "offline.settled",
+    actor_user_id: adminId,
+    reference: body.reference,
+  });
+
+  const providerPayment = await callback(session, "checkout.session.async_payment_succeeded");
+  expect(providerPayment.status).toBe(200);
+  expect(await providerPayment.json()).toMatchObject({ outcome: "paid_requires_handling" });
+  expect(
+    (
+      await env.DB.prepare(
+        "SELECT provider, status, payment_method FROM payment_ledger_entries " +
+          "WHERE purpose = 'membership' AND resource_id = ? ORDER BY provider",
+      )
+        .bind(metadata.membershipFeeId)
+        .all()
+    ).results,
+  ).toEqual([
+    { provider: "offline", status: "paid", payment_method: "bank_transfer" },
+    { provider: "stripe", status: "paid", payment_method: null },
+  ]);
+});
+
+it("accepts the original signed checkout metadata after its category is renamed twice", async () => {
+  const { id, session } = await prepareFeeApplication();
+  const original = await requireMembershipCategory(env.DB, "F");
+  await env.DB.batch(prepareMembershipCategoryRename(env.DB, "F", "ORG", original.revision, new Date().toISOString()));
+  await env.DB.batch(
+    prepareMembershipCategoryRename(env.DB, "ORG", "ORG_PAID", original.revision, new Date().toISOString()),
+  );
+  const response = await callback(session);
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(await response.json()).toMatchObject({ outcome: "paid" });
+  const execution = await getMembershipExecution(env.DB, id);
+  expect(execution.application.membership_category).toBe("ORG_PAID");
+  expect(execution.application.stage).toBe("approved");
+});
 
 it("approves a payment-only organization only on exact verified payment, idempotently, without an EC stage", async () => {
   const { id, session } = await prepareFeeApplication();
@@ -208,6 +365,7 @@ it("retries an uncertain checkout with identical parameters and renews only afte
   });
   expect(calls[1].key).not.toBe(calls[0].key);
   expect(new URLSearchParams(calls[1].body).get("metadata[membershipFeeId]")).toBe(fixture.metadata.membershipFeeId);
+  expect(new URLSearchParams(calls[1].body).get("metadata[pkic_payment_type]")).toBe("membership");
 });
 
 it("a refund before the final review blocks provisioning even though the payment step previously completed", async () => {

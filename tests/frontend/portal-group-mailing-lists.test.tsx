@@ -14,6 +14,7 @@ import {
   mailingListLifecycleTransitionSchema,
 } from "../../assets/shared/schemas/mailing-lists";
 import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
+import { mailingListSyncRunSchema } from "../../assets/shared/schemas/mailing-list-sync";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
@@ -31,6 +32,22 @@ vi.mock("wouter", () => ({
 }));
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
+const exampleList = {
+  id: "a0000000-0000-4000-8000-000000000001",
+  email: "architecture@lists.example.test",
+  label: "Architecture discussion",
+  purpose: "group",
+  groupId: GROUP_ID,
+  primaryDiscussion: true,
+  subscriptionDefault: "group_members",
+  postingPolicy: "members",
+  moderationPolicy: "moderated",
+  autoSyncCategories: null,
+  active: true,
+  archivedAt: null,
+  createdAt: "2026-08-01T00:00:00.000Z",
+  updatedAt: "2026-08-01T00:00:00.000Z",
+};
 const mounted: HTMLElement[] = [];
 
 function json(value: unknown): Response {
@@ -76,24 +93,7 @@ describe("portal group mailing lists", () => {
         requests.push(url);
         if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled: true, revision: 0 } });
         return json({
-          mailingLists: [
-            {
-              id: "a0000000-0000-4000-8000-000000000001",
-              email: "architecture@lists.example.test",
-              label: "Architecture discussion",
-              purpose: "group",
-              groupId: GROUP_ID,
-              primaryDiscussion: true,
-              subscriptionDefault: "group_members",
-              postingPolicy: "members",
-              moderationPolicy: "moderated",
-              autoSyncCategories: null,
-              active: true,
-              archivedAt: null,
-              createdAt: "2026-08-01T00:00:00.000Z",
-              updatedAt: "2026-08-01T00:00:00.000Z",
-            },
-          ],
+          mailingLists: [exampleList],
           page: { limit: 50, offset: 0, total: 1, hasMore: false },
         });
       }),
@@ -120,6 +120,54 @@ describe("portal group mailing lists", () => {
     expect(collectionRequests[0].searchParams.get("sort")).toBe("label");
     expect(container.textContent).not.toContain("Enable Google Groups synchronization");
   });
+  it.each([
+    { enabled: true, queued: 2, status: 200, expected: "2 subscription changes queued" },
+    { enabled: true, queued: 0, status: 200, expected: "No subscription changes need synchronization" },
+    { enabled: false, queued: 0, status: 200, expected: "Synchronization is paused" },
+    { enabled: true, queued: 0, status: 409, expected: "Synchronization settings changed. Reload and retry." },
+  ])("requests only the selected list from its row menu: $expected", async ({ enabled, queued, status, expected }) => {
+    const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        const url = new URL(String(input), location.origin);
+        const method = init.method ?? "GET";
+        const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
+        requests.push({ url, method, body });
+        if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled, revision: 7 } });
+        if (url.pathname.endsWith("/runs"))
+          return new Response(
+            JSON.stringify(
+              status === 200
+                ? { queued }
+                : {
+                    error: { code: "MAILING_LIST_SYNC_CHANGED", message: expected },
+                  },
+            ),
+            { status, headers: { "content-type": "application/json" } },
+          );
+        return json({ mailingLists: [exampleList], page: { limit: 50, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+    const container = mount(<GroupMailingLists groupId={GROUP_ID} canManage canParticipate={false} />);
+    await settle();
+    expect(requests).toHaveLength(1);
+    await runRowAction(container, exampleList.label, "Sync now");
+    await settle();
+    expect(navigate).not.toHaveBeenCalled();
+    const endpoint = `/api/v1/groups/${GROUP_ID}/mailing-lists/${exampleList.id}/synchronization`;
+    expect(requests[1].url.pathname).toBe(endpoint);
+    const writes = requests.filter(({ method }) => method === "POST");
+    expect(writes).toHaveLength(enabled ? 1 : 0);
+    if (enabled) {
+      expect(writes[0].url.pathname).toBe(`${endpoint}/runs`);
+      expect(mailingListSyncRunSchema.parse(writes[0].body)).toEqual({ expectedRevision: 7 });
+    }
+    const feedback = container.querySelector(enabled && status === 200 ? '[role="status"]' : '[role="alert"]');
+    expect(feedback?.textContent).toContain(expected);
+    if (!enabled) expect(feedback?.textContent).toContain("Settings");
+  });
+
   it("renders the manager empty state", async () => {
     vi.stubGlobal(
       "fetch",

@@ -103,6 +103,28 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
     await expect(page.getByRole("heading", { name: "Post-Quantum Cryptography Working Group" })).toBeVisible();
   });
 
+  test("group settings explain the enabled setting", async ({ page }) => {
+    await gotoAsAdmin(page);
+    await page.goto(`/portal/#/groups/${PQC_GROUP_ID}/settings`);
+    await page.getByRole("button", { name: "Group settings actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+    const enabled = page.getByRole("checkbox", { name: "Group enabled", exact: true });
+    await expect(enabled).toBeChecked();
+    await expect(enabled).toHaveAccessibleDescription(
+      "Disabling prevents users from joining or accessing the group as participants, stops automatic enrollment, and ends automatically enrolled memberships. The group and its history are kept.",
+    );
+    await enabled.focus();
+    await page.keyboard.press("Space");
+    await expect(enabled).not.toBeChecked();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await enabled.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath("group-enabled-help-mobile.png") });
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Group settings actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
+    await expect(enabled).toBeChecked();
+  });
+
   test("an admin creates a group through the create form and lands on its Settings tab", async ({ page }) => {
     const suffix = uniqueSuffix();
     const name = `E2E Created Group ${suffix}`;

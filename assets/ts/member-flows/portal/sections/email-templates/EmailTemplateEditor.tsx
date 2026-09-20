@@ -1,3 +1,4 @@
+import { IconBraces } from "../../../../components/icons";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 import type { MarkdownEditorHandle } from "../../../../components/markdown-editor/MarkdownEditor";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -39,10 +40,6 @@ import "../../../../ui/Content.css";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
-
-// ────────────────────────────────────────────────────────
-// Template editor component
-// ────────────────────────────────────────────────────────
 
 export function TemplateEditor({
   templateKey,
@@ -127,7 +124,14 @@ export function TemplateEditor({
   function insertSnippet(snippet: string, preferredTarget?: "subject" | "body" | null) {
     const target = preferredTarget ?? editorFocusRef.current;
     if (target === "subject") {
-      setSubject((s) => s + snippet);
+      const input = subjectPreRef.current?.parentElement?.querySelector("input");
+      const start = input?.selectionStart ?? subject.length;
+      const end = input?.selectionEnd ?? start;
+      setSubject(`${subject.slice(0, start)}${snippet}${subject.slice(end)}`);
+      requestAnimationFrame(() => {
+        input?.focus();
+        input?.setSelectionRange(start + snippet.length, start + snippet.length);
+      });
       editorFocusRef.current = "subject";
     } else if (contentType === "markdown") {
       bodyEditor.current?.insertText(snippet);
@@ -350,48 +354,42 @@ export function TemplateEditor({
                 </div>
               )}
 
-              {/* Subject with highlight backdrop. The field's control box is
-                  the backdrop's positioning context — both want
-                  `position: relative` — so the backdrop and the control sit
-                  directly in the box the Field provides rather than in a
-                  second box of their own. */}
               <Field label="Subject template" help="Supports conditions and variables.">
                 {(control) => (
-                  <>
-                    <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
-                    <TextInput
-                      {...control}
-                      class="pk-mono pk-overlay-editor__input"
-                      value={subject}
-                      disabled={!canWrite}
-                      placeholder="e.g. Your invitation to {{eventName}}"
-                      onInput={(e) => {
-                        setSubject((e.target as HTMLInputElement).value);
-                        hasPreviewedRef.current = false;
-                      }}
-                      onFocus={() => {
-                        editorFocusRef.current = "subject";
-                      }}
-                    />
-                  </>
+                  <div class="pk-template-subject">
+                    <div class="pk-overlay-editor">
+                      <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
+                      <TextInput
+                        {...control}
+                        class="pk-mono pk-overlay-editor__input"
+                        value={subject}
+                        disabled={!canWrite}
+                        placeholder="e.g. Your invitation to {{eventName}}"
+                        onInput={(e) => {
+                          setSubject((e.target as HTMLInputElement).value);
+                          hasPreviewedRef.current = false;
+                        }}
+                        onFocus={() => {
+                          editorFocusRef.current = "subject";
+                        }}
+                      />
+                    </div>
+                    <Menu
+                      label="Insert subject variable"
+                      align="end"
+                      items={TEMPLATE_HELPERS.filter((item) => item.category === "Variables").map((item) => ({
+                        id: item.label,
+                        label: item.label,
+                        disabled: !canWrite,
+                        onSelect: () => insertSnippet(item.snippet, "subject"),
+                      }))}
+                    >
+                      <IconBraces />
+                    </Menu>
+                  </div>
                 )}
               </Field>
 
-              {/* Body with highlight backdrop */}
-              {contentType === "markdown" && (
-                <Menu
-                  label="Insert subject variable"
-                  variant="plain"
-                  items={TEMPLATE_HELPERS.filter((item) => item.category === "Variables").map((item) => ({
-                    id: item.label,
-                    label: item.label,
-                    disabled: !canWrite,
-                    onSelect: () => insertSnippet(item.snippet, "subject"),
-                  }))}
-                >
-                  Insert subject variable
-                </Menu>
-              )}
               <Field label="Body" help="Supports {{variables}}, {{#if}}...{{/if}}, {{#each}}...{{/each}}.">
                 {(control) =>
                   contentType === "markdown" ? (

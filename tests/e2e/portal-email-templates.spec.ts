@@ -4,6 +4,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { emailTemplatePreviewSchema } from "../../assets/shared/schemas/email-templates";
 
 const EMAIL_TEMPLATES_API = "/api/v1/email/templates";
 const REMOVED_ADMIN_TEMPLATES_API = "/api/v1/admin/email-templates";
@@ -45,6 +46,18 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(page.getByText(`Edit: ${templateKey}`, { exact: false })).toBeVisible();
 
   await expect(page.getByRole("textbox", { name: "Body", exact: true })).toBeVisible();
+  const subject = page.getByLabel("Subject template");
+  await subject.fill("Hello organization");
+  await subject.evaluate((input: HTMLInputElement) => input.setSelectionRange(6, 18));
+  const subjectVariables = page.getByRole("button", { name: "Insert subject variable", exact: true });
+  const subjectBox = await subject.boundingBox();
+  const menuBox = await subjectVariables.boundingBox();
+  expect(Math.abs(subjectBox!.y - menuBox!.y)).toBeLessThan(12);
+  await subjectVariables.click();
+  await page.getByRole("menuitem", { name: "organizationName", exact: true }).click();
+  await expect(subject).toHaveValue("Hello {{organizationName}}");
+  await expect(subject).toBeFocused();
+  await page.screenshot({ path: test.info().outputPath("subject-variable-control.png"), fullPage: true });
   await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Body Markdown source", exact: true });
   const editor = page.locator(".pk-markdown-editor").filter({ has: source });
@@ -70,18 +83,31 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Markdown source", exact: true }).click();
 
-  const revisedBody = "Hello {{firstName}}, this version is ready for immediate activation.";
+  const revisedBody = "Hello {{firstName}}, this version is ready for immediate activation.\n\n{{> about_pkic}}";
   await page.getByRole("textbox", { name: "Body Markdown source", exact: true }).fill(revisedBody);
+  await page.getByRole("button", { name: "Visual editor", exact: true }).click();
+  await visual.press("ControlOrMeta+End");
+  // An actual visual edit must not turn the partial into {{&gt; about\_pkic}}.
+  await visual.press("Space");
+  await visual.press("Backspace");
   const previewResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${EMAIL_TEMPLATES_API}/preview` && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Render Preview" }).click();
-  expect((await previewResponse).status()).toBe(200);
+  const renderedPreview = await previewResponse;
+  expect(renderedPreview.status()).toBe(200);
+  expect(emailTemplatePreviewSchema.parse(renderedPreview.request().postDataJSON()).content).toBe(revisedBody);
   await expect(page.getByText("Preview rendered.", { exact: true })).toBeVisible();
   await expect(page.locator("iframe[title='Rendered email HTML preview']")).toHaveAttribute("sandbox", "");
   await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
     "ready for immediate activation",
+  );
+  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
+    "About the PKI Consortium",
+  );
+  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).not.toContainText(
+    "about_pkic",
   );
 
   // The editor and rendered result share the working width on a wide screen.
@@ -149,7 +175,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
     .filter({ hasText: templateKey })
     .getByRole("button", { name: "Edit", exact: false })
     .click();
-  await expect(page.getByRole("textbox", { name: "Body", exact: true })).toHaveText(revisedBody);
+  await expect(page.getByRole("textbox", { name: "Body", exact: true })).toContainText("{{> about_pkic}}");
   await expect(
     page
       .getByRole("row")

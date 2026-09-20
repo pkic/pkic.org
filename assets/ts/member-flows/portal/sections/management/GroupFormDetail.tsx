@@ -9,7 +9,8 @@ import {
   groupFormSubmissionsResponseSchema,
 } from "../../../../../shared/schemas/group-forms";
 import { FormResponseStats } from "../../../../components/forms/FormResponseStats";
-import { FormSubmissionsTable } from "../../../../components/forms/FormResponseViews";
+import { FormSubmissionRecord, FormSubmissionsTable } from "../../../../components/forms/FormResponseViews";
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { FormSubmissionForm } from "../../../../components/forms/FormSubmissionForm";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
@@ -74,6 +75,7 @@ export function GroupFormDetail({
   onChanged: () => void | Promise<void>;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const [responseId, setResponseId] = useHashQueryParam("response", "");
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/forms/${encodeURIComponent(placementId)}`;
   const requestedTab = (initialTab as GroupFormTab | undefined) ?? DEFAULT_TAB;
   const detail = useData(() => getJson(base, groupFormDefinitionResponseSchema), [base]);
@@ -190,13 +192,24 @@ export function GroupFormDetail({
             This form page manages the questions and availability; it does not list those responses.
           </Alert>
         )}
-        {activeTab === "responses" && !eventResponses && (
-          <FormSubmissionsTable
-            fields={form.fields}
-            endpoint={`${base}/submissions`}
-            responseSchema={groupFormSubmissionsResponseSchema}
-          />
-        )}
+        {activeTab === "responses" &&
+          !eventResponses &&
+          (responseId ? (
+            <FormSubmissionRecord
+              fields={form.fields}
+              endpoint={`${base}/submissions`}
+              responseSchema={groupFormSubmissionsResponseSchema}
+              responseId={responseId}
+              onBack={() => setResponseId("")}
+            />
+          ) : (
+            <FormSubmissionsTable
+              fields={form.fields}
+              endpoint={`${base}/submissions`}
+              responseSchema={groupFormSubmissionsResponseSchema}
+              onOpen={(submission) => setResponseId(submission.id)}
+            />
+          ))}
         {activeTab === "definition" && (
           <GroupFormEditor
             groupId={groupId}

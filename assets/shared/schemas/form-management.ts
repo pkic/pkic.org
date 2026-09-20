@@ -104,6 +104,7 @@ const formSubmissionFiltersSchema = z.object({
   status: z.string().trim().max(50).optional(),
   attendanceType: z.string().trim().max(50).optional(),
   eventSlug: z.string().trim().min(1).max(200).optional(),
+  responseId: z.string().trim().min(1).max(250).optional(),
 });
 
 export const formSubmissionsQuerySchema = searchableListQuerySchema(formSubmissionsSortValueSchema, {

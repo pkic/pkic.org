@@ -37,7 +37,7 @@ import {
   sessionExpiresAtToExp,
   type SessionTableConfig,
 } from "./session-engine";
-import { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH } from "./session-cookies";
+import { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, USER_SESSION_TOKEN_HEADER } from "./session-cookies";
 import {
   assertEmailAuthCapabilityEmail,
   commitEmailAuthRedemption,
@@ -58,7 +58,6 @@ import {
 const USER_SESSIONS: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
 const STAFF_CAPACITY_TTL_HOURS = 8;
 const USER_SESSION_TOKEN_TYPE = "user-session";
-export const USER_SESSION_TOKEN_HEADER = "x-user-token";
 
 export interface UserSessionTokenClaims {
   typ: typeof USER_SESSION_TOKEN_TYPE;
@@ -587,4 +586,4 @@ export async function redeemSponsorSignInCapability(
   return { session, token };
 }
 
-export { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH } from "./session-cookies";
+export { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, USER_SESSION_TOKEN_HEADER } from "./session-cookies";

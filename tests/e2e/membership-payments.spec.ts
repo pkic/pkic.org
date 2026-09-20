@@ -112,7 +112,7 @@ for (const staffReview of [false, true]) {
       data: { object: { ...session, payment_status: "paid" } },
     });
     const signature = createHmac("sha256", "whsec_e2e_membership").update(`${timestamp}.${event}`).digest("hex");
-    const response = await page.request.post("/api/v1/membership/payments/stripe/webhook", {
+    const response = await page.request.post("/api/v1/webhooks/stripe", {
       data: event,
       headers: { "content-type": "application/json", "stripe-signature": `t=${timestamp},v1=${signature}` },
     });

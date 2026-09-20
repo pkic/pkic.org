@@ -6,9 +6,11 @@
  * registrations and the proposals — records of its own, each a routed page
  * with its own address. Nothing opens between the rows of a list.
  */
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
+import type { EventFormsPurpose } from "../../../../../shared/schemas/forms";
 import {
   EVENT_PROFILE_LABELS,
   EVENT_REGISTRATION_POLICY_LABELS,
@@ -30,6 +32,7 @@ import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
 import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
+import { EventFormResponses } from "../../../../components/forms/management/FormManagement";
 import { GroupEventCommunications, NEW_CAMPAIGN_SEGMENT } from "./GroupEventCommunications";
 import { GroupEventConfiguration } from "./GroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
@@ -52,6 +55,39 @@ interface EventWorkspaceTabDef extends TabItem {
 }
 
 export const GROUP_EVENT_OVERVIEW_TAB = "overview";
+const EVENT_RESPONSES_SEGMENT = "responses";
+
+function EventRecordSections({
+  label,
+  basePath,
+  responsesActive,
+  eventSlug,
+  purpose,
+  children,
+}: {
+  label: string;
+  basePath: string;
+  responsesActive: boolean;
+  eventSlug: string;
+  purpose: EventFormsPurpose;
+  children: ComponentChildren;
+}) {
+  const active = responsesActive ? EVENT_RESPONSES_SEGMENT : "overview";
+  return (
+    <div class="pk pk-stack">
+      <Tabs
+        label={`${label} sections`}
+        items={[
+          { key: "overview", label: "Overview" },
+          { key: EVENT_RESPONSES_SEGMENT, label: "Responses" },
+        ]}
+        active={active}
+        hrefFor={(key) => (key === "overview" ? basePath : `${basePath}/${EVENT_RESPONSES_SEGMENT}`)}
+      />
+      {responsesActive ? <EventFormResponses eventSlug={eventSlug} purpose={purpose} /> : children}
+    </div>
+  );
+}
 
 const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
   { key: GROUP_EVENT_OVERVIEW_TAB, label: "Overview", visible: () => true },
@@ -148,7 +184,9 @@ export function GroupEventWorkspace({
   const invitationPath = (key: string) =>
     key === invitationAudiences[0]?.key ? tabPath("invitations") : `${tabPath("invitations")}/${key}`;
 
-  const recordOpen = detailId !== undefined && (activeTab === "registrations" || activeTab === "proposals");
+  const responsesActive = detailId === EVENT_RESPONSES_SEGMENT;
+  const recordOpen =
+    detailId !== undefined && !responsesActive && (activeTab === "registrations" || activeTab === "proposals");
 
   return (
     <BreadcrumbBranch
@@ -252,7 +290,7 @@ export function GroupEventWorkspace({
             )}
 
             {activeTab === "registrations" &&
-              (detailId ? (
+              (recordOpen && detailId ? (
                 <GroupEventRegistrationRecord
                   key={detailId}
                   groupId={groupId}
@@ -261,11 +299,19 @@ export function GroupEventWorkspace({
                   canVip={canManage}
                 />
               ) : (
-                <GroupEventRegistrations groupId={groupId} eventId={event.id} />
+                <EventRecordSections
+                  label="Registration"
+                  basePath={tabPath("registrations")}
+                  responsesActive={responsesActive}
+                  eventSlug={event.slug}
+                  purpose="event_registration"
+                >
+                  <GroupEventRegistrations groupId={groupId} eventId={event.id} />
+                </EventRecordSections>
               ))}
 
             {activeTab === "proposals" &&
-              (detailId ? (
+              (recordOpen && detailId ? (
                 <ProposalDetailPage
                   key={detailId}
                   slug={event.slug}
@@ -278,7 +324,15 @@ export function GroupEventWorkspace({
                   parentNavigation
                 />
               ) : (
-                <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
+                <EventRecordSections
+                  label="Proposal"
+                  basePath={tabPath("proposals")}
+                  responsesActive={responsesActive}
+                  eventSlug={event.slug}
+                  purpose="proposal_submission"
+                >
+                  <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
+                </EventRecordSections>
               ))}
 
             {activeTab === "invitations" && invitationAudience && (

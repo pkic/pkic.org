@@ -27,6 +27,7 @@ import roles_Router from "./roles/router";
 import sponsors_Router from "./sponsors/router";
 import users_Router from "./users/router";
 import votes_Router from "./votes/router";
+import { StripeWebhookPost } from "./webhooks/stripe";
 
 const app = new Hono();
 export const openapi = fromHono(app);
@@ -42,6 +43,7 @@ app.use("*", middleware_l);
 openapi.get("/geolocation/country", GeolocationCountryGet);
 app.on("HEAD", "/geolocation/country", GeolocationCountryGet_l);
 openapi.get("/", RouteGet);
+openapi.post("/webhooks/stripe", StripeWebhookPost);
 openapi.route("/analytics", analytics_Router);
 openapi.route("/audit-log", auditLog_Router);
 openapi.route("/auth", auth_Router);

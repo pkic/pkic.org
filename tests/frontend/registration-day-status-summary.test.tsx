@@ -54,12 +54,24 @@ describe("RegistrationDayStatusSummary", () => {
     expect(root.innerHTML).toBe("");
   });
 
-  it("announces itself as a region with a title rather than a coloured box", () => {
+  it("announces confirmed days as a status without a pending-days warning", () => {
     const root = mount([{ dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" }]);
 
-    const alert = root.querySelector('[role="alert"]');
-    expect(alert).not.toBeNull();
+    const status = root.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(root.textContent).not.toContain("pending days");
     expect(root.querySelector(".pk-alert__title")?.textContent).toBe("What is confirmed right now");
+  });
+
+  it("announces pending days as a warning with recovery guidance", () => {
+    const root = mount(
+      [{ dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" }],
+      [{ dayDate: "2026-09-01", status: "waiting" }],
+    );
+
+    expect(root.querySelector('[role="alert"]')).not.toBeNull();
+    expect(root.textContent).toContain("In-person still pending");
+    expect(root.textContent).toContain("switch days");
   });
 
   it("pairs each day with its state as a term and a value", () => {

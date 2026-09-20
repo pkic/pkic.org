@@ -6,7 +6,7 @@ import { jsonResponse } from "./helpers/member-provisioning";
 import { membershipWorkflowVersionResponseSchema } from "../../assets/shared/schemas/membership-workflows";
 
 /** @covers system.12.7 */
-test("publishes a workflow, assigns a new organization category, and completes its required staff review", async ({
+test("changes an existing organization category's workflow and completes its required staff review", async ({
   page,
 }, testInfo) => {
   await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows"));
@@ -41,22 +41,24 @@ test("publishes a workflow, assigns a new organization category, and completes i
   expect(published.workflow.status).toBe("published");
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("published-workflow.png"), fullPage: true });
-  const code = `ORG_${Date.now()}`;
-  await page.goto("/portal/#/settings/membership-categories/new");
-  await page.getByLabel("Code").fill(code);
-  await page.getByLabel("Label").fill("Example organization category");
-  const picker = page.getByRole("combobox", { name: "Membership workflow" });
-  await picker.fill("Standard membership");
-  await page.getByRole("option").filter({ hasText: "Standard membership" }).click();
-  await page.getByRole("button", { name: "Create category", exact: true }).click();
-  await expect(page).toHaveURL(/membership-categories$/);
+  const code = "A";
   await page.goto(`/portal/#/settings/membership-categories/${code}`);
-  await expect(page.getByRole("combobox", { name: "Membership workflow" })).toBeVisible();
+  const picker = page.getByRole("combobox", { name: "Membership workflow" });
+  await expect(picker).toBeVisible();
   await expect(picker).toHaveValue(/Standard membership/);
+  await picker.click();
+  await expect(page.getByRole("option").filter({ hasText: name })).toBeVisible();
   await picker.fill(name);
   await page.getByRole("option").filter({ hasText: name }).click();
+  await picker.click();
+  await expect(page.getByRole("option").filter({ hasText: "Standard membership" })).toBeVisible();
+  await picker.press("Escape");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("existing-category-workflow.png"), fullPage: true });
   await page.getByRole("button", { name: `Save category ${code}`, exact: true }).click();
   await expect(page).toHaveURL(/membership-categories$/);
+  await page.goto(`/portal/#/settings/membership-categories/${code}`);
+  await expect(picker).toHaveValue(`${name} · version 1`);
   const application = await submitMembershipApplication(page, {
     email: `user@organization-${suffix}.test`,
     name: "Example User",
@@ -79,4 +81,43 @@ test("publishes a workflow, assigns a new organization category, and completes i
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("approved-workflow-mobile.png"), fullPage: true });
+});
+
+/** @covers system.12.7 */
+test("creates, renames, and reorders organization categories from their forms and table", async ({
+  page,
+}, testInfo) => {
+  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows"));
+  const code = `ORG_${Date.now()}`;
+  const renamed = `${code}_NEW`;
+  await page.goto("/portal/#/settings/membership-categories/new");
+  await page.getByLabel(/^Code/).fill(code);
+  await page.getByLabel(/^Name/).fill("Example Organization category");
+  await page.getByLabel("Category", { exact: true }).selectOption("organization");
+  await page
+    .getByLabel("Description", { exact: true })
+    .fill("Organizations joining through the membership application form.");
+  await expect(page.getByLabel("Display order", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Create category", exact: true }).click();
+  await expect(page).toHaveURL(/membership-categories$/);
+  await page.goto(`/portal/#/settings/membership-categories/${code}`);
+  await page.getByLabel(/^Code/).fill(renamed);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: testInfo.outputPath("category-form.png"), fullPage: true });
+  await page.getByRole("button", { name: `Save category ${code}`, exact: true }).click();
+  await expect(page).toHaveURL(/membership-categories$/);
+  const rows = page.getByRole("table", { name: "Membership categories" }).locator("tbody tr");
+  await expect(rows.last()).toContainText(renamed);
+  await page.getByRole("button", { name: `Actions for category ${renamed}`, exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Move down", exact: true })).toBeDisabled();
+  await page.getByRole("menuitem", { name: "Move up", exact: true }).click();
+  await expect(rows.nth((await rows.count()) - 2)).toContainText(renamed);
+  await page.reload();
+  await expect(rows.nth((await rows.count()) - 2)).toContainText(renamed);
+  await page.goto(`/portal/#/settings/membership-categories/${renamed}`);
+  await expect(page.getByLabel(/^Code/)).toHaveValue(renamed);
+  await expect(page.getByLabel("Category", { exact: true })).toBeDisabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("category-form-mobile.png"), fullPage: true });
 });

@@ -219,7 +219,28 @@ describe("GET /api/v1/email/outbox", () => {
     expect(byId.get(rowIds[4])?.subject).toBe("Version one subject");
   });
 
-  it("keeps the exact due-now page, count, and status aggregate on the partial due index", async () => {
+  it.each([{}, { status: "sent" }, { messageType: "transactional" }])(
+    "uses an ordered index for the newest-first outbox page with %j",
+    async (filter) => {
+      await setupAdmin();
+      const query = emailOutboxQuerySchema.parse({ ...filter, sort: "-createdAt", limit: 25 });
+      const page = buildOffsetPageSql(buildEmailOutboxQueryStatements(query, new Date().toISOString()).page);
+      const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${page.pageSql}`)
+        .bind(...page.bindings, query.limit, query.offset)
+        .all<{ detail: string }>();
+      expect(
+        plan.results.some((row) => row.detail.includes("TEMP B-TREE")),
+        JSON.stringify(plan.results),
+      ).toBe(false);
+      expect(
+        plan.results.some((row) => /idx_email_outbox_(created|status_created|type_created)/.test(row.detail)),
+        JSON.stringify(plan.results),
+      ).toBe(true);
+      expect(page.countSql).not.toContain("JOIN events");
+    },
+  );
+
+  it("keeps the exact due-now page and count on the partial due index", async () => {
     await setupAdmin();
     const query = emailOutboxQuerySchema.parse({ dueNow: true, limit: 25, offset: 0, sort: "sendAfter" });
     const statements = buildEmailOutboxQueryStatements(query, "2026-08-28T00:00:00.000Z");
@@ -231,15 +252,7 @@ describe("GET /api/v1/email/outbox", () => {
     const countPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${page.countSql}`)
       .bind(...page.countBindings)
       .all<{ detail: string }>();
-    const statusPlan = await env.DB.prepare(
-      `EXPLAIN QUERY PLAN SELECT o.status, COUNT(*) AS count
-       ${statements.aggregateFrom} ${statements.where}
-       GROUP BY o.status`,
-    )
-      .bind(...statements.bindings)
-      .all<{ detail: string }>();
-
-    for (const plan of [pagePlan, countPlan, statusPlan]) {
+    for (const plan of [pagePlan, countPlan]) {
       expect(
         plan.results.some((row) => row.detail.includes("idx_email_outbox_due")),
         JSON.stringify(plan.results),

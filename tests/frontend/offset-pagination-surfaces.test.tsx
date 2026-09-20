@@ -266,15 +266,6 @@ describe("shared pagination across portal collections", () => {
               },
             ],
             page: pageFor(url),
-            summary: {
-              total: 60,
-              byStatus: { queued: 60 },
-              byMessageType: { transactional: 60 },
-              topTemplates: [],
-              dueNow: 1,
-              dueByStatus: { queued: 1 },
-              nextSendAfter: "2026-01-01T00:00:00Z",
-            },
           });
         }
         return jsonResponse({

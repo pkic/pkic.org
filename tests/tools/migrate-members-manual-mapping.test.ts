@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadManualMappings, reconcileManualRecord } from "../../scripts/migrate-members/manual-mapping.mjs";
+import { renderMarkdownReport } from "../../scripts/migrate-members/report.mjs";
 import { buildMigration } from "../../scripts/migrate-members/build-migration.mjs";
 import { matchRepsToCandidates } from "../../scripts/migrate-members/reconciliation.mjs";
 
@@ -42,7 +43,7 @@ describe("approved member mappings", () => {
       mappings,
     });
     expect(result.reps).toEqual([{ name: "Ada User", role: "Engineer", confirmedEmail: "bob@forms.example" }]);
-    const assignment = matchRepsToCandidates(result.reps, result.candidates);
+    const { assignment } = matchRepsToCandidates(result.reps, result.candidates);
     expect(result.candidates[assignment[0]!].email).toBe("bob@forms.example");
     expect(result.candidates.some((candidate: { email: string }) => candidate.email === "former@forms.example")).toBe(
       false,
@@ -75,40 +76,95 @@ describe("approved member mappings", () => {
     ).toThrow("conflicting corrected domains");
   });
 
-  it("reports remaining ambiguity when an approved file only resolves part of an organization", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "manual-report-"));
-    dirs.push(root);
-    const membersDir = path.join(root, "members");
-    const csvDir = path.join(root, "csv");
-    fs.mkdirSync(membersDir);
-    fs.mkdirSync(csvDir);
-    fs.writeFileSync(
-      path.join(membersDir, "forms.yaml"),
-      "name: Forms Organization\nmemberType: A\norganizationDomains: [forms.example]\nrepresentatives:\n  - name: Ada User\n  - name: Bob User\n",
-    );
-    for (const name of ["pkic", "ca", "cbom", "cm", "pkimm", "pqc", "tcwg"]) {
+  it.each([
+    {
+      names: ["Ada User", "Bob User"],
+      emails: ["first", "second"],
+      memberType: "A",
+      manual: true,
+      expected: "Bob User",
+      method: "join-order fallback",
+    },
+    {
+      names: ["Leo Grove"],
+      emails: ["chris", "leo"],
+      memberType: "A",
+      manual: false,
+      expected: "Leo Grove",
+      method: "join-order fallback",
+    },
+    {
+      names: ["Alice Anderson"],
+      emails: ["alice"],
+      memberType: "A",
+      manual: false,
+      expected: "Alice Anderson",
+      method: "name match",
+    },
+    {
+      names: ["Leo Grove"],
+      emails: ["chris"],
+      memberType: "A",
+      manual: false,
+      expected: "Leo Grove",
+      method: "join-order fallback",
+    },
+    {
+      names: ["Forms Organization"],
+      emails: ["first"],
+      memberType: "H6",
+      manual: false,
+      expected: "Forms Organization",
+      method: "join-order fallback",
+    },
+    { names: ["Ada User"], emails: ["first"], memberType: "A", manual: true, expected: null, method: null },
+    { names: ["Forms Organization"], emails: ["first"], memberType: "H6", manual: true, expected: null, method: null },
+  ])(
+    "reports every unconfirmed assignment: $names / $memberType / manual=$manual",
+    ({ names, emails, memberType, manual, expected, method }) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), "manual-report-"));
+      dirs.push(root);
+      const membersDir = path.join(root, "members");
+      const csvDir = path.join(root, "csv");
+      fs.mkdirSync(membersDir);
+      fs.mkdirSync(csvDir);
       fs.writeFileSync(
-        path.join(csvDir, `${name}.csv`),
-        name === "pkic" ? "Email\nfirst@forms.example\nsecond@forms.example\n" : "Email\n",
+        path.join(membersDir, "forms.yaml"),
+        `name: Forms Organization\nmemberType: ${memberType}\norganizationDomains: [forms.example]\nrepresentatives:\n${names.map((name) => `  - name: ${name}`).join("\n")}\n`,
       );
-    }
-    const manualMappingPath = path.join(csvDir, "manual-mapping.csv");
-    fs.writeFileSync(
-      manualMappingPath,
-      `${header}\nforms.yaml,Forms Organization,Ada User,,ada@users.example,,confirmed,`,
-    );
-    const { report } = buildMigration({
-      uploadLogos: false,
-      rosterTimeZone: "UTC",
-      membersDir,
-      csvDir,
-      sponsorsYamlPath: path.join(root, "missing.yaml"),
-      manualMappingPath,
-    });
-    expect(report.totals.unmatched).toHaveLength(0);
-    expect(report.totals.ambiguousPairing).toHaveLength(1);
-    expect(report.manualMappings).toHaveLength(1);
-  });
+      for (const name of ["pkic", "ca", "cbom", "cm", "pkimm", "pqc", "tcwg"]) {
+        fs.writeFileSync(
+          path.join(csvDir, `${name}.csv`),
+          name === "pkic" ? `Email\n${emails.map((email) => `${email}@forms.example`).join("\n")}\n` : "Email\n",
+        );
+      }
+      const manualMappingPath = path.join(csvDir, "manual-mapping.csv");
+      fs.writeFileSync(
+        manualMappingPath,
+        `${header}\nforms.yaml,Forms Organization,${names[0]},,ada@users.example,,confirmed,`,
+      );
+      const { report } = buildMigration({
+        uploadLogos: false,
+        rosterTimeZone: "UTC",
+        membersDir,
+        csvDir,
+        sponsorsYamlPath: path.join(root, "missing.yaml"),
+        manualMappingPath: manual ? manualMappingPath : undefined,
+      });
+      expect(report.totals.unmatched).toHaveLength(0);
+      expect(report.totals.ambiguousPairing).toHaveLength(expected ? 1 : 0);
+      expect(report.manualMappings).toHaveLength(manual ? 1 : 0);
+      if (expected) {
+        const guess = { representative: expected, email: `${emails[0]}@forms.example`, method };
+        expect(report.totals.ambiguousPairing[0]).toMatchObject({ guesses: [guess] });
+        const markdown = renderMarkdownReport(report);
+        expect(markdown).toContain(`${expected} → \`${guess.email}\` — **unconfirmed ${method}**`);
+        expect(markdown).toContain(
+          `Candidate emails: [${[...emails.map((email) => `${email}@forms.example`), ...(manual ? ["ada@users.example"] : [])].join(", ")}]`,
+        );
+      }
+    },
+  );
 
   it("permits only the deterministic placeholder for an individual", () => {
     const individual = [{ filename: "ada.yaml", slug: "ada", doc: { name: "Ada User", memberType: "H6" } }];

@@ -3,6 +3,7 @@ import { parseCookieHeader } from "./session-engine";
 /** The single human identity session used by the canonical auth endpoints. */
 export const USER_SESSION_COOKIE_NAME = "pkic_session";
 export const USER_SESSION_COOKIE_PATH = "/api/v1";
+export const USER_SESSION_TOKEN_HEADER = "x-user-token";
 
 export const MEETING_GUEST_SESSION_COOKIE_NAME = "pkic_meeting_guest_session";
 export const MEETING_GUEST_CHALLENGE_COOKIE_NAME = "pkic_meeting_guest_challenge";
@@ -17,4 +18,13 @@ export function hasAuthenticatedSessionCookie(request: Request): boolean {
     if (AUTHENTICATED_SESSION_COOKIE_NAMES.has(cookieName)) return true;
   }
   return false;
+}
+
+/** True when a request carries any supported human or API authentication credential. */
+export function hasAuthenticationCredential(request: Request): boolean {
+  return (
+    request.headers.has("authorization") ||
+    request.headers.has(USER_SESSION_TOKEN_HEADER) ||
+    hasAuthenticatedSessionCookie(request)
+  );
 }

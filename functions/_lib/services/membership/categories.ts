@@ -1,4 +1,5 @@
 /** D1 category catalog and membership holder compatibility policy. */
+import { prepareMembershipCategoryRename } from "./category-renaming";
 import { all, first } from "../../db/queries";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
@@ -194,8 +195,12 @@ export async function updateMembershipCategory(
     throw new AppError(409, "MEMBERSHIP_CONFIGURATION_CHANGED", "Membership category changed; reload and retry");
   }
 
+  const nextCode = updates.code ?? current.code;
+  if (nextCode !== categoryCode && (await getMembershipCategory(db, nextCode)))
+    throw new AppError(409, "MEMBERSHIP_CATEGORY_EXISTS", "This category code already exists");
   const now = nowIso();
   const next = {
+    code: nextCode,
     label: updates.label ?? current.label,
     description: updates.description === undefined ? current.description : updates.description,
     displayOrder: updates.displayOrder ?? current.displayOrder,
@@ -215,6 +220,7 @@ export async function updateMembershipCategory(
             }),
           ]
         : []),
+      ...prepareMembershipCategoryRename(db, categoryCode, nextCode, updates.expectedRevision, now),
       db
         .prepare(
           `UPDATE membership_categories
@@ -232,7 +238,7 @@ export async function updateMembershipCategory(
           now,
           next.workflowVersionId,
           now,
-          categoryCode,
+          nextCode,
           updates.expectedRevision,
         ),
       prepareAuditLogAfterOneChange(
@@ -251,7 +257,7 @@ export async function updateMembershipCategory(
       throw new AppError(
         409,
         "MEMBERSHIP_CONFIGURATION_AUTHORIZATION_CHANGED",
-        "Membership-management permission changed while the category was being saved",
+        "The category code, catalog, workflow, or your permission changed. Reload and retry",
       );
     }
     if (isAuditChangeGuardFailure(error)) {

@@ -66,6 +66,11 @@
     flex-wrap: wrap;
   }
 
+  .pk-toolbar--single-row,
+  .pk-toolbar--single-row .pk-toolbar__controls {
+    flex-wrap: nowrap;
+  }
+
   @media (max-width: 47.9375rem) {
     .pk-toolbar {
       flex-direction: column;
@@ -76,6 +81,11 @@
       flex: none;
       width: 100%;
       order: -1;
+    }
+
+    .pk-toolbar--single-row,
+    .pk-toolbar--single-row .pk-toolbar__controls {
+      flex-wrap: wrap;
     }
 
     .pk-toolbar__controls {

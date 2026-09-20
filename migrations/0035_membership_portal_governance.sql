@@ -6863,3 +6863,12 @@ CREATE TABLE mailing_list_sync_settings (
   revision INTEGER NOT NULL DEFAULT 0 CHECK (revision >= 0),
   updated_at TEXT NOT NULL
 );
+
+-- Bounded newest-first outbox pages, with the same deterministic id tie-break
+-- used by the shared offset-page query. Existing delivery indexes remain intact.
+CREATE INDEX idx_email_outbox_created
+  ON email_outbox(created_at DESC, id ASC);
+CREATE INDEX idx_email_outbox_status_created
+  ON email_outbox(status, created_at DESC, id ASC);
+CREATE INDEX idx_email_outbox_type_created
+  ON email_outbox(message_type, created_at DESC, id ASC);

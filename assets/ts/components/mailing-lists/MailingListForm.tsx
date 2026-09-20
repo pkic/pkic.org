@@ -286,7 +286,16 @@ export function MailingListForm({
                         id={`${idPrefix}-active`}
                         checked={draft.active}
                         onChange={(event) => onChange({ active: (event.target as HTMLInputElement).checked })}
-                        label="Active"
+                        label={<span id={`${idPrefix}-active-label`}>List enabled</span>}
+                        aria-labelledby={`${idPrefix}-active-label`}
+                        aria-describedby={`${idPrefix}-active-help`}
+                        hint={
+                          <span id={`${idPrefix}-active-help`}>
+                            Disabling hides this list from subscription choices and queues removal of managed
+                            subscribers from Google Groups. Saved preferences are kept. To keep subscribers while
+                            pausing updates, turn off synchronization instead.
+                          </span>
+                        }
                       />
                       <Checkbox
                         id={`${idPrefix}-primary-discussion`}

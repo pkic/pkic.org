@@ -260,6 +260,32 @@ describe("group event workspace", () => {
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}`);
   });
 
+  it("exposes routed response views for registration and proposal forms", () => {
+    const event = baseEvent({
+      capabilities: ["view", "manage_attendance"],
+      proposalAccess: {
+        eventPermissions: ["proposals:read"],
+        canRead: true,
+        canReview: false,
+        canFinalize: false,
+        canEditAcceptedAbstract: false,
+        canCancelAcceptedProposal: false,
+      },
+    });
+
+    const registrations = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="registrations" />);
+    const registrationSections = registrations.querySelector('nav[aria-label="Registration sections"]');
+    expect(registrationSections?.textContent).toContain("Overview");
+    expect(registrationSections?.textContent).toContain("Responses");
+    expect(registrationSections?.querySelector('a[href$="/registrations/responses"]')).not.toBeNull();
+
+    const proposals = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" />);
+    const proposalSections = proposals.querySelector('nav[aria-label="Proposal sections"]');
+    expect(proposalSections?.textContent).toContain("Overview");
+    expect(proposalSections?.textContent).toContain("Responses");
+    expect(proposalSections?.querySelector('a[href$="/proposals/responses"]')).not.toBeNull();
+  });
+
   it("shows the not-available pattern for a capability-less tab request instead of falling back", () => {
     const event = baseEvent({ capabilities: ["view"] });
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);

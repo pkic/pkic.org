@@ -105,6 +105,8 @@ function buildDonationCheckoutParams(appBaseUrl: string, input: DonationCheckout
   }
   params.set("metadata[donor_name]", input.name);
   params.set("payment_intent_data[metadata][donor_name]", input.name);
+  params.set("metadata[pkic_payment_type]", "donation");
+  params.set("payment_intent_data[metadata][pkic_payment_type]", "donation");
   if (input.email) params.set("metadata[donor_email]", input.email);
   if (input.email) params.set("payment_intent_data[metadata][donor_email]", input.email);
   if (input.organizationName) params.set("metadata[donor_organization]", input.organizationName);

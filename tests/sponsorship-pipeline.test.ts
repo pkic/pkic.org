@@ -110,6 +110,61 @@ describe("Sponsorship sales pipeline", () => {
     ).toBe(403);
   });
 
+  it("records an idempotent offline sponsorship settlement without activating the sponsorship", async () => {
+    const sponsorship = await createSponsorship(env.DB, adminActor, {
+      sponsorType: "event",
+      organizationId: null,
+      nonMemberName: "Direct Sponsor",
+      nonMemberWebsite: null,
+      contactName: "Sponsorship Contact",
+      contactEmail: "sponsor@example.test",
+      eventId,
+      tier: "Leader",
+      assignedToUserId: null,
+      renewalDate: null,
+      notes: null,
+    });
+    const body = {
+      idempotencyKey: crypto.randomUUID(),
+      amount: 50000,
+      currency: "eur",
+      method: "bank_transfer",
+      settledAt: new Date().toISOString(),
+      reference: "BANK-SPONSOR-2026",
+      note: "Matched to the signed sponsorship agreement.",
+    };
+    const settle = () =>
+      call(adminToken, "/api/v1/sponsors/" + sponsorship.id + "/settlements", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+    const response = await settle();
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(await response.json()).toMatchObject({
+      purpose: "sponsorship",
+      resourceId: sponsorship.id,
+      status: "paid",
+      amount: 50000,
+      currency: "eur",
+      duplicate: false,
+    });
+    expect(
+      await env.DB.prepare("SELECT pipeline_stage, price_amount_cents, price_currency FROM sponsorships WHERE id = ?")
+        .bind(sponsorship.id)
+        .first(),
+    ).toEqual({ pipeline_stage: "new_inquiry", price_amount_cents: 50000, price_currency: "eur" });
+
+    const duplicate = await settle();
+    expect(duplicate.status, await duplicate.clone().text()).toBe(200);
+    expect(await duplicate.json()).toMatchObject({ duplicate: true });
+    expect(
+      await env.DB.prepare("SELECT actor_user_id, reference FROM payment_ledger_events WHERE external_event_id = ?")
+        .bind("offline:" + body.idempotencyKey)
+        .first(),
+    ).toEqual({ actor_user_id: adminId, reference: body.reference });
+  });
+
   it("creates, lists, and updates a consortium sponsorship", async () => {
     const { organizationId } = await seedOrganization("Acme Corp");
 

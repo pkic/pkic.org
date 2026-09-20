@@ -136,15 +136,6 @@ describe("portal Operations outbox reads", () => {
           return json({
             outbox: [],
             page: { limit: 25, offset: 0, total: 0, hasMore: false },
-            summary: {
-              total: 0,
-              byStatus: {},
-              byMessageType: {},
-              topTemplates: [],
-              dueNow: 0,
-              dueByStatus: {},
-              nextSendAfter: null,
-            },
           });
         }
         throw new Error(`Unexpected request: ${method} ${url.pathname}`);
@@ -218,15 +209,6 @@ describe("portal Operations outbox reads", () => {
               },
             ],
             page: { limit: 25, offset: 0, total: 1, hasMore: false },
-            summary: {
-              total: 1,
-              byStatus: { failed: 1 },
-              byMessageType: { transactional: 1 },
-              topTemplates: [],
-              dueNow: 0,
-              dueByStatus: {},
-              nextSendAfter: null,
-            },
           });
         }
         if (url.pathname === "/api/v1/email/outbox/process") {
@@ -312,15 +294,6 @@ describe("portal Operations outbox reads", () => {
           return json({
             outbox: [],
             page: { limit: 25, offset: 0, total: 0, hasMore: false },
-            summary: {
-              total: 0,
-              byStatus: {},
-              byMessageType: {},
-              topTemplates: [],
-              dueNow: 0,
-              dueByStatus: {},
-              nextSendAfter: null,
-            },
           });
         }
         if (url.pathname === "/api/v1/email/outbox/process") {

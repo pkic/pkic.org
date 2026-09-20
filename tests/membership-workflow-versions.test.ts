@@ -19,14 +19,14 @@ it("publishes immutable reusable workflow versions and assigns only published po
   const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
   const token = await createAdminSession(env.DB, admin.id, "membership-workflows-admin");
   const base = "/api/v1/membership/workflows/versions";
-  async function call(path: string, method = "GET", body?: unknown) {
+  async function call(path: string, method = "GET", body?: unknown, requestEnv: typeof env = env) {
     return app.fetch(
       new Request(`https://app.test${path}`, {
         method,
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
-      env as any,
+      requestEnv as any,
       { waitUntil() {}, passThroughOnException() {} } as any,
     );
   }
@@ -105,12 +105,30 @@ it("publishes immutable reusable workflow versions and assigns only published po
   const paid = membershipWorkflowVersionResponseSchema.parse(await paidResponse.json()).workflow;
   expect(
     (
-      await call(`${base}/${paid.id}/publication`, "POST", {
-        expectedRevision: 0,
-        reason: "Payment configuration is incomplete.",
-      })
+      await call(
+        `${base}/${paid.id}/publication`,
+        "POST",
+        {
+          expectedRevision: 0,
+          reason: "Payment configuration is incomplete.",
+        },
+        { ...env, STRIPE_SECRET_KEY: undefined, STRIPE_WEBHOOK_SECRET: undefined },
+      )
     ).status,
   ).toBe(422);
+  expect(
+    (
+      await call(
+        `${base}/${paid.id}/publication`,
+        "POST",
+        {
+          expectedRevision: 0,
+          reason: "Stripe checkout is configured; local testing uses manual reconciliation.",
+        },
+        { ...env, STRIPE_SECRET_KEY: "sk_test_local", STRIPE_WEBHOOK_SECRET: undefined },
+      )
+    ).status,
+  ).toBe(200);
 });
 
 it("restores seeded workflow policy between scenarios without removing production immutability", async () => {

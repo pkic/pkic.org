@@ -1,3 +1,4 @@
+import { reorderMembershipCategories } from "../../../_lib/services/membership/category-ordering";
 import {
   membershipCategoryCatalogResponseSchema,
   membershipCategoryCatalogRouteSchema,
@@ -10,6 +11,7 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 import { listMembershipCategories, updateMembershipCategory } from "../../../_lib/services/membership/categories";
 import { requireStaffPermission } from "../../../_lib/auth/staff-permissions";
 import {
+  membershipCategoryOrderRouteSchema,
   membershipCategoryCreateRouteSchema,
   membershipCategoryDeleteRouteSchema,
 } from "../../../../assets/shared/schemas/membership-category-lifecycle";
@@ -52,5 +54,13 @@ export const MembershipCategoryUpdate = openApiRoute(
         category: await updateMembershipCategory(db, staff, data.params.categoryCode, data.body),
       }),
     );
+  },
+);
+
+export const MembershipCategoryOrder = openApiRoute(
+  membershipCategoryOrderRouteSchema,
+  async (c: AdminContext, data) => {
+    const { db, staff } = await requireStaffPermission(c, "membership:write");
+    return json(membershipCategoryCatalogResponseSchema.parse(await reorderMembershipCategories(db, staff, data.body)));
   },
 );

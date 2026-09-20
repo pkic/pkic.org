@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   membershipCategoryCatalogResponseSchema,
   membershipCategoryDeleteSchema,
+  membershipCategoryOrderSchema,
   membershipCategoryDeleteResponseSchema,
   type MembershipCategoryCatalogEntry,
 } from "../../../../../shared/schemas/membership-categories";
@@ -66,6 +67,36 @@ export function MembershipCategories({
   const { categories, loading, error, load } = useCategoryCatalog();
   const [mutationError, setMutationError] = useState<string | null>(null);
 
+  const [reordering, setReordering] = useState(false);
+
+  async function move(category: MembershipCategoryCatalogEntry, direction: -1 | 1) {
+    if (!canWrite || reordering) return;
+    const index = categories.findIndex((entry) => entry.code === category.code);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= categories.length) return;
+    const ordered = [...categories];
+    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    setReordering(true);
+    setMutationError(null);
+    try {
+      await requestJson(`${CATEGORIES_API}/order`, membershipCategoryCatalogResponseSchema, {
+        method: "PUT",
+        body: JSON.stringify(
+          membershipCategoryOrderSchema.parse({
+            categories: ordered.map(({ code, revision }) => ({ code, expectedRevision: revision })),
+          }),
+        ),
+      });
+      invalidateMembershipCategoryCatalog();
+      await load();
+      toast(`Category ${category.code} moved ${direction < 0 ? "up" : "down"}`, "success");
+    } catch (caught) {
+      setMutationError((caught as Error).message);
+    } finally {
+      setReordering(false);
+    }
+  }
+
   async function remove(category: MembershipCategoryCatalogEntry) {
     if (
       !canWrite ||
@@ -95,7 +126,16 @@ export function MembershipCategories({
     }
   }
 
-  if (categoryCode === "new") return <MembershipCategoryForm canWrite={canWrite} onSaved={load} />;
+  if (categoryCode === "new" && loading) return <Spinner label="Loading membership categories…" />;
+  if (categoryCode === "new" && error) return <ErrorAlert error={error} />;
+  if (categoryCode === "new")
+    return (
+      <MembershipCategoryForm
+        canWrite={canWrite}
+        nextDisplayOrder={Math.max(0, ...categories.map((entry) => entry.displayOrder)) + 10}
+        onSaved={load}
+      />
+    );
   if (categoryCode !== undefined) {
     if (loading) return <Spinner label="Loading membership categories…" />;
     const category = categories.find((entry) => entry.code === categoryCode);
@@ -122,7 +162,14 @@ export function MembershipCategories({
     }
     // Keyed by revision so a save that comes back through the list starts a
     // fresh draft rather than editing on top of a stale one.
-    return <MembershipCategoryForm key={category.revision} category={category} canWrite={canWrite} onSaved={load} />;
+    return (
+      <MembershipCategoryForm
+        key={`${category.code}:${category.revision}`}
+        category={category}
+        canWrite={canWrite}
+        onSaved={load}
+      />
+    );
   }
 
   const columns: Column<MembershipCategoryCatalogEntry>[] = [
@@ -153,12 +200,6 @@ export function MembershipCategories({
       width: "fit",
     },
     {
-      header: "Order",
-      cell: (category) => category.displayOrder,
-      className: "pk-center",
-      width: "fit",
-    },
-    {
       // The one prose column, so the slack is its rather than the label's.
       header: "Description",
       width: "primary",
@@ -177,6 +218,18 @@ export function MembershipCategories({
               <RowActions
                 subject={`category ${category.code}`}
                 actions={[
+                  {
+                    id: "up",
+                    label: "Move up",
+                    disabled: reordering || categories[0]?.code === category.code,
+                    onSelect: () => void move(category, -1),
+                  },
+                  {
+                    id: "down",
+                    label: "Move down",
+                    disabled: reordering || categories.at(-1)?.code === category.code,
+                    onSelect: () => void move(category, 1),
+                  },
                   { id: "edit", label: "Edit…", onSelect: () => navigate(editPath(category.code)) },
                   { id: "delete", label: "Delete…", danger: true, onSelect: () => void remove(category) },
                 ]}

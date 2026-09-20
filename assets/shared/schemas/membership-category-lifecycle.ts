@@ -1,5 +1,7 @@
 import {
   membershipCategoryCreateSchema,
+  membershipCategoryOrderSchema,
+  membershipCategoryCatalogResponseSchema,
   membershipCategoryDeleteSchema,
   membershipCategoryDeleteResponseSchema,
   membershipCategoryParamsSchema,
@@ -35,5 +37,19 @@ export const membershipCategoryDeleteRouteSchema = {
       content: { "application/json": { schema: membershipCategoryDeleteResponseSchema } },
     },
     "409": { description: "The category is referenced or has changed." },
+  },
+};
+
+export const membershipCategoryOrderRouteSchema = {
+  ...requiresPermissions("membership:write"),
+  tags: ["Membership"],
+  summary: "Reorder the membership category catalog",
+  request: { body: { required: true, content: { "application/json": { schema: membershipCategoryOrderSchema } } } },
+  responses: {
+    "200": {
+      description: "Categories in their updated order.",
+      content: { "application/json": { schema: membershipCategoryCatalogResponseSchema } },
+    },
+    "409": { description: "The catalog or permission changed. Reload before reordering." },
   },
 };

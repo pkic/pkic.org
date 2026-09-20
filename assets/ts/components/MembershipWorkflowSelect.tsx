@@ -30,6 +30,7 @@ export function MembershipWorkflowSelect({
         {...control}
         catalog={publishedMembershipWorkflowCatalog}
         searchLabel="Published workflow"
+        placeholder="No workflow — unavailable on the join form"
         value={value}
         selectedLabel={selected.data ? publishedMembershipWorkflowCatalog.itemLabel(selected.data.workflow) : undefined}
         disabled={disabled}

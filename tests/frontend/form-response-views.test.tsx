@@ -156,11 +156,13 @@ describe("the submissions table", () => {
         json({ submissions: [submission()], page: { limit: 50, offset: 0, total: 1, hasMore: false } }),
       ),
     );
+    const onOpen = vi.fn();
     const page = mount(
       <FormSubmissionsTable
         fields={[field()]}
         endpoint="/api/v1/forms/f/submissions"
         responseSchema={submissionsSchema}
+        onOpen={onOpen}
       />,
     );
     await settle();
@@ -168,16 +170,12 @@ describe("the submissions table", () => {
     // The table names itself among the tables on the page.
     expect(page.querySelector("caption")?.textContent).toBe("Form responses");
 
-    const view = [...page.querySelectorAll("button")].find((button) => button.textContent === "View")!;
-    expect(view.getAttribute("aria-label")).toBe("View answers from Ada Lovelace");
-    expect(view.getAttribute("aria-expanded")).toBe("false");
-
-    await act(() => view.click());
-    await settle();
-    const expanded = [...page.querySelectorAll("button")].find((button) => button.textContent === "Hide")!;
-    expect(expanded.getAttribute("aria-expanded")).toBe("true");
-    expect(expanded.getAttribute("aria-label")).toBe("Hide answers from Ada Lovelace");
-    expect(page.querySelector("dl")).toBeTruthy();
+    const menu = page.querySelector('button[aria-label="Actions for Ada Lovelace"]') as HTMLButtonElement;
+    expect(menu).toBeTruthy();
+    await act(() => menu.click());
+    const open = [...document.querySelectorAll("button")].find((button) => button.textContent === "Open response")!;
+    await act(() => open.click());
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "a0000000-0000-4000-8000-000000000001" }));
   });
 
   it("replaces the table with the failure rather than claiming there are no responses", async () => {
@@ -190,6 +188,7 @@ describe("the submissions table", () => {
         fields={[field()]}
         endpoint="/api/v1/forms/f/submissions"
         responseSchema={submissionsSchema}
+        onOpen={vi.fn()}
       />,
     );
     await settle();

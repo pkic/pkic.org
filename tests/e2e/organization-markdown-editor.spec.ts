@@ -44,13 +44,17 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await edit();
   await expect(canvas).not.toContainText("A draft to cancel.");
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  for (const label of ["Image", "Video", "Table", "Callout"]) {
+    await expect(contentEditor.getByRole("button", { name: label, exact: true })).toBeVisible();
+  }
   await canvas.fill("Security begins with clear information.");
   await canvas.press("ControlOrMeta+a");
   await contentEditor.getByRole("button", { name: "Bold", exact: true }).click();
   await expect(canvas.locator("strong")).toHaveText("Security begins with clear information.");
   await canvas.press("ControlOrMeta+End");
   await canvas.press("Enter");
-  await page.getByRole("group", { name: "Content blocks" }).getByRole("button", { name: "Video", exact: true }).click();
+  await contentEditor.getByRole("button", { name: "Video", exact: true }).click();
   await page.getByLabel("Video URL").fill("https://example.test/not-a-video");
   await page.getByRole("button", { name: "Insert video", exact: true }).click();
   await expect(page.getByLabel("Video URL")).toHaveAttribute("aria-invalid", "true");
@@ -58,8 +62,7 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await page.getByRole("button", { name: "Insert video", exact: true }).click();
   await expect(canvas.locator("iframe")).toHaveCount(1);
   await canvas.press("ControlOrMeta+End");
-  await page
-    .getByRole("group", { name: "Content blocks" })
+  await contentEditor
     .getByRole("button", { name: "Table", exact: true })
     .dragTo(canvas, { targetPosition: { x: 20, y: 30 } });
   await expect(canvas.locator("table")).toHaveCount(1);
@@ -78,7 +81,7 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await expect(canvas.locator("th")).toHaveCount(2);
   await canvas.press("ControlOrMeta+End");
   await canvas.press("Enter");
-  await page.getByRole("group", { name: "Content blocks" }).getByRole("button", { name: "Image", exact: true }).click();
+  await contentEditor.getByRole("button", { name: "Image", exact: true }).click();
   await page.getByLabel("Image URL").fill("/img/logo-color.svg");
   await page.getByRole("button", { name: "Insert image", exact: true }).click();
   await expect(page.getByLabel("Image description")).toHaveAttribute("aria-invalid", "true");
@@ -86,21 +89,15 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await page.getByRole("button", { name: "Insert image", exact: true }).click();
   await expect(canvas.getByRole("img", { name: "PKI Consortium logo" })).toBeVisible();
   await canvas.press("ControlOrMeta+End");
-  await page
-    .getByRole("group", { name: "Content blocks" })
-    .getByRole("button", { name: "Callout", exact: true })
-    .click();
-  await canvas.locator("blockquote p").click({ clickCount: 3 });
-  await expect.poll(() => page.evaluate(() => getSelection()?.toString().trim())).toBe("Write your callout here.");
+  await contentEditor.getByRole("button", { name: "Callout", exact: true }).click();
+
   await page.keyboard.type("Built for interoperability.");
   await expect(canvas.locator("blockquote")).toHaveText("Built for interoperability.");
   await canvas.press("ControlOrMeta+End");
-  await page
-    .getByRole("group", { name: "Content blocks" })
-    .getByRole("button", { name: "Section", exact: true })
-    .click();
-  await canvas.getByRole("heading", { name: "Section heading" }).click({ clickCount: 3 });
-  await expect.poll(() => page.evaluate(() => getSelection()?.toString().trim())).toBe("Section heading");
+  await canvas.press("Enter");
+  await canvas.press("Enter");
+  await contentEditor.getByRole("button", { name: "Heading", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Heading 2", exact: true }).click();
   await page.keyboard.type("Learn more");
   await contentEditor.getByRole("button", { name: "Markdown source", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Member page content Markdown source", exact: true })).toHaveValue(
@@ -114,6 +111,14 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   await page.setViewportSize({ width: 390, height: 844 });
   await canvas.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await contentEditor.getByRole("button", { name: "More formatting", exact: true }).click();
+  for (const label of ["Table", "Image", "Video"]) {
+    await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+  }
+  await page.getByRole("menuitem", { name: "Image", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(contentEditor.getByLabel("Image URL")).toBeVisible();
+  await contentEditor.getByRole("button", { name: "Cancel insertion", exact: true }).click();
   await contentEditor.screenshot({ path: testInfo.outputPath("visual-editor-phone.png") });
   await page.setViewportSize({ width: 1440, height: 1100 });
   const saved = page.waitForResponse(

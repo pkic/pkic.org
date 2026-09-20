@@ -1,9 +1,8 @@
-import type { ComponentChildren } from "preact";
 import { lazy, Suspense } from "preact/compat";
-import { eventProposalDetailViewPath } from "./detail/proposal-paths";
 import { useEffect } from "preact/hooks";
 import { EventAudienceView } from "./EventAudienceView";
 import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { useData } from "../../../../hooks/useData";
@@ -24,16 +23,6 @@ const EventList = lazy(() => import("./EventList").then((module) => ({ default: 
 const ProposalPrograms = lazy(() =>
   import("../management/ProposalPrograms").then((module) => ({ default: module.ProposalPrograms })),
 );
-const EventDetailView = lazy(() =>
-  import("./detail/EventDetail").then((module) => ({ default: module.EventDetailView })),
-);
-const ProposalDetailPage = lazy(() =>
-  import("./detail/ProposalDetailPage").then((module) => ({ default: module.ProposalDetailPage })),
-);
-const RegistrationDetailPage = lazy(() =>
-  import("./detail/RegistrationDetailPage").then((module) => ({ default: module.RegistrationDetailPage })),
-);
-
 type EventWorkspaceProps =
   | { view: "list" }
   | { view: "participant"; slug: string; kind: "registration" | "proposal"; resourceId: string; tab?: string }
@@ -42,21 +31,18 @@ type EventWorkspaceProps =
   | { view: "registration"; slug: string; resourceId: string };
 
 /**
- * Canonical event homes are groups. A management view for a group-owned
- * event redirects to the owning group's event workspace; only events
- * without an owning group keep the standalone surface. Fetch errors fall
- * back to the standalone view, whose own components explain them.
+ * Canonical event management lives in groups. These legacy routes only
+ * resolve an event to its owning group; they never provide an independent
+ * system-level management workspace.
  */
-function OwnerGroupGate({
+function LegacyEventRoute({
   slug,
   mapPath,
-  children,
   audienceFallback = false,
   audienceTab,
 }: {
   slug: string;
   mapPath: (base: string) => string;
-  children: ComponentChildren;
   audienceFallback?: boolean;
   audienceTab?: string;
 }) {
@@ -78,15 +64,19 @@ function OwnerGroupGate({
       ? mapPath(`/groups/${encodeURIComponent(ownerGroupId)}/events/${encodeURIComponent(eventId)}`)
       : null;
 
+  const fallbackTarget = !detail.loading && !detail.error && event && !target && !audienceFallback ? "/events" : null;
+
   useEffect(() => {
-    if (target) navigate(target, { replace: true });
-  }, [target, navigate]);
+    const destination = target ?? fallbackTarget;
+    if (destination) navigate(destination, { replace: true });
+  }, [target, fallbackTarget, navigate]);
 
   if (detail.loading) return <Spinner label="Loading event…" />;
-  if (target) return null;
+  if (detail.error) return <ErrorAlert error={detail.error} />;
+  if (target || fallbackTarget) return null;
   if (personal && event) return <ParticipantEvent event={event} tab={audienceTab} />;
   if (audienceFallback && event && "viewer" in event) return <EventAudienceView event={event} />;
-  return <>{children}</>;
+  return null;
 }
 
 /**
@@ -126,58 +116,39 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     );
   }
 
-  // The record pages below open with their own subject heading, so the
-  // workspace adds no generic "Event"/"Proposal" title above them — that
-  // label named the route, not the record, and repeated what the page's own
-  // heading was about to say.
-  let content: ComponentChildren;
+  let content;
   if (props.view === "proposal") {
     content = (
-      <OwnerGroupGate
+      <LegacyEventRoute
         slug={props.slug}
         mapPath={(base) =>
           `${base}/proposals/${encodeURIComponent(props.resourceId)}${props.tab ? `/${encodeURIComponent(props.tab)}` : ""}${
             props.segment ? `/${encodeURIComponent(props.segment)}` : ""
           }`
         }
-      >
-        <ProposalDetailPage
-          slug={props.slug}
-          proposalId={props.resourceId}
-          tab={props.tab}
-          segment={props.segment}
-          tabHref={(key) =>
-            `${eventProposalDetailViewPath(props.slug, props.resourceId)}${key === "submission" ? "" : `/${key}`}`
-          }
-        />
-      </OwnerGroupGate>
+      />
     );
   } else if (props.view === "registration") {
     content = (
-      <OwnerGroupGate
+      <LegacyEventRoute
         slug={props.slug}
         mapPath={(base) => `${base}/registrations/${encodeURIComponent(props.resourceId)}`}
-      >
-        <RegistrationDetailPage slug={props.slug} regId={props.resourceId} />
-      </OwnerGroupGate>
+      />
     );
   } else {
     const tab = props.tab;
     const subTab = props.subTab;
     content = (
-      <OwnerGroupGate
+      <LegacyEventRoute
         slug={props.slug}
-        audienceFallback
+        audienceFallback={!tab || tab === "overview"}
         audienceTab={props.tab}
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;
           if (tab === "promoters" && subTab) return `${base}/promoters/${encodeURIComponent(subTab)}`;
-          // Settings sub-keys have no group-side segment; land on the tab.
           return `${base}/${encodeURIComponent(tab)}`;
         }}
-      >
-        <EventDetailView slug={props.slug} tab={props.tab} subTab={props.subTab} detailSegment={props.detailSegment} />
-      </OwnerGroupGate>
+      />
     );
   }
   return (

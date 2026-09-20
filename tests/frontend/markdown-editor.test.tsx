@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
+import { restoreTemplateMarkdown } from "../../assets/ts/components/markdown-editor/template-markdown";
 import { TemplateHighlighting } from "../../assets/ts/components/markdown-editor/template-highlighting";
 import { Editor } from "@tiptap/core";
 import { render } from "preact";
@@ -102,6 +103,21 @@ describe("author content remains data", () => {
 });
 
 describe("visual template highlighting", () => {
+  it("preserves reusable template names while editing surrounding text", () => {
+    const instance = editor("Hello {{firstName}}\n\n{{> about_pkic}}");
+    instance.commands.insertContentAt(1, "Welcome. ");
+    expect(restoreTemplateMarkdown(instance.getMarkdown())).toContain("{{> about_pkic}}");
+  });
+
+  it("preserves template comparisons and underscore variables without unescaping ordinary content", () => {
+    const instance = editor("Literal_name <safe>\n\n{{#if user_name}}Hello {{user_name}}{{/if}}\n\n{{> about_pkic}}");
+    const saved = restoreTemplateMarkdown(instance.getMarkdown());
+    expect(saved).toContain("Literal\\_name &lt;safe&gt;");
+    expect(saved).toContain("{{#if user_name}}Hello {{user_name}}{{/if}}");
+    expect(saved).toContain("{{> about_pkic}}");
+    expect(restoreTemplateMarkdown(editor(saved).getMarkdown())).toBe(saved);
+  });
+
   it("highlights nested conditions and variables without serializing decorations", () => {
     const content =
       "{{#if hasBio}}\n\nHello {{firstName}}.\n\n{{#unless hasHeadshot}}Upload a photo.{{/unless}}\n\n{{/if}}";

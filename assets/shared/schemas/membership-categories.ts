@@ -90,6 +90,7 @@ export const membershipCategoryCatalogRouteSchema = {
 export const membershipCategoryParamsSchema = z.object({ categoryCode: membershipCategorySchema });
 export const membershipCategoryMutableSchema = membershipCategoryCatalogEntrySchema
   .pick({
+    code: true,
     label: true,
     description: true,
     displayOrder: true,
@@ -117,6 +118,23 @@ export const membershipCategoryCreateSchema = membershipCategoryCatalogEntrySche
     message: "University email requirements apply to individual categories",
   });
 export type MembershipCategoryCreate = z.infer<typeof membershipCategoryCreateSchema>;
+/** Full bounded catalog snapshot; prevents lost updates when two users reorder or edit. */
+export const membershipCategoryOrderSchema = z.object({
+  categories: z
+    .array(
+      membershipCategoryCatalogEntrySchema.pick({ code: true }).extend({
+        expectedRevision: membershipCategoryCatalogEntrySchema.shape.revision,
+      }),
+    )
+    .min(1)
+    .max(MEMBERSHIP_CATEGORY_CATALOG_LIMIT)
+    .refine(
+      (entries) => new Set(entries.map((entry) => entry.code)).size === entries.length,
+      "Each category must appear exactly once",
+    ),
+});
+export type MembershipCategoryOrder = z.infer<typeof membershipCategoryOrderSchema>;
+
 export const membershipCategoryDeleteSchema = z.object({ expectedRevision: z.number().int().nonnegative() });
 export const membershipCategoryDeleteResponseSchema = z.object({ deleted: z.literal(true) });
 

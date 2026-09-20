@@ -44,6 +44,11 @@ test("group configuration requires editing and preserves only saved changes", as
   await page.getByRole("tab", { name: "Eligibility", exact: true }).click();
   const eligibility = page.getByRole("tabpanel");
   await expect(eligibility.getByRole("table")).toBeVisible();
+  const tableBounds = await eligibility.getByRole("table").boundingBox();
+  const panelBounds = await eligibility.locator(".pk-panel").boundingBox();
+  expect(Math.abs(tableBounds!.x - panelBounds!.x)).toBeLessThanOrEqual(2);
+  expect(Math.abs(tableBounds!.width - panelBounds!.width)).toBeLessThanOrEqual(4);
+  await page.screenshot({ path: test.info().outputPath("eligibility-table.png"), fullPage: true });
   const label = "Certification Authorities and Trust Service Providers";
   const row = eligibility.getByRole("row").filter({ has: page.getByText(label, { exact: true }) });
   await expect(row.getByRole("checkbox", { name: label, exact: true })).toBeVisible();

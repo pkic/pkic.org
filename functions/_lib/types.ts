@@ -152,8 +152,6 @@ export interface Env {
   STRIPE_PUBLISHABLE_KEY?: string;
   /** Stripe webhook signing secret for verifying checkout.session.completed events. */
   STRIPE_WEBHOOK_SECRET?: string;
-  /** Signing secret for the separately configured membership-fee webhook endpoint. */
-  MEMBERSHIP_STRIPE_WEBHOOK_SECRET?: string;
   /**
    * Seconds to delay sending the registration-confirmed email so the OG badge has
    * time to render and can be attached. Defaults to 90 in production. Set to 0 in

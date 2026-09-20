@@ -368,6 +368,34 @@ export function IconHeading(props: SvgProps) {
   );
 }
 
+export function IconImage(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="2" width="12" height="12" rx="1" />
+      <circle cx="5.5" cy="5.5" r="1" />
+      <path d="m2 12 4-4 3 3 2-2 3 3" />
+    </StrokeIcon>
+  );
+}
+
+export function IconVideo(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="2" width="12" height="12" rx="2" />
+      <path d="m6 5 5 3-5 3z" />
+    </StrokeIcon>
+  );
+}
+
+export function IconTable(props: SvgProps) {
+  return (
+    <StrokeIcon {...props}>
+      <rect x="2" y="2" width="12" height="12" rx="1" />
+      <path d="M2 6h12M2 10h12M7 6v8" />
+    </StrokeIcon>
+  );
+}
+
 export function IconBold(props: SvgProps) {
   return (
     <StrokeIcon {...props}>

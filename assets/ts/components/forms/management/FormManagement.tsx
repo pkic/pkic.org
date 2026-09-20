@@ -29,6 +29,7 @@ import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-cl
 import { formatDateTime } from "../../../shared/ui";
 import { ApiDataTable } from "../../ApiDataTable";
 import { confirmAction } from "../../ConfirmDialog";
+import { EmptyState } from "../../EmptyState";
 import { ErrorAlert } from "../../ErrorAlert";
 import { FilterSelect, type FilterOption } from "../../FilterSelect";
 import { Spinner } from "../../Spinner";
@@ -39,7 +40,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Toolbar } from "../../../ui/Toolbar";
 import { FormDefinitionEditor, type EditableFormDetail } from "../FormDefinitionEditor";
 import { FormResponseStats, type ServerFieldStat } from "../FormResponseStats";
-import { FormSubmissionsTable } from "../FormResponseViews";
+import { FormSubmissionRecord, FormSubmissionsTable } from "../FormResponseViews";
 // `pk-mono` lives in the design system's Content.css, which ships in a lazy
 // chunk: a surface that writes the class name has to import the stylesheet
 // itself, or the identifier renders in the body face once Bootstrap is gone.
@@ -150,6 +151,7 @@ export function FormManagementDetail({
   notify,
   submissionParams,
   formEndpoint,
+  showBack = true,
 }: {
   formKey: string;
   canWrite: boolean;
@@ -158,8 +160,10 @@ export function FormManagementDetail({
   notify?: (message: string, kind: "success" | "error") => void;
   submissionParams?: Record<string, string>;
   formEndpoint?: string;
+  showBack?: boolean;
 }) {
   const [rawTab, setTab] = useHashQueryParam("formTab", "statistics");
+  const [responseId, setResponseId] = useHashQueryParam("response", "");
   const tab: FormTab = rawTab === "responses" || rawTab === "edit" ? rawTab : "statistics";
   // The tab strip is the WAI-ARIA pattern, so each tab has to point at the
   // panel it controls and each panel back at its tab. The ids are generated
@@ -233,15 +237,17 @@ export function FormManagementDetail({
     );
   if (!detail) return null;
   const canManageForm = canWrite && detail.form.scope_type !== "community";
-  const effectiveTab: FormTab = tab === "edit" && !canManageForm ? "statistics" : tab;
+  const effectiveTab: FormTab = responseId ? "responses" : tab === "edit" && !canManageForm ? "statistics" : tab;
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-cluster">
-        <Button size="sm" onClick={onBack}>
-          ← All forms
-        </Button>
-      </div>
+      {showBack && (
+        <div class="pk-cluster">
+          <Button size="sm" onClick={onBack}>
+            ← All forms
+          </Button>
+        </div>
+      )}
       <Panel>
         <PanelHeader title={detail.form.title}>
           <Button size="sm" onClick={() => void load()}>
@@ -278,12 +284,23 @@ export function FormManagementDetail({
           )}
           {effectiveTab === "responses" && (
             <div id={responsesPanelId} role="tabpanel" aria-labelledby={`${tabPrefix}-responses`}>
-              <FormSubmissionsTable
-                fields={detail.fields}
-                endpoint={`${base}/submissions`}
-                responseSchema={formSubmissionsResponseSchema}
-                params={submissionParams}
-              />
+              {responseId ? (
+                <FormSubmissionRecord
+                  fields={detail.fields}
+                  endpoint={`${base}/submissions`}
+                  responseSchema={formSubmissionsResponseSchema}
+                  responseId={responseId}
+                  onBack={() => setResponseId("")}
+                />
+              ) : (
+                <FormSubmissionsTable
+                  fields={detail.fields}
+                  endpoint={`${base}/submissions`}
+                  responseSchema={formSubmissionsResponseSchema}
+                  params={submissionParams}
+                  onOpen={(submission) => setResponseId(submission.id)}
+                />
+              )}
             </div>
           )}
           {effectiveTab === "edit" && canManageForm && (
@@ -415,13 +432,14 @@ export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: strin
   );
 }
 
-/** Shared read-only event response view used while legacy event tabs remain. */
+/** The one configured response set for an event flow. */
 export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; purpose: EventFormsPurpose }) {
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState<string | null>(null);
+  const [placementLoading, setPlacementLoading] = useState(true);
+  const [placementError, setPlacementError] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [attendanceType, setAttendanceType] = useState("");
   const [attendanceOptions, setAttendanceOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const formsEndpoint = `/api/v1/events/${encodeURIComponent(eventSlug)}/forms`;
   const submissionParams = {
     eventSlug,
     ...(status ? { status } : {}),
@@ -429,25 +447,29 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
   };
 
   useEffect(() => {
-    if (purpose !== "event_registration") {
-      setAttendanceOptions([]);
-      return;
-    }
+    setPlacementLoading(true);
+    setPlacementError(null);
     void getJson(
       `/api/v1/events/${encodeURIComponent(eventSlug)}/forms/placements/${encodeURIComponent(purpose)}`,
       eventFormsResponseSchema,
     )
-      .then((response) => setAttendanceOptions(collectAttendanceOptions(response.eventDays)))
-      .catch(() => setAttendanceOptions([]));
+      .then((response) => {
+        setFormKey(response.form?.key ?? null);
+        setAttendanceOptions(purpose === "event_registration" ? collectAttendanceOptions(response.eventDays) : []);
+      })
+      .catch((cause) => setPlacementError((cause as Error).message))
+      .finally(() => setPlacementLoading(false));
   }, [eventSlug, purpose]);
+
+  if (placementLoading) return <Spinner label="Loading responses…" />;
+  if (placementError) return <ErrorAlert error={placementError} />;
+  if (!formKey) {
+    return <EmptyState title="No form is configured" body="This event flow has no active form to report on." />;
+  }
 
   return (
     <div class="pk pk-stack pk-stack--snug">
-      {/* The filters stay above the list because they scope the submissions
-          shown once a form is opened, not the catalogue of forms itself. The
-          bar is a named toolbar, so it is announced as one region rather than
-          as two anonymous combo boxes. */}
-      <Toolbar label="Response filters">
+      <Toolbar label="Response filters" class="pk-toolbar--single-row">
         <FilterSelect
           ariaLabel="Submission status"
           value={status}
@@ -463,59 +485,14 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
           />
         )}
       </Toolbar>
-      {!selectedKey ? (
-        <ApiDataTable
-          caption="Forms linked to this event"
-          endpoint={formsEndpoint}
-          responseSchema={formsListResponseSchema}
-          resolve={(response) => response.forms}
-          resolvePage={(response) => response.page}
-          // The catalogue opens on the forms linked to this event: that is
-          // the page's fixed scope, and the Scope column's filter overrides
-          // it. Its open state carries no value, so the default below holds;
-          // the widened state sends the contract's `false` in its place.
-          params={{ purpose, linkedOnly: "true" }}
-          paginate
-          initialPageSize={25}
-          initialSort="title"
-          searchPlaceholder="Search event forms…"
-          columns={[
-            { header: "Title", cell: (form: FormSummary) => form.title },
-            { header: "Key", cell: (form: FormSummary) => form.key, className: "pk-mono pk-small" },
-            {
-              // Where the form belongs. The list contract already accepts
-              // `linkedOnly`; the column shows the scope and its menu widens
-              // it, instead of hiding the catalogue's global forms with no
-              // way to reach them.
-              header: "Scope",
-              cell: (form: FormSummary) => formScopeLabel(form),
-              width: "fit",
-              filter: {
-                param: "linkedOnly",
-                options: [
-                  { value: "", label: "Linked to this event" },
-                  { value: "false", label: "Linked and global forms" },
-                ],
-              },
-            },
-            { header: "Responses", cell: (form: FormSummary) => form.submission_count, className: "pk-end pk-mono" },
-          ]}
-          rowAction={(form: FormSummary) => ({
-            label: `Open ${form.title}`,
-            onSelect: () => setSelectedKey(form.key),
-          })}
-          empty="No linked forms found"
-          rowKey={(form: FormSummary) => form.id}
-        />
-      ) : (
-        <FormManagementDetail
-          formKey={selectedKey}
-          canWrite={false}
-          onBack={() => setSelectedKey(null)}
-          submissionParams={submissionParams}
-          formEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(selectedKey)}`}
-        />
-      )}
+      <FormManagementDetail
+        formKey={formKey}
+        canWrite={false}
+        showBack={false}
+        onBack={() => undefined}
+        submissionParams={submissionParams}
+        formEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(formKey)}`}
+      />
     </div>
   );
 }

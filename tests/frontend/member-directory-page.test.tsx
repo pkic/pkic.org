@@ -75,6 +75,64 @@ afterEach(() => {
 });
 
 describe("public member directory", () => {
+  it("loads beyond 50 members and gives every enabled letter a destination", async () => {
+    const first = Array.from({ length: 50 }, (_, index) => member({ id: `org-${index}`, name: `Alpha ${index}` }));
+    const fetchMock = vi.fn(async (url: string) => {
+      const offset = Number(new URL(url, "https://test.local").searchParams.get("offset"));
+      return new Response(
+        JSON.stringify(
+          publicMembersListResponseSchema.parse({
+            members: offset === 0 ? first : [member({ name: "Zulu Organization" })],
+            page: { limit: 50, offset, total: 51, hasMore: offset === 0 },
+          }),
+        ),
+        { headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const container = await mountDirectory();
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(container.querySelectorAll(".member-card")).toHaveLength(51);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('a[href="#m-Z"]')).not.toBeNull();
+    for (const link of container.querySelectorAll<HTMLAnchorElement>(".members-az-sidebar a")) {
+      expect(container.querySelector(link.hash)).not.toBeNull();
+    }
+    expect(container.querySelector('a[href="#m-B"]')).toBeNull();
+    expect(container.querySelector('[aria-disabled="true"]')?.textContent).toBe("B");
+  });
+
+  it("does not expose a partial directory when a later page fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            publicMembersListResponseSchema.parse({
+              members: [member()],
+              page: { limit: 50, offset: 0, total: 51, hasMore: true },
+            }),
+          ),
+          { headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "nope" }), { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const container = await mountDirectory();
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    });
+    expect(container.querySelector(".members-az-sidebar")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("names the search control through a for/id pair rather than a placeholder", async () => {
     stubFetch(listingResponse([member()]));
 

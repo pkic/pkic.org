@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * Canonical event homes are groups: standalone /events/:slug management
- * views redirect to the owning group's event workspace, while events
- * without an owning group keep the standalone surface.
+ * views redirect to the owning group's event workspace. Events without an
+ * owning group never gain a second, system-level management surface.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -64,9 +64,7 @@ async function settle(): Promise<void> {
 
 let container: HTMLDivElement;
 
-beforeEach(async () => {
-  await import("../../assets/ts/member-flows/portal/sections/events/detail/EventDetail");
-  await import("../../assets/ts/member-flows/portal/sections/events/detail/RegistrationDetailPage");
+beforeEach(() => {
   navigate.mockReset();
   container = document.createElement("div");
   document.body.append(container);
@@ -119,14 +117,12 @@ describe("standalone event views redirect to the owning group", () => {
     });
   });
 
-  it("keeps the standalone surface for an event without an owning group", async () => {
+  it("rejects a management route for an event without an owning group", async () => {
     stubDetail(null);
     await act(() => render(<EventWorkspace view="detail" slug="summit" tab="registrations" />, container));
     await settle();
-    expect(navigate).not.toHaveBeenCalled();
-    // The standalone detail view mounted (its own content or error handling
-    // renders inside the section) rather than a redirect.
-    expect(container.querySelector(".portal-section")).not.toBeNull();
+    expect(navigate).toHaveBeenCalledWith("/events", { replace: true });
+    expect(container.textContent).not.toContain("Registrations");
   });
   it("shows the current viewer's registration without requesting management-only data", async () => {
     vi.stubGlobal(

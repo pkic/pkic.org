@@ -19,7 +19,7 @@ export type FieldStatPayload = z.infer<typeof formSubmissionStatSchema>;
 
 export type FormSubmissionFilters = { formKey: string } & Pick<
   FormSubmissionStatsQuery,
-  "placementId" | "status" | "attendanceType" | "eventSlug" | "q"
+  "placementId" | "status" | "attendanceType" | "eventSlug" | "responseId" | "q"
 > & { unownedOnly?: boolean; installationOnly?: boolean };
 export type ListFormSubmissionsParams = FormSubmissionFilters & Pick<FormSubmissionsQuery, "sort" | "limit" | "offset">;
 export type ListFormSubmissionsResult = {

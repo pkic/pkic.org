@@ -171,10 +171,12 @@ export function ServerSearchSelect<Item, Response>({
   }, [open, activeIndex]);
 
   const close = useCallback(() => {
+    cancelDebounce();
     setOpen(false);
     setActiveIndex(-1);
     setQuery(null);
-  }, []);
+    setSearch("");
+  }, [cancelDebounce]);
 
   useEffect(() => {
     if (!open) return;
@@ -279,6 +281,7 @@ export function ServerSearchSelect<Item, Response>({
         disabled={disabled}
         onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
         onKeyDown={handleKeyDown}
+        onFocus={(event) => event.currentTarget.select()}
         onClick={() => !disabled && !open && setOpen(true)}
         onBlur={close}
       />
