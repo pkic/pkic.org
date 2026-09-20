@@ -13,7 +13,7 @@ import { EventEmailCampaign } from "../../../../../components/events/EventEmailC
 import { EventFormResponses } from "./Forms";
 import { toast } from "../../../ui";
 import { eventProposalDetailViewPath } from "./proposal-paths";
-import { ButtonLink } from "../../../../../ui/Button";
+import { EventPresentationArchiveLinks } from "../../../../../components/proposals/EventPresentationArchiveLinks";
 
 function ProposalsList({ slug }: { slug: string }) {
   return (
@@ -21,26 +21,7 @@ function ProposalsList({ slug }: { slug: string }) {
       endpoint={`/api/v1/events/${encodeURIComponent(slug)}/proposals`}
       urlState="proposals"
       rowHref={(proposal) => usePortalHashLocation.hrefs(eventProposalDetailViewPath(slug, proposal.id))}
-      toolbarPrefix={(_, access) =>
-        access?.canRead ? (
-          <div class="pk-cluster" role="group" aria-label="Download event presentations">
-            <ButtonLink
-              size="sm"
-              href={`/api/v1/events/${encodeURIComponent(slug)}/presentations/archive`}
-              title="Download the current presentation for every accepted proposal"
-            >
-              <span aria-hidden="true">↓</span> Current presentations
-            </ButtonLink>
-            <ButtonLink
-              size="sm"
-              href={`/api/v1/events/${encodeURIComponent(slug)}/presentations/archive?versions=all`}
-              title="Download every retained presentation version for accepted proposals"
-            >
-              All presentation versions
-            </ButtonLink>
-          </div>
-        ) : null
-      }
+      toolbarPrefix={(_, access) => <EventPresentationArchiveLinks slug={slug} canRead={access?.canRead === true} />}
     />
   );
 }

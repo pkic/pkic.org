@@ -48,34 +48,34 @@ test("a permitted staff identity reads and updates membership settings through t
 
   await expect(page.getByRole("heading", { name: "Application workflow" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Application workflow" })).toHaveAttribute("aria-current", "page");
-  const consultationWindow = page.getByLabel("Consultation window (days)");
-  await expect(consultationWindow).toHaveCount(0);
+  const onHoldDeadline = page.getByLabel("On-hold response deadline (days)");
+  await expect(onHoldDeadline).toHaveCount(0);
   async function editWorkflow() {
     await page.getByRole("button", { name: "Workflow settings actions" }).click();
     await page.getByRole("menuitem", { name: "Edit settings" }).click();
   }
   await editWorkflow();
-  const originalWindow = await consultationWindow.inputValue();
-  await consultationWindow.fill("999");
+  const originalWindow = await onHoldDeadline.inputValue();
+  await onHoldDeadline.fill("999");
   await page.getByRole("button", { name: "Save workflow settings" }).click();
-  await expect(consultationWindow).toHaveAttribute("aria-invalid", "true");
+  await expect(onHoldDeadline).toHaveAttribute("aria-invalid", "true");
   expect(membershipRequests).not.toContain(`PATCH ${SETTINGS_API}`);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await editWorkflow();
-  await expect(consultationWindow).toHaveValue(originalWindow);
-  await expect(consultationWindow).toBeVisible();
+  await expect(onHoldDeadline).toHaveValue(originalWindow);
+  await expect(onHoldDeadline).toBeVisible();
 
-  const updatedWindow = String(Number(await consultationWindow.inputValue()) + 1);
+  const updatedWindow = String(Number(await onHoldDeadline.inputValue()) + 1);
   const saveResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === SETTINGS_API && response.request().method() === "PATCH",
   );
-  await consultationWindow.fill(updatedWindow);
+  await onHoldDeadline.fill(updatedWindow);
   await page.getByRole("button", { name: "Save workflow settings" }).click();
   expect((await saveResponse).status()).toBe(200);
   await expect(page.getByText("Membership workflow settings saved", { exact: true })).toBeVisible();
-  await expect(consultationWindow).toHaveCount(0);
+  await expect(onHoldDeadline).toHaveCount(0);
   await editWorkflow();
-  await expect(consultationWindow).toHaveValue(updatedWindow);
+  await expect(onHoldDeadline).toHaveValue(updatedWindow);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await page.goto("/portal/#/settings/membership-categories");
@@ -93,7 +93,7 @@ test("a permitted staff identity reads and updates membership settings through t
     await expect(page.getByRole("form", { name: "Edit category H8" })).toBeVisible();
   }
   await editCategory();
-  const categoryLabel = page.getByLabel("Label");
+  const categoryLabel = page.getByLabel("Name");
   const updatedLabel = `${await categoryLabel.inputValue()} (E2E)`;
   const categoryResponse = page.waitForResponse(
     (response) =>
@@ -125,9 +125,9 @@ test("a permitted staff identity reads and updates membership settings through t
   // own address.
   await page.goto("/portal/#/settings/application-workflow");
   await editWorkflow();
-  await expect(page.getByLabel("Consultation window (days)")).toHaveValue(updatedWindow);
+  await expect(page.getByLabel("On-hold response deadline (days)")).toHaveValue(updatedWindow);
   await page.goto("/portal/#/settings/membership-categories/H8");
-  await expect(page.getByLabel("Label")).toHaveValue(updatedLabel);
+  await expect(page.getByLabel("Name")).toHaveValue(updatedLabel);
   expect(removedAdminRequests).toEqual([]);
 });
 
@@ -141,8 +141,8 @@ test("creates organization and individual categories and removes unused categori
     await page.getByRole("button", { name: "New category", exact: true }).click();
     await expect(page.getByRole("form", { name: "Create membership category" })).toBeVisible();
     await page.getByLabel("Code").fill(code);
-    await page.getByLabel("Held by", { exact: true }).selectOption(holder);
-    await page.getByLabel("Label").fill(label);
+    await page.getByLabel("Category", { exact: true }).selectOption(holder);
+    await page.getByLabel("Name").fill(label);
     await page.getByRole("button", { name: "Create category", exact: true }).click();
     const row = page
       .getByRole("row")

@@ -6,6 +6,10 @@ import {
   groupEventRegistrationManagerUpdateRouteSchema,
   groupEventRegistrationsListRouteSchema,
 } from "../../../../../../../assets/shared/schemas/group-events";
+import {
+  groupEventRegistrationExportRouteSchema,
+  groupEventRegistrationPromotionsCreateRouteSchema,
+} from "../../../../../../../assets/shared/schemas/group-event-registration-operations";
 import { eventAttendanceRegistrationsListResponseSchema } from "../../../../../../../assets/shared/schemas/event-registrations";
 import {
   eventRegistrationAdmitResponseSchema,
@@ -14,13 +18,16 @@ import {
   eventRegistrationManagerUpdateResponseSchema,
 } from "../../../../../../../assets/shared/schemas/event-registration-detail";
 import { registrationSubmissionResponseSchema } from "../../../../../../../assets/shared/schemas/registration";
-import { getConfig, resolveAppBaseUrl } from "../../../../../../_lib/config";
+import { getConfig, getCsvExportLimits, resolveAppBaseUrl } from "../../../../../../_lib/config";
+import { csvResponse } from "../../../../../../_lib/csv";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 import { json } from "../../../../../../_lib/http";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../../../_lib/request";
 import { submitGroupEventRegistration } from "../../../../../../_lib/services/events/group-registration";
 import { listGroupManagedEventRegistrations } from "../../../../../../_lib/services/events/group-management";
+import { buildRegistrationCsvWithAudit } from "../../../../../../_lib/services/registrations/export";
+import { promoteEventWaitlistWithNotifications } from "../../../../../../_lib/services/registrations/waitlist-promotions";
 import {
   admitGroupManagedEventRegistration,
   cancelGroupManagedEventRegistration,
@@ -28,7 +35,9 @@ import {
   updateGroupManagedEventRegistrationDayAttendance,
 } from "../../../../../../_lib/services/registrations/group-attendee-management";
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
+import { eventRegistrationPromotionsResponseSchema } from "../../../../../../../assets/shared/schemas/event-registrations";
 import { requireGroupManagementActor, requireGroupResourceContext } from "../../../group-resource-context";
+import { requireManagedGroupEventContext } from "./management-context";
 
 export const GroupEventRegistrationCreate = openApiRoute(
   groupEventRegistrationCreateRouteSchema,
@@ -79,6 +88,48 @@ export const GroupEventRegistrationsList = openApiRoute(
         },
       }),
     );
+  },
+);
+
+export const GroupEventRegistrationPromotionsCreate = openApiRoute(
+  groupEventRegistrationPromotionsCreateRouteSchema,
+  async (c: AdminContext, data) => {
+    const context = await requireManagedGroupEventContext(c, data.params.groupId, data.params.eventId);
+    const promoted = await promoteEventWaitlistWithNotifications(context.db, {
+      event: context.event,
+      appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
+      claimWindowHours: getConfig(c.env, c.req.raw).waitlistClaimWindowHours,
+      source: {
+        actorType: "admin",
+        actorId: context.actor.id,
+        auditAction: "admin_waitlist_promoted",
+        source: "group_event_registration_management",
+      },
+    });
+    c.executionCtx.waitUntil(
+      Promise.all(promoted.outboxIds.map((outboxId) => processOutboxByIdBackground(context.rawDb, c.env, outboxId))),
+    );
+    return json(
+      eventRegistrationPromotionsResponseSchema.parse({
+        success: true,
+        dayRegistrationOffers: promoted.dayRegistrationOffers,
+        affectedRegistrations: promoted.affectedRegistrations,
+      }),
+    );
+  },
+);
+
+export const GroupEventRegistrationExportGet = openApiRoute(
+  groupEventRegistrationExportRouteSchema,
+  async (c: AdminContext, data) => {
+    const context = await requireManagedGroupEventContext(c, data.params.groupId, data.params.eventId);
+    const result = await buildRegistrationCsvWithAudit(
+      context.db,
+      { id: context.event.id, source_mode: context.event.source_mode ?? null },
+      context.actor.id,
+      getCsvExportLimits(c.env),
+    );
+    return csvResponse(result.csv, `${context.event.slug}-attendees.csv`);
   },
 );
 

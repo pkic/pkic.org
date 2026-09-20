@@ -97,6 +97,54 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-token");
   });
 
+  it("persists contribution, preferences and group corrections while enforcing legal acceptance", async () => {
+    const submission = await createApplicationFormSubmission({
+      contribution_type: "observer",
+      reason: "Our organization contributes expertise to working groups.",
+      wants_to_present: false,
+    });
+    const { id } = await createApplication({ form_submission_id: submission });
+    const [group] = await queryAll<{ id: string; slug: string }>(
+      env.DB,
+      "SELECT id, slug FROM groups WHERE type_key = 'working_group' AND active = 1 LIMIT 1",
+    );
+    const answers = {
+      contribution_type: "active",
+      wants_to_present: true,
+      interested_in_sponsoring: true,
+      working_groups: [group.id],
+      agrees_bylaws: true,
+      agrees_code_of_conduct: true,
+      agrees_ipr_policy: true,
+      warranted_authority: true,
+    };
+    const response = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers }),
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await response.json()).toMatchObject({ answers, requestedWorkingGroups: [{ slug: group.slug }] });
+    const invalid = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: { agrees_bylaws: false, contribution_type: "observer" } }),
+    });
+    expect(invalid.status).toBe(422);
+    const reloaded = await call(adminToken, `/api/v1/members/applications/${id}`);
+    expect(await reloaded.json()).toMatchObject({
+      answers,
+      answerFields: expect.arrayContaining([expect.objectContaining({ key: "contribution_type" })]),
+    });
+    const cleared = await call(adminToken, `/api/v1/members/applications/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers: { wants_to_present: false, working_groups: [] } }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({
+      answers: { wants_to_present: false },
+      requestedWorkingGroups: [],
+    });
+  });
+
   it("edits top-level fields and answers, without transitioning stage", async () => {
     const formSubmissionId = await createApplicationFormSubmission({
       job_title: "Engineer",

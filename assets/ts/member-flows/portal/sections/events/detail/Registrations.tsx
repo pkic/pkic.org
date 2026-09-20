@@ -5,15 +5,14 @@ import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { FilterSelect } from "../../../../../components/FilterSelect";
 import { Tabs } from "../../../../../components/Tabs";
-import { Button } from "../../../../../ui/Button";
 import { PersonCell } from "../../../../../ui/PersonCell";
-import { postJson } from "../../../../../shared/api-client";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { fmt, fmtDate, toast } from "../../../ui";
 import type { Registration, RegistrationAttendanceChange } from "../types";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { RegistrationDayStates } from "../../../../../components/event-registrations/RegistrationDayStates";
 import { RegistrationTotals } from "../../../../../components/event-registrations/RegistrationTotals";
+import { RegistrationRosterActions } from "../../../../../components/event-registrations/RegistrationRosterActions";
 import { EventFormResponses } from "./Forms";
 import {
   EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS,
@@ -23,7 +22,6 @@ import {
   eventRegistrationsListResponseSchema,
   type EventRegistrationsListResponse,
 } from "../../../../../../shared/schemas/event-registrations";
-import { eventRegistrationPromotionsResponseSchema } from "../../../../../../shared/schemas/route-contracts-event-registration-management";
 import {
   eventRegistrationExportsPath,
   eventRegistrationPromotionsPath,
@@ -68,20 +66,6 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
   const [attendanceChangeFilter, setAttendanceChangeFilter] = useState(initialAttendanceChange);
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
-
-  async function runWaitlistPromotions() {
-    try {
-      await postJson(eventRegistrationPromotionsPath(slug), {}, eventRegistrationPromotionsResponseSchema);
-      toast("Waitlist promotions run", "success");
-      await tableRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  }
-
-  function downloadCsv() {
-    window.location.href = eventRegistrationExportsPath(slug);
-  }
 
   const columns: Array<Column<Registration>> = [
     {
@@ -310,12 +294,12 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
                 resetPage();
               }}
             />
-            <Button variant="secondary" size="sm" onClick={() => void runWaitlistPromotions()}>
-              Run waitlist promotions
-            </Button>
-            <Button variant="secondary" size="sm" onClick={downloadCsv}>
-              Download CSV
-            </Button>
+            <RegistrationRosterActions
+              promotionsEndpoint={eventRegistrationPromotionsPath(slug)}
+              exportsEndpoint={eventRegistrationExportsPath(slug)}
+              onPromoted={() => tableRef.current?.reload()}
+              notify={toast}
+            />
           </>
         )}
         columns={columns}

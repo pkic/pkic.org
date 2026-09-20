@@ -42,6 +42,7 @@ interface PublicLeadershipRow extends PublicTenureRow {
 /** The public person columns, from the exact identity a tenure was held through. */
 const PUBLIC_PROFILE_SELECT_SQL = `
   u.first_name, u.last_name,
+  category.code AS membership_category,
   CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
   o.id AS org_id, o.name AS org_name,
   o.logo_r2_key AS org_logo_r2_key, o.website AS org_website,

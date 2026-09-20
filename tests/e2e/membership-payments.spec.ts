@@ -13,7 +13,10 @@ for (const staffReview of [false, true]) {
   test(`${staffReview ? "staff review and payment" : "payment-only"} membership requires a signed fee event after checkout`, async ({
     page,
   }, testInfo) => {
-    await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows"));
+    await signInAsE2eStaff(
+      page,
+      e2eAdminEmail(staffReview ? "membership-workflows-staff-review-payment" : "membership-workflows-payment-only"),
+    );
     const suffix = uniqueSuffix();
     const version = membershipWorkflowVersionResponseSchema.parse(
       await jsonResponse(page.request, "POST", "/api/v1/membership/workflows/versions", {

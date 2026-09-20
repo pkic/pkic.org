@@ -3,6 +3,7 @@ import { getJson, patchJson, postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import type {
   ApplicationCommunicationCreate,
+  ApplicationUpdate,
   MembershipApplicationDetail,
 } from "../../../../../shared/schemas/membership-application-management";
 import {
@@ -98,36 +99,8 @@ export function useApplicationDetail(applicationId: string) {
   }
 
   /** Throws on failure — caller (the overview card) owns editSaving/editError local state. */
-  async function saveEdit(edits: {
-    applicantName: string;
-    applicantEmail: string;
-    organizationName: string | null;
-    membershipCategory: string;
-    jobTitle: string | null;
-    linkedin: string | null;
-    organizationWebsite: string | null;
-    aboutYourself: string | null;
-    aboutOrganization: string | null;
-    reason: string | null;
-  }) {
-    await patchJson(
-      `/api/v1/members/applications/${applicationId}`,
-      {
-        applicantName: edits.applicantName,
-        applicantEmail: edits.applicantEmail,
-        organizationName: edits.organizationName,
-        membershipCategory: edits.membershipCategory,
-        answers: {
-          job_title: edits.jobTitle,
-          linkedin: edits.linkedin,
-          organization_website: edits.organizationWebsite,
-          about_yourself: edits.aboutYourself,
-          about_organization: edits.aboutOrganization,
-          reason: edits.reason,
-        },
-      },
-      membershipApplicationDetailSchema,
-    );
+  async function saveEdit(edits: ApplicationUpdate) {
+    await patchJson(`/api/v1/members/applications/${applicationId}`, edits, membershipApplicationDetailSchema);
     toast("Application updated", "success");
     await reload();
   }

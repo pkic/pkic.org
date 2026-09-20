@@ -89,7 +89,7 @@ export async function listMembershipCategories(
     db,
     `SELECT ${MEMBERSHIP_CATEGORY_COLUMNS}
        FROM membership_categories
-       ${availableForApplication ? "WHERE retired_at IS NULL AND EXISTS (SELECT 1 FROM membership_workflow_versions version WHERE version.id = membership_categories.workflow_version_id AND version.published_at IS NOT NULL)" : ""}
+       ${availableForApplication ? "WHERE retired_at IS NULL AND EXISTS (SELECT 1 FROM membership_workflow_versions version WHERE version.id = membership_categories.workflow_version_id AND version.published_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id))" : ""}
       ORDER BY display_order, code LIMIT ?`,
     [MEMBERSHIP_CATEGORY_CATALOG_LIMIT],
   );
@@ -215,7 +215,7 @@ export async function updateMembershipCategory(
       ...(next.workflowVersionId
         ? [
             prepareAuthorizationGuard(db, {
-              sql: "SELECT 1 FROM membership_workflow_versions WHERE id = ? AND published_at IS NOT NULL",
+              sql: "SELECT 1 FROM membership_workflow_versions version WHERE id = ? AND published_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id)",
               bindings: [next.workflowVersionId],
             }),
           ]

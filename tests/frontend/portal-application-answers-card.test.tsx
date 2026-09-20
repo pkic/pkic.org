@@ -168,6 +168,31 @@ describe("membership application answers card", () => {
     expect([...groups].map((item) => item.textContent)).toEqual(["Working Group One", "Working Group Two"]);
   });
 
+  it("shows the canonical join form answers and honors false over legacy values", () => {
+    const page = mount(
+      <ApplicationAnswersCard
+        detail={detail({
+          answers: {
+            contribution_type: "active",
+            contributionType: "observer",
+            wants_to_present: true,
+            interested_in_sponsoring: false,
+            interestedInSponsoring: true,
+            agrees_bylaws: true,
+            agrees_code_of_conduct: true,
+            agrees_ipr_policy: true,
+            warranted_authority: true,
+          },
+        })}
+      />,
+    );
+    expect(answerTo(page, "Contribution type").textContent).toBe("active");
+    expect(answerTo(page, "Legal agreements").textContent).toBe("Bylaws, Code of Conduct, IPR Policy");
+    expect(answerTo(page, "Wants to present").textContent).toBe("Yes");
+    expect(answerTo(page, "Interested in sponsoring").textContent).toBe("No");
+    expect(answerTo(page, "Warranted authority").textContent).toBe("Yes");
+  });
+
   it("renders an answer that arrived in the wrong shape rather than failing with the card", () => {
     // `answers` is an open record of unknowns, so nothing upstream guarantees
     // a string. A number, a null and a non-array where a list was expected
@@ -188,7 +213,7 @@ describe("membership application answers card", () => {
 
     expect(answerTo(page, "Role / Job title").textContent).toBe("42");
     expect(answerTo(page, "Reason for joining").textContent).toContain("Not provided");
-    expect(answerTo(page, "Contribution type").textContent).toBe("[object Object]");
+    expect(answerTo(page, "Contribution type").textContent).toBe(JSON.stringify({ unexpected: true }, null, 2));
     // A non-array is not a list of agreements, so it is reported as absent
     // rather than spread into characters.
     expect(answerTo(page, "Legal agreements").textContent).toContain("Not provided");

@@ -1,3 +1,5 @@
+import { prepareMembershipWorkflowPin } from "../functions/_lib/services/membership/workflows/pinning";
+import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";
 import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
 import { membershipWorkflowMigrationPreviewResponseSchema } from "../assets/shared/schemas/membership-workflow-migration";
 import { seedMemberApplication } from "./helpers/member-applications";
@@ -223,4 +225,93 @@ it("previews policy changes, rejects stale previews, and preserves blocking obje
   });
   expect(restarted.status, await restarted.clone().text()).toBe(200);
   expect((await getMembershipExecution(env.DB, applicationId)).generation).toBe(3);
+});
+
+it("deletes unused drafts and archives published versions without changing pinned policy", async () => {
+  await resetDb();
+  await seedEventAndAdmin(env.DB);
+  const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+  const token = await createAdminSession(env.DB, admin.id, "workflow-removal-admin");
+  const base = "/api/v1/membership/workflows/versions";
+  const call = (path: string, method = "GET", body?: unknown, authenticated = true) =>
+    app.fetch(
+      new Request(`https://app.test${path}`, {
+        method,
+        headers: { "content-type": "application/json", ...(authenticated ? { authorization: `Bearer ${token}` } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+      env as any,
+      { waitUntil() {}, passThroughOnException() {} } as any,
+    );
+  const standard = membershipWorkflowsResponseSchema.parse(await (await call(base)).json()).workflows[0];
+  const reason = "Retire the synthetic organization workflow.";
+  expect((await call(`${base}/${standard.id}`, "DELETE", { expectedRevision: standard.revision, reason })).status).toBe(
+    409,
+  );
+  const create = async () =>
+    membershipWorkflowVersionResponseSchema.parse(
+      await (
+        await call(base, "POST", { definition: { ...standard.definition, name: "Example Organization policy" } })
+      ).json(),
+    ).workflow;
+  const draft = await create();
+  expect(
+    (await call(`${base}/${draft.id}`, "DELETE", { expectedRevision: draft.revision, reason }, false)).status,
+  ).toBe(401);
+  expect((await call(`${base}/${draft.id}`, "DELETE", { expectedRevision: draft.revision + 1, reason })).status).toBe(
+    409,
+  );
+  const deleted = await call(`${base}/${draft.id}`, "DELETE", { expectedRevision: draft.revision, reason });
+  expect(deleted.status, await deleted.clone().text()).toBe(200);
+  expect(await deleted.json()).toMatchObject({ outcome: "deleted" });
+  expect((await call(`${base}/${draft.id}`)).status).toBe(404);
+  const unused = await create();
+  const published = membershipWorkflowVersionResponseSchema.parse(
+    await (
+      await call(`${base}/${unused.id}/publication`, "POST", { expectedRevision: unused.revision, reason })
+    ).json(),
+  ).workflow;
+  const applicationId = await seedMemberApplication({
+    applicantEmail: "user@archive-example.test",
+    organizationDomain: "archive-example.test",
+    organizationName: "Example Organization",
+    stage: "processing",
+  });
+  await env.DB.batch(
+    prepareMembershipWorkflowPin(
+      env.DB,
+      applicationId,
+      await requireMembershipCategory(env.DB, "F"),
+      published,
+      1,
+      new Date().toISOString(),
+      true,
+    ),
+  );
+  const archived = await call(`${base}/${published.id}`, "DELETE", { expectedRevision: published.revision, reason });
+  expect(archived.status, await archived.clone().text()).toBe(200);
+  expect(await archived.json()).toMatchObject({ outcome: "archived" });
+  const retained = membershipWorkflowVersionResponseSchema.parse(
+    await (await call(`${base}/${published.id}`)).json(),
+  ).workflow;
+  expect(retained.definition).toEqual(published.definition);
+  expect((await getMembershipExecution(env.DB, applicationId)).version.definition).toEqual(published.definition);
+  expect(retained.archivedAt).toMatch(/\.\d{3}Z$/);
+  expect(
+    membershipWorkflowsResponseSchema
+      .parse(await (await call(base)).json())
+      .workflows.some((version) => version.id === published.id),
+  ).toBe(false);
+  expect(
+    membershipWorkflowsResponseSchema
+      .parse(await (await call(`${base}?archived=true`)).json())
+      .workflows.map((version) => version.id),
+  ).toEqual([published.id]);
+  expect(
+    (await call("/api/v1/membership/categories/A", "PATCH", { workflowVersionId: published.id, expectedRevision: 0 }))
+      .status,
+  ).toBe(409);
+  await expect(
+    env.DB.prepare("DELETE FROM membership_workflow_versions WHERE id = ?").bind(published.id).run(),
+  ).rejects.toThrow("PUBLISHED_MEMBERSHIP_WORKFLOW_IMMUTABLE");
 });

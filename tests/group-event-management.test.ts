@@ -269,6 +269,82 @@ describe("group event management routes", () => {
     expect(await delegated.json()).toMatchObject({ event: { name: "Delegated update" } });
   });
 
+  it("manages sponsor attendee-data tiers through owner and delegated group authority", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const ownerPath = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/sponsors/tiers`;
+    const granteePath = `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/sponsors/tiers`;
+
+    const initial = await request(fixture.ownerLeaderToken, ownerPath);
+    expect(initial.status, await initial.clone().text()).toBe(200);
+    expect(await initial.json()).toEqual({ tiers: [] });
+
+    const denied = await request(fixture.granteeLeaderToken, granteePath);
+    expect(denied.status).toBe(403);
+
+    const saved = await request(fixture.ownerLeaderToken, ownerPath, {
+      method: "PUT",
+      body: JSON.stringify({
+        tiers: [
+          { tierName: "Leader", hasAttendeeDataAccess: true },
+          { tierName: "Supporter", hasAttendeeDataAccess: false },
+        ],
+      }),
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    expect(await saved.json()).toEqual({
+      tiers: [
+        { tierName: "Leader", hasAttendeeDataAccess: true },
+        { tierName: "Supporter", hasAttendeeDataAccess: false },
+      ],
+    });
+
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "manage",
+    });
+    const delegated = await request(fixture.granteeLeaderToken, granteePath, {
+      method: "PUT",
+      body: JSON.stringify({ tiers: [{ tierName: "Partner", hasAttendeeDataAccess: true }] }),
+    });
+    expect(delegated.status, await delegated.clone().text()).toBe(200);
+    expect(await delegated.json()).toEqual({
+      tiers: [{ tierName: "Partner", hasAttendeeDataAccess: true }],
+    });
+  });
+
+  it("runs waitlist promotions and exports registrations through exact group event management", async () => {
+    const fixture = await createFixture();
+    const created = await createGroupEvent(fixture);
+    const ownerPath = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/registrations`;
+    const granteePath = `/api/v1/groups/${fixture.granteeGroupId}/events/${created.id}/registrations`;
+
+    const deniedPromotion = await request(fixture.granteeLeaderToken, `${granteePath}/promotions`, {
+      method: "POST",
+    });
+    expect(deniedPromotion.status).toBe(403);
+
+    const promoted = await request(fixture.ownerLeaderToken, `${ownerPath}/promotions`, { method: "POST" });
+    expect(promoted.status, await promoted.clone().text()).toBe(200);
+    expect(await promoted.json()).toEqual({
+      success: true,
+      dayRegistrationOffers: 0,
+      affectedRegistrations: [],
+    });
+
+    const exported = await request(fixture.ownerLeaderToken, `${ownerPath}/exports`);
+    expect(exported.status, await exported.clone().text()).toBe(200);
+    expect(exported.headers.get("content-type")).toContain("text/csv");
+    expect(await exported.text()).toContain("ID,Name,Email,Organization");
+
+    await grantResourceToGroup(env.DB, fixture.administrator, fixture.ownerGroupId, "event", created.id, {
+      granteeGroupId: fixture.granteeGroupId,
+      capability: "manage",
+    });
+    const delegatedExport = await request(fixture.granteeLeaderToken, `${granteePath}/exports`);
+    expect(delegatedExport.status, await delegatedExport.clone().text()).toBe(200);
+  });
+
   it("configures terms and attendance days through one guarded selected-group contract", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);

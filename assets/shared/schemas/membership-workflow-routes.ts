@@ -7,6 +7,8 @@ import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { authErrors, ok, requiresPermissions } from "./route-contract";
 import {
+  membershipWorkflowRemovalSchema,
+  membershipWorkflowRemovalResponseSchema,
   membershipWorkflowCreateSchema,
   membershipWorkflowPublishSchema,
   membershipWorkflowsQuerySchema,
@@ -73,5 +75,18 @@ export const membershipWorkflowDestinationRouteSchema = {
   responses: {
     ...ok("Managed notification list.", mailingListResponseSchema),
     ...authErrors({ notFound: "List not found." }),
+  },
+};
+
+export const membershipWorkflowRemoveRouteSchema = {
+  ...workflowWrite,
+  summary: "Delete an unused draft or archive a published workflow version",
+  request: {
+    params: membershipWorkflowVersionParamsSchema,
+    body: { required: true, content: { "application/json": { schema: membershipWorkflowRemovalSchema } } },
+  },
+  responses: {
+    ...ok("Workflow removed from future selection.", membershipWorkflowRemovalResponseSchema),
+    ...authErrors({ notFound: "Workflow not found.", conflict: "Workflow is assigned or changed." }),
   },
 };

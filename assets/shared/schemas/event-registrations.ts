@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { successResponseSchema } from "./api-common";
 import { eventSummarySchema } from "./event-read-models";
+import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { registrationRecordContextSchema } from "./registration-record";
 
@@ -18,6 +20,11 @@ export type EventRegistrationStatusFilter = z.infer<typeof eventRegistrationStat
 export function eventRegistrationStatusLabel(status: EventRegistrationStatus): string {
   return EVENT_REGISTRATION_STATUS_LABELS[status];
 }
+
+export const eventRegistrationPromotionsResponseSchema = successResponseSchema.extend({
+  dayRegistrationOffers: z.number().int().nonnegative(),
+  affectedRegistrations: z.array(databaseIdSchema),
+});
 
 export const eventRegistrationAttendanceChangeFilterSchema = z.enum(["any", "left_in_person", "joined_in_person"]);
 export type EventRegistrationAttendanceChangeFilter = z.infer<typeof eventRegistrationAttendanceChangeFilterSchema>;

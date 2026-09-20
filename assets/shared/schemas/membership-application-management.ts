@@ -3,12 +3,13 @@
  * transitions, communications/notes, and evidence-based approval.
  */
 import { z } from "zod";
+import { formFieldDefinitionSchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api-common";
 import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpUrlSchema } from "./urls";
-import { groupLabelSchema } from "./groups";
+import { groupIdSchema, groupLabelSchema } from "./groups";
 import { requiresPermissions } from "./route-contract";
 /** Allowlisted sort columns for GET /api/v1/members/applications — see listMembershipApplications. */
 export const MEMBERSHIP_APPLICATIONS_SORT_COLUMNS = [
@@ -67,6 +68,7 @@ export const membershipApplicationCommunicationSchema = z.object({
 export const membershipApplicationDetailSchema = membershipApplicationSummarySchema.extend({
   stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
+  answerFields: z.array(formFieldDefinitionSchema).optional(),
   requestedWorkingGroups: z.array(groupLabelSchema.pick({ slug: true, name: true })),
   events: z.array(membershipApplicationEventSchema),
   communications: z.array(membershipApplicationCommunicationSchema),
@@ -246,6 +248,14 @@ export const applicationEditableAnswersSchema = z.object({
   about_yourself: z.string().trim().max(5000).nullable().optional(),
   about_organization: z.string().trim().max(5000).nullable().optional(),
   reason: z.string().trim().max(5000).nullable().optional(),
+  contribution_type: z.string().trim().max(200).nullable().optional(),
+  wants_to_present: z.boolean().optional(),
+  interested_in_sponsoring: z.boolean().optional(),
+  agrees_bylaws: z.boolean().optional(),
+  agrees_code_of_conduct: z.boolean().optional(),
+  agrees_ipr_policy: z.boolean().optional(),
+  warranted_authority: z.boolean().optional(),
+  working_groups: z.array(groupIdSchema).max(50).optional(),
 });
 
 export const applicationUpdateSchema = z
@@ -265,6 +275,8 @@ export const applicationUpdateSchema = z
       value.answers !== undefined,
     { message: "At least one field must be provided" },
   );
+
+export type ApplicationUpdate = z.infer<typeof applicationUpdateSchema>;
 
 export const applicationUpdateRouteSchema = {
   ...requiresPermissions("membership:write"),

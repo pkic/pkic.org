@@ -2,7 +2,7 @@
  * @covers proposal.4.1
  * @covers proposal.4.6
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
@@ -11,8 +11,97 @@ import { proposalDecisionPreviewResponseSchema } from "../../assets/shared/schem
 import { definitionFor } from "./helpers/definition-list";
 import { tab } from "./helpers/tabs";
 
+const GROUP_ID = "20000000-0000-4000-8000-000000000003";
+
+function groupDetailResponse() {
+  return {
+    group: {
+      id: GROUP_ID,
+      slug: "pqc",
+      name: "Post-Quantum Cryptography Working Group",
+      type: { key: "working_group", singularLabel: "Working group", pluralLabel: "Working groups" },
+      parentGroup: null,
+      description: null,
+      links: [],
+      visibility: "authenticated",
+      publicLeadership: false,
+      publicRoster: false,
+      active: true,
+      membershipCapacityCount: 0,
+      representedMemberCount: 0,
+      participantCount: 0,
+      childCount: 0,
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    },
+    capabilities: ["view", "manage"],
+  };
+}
+
+function groupEventResponse({
+  id,
+  slug,
+  name,
+  startsAt = null,
+  capabilities = ["view", "manage"],
+}: {
+  id: string;
+  slug: string;
+  name: string;
+  startsAt?: string | null;
+  capabilities?: Array<"view" | "manage">;
+}) {
+  return {
+    event: {
+      id,
+      ownerGroupId: GROUP_ID,
+      seriesId: null,
+      slug,
+      basePath: null,
+      name,
+      timezone: "Europe/Amsterdam",
+      startsAt,
+      endsAt: null,
+      profileKey: "conference",
+      sourceMode: "hugo",
+      registrationPolicy: "public",
+      visibility: "public",
+      inviteLimitAttendee: 50,
+      location: "Amsterdam",
+      links: [],
+      nextOccurrenceAt: startsAt,
+      updatedAt: "2026-08-29T00:00:00.000Z",
+      proposalAccess: {
+        eventPermissions: ["proposals:read", "review", "finalize"],
+        canRead: true,
+        canReview: true,
+        canFinalize: true,
+        canEditAcceptedAbstract: true,
+        canCancelAcceptedProposal: true,
+      },
+      capabilities,
+    },
+  };
+}
+
+async function fulfillGroupRoute(route: Route, event: ReturnType<typeof groupEventResponse>): Promise<void> {
+  const pathname = new URL(route.request().url()).pathname;
+  if (pathname === `/api/v1/groups/${GROUP_ID}`) {
+    await route.fulfill({ json: groupDetailResponse() });
+    return;
+  }
+  if (pathname === `/api/v1/groups/${GROUP_ID}/events/${event.event.id}`) {
+    await route.fulfill({ json: event });
+    return;
+  }
+  await route.fulfill({
+    json: { groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } },
+  });
+}
+
 const adminSessionResponse = userAuthSessionResponseSchema.parse({
   success: true,
+  expiresAt: "2099-12-31T23:59:59.000Z",
   identity: { id: "10000000000000000000000000000001", email: "admin@pkic.org" },
   staff: {
     id: "admin-1",
@@ -86,15 +175,14 @@ test("renders the portal proposal detail workflow with submission answers and op
     }) as typeof window.open;
   });
 
-  // The staff sidebar fetches group feeds on boot; unmocked they hit the real
-  // server unauthenticated, and the resulting 401 clears the mocked session.
-  await page.route("**/api/v1/groups**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } }),
-    });
+  // Resolve the legacy event URL into the canonical group workspace. The
+  // production member migration assigns this conference to the PQC group.
+  const groupEvent = groupEventResponse({
+    id: "pqc-2026-event-id",
+    slug: "pqc-2026",
+    name: "PQC 2026",
   });
+  await page.route("**/api/v1/groups**", (route) => fulfillGroupRoute(route, groupEvent));
   await page.route("**/api/v1/users/current/groups**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -111,8 +199,6 @@ test("renders the portal proposal detail workflow with submission answers and op
     });
   });
 
-  // The standalone event views now resolve the owning group before
-  // rendering; this mocked event has none, so the standalone surface stays.
   await page.route("**/api/v1/events/pqc-2026", async (route) => {
     await route.fulfill({
       status: 200,
@@ -131,7 +217,7 @@ test("renders the portal proposal detail workflow with submission answers and op
           visibility: "public",
           inviteLimitAttendee: 0,
           updatedAt: "2026-08-01T00:00:00.000Z",
-          ownerGroupId: null,
+          ownerGroupId: GROUP_ID,
           seriesId: null,
           basePath: null,
           userRetentionDays: null,
@@ -569,7 +655,8 @@ test("renders the portal proposal detail workflow with submission answers and op
 
   expect(openedUrls).toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
 
-  await tab(page, "Audit Log").click();
+  const proposalTabs = page.getByRole("navigation", { name: "Proposal sections" });
+  await tab(proposalTabs, "Audit Log").click();
   await expect(page.getByText("Proposal updated: title")).toBeVisible();
   // The pager is reached by its role and accessible name, and the page it is
   // showing by `aria-current` — `.adm-pager`/`.page-item` were Bootstrap class
@@ -668,15 +755,13 @@ test("renders the portal proposal detail workflow with submission answers and op
 
 test("offers event presentation archives only with proposal read access", async ({ page }) => {
   let canReadPresentations = false;
-  // The staff sidebar fetches group feeds on boot; unmocked they hit the real
-  // server unauthenticated, and the resulting 401 clears the mocked session.
-  await page.route("**/api/v1/groups**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ groups: [], page: { limit: 12, offset: 0, total: 0, hasMore: false } }),
-    });
+  const groupEvent = groupEventResponse({
+    id: "event-1",
+    slug: "pqc-2026",
+    name: "PQC Conference 2026",
+    startsAt: "2026-11-01T09:00:00.000Z",
   });
+  await page.route("**/api/v1/groups**", (route) => fulfillGroupRoute(route, groupEvent));
   await page.route("**/api/v1/users/current/groups**", async (route) => {
     await route.fulfill({
       status: 200,
@@ -711,7 +796,7 @@ test("offers event presentation archives only with proposal read access", async 
             visibility: "public",
             inviteLimitAttendee: 50,
             updatedAt: "2026-08-29T00:00:00.000Z",
-            ownerGroupId: null,
+            ownerGroupId: GROUP_ID,
             seriesId: null,
             basePath: null,
             userRetentionDays: null,

@@ -339,7 +339,7 @@ describe("portal membership-application management", () => {
     await act(async () => commands!.click());
     expect(menuItemNamed(page, "Edit application…")).not.toBeNull();
     const tabs = [...page.querySelectorAll('[aria-label="Application sections"] a')].map((tab) => tab.textContent);
-    expect(tabs).toEqual(["Application", "Communications"]);
+    expect(tabs).toEqual(["Application", "Communications", "Review workflow and objections"]);
     const correspondence = mountDetail({ canWrite: true, canApprove: true, tab: "communications" });
     await settle();
     expect(correspondence.textContent).toContain("Send communication");

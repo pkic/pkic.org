@@ -1,10 +1,11 @@
+import type { ApplicationUpdate } from "../../../../../shared/schemas/membership-application-management";
 import { useEffect, useState } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmt } from "../../ui";
 import { type MembershipCategoryCatalogEntry } from "../../../../../shared/schemas/membership-categories";
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
-import { asString } from "./helpers";
+import { asString, asBool, asStringArray } from "./helpers";
 import { ApplicationEditForm, type ApplicationEditFormValue } from "./ApplicationEditForm";
 // `pk-datalist` and `pk-mono` are written here as class names rather than
 // reached through a component, so this module has to pull their stylesheet
@@ -35,18 +36,7 @@ export function ApplicationOverviewCard({
   editing?: boolean;
   /** The record's way of learning that the editor closed — saved or cancelled. */
   onEditingChange?: (editing: boolean) => void;
-  onSave: (edits: {
-    applicantName: string;
-    applicantEmail: string;
-    organizationName: string | null;
-    membershipCategory: string;
-    jobTitle: string | null;
-    linkedin: string | null;
-    organizationWebsite: string | null;
-    aboutYourself: string | null;
-    aboutOrganization: string | null;
-    reason: string | null;
-  }) => Promise<void>;
+  onSave: (edits: ApplicationUpdate) => Promise<void>;
 }) {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -72,33 +62,28 @@ export function ApplicationOverviewCard({
       aboutYourself: asString(answers.about_yourself),
       aboutOrganization: asString(answers.about_organization),
       reason: asString(answers.reason),
+      extraAnswers: {
+        contribution_type: asString(answers.contribution_type ?? answers.contributionType) || null,
+        wants_to_present: asBool(answers.wants_to_present ?? answers.wantsToPresent),
+        interested_in_sponsoring: asBool(answers.interested_in_sponsoring ?? answers.interestedInSponsoring),
+        agrees_bylaws: asBool(answers.agrees_bylaws),
+        agrees_code_of_conduct: asBool(answers.agrees_code_of_conduct),
+        agrees_ipr_policy: asBool(answers.agrees_ipr_policy),
+        warranted_authority: asBool(answers.warranted_authority ?? answers.warrantedAuthority),
+        working_groups: asStringArray(answers.working_groups),
+      },
     });
     setEditError("");
     // Only the opening matters: the record is what the draft is read from.
   }, [editing]);
 
-  async function saveEdit() {
+  async function saveEdit(body: ApplicationUpdate) {
     if (!editForm) return;
     setEditSaving(true);
     setEditError("");
     try {
-      const isIndividual =
-        categories.find((category) => category.code === editForm.membershipCategory)?.isIndividual === true;
-      await onSave({
-        applicantName: editForm.applicantName,
-        applicantEmail: editForm.applicantEmail,
-        organizationName: isIndividual ? null : editForm.organizationName || null,
-        membershipCategory: editForm.membershipCategory,
-        jobTitle: editForm.jobTitle || null,
-        linkedin: editForm.linkedin || null,
-        organizationWebsite: editForm.organizationWebsite || null,
-        aboutYourself: editForm.aboutYourself || null,
-        aboutOrganization: editForm.aboutOrganization || null,
-        reason: editForm.reason || null,
-      });
+      await onSave(body);
       setEditing(false);
-    } catch (e) {
-      setEditError((e as Error).message);
     } finally {
       setEditSaving(false);
     }
@@ -152,11 +137,13 @@ export function ApplicationOverviewCard({
                 </p>
                 <ApplicationEditForm
                   form={editForm}
+                  answerFields={detail.answerFields}
+                  requestedWorkingGroups={detail.requestedWorkingGroups}
                   categories={categories}
                   onChange={(updater) => setEditForm((f) => (f ? updater(f) : f))}
                   disabled={editSaving}
                   error={editError}
-                  onSave={() => void saveEdit()}
+                  onSave={saveEdit}
                   onCancel={() => setEditing(false)}
                   saving={editSaving}
                 />

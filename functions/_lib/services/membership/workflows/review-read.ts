@@ -1,3 +1,5 @@
+import { getGlobalFormByKey } from "../../forms";
+import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
 import type { UserCatalogListQuery } from "../../../../../assets/shared/schemas/user-catalog";
 import { listUserCatalog } from "../../user-catalog";
 import { consensusReviewerEvidence } from "./reviewer-eligibility";
@@ -60,6 +62,7 @@ export async function getMembershipReview(db: DatabaseLike, applicationId: strin
       organizationName: application.organization_name,
       membershipCategory: application.membership_category,
       answers,
+      answerFields: (await getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY))?.fields ?? [],
       requestedWorkingGroups: await getRequestedApplicationGroups(db, answers),
     },
     workflow: membershipWorkflowProgress(execution),

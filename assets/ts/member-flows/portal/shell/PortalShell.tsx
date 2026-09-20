@@ -1,4 +1,5 @@
 import { portalEventParticipantRoutes } from "./portal-event-participant-routes";
+import { portalEventResponseRoutes } from "./portal-event-response-routes";
 /** Capability-derived portal shell shared by member and management identities. */
 import type { ComponentChildren } from "preact";
 import { Suspense } from "preact/compat";
@@ -117,6 +118,7 @@ export function PortalShell() {
                 )}
               />
             )}
+            {access.hasEventWorkspace && portalEventResponseRoutes()}
             {access.hasEventWorkspace && portalEventParticipantRoutes()}
             {access.hasEventWorkspace && (
               // A team member is added on a page below the Team tab, which is
@@ -317,7 +319,16 @@ export function PortalShell() {
               path="/membership/applications/:applicationId/review"
               component={({ params }: { params: { applicationId: string } }) => (
                 <SectionWrapper>
-                  <WorkflowReviewPage applicationId={params.applicationId} />
+                  {access.hasMembershipQueue ? (
+                    <MembershipApplications
+                      initialApplicationId={params.applicationId}
+                      initialTab="review"
+                      canWrite={portalHasGlobalPermission(session, "membership:write")}
+                      canApprove={portalHasGlobalPermission(session, "membership:approve")}
+                    />
+                  ) : (
+                    <WorkflowReviewPage applicationId={params.applicationId} />
+                  )}
                 </SectionWrapper>
               )}
             />

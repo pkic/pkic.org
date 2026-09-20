@@ -78,7 +78,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await expect(page).toHaveURL(/\/communications\/new$/);
   const communications = detail.getByRole("region", { name: "New attendees campaign" });
   await communications.getByPlaceholder("Email subject").fill("Workshop planning update");
-  await communications.getByRole("textbox", { name: "Message Markdown source" }).fill("Hello members");
+  await communications.getByRole("textbox", { name: "Message", exact: true }).fill("Hello members");
   const campaignPreview = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/v1/groups/${GROUP_ID}/events/`) &&

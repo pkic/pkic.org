@@ -1,6 +1,6 @@
 import { WorkflowMigrationCard } from "./WorkflowMigrationCard";
 import { isApplicationTerminalStage } from "../../../../../shared/schemas/member-applications";
-import { ButtonLink } from "../../../../ui/Button";
+import { WorkflowReviewPage } from "./WorkflowReviewPage";
 /**
  * One membership application as a record: who applied, in the header, with
  * the stage beside the name and the record's commands in its own menu; then
@@ -34,6 +34,7 @@ import type { MembershipCategoryCatalogEntry } from "../../../../../shared/schem
 export const APPLICATION_TABS = [
   { key: "overview", label: "Application" },
   { key: "communications", label: "Communications" },
+  { key: "review", label: "Review workflow and objections" },
 ] as const;
 export type ApplicationTab = (typeof APPLICATION_TABS)[number]["key"];
 
@@ -55,7 +56,7 @@ export function ApplicationDetailView({
   /** The URL-addressed facet; undefined or unknown opens the application itself. */
   tab?: string;
 }) {
-  const { loading, error, detail, transition, sendCommunication, addNote, saveEdit } =
+  const { loading, error, detail, reload, transition, sendCommunication, addNote, saveEdit } =
     useApplicationDetail(applicationId);
   const [editing, setEditing] = useState(false);
   const activeTab = resolveTab(tab);
@@ -126,9 +127,6 @@ export function ApplicationDetailView({
             {(canWrite || canApprove) && (
               <ApplicationTransitionCard detail={detail} canWrite={canWrite} onTransition={transition} />
             )}
-            <ButtonLink href={usePortalHashLocation.hrefs(`${basePath}/review`)}>
-              Review workflow and objections
-            </ButtonLink>
             {canApprove && !isApplicationTerminalStage(detail.stage) && (
               <WorkflowMigrationCard applicationId={applicationId} />
             )}
@@ -136,6 +134,7 @@ export function ApplicationDetailView({
           </aside>
         </div>
       )}
+      {activeTab === "review" && <WorkflowReviewPage applicationId={applicationId} embedded onSaved={reload} />}
       {activeTab === "communications" && (
         <ApplicationCommunicationsCard
           detail={detail}

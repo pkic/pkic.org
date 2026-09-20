@@ -9,7 +9,7 @@
  * said "in_person" for a registration whose three days were one confirmed and
  * two waitlisted, and nothing at all about the waitlist.
  */
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { PersonCell } from "../../../../ui/PersonCell";
 import {
   EVENT_REGISTRATION_STATUSES,
@@ -17,20 +17,31 @@ import {
   eventRegistrationStatusLabel,
   type EventAttendanceRegistrationsStats,
 } from "../../../../../shared/schemas/event-registrations";
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { RegistrationDayStates } from "../../../../components/event-registrations/RegistrationDayStates";
 import { RegistrationTotals } from "../../../../components/event-registrations/RegistrationTotals";
+import { RegistrationRosterActions } from "../../../../components/event-registrations/RegistrationRosterActions";
 import { usePortalHashLocation } from "../../hash-location";
-import { fmtDate } from "../../ui";
+import { fmtDate, toast } from "../../ui";
 
 /** The registration's address inside its group event. */
 export function groupEventRegistrationPath(groupId: string, eventId: string, registrationId: string): string {
   return `/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations/${encodeURIComponent(registrationId)}`;
 }
 
-export function GroupEventRegistrations({ groupId, eventId }: { groupId: string; eventId: string }) {
+export function GroupEventRegistrations({
+  groupId,
+  eventId,
+  canManage = false,
+}: {
+  groupId: string;
+  eventId: string;
+  canManage?: boolean;
+}) {
   const [stats, setStats] = useState<EventAttendanceRegistrationsStats | null>(null);
+  const tableRef = useRef<ApiTableActions | null>(null);
+  const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
 
   return (
     <div class="pk-stack pk-stack--snug">
@@ -38,11 +49,24 @@ export function GroupEventRegistrations({ groupId, eventId }: { groupId: string;
       <ApiDataTable
         caption="Registrations"
         urlState="registrations"
-        endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`}
+        endpoint={registrationEndpoint}
         responseSchema={eventAttendanceRegistrationsListResponseSchema}
         resolve={(response) => response.registrations}
         resolvePage={(response) => response.page}
         onData={(response) => setStats(response.stats)}
+        actionsRef={tableRef}
+        toolbar={
+          canManage
+            ? () => (
+                <RegistrationRosterActions
+                  promotionsEndpoint={`${registrationEndpoint}/promotions`}
+                  exportsEndpoint={`${registrationEndpoint}/exports`}
+                  onPromoted={() => tableRef.current?.reload()}
+                  notify={toast}
+                />
+              )
+            : undefined
+        }
         paginate
         searchPlaceholder="name or email"
         initialSort="display_name"

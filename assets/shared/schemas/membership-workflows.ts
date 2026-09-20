@@ -1,7 +1,7 @@
 /** Immutable, ordered membership requirements shared by forms and execution. */
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { utcInstantSchema, trimmedString } from "./api-common";
+import { utcInstantSchema, trimmedString, booleanQueryFlagSchema } from "./api-common";
 import { donationCheckoutSchema } from "./donation";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
@@ -83,11 +83,13 @@ export const membershipWorkflowVersionSchema = z.object({
   definition: membershipWorkflowDefinitionSchema,
   createdAt: utcInstantSchema,
   publishedAt: utcInstantSchema.nullable(),
+  archivedAt: utcInstantSchema.nullable().default(null),
 });
 export type MembershipWorkflowVersion = z.infer<typeof membershipWorkflowVersionSchema>;
 export const membershipWorkflowVersionResponseSchema = z.object({ workflow: membershipWorkflowVersionSchema });
 export const membershipWorkflowsQuerySchema = listQuerySchema(["name", "createdAt", "version"] as const).extend({
   status: membershipWorkflowVersionSchema.shape.status.optional(),
+  archived: booleanQueryFlagSchema.default(false),
 });
 export type MembershipWorkflowsQuery = z.infer<typeof membershipWorkflowsQuerySchema>;
 export const membershipWorkflowsResponseSchema = paginatedResponseSchema("workflows", membershipWorkflowVersionSchema);
@@ -102,6 +104,12 @@ export const membershipWorkflowUpdateSchema = z.object({
 export const membershipWorkflowPublishSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   reason: trimmedString(3, 2000),
+});
+
+export const membershipWorkflowRemovalSchema = membershipWorkflowPublishSchema;
+export const membershipWorkflowRemovalResponseSchema = z.object({
+  id: databaseIdSchema,
+  outcome: z.enum(["deleted", "archived"]),
 });
 
 export const MEMBERSHIP_APPLICATION_LIFECYCLES = [

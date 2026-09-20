@@ -25,7 +25,7 @@ test("permitted staff manage global forms through the canonical Forms resource",
     }
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  await signInToPortal(page, e2eAdminEmail("portal-forms-management"));
   await page.goto("/portal/#/forms");
 
   await expect(page.getByRole("link", { name: "Forms", exact: true })).toBeVisible();
@@ -103,7 +103,7 @@ test("permitted staff manage global forms through the canonical Forms resource",
 test("permitted staff filter the forms list by Purpose and Status, and archive/delete through the UI", async ({
   page,
 }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  await signInToPortal(page, e2eAdminEmail("portal-forms-filters"));
   await page.goto("/portal/#/forms");
 
   const formKey = `e2e-form-filter-${Date.now()}-${test.info().workerIndex}`;

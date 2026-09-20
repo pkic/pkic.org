@@ -9,7 +9,7 @@ export async function requireCategoryWorkflow(db: DatabaseLike, category: Member
   if (!category.active || !category.workflowVersionId)
     throw new AppError(409, "MEMBERSHIP_CATEGORY_UNAVAILABLE", "This category is not accepting applications.");
   const version = await getMembershipWorkflowVersion(db, category.workflowVersionId);
-  if (version.status !== "published")
+  if (version.status !== "published" || version.archivedAt)
     throw new AppError(409, "MEMBERSHIP_WORKFLOW_UNPUBLISHED", "The selected category has no published workflow.");
   return version;
 }
@@ -28,6 +28,7 @@ export function prepareMembershipWorkflowPin(
     prepareAuthorizationGuard(db, {
       sql: `SELECT 1 FROM membership_categories category JOIN membership_workflow_versions version
         ON version.id = ? AND version.published_at IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id)
         WHERE category.code = ? AND category.revision = ?${explicitVersion ? "" : " AND category.retired_at IS NULL AND category.workflow_version_id = version.id"}`,
       bindings: [version.id, category.code, category.revision],
     }),

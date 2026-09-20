@@ -24,6 +24,10 @@ export function mount(node: ComponentChildren): HTMLElement {
 
 export async function settle(): Promise<void> {
   await act(async () => {
+    await vi.dynamicImportSettled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }

@@ -45,6 +45,7 @@ import { expectCurrentTab, tab } from "./helpers/tabs";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 const EVENT_SLUG = "pqc-conference-amsterdam-nl";
+const EVENT_GROUP_ID = "20000000-0000-4000-8000-000000000003";
 const ADMIN_AUTH_FILE = path.join("test-results", "portal-management-verification-auth.json");
 const ADMIN_EMAIL = e2eAdminEmail("portal-management-verification");
 
@@ -576,7 +577,7 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("button", { name: "Add team member" })).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Add team member" }).click();
     // Adding is a page of its own: the list it adds to is not underneath it.
-    await expect(page).toHaveURL(new RegExp(`#/events/${EVENT_SLUG}/settings/team/new$`));
+    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/team/new$`));
     await expect(page.getByRole("table", { name: "Event team members" })).toHaveCount(0);
 
     const form = page.locator("form").filter({
@@ -593,7 +594,7 @@ test.describe("Portal management browser-verification pass", () => {
     await form.getByRole("button", { name: "Add team member", exact: true }).click();
     expect((await assigned).status()).toBe(201);
     // And it returns to the list it added to.
-    await expect(page).toHaveURL(new RegExp(`#/events/${EVENT_SLUG}/settings/team$`));
+    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/team$`));
 
     const row = page.getByRole("row").filter({ hasText: email });
     await expect(row).toContainText("Program Committee");
@@ -667,8 +668,9 @@ test.describe("Portal management browser-verification pass", () => {
 
     const loaded = page.waitForResponse(
       (response) =>
-        new URL(response.url()).pathname === `/api/v1/events/${EVENT_SLUG}/registrations` &&
-        response.request().method() === "GET",
+        new RegExp(`^/api/v1/groups/${EVENT_GROUP_ID}/events/[^/]+/registrations$`).test(
+          new URL(response.url()).pathname,
+        ) && response.request().method() === "GET",
     );
     await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations`);
     expect((await loaded).status()).toBe(200);
@@ -692,8 +694,8 @@ test.describe("Portal management browser-verification pass", () => {
     });
 
     await page.goto(`/portal/#/events/${EVENT_SLUG}/proposals/responses`);
-    await expect(tab(page, "Responses")).toBeVisible({ timeout: 15_000 });
-    await expectCurrentTab(page, "Responses");
+    await expect(tab(page, /^Responses$/)).toBeVisible({ timeout: 15_000 });
+    await expectCurrentTab(page, /^Responses$/);
     await expect(page.getByText("Proposal not found")).toHaveCount(0);
     expect(proposalDetailRequests).toEqual([]);
   });
@@ -705,8 +707,8 @@ test.describe("Portal management browser-verification pass", () => {
     page,
   }) => {
     await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations/responses`);
-    await expect(tab(page, "Responses")).toBeVisible({ timeout: 15_000 });
-    await expectCurrentTab(page, "Responses");
+    await expect(tab(page, /^Responses$/)).toBeVisible({ timeout: 15_000 });
+    await expectCurrentTab(page, /^Responses$/);
     await expect(page.getByText("Registration not found")).toHaveCount(0);
   });
 

@@ -25,8 +25,8 @@ async function migrationSnapshot(db: DatabaseLike, applicationId: string, versio
   if (isApplicationTerminalStage(application.stage))
     throw new AppError(409, "MEMBERSHIP_APPLICATION_CLOSED", "Closed applications cannot change workflow.");
   const target = await getMembershipWorkflowVersion(db, versionId);
-  if (target.status !== "published")
-    throw new AppError(409, "MEMBERSHIP_WORKFLOW_UNPUBLISHED", "Choose a published workflow version.");
+  if (target.status !== "published" || target.archivedAt)
+    throw new AppError(409, "MEMBERSHIP_WORKFLOW_UNPUBLISHED", "Choose an available published workflow version.");
   const current = await first<{ generation: number; version_id: string; revision: number }>(
     db,
     "SELECT generation, version_id, revision FROM membership_application_workflows WHERE application_id = ? AND superseded_at IS NULL",

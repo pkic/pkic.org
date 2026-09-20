@@ -1,3 +1,4 @@
+import { formatFormAnswerValue } from "../../../../components/forms/form-answers";
 import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { LinkList } from "../../../../ui/LinkList";
@@ -40,11 +41,18 @@ function NotProvided() {
 export function ApplicationAnswersCard({
   detail,
 }: {
-  detail: Pick<MembershipApplicationDetail, "answers" | "requestedWorkingGroups">;
+  detail: Pick<MembershipApplicationDetail, "answers" | "requestedWorkingGroups" | "answerFields">;
 }) {
   const linkedin = asString(detail.answers.linkedin);
   const website = asString(detail.answers.organization_website);
-  const agreements = asStringArray(detail.answers.legalAgreements);
+  const policyAnswers = [
+    ["agrees_bylaws", "Bylaws"],
+    ["agrees_code_of_conduct", "Code of Conduct"],
+    ["agrees_ipr_policy", "IPR Policy"],
+  ] as const;
+  const agreements = policyAnswers.some(([key]) => key in detail.answers)
+    ? policyAnswers.filter(([key]) => asBool(detail.answers[key])).map(([, label]) => label)
+    : asStringArray(detail.answers.legalAgreements);
 
   return (
     <div class="pk">
@@ -93,13 +101,24 @@ export function ApplicationAnswersCard({
             </dd>
 
             <dt>Contribution type</dt>
-            <dd>{asString(detail.answers.contributionType) || <NotProvided />}</dd>
+            <dd>
+              {asString(detail.answers.contribution_type ?? detail.answers.contributionType) ? (
+                formatFormAnswerValue(
+                  detail.answers.contribution_type ?? detail.answers.contributionType,
+                  detail.answerFields?.find((field) => field.key === "contribution_type"),
+                ).join(", ")
+              ) : (
+                <NotProvided />
+              )}
+            </dd>
 
             <dt>Wants to present</dt>
-            <dd>{asBool(detail.answers.wantsToPresent) ? "Yes" : "No"}</dd>
+            <dd>{asBool(detail.answers.wants_to_present ?? detail.answers.wantsToPresent) ? "Yes" : "No"}</dd>
 
             <dt>Interested in sponsoring</dt>
-            <dd>{asBool(detail.answers.interestedInSponsoring) ? "Yes" : "No"}</dd>
+            <dd>
+              {asBool(detail.answers.interested_in_sponsoring ?? detail.answers.interestedInSponsoring) ? "Yes" : "No"}
+            </dd>
 
             <dt>Working groups requested</dt>
             <dd>

@@ -106,6 +106,30 @@ describe("public generic group directory", () => {
     );
   });
 
+  it("labels an H6 chair Independent while retaining organization job titles", async () => {
+    const groupId = await insertGroup({ slug: "independent-chair", name: "Example Working Group", publicRoster: true });
+    const userId = await insertLeader(groupId, "role-group_lead", "Independent User");
+    await env.DB.prepare(
+      "UPDATE member_category_assignments SET category_code = 'H6' WHERE member_id IN (SELECT id FROM members WHERE user_id = ?)",
+    )
+      .bind(userId)
+      .run();
+    await insertLeader(groupId, "role-group_deputy_lead", "Organization User", "Security Engineer");
+    const response = await callApi(env as any, "/api/v1/groups/independent-chair/directory");
+    expect(response.status).toBe(200);
+    const directory = groupDirectoryResponseSchema.parse(await response.json());
+    expect(directory.leadership.find((entry) => entry.person.name === "Independent User")?.person).toMatchObject({
+      jobTitle: "Independent",
+      organizationName: null,
+    });
+    expect(directory.roster?.current.find((entry) => entry.person.name === "Independent User")?.person.jobTitle).toBe(
+      "Independent",
+    );
+    expect(directory.leadership.find((entry) => entry.person.name === "Organization User")?.person.jobTitle).toBe(
+      "Security Engineer",
+    );
+  });
+
   it("does not disclose a non-public inherited source group", async () => {
     const parentId = await insertGroup({
       slug: "private-directory-parent",

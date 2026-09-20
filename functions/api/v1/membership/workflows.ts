@@ -1,3 +1,5 @@
+import { membershipWorkflowRemoveRouteSchema } from "../../../../assets/shared/schemas/membership-workflow-routes";
+import { removeMembershipWorkflowVersion } from "../../../_lib/services/membership/workflows/removal";
 import {
   membershipWorkflowDestinationsRouteSchema,
   membershipWorkflowDestinationRouteSchema,
@@ -80,5 +82,13 @@ export const MembershipWorkflowDestination = openApiRoute(
   async (c: AdminContext, data) => {
     const { db } = await requireStaffPermission(c, "membership:read");
     return json(await getMembershipNoticeDestination(db, data.params.destinationId));
+  },
+);
+
+export const MembershipWorkflowRemove = openApiRoute(
+  membershipWorkflowRemoveRouteSchema,
+  async (c: AdminContext, data) => {
+    const { db, staff } = await requireStaffPermission(c, "membership:write");
+    return json(await removeMembershipWorkflowVersion(db, staff, data.params.versionId, data.body));
   },
 );

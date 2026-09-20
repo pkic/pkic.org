@@ -99,8 +99,8 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.42.1",
-    "@cloudflare/vitest-pool-workers": "^0.13.5",
-    "@cloudflare/workers-types": "^4.20260621.1",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260918.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@types/node": "^24.12.4",
@@ -120,6 +120,6 @@
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.11",
-    "wrangler": "^4.127.1"
+    "wrangler": "^4.135.0"
   }
 }

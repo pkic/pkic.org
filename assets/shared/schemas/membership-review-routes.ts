@@ -61,6 +61,7 @@ export const membershipWorkflowReviewResponseSchema = z.object({
     organizationName: true,
     membershipCategory: true,
     answers: true,
+    answerFields: true,
     requestedWorkingGroups: true,
   }),
   workflow: membershipWorkflowProgressSchema,

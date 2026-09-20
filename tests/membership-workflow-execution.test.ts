@@ -5,7 +5,7 @@ import { beforeEach, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
 import { seatInExecutiveCouncil, unseatFromExecutiveCouncil } from "./helpers/group-leadership";
@@ -89,9 +89,8 @@ it("requires an authorized staff review, a sent notice and a full window, then r
       { waitUntil() {}, passThroughOnException() {} } as any,
     );
   }
-  await evaluateMembershipApplication(env.DB, applicationId, "https://app.test");
   const active = await getMembershipExecution(env.DB, applicationId);
-  expect(active.steps[0].state).toBe("active");
+  expect(active.steps[0].state).toBe("waiting");
   expect(
     (
       await call(
@@ -101,6 +100,27 @@ it("requires an authorized staff review, a sent notice and a full window, then r
       )
     ).status,
   ).toBe(401);
+  const reviewResponse = await app.fetch(
+    new Request(`https://app.test/api/v1/members/applications/${applicationId}/reviews/current`, {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+    env as any,
+    { waitUntil() {}, passThroughOnException() {} } as any,
+  );
+  expect(await reviewResponse.json()).toMatchObject({ capabilities: { completeReview: true } });
+  const outsiderId = await insertUser(env.DB, "non-reviewer@example.test");
+  await seatInExecutiveCouncil(env.DB, outsiderId);
+  const outsiderToken = await createMemberSession(env.DB, outsiderId, "non-reviewer");
+  const denied = await app.fetch(
+    new Request(`https://app.test/api/v1/members/applications/${applicationId}/reviews/completion`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${outsiderToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ expectedRevision: active.revision, reason: "An unrelated user cannot approve." }),
+    }),
+    env as any,
+    { waitUntil() {}, passThroughOnException() {} } as any,
+  );
+  expect(denied.status).toBe(403);
   const completion = await call("/reviews/completion", {
     expectedRevision: active.revision,
     reason: "The organization form is complete.",

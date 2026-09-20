@@ -1,13 +1,12 @@
-import { MAILING_LIST_SORT_COLUMNS, type MailingListsListQuery } from "../../../../assets/shared/schemas/mailing-lists";
+import type { MailingListsListQuery } from "../../../../assets/shared/schemas/mailing-lists";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "../groups/governance";
 import type { AuthAdmin } from "../../types";
 import { isAuthorizationGuardFailure, type AuthorizationEvidence } from "../../db/authorization-guard";
 import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { all, first } from "../../db/queries";
-import { buildD1TextSearchFilter } from "../../db/search";
-import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
+import { appendMailingListFilters, resolveMailingListOrderBy } from "../mailing-list-query";
 import { requireManagedGroupMailingList } from "./authorization";
 import { MAILING_LIST_COLUMNS, type MailingListRow, toMailingList } from "./record";
 import {
@@ -34,19 +33,7 @@ export function buildMailingListsPageQuery(
   } else if (!options.requiredAuthorization) {
     throw new Error("A group, accessible resource set, or explicit authorization is required for mailing-list pages");
   }
-  const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
-  if (search) {
-    conditions.push(search.sql);
-    bindings.push(...search.bindings);
-  }
-  if (query.purpose) {
-    conditions.push("purpose = ?");
-    bindings.push(query.purpose);
-  }
-  if (query.active !== undefined) conditions.push(query.active ? "active = 1" : "active = 0");
-  if (query.primaryDiscussion !== undefined) {
-    conditions.push(query.primaryDiscussion ? "is_primary_discussion = 1" : "is_primary_discussion = 0");
-  }
+  appendMailingListFilters(query, conditions, bindings);
   if (options.requiredAuthorization) {
     conditions.push(`EXISTS (${options.requiredAuthorization.sql})`);
     bindings.push(...options.requiredAuthorization.bindings);
@@ -59,18 +46,7 @@ export function buildMailingListsPageQuery(
         ${options.accessibleResources ? "JOIN accessible_resource ON accessible_resource.resource_id = mailing_lists.id" : ""}
         ${where}`,
     bindings,
-    orderBy: resolveMappedOrderBy(
-      query.sort,
-      {
-        email: "email COLLATE NOCASE",
-        label: "label COLLATE NOCASE",
-        purpose: "purpose",
-        active: "active",
-        created_at: "created_at",
-      } satisfies Record<(typeof MAILING_LIST_SORT_COLUMNS)[number], string>,
-      "purpose ASC, email ASC",
-      "id ASC",
-    ),
+    orderBy: resolveMailingListOrderBy(query.sort, "purpose ASC, email ASC"),
     limit: query.limit,
     offset: query.offset,
   };

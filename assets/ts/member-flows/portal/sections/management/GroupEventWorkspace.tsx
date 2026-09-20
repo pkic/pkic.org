@@ -32,9 +32,10 @@ import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
 import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
+import { LazySponsorTiersTab } from "../events/detail/settings/LazySponsorTiersTab";
 import { EventFormResponses } from "../../../../components/forms/management/FormManagement";
 import { GroupEventCommunications, NEW_CAMPAIGN_SEGMENT } from "./GroupEventCommunications";
-import { GroupEventConfiguration } from "./GroupEventConfiguration";
+import { LazyGroupEventConfiguration } from "./LazyGroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventInvitations } from "./GroupEventInvitations";
 import { GroupEventProposals } from "./GroupEventProposals";
@@ -306,7 +307,7 @@ export function GroupEventWorkspace({
                   eventSlug={event.slug}
                   purpose="event_registration"
                 >
-                  <GroupEventRegistrations groupId={groupId} eventId={event.id} />
+                  <GroupEventRegistrations groupId={groupId} eventId={event.id} canManage={canManage} />
                 </EventRecordSections>
               ))}
 
@@ -439,7 +440,26 @@ export function GroupEventWorkspace({
                   </PanelBody>
                 </Panel>
 
-                {!event.seriesId && <GroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />}
+                {!event.seriesId && (
+                  <LazyGroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />
+                )}
+
+                <Panel aria-label="Sponsor tiers">
+                  <PanelHeader title="Sponsor tiers" />
+                  <PanelBody>
+                    <LazySponsorTiersTab
+                      slug={event.slug}
+                      canWrite={canManage}
+                      endpoint={
+                        "/api/v1/groups/" +
+                        encodeURIComponent(groupId) +
+                        "/events/" +
+                        encodeURIComponent(event.id) +
+                        "/sponsors/tiers"
+                      }
+                    />
+                  </PanelBody>
+                </Panel>
 
                 {event.ownerGroupId === groupId && (
                   <ResourceSharingEditor

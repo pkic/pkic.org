@@ -205,6 +205,11 @@ export function MarkdownEditor({
   }, [editor, editorRef, source, disabled]);
 
   const locked = disabled || !editor || source;
+  const runFocused = (run: (focused: Editor) => void) => {
+    if (!editor) return;
+    editor.view.focus();
+    run(editor);
+  };
   const position = () => editor?.state.selection.from ?? 0;
   const toggleSource = () => {
     if (source)
@@ -246,7 +251,7 @@ export function MarkdownEditor({
             checked: Boolean(editor?.isActive("paragraph")),
             disabled: locked,
             onSelect: () => {
-              editor?.chain().focus().setParagraph().run();
+              runFocused((focused) => focused.commands.setParagraph());
             },
           },
           ...([2, 3, 4] as const).map((level) => ({
@@ -255,7 +260,7 @@ export function MarkdownEditor({
             disabled: locked,
             checked: Boolean(editor?.isActive("heading", { level })),
             onSelect: () => {
-              editor?.chain().focus().setHeading({ level }).run();
+              runFocused((focused) => focused.commands.setHeading({ level }));
             },
           })),
         ],
@@ -272,7 +277,7 @@ export function MarkdownEditor({
         icon: <IconQuote />,
         active: "blockquote",
         block: "callout",
-        run: () => editor?.chain().focus().toggleBlockquote().run(),
+        run: () => runFocused((focused) => focused.commands.toggleBlockquote()),
       },
       { label: "Code", icon: <IconCode />, active: "code", run: () => editor?.chain().focus().toggleCode().run() },
       {

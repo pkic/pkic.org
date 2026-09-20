@@ -218,7 +218,12 @@ export function WorkflowStepFields({
       )}
       {step.kind === "payment" && (
         <>
-          <Field label="Fee or product reference" {...of(name("feeReference"))} required>
+          <Field
+            label="Fee or product reference"
+            {...of(name("feeReference"))}
+            required
+            help="Enter a short name for this fee, such as Organization membership. Applicants see it at checkout. Set the price in Fee amount below; no URL or Stripe product ID is needed."
+          >
             {(control) => (
               <TextInput
                 {...control}

@@ -78,7 +78,19 @@ export function ApplicationWorkflow({
         rowKey={(version) => version.id}
         rowAction={(version) => ({ label: "View workflow", onSelect: () => navigate(`${path}/${version.id}`) })}
         createAction={canWrite ? { label: "New workflow", onSelect: () => navigate(`${path}/new`) } : undefined}
+        initialFilters={{ archived: "false" }}
         columns={[
+          {
+            header: "Availability",
+            cell: (version) => (version.archivedAt ? "Archived" : "Available"),
+            filter: {
+              param: "archived",
+              options: [
+                { value: "false", label: "Available workflows" },
+                { value: "true", label: "Archived workflows" },
+              ],
+            },
+          },
           {
             header: "Workflow",
             cell: (version) => <strong>{version.definition.name}</strong>,
@@ -87,7 +99,7 @@ export function ApplicationWorkflow({
           { header: "Version", cell: (version) => version.version, sort: { asc: "version", desc: "-version" } },
           {
             header: "Status",
-            cell: (version) => <Badge status={version.status} />,
+            cell: (version) => <Badge status={version.archivedAt ? "archived" : version.status} />,
             filter: {
               param: "status",
               options: [

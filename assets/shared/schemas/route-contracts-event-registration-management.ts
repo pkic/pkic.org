@@ -2,7 +2,11 @@ import { z } from "zod";
 import { eventSlugParamsSchema, successResponseSchema } from "./api-common";
 import { scopedAuditLogListQuerySchema, scopedAuditLogResponseSchema } from "./audit-log";
 import { eventRegistrationAdmitSchema, eventRegistrationDetailResponseSchema } from "./event-registration-detail";
-import { eventRegistrationsListResponseSchema, eventRegistrationsQuerySchema } from "./event-registrations";
+import {
+  eventRegistrationPromotionsResponseSchema,
+  eventRegistrationsListResponseSchema,
+  eventRegistrationsQuerySchema,
+} from "./event-registrations";
 import { databaseIdSchema } from "./identifiers";
 import { registrationBadgePatchSchema, registrationBadgeResponseSchema } from "./participant-roles";
 import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } from "./registration";
@@ -32,11 +36,6 @@ export const eventRegistrationAdmissionResponseSchema = successResponseSchema.ex
   registration: registrationCapabilitySafeProjectionSchema,
   admittedDayDates: z.array(z.string()),
 });
-export const eventRegistrationPromotionsResponseSchema = successResponseSchema.extend({
-  dayRegistrationOffers: z.number().int().nonnegative(),
-  affectedRegistrations: z.array(databaseIdSchema),
-});
-
 export const eventRegistrationsListRouteSchema = {
   ...requiresPermissions("events:manage"),
   tags: ["Event registrations"],

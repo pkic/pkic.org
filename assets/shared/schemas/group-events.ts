@@ -40,6 +40,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendeeRegistrationParticipationSchema, registrationSubmissionResponseSchema } from "./registration";
 import { eventGroupGrantSchemas } from "./resource-grants";
 import { proposalAccessSchema } from "./event-proposals";
+import { eventSponsorTiersReplaceSchema, eventSponsorTiersResponseSchema } from "./sponsorship-management";
 import {
   eventAttendeeInvitesListResponseSchema,
   eventInvitesListQuerySchema,
@@ -366,6 +367,43 @@ export const groupEventSettingsUpdateRouteSchema = {
     "401": jsonErrorResponse("An authenticated portal identity is required."),
     "403": jsonErrorResponse("Event management access is required."),
     "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
+  },
+};
+
+export const groupEventSponsorTiersGetRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Sponsorships"],
+  summary: "View sponsor attendee-data tiers for a managed group event",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "Sponsor attendee-data tiers for the selected event.",
+      content: { "application/json": { schema: eventSponsorTiersResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventSponsorTiersPutRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Sponsorships"],
+  summary: "Replace sponsor attendee-data tiers for a managed group event",
+  request: {
+    params: groupEventParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventSponsorTiersReplaceSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Sponsor attendee-data tiers replaced.",
+      content: { "application/json": { schema: eventSponsorTiersResponseSchema } },
+    },
+    "400": jsonErrorResponse("Invalid sponsor tier configuration."),
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Event management access changed while the settings were saved."),
   },
 };
 

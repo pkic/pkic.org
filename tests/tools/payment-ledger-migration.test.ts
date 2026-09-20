@@ -2,19 +2,26 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
-function applyMigrationsBeforeLedger(db: DatabaseSync): void {
+const LEDGER_SECTION = "-- Section: Shared payment ledger and immutable payment-event history.";
+
+function applyMigrationsBeforeLedger(db: DatabaseSync): string {
   for (const name of readdirSync("migrations")
-    .filter((name) => /^\d{4}_.+\.sql$/.test(name) && name < "0036_payment_ledger.sql")
+    .filter((name) => /^\d{4}_.+\.sql$/.test(name) && name < "0035_membership_portal_governance.sql")
     .sort()) {
     db.exec(readFileSync("migrations/" + name, "utf8"));
   }
+  const migration = readFileSync("migrations/0035_membership_portal_governance.sql", "utf8");
+  const ledgerOffset = migration.indexOf(LEDGER_SECTION);
+  if (ledgerOffset < 0) throw new Error("Migration 0035 does not contain the payment ledger section");
+  db.exec(migration.slice(0, ledgerOffset));
+  return migration.slice(ledgerOffset);
 }
 
 describe("payment ledger migration", () => {
   it("backfills existing donation, membership fee, and paid sponsorship records", () => {
     const db = new DatabaseSync(":memory:");
     try {
-      applyMigrationsBeforeLedger(db);
+      const migrationAfterLedgerSetup = applyMigrationsBeforeLedger(db);
       db.exec("PRAGMA foreign_keys = OFF");
       db.exec(
         "INSERT INTO donations " +
@@ -34,7 +41,7 @@ describe("payment ledger migration", () => {
           "'cs_sponsor', 'evt_sponsor', 50000, 'eur', '2026-09-20T08:00:00.000Z', '2026-09-20T08:00:00.000Z')",
       );
 
-      db.exec(readFileSync("migrations/0036_payment_ledger.sql", "utf8"));
+      db.exec(migrationAfterLedgerSetup);
 
       expect(
         db

@@ -42,6 +42,8 @@ import {
   MEMBERSHIP_APPLICATIONS_SORT_COLUMNS,
   membershipApplicationDetailSchema,
   membershipApplicationSummarySchema,
+  applicationEditableAnswersSchema,
+  type ApplicationUpdate,
   type MembershipApplicationsListQuery,
   type MembershipApplicationDetail,
   type MembershipApplicationSummary,
@@ -169,7 +171,7 @@ export async function getMembershipApplicationDetail(
   }
 
   const answers = await getApplicationAnswers(db, application.form_submission_id);
-  const [category, eventRows, communications, requestedWorkingGroupRows] = await Promise.all([
+  const [category, eventRows, communications, requestedWorkingGroupRows, form] = await Promise.all([
     first<{ label: string }>(db, "SELECT label FROM membership_categories WHERE code = ?", [
       application.membership_category,
     ]),
@@ -180,12 +182,14 @@ export async function getMembershipApplicationDetail(
     ),
     listApplicationCommunications(db, applicationId),
     getRequestedApplicationGroups(db, answers),
+    getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY),
   ]);
 
   return membershipApplicationDetailSchema.parse({
     ...toSummary(application, category?.label ?? application.membership_category),
     stageEnteredAt: application.stage_entered_at,
     answers,
+    answerFields: form?.fields ?? [],
     requestedWorkingGroups: requestedWorkingGroupRows,
     events: eventRows.map((row) => ({
       fromStage: row.from_stage,
@@ -223,28 +227,11 @@ export async function getMembershipApplicationDetail(
 // `fromStage -> toStage`, so an identical pair reads as "nothing moved" while
 // the note carries the actual detail, keeping it visually distinct from a
 // real transition (which always has fromStage !== toStage).
-const EDITABLE_ANSWER_KEYS = [
-  "job_title",
-  "linkedin",
-  "organization_website",
-  "about_yourself",
-  "about_organization",
-  "reason",
-] as const;
-
-export interface ApplicationEditInput {
-  applicantName?: string;
-  applicantEmail?: string;
-  organizationName?: string | null;
-  membershipCategory?: string;
-  answers?: Partial<Record<(typeof EDITABLE_ANSWER_KEYS)[number], string | null>>;
-}
-
 export async function updateMembershipApplication(
   db: DatabaseLike,
   applicationId: string,
   actor: UserBackedAuthAdmin,
-  input: ApplicationEditInput,
+  input: ApplicationUpdate,
 ): Promise<MembershipApplicationDetail> {
   const application = await getMemberApplicationById(db, applicationId);
   if (!application) {
@@ -344,12 +331,13 @@ export async function updateMembershipApplication(
   if (input.answers) {
     const currentAnswers = await getApplicationAnswers(db, application.form_submission_id);
     const mergedAnswers = { ...currentAnswers };
-    for (const key of EDITABLE_ANSWER_KEYS) {
+    for (const key of applicationEditableAnswersSchema.keyof().options) {
       if (input.answers[key] === undefined) continue;
       const nextValue = input.answers[key] ?? null;
-      if (nextValue !== (currentAnswers[key] ?? null)) {
+      if (JSON.stringify(nextValue) !== JSON.stringify(currentAnswers[key] ?? null)) {
         changedFields.push(`answers.${key}`);
-        if (nextValue === null || nextValue.trim().length === 0) delete mergedAnswers[key];
+        if (nextValue === null || (typeof nextValue === "string" && nextValue.trim().length === 0))
+          delete mergedAnswers[key];
         else mergedAnswers[key] = nextValue;
       }
     }
@@ -379,10 +367,10 @@ export async function updateMembershipApplication(
         values.push(formSubmissionId);
       } else {
         const answerMutations = Object.fromEntries(
-          EDITABLE_ANSWER_KEYS.filter((key) => input.answers?.[key] !== undefined).map((key) => [
-            key,
-            normalizedAnswers[key],
-          ]),
+          applicationEditableAnswersSchema
+            .keyof()
+            .options.filter((key) => input.answers?.[key] !== undefined)
+            .map((key) => [key, normalizedAnswers[key]]),
         );
         dependentStatements.push(...prepareUpdateFormSubmission(db, form, formSubmissionId, answerMutations, now));
       }

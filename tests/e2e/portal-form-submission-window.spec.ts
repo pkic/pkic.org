@@ -13,7 +13,7 @@ const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 test.use({ timezoneId: "Europe/Amsterdam" });
 
 test("event forms explain where registration and proposal answers are recorded", async ({ page }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  await signInToPortal(page, e2eAdminEmail("portal-form-records"));
   const placementId = "80000000-0000-4000-8000-000000000092";
   const formId = "80000000-0000-4000-8000-000000000093";
   const base = `/api/v1/groups/${GROUP_ID}/forms/${placementId}`;
@@ -67,7 +67,7 @@ test("event forms explain where registration and proposal answers are recorded",
 });
 
 test("a respondent cannot submit a form closed after they opened it", async ({ page, browser }) => {
-  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  await signInToPortal(page, e2eAdminEmail("portal-form-submission-window"));
   const member = await createMember(page);
   const created = await page.request.post(`/api/v1/groups/${GROUP_ID}/forms`, {
     data: groupFormDefinitionCreateSchema.parse({

@@ -50,6 +50,7 @@ function mount(node: ComponentChildren): HTMLElement {
 
 async function settle(): Promise<void> {
   await act(async () => {
+    await vi.dynamicImportSettled();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }

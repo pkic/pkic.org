@@ -5,6 +5,7 @@ import {
   MembershipWorkflowCreate,
   MembershipWorkflowUpdate,
   MembershipWorkflowPublish,
+  MembershipWorkflowRemove,
 } from "./workflows";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
@@ -28,6 +29,7 @@ openapi.get("/workflows/versions", MembershipWorkflowsList);
 openapi.post("/workflows/versions", MembershipWorkflowCreate);
 openapi.get("/workflows/versions/:versionId", MembershipWorkflowGet);
 openapi.patch("/workflows/versions/:versionId", MembershipWorkflowUpdate);
+openapi.delete("/workflows/versions/:versionId", MembershipWorkflowRemove);
 openapi.post("/workflows/versions/:versionId/publication", MembershipWorkflowPublish);
 openapi.get("/categories", MembershipCategoriesList);
 openapi.post("/categories", MembershipCategoryCreate);

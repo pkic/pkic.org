@@ -158,6 +158,14 @@ export const membershipCategoryUpdateRouteSchema = {
 /** Individual categories in legacy source records; live policy comes from the D1 catalog. */
 export const INDIVIDUAL_MEMBERSHIP_CATEGORIES = new Set<string>(["H5", "H6", "H7"]);
 
+/** Compact public affiliation for an independent consultant's role card. */
+export function publicMembershipAffiliation(
+  category: string | null | undefined,
+  fallback: string | null,
+): string | null {
+  return category === "H6" ? "Independent" : fallback;
+}
+
 export function isIndividualMembershipCategory(category: string): boolean {
   return INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category);
 }

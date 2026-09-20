@@ -20,9 +20,11 @@ interface WorkflowVersionRow {
   definition_json: string;
   created_at: string;
   published_at: string | null;
+  archived_at: string | null;
 }
 const VERSION_SELECT = `SELECT version.id, version.workflow_id, version.version, version.revision,
-  version.status, version.definition_json, version.created_at, version.published_at`;
+  version.status, version.definition_json, version.created_at, version.published_at,
+  (SELECT archived_at FROM membership_workflow_archives archive WHERE archive.version_id = version.id) AS archived_at`;
 function toWorkflowVersion(row: WorkflowVersionRow): MembershipWorkflowVersion {
   return membershipWorkflowVersionSchema.parse({
     id: row.id,
@@ -33,6 +35,7 @@ function toWorkflowVersion(row: WorkflowVersionRow): MembershipWorkflowVersion {
     definition: JSON.parse(row.definition_json),
     createdAt: row.created_at,
     publishedAt: row.published_at,
+    archivedAt: row.archived_at,
   });
 }
 export async function getMembershipWorkflowVersion(db: DatabaseLike, id: string): Promise<MembershipWorkflowVersion> {
@@ -45,7 +48,9 @@ export async function getMembershipWorkflowVersion(db: DatabaseLike, id: string)
   return toWorkflowVersion(row);
 }
 export async function listMembershipWorkflowVersions(db: DatabaseLike, query: MembershipWorkflowsQuery) {
-  const clauses: string[] = [];
+  const clauses: string[] = [
+    `${query.archived ? "" : "NOT "}EXISTS (SELECT 1 FROM membership_workflow_archives archive WHERE archive.version_id = version.id)`,
+  ];
   const bindings: unknown[] = [];
   if (query.status) {
     clauses.push("version.status = ?");

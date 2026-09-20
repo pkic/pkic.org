@@ -3,7 +3,7 @@ import type { EventDetail } from "../types";
 import { Team } from "./Team";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
-import { SponsorTiersTab } from "./settings/SponsorTiersTab";
+import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
 
 type SettingsTab = "general" | "sponsor-tiers" | "team";
 
@@ -41,7 +41,9 @@ export function Settings({
 
       {tab === "general" &&
         (event.seriesId ? <SeriesManagedNotice event={event} /> : <GeneralTab event={event} onUpdated={onUpdated} />)}
-      {tab === "sponsor-tiers" && <SponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />}
+      {tab === "sponsor-tiers" && (
+        <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
+      )}
       {tab === "team" && <Team slug={event.slug} teamSegment={detailSegment} />}
     </div>
   );

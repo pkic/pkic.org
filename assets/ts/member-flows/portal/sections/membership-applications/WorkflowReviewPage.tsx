@@ -239,7 +239,15 @@ function ResolveObjection({
     </Panel>
   );
 }
-export function WorkflowReviewPage({ applicationId }: { applicationId: string }) {
+export function WorkflowReviewPage({
+  applicationId,
+  embedded = false,
+  onSaved,
+}: {
+  applicationId: string;
+  embedded?: boolean;
+  onSaved?: () => Promise<void>;
+}) {
   const base = `/api/v1/members/applications/${encodeURIComponent(applicationId)}`;
   const state = useData(
     () => getJson(`${base}/reviews/current`, membershipWorkflowReviewResponseSchema),
@@ -250,16 +258,19 @@ export function WorkflowReviewPage({ applicationId }: { applicationId: string })
   async function refresh() {
     await state.reload();
     await table.current?.reload();
+    await onSaved?.();
   }
   if (state.loading) return <Spinner label="Loading application review…" />;
   if (!state.data) return <ErrorAlert error={state.error} />;
   const review = state.data;
   return (
     <div class="pk pk-stack">
-      <PageHeader
-        title={review.application.organizationName ?? review.application.applicantName}
-        eyebrow="Membership application review"
-      />
+      {!embedded && (
+        <PageHeader
+          title={review.application.organizationName ?? review.application.applicantName}
+          eyebrow="Membership application review"
+        />
+      )}
       <ErrorAlert error={state.error} />
       <p>
         Submitted by {review.application.applicantName} ({review.application.applicantEmail}).

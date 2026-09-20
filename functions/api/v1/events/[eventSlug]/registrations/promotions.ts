@@ -1,8 +1,6 @@
 import type { ValidatedData } from "chanfana";
-import {
-  eventRegistrationPromotionsCreateRouteSchema,
-  eventRegistrationPromotionsResponseSchema,
-} from "../../../../../../assets/shared/schemas/route-contracts-event-registration-management";
+import { eventRegistrationPromotionsResponseSchema } from "../../../../../../assets/shared/schemas/event-registrations";
+import { eventRegistrationPromotionsCreateRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-event-registration-management";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import type { AdminContext } from "../../../../../_lib/db/context";
 import { requestDb } from "../../../../../_lib/db/context";

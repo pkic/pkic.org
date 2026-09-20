@@ -1,15 +1,13 @@
 import {
-  MAILING_LIST_SORT_COLUMNS,
   effectiveMailingListSubscriptionSchema,
   type GroupMailingListSubscriptionsQuery,
 } from "../../../../assets/shared/schemas/mailing-lists";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
-import { buildD1TextSearchFilter } from "../../db/search";
-import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
+import { appendMailingListFilters, resolveMailingListOrderBy } from "../mailing-list-query";
 import { toMailingList, type MailingListRow } from "../mailing-list-record";
 import { liveGroupResourceContextAccess } from "../resource-grants/access";
 import { buildLiveAccessibleGroupResourceIdsCte } from "../resource-grants/access-query";
@@ -72,19 +70,7 @@ export async function listEffectiveGroupMailingListSubscriptions(
   );
   const conditions: string[] = [];
   const bindings: unknown[] = [userId, ...accessibleLists.bindings];
-  const search = query.q ? buildD1TextSearchFilter(query.q, ["email", "label", "purpose"]) : null;
-  if (search) {
-    conditions.push(search.sql);
-    bindings.push(...search.bindings);
-  }
-  if (query.purpose) {
-    conditions.push("purpose = ?");
-    bindings.push(query.purpose);
-  }
-  if (query.active !== undefined) conditions.push(query.active ? "active = 1" : "active = 0");
-  if (query.primaryDiscussion !== undefined) {
-    conditions.push(query.primaryDiscussion ? "is_primary_discussion = 1" : "is_primary_discussion = 0");
-  }
+  appendMailingListFilters(query, conditions, bindings);
   const { rows, total } = await queryPage<EffectiveSubscriptionRow>(db, {
     sql: `${EFFECTIVE_SUBSCRIPTION_CTE}, ${accessibleLists.sql}
       SELECT ${SELECT_COLUMNS}
@@ -92,18 +78,7 @@ export async function listEffectiveGroupMailingListSubscriptions(
         JOIN accessible_resource accessible ON accessible.resource_id = effective_subscriptions.id
        ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}`,
     bindings,
-    orderBy: resolveMappedOrderBy(
-      query.sort,
-      {
-        email: "email COLLATE NOCASE",
-        label: "label COLLATE NOCASE",
-        purpose: "purpose",
-        active: "active",
-        created_at: "created_at",
-      } satisfies Record<(typeof MAILING_LIST_SORT_COLUMNS)[number], string>,
-      "is_primary_discussion DESC, label COLLATE NOCASE ASC",
-      "id ASC",
-    ),
+    orderBy: resolveMailingListOrderBy(query.sort, "is_primary_discussion DESC, label COLLATE NOCASE ASC"),
     limit: query.limit,
     offset: query.offset,
   });

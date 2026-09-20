@@ -72,12 +72,15 @@ import {
   GroupEventRegistrationCreate,
   GroupEventRegistrationDayAttendancePatch,
   GroupEventRegistrationManagerUpdate,
+  GroupEventRegistrationPromotionsCreate,
+  GroupEventRegistrationExportGet,
   GroupEventRegistrationDetailGet,
   GroupEventRegistrationsList,
 } from "./[groupId]/events/[eventId]/registrations";
 import { GroupEventRegistrationConfigGet } from "./[groupId]/events/[eventId]/registration-config";
 import { GroupEventDaysGet, GroupEventDaysPut } from "./[groupId]/events/[eventId]/days";
 import { GroupEventTermsGet, GroupEventTermsPut } from "./[groupId]/events/[eventId]/terms";
+import { GroupEventSponsorTiersGet, GroupEventSponsorTiersPut } from "./[groupId]/events/[eventId]/sponsors/tiers";
 import {
   GroupEventRegistrationSettingsGet,
   GroupEventRegistrationSettingsPut,
@@ -170,6 +173,8 @@ openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
 registerGroupEventEmailCampaignRoutes(openapi);
 openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
 openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
+openapi.post("/:groupId/events/:eventId/registrations/promotions", GroupEventRegistrationPromotionsCreate);
+openapi.get("/:groupId/events/:eventId/registrations/exports", GroupEventRegistrationExportGet);
 openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);
 openapi.patch("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationManagerUpdate);
 openapi.patch(
@@ -185,6 +190,8 @@ openapi.get("/:groupId/events/:eventId/days", GroupEventDaysGet);
 openapi.put("/:groupId/events/:eventId/days", GroupEventDaysPut);
 openapi.get("/:groupId/events/:eventId/terms", GroupEventTermsGet);
 openapi.put("/:groupId/events/:eventId/terms", GroupEventTermsPut);
+openapi.get("/:groupId/events/:eventId/sponsors/tiers", GroupEventSponsorTiersGet);
+openapi.put("/:groupId/events/:eventId/sponsors/tiers", GroupEventSponsorTiersPut);
 openapi.get("/:groupId/events/:eventId/registration-settings", GroupEventRegistrationSettingsGet);
 openapi.put("/:groupId/events/:eventId/registration-settings", GroupEventRegistrationSettingsPut);
 openapi.get("/:groupId/events/:eventId/forms/:purpose/available", GroupEventFormsList);

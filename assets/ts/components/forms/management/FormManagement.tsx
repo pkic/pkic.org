@@ -152,6 +152,7 @@ export function FormManagementDetail({
   submissionParams,
   formEndpoint,
   showBack = true,
+  responseTabLabel = "Responses",
 }: {
   formKey: string;
   canWrite: boolean;
@@ -161,6 +162,7 @@ export function FormManagementDetail({
   submissionParams?: Record<string, string>;
   formEndpoint?: string;
   showBack?: boolean;
+  responseTabLabel?: string;
 }) {
   const [rawTab, setTab] = useHashQueryParam("formTab", "statistics");
   const [responseId, setResponseId] = useHashQueryParam("response", "");
@@ -270,7 +272,7 @@ export function FormManagementDetail({
             label={`${detail.form.title} sections`}
             items={[
               { key: "statistics", label: `Analytics (${totalResponses})`, panelId: statisticsPanelId },
-              { key: "responses", label: "Responses", panelId: responsesPanelId },
+              { key: "responses", label: responseTabLabel, panelId: responsesPanelId },
               ...(canManageForm ? [{ key: "edit", label: "Edit", panelId: editPanelId }] : []),
             ]}
             active={effectiveTab}
@@ -489,6 +491,7 @@ export function EventFormResponses({ eventSlug, purpose }: { eventSlug: string; 
         formKey={formKey}
         canWrite={false}
         showBack={false}
+        responseTabLabel="Individual responses"
         onBack={() => undefined}
         submissionParams={submissionParams}
         formEndpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/forms/${encodeURIComponent(formKey)}`}

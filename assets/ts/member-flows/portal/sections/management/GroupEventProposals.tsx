@@ -14,6 +14,7 @@ import { EmptyState } from "../../../../components/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";
+import { EventPresentationArchiveLinks } from "../../../../components/proposals/EventPresentationArchiveLinks";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
@@ -51,6 +52,9 @@ export function GroupEventProposals({
         endpoint={`/api/v1/events/${encodeURIComponent(resolvedEventSlug)}/proposals`}
         urlState="proposals"
         rowHref={(proposal) => usePortalHashLocation.hrefs(groupEventProposalPath(groupId, eventId, proposal.id))}
+        toolbarPrefix={(_, access) => (
+          <EventPresentationArchiveLinks slug={resolvedEventSlug} canRead={access?.canRead === true} />
+        )}
         empty="No proposals are available through this event."
       />
     );

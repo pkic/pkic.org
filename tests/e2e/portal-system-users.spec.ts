@@ -127,7 +127,7 @@ async function createNonAdminUser(page: import("@playwright/test").Page, suffix:
 
 test("permitted staff filter, sort, and manage columns in the users list", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
-  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  await signInToPortal(page, e2eAdminEmail("portal-users-list"));
   const { email, organizationName } = await createNonAdminUser(page, suffix);
 
   await page.goto("/portal/#/users");
@@ -251,7 +251,7 @@ test("permitted staff filter, sort, and manage columns in the users list", async
 
 test("permitted staff grant and revoke the administrator role from a user list row", async ({ page }) => {
   const suffix = crypto.randomUUID().slice(0, 8);
-  await signInToPortal(page, e2eAdminEmail("portal-users"));
+  await signInToPortal(page, e2eAdminEmail("portal-users-role-management"));
   const { email } = await createNonAdminUser(page, suffix);
 
   await page.goto("/portal/#/users");

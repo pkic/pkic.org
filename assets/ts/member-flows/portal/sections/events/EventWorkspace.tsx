@@ -141,12 +141,20 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     content = (
       <LegacyEventRoute
         slug={props.slug}
-        audienceFallback={!tab || tab === "overview"}
+        audienceFallback={!tab || tab === "overview" || tab === "submissions"}
         audienceTab={props.tab}
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;
-          if (tab === "promoters" && subTab) return `${base}/promoters/${encodeURIComponent(subTab)}`;
-          return `${base}/${encodeURIComponent(tab)}`;
+          // The group workspace flattened Team out of Settings, while the
+          // other event sections kept their second URL segment. Preserve the
+          // complete destination so bookmarked legacy URLs still open the
+          // exact workflow they name instead of silently landing one level
+          // too high.
+          if (tab === "settings" && subTab === "team") {
+            return `${base}/team${props.detailSegment ? `/${encodeURIComponent(props.detailSegment)}` : ""}`;
+          }
+          if (tab === "settings") return `${base}/settings`;
+          return `${base}/${encodeURIComponent(tab)}${subTab ? `/${encodeURIComponent(subTab)}` : ""}`;
         }}
       />
     );

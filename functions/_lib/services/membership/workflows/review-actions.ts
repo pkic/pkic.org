@@ -24,8 +24,14 @@ export async function completeMembershipStaffReview(
   const position = execution.currentPosition;
   const step = execution.version.definition.steps[position];
   const row = execution.steps[position];
-  if (execution.application.stage === "on_hold" || step?.kind !== "staff_review" || row?.state !== "active")
+  if (
+    execution.application.stage === "on_hold" ||
+    step?.kind !== "staff_review" ||
+    !["waiting", "active"].includes(row?.state ?? "")
+  )
     throw new AppError(409, "MEMBERSHIP_REVIEW_NOT_ACTIVE", "This application has no active staff review to complete.");
+  // A newly pinned current step can be reviewed before the scheduler first opens it.
+  // The workflow snapshot and live reviewer guard still protect this single atomic command.
   const authorization = await requireWorkflowReviewer(db, step, actor);
   const now = nowIso();
   // Evaluation sees the proposed evidence; the transaction writes it only with live authorization.
@@ -45,7 +51,7 @@ export async function completeMembershipStaffReview(
           .prepare(
             `UPDATE membership_application_steps
       SET state = 'complete', completed_at = ?, completed_by_user_id = ?, completion_reason = ?
-      WHERE application_id = ? AND generation = ? AND position = ? AND state = 'active' AND completed_at IS NULL`,
+      WHERE application_id = ? AND generation = ? AND position = ? AND state IN ('waiting', 'active') AND completed_at IS NULL`,
           )
           .bind(now, actor.userId, input.reason, applicationId, execution.generation, position),
       ],

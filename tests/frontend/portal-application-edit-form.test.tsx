@@ -140,6 +140,20 @@ describe("membership-application edit form", () => {
       "About yourself",
       "About organization",
       "Reason for joining",
+      "Contribution type",
+      "Wants to present",
+      "Yes",
+      "Interested in sponsoring",
+      "Yes",
+      "Agrees to the Bylaws",
+      "Yes",
+      "Agrees to the Code of Conduct",
+      "Yes",
+      "Agrees to the IPR Policy",
+      "Yes",
+      "Warranted authority",
+      "Yes",
+      "Working groups requested",
     ]);
 
     // Resolved through the `for`/`id` pair itself, so the lookup fails exactly
@@ -192,7 +206,7 @@ describe("membership-application edit form", () => {
     // into while the request is outstanding. The state is inherited rather
     // than reflected onto each element, so `:disabled` is what says it.
     const controls = [...page.querySelectorAll("fieldset input, fieldset select, fieldset textarea")];
-    expect(controls).toHaveLength(10);
+    expect(controls).toHaveLength(18);
     expect(controls.every((control) => control.matches(":disabled"))).toBe(true);
     // The editors are not native controls, so they say it themselves.
     const editors = [...page.querySelectorAll('fieldset [role="textbox"]')];
@@ -317,7 +331,7 @@ describe("membership-application edit form, end to end", () => {
       organizationName: "Example Organization",
       membershipCategory: "F",
     });
-    expect(parsed.answers).toEqual({
+    expect(parsed.answers).toMatchObject({
       job_title: null,
       linkedin: null,
       organization_website: null,

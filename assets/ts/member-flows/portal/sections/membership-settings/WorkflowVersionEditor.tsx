@@ -1,3 +1,4 @@
+import { WorkflowRemoval } from "./WorkflowRemoval";
 import { WorkflowReviewSummary } from "./WorkflowReviewSummary";
 import { membershipFeeLabel } from "../../../../components/MembershipWorkflowProgress";
 import { useState } from "preact/hooks";
@@ -309,6 +310,7 @@ export function WorkflowVersionEditor({
           <ButtonLink href={usePortalHashLocation.hrefs(path)}>Back to workflows</ButtonLink>
         </div>
       </form>
+      {initial && canWrite && <WorkflowRemoval version={initial} />}
       {initial &&
         !published &&
         canWrite &&

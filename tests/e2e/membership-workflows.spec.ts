@@ -65,19 +65,36 @@ test("changes an existing organization category's workflow and completes its req
     category: code,
     organizationName: "Example Organization",
   });
-  await jsonResponse(page.request, "POST", "/api/v1/scheduler/jobs/membership_workflows/runs", {});
+  await page.goto(`/portal/#/membership/applications/${application.applicationId}`);
+  await page.getByRole("button", { name: "Application actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit application…", exact: true }).click();
+  await page.getByLabel("Contribution type", { exact: true }).selectOption("active");
+  await page.getByLabel("Wants to present").check();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText("Actively contribute to the consortium and its mission", { exact: true })).toBeVisible();
+  await expect(page.getByText("Bylaws, Code of Conduct, IPR Policy", { exact: true })).toBeVisible();
+  const sections = page.getByRole("navigation", { name: "Application sections", exact: true });
+  await sections.getByRole("link", { name: "Review workflow and objections", exact: true }).click();
+  await expect(sections.getByRole("link", { name: "Review workflow and objections", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await sections.getByRole("link", { name: "Application", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${application.applicationId}$`));
   await page.goto(`/portal/#/membership/applications/${application.applicationId}/review`);
-  await expect(page.getByRole("heading", { name: "Example Organization", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Example User", exact: true })).toBeVisible();
   await page
     .getByLabel("Review decision and reason")
     .fill("Verified the organization details and the user's authority from the submitted form.");
   await page.getByRole("button", { name: "Complete review", exact: true }).click();
-  await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approved", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Complete review", exact: true })).toHaveCount(0);
   await expect(page.getByRole("table", { name: "Review objections" })).toBeVisible();
   await expect(page.getByText("Internal server error", { exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("heading", { name: "Example Organization", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Example User", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("approved-workflow-mobile.png"), fullPage: true });
@@ -120,4 +137,38 @@ test("creates, renames, and reorders organization categories from their forms an
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("category-form-mobile.png"), fullPage: true });
+});
+
+/** @covers system.12.7 */
+test("explains payment references and removes unused organization workflow versions", async ({ page }, testInfo) => {
+  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows"));
+  await page.goto("/portal/#/settings/application-workflow/new");
+  const name = `Unused organization workflow ${uniqueSuffix()}`;
+  await page.getByLabel("Workflow name").fill(name);
+  await page.getByLabel("Policy reference").fill("Synthetic organization policy for browser verification");
+  await page.getByRole("button", { name: "Add payment confirmation", exact: true }).click();
+  const reference = page.getByLabel(/^Fee or product reference/);
+  await expect(reference).toHaveAccessibleDescription(/Enter a short name.*Applicants see it at checkout/);
+  await reference.fill("Example Organization membership");
+  await page.screenshot({ path: testInfo.outputPath("payment-reference-help.png"), fullPage: true });
+  await page.getByRole("button", { name: "Remove step", exact: true }).last().click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page).toHaveURL(/application-workflow\/[a-f0-9-]+$/);
+  const draftId = page.url().split("/").at(-1)!;
+  await page.getByRole("button", { name: "Delete draft…", exact: true }).click();
+  await page.getByLabel("Reason for removal").fill("This unused organization policy draft is no longer needed.");
+  await page.getByRole("button", { name: "Delete draft", exact: true }).click();
+  await expect(page).toHaveURL(/application-workflow$/);
+  expect((await page.request.get(`/api/v1/membership/workflows/versions/${draftId}`)).status()).toBe(404);
+  await page.getByRole("button", { name: "New workflow", exact: true }).click();
+  await page.getByLabel("Workflow name").fill(`${name} published`);
+  await page.getByLabel("Policy reference").fill("Synthetic policy approved only for this browser verification");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await page.getByLabel("Policy adoption reason").fill("Verify archival of an unassigned published policy.");
+  await page.getByRole("button", { name: "Publish version 1", exact: true }).click();
+  await page.getByRole("button", { name: "Archive version…", exact: true }).click();
+  await page.getByLabel("Reason for removal").fill("Replaced by another synthetic organization policy.");
+  await page.screenshot({ path: testInfo.outputPath("workflow-archive-confirmation.png"), fullPage: true });
+  await page.getByRole("button", { name: "Archive version", exact: true }).click();
+  await expect(page).toHaveURL(/application-workflow$/);
 });

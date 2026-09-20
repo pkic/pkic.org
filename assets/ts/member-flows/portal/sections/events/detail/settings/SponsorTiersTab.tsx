@@ -15,10 +15,18 @@ import { Field } from "../../../../../../ui/Field";
 import { TextInput } from "../../../../../../ui/TextControl";
 import { SettingsEditor } from "./SettingsEditor";
 
-export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: boolean }) {
+export function SponsorTiersTab({
+  slug,
+  canWrite,
+  endpoint = "/api/v1/events/" + encodeURIComponent(slug) + "/sponsors/tiers",
+}: {
+  slug: string;
+  canWrite: boolean;
+  endpoint?: string;
+}) {
   const resource = useEditorResource(
-    async () => (await getJson(`/api/v1/events/${slug}/sponsors/tiers`, eventSponsorTiersResponseSchema)).tiers,
-    [slug],
+    async () => (await getJson(endpoint, eventSponsorTiersResponseSchema)).tiers,
+    [endpoint],
     [],
   );
   const { value: tiers, setValue: setTiers, loading, error, reload } = resource;
@@ -48,7 +56,7 @@ export function SponsorTiersTab({ slug, canWrite }: { slug: string; canWrite: bo
     setSaving(true);
     setFailure("");
     try {
-      await putJson(`/api/v1/events/${slug}/sponsors/tiers`, checked.data, eventSponsorTiersResponseSchema);
+      await putJson(endpoint, checked.data, eventSponsorTiersResponseSchema);
       await reload();
       setEditing(false);
       setSaved(true);

@@ -100,6 +100,39 @@ describe("standalone event views redirect to the owning group", () => {
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}/registrations`, { replace: true });
   });
 
+  it.each([
+    {
+      label: "attendance analytics",
+      props: { tab: "stats", subTab: "attendance" },
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/stats/attendance`,
+    },
+    {
+      label: "proposal responses",
+      props: { tab: "proposals", subTab: "responses" },
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/responses`,
+    },
+    {
+      label: "registration responses",
+      props: { tab: "registrations", subTab: "responses" },
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/responses`,
+    },
+    {
+      label: "event settings",
+      props: { tab: "settings", subTab: "sponsor-tiers" },
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings`,
+    },
+    {
+      label: "the add-team-member page",
+      props: { tab: "settings", subTab: "team", detailSegment: "new" },
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/team/new`,
+    },
+  ])("preserves $label when redirecting a legacy event URL", async ({ props, destination }) => {
+    stubDetail(GROUP_ID);
+    await act(() => render(<EventWorkspace view="detail" slug="summit" {...props} />, container));
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(destination, { replace: true });
+  });
+
   it("maps registration and proposal detail views onto the group route", async () => {
     stubDetail(GROUP_ID);
     await act(() => render(<EventWorkspace view="registration" slug="summit" resourceId="reg-1" />, container));
@@ -159,5 +192,58 @@ describe("standalone event views redirect to the owning group", () => {
     expect(container.textContent).toContain("Amsterdam");
     expect(navigate).not.toHaveBeenCalled();
     expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).toEqual(["/api/v1/events/summit"]);
+  });
+
+  it("keeps a participant's proposals tab in the event workspace", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), location.origin);
+        if (url.pathname === "/api/v1/events/summit") {
+          return new Response(
+            JSON.stringify({
+              event: {
+                id: EVENT_ID,
+                slug: "summit",
+                name: "Summit",
+                timezone: "UTC",
+                startsAt: null,
+                endsAt: null,
+                profileKey: "conference",
+                registrationPolicy: "public",
+                visibility: "public",
+                accessLevel: "participant",
+                location: "Amsterdam",
+                links: [],
+                basePath: "/events/summit/",
+                viewer: null,
+                participation: {
+                  registrationId: null,
+                  registrationStatus: null,
+                  proposals: 1,
+                  speakerProposals: 0,
+                  proposalStates: ["submitted"],
+                  speakerStates: [],
+                },
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.pathname === "/api/v1/users/current/proposals") {
+          return new Response(
+            JSON.stringify({ proposals: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "nope" } }), { status: 404 });
+      }),
+    );
+
+    await act(() => render(<EventWorkspace view="detail" slug="summit" tab="submissions" />, container));
+    await settle();
+
+    expect(navigate).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(container.textContent).toContain("Your event proposals"));
   });
 });
