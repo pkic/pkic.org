@@ -4,7 +4,8 @@ slogan:
 website: https://www.telstra.com.au/
 # Business domains for email
 organizationDomains:
-  - team.testra.com
+  - team.telstra.com
+  - telstra.com.au
 # Short description, longer content can be placed in `content/members/`
 description: Join Australia's largest mobile network, view our plans for NBN broadband internet, mobile phones, 5G & on-demand streaming services.
 
