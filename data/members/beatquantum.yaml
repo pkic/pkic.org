@@ -4,6 +4,7 @@ slogan:
 website: https://beatquantum.com
 # Business domains for email
 organizationDomains:
+  - beatquantum.com
   - santoshpandit.com
 # Short description, longer content can be placed in `content/members/`
 description: A world-leading centre of excellence in applied post-quantum cryptography. Specialist partner to boards and regulated businesses on the post-quantum transition and the broader technology resilience it depends on.
@@ -23,28 +24,28 @@ sponsor:
 # Blog posts
 blog:
   url: https://beatquantum.com/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/BeatQuantum1
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/beatquantumhq
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
