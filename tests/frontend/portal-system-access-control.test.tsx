@@ -116,11 +116,8 @@ describe("portal system access control", () => {
     void act(() => render(null, revokeOnly));
     const grantAuthorized = mount(<Grants canGrant canRevoke onNavigate={() => {}} />);
     await settle();
-    expect(grantAuthorized.textContent).toContain("New grant");
     expect(grantAuthorized.textContent).not.toContain("Grant a permission");
-    const newGrantButton = Array.from(grantAuthorized.querySelectorAll("button")).find(
-      (button) => button.textContent === "New grant",
-    );
+    const newGrantButton = grantAuthorized.querySelector<HTMLButtonElement>('button[aria-label="New grant"]');
     expect(newGrantButton).toBeTruthy();
     // The action navigates rather than unfolding a panel: creating a grant is
     // a page of its own, reached under the reserved `new` segment.
@@ -148,18 +145,13 @@ describe("portal system access control", () => {
 
       expect(container.textContent).not.toContain("Create a custom role");
       expect(container.textContent).toContain("custom_reviewer");
-      const newRoleButton = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent === "New role",
-      );
+      const newRoleButton = container.querySelector<HTMLButtonElement>('button[aria-label="New role"]');
       expect(newRoleButton).toBeTruthy();
       void act(() => newRoleButton!.click());
       expect(onNavigate).toHaveBeenCalledWith("new");
 
-      const openButton = Array.from(container.querySelectorAll("button")).find(
-        (button) => button.textContent === `Open ${ROLE.name}`,
-      );
-      void act(() => openButton!.click());
-      expect(onNavigate).toHaveBeenCalledWith(ROLE.id);
+      const openLink = container.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
+      expect(openLink?.getAttribute("href")).toBe(`#/settings/access-control/roles/${ROLE.id}`);
     });
 
     it("hides role creation and deletion without the corresponding authority, but keeps inspection", async () => {
@@ -198,7 +190,7 @@ describe("portal system access control", () => {
           }),
         ),
       );
-      const container = mount(<RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={vi.fn()} />);
+      const container = mount(<RoleList canGrant canRevoke onCreateNew={vi.fn()} />);
       await settle();
 
       // Four or fewer permissions: every chip shows, no overflow text.
@@ -508,7 +500,7 @@ describe("portal system access control", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={vi.fn()} />
+        <RoleList canGrant canRevoke onCreateNew={vi.fn()} />
       </>,
     );
     await settle();

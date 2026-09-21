@@ -37,6 +37,12 @@ import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
 import { CompanyDetailPanel } from "./CompanyDetailPanel";
 import { SponsorshipDetail } from "./SponsorshipDetail";
 
+function readSelectedCompany(): SponsorshipCompany | null {
+  const key = readHashQueryParam("company");
+  if (!key) return null;
+  const label = readHashQueryParam("companyLabel") ?? key.replace(/^[^:]+:/, "");
+  return { key, label, website: null, sponsorshipCount: 0, stages: "" };
+}
 function SponsorshipDetailPage({
   detailId,
   canRead,
@@ -141,35 +147,14 @@ export function Sponsorships({
 
   const tableRef = useRef<ApiTableActions | null>(null);
 
-  // Which company is open is a selection and nothing more: the panel it opens
-  // asks the sponsorships endpoint for that company's page itself, through the
-  // shared table, so there is no fetched page to keep here.
-  const [selectedCompany, setSelectedCompany] = useState<SponsorshipCompany | null>(null);
-  // The company view is addressed by `?company=<key>` on the sponsors route,
-  // so the trail's "Sponsors" crumb is a real link back: when the query goes,
-  // the view goes with it. The portal's location hook strips the query, so
-  // the key is read from the hash directly and re-read when the hash changes.
-  const [companyKey, setCompanyKey] = useState(() => readHashQueryParam("company"));
+  // The stable key and display label live in the address, so a new tab can
+  // render the same bounded company sponsorship query without list-page state.
+  const [selectedCompany, setSelectedCompany] = useState(readSelectedCompany);
   useEffect(() => {
-    const sync = () => setCompanyKey(readHashQueryParam("company"));
+    const sync = () => setSelectedCompany(readSelectedCompany());
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
   }, []);
-  useEffect(() => {
-    if (!companyKey && selectedCompany) setSelectedCompany(null);
-  }, [companyKey, selectedCompany]);
-  function openCompany(next: SponsorshipCompany) {
-    setSelectedCompany(next);
-    // Remembered here as well as in the address: `replaceState` announces no
-    // hashchange, and the effect above would otherwise read the stale key
-    // and send the view straight back to the list.
-    setCompanyKey(next.key);
-    // The address names the company without announcing a navigation: a
-    // hashchange here would re-render the route and drop the selection just
-    // made. The trail's crumb back to `#/sponsors` does fire one, and that
-    // fresh render is exactly the list it should land on.
-    history.replaceState(history.state, "", `#/sponsors?company=${encodeURIComponent(next.key)}`);
-  }
 
   // The list contract's two filters live in the columns they narrow: the
   // stage filter on the stages column, the type filter on the count of
@@ -237,7 +222,10 @@ export function Sponsorships({
           }
           columns={companyColumns}
           rowKey={(c) => c.key}
-          rowAction={(c) => ({ label: `View sponsorships for ${c.label}`, onSelect: () => openCompany(c) })}
+          rowAction={(c) => ({
+            label: `View sponsorships for ${c.label}`,
+            href: `#/sponsors?company=${encodeURIComponent(c.key)}&companyLabel=${encodeURIComponent(c.label)}`,
+          })}
           empty={
             canWrite ? (
               <EmptyState title="No sponsorships found" body="Create a sponsorship, or adjust the filters above." />

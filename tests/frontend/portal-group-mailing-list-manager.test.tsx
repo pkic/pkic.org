@@ -25,7 +25,7 @@ const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", navigate],
 }));
-import { buttonNamed, controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { controlFor, submitForm, typeInto } from "./helpers/labelled-control";
 import { rowActionControlNames, rowMenuTrigger } from "./helpers/row-actions";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
@@ -192,14 +192,10 @@ describe("group mailing-list management surface", () => {
     const container = mount(<GroupMailingListManager groupId={GROUP_ID} />);
     await settle();
 
-    // Activating the row navigates: a list is a record with an address, so
-    // nothing unfolds between the table's rows.
-    await act(() => {
-      buttonNamed(container, "Open Architecture discussion").click();
-    });
-    await settle();
-
-    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/mailing-lists/${archivedList.id}`);
+    // A real link lets Ctrl/Cmd-click preserve this filtered list in its tab.
+    const link = container.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
+    expect(link?.textContent).toContain("Open Architecture discussion");
+    expect(link?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/mailing-lists/${archivedList.id}`);
     expect(container.querySelector(".pk-table__detail")).toBeNull();
     expect(container.querySelector('input[type="email"]')).toBeNull();
   });

@@ -3,12 +3,6 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ navigate: vi.fn() }));
-
-vi.mock("wouter", () => ({
-  useLocation: () => ["/membership/applications", mocks.navigate],
-}));
-
 vi.mock("../../assets/ts/shared/api-client", () => ({
   getJson: vi.fn(async () => ({ categories: [] })),
 }));
@@ -20,11 +14,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/membership-applications/Ap
 }));
 
 vi.mock("../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList", () => ({
-  ApplicationsList: ({ onViewApplication }: { onViewApplication: (id: string) => void }) => (
-    <button type="button" onClick={() => onViewApplication("application-2")}>
-      Open application
-    </button>
-  ),
+  ApplicationsList: () => <a href="#/membership/applications/application-2">Open application</a>,
 }));
 
 import { MembershipApplications } from "../../assets/ts/member-flows/portal/sections/membership-applications";
@@ -44,7 +34,6 @@ afterEach(() => {
     void act(() => render(null, container));
     container.remove();
   }
-  mocks.navigate.mockReset();
 });
 
 describe("portal membership application routing", () => {
@@ -61,8 +50,7 @@ describe("portal membership application routing", () => {
   it("opens list rows at a stable portal detail URL", () => {
     const container = mount(<MembershipApplications canWrite={false} canApprove={false} />);
 
-    void act(() => (container.querySelector("button") as HTMLButtonElement).click());
-
-    expect(mocks.navigate).toHaveBeenCalledWith("/membership/applications/application-2");
+    const link = container.querySelector<HTMLAnchorElement>("a");
+    expect(link?.getAttribute("href")).toBe("#/membership/applications/application-2");
   });
 });

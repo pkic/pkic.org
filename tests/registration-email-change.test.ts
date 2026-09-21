@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { uuid } from "../functions/_lib/utils/ids";
@@ -23,11 +23,15 @@ import { getEventById } from "../functions/_lib/services/events";
 import { first, run } from "../functions/_lib/db/queries";
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations/queries";
 import { queueRegistrationStatusEmail } from "../functions/_lib/services/registrations/status-notifications";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 describe("Registration Email Change", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   // Helper to create test event
   async function createTestEvent(db: any = env.DB): Promise<string> {

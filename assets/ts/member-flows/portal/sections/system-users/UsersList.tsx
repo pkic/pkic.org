@@ -14,6 +14,7 @@ import {
   usersListResponseSchema,
   type UserListItem,
 } from "../../../../../shared/schemas/user-management";
+import { usePortalHashLocation } from "../../hash-location";
 
 /**
  * A column filter over a whole vocabulary, plus the "no filter" choice.
@@ -50,15 +51,7 @@ function representation(user: UserListItem): string {
   return "";
 }
 
-export function UsersList({
-  onViewUser,
-  canWrite,
-  canGrantAccess,
-}: {
-  onViewUser: (id: string) => void;
-  canWrite: boolean;
-  canGrantAccess: boolean;
-}) {
+export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; canGrantAccess: boolean }) {
   const tableRef = useRef<ApiTableActions | null>(null);
 
   async function updateRole(user: UserListItem, newRole: "admin" | "user"): Promise<void> {
@@ -191,7 +184,7 @@ export function UsersList({
       rowKey={(user) => user.id}
       rowAction={(user) => ({
         label: `View ${personDisplayName(user.first_name, user.last_name, user.email)}`,
-        onSelect: () => onViewUser(user.id),
+        href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(user.id)}`),
       })}
     />
   );

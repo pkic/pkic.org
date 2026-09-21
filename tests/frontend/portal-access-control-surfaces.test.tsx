@@ -501,16 +501,16 @@ describe("the roles list on the design system", () => {
       "fetch",
       vi.fn(async () => json({ roles: [ROLE], page: { limit: 50, offset: 0, total: 1, hasMore: false } })),
     );
-    const container = mount(<RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={vi.fn()} />);
+    const container = mount(<RoleList canGrant canRevoke onCreateNew={vi.fn()} />);
     await settle();
 
     // A page of rows used to offer a column of buttons all called "Open" and
     // a column of menus all called "Row actions".
     expect(container.querySelector("caption")?.textContent).toBe("Roles");
-    const rowLink = [...container.querySelectorAll("button.pk-table__row-link")].find(
+    const rowLink = [...container.querySelectorAll<HTMLAnchorElement>("a.pk-table__row-link")].find(
       (control) => control.textContent === "Open custom_reviewer",
     );
-    expect(rowLink).toBeTruthy();
+    expect(rowLink?.getAttribute("href")).toBe(`#/settings/access-control/roles/${ROLE.id}`);
     expect(rowActionControlNames(container)).toEqual(["Actions for custom_reviewer"]);
   });
 
@@ -520,7 +520,7 @@ describe("the roles list on the design system", () => {
       vi.fn(async () => json({ roles: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
     );
     const onCreateNew = vi.fn();
-    const container = mount(<RoleList canGrant canRevoke onOpenRole={vi.fn()} onCreateNew={onCreateNew} />);
+    const container = mount(<RoleList canGrant canRevoke onCreateNew={onCreateNew} />);
     await settle();
 
     const empty = container.querySelector('[role="status"]')!;
@@ -530,9 +530,7 @@ describe("the roles list on the design system", () => {
     // buttons to anyone navigating by name.
     expect(empty.textContent).toContain("New role");
     expect(empty.querySelectorAll("button")).toHaveLength(0);
-    const actions = Array.from(container.querySelectorAll("button")).filter(
-      (button) => button.textContent === "New role",
-    );
+    const actions = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="New role"]'));
     expect(actions).toHaveLength(1);
     void act(() => actions[0].click());
     expect(onCreateNew).toHaveBeenCalled();

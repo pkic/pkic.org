@@ -167,14 +167,11 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(versionTwoRow.getByText("Active", { exact: true })).toBeVisible();
 
   await page.reload();
-  await page.getByPlaceholder("Search template key…").fill(templateKey);
-  // The row's actions cell is also named after the key, so the row is the target.
-  await expect(page.getByRole("row").filter({ hasText: templateKey })).toBeVisible();
-  await page
-    .getByRole("row")
-    .filter({ hasText: templateKey })
-    .getByRole("button", { name: "Edit", exact: false })
-    .click();
+  await page.getByRole("searchbox", { name: "Search email templates" }).fill(templateKey);
+  await page.getByRole("button", { name: "Search email templates" }).click();
+  const templateLink = page.getByRole("link", { name: "Edit " + templateKey, exact: true });
+  await expect(templateLink).toBeVisible();
+  await templateLink.click();
   await expect(page.getByRole("textbox", { name: "Body", exact: true })).toContainText("{{> about_pkic}}");
   await expect(
     page

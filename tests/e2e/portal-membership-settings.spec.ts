@@ -44,10 +44,10 @@ test("a permitted staff identity reads and updates membership settings through t
   await signInToPortal(page, e2eAdminEmail("portal-membership-settings"));
   // Three pages, three addresses. They shared one "Membership Settings" tab
   // before, so neither the workflow nor the catalog could be linked to (#40).
-  await page.goto("/portal/#/settings/application-workflow");
+  await page.goto("/portal/#/settings/applicant-reminders");
 
-  await expect(page.getByRole("heading", { name: "Application workflow" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Application workflow" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Applicant reminders" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Applicant reminders" })).toHaveAttribute("aria-current", "page");
   const onHoldDeadline = page.getByLabel("On-hold response deadline (days)");
   await expect(onHoldDeadline).toHaveCount(0);
   async function editWorkflow() {
@@ -123,7 +123,7 @@ test("a permitted staff identity reads and updates membership settings through t
 
   // Each edit survives a reload of the page it was made on, at that page's
   // own address.
-  await page.goto("/portal/#/settings/application-workflow");
+  await page.goto("/portal/#/settings/applicant-reminders");
   await editWorkflow();
   await expect(page.getByLabel("On-hold response deadline (days)")).toHaveValue(updatedWindow);
   await page.goto("/portal/#/settings/membership-categories/H8");

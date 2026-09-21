@@ -193,6 +193,18 @@ describe("portal navigation shell", () => {
     expect(groupsList.querySelector(".portal-sidebar-group-role")).toBeNull();
   });
 
+  it("lists applicant reminders as its own Settings page", async () => {
+    currentLocation.value = "/settings/application-workflow";
+    window.location.hash = "#/settings/application-workflow";
+    mountNavigation(portalSessionFixture({ staff: true }));
+    await settle();
+
+    const settingsPages = container.querySelector('ul[aria-label="Settings pages"]');
+    expect(settingsPages).not.toBeNull();
+    const reminders = settingsPages?.querySelector<HTMLAnchorElement>('a[href="#/settings/applicant-reminders"]');
+    expect(reminders?.textContent).toContain("Applicant reminders");
+  });
+
   it("opens a section's own pages under it and folds them away when the reader leaves", async () => {
     /*
      * A section's pages belong under the section, the way a group's pages

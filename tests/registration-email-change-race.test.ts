@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -13,11 +13,15 @@ import {
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 import { prepareRotateUserRegistrationManageSecrets } from "../functions/_lib/services/registrations/manage-capability-revocation";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 describe("registration email-change concurrency", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("atomically rejects a prepared email change after the registration is cancelled", async () => {
     const signingSecret = "test-signing-secret";

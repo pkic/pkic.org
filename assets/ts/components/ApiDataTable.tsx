@@ -17,6 +17,7 @@ import { Toolbar } from "../ui/Toolbar";
 import { ErrorAlert } from "./ErrorAlert";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { DataTable, type DataTableProps } from "./Table";
+import { IconPlus, IconRefresh } from "./icons";
 
 export interface ApiTableActions {
   reload: () => Promise<void>;
@@ -198,13 +199,11 @@ export function ApiDataTable<T, Response = unknown>({
                   value: pendingSearch,
                   placeholder: searchPlaceholder,
                   onInput: setPendingSearch,
+                  onSubmit: applySearch,
                   label: `Search ${caption.toLowerCase()}`,
                 }
               : undefined
           }
-          onKeyDown={(event: KeyboardEvent) => {
-            if (event.key === "Enter") applySearch();
-          }}
         >
           {toolbar?.(actions)}
           {/* Default size, not `sm`: these sit on the same row as the search
@@ -217,15 +216,25 @@ export function ApiDataTable<T, Response = unknown>({
           {createAction && (
             <Button
               variant="primary"
+              icon
+              aria-label={createAction.label}
+              title={createAction.label}
               onClick={createAction.onSelect}
               disabled={createAction.disabled}
               aria-expanded={createAction.expanded}
             >
-              {createAction.label}
+              <IconPlus />
+              <span class="pk-sr-only">{createAction.label}</span>
             </Button>
           )}
-          <Button variant="secondary" onClick={() => void collection.reload()}>
-            Refresh
+          <Button
+            variant="secondary"
+            icon
+            title={`Refresh ${caption.toLowerCase()}`}
+            onClick={() => void collection.reload()}
+          >
+            <IconRefresh />
+            <span class="pk-sr-only">Refresh</span>
           </Button>
         </Toolbar>
       )}

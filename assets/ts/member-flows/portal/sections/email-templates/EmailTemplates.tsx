@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Spinner } from "../../../../components/Spinner";
 import type { MenuItem } from "../../../../ui/Menu";
 import { RowActions } from "../../../../ui/RowActions";
 import { useContractForm, type FieldPresentation } from "../../../../hooks/useContractForm";
@@ -301,17 +303,50 @@ function EmailTemplateCreateOnly() {
 // Main section
 // ────────────────────────────────────────────────────────
 
+function RoutedTemplateEditor({ templateKey, canWrite }: { templateKey: string; canWrite: boolean }) {
+  const [loaded, setLoaded] = useState<{ version: EmailTemplateVersion | null } | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getEmailTemplateEditorVersion(templateKey)
+      .then((version) => {
+        if (!cancelled) setLoaded({ version });
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) setError(caught instanceof Error ? caught : new Error("Could not load this template."));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateKey]);
+
+  if (error) return <ErrorAlert error={error} />;
+  if (!loaded) return <Spinner label="Loading email template…" />;
+  return (
+    <TemplateEditor
+      templateKey={templateKey}
+      initialVersion={loaded.version}
+      canWrite={canWrite}
+      onBack={() => {
+        window.location.hash = "#/settings/email-templates";
+      }}
+    />
+  );
+}
 type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
 
 export function EmailTemplates({
   canRead = true,
   canWrite,
   canManage = false,
+  templateKey,
 }: {
   canRead?: boolean;
   canWrite: boolean;
   /** May archive and delete templates (`email-templates:manage`). */
   canManage?: boolean;
+  templateKey?: string;
 }) {
   const [view, setView] = useState<TemplatesView>("list");
   const tableActions = useRef<ApiTableActions | null>(null);
@@ -391,6 +426,8 @@ export function EmailTemplates({
   if (!canRead) {
     return canWrite ? <EmailTemplateCreateOnly /> : null;
   }
+
+  if (templateKey) return <RoutedTemplateEditor templateKey={templateKey} canWrite={canWrite} />;
 
   if (view !== "list" && view !== "create") {
     return (
@@ -492,7 +529,7 @@ export function EmailTemplates({
         // a nameless last column, which left the row itself inert.
         rowAction={(t) => ({
           label: `${canWrite ? "Edit" : "View"} ${t.template_key}`,
-          onSelect: () => void openEditor(t.template_key),
+          href: `#/settings/email-templates/${encodeURIComponent(t.template_key)}`,
         })}
       />
     </div>

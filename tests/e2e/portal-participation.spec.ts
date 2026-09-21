@@ -63,11 +63,11 @@ test("a freshly approved member sees their application and empty records elsewhe
   // the link reaches the right page and its one row opens.
   await applicationLink.click();
   await expect(page.getByRole("heading", { name: "My application" })).toBeVisible({ timeout: 15_000 });
-  const openRow = page.getByRole("button", { name: /^Open the application submitted/ });
+  const openRow = page.getByRole("link", { name: /^Open the application submitted/ });
   await expect(openRow).toBeVisible({ timeout: 15_000 });
   await openRow.click();
   await expect(page.getByRole("heading", { name: `Participation Member ${suffix}` })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByRole("button", { name: "Back to applications" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to applications" })).toBeVisible();
 });

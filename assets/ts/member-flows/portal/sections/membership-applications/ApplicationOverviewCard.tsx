@@ -84,6 +84,8 @@ export function ApplicationOverviewCard({
     try {
       await onSave(body);
       setEditing(false);
+    } catch (cause) {
+      setEditError(cause instanceof Error ? cause.message : "Could not save the application.");
     } finally {
       setEditSaving(false);
     }

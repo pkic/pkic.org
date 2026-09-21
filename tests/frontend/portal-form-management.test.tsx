@@ -192,7 +192,7 @@ describe("portal form management", () => {
       }),
     );
 
-    const container = mount(<FormManagementList onOpenForm={vi.fn()} />);
+    const container = mount(<FormManagementList />);
     await settle();
 
     expect(requests).toHaveLength(1);
@@ -217,7 +217,7 @@ describe("portal form management", () => {
       }),
     );
 
-    const container = mount(<FormManagementList onOpenForm={vi.fn()} />);
+    const container = mount(<FormManagementList />);
     await settle();
 
     // The create action lives in the page header, not the list's toolbar:
@@ -366,9 +366,7 @@ describe("portal form management", () => {
       "fetch",
       vi.fn(async () => formListResponse()),
     );
-    const onOpenForm = vi.fn();
-
-    const container = mount(<FormManagementList onOpenForm={onOpenForm} />);
+    const container = mount(<FormManagementList />);
     await settle();
 
     // A table with no caption is announced as "table"; this page can hold
@@ -376,14 +374,12 @@ describe("portal form management", () => {
     expect(container.querySelector("caption")?.textContent).toBe("Configured forms");
 
     const row = container.querySelector("tbody tr");
-    const action = row?.querySelector("button");
+    const action = row?.querySelector<HTMLAnchorElement>("a");
     expect(action?.textContent).toBe("Open Member feedback");
+    expect(action?.getAttribute("href")).toBe("#/forms/member-feedback");
     // Not a click handler on the <tr>: a row is not focusable and takes no
     // Enter key.
     expect(row?.hasAttribute("onclick")).toBe(false);
-
-    action!.click();
-    expect(onOpenForm).toHaveBeenCalledWith("member-feedback");
   });
 
   it("names the response filter bar and every control in it", async () => {

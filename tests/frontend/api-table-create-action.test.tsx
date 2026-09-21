@@ -82,12 +82,14 @@ describe("ApiDataTable createAction", () => {
     // so the assertion survives the next change of presentational classes.
     const toolbar = container.querySelector('[role="toolbar"]');
     expect(toolbar?.getAttribute("aria-label")).toBe("Things controls");
-    const buttons = [...(toolbar?.querySelectorAll("button") ?? [])].map((button) => button.textContent);
-    expect(buttons).toEqual(["New thing", "Refresh"]);
+    const buttons = [...(toolbar?.querySelectorAll("button") ?? [])].map(
+      (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
+    );
+    expect(buttons).toEqual(["Search things", "New thing", "Refresh"]);
     expect(toolbar?.querySelector("input[type=search]")).not.toBeNull();
 
     await act(() => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent === "New thing")?.click();
+      container.querySelector<HTMLButtonElement>('button[aria-label="New thing"]')?.click();
     });
     expect(created).toBe(1);
   });
@@ -96,14 +98,18 @@ describe("ApiDataTable createAction", () => {
     stubList();
     const container = mount(table(undefined));
     await settle();
-    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Refresh"]);
+    expect(
+      [...container.querySelectorAll("button")].map(
+        (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
+      ),
+    ).toEqual(["Search things", "Refresh"]);
   });
 
   it("disables the create button when the action is disabled", async () => {
     stubList();
     const container = mount(table({ label: "New thing", onSelect: () => {}, disabled: true }));
     await settle();
-    const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === "New thing");
+    const button = container.querySelector<HTMLButtonElement>('button[aria-label="New thing"]');
     expect(button?.disabled).toBe(true);
   });
 });
@@ -117,9 +123,7 @@ it("keeps loaded rows visible after a transient refresh failure and clears them 
     "fetch",
     vi.fn(async () => new Response(null, { status: 503 })),
   );
-  const refresh = Array.from(container.querySelectorAll("button")).find(
-    (button) => button.textContent?.trim() === "Refresh",
-  )!;
+  const refresh = container.querySelector<HTMLButtonElement>('button[title="Refresh things"]')!;
   await act(() => refresh.click());
   await settle();
   expect(container.textContent).toContain("Row one");

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
+import { NODE_UNIT_TEST_FILES } from "./vitest.config.unit";
 
 export default defineConfig(async () => {
   const migrationsPath = path.join(import.meta.dirname, "migrations");
@@ -35,9 +36,10 @@ export default defineConfig(async () => {
     ],
     test: {
       include: ["tests/**/*.test.ts"],
-      exclude: ["tests/frontend/**", "tests/e2e/**", "tests/tools/**", "**/._*"],
+      exclude: [...NODE_UNIT_TEST_FILES, "tests/frontend/**", "tests/e2e/**", "tests/tools/**", "**/._*"],
       setupFiles: ["./tests/helpers/apply-migrations.ts"],
       maxWorkers: 3,
+      reporters: ["default", "./tests/tools/slowest-tests-reporter.ts"],
     },
   };
 });

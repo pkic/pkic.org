@@ -14,7 +14,6 @@ import { PageHeader } from "../../../../ui/PageHeader";
 import { Badge, statusLabel } from "../../../../components/Badge";
 import { usePortalHashLocation } from "../../hash-location";
 import { WorkflowVersionEditor } from "./WorkflowVersionEditor";
-import { ApplicationHoldSettings } from "./ApplicationHoldSettings";
 
 const path = "/settings/application-workflow";
 function VersionPage({ id, canWrite, canPublish }: { id: string; canWrite: boolean; canPublish: boolean }) {
@@ -60,7 +59,13 @@ export function ApplicationWorkflow({
   if (resourceId) return <VersionPage id={resourceId} canWrite={canWrite} canPublish={canPublish} />;
   return (
     <div class="pk pk-stack">
-      <PageHeader title="Application workflows" />
+      <PageHeader
+        title="Application workflows"
+        trail={[
+          { label: "Settings", href: usePortalHashLocation.hrefs("/settings") },
+          { label: "Application workflows" },
+        ]}
+      />
       <p>
         Categories select a published workflow. Each application keeps its version, so a later policy edit cannot change
         an ongoing review.
@@ -76,27 +81,25 @@ export function ApplicationWorkflow({
         initialSort="name"
         searchPlaceholder="Workflow name"
         rowKey={(version) => version.id}
-        rowAction={(version) => ({ label: "View workflow", onSelect: () => navigate(`${path}/${version.id}`) })}
+        rowAction={(version) => ({
+          label: "View workflow",
+          href: usePortalHashLocation.hrefs(`${path}/${encodeURIComponent(version.id)}`),
+        })}
         createAction={canWrite ? { label: "New workflow", onSelect: () => navigate(`${path}/new`) } : undefined}
         initialFilters={{ archived: "false" }}
         columns={[
           {
-            header: "Availability",
-            cell: (version) => (version.archivedAt ? "Archived" : "Available"),
-            filter: {
-              param: "archived",
-              options: [
-                { value: "false", label: "Available workflows" },
-                { value: "true", label: "Archived workflows" },
-              ],
-            },
-          },
-          {
             header: "Workflow",
             cell: (version) => <strong>{version.definition.name}</strong>,
             sort: { asc: "name", desc: "-name" },
+            width: "primary",
           },
-          { header: "Version", cell: (version) => version.version, sort: { asc: "version", desc: "-version" } },
+          {
+            header: "Version",
+            cell: (version) => version.version,
+            sort: { asc: "version", desc: "-version" },
+            width: "fit",
+          },
           {
             header: "Status",
             cell: (version) => <Badge status={version.archivedAt ? "archived" : version.status} />,
@@ -110,14 +113,31 @@ export function ApplicationWorkflow({
                 })),
               ],
             },
+            width: "fit",
           },
           {
             header: "Required steps",
             cell: (version) => version.definition.steps.map((step) => step.label).join(" → "),
           },
+          {
+            header: "Availability",
+            cell: (version) => (
+              <Badge
+                status={version.archivedAt ? "archived" : "active"}
+                label={version.archivedAt ? "Archived" : "Available"}
+              />
+            ),
+            filter: {
+              param: "archived",
+              options: [
+                { value: "false", label: "Available workflows" },
+                { value: "true", label: "Archived workflows" },
+              ],
+            },
+            width: "fit",
+          },
         ]}
       />
-      <ApplicationHoldSettings canWrite={canWrite} />
     </div>
   );
 }

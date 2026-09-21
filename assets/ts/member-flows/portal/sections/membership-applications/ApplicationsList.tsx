@@ -7,8 +7,9 @@ import "../../../../ui/Content.css";
 import { fmtDate } from "../../ui";
 import { APPLICATION_STAGES } from "../../../../../shared/schemas/member-applications";
 import { membershipApplicationsListResponseSchema } from "../../../../../shared/schemas/membership-application-management";
+import { usePortalHashLocation } from "../../hash-location";
 
-export function ApplicationsList({ onViewApplication }: { onViewApplication: (id: string) => void }) {
+export function ApplicationsList() {
   const tableRef = useRef<ApiTableActions | null>(null);
 
   return (
@@ -90,7 +91,7 @@ export function ApplicationsList({ onViewApplication }: { onViewApplication: (id
         rowKey={(a) => a.id}
         rowAction={(a) => ({
           label: `Review the application from ${a.applicantName}`,
-          onSelect: () => onViewApplication(a.id),
+          href: usePortalHashLocation.hrefs(`/membership/applications/${encodeURIComponent(a.id)}`),
         })}
       />
     </div>

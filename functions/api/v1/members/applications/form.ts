@@ -8,23 +8,11 @@
  */
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { jsonNoStore } from "../../../../_lib/http";
-import { getGlobalFormByKey } from "../../../../_lib/services/forms";
-import { requireMembershipApplicationPolicyFields } from "../../../../_lib/services/membership/application-form";
-import { listMembershipCategories } from "../../../../_lib/services/membership/categories";
-import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
-import {
-  memberApplicationFormResponseSchema,
-  memberApplicationFormRouteSchema,
-} from "../../../../../assets/shared/schemas/member-applications";
+import { getPublicMembershipApplicationForm } from "../../../../_lib/services/membership/application-form";
+import { memberApplicationFormRouteSchema } from "../../../../../assets/shared/schemas/member-applications";
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const db = c.env.DB;
-  const [form, categories] = await Promise.all([
-    getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY),
-    listMembershipCategories(db, true),
-  ]);
-  if (form) requireMembershipApplicationPolicyFields(form.fields);
-  return jsonNoStore(memberApplicationFormResponseSchema.parse({ form, categories }));
+  return jsonNoStore(await getPublicMembershipApplicationForm(c.env.DB));
 }
 
 export const MembersApplicationsFormGet = openApiRoute(memberApplicationFormRouteSchema, onRequestGet);

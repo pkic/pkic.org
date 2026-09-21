@@ -15,6 +15,8 @@ import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { isPersonalEmailAddress } from "../../shared/constants/email-domains";
+import { formatCurrencyAmount } from "../../shared/format-currency";
+import { isMembershipOrganizationFieldKey } from "../../shared/schemas/membership-application-form";
 import {
   memberApplicationCreateResponseSchema,
   memberApplicationCreateSchemaForCategory,
@@ -95,6 +97,27 @@ export function filterCategoriesForApplicantKind(
   return categories.filter((category) => category.isIndividual === (applicantKind === "individual"));
 }
 
+export function membershipCategoryFeeText(category: MembershipCategory): string | null {
+  if (!category.fee) return null;
+  return `Required fee: ${formatCurrencyAmount(category.fee.amount, category.fee.currency)}. Payment is due within ${category.fee.deadlineDays} days after the payment step opens.`;
+}
+
+export function filterApplicationFieldsForApplicantKind(
+  fields: MembershipApplicationField[],
+  applicantKind: JoinApplicantKind,
+): MembershipApplicationField[] {
+  return applicantKind === "individual"
+    ? fields.filter((field) => !isMembershipOrganizationFieldKey(field.key))
+    : fields;
+}
+
+function membershipLegalLabel(key: string, configuredLabel: string, applicantKind: JoinApplicantKind): string {
+  if (applicantKind !== "individual") return configuredLabel;
+  if (key === "warranted_authority") {
+    return "I confirm that I am submitting this application for myself and agree to be bound by these terms";
+  }
+  return configuredLabel.replace(/^I and my organization \(if applicable\)/, "I");
+}
 export function renderMembershipCategorySummary(container: HTMLElement, categories: MembershipCategory[]): void {
   if (categories.length === 0) {
     container.textContent = "No eligible individual categories are currently available.";
@@ -118,6 +141,13 @@ export function renderMembershipCategorySummary(container: HTMLElement, categori
       description.textContent = category.description;
       item.append(description);
     }
+    const fee = membershipCategoryFeeText(category);
+    if (fee) {
+      const feeSummary = document.createElement("div");
+      feeSummary.className = "pk-small pk-strong";
+      feeSummary.textContent = fee;
+      item.append(feeSummary);
+    }
     list.append(item);
   }
   container.replaceChildren(list);
@@ -130,6 +160,7 @@ export function renderMembershipCategorySummary(container: HTMLElement, categori
 export function configureMembershipLegalFields(
   form: HTMLFormElement,
   fields: MembershipApplicationField[],
+  applicantKind: JoinApplicantKind = "organization",
 ): MembershipApplicationField[] {
   const fieldsByKey = new Map(fields.map((field) => [field.key, field]));
   const configuredKeys = new Set<string>();
@@ -146,14 +177,17 @@ export function configureMembershipLegalFields(
     if (!configured || !key || !field || !input || !label) continue;
 
     input.required = field.required;
-    label.textContent = field.label;
+    label.textContent = membershipLegalLabel(key, field.label, applicantKind);
     configuredKeys.add(key);
   }
 
   const agreements = form.querySelector<HTMLElement>("[data-membership-legal-agreements]");
   if (agreements) agreements.hidden = configuredKeys.size === 0;
 
-  return fields.filter((field) => !configuredKeys.has(field.key));
+  return filterApplicationFieldsForApplicantKind(
+    fields.filter((field) => !configuredKeys.has(field.key)),
+    applicantKind,
+  );
 }
 
 /**
@@ -260,6 +294,13 @@ export function renderMembershipCategories(container: HTMLElement, categories: M
         description.className = "pk-check__hint";
         description.textContent = category.description;
         label.append(description);
+      }
+      const fee = membershipCategoryFeeText(category);
+      if (fee) {
+        const feeSummary = document.createElement("span");
+        feeSummary.className = "pk-check__hint pk-strong";
+        feeSummary.textContent = fee;
+        label.append(feeSummary);
       }
       wrapper.htmlFor = id;
       wrapper.append(input, label);
@@ -386,7 +427,7 @@ async function main(): Promise<void> {
       }
       renderMembershipCategories(categoryContainer, categories);
       const fields = definition.form?.fields ?? [];
-      const genericFields = configureMembershipLegalFields(applicationForm, fields);
+      const genericFields = configureMembershipLegalFields(applicationForm, fields, context.applicantKind);
       if (customFieldsContainer) renderCustomFields(customFieldsContainer, genericFields);
       if (verifiedEmail) verifiedEmail.textContent = context.applicantEmail;
       if (verifiedKind) {

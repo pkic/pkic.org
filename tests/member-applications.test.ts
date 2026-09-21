@@ -563,6 +563,53 @@ describe("GET /api/v1/members/applications/form", () => {
     expect(body.form?.key).toBe("membership-application");
   });
 
+  it("projects the exact payment step from each category's pinned workflow", async () => {
+    const workflowId = crypto.randomUUID();
+    const versionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const definition = {
+      name: "Individual membership with fee",
+      policyReference: "Synthetic fee disclosure policy",
+      steps: [
+        {
+          id: crypto.randomUUID(),
+          kind: "payment",
+          label: "Pay individual membership fee",
+          instructions: "Pay after the application review is complete.",
+          feeReference: "individual-membership",
+          amount: 12500,
+          currency: "usd",
+          deadlineDays: 14,
+        },
+      ],
+    };
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO membership_workflows (id, created_at) VALUES (?, ?)").bind(workflowId, now),
+      env.DB.prepare(
+        `INSERT INTO membership_workflow_versions
+             (id, workflow_id, version, revision, name, status, definition_json, created_at, published_at)
+           VALUES (?, ?, 1, 0, ?, 'published', ?, ?, ?)`,
+      ).bind(versionId, workflowId, definition.name, JSON.stringify(definition), now, now),
+      env.DB.prepare("UPDATE membership_categories SET workflow_version_id = ? WHERE code = 'H6'").bind(versionId),
+    ]);
+
+    const response = await callEndpoint(
+      getApplicationForm,
+      createContext(makeEnv(), new Request("https://pkic.org/api/v1/members/applications/form"), {}),
+    );
+
+    expect(response.status).toBe(200);
+    const body = memberApplicationFormResponseSchema.parse(await response.json());
+    expect(body.categories.find(({ code }) => code === "H6")?.fee).toEqual({
+      label: "Pay individual membership fee",
+      instructions: "Pay after the application review is complete.",
+      amount: 12500,
+      currency: "usd",
+      deadlineDays: 14,
+    });
+    expect(body.categories.find(({ code }) => code === "A")?.fee).toBeNull();
+  });
+
   it("resolves working-group choices from active D1 rows rather than a seed snapshot", async () => {
     await env.DB.prepare("UPDATE groups SET name = 'A Dynamic Working Group' WHERE slug = 'pqc'").run();
     await env.DB.prepare("UPDATE groups SET active = 0 WHERE slug = 'cm'").run();

@@ -300,6 +300,12 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
         access: (session) => portalHasGlobalPermission(session, "membership:read"),
       },
       {
+        path: "/settings/applicant-reminders",
+        label: "Applicant reminders",
+        description: "When an applicant on hold is reminded, and which addresses receive a copy.",
+        access: (session) => portalHasGlobalPermission(session, "membership:read"),
+      },
+      {
         path: "/settings/membership-application-form",
         label: "Membership application form",
         description: "The questions an applicant answers once their email address is verified.",

@@ -1,14 +1,18 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { recordEngagement } from "../functions/_lib/services/engagement";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 describe("engagement events", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+  afterEach(() => vi.unstubAllGlobals());
+
   it("records registration lifecycle points", async () => {
     await seedEventAndAdmin(env.DB);
 

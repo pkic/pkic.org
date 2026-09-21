@@ -64,12 +64,46 @@
   padding-inline-start: var(--pk-3);
 }
 
-// Replaces Bootstrap's `.row` for the {{% row %}}/{{% col %}} content
-// shortcodes. Deliberately gapless: `col.html` still emits `col-lg-*`
-// percentage widths that add up to exactly 100%, and any gap would wrap a
-// 7/5 split onto two lines. The columns' own gutter padding is the spacing.
+// Responsive 12-column content grid for the {{% row %}}/{{% col %}}
+// shortcodes. Tracks and gaps belong to the parent, so authored pages do not
+// recreate the removed Bootstrap layout or carry inline positioning styles.
 .content-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--pk-6);
   align-items: flex-start;
+}
+
+.content-col {
+  grid-column: span 12;
+  min-width: 0;
+}
+
+@media (min-width: 36rem) {
+  @for $span from 1 through 12 {
+    .content-col--sm-#{$span} {
+      grid-column: span $span;
+    }
+  }
+}
+
+@media (min-width: 48rem) {
+  @for $span from 1 through 12 {
+    .content-col--md-#{$span} {
+      grid-column: span $span;
+    }
+  }
+}
+
+@media (min-width: 62rem) {
+  @for $span from 1 through 12 {
+    .content-col--lg-#{$span} {
+      grid-column: span $span;
+    }
+  }
+
+  .content-col--sticky {
+    position: sticky;
+    top: 5rem;
+  }
 }

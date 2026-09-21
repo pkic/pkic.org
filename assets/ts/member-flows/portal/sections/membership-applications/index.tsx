@@ -9,7 +9,6 @@
  * useApplicationDetail and the Application*Card components in this
  * directory. This file is just the list/detail top-level composition.
  */
-import { useLocation } from "wouter";
 import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { ApplicationDetailView } from "./ApplicationDetailView";
@@ -27,7 +26,6 @@ export function MembershipApplications({
   canWrite: boolean;
   canApprove: boolean;
 }) {
-  const [, navigate] = useLocation();
   const categories = useMembershipCategoryCatalog();
 
   if (initialApplicationId) {
@@ -44,7 +42,7 @@ export function MembershipApplications({
   return (
     <div class="pk pk-stack">
       <PageHeader title="Membership applications" />
-      <ApplicationsList onViewApplication={(id) => navigate(`/membership/applications/${encodeURIComponent(id)}`)} />
+      <ApplicationsList />
     </div>
   );
 }

@@ -55,6 +55,7 @@ const categoryCatalog = {
       code: "F" as const,
       label: "PKI or cryptographic software and device providers",
       description: null,
+      fee: null,
       displayOrder: 60,
       isIndividual: false,
       isVoting: true,
@@ -109,8 +110,8 @@ function stub(options: { list?: () => Response; detail?: () => Response } = {}) 
   return requests;
 }
 
-function mount(): HTMLElement {
-  void act(() => render(<MyApplications />, container));
+function mount(applicationId?: string): HTMLElement {
+  void act(() => render(<MyApplications applicationId={applicationId} />, container));
   return container;
 }
 
@@ -176,7 +177,7 @@ describe("my applications", () => {
     expect([...root.querySelectorAll("thead th")].every((cell) => cell.getAttribute("scope") === "col")).toBe(true);
   });
 
-  it("opens the detail from a real control that names what it opens, not a handler on the row", async () => {
+  it("links the detail from a real control that preserves the list in a new tab", async () => {
     const requests = stub();
 
     const root = mount();
@@ -186,37 +187,24 @@ describe("my applications", () => {
     expect(row?.getAttribute("onclick")).toBeNull();
 
     const link = rowLink(root);
-    expect(link.tagName).toBe("BUTTON");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("#/application/" + APPLICATION_ID);
     expect(link.textContent).toContain("Open the application submitted");
-
-    await act(() => link.click());
-    await settle();
-
-    expect(requests.map(({ url }) => url.pathname)).toContain(`/api/v1/users/current/applications/${APPLICATION_ID}`);
-    expect(root.textContent).toContain("Example Applicant");
-    expect(root.textContent).toContain("Status history");
-    // The status change reads as words, so the history does not rest on colour.
-    expect(root.textContent).toContain("Submitted → ");
-    expect(root.textContent).toContain("Review started.");
-    expect(root.textContent).toContain("We received your application");
+    expect(requests.map(({ url }) => url.pathname)).not.toContain(
+      "/api/v1/users/current/applications/" + APPLICATION_ID,
+    );
   });
 
   it("returns to the list from the detail view", async () => {
     stub();
 
-    const root = mount();
-    await settle();
-    await act(() => rowLink(root).click());
+    const root = mount(APPLICATION_ID);
     await settle();
 
-    const back = [...root.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("Back to applications"),
+    const back = [...root.querySelectorAll<HTMLAnchorElement>("a")].find((link) =>
+      link.textContent?.includes("Back to applications"),
     );
-    expect(back).toBeDefined();
-    await act(() => back!.click());
-    await settle();
-
-    expect(root.querySelector("caption")?.textContent).toBe("Your membership applications");
+    expect(back?.getAttribute("href")).toBe("#/application");
   });
 
   it("says so in an announced region when no application is on file", async () => {
@@ -249,9 +237,7 @@ describe("my applications", () => {
   it("states a failed detail request without pretending the application loaded", async () => {
     stub({ detail: () => json({ error: "Not found" }, 404) });
 
-    const root = mount();
-    await settle();
-    await act(() => rowLink(root).click());
+    const root = mount(APPLICATION_ID);
     await settle();
 
     const alert = root.querySelector('[role="alert"]');
@@ -259,7 +245,9 @@ describe("my applications", () => {
     expect(root.textContent).not.toContain("Status history");
     // The way back is still there, so the reader is not stranded.
     expect(
-      [...root.querySelectorAll("button")].some((button) => button.textContent?.includes("Back to applications")),
+      [...root.querySelectorAll<HTMLAnchorElement>("a")].some(
+        (link) => link.textContent?.includes("Back to applications") && link.getAttribute("href") === "#/application",
+      ),
     ).toBe(true);
   });
 });

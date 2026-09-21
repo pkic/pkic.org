@@ -188,10 +188,8 @@ describe("portal System Organizations", () => {
     const container = mount(<Organizations canRead canCreate />);
     await settle();
 
-    const create = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Add organization",
-    );
-    expect(create).not.toBeUndefined();
+    const create = container.querySelector<HTMLButtonElement>('button[aria-label="Add organization"]');
+    expect(create).not.toBeNull();
     await act(async () => {
       create?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

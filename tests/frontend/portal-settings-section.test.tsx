@@ -77,10 +77,11 @@ describe("settings section", () => {
     const section = mount(<SettingsSection session={staffWith("membership:read", "audit:read")} />);
 
     expect(section.querySelector("h2")?.textContent).toBe("Settings");
-    // The three subjects that shared one "Membership Settings" tab are three
-    // entries now, and each links somewhere a reader can be sent.
+    // The settings that shared one membership page are separate entries now,
+    // and each links somewhere a reader can be sent.
     expect(linkNames(section)).toEqual([
       "Application workflow",
+      "Applicant reminders",
       "Membership application form",
       "Membership categories",
       "Audit log",
@@ -90,6 +91,7 @@ describe("settings section", () => {
     );
     expect(addresses).toEqual([
       "#/settings/application-workflow",
+      "#/settings/applicant-reminders",
       "#/settings/membership-application-form",
       "#/settings/membership-categories",
       "#/settings/audit-log",

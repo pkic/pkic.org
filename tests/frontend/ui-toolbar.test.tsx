@@ -39,7 +39,10 @@ describe("Toolbar", () => {
 
   it("renders a search input with an accessible name via visually-hidden label", () => {
     const container = mount(
-      <Toolbar label="List controls" search={{ value: "", placeholder: "Find items", onInput: () => {} }} />,
+      <Toolbar
+        label="List controls"
+        search={{ value: "", placeholder: "Find items", onInput: () => {}, onSubmit: () => {} }}
+      />,
     );
     const label = container.querySelector("label") as HTMLLabelElement;
     const input = container.querySelector('input[type="search"]') as HTMLInputElement;
@@ -54,7 +57,7 @@ describe("Toolbar", () => {
   it("fires onInput with the typed value", () => {
     const onInput = vi.fn();
     const container = mount(
-      <Toolbar label="List controls" search={{ value: "", placeholder: "Find items", onInput }} />,
+      <Toolbar label="List controls" search={{ value: "", placeholder: "Find items", onInput, onSubmit: () => {} }} />,
     );
     const input = container.querySelector('input[type="search"]') as HTMLInputElement;
 
@@ -66,6 +69,29 @@ describe("Toolbar", () => {
     expect(onInput).toHaveBeenCalledWith("test query");
   });
 
+  it("submits the current search from the keyboard", () => {
+    const onSubmit = vi.fn();
+    const container = mount(
+      <Toolbar label="List controls" search={{ value: "PKI", label: "Search members", onInput: () => {}, onSubmit }} />,
+    );
+    const input = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    void act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("submits the current search from an explicit accessible button", () => {
+    const onSubmit = vi.fn();
+    const container = mount(
+      <Toolbar label="List controls" search={{ value: "PKI", label: "Search members", onInput: () => {}, onSubmit }} />,
+    );
+
+    const button = container.querySelector<HTMLButtonElement>('button[aria-label="Search members"]');
+    expect(button).not.toBeNull();
+    void act(() => button?.click());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
   it("does not nest buttons inside buttons", () => {
     const container = mount(
       <Toolbar label="List controls">

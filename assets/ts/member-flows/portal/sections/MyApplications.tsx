@@ -2,9 +2,7 @@
  * My Application — View original application, status history,
  * and timeline. Most members have exactly one application, but the backend
  * (GET /api/v1/users/current/applications) returns every application matching the
- * caller's email, so this renders as a list that expands into a detail view
- * (master/detail within a single tab — no route param, since
- * scoped the nav shell's routing to top-level sections only).
+ * caller's email, so the list links to one addressable detail view per application.
  */
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -16,7 +14,7 @@ import { Pager } from "../../../components/Pager";
 import { useApiPage } from "../../../hooks/useApiPage";
 import { fmt, fmtDate } from "../ui";
 import { Badge, statusLabel } from "../../../components/Badge";
-import { Button } from "../../../ui/Button";
+import { ButtonLink } from "../../../ui/Button";
 import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
 import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
@@ -41,7 +39,7 @@ function LogEntry({ headline, at, body }: { headline: ComponentChildren; at: str
   );
 }
 
-function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void }) {
+function ApplicationDetailView({ id }: { id: string }) {
   const [detail, setDetail] = useState<MyApplicationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { label: categoryLabel } = useMembershipCategoryLabels();
@@ -62,24 +60,22 @@ function ApplicationDetailView({ id, onBack }: { id: string; onBack: () => void 
 
   return (
     <div class="pk pk-stack">
-      {/* The applicant heads the page; the way back rides in the header's
-          action slot because the detail has no URL of its own for a trail
-          link to point at — it is the same page, expanded. */}
+      {/* The applicant heads the page; the link returns to the addressable list. */}
       {detail ? (
         <PageHeader
           title={detail.applicantName}
           context={<Badge status={detail.stage} />}
           actions={
-            <Button size="sm" variant="ghost" onClick={onBack}>
+            <ButtonLink size="sm" variant="ghost" href="#/application">
               Back to applications
-            </Button>
+            </ButtonLink>
           }
         />
       ) : (
         <div class="pk-cluster">
-          <Button size="sm" variant="ghost" onClick={onBack}>
+          <ButtonLink size="sm" variant="ghost" href="#/application">
             Back to applications
-          </Button>
+          </ButtonLink>
         </div>
       )}
       {error && <ErrorAlert error={error} />}
@@ -178,19 +174,14 @@ function applicationColumns(
   ];
 }
 
-export function MyApplications() {
+function MyApplicationsList() {
   const page = useApiPage(
     "/api/v1/users/current/applications",
     { sort: "-createdAt" },
     myApplicationsListResponseSchema,
     (data) => data.applications,
   );
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const categories = useMembershipCategoryLabels((page.data?.applications.length ?? 0) > 0);
-
-  if (selectedId) {
-    return <ApplicationDetailView id={selectedId} onBack={() => setSelectedId(null)} />;
-  }
 
   if (page.error) {
     return (
@@ -217,7 +208,7 @@ export function MyApplications() {
             // reached with a mouse.
             rowAction={(app) => ({
               label: `Open the application submitted ${fmtDate(app.createdAt)}`,
-              onSelect: () => setSelectedId(app.id),
+              href: `#/application/${encodeURIComponent(app.id)}`,
             })}
             empty={
               <EmptyState
@@ -231,4 +222,8 @@ export function MyApplications() {
       </Panel>
     </div>
   );
+}
+export function MyApplications({ applicationId }: { applicationId?: string }) {
+  if (applicationId) return <ApplicationDetailView id={applicationId} />;
+  return <MyApplicationsList />;
 }

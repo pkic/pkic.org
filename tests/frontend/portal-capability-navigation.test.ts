@@ -91,6 +91,7 @@ describe("portal capability-derived navigation", () => {
      */
     expect(portalSettingsPages(reader).map((page) => [page.path, page.label])).toEqual([
       ["/settings/application-workflow", "Application workflow"],
+      ["/settings/applicant-reminders", "Applicant reminders"],
       ["/settings/membership-application-form", "Membership application form"],
       ["/settings/membership-categories", "Membership categories"],
     ]);

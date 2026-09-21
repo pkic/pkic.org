@@ -11,9 +11,8 @@
   takes no gutter or alignment argument: one rule in the stylesheet rather
   than one per call site.
 
-  `.content-row` rather than `pk-cluster`, because `col.html` still writes
-  Bootstrap's percentage widths and a cluster's gap would push a 7/5 split
-  onto two lines. When `col.html` migrates, this can become a `pk-grid`.
+  The content grid owns both track widths and spacing. It deliberately keeps
+  the familiar 12-column authoring API without depending on Bootstrap.
 */}}
 <div class="content-row">
 {{ .Inner }}

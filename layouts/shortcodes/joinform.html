@@ -132,22 +132,21 @@
     <a class="pk-btn pk-btn--secondary" href="/contact/">Contact the PKI Consortium</a>
   </section>
 
-  <form data-join-application-form class="pk-form needs-validation" novalidate hidden>
-    <div>
-      <div class="membership-verified-context">
-        <p>
-          <strong data-verified-application-kind></strong> using verified email address
-          <strong data-verified-application-email></strong>.
-        </p>
-        <p class="pk-small">
-          Your verified email address and application path are fixed for this application. Start again if either is
-          incorrect.
-        </p>
-      </div>
+  <form data-join-application-form class="join-application-form pk-stack needs-validation" novalidate hidden>
+    <div class="membership-verified-context">
+      <p>
+        <strong data-verified-application-kind></strong> using verified email address
+        <strong data-verified-application-email></strong>.
+      </p>
+      <p class="pk-small">
+        Your verified email address and application path are fixed for this application. Start again if either is
+        incorrect.
+      </p>
     </div>
 
     <p class="pk-muted pk-small">
-      Only eligibility categories permitted for this verified application path are available below.
+      Only eligibility categories permitted for this verified application path are available below. Any required fee is
+      shown with the category before you submit.
     </p>
 
     <fieldset class="pk-fieldset pk-field">
@@ -157,39 +156,41 @@
       <p data-field-error="membershipCategory" class="pk-field__message" aria-live="polite" hidden></p>
     </fieldset>
 
-    <div class="pk-field">
-      <label for="firstName" class="pk-field__label">First name</label>
-      <div class="pk-field__control">
-        <input type="text" class="pk-input" id="firstName" name="firstName" autocomplete="given-name" required />
+    <div class="join-application-identity-grid">
+      <div class="pk-field">
+        <label for="firstName" class="pk-field__label">First name</label>
+        <div class="pk-field__control">
+          <input type="text" class="pk-input" id="firstName" name="firstName" autocomplete="given-name" required />
+        </div>
+        <p data-field-error="firstName" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
-      <p data-field-error="firstName" class="pk-field__message" aria-live="polite" hidden></p>
-    </div>
-    <div class="pk-field">
-      <label for="lastName" class="pk-field__label">Last name</label>
-      <div class="pk-field__control">
-        <input type="text" class="pk-input" id="lastName" name="lastName" autocomplete="family-name" required />
+      <div class="pk-field">
+        <label for="lastName" class="pk-field__label">Last name</label>
+        <div class="pk-field__control">
+          <input type="text" class="pk-input" id="lastName" name="lastName" autocomplete="family-name" required />
+        </div>
+        <p data-field-error="applicantName" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
-      <p data-field-error="applicantName" class="pk-field__message" aria-live="polite" hidden></p>
-    </div>
-    <div class="pk-field" data-organization-name-field>
-      <label for="organizationName" class="pk-field__label">Organization name</label>
-      <div class="pk-field__control">
-        <input
-          type="text"
-          class="pk-input"
-          id="organizationName"
-          name="organizationName"
-          autocomplete="organization"
-          aria-describedby="organizationNameHelp"
-        />
+      <div class="pk-field" data-organization-name-field>
+        <label for="organizationName" class="pk-field__label">Organization name</label>
+        <div class="pk-field__control">
+          <input
+            type="text"
+            class="pk-input"
+            id="organizationName"
+            name="organizationName"
+            autocomplete="organization"
+            aria-describedby="organizationNameHelp"
+          />
+        </div>
+        <p data-field-error="organizationName" class="pk-field__message" aria-live="polite" hidden></p>
+        <p id="organizationNameHelp" class="pk-field__help">
+          Use the legal or commonly recognized name of the organization you represent.
+        </p>
       </div>
-      <p data-field-error="organizationName" class="pk-field__message" aria-live="polite" hidden></p>
-      <p id="organizationNameHelp" class="pk-field__help">
-        Use the legal or commonly recognized name of the organization you represent.
-      </p>
     </div>
 
-    <div data-custom-fields>
+    <div class="join-application-fields" data-custom-fields>
       <p class="pk-muted pk-small">Loading additional questions…</p>
     </div>
 
@@ -197,7 +198,7 @@
       <div>
         <h3>Review and accept the membership terms</h3>
         <p class="pk-muted pk-small">
-          Read each document in the scrollable panel. The agreement control is located at the bottom of each document.
+          Read each document in the scrollable panel, then confirm your agreement in its attached footer.
         </p>
       </div>
 

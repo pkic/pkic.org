@@ -13,7 +13,7 @@ menu:
 We welcome all organizations and individuals that are [eligible to join the PKI Consortium](/bylaws/#eligibility) as defined by the Bylaws of the PKI Consortium. Membership applications will be reviewed following the [Process for Admitting New Members](/bylaws/#process-for-admitting-new-members). 
 
 {{< alert type="success" >}}
-There are **no membership fees**, we encourage (but do not require) all members to become a sponsor.
+Membership fees depend on the category. If a fee applies, the exact amount and payment timing are shown before you submit. Sponsorship and donations are separate and optional.
 {{< /alert >}}
 
 [Learn more about the application process to join the PKI Consortium](/application-process/).
@@ -33,10 +33,10 @@ By joining the PKI Consortium, you agree to adhere to the [Intellectual Property
 {{< joinform >}}
 
 {{< banner style="inline" >}}
-heading: Help us keep everything free
-body: Membership is free, but running the consortium is not. Your donation or sponsorship directly funds the community.
-stat: Free
-statLabel: membership, events, and resources
+heading: Support the community
+body: Donations and sponsorships fund the working groups, events, and public resources the consortium provides.
+stat: Open
+statLabel: resources for the PKI community
 links:
   - text: Donate now
     url: /donate/

@@ -124,12 +124,17 @@ function stubApi(onAssign: (body: unknown) => Response): URL[] {
 
 /** Picks the one matching person through the suggestion list's accessible name. */
 async function pickUser(container: HTMLElement): Promise<void> {
+  vi.useFakeTimers();
   const search = container.querySelector<HTMLInputElement>('.portal-access-role-user-picker input[type="text"]')!;
   search.value = "assignee";
   void act(() => {
     search.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await settle(300);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  vi.useRealTimers();
+  await settle();
   const suggestions = container.querySelector('[role="group"][aria-label="Matching users"]')!;
   void act(() => (suggestions.querySelector("button") as HTMLButtonElement).click());
   await settle();
@@ -148,6 +153,7 @@ afterEach(() => {
     void act(() => render(null, container));
     container.remove();
   }
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 

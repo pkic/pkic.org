@@ -112,16 +112,14 @@ test("verifies an organization email before submitting the D1-backed membership 
 
   const legalFields = page.locator("[data-membership-legal-field]");
   await expect(legalFields).toHaveCount(4);
-  const firstDocument = page.locator(".membership-legal-card-scroll").first();
-  const firstAgreement = firstDocument.locator("[data-membership-legal-input]");
-  expect(
-    await firstAgreement.evaluate((input) => {
-      const container = input.closest<HTMLElement>(".membership-legal-card-scroll");
-      return Boolean(container && (input as HTMLElement).offsetTop > container.clientHeight);
-    }),
-  ).toBe(true);
-  await firstAgreement.scrollIntoViewIfNeeded();
-  expect(await firstDocument.evaluate((container) => container.scrollTop)).toBeGreaterThan(0);
+  const firstLegalCard = legalFields.first();
+  const firstDocument = firstLegalCard.locator(".membership-legal-card-scroll");
+  const firstAgreement = firstLegalCard.locator("[data-membership-legal-input]");
+  expect(await firstAgreement.evaluate((input) => input.closest(".membership-legal-card-scroll") === null)).toBe(true);
+  await firstDocument.evaluate((container) => {
+    container.scrollTop = container.scrollHeight;
+  });
+  await expect(firstAgreement).toBeVisible();
 
   for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();

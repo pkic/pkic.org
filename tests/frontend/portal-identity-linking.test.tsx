@@ -30,13 +30,28 @@ beforeEach(() => {
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 async function settle(): Promise<void> {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
+}
+
+/** Drives the picker's intentional debounce without making the test sleep. */
+async function searchForUser(input: HTMLInputElement, value: string): Promise<void> {
+  vi.useFakeTimers();
+  input.value = value;
+  void act(() => {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250);
+  });
+  vi.useRealTimers();
+  await settle();
 }
 
 function mount(): void {
@@ -121,11 +136,7 @@ describe("linking existing users as acting identities", () => {
 
     // The picker's own field, not the list's search box beside the commands that opened it.
     const search = container.querySelector<HTMLInputElement>('input[aria-label="Search for a user"]')!;
-    search.value = "alex";
-    await act(async () => {
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await settle();
+    await searchForUser(search, "alex");
 
     const option = [...container.querySelectorAll("button")].find((candidate) =>
       candidate.textContent?.includes("alex@example.test"),
@@ -195,11 +206,7 @@ describe("linking existing users as acting identities", () => {
     await settle();
     // The picker's own field, not the list's search box beside the commands that opened it.
     const search = container.querySelector<HTMLInputElement>('input[aria-label="Search for a user"]')!;
-    search.value = "alex";
-    await act(async () => {
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await settle();
+    await searchForUser(search, "alex");
     const option = [...container.querySelectorAll("button")].find((candidate) =>
       candidate.textContent?.includes("alex@example.test"),
     )!;

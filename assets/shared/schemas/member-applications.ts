@@ -1,4 +1,8 @@
-import { membershipWorkflowProgressSchema, MEMBERSHIP_APPLICATION_LIFECYCLES } from "./membership-workflows";
+import {
+  membershipWorkflowProgressSchema,
+  membershipWorkflowStepSchema,
+  MEMBERSHIP_APPLICATION_LIFECYCLES,
+} from "./membership-workflows";
 import { z } from "zod";
 import { activeFormSummarySchema } from "./forms";
 import { MEMBERSHIP_APPLICATION_FORM_KEY } from "./membership-application-form";
@@ -150,8 +154,20 @@ export const memberApplicationStatusRouteSchema = {
   },
 };
 
+export const membershipApplicationFeeSchema = membershipWorkflowStepSchema.options[2].pick({
+  label: true,
+  instructions: true,
+  amount: true,
+  currency: true,
+  deadlineDays: true,
+});
+
+export const membershipApplicationCategorySchema = membershipCategoryCatalogEntrySchema.extend({
+  fee: membershipApplicationFeeSchema.nullable(),
+});
+
 export const memberApplicationFormResponseSchema = z.object({
-  categories: z.array(membershipCategoryCatalogEntrySchema),
+  categories: z.array(membershipApplicationCategorySchema),
   form: activeFormSummarySchema.extend({ key: z.literal(MEMBERSHIP_APPLICATION_FORM_KEY) }).nullable(),
 });
 export type MemberApplicationFormResponse = z.infer<typeof memberApplicationFormResponseSchema>;
@@ -159,7 +175,7 @@ export type MemberApplicationFormResponse = z.infer<typeof memberApplicationForm
 export const memberApplicationFormRouteSchema = {
   tags: ["Members"],
   summary: "Get the current membership application form definition",
-  description: "Returns the active public membership application form definition.",
+  description: "Returns the active public membership application form definition and configured category fee.",
   responses: {
     "200": {
       description: "Active membership application form, or null if none configured.",

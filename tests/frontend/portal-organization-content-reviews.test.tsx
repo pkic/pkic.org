@@ -133,17 +133,15 @@ describe("portal organization content reviews", () => {
     expect(requests[0]?.url.searchParams.get("sort")).toBe("-submittedAt");
     expect(requests[0]?.url.searchParams.get("limit")).toBe("50");
 
-    // The row is opened by a real button whose name says what it opens, not by
-    // a click handler on the `<tr>` that no keyboard could reach.
-    await act(async () => button("Open the content review for Example Member")?.click());
+    const reviewLink = container.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
+    expect(reviewLink?.getAttribute("href")).toBe(`#/settings/organization-content-reviews/${REVIEW_ID}`);
+    expect(captions()).toContain("Organization content reviews");
+    await act(() => render(<OrganizationContentReviews reviewId={REVIEW_ID} />, container!));
     await settle();
     expect(container.textContent).toContain("Slogan");
 
-    // Both tables name themselves, so a screen reader listing the tables on
-    // this page does not read out two tables called nothing.
-    expect(captions()).toEqual(
-      expect.arrayContaining(["Organization content reviews", "Proposed changes for Example Member"]),
-    );
+    // The routed detail table still has its own accessible name.
+    expect(captions()).toEqual(["Proposed changes for Example Member"]);
     // The change is shown in place: the words the proposal removes are
     // struck and the words it adds are marked, with the rest left alone (#97).
     const change = container.querySelector<HTMLElement>('[aria-label="Change to Slogan"]');
@@ -191,9 +189,7 @@ describe("portal organization content reviews", () => {
 
     container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<OrganizationContentReviews />, container!));
-    await settle();
-    await act(async () => button("Open the content review for Example Member")?.click());
+    await act(() => render(<OrganizationContentReviews reviewId={REVIEW_ID} />, container!));
     await settle();
 
     // A logo-only submission has no field changes, and the table says so
@@ -245,9 +241,7 @@ describe("portal organization content reviews", () => {
 
     container = document.createElement("div");
     document.body.append(container);
-    await act(() => render(<OrganizationContentReviews />, container!));
-    await settle();
-    await act(async () => button("Open the content review for Example Member")?.click());
+    await act(() => render(<OrganizationContentReviews reviewId={REVIEW_ID} />, container!));
     await settle();
 
     await typeMarkdown(container!, "Reviewer note", "See https://example.test");

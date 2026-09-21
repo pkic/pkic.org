@@ -21,6 +21,14 @@ export function isMembershipApplicationPolicyFieldKey(key: string): key is Membe
   return membershipApplicationPolicyFieldKeys.has(key);
 }
 
+/** Questions that describe an organization and do not apply to an individual applicant. */
+export const MEMBERSHIP_ORGANIZATION_FIELD_KEYS = ["organization_website", "about_organization"] as const;
+const membershipOrganizationFieldKeys = new Set<string>(MEMBERSHIP_ORGANIZATION_FIELD_KEYS);
+
+export function isMembershipOrganizationFieldKey(key: string): boolean {
+  return membershipOrganizationFieldKeys.has(key);
+}
+
 export const membershipApplicationPolicyFieldSchema = formFieldDefinitionSchema.extend({
   key: membershipApplicationPolicyFieldKeySchema,
   fieldType: z.literal("boolean"),

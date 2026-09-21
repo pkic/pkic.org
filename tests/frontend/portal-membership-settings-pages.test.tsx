@@ -16,6 +16,7 @@ import { membershipApplicationFormDefinitionUpdateSchema } from "../../assets/sh
 import { membershipCategoryUpdateSchema } from "../../assets/shared/schemas/membership-categories";
 import { membershipSettingsUpdateSchema } from "../../assets/shared/schemas/membership-settings";
 import { ApplicationHoldSettings } from "../../assets/ts/member-flows/portal/sections/membership-settings/ApplicationHoldSettings";
+import { ApplicationWorkflow } from "../../assets/ts/member-flows/portal/sections/membership-settings/ApplicationWorkflow";
 import { MembershipApplicationForm } from "../../assets/ts/member-flows/portal/sections/membership-settings/MembershipApplicationForm";
 import { MembershipCategories } from "../../assets/ts/member-flows/portal/sections/membership-settings/MembershipCategories";
 import { beginRecordEdit } from "./helpers/record-edit";
@@ -34,6 +35,7 @@ const NOW = "2026-08-27T12:00:00.000Z";
 const SETTINGS_API = "/api/v1/membership/settings";
 const CATEGORIES_API = "/api/v1/membership/categories";
 const FORM_DEFINITION_API = "/api/v1/members/applications/form/definition";
+const WORKFLOWS_API = "/api/v1/membership/workflows/versions";
 
 const settings = {
   onHoldResponseDeadlineDays: 7,
@@ -94,6 +96,30 @@ const applicationForm = {
       archivedAt: null,
     }),
   ),
+};
+
+const workflow = {
+  id: "10000000-0000-4000-8000-000000000010",
+  workflowId: "10000000-0000-4000-8000-000000000011",
+  version: 2,
+  revision: 0,
+  status: "published",
+  definition: {
+    name: "Individual application",
+    policyReference: "Bylaws article 3",
+    steps: [
+      {
+        id: "10000000-0000-4000-8000-000000000012",
+        kind: "staff_review",
+        label: "Staff review",
+        instructions: "Review the application.",
+        reviewerGroupId: null,
+      },
+    ],
+  },
+  createdAt: NOW,
+  publishedAt: NOW,
+  archivedAt: null,
 };
 
 let container: HTMLElement | null = null;
@@ -466,5 +492,30 @@ describe("membership categories page", () => {
 
     expect(page.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side.");
     expect(page.querySelectorAll("form")).toHaveLength(0);
+  });
+});
+
+describe("application workflow table", () => {
+  it("leads with the workflow and keeps availability as a compact final column", async () => {
+    stubApi((url) =>
+      url.pathname === WORKFLOWS_API
+        ? json({ workflows: [workflow], page: { limit: 25, offset: 0, total: 1, hasMore: false } })
+        : null,
+    );
+
+    const page = mount(<ApplicationWorkflow canWrite={false} />);
+    await settle();
+
+    const headings = Array.from(page.querySelectorAll("thead th"));
+    const labels = headings.map(
+      (heading) =>
+        heading.querySelector(
+          ":scope > button > span, :scope > span:not(.pk-table__head-end):not(.pk-table__head-tools):not(.pk-table__head-filter)",
+        )?.textContent,
+    );
+    expect(labels).toEqual(["Workflow", "Version", "Status", "Required steps", "Availability"]);
+    expect(headings[0].classList.contains("pk-table__col--primary")).toBe(true);
+    expect(headings.at(-1)?.classList.contains("pk-table__col--fit")).toBe(true);
+    expect(page.textContent).toContain("Available");
   });
 });

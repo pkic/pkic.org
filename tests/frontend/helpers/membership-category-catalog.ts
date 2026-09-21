@@ -1,14 +1,15 @@
+import { membershipApplicationCategorySchema } from "../../../assets/shared/schemas/member-applications";
 import {
   MEMBERSHIP_CATEGORIES,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  membershipCategoryCatalogEntrySchema,
 } from "../../../assets/shared/schemas/membership-categories";
 
 /** Synthetic catalog for organization and individual membership form tests. */
 export const exampleMembershipCategories = MEMBERSHIP_CATEGORIES.map((code, displayOrder) =>
-  membershipCategoryCatalogEntrySchema.parse({
+  membershipApplicationCategorySchema.parse({
     code,
     label: `Example ${code}`,
+    fee: null,
     isIndividual: INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(code),
     displayOrder,
     description: null,

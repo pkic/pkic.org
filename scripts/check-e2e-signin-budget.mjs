@@ -67,7 +67,7 @@ for (const file of specFiles(specDir)) {
     uses.set(scope, (uses.get(scope) ?? 0) + 1);
   }
 
-  for (const match of source.matchAll(/signInToPortal\(\s*\w+\s*,\s*([^)]+?)\s*\)/g)) {
+  for (const match of source.matchAll(/(?:signInToPortal|signInAsE2eStaff)\(\s*\w+\s*,\s*([^\n]+)\s*\)/g)) {
     const argument = match[1].trim();
     const inline = /^e2eAdminEmail\(\s*"([^"]+)"\s*\)$/.exec(argument);
     if (inline) {

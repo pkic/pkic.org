@@ -60,7 +60,7 @@ export function Forms({ formKey, canWrite }: { formKey?: string; canWrite: boole
           ) : undefined
         }
       />
-      <FormManagementList onOpenForm={(key) => navigate(`/forms/${encodeURIComponent(key)}`)} />
+      <FormManagementList />
     </div>
   );
 }

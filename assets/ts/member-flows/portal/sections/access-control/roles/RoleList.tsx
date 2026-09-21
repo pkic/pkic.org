@@ -48,12 +48,10 @@ function PermissionsSummaryCell({ permissions }: { permissions: string[] }) {
 export function RoleList({
   canGrant,
   canRevoke,
-  onOpenRole,
   onCreateNew,
 }: {
   canGrant: boolean;
   canRevoke: boolean;
-  onOpenRole: (roleId: string) => void;
   onCreateNew: () => void;
 }) {
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -141,7 +139,10 @@ export function RoleList({
             ]
           : []),
       ]}
-      rowAction={(r) => ({ label: `Open ${r.name}`, onSelect: () => onOpenRole(r.id) })}
+      rowAction={(r) => ({
+        label: `Open ${r.name}`,
+        href: `#/settings/access-control/roles/${encodeURIComponent(r.id)}`,
+      })}
       empty={
         canGrant ? (
           // The toolbar above already carries "New role"; repeating it here

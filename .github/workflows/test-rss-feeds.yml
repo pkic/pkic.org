@@ -3,6 +3,12 @@ name: RSS Feed Validation
 on:
   pull_request:
     types: [opened, synchronize]
+    paths:
+      - "content/**"
+      - "data/**"
+      - "config.yaml"
+      - "scripts/test-feeds.py"
+      - ".github/workflows/test-rss-feeds.yml"
 
 permissions:
   contents: read

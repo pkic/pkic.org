@@ -113,12 +113,14 @@ describe("portal membership-application management", () => {
       }),
     );
 
-    const open = vi.fn();
-    const page = mount(<ApplicationsList onViewApplication={open} />);
+    const page = mount(<ApplicationsList />);
     await settle();
 
     expect(page.textContent).toContain("General Member");
     expect(page.textContent).toContain("(F)");
+    const rowLink = page.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
+    expect(rowLink?.getAttribute("href")).toBe(`#/membership/applications/${detail.id}`);
+
     // Two reads of the same collection: the list itself, and the consultation
     // queue's one-row count probe beside it. Nothing else.
     expect(requests).toHaveLength(1);
@@ -128,11 +130,6 @@ describe("portal membership-application management", () => {
     expect(list?.searchParams.get("offset")).toBe("0");
     expect(list?.searchParams.get("sort")).toBe("-created_at");
     expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
-
-    // The row's control, not the row: the `<tr>` click handler this replaced
-    // was unreachable by keyboard.
-    void act(() => (page.querySelector("tbody .pk-table__row-link") as HTMLElement).click());
-    expect(open).toHaveBeenCalledWith(APPLICATION_ID);
   });
 
   it("narrows by stage from the Stage column, sends it to the collection query, without a separate consultation queue", async () => {
@@ -152,7 +149,7 @@ describe("portal membership-application management", () => {
       }),
     );
 
-    const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
+    const page = mount(<ApplicationsList />);
     await settle();
 
     // No select above the table: the stage filter is the Stage column's own.
@@ -178,7 +175,7 @@ describe("portal membership-application management", () => {
       vi.fn(async () => json({ applications: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
     );
 
-    const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
+    const page = mount(<ApplicationsList />);
     await settle();
 
     expect(page.querySelector('[role="status"].pk-alert')).toBeNull();
@@ -197,7 +194,7 @@ describe("portal membership-application management", () => {
       ),
     );
 
-    const page = mount(<ApplicationsList onViewApplication={vi.fn()} />);
+    const page = mount(<ApplicationsList />);
     await settle();
 
     const alert = page.querySelector('[role="alert"]');

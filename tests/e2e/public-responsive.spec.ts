@@ -121,6 +121,27 @@ test.describe("public site at every width", () => {
     expect(failures, "public site problems across widths").toEqual([]);
   });
 
+  test("keeps the donation form beside the story on desktop and stacks it on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/donate/");
+    const columns = page.locator(".content-row > div");
+    await expect(columns).toHaveCount(2);
+    const [desktopStory, desktopForm] = await Promise.all([columns.nth(0).boundingBox(), columns.nth(1).boundingBox()]);
+    expect(desktopStory).not.toBeNull();
+    expect(desktopForm).not.toBeNull();
+    expect(Math.abs(desktopStory!.y - desktopForm!.y)).toBeLessThan(2);
+    expect(desktopForm!.x).toBeGreaterThan(desktopStory!.x + desktopStory!.width);
+    expect(await columns.nth(1).evaluate((element) => getComputedStyle(element).position)).toBe("sticky");
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/donate/");
+    const [mobileStory, mobileForm] = await Promise.all([columns.nth(0).boundingBox(), columns.nth(1).boundingBox()]);
+    expect(mobileStory).not.toBeNull();
+    expect(mobileForm).not.toBeNull();
+    expect(mobileForm!.y).toBeGreaterThan(mobileStory!.y + mobileStory!.height);
+    expect(await columns.nth(1).evaluate((element) => getComputedStyle(element).position)).toBe("static");
+  });
+
   test("opens and closes the site navigation on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");

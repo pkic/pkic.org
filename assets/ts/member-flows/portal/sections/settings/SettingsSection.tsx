@@ -18,6 +18,11 @@ import { SettingsIndex } from "./SettingsIndex";
 const ApplicationWorkflow = lazy(() =>
   import("../membership-settings/ApplicationWorkflow").then((module) => ({ default: module.ApplicationWorkflow })),
 );
+const ApplicationHoldSettings = lazy(() =>
+  import("../membership-settings/ApplicationHoldSettings").then((module) => ({
+    default: module.ApplicationHoldSettings,
+  })),
+);
 const MembershipApplicationForm = lazy(() =>
   import("../membership-settings/MembershipApplicationForm").then((module) => ({
     default: module.MembershipApplicationForm,
@@ -80,6 +85,8 @@ export function SettingsSection({
           canWrite={portalHasGlobalPermission(session, "membership:write")}
           resourceId={resourceId}
         />
+      ) : requested === "/settings/applicant-reminders" ? (
+        <ApplicationHoldSettings canWrite={portalHasGlobalPermission(session, "membership:write")} />
       ) : requested === "/settings/membership-application-form" ? (
         <MembershipApplicationForm canWrite={portalHasGlobalPermission(session, "membership:write")} />
       ) : requested === "/settings/membership-categories" ? (
@@ -88,7 +95,7 @@ export function SettingsSection({
           categoryCode={resourceId}
         />
       ) : requested === "/settings/organization-content-reviews" ? (
-        <OrganizationContentReviews />
+        <OrganizationContentReviews reviewId={resourceId} />
       ) : requested === "/settings/audit-log" ? (
         <SystemAuditLog />
       ) : requested === "/settings/email-templates" ? (
@@ -96,6 +103,7 @@ export function SettingsSection({
           canRead={portalHasGlobalPermission(session, "email-templates:read")}
           canWrite={portalHasGlobalPermission(session, "email-templates:write")}
           canManage={portalHasGlobalPermission(session, "email-templates:manage")}
+          templateKey={resourceId}
         />
       ) : requested === "/settings/email-outbox" ? (
         resourceId ? (

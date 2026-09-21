@@ -1,5 +1,6 @@
 import { portalEventParticipantRoutes } from "./portal-event-participant-routes";
 import { portalEventResponseRoutes } from "./portal-event-response-routes";
+import { portalMemberApplicationRoutes } from "./portal-member-application-routes";
 /** Capability-derived portal shell shared by member and management identities. */
 import type { ComponentChildren } from "preact";
 import { Suspense } from "preact/compat";
@@ -20,7 +21,6 @@ import {
   Members,
   MembershipApplications,
   WorkflowReviewPage,
-  MyApplications,
   MyOrganization,
   OrganizationDetail,
   Organizations,
@@ -70,18 +70,10 @@ export function PortalShell() {
       >
         <Suspense fallback={<Spinner />}>
           <Switch>
-            {/* Each domain's analytics page, every one of them a reserved
-                segment that has to match before its section's own `:id` route.
-                See `portal-analytics-routes.tsx` (#39). */}
+            {/* Reserved analytics routes match before each domain's `:id` route. See #39. */}
             {portalAnalyticsRoutes(access, (children: ComponentChildren) => (
               <SectionWrapper>{children}</SectionWrapper>
             ))}
-            {/*
-              A reserved segment, and it has to be routed above `/events/:slug`
-              or the workspace claims it as the slug of an event called
-              "analytics". Analytics live under the domain they measure rather
-              than in one system-wide panel inside Settings (#39).
-            */}
             {access.hasEventWorkspace && access.canReadAnalytics && (
               <Route
                 path="/events/analytics/:tab?"
@@ -562,16 +554,7 @@ export function PortalShell() {
               Object.entries(PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS).map(([from, to]) => (
                 <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
               ))}
-            {access.hasMemberApplication && (
-              <Route
-                path="/application"
-                component={() => (
-                  <SectionWrapper>
-                    <MyApplications />
-                  </SectionWrapper>
-                )}
-              />
-            )}
+            {access.hasMemberApplication && portalMemberApplicationRoutes()}
             {access.hasParticipationRecord && (
               <Route
                 path="/participation"

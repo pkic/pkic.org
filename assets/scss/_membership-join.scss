@@ -9,10 +9,44 @@
   background: var(--pk-ok-soft);
   color: var(--pk-ok-ink);
 }
+.join-application-form {
+  width: 100%;
+}
+
+.join-application-identity-grid,
+.join-application-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--pk-4);
+}
+
+.join-application-fields > .pk-field:has(textarea),
+.join-application-fields > .pk-field:has([role="group"]) {
+  grid-column: 1 / -1;
+}
 
 .membership-legal-agreements {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: 1fr;
+  gap: var(--pk-4);
+}
+
+.membership-legal-agreements > :first-child,
+.membership-legal-authority {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 48rem) {
+  .join-application-identity-grid,
+  .join-application-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 62rem) {
+  .membership-legal-agreements {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .membership-legal-card {
@@ -61,7 +95,7 @@
 }
 
 .membership-legal-acceptance {
-  margin-top: 1.25rem;
+  margin: 0;
   padding: 1rem;
   border-top: 1px solid var(--pk-line);
   background: var(--pk-surface-sunk);

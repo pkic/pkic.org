@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   CONTENT_REVIEW_STATUSES,
   organizationContentReviewDecisionResponseSchema,
@@ -7,7 +7,7 @@ import {
   organizationContentReviewsListResponseSchema,
   type OrganizationContentReviewDetail,
 } from "../../../../shared/schemas/organization-content-reviews";
-import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
+import { ApiDataTable } from "../../../components/ApiDataTable";
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
@@ -16,7 +16,7 @@ import { TextDiff } from "../../../components/TextDiff";
 import { useContractForm } from "../../../hooks/useContractForm";
 import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
-import { Button } from "../../../ui/Button";
+import { Button, ButtonLink } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -194,10 +194,29 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
     </Panel>
   );
 }
+function RoutedContentReview({ reviewId }: { reviewId: string }) {
+  return (
+    <div class="pk pk-stack">
+      <PageHeader
+        title="Content review"
+        actions={
+          <ButtonLink size="sm" variant="ghost" href="#/settings/organization-content-reviews">
+            Back to content reviews
+          </ButtonLink>
+        }
+      />
+      <ReviewDetail
+        reviewId={reviewId}
+        onDecided={async () => {
+          window.location.hash = "#/settings/organization-content-reviews";
+        }}
+      />
+    </div>
+  );
+}
 
-export function OrganizationContentReviews() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const tableActions = useRef<ApiTableActions | null>(null);
+export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) {
+  if (reviewId) return <RoutedContentReview reviewId={reviewId} />;
 
   return (
     <div class="pk pk-stack">
@@ -214,7 +233,6 @@ export function OrganizationContentReviews() {
         searchPlaceholder="organization, submitter, or note…"
         initialSort="-submittedAt"
         params={{ status: DEFAULT_QUEUE_STATUS }}
-        actionsRef={tableActions}
         columns={[
           {
             header: "Organization",
@@ -260,21 +278,11 @@ export function OrganizationContentReviews() {
         // inside one cell, which left the rest of the row inert.
         rowAction={(review) => ({
           label: `Open the content review for ${review.organizationName}`,
-          onSelect: () => setSelectedId(review.id),
+          href: `#/settings/organization-content-reviews/${encodeURIComponent(review.id)}`,
         })}
         empty="No organization content submissions match the current filters."
         rowKey={(review) => review.id}
       />
-
-      {selectedId && (
-        <ReviewDetail
-          reviewId={selectedId}
-          onDecided={async () => {
-            setSelectedId(null);
-            await tableActions.current?.reload();
-          }}
-        />
-      )}
     </div>
   );
 }

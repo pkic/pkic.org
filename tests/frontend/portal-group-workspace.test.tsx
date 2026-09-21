@@ -153,6 +153,7 @@ describe("portal selected-group workspace", () => {
                 code: "A",
                 label: "Category A",
                 description: null,
+                fee: null,
                 displayOrder: 1,
                 isIndividual: false,
                 isVoting: true,

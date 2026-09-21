@@ -361,7 +361,7 @@ export function FormManagementCreate({
   );
 }
 
-export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: string) => void }) {
+export function FormManagementList() {
   return (
     <div class="pk">
       <ApiDataTable
@@ -426,7 +426,10 @@ export function FormManagementList({ onOpenForm }: { onOpenForm: (formKey: strin
         // Row activation is the design system's stretched control rather than
         // an "Open" button repeated down a column: every row gets a name that
         // says which form it opens, and the whole row is the target.
-        rowAction={(form: FormSummary) => ({ label: `Open ${form.title}`, onSelect: () => onOpenForm(form.key) })}
+        rowAction={(form: FormSummary) => ({
+          label: `Open ${form.title}`,
+          href: `#/forms/${encodeURIComponent(form.key)}`,
+        })}
         empty="No forms configured"
         rowKey={(form: FormSummary) => form.id}
       />

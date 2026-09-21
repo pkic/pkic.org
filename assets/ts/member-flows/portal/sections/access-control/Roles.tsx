@@ -45,12 +45,5 @@ export function Roles({
     return <RoleDetail roleId={roleSegment} canGrant={canGrant} canRevoke={canRevoke} />;
   }
 
-  return (
-    <RoleList
-      canGrant={canGrant}
-      canRevoke={canRevoke}
-      onOpenRole={(roleId) => onNavigate(roleId)}
-      onCreateNew={() => onNavigate(NEW_ROLE_SEGMENT)}
-    />
-  );
+  return <RoleList canGrant={canGrant} canRevoke={canRevoke} onCreateNew={() => onNavigate(NEW_ROLE_SEGMENT)} />;
 }

@@ -1,21 +1,73 @@
-name: Backend Checks
+name: Application Checks
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.scss"
+      - "**/*.css"
+      - "functions/**"
+      - "layouts/**"
+      - "migrations/**"
+      - "scripts/**"
+      - "tests/**"
+      - "static/**"
+      - "config.yaml"
+      - ".dev.vars.example"
+      - "go.mod"
+      - "go.sum"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "playwright.config.ts"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - "vitest.config*.ts"
+      - "wrangler.jsonc"
+      - ".github/workflows/backend-tests.yml"
   push:
     branches: [main]
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.scss"
+      - "**/*.css"
+      - "functions/**"
+      - "layouts/**"
+      - "migrations/**"
+      - "scripts/**"
+      - "tests/**"
+      - "static/**"
+      - "config.yaml"
+      - ".dev.vars.example"
+      - "go.mod"
+      - "go.sum"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "playwright.config.ts"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - "vitest.config*.ts"
+      - "wrangler.jsonc"
+      - ".github/workflows/backend-tests.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: backend-${{ github.workflow }}-${{ github.ref }}
+  group: application-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  backend:
+  application:
+    name: Application checks (fail-fast sequence)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -43,10 +95,62 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Hugo site for Workers tests
-        run: bash ./scripts/build.sh
-
-      - name: Run backend checks
+      - name: Run static checks
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm run check
+        run: pnpm run check:static
+
+      - name: Run schema and policy unit tests (Node)
+        timeout-minutes: 2
+        run: pnpm run test:unit --bail=1
+
+      - name: Run frontend component tests
+        timeout-minutes: 5
+        run: pnpm run test:frontend --bail=1
+
+      - name: Run tooling tests
+        timeout-minutes: 5
+        run: pnpm run test:tools --bail=1
+
+      - name: Generate the public site
+        timeout-minutes: 5
+        run: pnpm run generate:public
+
+      - name: Check the CSS budget
+        timeout-minutes: 2
+        run: pnpm run check:css-budget
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install Playwright browser
+        timeout-minutes: 10
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare dev vars
+        run: cp .dev.vars.example .dev.vars
+
+      # One Playwright invocation builds and seeds the Worker once. Playwright's
+      # maxFailures setting still stops the suite after its first persistent failure.
+      - name: Run all browser user-flow tests
+        timeout-minutes: 45
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Run Worker and D1 integration tests
+        timeout-minutes: 35
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm run test:worker --bail=1

@@ -35,7 +35,7 @@ test("staff hold and resume an application, then complete its required review", 
     organizationName: `Stages Organization ${suffix}`,
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-application-stages"));
+  await signInToPortal(page, e2eAdminEmail("portal-application-stages-approval"));
   await openApplicationDetail(page, email, "submitted");
   // The record's body is the shared record grid: the application and its
   // answers take the width, the stage controls stand beside them (#109).
@@ -75,7 +75,7 @@ test("staff hold and resume an application, then complete its required review", 
   await page.goto(`/portal/#/membership/applications/${application.applicationId}/review`);
   await page.getByLabel("Review decision and reason").fill("Verified the signed policy and the user's authority.");
   await page.getByRole("button", { name: "Complete review", exact: true }).click();
-  await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+  await expect(stageBadge(page, name).filter({ hasText: "Approved" })).toBeVisible();
 
   // Approval is only real if the applicant hears about it: the welcome mail
   // is queued by the approval service and delivered by the background outbox
@@ -102,7 +102,7 @@ test("a declined application is terminal and never reaches onboarding", async ({
     organizationName: `Declined Organization ${suffix}`,
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-application-stages"));
+  await signInToPortal(page, e2eAdminEmail("portal-application-stages-decline"));
   await openApplicationDetail(page, email, "submitted");
 
   await transitionStageInUi(page, "declined", { note: "Does not meet the category criteria." });
@@ -124,7 +124,7 @@ test("staff email the applicant and record an internal note through the Communic
     organizationName: `Communications Organization ${suffix}`,
   });
 
-  await signInToPortal(page, e2eAdminEmail("portal-application-stages"));
+  await signInToPortal(page, e2eAdminEmail("portal-application-stages-communications"));
   await openApplicationDetail(page, email, "submitted");
 
   // Correspondence is a facet of the record, reached by its tab (#109).

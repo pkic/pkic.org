@@ -21,6 +21,10 @@ vi.mock("../../assets/shared/schemas/votes", async (importOriginal) => {
   return { ...actual, THRESHOLD_TYPES, thresholdTypeSchema: z.enum(THRESHOLD_TYPES) };
 });
 
+// Threshold vocabulary is the subject here; loading the full Tiptap editor only
+// adds an unrelated asynchronous module graph and can outlive jsdom teardown.
+vi.mock("../../assets/ts/components/markdown-editor/MarkdownInput", () => ({ MarkdownEditor: () => null }));
+
 const ADDED_THRESHOLD = "unanimous";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";

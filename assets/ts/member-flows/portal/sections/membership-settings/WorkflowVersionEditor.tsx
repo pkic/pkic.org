@@ -1,6 +1,6 @@
 import { WorkflowRemoval } from "./WorkflowRemoval";
 import { WorkflowReviewSummary } from "./WorkflowReviewSummary";
-import { membershipFeeLabel } from "../../../../components/MembershipWorkflowProgress";
+import { formatCurrencyAmount } from "../../../../../shared/format-currency";
 import { useState } from "preact/hooks";
 import {
   membershipWorkflowCreateSchema,
@@ -166,11 +166,16 @@ export function WorkflowVersionEditor({
     setDefinition({ ...definition, steps: [...definition.steps, newWorkflowStep(kind)] });
     setEditingStep(definition.steps.length);
   }
+  const title = initial ? `${initial.definition.name} · version ${initial.version}` : "New membership workflow";
   return (
     <div class="pk pk-stack">
       <PageHeader
-        title={initial ? `${initial.definition.name} · version ${initial.version}` : "New membership workflow"}
-        trail={[{ label: "Application workflows", href: usePortalHashLocation.hrefs(path) }]}
+        title={title}
+        trail={[
+          { label: "Settings", href: usePortalHashLocation.hrefs("/settings") },
+          { label: "Application workflows", href: usePortalHashLocation.hrefs(path) },
+          { label: title },
+        ]}
       />
       {published && (
         <p>This published version is immutable. Create a new draft to change the policy for future applications.</p>
@@ -217,7 +222,7 @@ export function WorkflowVersionEditor({
                   ? "An eligible reviewer must record a decision with a reason."
                   : step.kind === "consensus"
                     ? `The response window lasts ${step.durationDays} days after the notice is sent. ${step.objectionHandling === "hold_for_resolution" ? "Objections must be resolved before continuing." : "Objections are referred to the following review and still block final approval."}`
-                    : `Verified payment of ${membershipFeeLabel(step.amount, step.currency)} is required within ${step.deadlineDays} days.`}
+                    : `Verified payment of ${formatCurrencyAmount(step.amount, step.currency)} is required within ${step.deadlineDays} days.`}
               </p>
               <WorkflowReviewSummary step={step} />
               {step.instructions && <p>{step.instructions}</p>}

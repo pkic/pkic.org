@@ -7,6 +7,8 @@
 
 import type { ComponentChildren, JSX } from "preact";
 import { useId } from "preact/hooks";
+import { IconSearch } from "../components/icons";
+import { Button } from "./Button";
 
 import "./Toolbar.css";
 
@@ -18,6 +20,7 @@ export interface ToolbarProps extends JSX.HTMLAttributes<HTMLDivElement> {
     value: string;
     placeholder?: string;
     onInput: (value: string) => void;
+    onSubmit: () => void;
     /**
      * Names the field — "Search members", not "Search".
      *
@@ -51,7 +54,23 @@ export function Toolbar({ label, search, class: className, children, ...rest }: 
               const target = e.target as HTMLInputElement;
               search.onInput(target.value);
             }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              search.onSubmit();
+            }}
           />
+          <Button
+            class="pk-toolbar__search-button"
+            variant="ghost"
+            size="sm"
+            icon
+            aria-label={search.label ?? "Search"}
+            title={search.label ?? "Search"}
+            onClick={search.onSubmit}
+          >
+            <IconSearch />
+          </Button>
         </div>
       )}
       {children && <div class="pk-toolbar__controls">{children}</div>}

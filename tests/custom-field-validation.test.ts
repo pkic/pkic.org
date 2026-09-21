@@ -1,9 +1,10 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 const TEST_DAY = "2026-12-01";
 
@@ -103,7 +104,9 @@ async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise
 describe("custom field validation", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+  afterEach(() => vi.unstubAllGlobals());
   it("rejects invalid registration custom answers", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedRegistrationForm(env.DB, eventId);

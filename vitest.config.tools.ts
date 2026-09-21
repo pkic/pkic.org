@@ -15,5 +15,6 @@ export default defineConfig({
     // otherwise-idle machine, so 60s cuts it close under any real load.
     testTimeout: 120_000,
     hookTimeout: 120_000,
+    reporters: ["default", "./tests/tools/slowest-tests-reporter.ts"],
   },
 });

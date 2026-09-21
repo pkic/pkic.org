@@ -10,12 +10,19 @@ import {
   type MembershipApplicationPolicyField,
 } from "../../../../assets/shared/schemas/membership-application-form";
 import type { FormDefinitionUpdateInput, FormFieldDefinition } from "../../../../assets/shared/schemas/forms";
+import {
+  memberApplicationFormResponseSchema,
+  type MemberApplicationFormResponse,
+} from "../../../../assets/shared/schemas/member-applications";
+import { membershipWorkflowDefinitionSchema } from "../../../../assets/shared/schemas/membership-workflows";
+import { all } from "../../db/queries";
+import { listMembershipCategories } from "./categories";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { formChangedError, isFormMutationConflict } from "../forms/mutation-guard";
-import { getManagedFormWithFields, mapManagedFormFields } from "../forms/read";
+import { getGlobalFormByKey, getManagedFormWithFields, mapManagedFormFields } from "../forms/read";
 import { updateManagedForm } from "../forms/management";
 
 export function rejectLegacyMembershipApplicationFormRoute(formKey: string): void {
@@ -141,6 +148,65 @@ function toDefinitionResponse(
     },
     fields,
     policyFields,
+  });
+}
+interface WorkflowDefinitionRow {
+  id: string;
+  definition_json: string;
+}
+
+async function applicationFeesByWorkflow(
+  db: DatabaseLike,
+  workflowVersionIds: readonly string[],
+): Promise<Map<string, MemberApplicationFormResponse["categories"][number]["fee"]>> {
+  const ids = [...new Set(workflowVersionIds)];
+  if (ids.length === 0) return new Map();
+
+  const rows = await all<WorkflowDefinitionRow>(
+    db,
+    `SELECT id, definition_json
+       FROM membership_workflow_versions
+      WHERE id IN (SELECT value FROM json_each(?))`,
+    [JSON.stringify(ids)],
+  );
+  return new Map(
+    rows.map((row) => {
+      const definition = membershipWorkflowDefinitionSchema.parse(JSON.parse(row.definition_json));
+      const payment = definition.steps.find((step) => step.kind === "payment");
+      return [
+        row.id,
+        payment
+          ? {
+              label: payment.label,
+              instructions: payment.instructions,
+              amount: payment.amount,
+              currency: payment.currency,
+              deadlineDays: payment.deadlineDays,
+            }
+          : null,
+      ];
+    }),
+  );
+}
+
+/** Public application form with the exact fee pinned to each category's published workflow. */
+export async function getPublicMembershipApplicationForm(db: DatabaseLike): Promise<MemberApplicationFormResponse> {
+  const [form, categories] = await Promise.all([
+    getGlobalFormByKey(db, MEMBERSHIP_APPLICATION_FORM_KEY),
+    listMembershipCategories(db, true),
+  ]);
+  if (form) requireMembershipApplicationPolicyFields(form.fields);
+
+  const fees = await applicationFeesByWorkflow(
+    db,
+    categories.flatMap((category) => (category.workflowVersionId ? [category.workflowVersionId] : [])),
+  );
+  return memberApplicationFormResponseSchema.parse({
+    form,
+    categories: categories.map((category) => ({
+      ...category,
+      fee: category.workflowVersionId ? (fees.get(category.workflowVersionId) ?? null) : null,
+    })),
   });
 }
 

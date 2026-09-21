@@ -263,7 +263,7 @@ export function GroupMailingListManager({
         // other record in the portal.
         rowAction={(list) => ({
           label: `Open ${list.label}`,
-          onSelect: () => navigate(`${listsPath}/${encodeURIComponent(list.id)}`),
+          href: usePortalHashLocation.hrefs(`${listsPath}/${encodeURIComponent(list.id)}`),
         })}
         empty={
           <EmptyState title="No mailing lists yet" body="Create a mailing list to start managing this group's lists." />

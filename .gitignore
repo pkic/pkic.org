@@ -49,10 +49,9 @@ ds-bundle/
 csv/
 prod-csv/
 
-.design-sync/.cache/
-.design-sync/.cache-*
-.design-sync/learnings/
-.design-sync/node_modules
+# Local assistant and design synchronization files
+/.claude/
+/.design-sync/
 types/
 
 # Local migration and rehearsal documentation

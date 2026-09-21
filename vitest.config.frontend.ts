@@ -18,5 +18,6 @@ export default defineConfig({
     // Bound concurrency like the Workers suite so high-core CI and developer
     // machines do not exhaust memory while running the repository-wide gate.
     maxWorkers: 3,
+    reporters: ["default", "./tests/tools/slowest-tests-reporter.ts"],
   },
 });

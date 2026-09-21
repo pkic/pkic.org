@@ -8,7 +8,7 @@ import { rowActionControlNames } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
 
-function mount(canGrantAccess: boolean, headshotUrl: string | null = null, onViewUser = vi.fn()): HTMLElement {
+function mount(canGrantAccess: boolean, headshotUrl: string | null = null): HTMLElement {
   vi.stubGlobal(
     "fetch",
     vi.fn(
@@ -47,7 +47,7 @@ function mount(canGrantAccess: boolean, headshotUrl: string | null = null, onVie
   const container = document.createElement("div");
   document.body.append(container);
   mounted.push(container);
-  void act(() => render(<UsersList canWrite canGrantAccess={canGrantAccess} onViewUser={onViewUser} />, container));
+  void act(() => render(<UsersList canWrite canGrantAccess={canGrantAccess} />, container));
   return container;
 }
 
@@ -101,20 +101,15 @@ describe("portal System Users list permissions", () => {
   });
 
   it("opens the user through a named control a keyboard can reach, not a click on the row", async () => {
-    const onViewUser = vi.fn();
-    const container = mount(true, null, onViewUser);
+    const container = mount(true);
     await settle();
 
-    // The row used to carry the click handler, which meant this list could be
-    // operated with a mouse and not at all with a keyboard. The control is now
-    // a real button, named after the person it opens.
-    const open = container.querySelector<HTMLButtonElement>("tbody .pk-table__row-link");
+    // A real link remains keyboard reachable and preserves native Ctrl/Cmd-click.
+    const open = container.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
     expect(open).not.toBeNull();
-    expect(open?.tagName).toBe("BUTTON");
+    expect(open?.tagName).toBe("A");
     expect(open?.textContent).toContain("Ada");
-
-    open!.click();
-    expect(onViewUser).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001");
+    expect(open?.getAttribute("href")).toBe("#/users/00000000-0000-4000-8000-000000000001");
   });
 });
 
@@ -134,7 +129,7 @@ describe("portal System Users list controls", () => {
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
-    void act(() => render(<UsersList canWrite canGrantAccess onViewUser={vi.fn()} />, container));
+    void act(() => render(<UsersList canWrite canGrantAccess />, container));
     await settle();
 
     // Several tables can share a page, so this one says which it is.
@@ -175,7 +170,7 @@ describe("portal System Users list controls", () => {
     const container = document.createElement("div");
     document.body.append(container);
     mounted.push(container);
-    void act(() => render(<UsersList canWrite canGrantAccess onViewUser={vi.fn()} />, container));
+    void act(() => render(<UsersList canWrite canGrantAccess />, container));
     await settle();
 
     const alert = container.querySelector('[role="alert"]');

@@ -3,9 +3,55 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseLookupParams, StatusSummary } from "../../assets/ts/member-flows/application-status-page";
+import type { MembershipWorkflowProgress } from "../../assets/shared/schemas/membership-workflows";
 
 /** A real database identifier: the status schema rejects anything else. */
 const APPLICATION_ID = "0f7d1c1a4b7e4a1e9c2d3f4a5b6c7d8e";
+const workflow: MembershipWorkflowProgress = {
+  versionId: "1f7d1c1a4b7e4a1e9c2d3f4a5b6c7d8e",
+  name: "Individual membership",
+  version: 1,
+  lifecycle: "processing",
+  revision: 0,
+  steps: [
+    {
+      stepId: "2f7d1c1a4b7e4a1e9c2d3f4a5b6c7d8e",
+      position: 0,
+      label: "Review application",
+      kind: "staff_review",
+      instructions: "We are reviewing your application.",
+      state: "active",
+      openedAt: "2026-03-04T10:00:00.000Z",
+      deadlineAt: null,
+      completedAt: null,
+      noticeStatus: null,
+      review: null,
+      payment: null,
+      blocker: null,
+    },
+    {
+      stepId: "3f7d1c1a4b7e4a1e9c2d3f4a5b6c7d8e",
+      position: 1,
+      label: "Pay membership fee",
+      kind: "payment",
+      instructions: "Pay after review.",
+      state: "waiting",
+      openedAt: null,
+      deadlineAt: null,
+      completedAt: null,
+      noticeStatus: null,
+      review: null,
+      payment: {
+        amount: 12500,
+        currency: "usd",
+        status: "pending",
+        checkoutUrl: null,
+        handlingRequired: false,
+      },
+      blocker: null,
+    },
+  ],
+};
 
 describe("parseLookupParams", () => {
   it("reads id and token from the query string", () => {
@@ -26,7 +72,7 @@ describe("parseLookupParams", () => {
 describe("StatusSummary", () => {
   let container: HTMLDivElement | null = null;
 
-  function mount(stage: string): HTMLDivElement {
+  function mount(stage: string, progress?: MembershipWorkflowProgress): HTMLDivElement {
     container = document.createElement("div");
     document.body.append(container);
     void act(() => {
@@ -37,6 +83,7 @@ describe("StatusSummary", () => {
             stage: stage as never,
             createdAt: "2026-02-01T10:00:00.000Z",
             stageEnteredAt: "2026-03-04T10:00:00.000Z",
+            workflow: progress,
           }}
         />,
         container!,
@@ -70,6 +117,35 @@ describe("StatusSummary", () => {
     const badge = root.querySelector(".pk-badge");
     expect(badge?.textContent).toBe("Processing");
     expect(badge?.textContent).toBeTruthy();
+  });
+
+  it("shows one compact ordered process with clear payment timing", () => {
+    const root = mount("processing", workflow);
+
+    expect(root.querySelectorAll(".pk-panel")).toHaveLength(1);
+    expect(root.querySelectorAll(".membership-progress__step")).toHaveLength(2);
+    expect(root.textContent).toContain("Required fee: $125.00");
+    expect(root.textContent).toContain("Payment will be available after the previous requirements are complete.");
+    expect(root.getAttribute("aria-label")).toBeNull();
+    expect(root.querySelector('[aria-label="Membership requirements"]')).not.toBeNull();
+  });
+
+  it("shows the payment action when checkout is ready", () => {
+    const ready = {
+      ...workflow,
+      steps: workflow.steps.map((step) =>
+        step.kind === "payment"
+          ? {
+              ...step,
+              state: "active" as const,
+              payment: { ...step.payment!, checkoutUrl: "https://checkout.example.test/session" },
+            }
+          : step,
+      ),
+    };
+    const root = mount("processing", ready);
+    const link = root.querySelector<HTMLAnchorElement>('a[href="https://checkout.example.test/session"]');
+    expect(link?.textContent).toContain("Pay membership fee");
   });
 
   it("reads no Bootstrap class names", () => {

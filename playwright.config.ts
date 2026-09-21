@@ -14,18 +14,15 @@ export default defineConfig({
   timeout: 120_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
   /*
-   * Stop a shard once the failures stop being about the tests.
+   * Stop a shard after its first persistent failure.
    *
-   * A shard holds around twenty tests; ten failures in one is not twenty
-   * regressions, it is the Worker having died and every test since having hit
-   * a dead server. Retries do not help there — a retry meets the same corpse —
-   * so the useful thing is to stop, leaving a short report whose first entry
-   * is the actual cause. A genuine regression run of a handful still reports
-   * in full.
+   * Passing runs still exercise every flow. Failed runs retain one retry and
+   * the full artifact bundle, then stop instead of spending scarce CI minutes
+   * collecting downstream failures from a commit that already cannot merge.
    */
-  maxFailures: process.env.CI ? 10 : undefined,
+  maxFailures: process.env.CI ? 1 : undefined,
   /*
    * The local SendGrid interceptor and seeded D1 state are shared by the E2E
    * files, so one worker keeps a test from clearing or mutating another's
@@ -62,9 +59,12 @@ export default defineConfig({
   },
   use: {
     baseURL: e2eBaseUrl,
+    // A stale selector must not consume the full two-minute scenario timeout.
+    // Twenty seconds still leaves ample room for a real Worker-backed action.
+    actionTimeout: process.env.CI ? 20_000 : 0,
     /*
      * Recorded only for the runs that need explaining. `video: "on"` wrote a
-     * film of all 111 tests every run — 280MB an run into the system temp
+     * film of all 111 tests every run — 280MB a run into the system temp
      * directory, which is on the internal disk and is what ran it out of space
      * mid-suite, taking the test server down with it. A passing test's video
      * is watched by nobody.

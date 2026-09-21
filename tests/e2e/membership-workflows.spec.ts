@@ -104,7 +104,7 @@ test("changes an existing organization category's workflow and completes its req
 test("creates, renames, and reorders organization categories from their forms and table", async ({
   page,
 }, testInfo) => {
-  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows"));
+  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows-categories"));
   const code = `ORG_${Date.now()}`;
   const renamed = `${code}_NEW`;
   await page.goto("/portal/#/settings/membership-categories/new");
@@ -141,7 +141,7 @@ test("creates, renames, and reorders organization categories from their forms an
 
 /** @covers system.12.7 */
 test("explains payment references and removes unused organization workflow versions", async ({ page }, testInfo) => {
-  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows"));
+  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows-archive"));
   await page.goto("/portal/#/settings/application-workflow/new");
   const name = `Unused organization workflow ${uniqueSuffix()}`;
   await page.getByLabel("Workflow name").fill(name);
@@ -158,7 +158,7 @@ test("explains payment references and removes unused organization workflow versi
   await page.getByRole("button", { name: "Delete draft…", exact: true }).click();
   await page.getByLabel("Reason for removal").fill("This unused organization policy draft is no longer needed.");
   await page.getByRole("button", { name: "Delete draft", exact: true }).click();
-  await expect(page).toHaveURL(/application-workflow$/);
+  await expect(page).toHaveURL(/application-workflow\?workflows\.f\.archived=false$/);
   expect((await page.request.get(`/api/v1/membership/workflows/versions/${draftId}`)).status()).toBe(404);
   await page.getByRole("button", { name: "New workflow", exact: true }).click();
   await page.getByLabel("Workflow name").fill(`${name} published`);
@@ -170,5 +170,39 @@ test("explains payment references and removes unused organization workflow versi
   await page.getByLabel("Reason for removal").fill("Replaced by another synthetic organization policy.");
   await page.screenshot({ path: testInfo.outputPath("workflow-archive-confirmation.png"), fullPage: true });
   await page.getByRole("button", { name: "Archive version", exact: true }).click();
-  await expect(page).toHaveURL(/application-workflow$/);
+  await expect(page).toHaveURL(/application-workflow\?workflows\.f\.archived=false$/);
+});
+
+/** @covers system.12.7 */
+test("navigates workflow breadcrumbs between settings, the list, and an organization policy form", async ({
+  page,
+}, testInfo) => {
+  await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows-breadcrumbs"));
+  await page.goto("/portal/#/settings/application-workflow");
+  const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
+  await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText("Application workflows");
+  await breadcrumb.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/#\/settings$/);
+  await page.goto("/portal/#/settings/application-workflow/new");
+  await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText("New membership workflow");
+  const name = `Example Organization admission ${uniqueSuffix()}`;
+  await page.getByLabel("Workflow name").fill(name);
+  await page.getByLabel("Policy reference").fill("Review the organization's form and submitting user's authority.");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText(`${name} · version 1`);
+  const workflowUrl = page.url();
+  await page.reload();
+  await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText(`${name} · version 1`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(breadcrumb).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("workflow-breadcrumb-mobile.png"), fullPage: true });
+  const listLink = breadcrumb.getByRole("link", { name: "Application workflows", exact: true });
+  await listLink.focus();
+  await listLink.press("Enter");
+  await expect(page).toHaveURL(/#\/settings\/application-workflow(?:\?|$)/);
+  await expect(page.getByRole("table", { name: "Membership workflow versions" })).toBeVisible();
+  await page.goto(workflowUrl);
+  await breadcrumb.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/#\/settings$/);
 });

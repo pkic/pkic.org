@@ -230,9 +230,7 @@ describe("portal email templates", () => {
     mount(<EmailTemplates canWrite />);
     await settle();
     expect(fieldLabels(container!)).toHaveLength(0);
-    const newTemplateButton = [...container!.querySelectorAll("button")].find((candidate) =>
-      candidate.textContent?.includes("New template"),
-    );
+    const newTemplateButton = container!.querySelector<HTMLButtonElement>('button[aria-label="New template"]');
     await act(() => newTemplateButton!.click());
 
     await typeInto(labelled<HTMLInputElement>(container!, "Template key"), templateKey);
@@ -279,9 +277,7 @@ describe("portal email templates", () => {
     mount(<EmailTemplates canWrite />);
     await settle();
     await act(() => {
-      [...container!.querySelectorAll("button")]
-        .find((candidate) => candidate.textContent?.includes("New template"))!
-        .click();
+      container!.querySelector<HTMLButtonElement>('button[aria-label="New template"]')!.click();
     });
 
     await typeInto(labelled<HTMLInputElement>(container!, "Template key"), templateKey);
@@ -464,14 +460,9 @@ describe("portal email templates", () => {
     ).toEqual(["Template Key", "Status", "Active", "Last changed"]);
     expect(container!.querySelectorAll(".pk-badge, [class*='badge']").length).toBeLessThanOrEqual(1);
 
-    const viewButton = [...container!.querySelectorAll("button")].find((candidate) =>
-      candidate.textContent?.includes("View"),
-    );
-    expect(viewButton).toBeDefined();
-    await act(async () => {
-      viewButton!.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    const viewLink = container!.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
+    expect(viewLink?.getAttribute("href")).toBe("#/settings/email-templates/registration_confirm_email");
+    void act(() => render(<EmailTemplates canWrite={false} templateKey="registration_confirm_email" />, container!));
     await settle();
 
     expect(requests.every((url) => url.pathname.startsWith("/api/v1/email/templates"))).toBe(true);

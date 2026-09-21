@@ -73,6 +73,16 @@ async function createMeetingFixture() {
   return { admin, userId, series, occurrence };
 }
 
+async function occurrenceUpdateAuditCount(occurrenceId: string): Promise<number> {
+  return (
+    (await env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_occurrence_updated' AND entity_id = ?",
+    )
+      .bind(occurrenceId)
+      .first<number>("total")) ?? 0
+  );
+}
+
 beforeEach(async () => {
   await resetDb();
 });
@@ -237,6 +247,7 @@ describe("group-owned event series", () => {
     ).toBe(true);
 
     const { admin, series, occurrence } = await createMeetingFixture();
+    const auditCountBeforeInvalidUpdate = await occurrenceUpdateAuditCount(occurrence.id);
     const originalCiphertext = await env.DB.prepare(
       "SELECT provider_join_url_ciphertext FROM event_occurrences WHERE id = ?",
     )
@@ -258,13 +269,7 @@ describe("group-owned event series", () => {
         .bind(occurrence.id)
         .first<string>("provider_join_url_ciphertext"),
     ).toBe(originalCiphertext);
-    expect(
-      await env.DB.prepare(
-        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_occurrence_updated' AND entity_id = ?",
-      )
-        .bind(occurrence.id)
-        .first<number>("total"),
-    ).toBe(0);
+    expect(await occurrenceUpdateAuditCount(occurrence.id)).toBe(auditCountBeforeInvalidUpdate);
 
     const replacementUrl = "https://meet.example.test/rotated-secret-room";
     await updateSeriesOccurrence(
@@ -359,6 +364,7 @@ describe("group-owned event series", () => {
 
   it("rolls back stale series and occurrence updates instead of partially changing event state", async () => {
     const { admin, series, occurrence } = await createMeetingFixture();
+    const auditCountBeforeStaleUpdate = await occurrenceUpdateAuditCount(occurrence.id);
     const staleSeriesDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE event_series SET updated_at = '2099-01-01T00:00:00.000Z' WHERE id = ?")
         .bind(series.id)
@@ -402,13 +408,7 @@ describe("group-owned event series", () => {
         .bind(occurrence.id)
         .first("location_override"),
     ).toBeNull();
-    expect(
-      await env.DB.prepare(
-        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'event_occurrence_updated' AND entity_id = ?",
-      )
-        .bind(occurrence.id)
-        .first("total"),
-    ).toBe(0);
+    expect(await occurrenceUpdateAuditCount(occurrence.id)).toBe(auditCountBeforeStaleUpdate);
   });
 
   it("treats event and recurrence rows as one concurrency-protected series aggregate", async () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
@@ -26,6 +26,7 @@ import {
   REPRESENTATIVE_ROLE_IDS,
   seedOrganizationAggregate,
 } from "./helpers/membership";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 async function extractConfirmationToken(payloadJson: string): Promise<string> {
   const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payloadJson);
@@ -62,7 +63,11 @@ function patchManage(token: string, body: unknown, headers?: HeadersInit): Promi
 describe("registration workflows", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
+
   /**
    * Issue #23: registering for an event is not joining the consortium.
    *

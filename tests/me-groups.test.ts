@@ -3,11 +3,23 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { selfGroupsListQuerySchema, selfGroupsListResponseSchema } from "../assets/shared/schemas/group-participation";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
-import { buildGroupsPageQuery, createGroup, joinGroup, listSelfGroups } from "../functions/_lib/services/groups";
+import {
+  buildGroupsPageQuery,
+  createGroup,
+  joinGroup,
+  listSelfGroups,
+  replaceGroupCategoryRules,
+} from "../functions/_lib/services/groups";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
-import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import {
+  addRepresentative,
+  insertIndividualMember,
+  insertOrganization,
+  insertUser,
+  seedOrganizationAggregate,
+} from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 async function adminActor(): Promise<UserBackedAuthAdmin> {
@@ -111,6 +123,32 @@ describe("generic self-service group catalog", () => {
     const invalidSort = await getAs(token, "/api/v1/users/current/groups?sort=email");
     expect(invalidSort.status).toBe(400);
     expect((await callApi(env, "/api/v1/users/current/groups")).status).toBe(401);
+  });
+
+  it("does not offer or permit an organization-only group to an individual member", async () => {
+    const admin = await adminActor();
+    const group = await createGroup(env.DB, admin, {
+      typeKey: "working_group",
+      name: "Organization Category Group",
+      visibility: "public",
+      eligibilityMode: "category",
+    });
+    await replaceGroupCategoryRules(env.DB, admin, group.id, {
+      rules: [{ membershipCategory: "A", permitsJoin: true, automaticEnrollment: false }],
+    });
+    const individual = await insertIndividualMember(env.DB, "H6");
+    const query = selfGroupsListQuerySchema.parse({ view: "catalog", typeKey: "working_group", limit: 50 });
+
+    expect((await listSelfGroups(env.DB, individual.userId, query)).groups.map(({ id }) => id)).not.toContain(group.id);
+    await expect(
+      joinGroup(env.DB, group.id, {
+        actorUserId: individual.userId,
+        targetUserId: individual.userId,
+        selection: { mode: "all_eligible", confirmed: true },
+        source: "self_service",
+        allowManaged: false,
+      }),
+    ).rejects.toMatchObject({ status: 403, code: "GROUP_CAPACITY_REQUIRED" });
   });
 
   it("requires person-level parent participation before discovering a child", async () => {

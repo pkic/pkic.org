@@ -116,6 +116,15 @@ test.describe("the dark theme", () => {
     // portal stayed light while the tables and inputs inside it went dark.
     await expect(page.locator("#portal-root")).toBeVisible();
     expect(await unreadableSurfaces(page)).toEqual([]);
+
+    // The issue was reported against data-heavy portal screens. Exercise an
+    // actual table and a settings form instead of treating the empty shell as
+    // representative of cards, controls and rows.
+    for (const route of ["/portal/#/users", "/portal/#/settings/application-workflow"]) {
+      await page.goto(route);
+      await expect(page.locator(".pk-table, .pk-panel").first()).toBeVisible();
+      expect(await unreadableSurfaces(page), route).toEqual([]);
+    }
   });
 
   test("remembers the reader's choice and hands it back", async ({ page }) => {

@@ -7,7 +7,9 @@ import {
   buildApplicationPayload,
   applyCategoryUI,
   configureMembershipLegalFields,
+  filterApplicationFieldsForApplicantKind,
   filterCategoriesForApplicantKind,
+  membershipCategoryFeeText,
   renderMembershipCategorySummary,
   renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
@@ -43,6 +45,7 @@ const categories: Category[] = [
     isVoting: true,
     active: true,
     workflowVersionId: null,
+    fee: null,
     revision: 0,
     updatedAt: "2026-08-27T00:00:00.000Z",
   },
@@ -56,6 +59,13 @@ const categories: Category[] = [
     isVoting: false,
     active: true,
     workflowVersionId: null,
+    fee: {
+      label: "Membership fee",
+      instructions: "Pay after review.",
+      amount: 12500,
+      currency: "usd",
+      deadlineDays: 14,
+    },
     revision: 0,
     updatedAt: "2026-08-27T00:00:00.000Z",
   },
@@ -146,6 +156,8 @@ describe("join-form helpers", () => {
     expect(container.querySelectorAll('input[name="category"]')).toHaveLength(1);
     expect(container.textContent).toContain("Independent consultant");
     expect(container.textContent).not.toContain("Certification authority");
+    expect(container.textContent).toContain("Required fee: $125.00");
+    expect(membershipCategoryFeeText(categories[0])).toBeNull();
   });
 
   it("draws each category radio with all three check parts and a label that names it", () => {
@@ -197,6 +209,37 @@ describe("join-form helpers", () => {
     const missingIpr = form.querySelector<HTMLElement>('[data-membership-legal-field="agrees_ipr_policy"]')!;
     expect(missingIpr.hidden).toBe(true);
     expect(missingIpr.querySelector<HTMLInputElement>("input")?.disabled).toBe(true);
+  });
+
+  it("removes organization-only questions and adapts authority wording for an individual", () => {
+    const form = document.createElement("form");
+    form.innerHTML = `
+      <div data-membership-legal-agreements hidden>
+        <section data-membership-legal-field="warranted_authority">
+          <input type="checkbox" name="custom.warranted_authority" data-membership-legal-input />
+          <label data-membership-legal-label></label>
+        </section>
+      </div>
+    `;
+    const fields = [
+      formField("organization_website", "url"),
+      formField("about_organization", "textarea"),
+      formField("professional_profile", "url"),
+      {
+        ...formField("warranted_authority"),
+        label: "I and my organization (if applicable) confirm that I have authority",
+      },
+    ];
+
+    expect(filterApplicationFieldsForApplicantKind(fields, "individual").map(({ key }) => key)).toEqual([
+      "professional_profile",
+      "warranted_authority",
+    ]);
+    const genericFields = configureMembershipLegalFields(form, fields, "individual");
+    expect(genericFields.map(({ key }) => key)).toEqual(["professional_profile"]);
+    expect(form.querySelector("label")?.textContent).toBe(
+      "I confirm that I am submitting this application for myself and agree to be bound by these terms",
+    );
   });
 
   it("renders an informational summary of eligible individual categories", () => {
