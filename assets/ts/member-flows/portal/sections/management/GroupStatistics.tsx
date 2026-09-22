@@ -99,11 +99,12 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
 
   return (
     <div class="pk pk-stack">
-      {/* A panel is a section, so it is named rather than announced as an
-          anonymous group of numbers. */}
-      <Panel aria-label="Reporting window">
-        <PanelHeader title="Reporting window" />
-        <PanelBody class="pk-stack">
+      <details>
+        <summary>
+          Reporting window · {SCOPE_LABELS[query.scope]} · {query.from?.slice(0, 10) ?? "Beginning"} to{" "}
+          {query.to?.slice(0, 10) ?? "now"}
+        </summary>
+        <div class="pk-stack">
           <form noValidate class="pk-stack" aria-label="Analytics window" onSubmit={applyWindow} {...form.handlers}>
             <div class="pk-grid pk-grid--tight">
               <Field label="Count people who" {...form.of("scope")}>
@@ -161,8 +162,8 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
             </div>
           </form>
           {stats.error && <ErrorAlert error={stats.error} />}
-        </PanelBody>
-      </Panel>
+        </div>
+      </details>
 
       {stats.data && (
         <>

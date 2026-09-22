@@ -15,7 +15,7 @@
   }
 
   .pk-toolbar__search {
-    flex: 0 1 20rem;
+    flex: 1 1 20rem;
     min-width: var(--pk-6);
     position: relative;
   }

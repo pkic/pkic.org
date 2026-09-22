@@ -121,7 +121,9 @@ describe("portal group statistics", () => {
     expect(describedBy(from, container)?.textContent).toContain("beginning of available history");
 
     const regions = [...container.querySelectorAll("section")].map((section) => section.getAttribute("aria-label"));
-    expect(regions).toEqual(["Reporting window", "Participation", "Activity"]);
+    expect(regions).toEqual(["Participation", "Activity"]);
+    expect(container.querySelector("details")?.open).toBe(false);
+    expect(container.querySelector("summary")?.textContent).toContain("Reporting window");
 
     // The scope select offers what the query contract accepts, so a third
     // population added there reaches the reader without an edit here.

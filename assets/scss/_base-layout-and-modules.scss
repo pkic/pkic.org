@@ -452,8 +452,19 @@ blockquote::after {
     content: none;
   }
 
-  p:last-child {
-    margin-bottom: 0;
+  > p {
+    margin-block: 0;
+  }
+}
+
+// A Markdown paragraph callout keeps its inline emphasis in the text flow.
+p.callout-warning {
+  display: block;
+
+  &::before {
+    display: inline-block;
+    vertical-align: text-bottom;
+    margin-inline-end: var(--pk-3);
   }
 }
 
@@ -531,7 +542,7 @@ blockquote::after {
 // Keep the exclusion at zero specificity so authored card styles still win.
 // H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
 @mixin readable-dark-headings {
-  main h2:not(:where(.pk *)) {
+  main :is(h2, h3, h4, h5, h6):not(:where(.pk *)) {
     background: none;
     color: var(--pk-ink);
     -webkit-text-fill-color: currentColor;

@@ -241,20 +241,6 @@ export function GroupVotes({
           { key: "proposals", label: "Proposals" },
         ]}
       />
-      {/*
-        What the two collections are, in one line (#52).
-        
-        The tabs named them and nothing said how they relate, so a reader who
-        could create one and not the other reasonably read that as broken. A
-        vote is the ballot the group runs; a proposal is a participant asking
-        for one. Endorsements can trigger conversion, and leadership can also
-        approve it directly.
-      */}
-      <p class="pk-small pk-muted">
-        {tab === "proposals"
-          ? "A proposal is a participant's request for a vote. Reaching the required endorsements creates a vote automatically; leadership can also approve it directly."
-          : "A vote is a ballot this group runs. Leadership can create one directly, or a participant proposal can become a vote."}
-      </p>
       <div id={panelId} class="pk-stack">
         {tab === "proposals" ? (
           <GroupVoteProposals

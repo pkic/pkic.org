@@ -81,20 +81,12 @@
     flex-wrap: nowrap;
   }
 
-  /*
-   * A form column.
-   *
-   * A form is filled one line at a time, so its width is set by the line rather
-   * than by the page. Stretched across a wide screen, an input becomes a target
-   * with no shape and the eye loses the label on its way to the control; the
-   * design page puts its own field examples in a column for the same reason.
-   * Composes with the stack modifiers, which is why the gap is the stack's.
-   */
+  /* Forms fill their containing layout; field groups own their columns. */
   .pk-form {
     display: flex;
     flex-direction: column;
     gap: var(--pk-gap, var(--pk-4));
-    max-width: 42rem;
+    min-width: 0;
   }
 
   /* A cluster whose items align to their tops rather than their centres —

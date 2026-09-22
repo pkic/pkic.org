@@ -36,6 +36,10 @@ $sponsors-tier-heights: (
 );
 
 .sponsors {
+  background: var(--pk-logo-surface);
+  color: var(--pk-on-solid-ink);
+  padding: var(--pk-5);
+  border-radius: var(--pk-radius);
   --sponsors-edge-inset: var(--pk-2);
   --sponsors-caption-gap: var(--pk-3);
   --sponsors-row-gap: var(--pk-4);
@@ -130,7 +134,7 @@ $sponsors-tier-heights: (
     // its own logos, so the space around the label reads as one measure rather
     // than as a tight horizontal notch above a loose vertical one.
     gap: var(--sponsors-caption-gap);
-    color: var(--pk-ink-muted);
+    color: var(--pk-on-solid-ink);
     font-size: var(--pk-text-2xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -140,7 +144,7 @@ $sponsors-tier-heights: (
       content: "";
       flex: 1;
       height: 1px;
-      background: var(--pk-line-soft);
+      background: color-mix(in srgb, var(--pk-on-solid-ink) 18%, transparent);
     }
   }
 
@@ -176,29 +180,6 @@ $sponsors-tier-heights: (
     justify-content: center;
     block-size: var(--sponsors-logo-height);
     inline-size: var(--sponsors-logo-width);
-  }
-
-  // A member's logo is their artwork, and almost all of it is drawn in dark
-  // ink for a light page. On the dark theme those logos vanish into the
-  // ground — Thales, IBM, EverTrust and several others were simply not there.
-  // Recolouring someone's mark is not ours to do, so the plate under it stays
-  // light in both themes and the artwork is shown as its owner drew it. The
-  // plate is only as large as the logo box, and the wall's own ground still
-  // follows the theme around it.
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) & .sponsor-link {
-      background: var(--pk-logo-surface);
-      border-radius: var(--pk-radius-sm);
-      padding: var(--pk-2);
-      box-sizing: content-box;
-    }
-  }
-
-  :root[data-theme="dark"] & .sponsor-link {
-    background: var(--pk-logo-surface);
-    border-radius: var(--pk-radius-sm);
-    padding: var(--pk-2);
-    box-sizing: content-box;
   }
 
   .sponsor-logo {

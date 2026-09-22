@@ -144,7 +144,7 @@
   }
 
   // Paragraphs & links
-  p:not(:where(.pk *)) {
+  p:not(:where(.pk *, .callout-warning)) {
     margin-bottom: 1rem;
     line-height: 1.75;
     color: inherit;

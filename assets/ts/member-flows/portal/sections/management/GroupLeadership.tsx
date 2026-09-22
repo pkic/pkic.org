@@ -16,7 +16,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { TabList } from "../../../../ui/TabList";
+import { Select } from "../../../../ui/TextControl";
 import { Panel, PanelHeader } from "../../../../ui/Panel";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
@@ -241,47 +241,43 @@ export function GroupLeadership({
             </span>
           )}
         </PanelHeader>
-        <div class="pk-table-list__inset">
-          <TabList
-            label="Leadership history"
-            activeId={view}
-            onSelect={setView}
-            idPrefix="leadership-view"
-            items={[
-              { id: "current", label: "Current leadership", panelId: "leadership-list" },
-              { id: "past", label: "Past leadership", panelId: "leadership-list" },
-            ]}
-          />
-        </div>
-        <div id="leadership-list" role="tabpanel" aria-labelledby={`leadership-view-${view}`}>
-          <ApiDataTable
-            key={view}
-            caption={view === "past" ? "Closed leadership terms of this group" : "Current leadership of this group"}
-            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`}
-            responseSchema={groupLeadershipListResponseSchema}
-            resolve={(response) => (view === "past" ? response.past : response.assignments)}
-            resolvePage={(response) => (view === "past" ? response.pastPage : response.page)}
-            paginate
-            searchPlaceholder="Search leadership…"
-            initialSort={view === "past" ? "-ends_at" : "person"}
-            actionsRef={currentTable}
-            createAction={{
-              label: "Add leadership",
-              onSelect: () => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`),
-            }}
-            columns={leadershipColumns(
-              busyId,
-              (assignment) => navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
-              view === "past" ? undefined : (assignment) => void endTerm(assignment),
-            )}
-            rowKey={(assignment) => assignment.userRoleId}
-            rowAction={(assignment) => ({
-              label: `Open ${assignment.userName}`,
-              href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
-            })}
-            empty={<EmptyState title={view === "past" ? "No past leadership found" : "No leadership found"} />}
-          />
-        </div>
+        <ApiDataTable
+          key={view}
+          toolbar={() => (
+            <Select
+              aria-label="Leadership status"
+              value={view}
+              onChange={(event) => setView(event.currentTarget.value)}
+            >
+              <option value="current">Current leadership</option>
+              <option value="past">Past leadership</option>
+            </Select>
+          )}
+          caption={view === "past" ? "Closed leadership terms of this group" : "Current leadership of this group"}
+          endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`}
+          responseSchema={groupLeadershipListResponseSchema}
+          resolve={(response) => (view === "past" ? response.past : response.assignments)}
+          resolvePage={(response) => (view === "past" ? response.pastPage : response.page)}
+          paginate
+          searchPlaceholder="Search leadership…"
+          initialSort={view === "past" ? "-ends_at" : "person"}
+          actionsRef={currentTable}
+          createAction={{
+            label: "Add leadership",
+            onSelect: () => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`),
+          }}
+          columns={leadershipColumns(
+            busyId,
+            (assignment) => navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
+            view === "past" ? undefined : (assignment) => void endTerm(assignment),
+          )}
+          rowKey={(assignment) => assignment.userRoleId}
+          rowAction={(assignment) => ({
+            label: `Open ${assignment.userName}`,
+            href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
+          })}
+          empty={<EmptyState title={view === "past" ? "No past leadership found" : "No leadership found"} />}
+        />
       </Panel>
     </div>
   );

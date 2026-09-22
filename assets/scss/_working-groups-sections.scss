@@ -171,8 +171,8 @@
   gap: var(--pk-1);
   padding: 1.25rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
+  border: 1px solid var(--pk-line);
+  background: var(--pk-surface);
   color: inherit;
   text-decoration: none;
   transition:
@@ -196,19 +196,19 @@
 .wg-explore-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
 }
 
 .wg-explore-desc {
   font-size: 0.8rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   line-height: 1.45;
 }
 
 .wg-explore-arrow {
   font-size: 0.82rem;
   font-weight: 600;
-  color: $green;
+  color: var(--pk-accent-ink);
   padding-top: 0.5rem;
 }
 
@@ -501,8 +501,8 @@
 .pqc-conf-past-card {
   padding: 1.25rem 1.25rem 1rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
+  border: 1px solid var(--pk-line);
+  background: var(--pk-surface);
   color: inherit;
   transition:
     transform 0.15s ease,
@@ -524,14 +524,14 @@
 .pqc-conf-past-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   margin-bottom: 0.25rem;
   line-height: 1.35;
 }
 
 .pqc-conf-past-meta {
   font-size: 0.78rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   margin-bottom: 0.6rem;
 }
 

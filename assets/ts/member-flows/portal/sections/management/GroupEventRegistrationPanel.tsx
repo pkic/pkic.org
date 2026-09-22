@@ -101,7 +101,7 @@ function RegistrationFields({ config }: { config: EventFormsResponse }): JSX.Ele
           <CustomFieldList fields={config.form.fields} context={customFieldContext} />
         </div>
       )}
-      <div class="pk-stack pk-stack--tight">
+      <div class="pk-stack">
         <h4>Terms and conditions</h4>
         <ConsentList terms={config.requiredTerms} />
       </div>

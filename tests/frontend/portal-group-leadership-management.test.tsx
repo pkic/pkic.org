@@ -237,12 +237,20 @@ describe("portal group leadership management", () => {
     expect(container.textContent).toContain("Since Jan 1, 2021");
     expect(container.textContent).toContain("Past leadership");
     expect(container.textContent).not.toContain("Former Chair");
-    await act(async () => container.querySelector<HTMLButtonElement>("#leadership-view-past")!.click());
+    await act(async () => {
+      const status = container.querySelector<HTMLSelectElement>('[aria-label="Leadership status"]')!;
+      status.value = "past";
+      status.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await settle();
     expect(container.textContent).toContain("Former Chair");
     expect(container.textContent).toContain("Feb 14, 2013 – Jan 1, 2021");
     expect(container.querySelectorAll("table")).toHaveLength(1);
-    await act(async () => container.querySelector<HTMLButtonElement>("#leadership-view-current")!.click());
+    await act(async () => {
+      const status = container.querySelector<HTMLSelectElement>('[aria-label="Leadership status"]')!;
+      status.value = "current";
+      status.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await settle();
     // The inherited deputy has no row menu; the local chair and the closed term do.
     expect(container.querySelectorAll('[aria-label^="Actions for"]')).toHaveLength(1);

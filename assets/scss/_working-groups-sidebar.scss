@@ -17,7 +17,7 @@
 
 .person-card-footer-label {
   font-weight: 600;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
 }
 
 .person-card-footer-dates {
@@ -33,8 +33,8 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.75rem;
-  background: #fff;
-  border: 1px solid $gray-200;
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line);
   border-radius: 0.65rem;
   width: 100%;
   transition:
@@ -61,7 +61,7 @@
 .person-card-compact-name {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -87,7 +87,7 @@
 
 .person-card-compact-jobtitle {
   font-size: 0.72rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   line-height: 1.3;
   margin-top: 0.15rem;
   white-space: nowrap;
@@ -210,7 +210,7 @@ $toggle-width: 1.4rem;
 // Collapsed state — arrow flips, border-radius becomes fully rounded (standalone pill)
 .wg-sidebar-wrap.is-collapsed .wg-sidebar-toggle {
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--pk-surface);
   color: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(0, 0, 0, 0.15);
   svg {

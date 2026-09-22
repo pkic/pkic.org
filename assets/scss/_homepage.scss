@@ -1089,7 +1089,7 @@ $pkic-page-hero-themes: (
 }
 
 .wg-alt-section {
-  background-color: #f4f6f8;
+  background-color: var(--pk-surface-sunk);
   background-image: radial-gradient(ellipse at 80% 50%, rgba(90, 155, 213, 0.04) 0%, transparent 70%);
 }
 // ============================================================
