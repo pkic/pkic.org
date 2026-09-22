@@ -366,6 +366,14 @@ it("retries an uncertain checkout with identical parameters and renews only afte
   expect(calls[1].key).not.toBe(calls[0].key);
   expect(new URLSearchParams(calls[1].body).get("metadata[membershipFeeId]")).toBe(fixture.metadata.membershipFeeId);
   expect(new URLSearchParams(calls[1].body).get("metadata[pkic_payment_type]")).toBe("membership");
+  const notices = await env.DB.prepare(
+    "SELECT recipient_email, subject, payload_json FROM email_outbox WHERE idempotency_key = ?",
+  )
+    .bind(`membership-fee-request:${fixture.metadata.membershipFeeId}`)
+    .all();
+  expect(notices.results).toHaveLength(1);
+  expect(notices.results[0].subject).toBe("Payment required for your membership application");
+  expect(String(notices.results[0].payload_json)).toContain("/application-status/?id=");
 });
 
 it("a refund before the final review blocks provisioning even though the payment step previously completed", async () => {
@@ -383,6 +391,25 @@ it("a refund before the final review blocks provisioning even though the payment
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   expect((await getMembershipExecution(env.DB, id)).application.stage).toBe("processing");
   expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM members").first("count")).toBe(0);
+});
+
+it("does not queue a payment request when the application closes during checkout creation", async () => {
+  const fixture = await prepareFeeApplication({ failCheckout: true });
+  await env.DB.prepare("UPDATE membership_fee_checkout_outbox SET next_attempt_at = ?")
+    .bind(new Date().toISOString())
+    .run();
+  const fetcher: typeof fetch = async () => {
+    await env.DB.prepare("UPDATE member_applications SET stage = 'withdrawn' WHERE id = ?").bind(fixture.id).run();
+    return Response.json({ id: "cs_closed", url: "https://checkout.stripe.com/c/pay/closed" });
+  };
+  expect(await processMembershipFeeCheckouts(env.DB, paymentEnv, "https://app.test", 1, fetcher)).toEqual({
+    processed: 0,
+  });
+  expect(
+    await env.DB.prepare("SELECT COUNT(*) AS count FROM email_outbox WHERE idempotency_key = ?")
+      .bind(`membership-fee-request:${fixture.metadata.membershipFeeId}`)
+      .first("count"),
+  ).toBe(0);
 });
 
 it("a payment received after the policy deadline requires handling and cannot provision membership", async () => {

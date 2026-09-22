@@ -26,10 +26,16 @@ import { toast } from "../../ui";
  */
 const AUDIENCE_LABELS: Record<EventEmailCampaignAudience, string> = {
   attendees: "Attendees",
+  attendee_invitations: "Invited attendees",
+  speaker_invitations: "Invited speakers",
   speakers: "Speakers",
 };
 
 const AUDIENCE_DESCRIPTIONS: Record<EventEmailCampaignAudience, string> = {
+  attendee_invitations:
+    "People with an open attendee invitation. Accepted, declined, revoked, expired, and opted-out invitations are excluded.",
+  speaker_invitations:
+    "People with an open speaker invitation. Accepted, declined, revoked, expired, and opted-out invitations are excluded.",
   attendees: "Everyone registered for the event, narrowed by status, attendance type, day or waitlist standing.",
   speakers: "The speakers on this event's proposals, narrowed by whether they have confirmed.",
 };
@@ -73,6 +79,7 @@ export function GroupEventCommunications({
           <PanelHeader title={`New ${AUDIENCE_LABELS[audience].toLowerCase()} campaign`} breadcrumb />
           <PanelBody>
             <EventEmailCampaign
+              key={audience}
               campaignsPath={`${eventPath}/email/campaigns`}
               daysPath={`${eventPath}/days`}
               audience={audience}

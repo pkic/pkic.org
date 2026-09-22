@@ -1,3 +1,4 @@
+import { isAttendeeCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import type {
   EventEmailCampaignCreateInput,
   EventEmailCampaignPreviewInput,
@@ -62,10 +63,9 @@ export async function previewEventEmailCampaign(
 
   const { partials, layoutHtml } = await loadEmailRenderResources(db);
   const sample = recipients[0];
-  const routeVariables =
-    input.filter.audience === "attendees"
-      ? { registrationUrl: registrationPageUrl(options.appBaseUrl, event, { source: "event_email" }) }
-      : { proposalUrl: proposalPageUrl(options.appBaseUrl, event, { source: "event_email" }) };
+  const routeVariables = isAttendeeCampaignAudience(input.filter.audience)
+    ? { registrationUrl: registrationPageUrl(options.appBaseUrl, event, { source: "event_email" }) }
+    : { proposalUrl: proposalPageUrl(options.appBaseUrl, event, { source: "event_email" }) };
   const sampleData = buildPersonalCampaignTemplateData(sample, {
     ...buildEventEmailVariables(event, options.appBaseUrl),
     recipientCount,

@@ -3,8 +3,20 @@ import { emailMessageTypeSchema, successResponseSchema, utcInstantSchema } from 
 import { eventRegistrationStatusFilterSchema } from "./event-registrations";
 import { attendanceTypeSchema } from "./registration";
 
-export const eventEmailCampaignAudienceSchema = z.enum(["attendees", "speakers"]);
+export const eventEmailCampaignAudienceSchema = z.enum([
+  "attendees",
+  "speakers",
+  "attendee_invitations",
+  "speaker_invitations",
+]);
 export type EventEmailCampaignAudience = z.infer<typeof eventEmailCampaignAudienceSchema>;
+
+export function isInvitationCampaignAudience(audience: EventEmailCampaignAudience): boolean {
+  return audience === "attendee_invitations" || audience === "speaker_invitations";
+}
+export function isAttendeeCampaignAudience(audience: EventEmailCampaignAudience): boolean {
+  return audience === "attendees" || audience === "attendee_invitations";
+}
 
 /**
  * The campaign's own vocabularies, each named rather than written inline in

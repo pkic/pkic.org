@@ -254,6 +254,7 @@ function DonationList({ canSync }: { canSync: boolean }) {
       <PageHeader title="Donations" />
       <ApiDataTable
         caption="Donations"
+        searchPlaceholder="Search donations…"
         urlState="donations"
         endpoint="/api/v1/donations"
         responseSchema={donationsListResponseSchema}

@@ -6,6 +6,9 @@ import { createDurableJobLease } from "../../../jobs/lease";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, Env } from "../../../types";
 import { uuid } from "../../../utils/ids";
+import { prepareQueueEmailStatement } from "../../../email/outbox";
+import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../../../email/direct-body";
+import { formatCurrencyAmount } from "../../../../../assets/shared/format-currency";
 
 interface FeeCheckoutRow {
   id: string;
@@ -120,7 +123,7 @@ export async function processMembershipFeeCheckouts(
           purpose: "application_status",
           resourceId: fee.application_id,
           nowSeconds: Math.floor(Date.parse(attempt.created_at) / 1000),
-          ttlSeconds: 2 * 86400,
+          ttlSeconds: Math.ceil((Date.parse(fee.deadline_at) - Date.parse(attempt.created_at)) / 1000) + 86400,
         });
         const returnUrl = `${appBaseUrl}/application-status/?id=${encodeURIComponent(fee.application_id)}&token=${encodeURIComponent(token)}`;
         const params = new URLSearchParams({
@@ -180,6 +183,15 @@ export async function processMembershipFeeCheckouts(
             sql: "SELECT 1 FROM membership_fee_checkout_outbox WHERE fee_id = ? AND lease_token = ?",
             bindings: [fee.id, lease.token],
           }),
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 FROM membership_fee_intents fee
+              JOIN member_applications application ON application.id = fee.application_id
+              JOIN membership_application_workflows workflow ON workflow.application_id = fee.application_id
+                AND workflow.generation = fee.generation AND workflow.superseded_at IS NULL
+              WHERE fee.id = ? AND fee.status = 'pending' AND fee.deadline_at > ?
+                AND application.stage NOT IN ('approved', 'declined', 'withdrawn', 'on_hold')`,
+            bindings: [fee.id, new Date().toISOString()],
+          }),
           db
             .prepare("UPDATE membership_fee_checkouts SET provider_session_id = ?, checkout_url = ? WHERE id = ?")
             .bind(session.id, session.url, attempt.id),
@@ -188,6 +200,27 @@ export async function processMembershipFeeCheckouts(
               "UPDATE membership_fee_intents SET checkout_session_id = ?, checkout_url = ?, updated_at = ? WHERE id = ? AND status = 'pending'",
             )
             .bind(session.id, session.url, lease.claimedAt, fee.id),
+          prepareQueueEmailStatement(
+            db,
+            {
+              outboxId: fee.id,
+              idempotencyKey: `membership-fee-request:${fee.id}`,
+              templateKey: DIRECT_EMAIL_TEMPLATE_KEY,
+              recipientEmail: fee.applicant_email,
+              messageType: "transactional",
+              subject: "Payment required for your membership application",
+              data: directEmailBodyPayload(
+                [
+                  `Your membership application is ready for its required fee of ${formatCurrencyAmount(fee.amount, fee.currency)}.`,
+                  "This is a one-time application payment. It does not create a recurring subscription.",
+                  `Please pay before ${fee.deadline_at}. Your application cannot proceed without the required payment.`,
+                  `[View your application and pay the membership fee](${returnUrl})`,
+                  "If the payment deadline passes, contact the membership team before making a payment.",
+                ].join("\n\n"),
+              ),
+            },
+            lease.claimedAt,
+          ).statement,
         ]);
       }
       await run(

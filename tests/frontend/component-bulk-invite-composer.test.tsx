@@ -138,6 +138,57 @@ afterEach(() => {
 });
 
 describe("bulk invite composer", () => {
+  it("allows names to be cleared and appends pasted contacts without dropping manual rows or duplicating emails", async () => {
+    const requests = installApi();
+    const container = mount(vi.fn());
+    await typeInto(emailInput(container), "alice@example.com");
+    const first = container.querySelector<HTMLInputElement>('input[aria-label="attendee 1 first name"]')!;
+    await typeInto(first, "Alice");
+    await typeInto(first, "");
+    await typeInto(container.querySelector("textarea")!, "ALICE@example.com\nBob Smith <bob@example.com>");
+    await click(button(container, "Parse"));
+    await click(button(container, "Preview email"));
+    const input = eventBulkAttendeeInvitesPreviewSchema.parse(requests.at(-1)?.body);
+    expect(input.invites).toEqual([
+      { email: "alice@example.com" },
+      { email: "bob@example.com", firstName: "Bob", lastName: "Smith" },
+    ]);
+  });
+
+  it("refuses the whole preview if one of several recipients is invalid", async () => {
+    const requests = installApi();
+    const container = mount(vi.fn());
+    await typeInto(emailInput(container), "alice@example.com");
+    await click(button(container, "Add row"));
+    await typeInto(container.querySelector<HTMLInputElement>('input[aria-label="attendee 2 email address"]')!, "bad");
+    await click(button(container, "Preview email"));
+    expect(requests).toHaveLength(0);
+    expect(container.querySelector('[aria-label="attendee 2 email address"]')?.getAttribute("aria-invalid")).toBe(
+      "true",
+    );
+  });
+
+  it("discards a pending preview when recipients change", async () => {
+    let resolve!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((done) => {
+            resolve = done;
+          }),
+      ),
+    );
+    const container = mount(vi.fn());
+    await typeInto(emailInput(container), "alice@example.com");
+    await click(button(container, "Preview email"));
+    await typeInto(emailInput(container), "bob@example.com");
+    await act(async () => resolve(json(previewResponse())));
+    await settle();
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(button(container, "Send attendee invites").disabled).toBe(true);
+  });
+
   it("previews and sends invites the bulk-invite request contracts accept", async () => {
     const requests = installApi();
     const sent = vi.fn();
@@ -165,7 +216,7 @@ describe("bulk invite composer", () => {
     expect(bulkBody.previewToken).toBe("preview-token-that-is-long-enough");
     expect(bulkBody.invites).toHaveLength(1);
     expect(sent).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Sent 1 invites");
+    expect(container.textContent).toContain("Queued 1 attendee invitations.");
   });
 
   it("reports a rejected preview in its live region and sends nothing", async () => {
@@ -194,7 +245,8 @@ describe("bulk invite composer", () => {
     await typeInto(emailInput(container), "not-an-address");
     await click(button(container, "Preview email"));
 
-    expect(notify).toHaveBeenCalledWith("No valid emails to preview", "error");
+    expect(emailInput(container).getAttribute("aria-invalid")).toBe("true");
+    expect(notify).toHaveBeenCalledWith(expect.any(String), "error");
     expect(requests).toHaveLength(0);
   });
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
+  eventBulkAttendeeInvitesPreviewSchema,
   eventInviteBulkResponseSchema,
   eventInvitePreviewResponseSchema,
 } from "../../../shared/schemas/event-invite-bulk";
@@ -8,6 +9,7 @@ import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../shared/time
 import { parseContactText } from "../../shared/invite-parser";
 import { postJson } from "../../shared/api-client";
 import type { ToastType } from "../../shared/ui";
+import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
@@ -36,6 +38,15 @@ function parseRows(raw: string): { rows: Omit<InviteRow, "key">[]; skipped: numb
     lastName: contact.lastName,
   }));
   return { rows, skipped: Math.max(0, lines - rows.length) };
+}
+
+function expiryInstant(value: string, timezone: string): string {
+  try {
+    return dateTimeLocalToIso(value, timezone);
+  } catch {
+    // Let the shared UTC contract reject a wall time that cannot be resolved.
+    return value;
+  }
 }
 
 function previewReset(
@@ -71,32 +82,50 @@ export function BulkInviteComposer({
   const [sending, setSending] = useState(false);
   const [expiresAt, setExpiresAt] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const previewRevision = useRef(0);
   const latestExpiry = event.endsAt ? instantToDateTimeLocal(event.endsAt, event.timezone) : undefined;
   const label = type === "attendee" ? "attendee" : "speaker";
-  const validRows = rows.filter((row) => row.email.trim().includes("@"));
+  const body = {
+    invites: rows.map(({ email, firstName, lastName }) => ({
+      email: email.trim(),
+      firstName: firstName?.trim() || undefined,
+      lastName: lastName?.trim() || undefined,
+    })),
+    ...(expiresAt ? { expiresAt: expiryInstant(expiresAt, event.timezone) } : {}),
+  };
+  const form = useContractForm(eventBulkAttendeeInvitesPreviewSchema, body);
   const confirmId = `invite-confirm-${type}`;
 
   function resetPreview() {
+    previewRevision.current++;
     previewReset(setPreview, setConfirmed, setPreviewStatus);
   }
 
-  function replaceRows(nextRows: Omit<InviteRow, "key">[], skipped: number) {
+  function appendRows(nextRows: Omit<InviteRow, "key">[], skipped: number) {
     if (nextRows.length === 0) {
       notify(`No valid emails found${skipped ? ` (${skipped} skipped)` : ""}`, "error");
       return;
     }
-    setRows(nextRows.map((row, index) => ({ ...row, key: nextKey + index })));
+    const existing = rows.filter((row) => row.email.trim() || row.firstName?.trim() || row.lastName?.trim());
+    const emails = new Set(existing.map((row) => row.email.trim().toLowerCase()));
+    const additions = nextRows.filter((row) => {
+      const email = row.email.trim().toLowerCase();
+      if (emails.has(email)) return false;
+      emails.add(email);
+      return true;
+    });
+    setRows([...existing, ...additions.map((row, index) => ({ ...row, key: nextKey + index }))]);
     setNextKey((key) => key + nextRows.length);
     resetPreview();
     notify(
-      `Loaded ${nextRows.length} invite${nextRows.length === 1 ? "" : "s"}${skipped ? `, ${skipped} skipped` : ""}`,
+      `Added ${additions.length} invite${additions.length === 1 ? "" : "s"}${skipped ? `, ${skipped} skipped` : ""}`,
       "success",
     );
   }
 
   function parsePastedRows() {
     const parsed = parseRows(pasteText);
-    replaceRows(parsed.rows, parsed.skipped);
+    appendRows(parsed.rows, parsed.skipped);
     if (parsed.rows.length) setPasteText("");
   }
 
@@ -106,7 +135,7 @@ export function BulkInviteComposer({
     const reader = new FileReader();
     reader.onload = () => {
       const parsed = parseRows(String(reader.result ?? ""));
-      replaceRows(parsed.rows, parsed.skipped);
+      appendRows(parsed.rows, parsed.skipped);
     };
     reader.readAsText(file);
     if (fileRef.current) fileRef.current.value = "";
@@ -117,27 +146,24 @@ export function BulkInviteComposer({
     resetPreview();
   }
 
-  function requestBody() {
-    return {
-      invites: validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName })),
-      ...(expiresAt ? { expiresAt: dateTimeLocalToIso(expiresAt, event.timezone) } : {}),
-    };
-  }
-
   async function renderPreview() {
-    if (validRows.length === 0) {
-      notify("No valid emails to preview", "error");
+    const checked = form.submit();
+    if (!checked.data) {
+      notify(checked.message, "error");
       return;
     }
     setPreviewStatus("Generating preview…");
     setPreview(null);
     setConfirmed(false);
+    const revision = ++previewRevision.current;
     try {
-      const nextPreview = await postJson(endpoints.preview, requestBody(), eventInvitePreviewResponseSchema);
+      const nextPreview = await postJson(endpoints.preview, checked.data, eventInvitePreviewResponseSchema);
+      if (revision !== previewRevision.current) return;
       setPreview(nextPreview);
       setPreviewStatus("Review and confirm below.");
     } catch (error) {
-      const message = (error as Error).message;
+      if (revision !== previewRevision.current) return;
+      const message = form.refuse(error);
       setPreviewStatus(message);
       notify(message, "error");
     }
@@ -151,26 +177,33 @@ export function BulkInviteComposer({
     setSending(true);
     setSendStatus("Sending…");
     try {
-      let sent = 0;
-      const body = requestBody();
+      let queued = 0;
+      let endorsed = 0;
+      let skipped = 0;
+      const checked = form.submit();
+      if (!checked.data) throw new Error(checked.message);
+      const body = checked.data;
       for (const batch of preview.sendBatches) {
         const invites = body.invites.slice(batch.offset, batch.offset + batch.count);
-        await postJson(
+        const result = await postJson(
           endpoints.bulk,
           { ...body, invites, previewToken: batch.previewToken, inviteDigest: batch.inviteDigest },
           eventInviteBulkResponseSchema,
         );
-        sent += invites.length;
-        setSendStatus(`Sent ${sent} of ${body.invites.length}…`);
+        queued += result.created.length;
+        endorsed += result.endorsed.length;
+        skipped += result.skipped.length;
+        setSendStatus(`Processed ${queued + endorsed + skipped} of ${body.invites.length}…`);
       }
-      notify(`Sent ${sent} ${label} invites`, "success");
-      setSendStatus(`Sent ${sent} invites`);
+      const outcome = `Queued ${queued} ${label} invitations.${endorsed ? ` Endorsed ${endorsed} existing invitations.` : ""}${skipped ? ` Skipped ${skipped} recipients.` : ""}`;
+      notify(outcome, "success");
+      setSendStatus(outcome);
       setRows([{ key: nextKey, email: "" }]);
       setNextKey((key) => key + 1);
       resetPreview();
       await onSent?.();
     } catch (error) {
-      const message = (error as Error).message;
+      const message = form.refuse(error);
       setSendStatus(message);
       notify(message, "error");
     } finally {
@@ -179,7 +212,7 @@ export function BulkInviteComposer({
   }
 
   return (
-    <section aria-label={`Send ${label} invitations`} class="pk pk-stack">
+    <section aria-label={`Send ${label} invitations`} class="pk pk-stack" {...form.handlers}>
       <div class="pk-stack pk-stack--snug">
         <Field label="Paste emails and names" help="One address per line. Bob Smith <bob@example.com> also works.">
           {(control) => (
@@ -213,25 +246,43 @@ export function BulkInviteComposer({
       <div class="pk-stack pk-stack--snug">
         {rows.map((row, index) => (
           <div key={row.key} class="pk-grid pk-grid--tight">
-            <TextInput
-              aria-label={`${label} ${index + 1} first name`}
-              placeholder="First"
-              value={row.firstName ?? ""}
-              onInput={(input) => updateRow(row.key, { firstName: input.currentTarget.value })}
-            />
-            <TextInput
-              aria-label={`${label} ${index + 1} last name`}
-              placeholder="Last"
-              value={row.lastName ?? ""}
-              onInput={(input) => updateRow(row.key, { lastName: input.currentTarget.value })}
-            />
-            <TextInput
-              aria-label={`${label} ${index + 1} email address`}
-              placeholder="email@example.com"
-              type="email"
-              value={row.email}
-              onInput={(input) => updateRow(row.key, { email: input.currentTarget.value })}
-            />
+            <Field label={"First name"} {...form.of(`invites.${index}.firstName`)}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={`invites.${index}.firstName`}
+                  aria-label={`${label} ${index + 1} first name`}
+                  placeholder="First"
+                  value={row.firstName ?? ""}
+                  onInput={(input) => updateRow(row.key, { firstName: input.currentTarget.value })}
+                />
+              )}
+            </Field>
+            <Field label={"Last name"} {...form.of(`invites.${index}.lastName`)}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={`invites.${index}.lastName`}
+                  aria-label={`${label} ${index + 1} last name`}
+                  placeholder="Last"
+                  value={row.lastName ?? ""}
+                  onInput={(input) => updateRow(row.key, { lastName: input.currentTarget.value })}
+                />
+              )}
+            </Field>
+            <Field label={"Email address"} {...form.of(`invites.${index}.email`)}>
+              {(control) => (
+                <TextInput
+                  {...control}
+                  name={`invites.${index}.email`}
+                  aria-label={`${label} ${index + 1} email address`}
+                  placeholder="email@example.com"
+                  type="email"
+                  value={row.email}
+                  onInput={(input) => updateRow(row.key, { email: input.currentTarget.value })}
+                />
+              )}
+            </Field>
             {/* The cluster keeps the button at its own width inside its grid
                 cell. Named per row: "Remove attendee row" repeated six times
                 gives a reader no way to tell which one they are on. */}
@@ -241,7 +292,10 @@ export function BulkInviteComposer({
                 variant="danger-quiet"
                 icon
                 aria-label={`Remove ${label} ${index + 1}`}
-                onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}
+                onClick={() => {
+                  setRows((current) => current.filter((item) => item.key !== row.key));
+                  resetPreview();
+                }}
               >
                 <span aria-hidden="true">×</span>
               </Button>
@@ -254,6 +308,7 @@ export function BulkInviteComposer({
             onClick={() => {
               setRows((current) => [...current, { key: nextKey, email: "" }]);
               setNextKey((key) => key + 1);
+              resetPreview();
             }}
           >
             Add row
@@ -263,11 +318,13 @@ export function BulkInviteComposer({
 
       <Field
         label="Invitation deadline"
+        {...form.of("expiresAt")}
         help="Leave blank to use the event start. A custom deadline cannot be later than the event end."
       >
         {(control) => (
           <TextInput
             {...control}
+            name="expiresAt"
             type="datetime-local"
             value={expiresAt}
             max={latestExpiry}
@@ -292,7 +349,9 @@ export function BulkInviteComposer({
         >
           Send {label} invites
         </Button>
-        <span class="pk-small">{validRows.length} valid</span>
+        <span class="pk-small">
+          {rows.length} recipient{rows.length === 1 ? "" : "s"}
+        </span>
       </div>
 
       {/*

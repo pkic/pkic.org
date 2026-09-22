@@ -1,3 +1,7 @@
+import {
+  isInvitationCampaignAudience,
+  type EventEmailCampaignAudience,
+} from "../../../shared/schemas/event-email-campaigns";
 import { useState, useEffect, useRef } from "preact/hooks";
 import { useContractForm } from "../../hooks/useContractForm";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
@@ -93,7 +97,7 @@ export function EventEmailCampaign({
 }: {
   campaignsPath: string;
   daysPath: string;
-  audience?: "attendees" | "speakers";
+  audience?: EventEmailCampaignAudience;
   notify?: (message: string, type: "success" | "error") => void;
   /** The way back, when the composer is a page of its own. */
   cancelHref?: string;
@@ -108,7 +112,7 @@ export function EventEmailCampaign({
   const [batchSize, setBatchSize] = useState(500);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [audience] = useState<"attendees" | "speakers">(defaultAudience);
+  const [audience] = useState<EventEmailCampaignAudience>(defaultAudience);
 
   // attendee filters
   const [attendeeStatus, setAttendeeStatus] = useState<EventRegistrationStatusFilter>("registered");
@@ -195,7 +199,7 @@ export function EventEmailCampaign({
       base.filter.attendanceType = attendanceType as CampaignPayload["filter"]["attendanceType"];
       if (dayFilter) base.filter.dayDate = dayFilter;
       base.filter.dayWaitlistStatus = dayWaitlistStatus;
-    } else {
+    } else if (audience === "speakers") {
       base.filter.speakerStatus = speakerStatus;
     }
     return base;
@@ -408,7 +412,9 @@ export function EventEmailCampaign({
       </div>
 
       {/* Filters */}
-      {audience === "attendees" ? (
+      {isInvitationCampaignAudience(audience) ? (
+        <p class="pk-small">Recipients are limited to open invitations and are checked again before delivery.</p>
+      ) : audience === "attendees" ? (
         <div class="pk-grid">
           <Field label="Registration status">
             {(control) => (

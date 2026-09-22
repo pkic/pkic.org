@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type {
+  EventEmailCampaignAudience,
   EventEmailCampaignDayWaitlistFilter,
   EventEmailCampaignPreviewInput,
   EventEmailCampaignSendMode,
@@ -115,7 +116,22 @@ export function useDays(daysPath: string) {
   return days;
 }
 
-export function availableHelperLabelsForAudience(audience: "attendees" | "speakers"): Set<string> {
+export function availableHelperLabelsForAudience(audience: EventEmailCampaignAudience): Set<string> {
+  if (audience === "attendee_invitations" || audience === "speaker_invitations") {
+    return new Set([
+      "eventName",
+      "eventUrl",
+      "eventTimezone",
+      "firstName",
+      "lastName",
+      "email",
+      audience === "attendee_invitations" ? "registrationUrl" : "proposalUrl",
+      "if firstName",
+      "else block",
+      "unless",
+      "CTA button",
+    ]);
+  }
   if (audience === "attendees") {
     return new Set([
       "eventName",
@@ -168,7 +184,7 @@ export function availableHelperLabelsForAudience(audience: "attendees" | "speake
   ]);
 }
 
-export function availablePartialsForAudience(audience: "attendees" | "speakers"): Set<string> {
+export function availablePartialsForAudience(audience: EventEmailCampaignAudience): Set<string> {
   return audience === "attendees"
     ? new Set(["reg_details", "sponsors_block", "about_pkic", "donation_request"])
     : new Set(["sponsors_block", "about_pkic", "donation_request"]);

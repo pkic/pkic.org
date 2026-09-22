@@ -1,5 +1,7 @@
 import { GroupMailingListManager } from "./GroupMailingListManager";
 import { GroupMailingListPreferences } from "./GroupMailingListPreferences";
+import { Tabs } from "../../../../components/Tabs";
+import { usePortalHashLocation } from "../../hash-location";
 
 /** Composes the separate management and member-preference surfaces for one group context. */
 export function GroupMailingLists({
@@ -17,13 +19,29 @@ export function GroupMailingLists({
   /** The URL segment below a list id: the record's active tab. */
   listTab?: string;
 }) {
-  // A record stands alone. The member's own preferences are a second subject,
-  // and leaving them under one list's page would say they belong to that list.
-  const onRecord = canManage && listSegment !== undefined;
+  const [, navigate] = usePortalHashLocation();
+  const base = `/groups/${encodeURIComponent(groupId)}/mailing-lists`;
+  const preferences = listSegment === "preferences";
+  const onRecord = canManage && listSegment !== undefined && !preferences;
+  const path = (key: string) => (key === "preferences" ? `${base}/preferences` : base);
   return (
-    <div>
-      {canManage && <GroupMailingListManager groupId={groupId} listSegment={listSegment} listTab={listTab} />}
-      {canParticipate && !onRecord && <GroupMailingListPreferences groupId={groupId} />}
+    <div class="pk pk-stack">
+      {canManage && canParticipate && !onRecord && (
+        <Tabs
+          label="Mailing list sections"
+          items={[
+            { key: "lists", label: "Mailing lists" },
+            { key: "preferences", label: "My preferences" },
+          ]}
+          active={preferences ? "preferences" : "lists"}
+          hrefFor={path}
+          onChange={(key) => navigate(path(key))}
+        />
+      )}
+      {canManage && !preferences && (
+        <GroupMailingListManager groupId={groupId} listSegment={listSegment} listTab={listTab} />
+      )}
+      {canParticipate && !onRecord && (!canManage || preferences) && <GroupMailingListPreferences groupId={groupId} />}
     </div>
   );
 }

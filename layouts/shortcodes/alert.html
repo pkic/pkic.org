@@ -17,7 +17,7 @@
      isolation gate) sees a complete class name rather than `pk-alert--{{`. */}}
 {{- $toneClass := printf "pk-alert--%s" $tone -}}
 <div class="pk pk-container">
-  <div class="pk-alert {{ $toneClass }} pk-cluster pk-cluster--start" role="{{ $role }}">
+  <div class="pk-alert {{ $toneClass }} pk-alert--callout" role="{{ $role }}">
     <span aria-hidden="true">{{ $icon }}</span>
     <div class="pk-alert__body">{{ .Inner | markdownify }}</div>
   </div>

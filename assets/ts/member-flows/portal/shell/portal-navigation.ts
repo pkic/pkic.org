@@ -7,6 +7,7 @@
 import type { PortalSession } from "../types";
 
 export interface PortalNavItem {
+  group?: string;
   path: string;
   section: string;
   label: string;
@@ -99,6 +100,7 @@ interface PortalSectionDef {
 
 /** A page inside a section, listed under it while that section is the one open. */
 export interface PortalSectionChild {
+  group?: string;
   path: string;
   label: string;
   access: (session: PortalSession | null) => boolean;
@@ -295,24 +297,28 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     children: [
       {
         path: "/settings/application-workflow",
+        group: "Membership",
         label: "Application workflow",
         description: "Review deadlines, and who is notified at each stage of a membership application.",
         access: (session) => portalHasGlobalPermission(session, "membership:read"),
       },
       {
         path: "/settings/applicant-reminders",
+        group: "Membership",
         label: "Applicant reminders",
         description: "When an applicant on hold is reminded, and which addresses receive a copy.",
         access: (session) => portalHasGlobalPermission(session, "membership:read"),
       },
       {
         path: "/settings/membership-application-form",
+        group: "Membership",
         label: "Membership application form",
         description: "The questions an applicant answers once their email address is verified.",
         access: (session) => portalHasGlobalPermission(session, "membership:read"),
       },
       {
         path: "/settings/membership-categories",
+        group: "Membership",
         label: "Membership categories",
         description: "What each category is called, where it sits in the list, and whether it votes.",
         access: (session) => portalHasGlobalPermission(session, "membership:read"),
@@ -485,7 +491,13 @@ export function portalSectionChildren(section: string, session: PortalSession | 
   const definition = PORTAL_SECTIONS.find((candidate) => candidate.section === section);
   return (definition?.children ?? [])
     .filter((child) => child.access(session))
-    .map((child) => ({ path: child.path, section, label: child.label, description: child.description }));
+    .map((child) => ({
+      path: child.path,
+      section,
+      label: child.label,
+      description: child.description,
+      group: child.group,
+    }));
 }
 
 export function portalActiveSection(location: string): string {

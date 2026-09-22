@@ -1,4 +1,5 @@
 import { confirmAction } from "../../../../components/ConfirmDialog";
+import { IconPlus, IconRefresh } from "../../../../components/icons";
 import { Toolbar } from "../../../../ui/Toolbar";
 import { invalidateMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { MembershipCategoryForm } from "./MembershipCategoryForm";
@@ -252,11 +253,29 @@ export function MembershipCategories({
         <ErrorAlert error={error} />
       ) : (
         <section class="pk-panel pk-table-list" aria-label="Membership categories">
-          {canWrite && (
-            <Toolbar label="Membership categories controls">
-              <Button onClick={() => navigate(editPath("new"))}>New category</Button>
-            </Toolbar>
-          )}
+          <Toolbar label="Membership categories controls">
+            {canWrite && (
+              <Button
+                icon
+                variant="primary"
+                aria-label="New category"
+                title="New category"
+                onClick={() => navigate(editPath("new"))}
+              >
+                <IconPlus />
+                <span class="pk-sr-only">New category</span>
+              </Button>
+            )}
+            <Button
+              icon
+              variant="secondary"
+              aria-label="Refresh membership categories"
+              title="Refresh membership categories"
+              onClick={() => void load()}
+            >
+              <IconRefresh />
+            </Button>
+          </Toolbar>
           <DataTable
             caption="Membership categories"
             columns={columns}

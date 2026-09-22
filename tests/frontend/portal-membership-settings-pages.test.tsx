@@ -496,7 +496,7 @@ describe("membership categories page", () => {
 });
 
 describe("application workflow table", () => {
-  it("leads with the workflow and keeps availability as a compact final column", async () => {
+  it("leads with the workflow without a redundant availability column", async () => {
     stubApi((url) =>
       url.pathname === WORKFLOWS_API
         ? json({ workflows: [workflow], page: { limit: 25, offset: 0, total: 1, hasMore: false } })
@@ -510,12 +510,11 @@ describe("application workflow table", () => {
     const labels = headings.map(
       (heading) =>
         heading.querySelector(
-          ":scope > button > span, :scope > span:not(.pk-table__head-end):not(.pk-table__head-tools):not(.pk-table__head-filter)",
+          ".pk-table__head-content > button > span, .pk-table__head-content > span:not(.pk-table__head-end):not(.pk-table__head-tools):not(.pk-table__head-filter)",
         )?.textContent,
     );
-    expect(labels).toEqual(["Workflow", "Version", "Status", "Required steps", "Availability"]);
+    expect(labels).toEqual(["Workflow", "Version", "Status", "Required steps"]);
     expect(headings[0].classList.contains("pk-table__col--primary")).toBe(true);
-    expect(headings.at(-1)?.classList.contains("pk-table__col--fit")).toBe(true);
-    expect(page.textContent).toContain("Available");
+    expect(page.textContent).not.toContain("Available");
   });
 });

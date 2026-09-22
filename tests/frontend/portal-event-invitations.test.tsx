@@ -1,13 +1,9 @@
+import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 // @vitest-environment jsdom
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  EVENT_INVITE_STATUSES,
-  type EventAttendeeInviteSummary,
-  type EventInviteSummary,
-} from "../../assets/shared/schemas/event-invites";
-import type { GroupEvent } from "../../assets/shared/schemas/group-events";
+import { EVENT_INVITE_STATUSES } from "../../assets/shared/schemas/event-invites";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventInvitations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventInvitations";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
@@ -27,89 +23,17 @@ vi.mock("wouter", () => ({
   ),
 }));
 
-const GROUP_ID = "10000000-0000-4000-8000-000000000001";
-const EVENT_ID = "20000000-0000-4000-8000-000000000001";
-const INVITE_ID = "30000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
-const EVENT: GroupEvent = {
-  id: EVENT_ID,
-  ownerGroupId: GROUP_ID,
-  seriesId: null,
-  slug: "working-group-event",
-  basePath: null,
-  name: "Working group event",
-  timezone: "UTC",
-  startsAt: "2026-12-01T08:00:00.000Z",
-  endsAt: "2026-12-01T18:00:00.000Z",
-  profileKey: "workshop",
-  sourceMode: "portal",
-  registrationPolicy: "public",
-  visibility: "group_members",
-  inviteLimitAttendee: 5,
-  location: null,
-  links: [],
-  nextOccurrenceAt: null,
-  updatedAt: "2026-08-01T12:00:00.000Z",
-  proposalAccess: null,
-  capabilities: ["view", "manage"],
-};
-
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-}
-
-function response(invites: EventAttendeeInviteSummary[] = [invite()]): {
-  invites: EventAttendeeInviteSummary[];
-  page: object;
-} {
-  return {
-    invites,
-    page: { limit: 50, offset: 0, total: invites.length, hasMore: false },
-  };
-}
-
-function invite(overrides: Partial<EventAttendeeInviteSummary> = {}): EventAttendeeInviteSummary {
-  return {
-    id: INVITE_ID,
-    inviteeEmail: "invitee@example.test",
-    inviteeFirstName: "Ada",
-    inviteeLastName: "Lovelace",
-    inviteType: "attendee",
-    status: "sent",
-    expiresAt: "2026-09-01T12:00:00.000Z",
-    acceptedAt: null,
-    declinedAt: null,
-    createdAt: "2026-08-01T12:00:00.000Z",
-    actions: { resend: true, revoke: true },
-    ...overrides,
-  };
-}
-
-function speakerInvite(overrides: Partial<EventInviteSummary> = {}): EventInviteSummary {
-  return {
-    id: INVITE_ID,
-    inviteeEmail: "speaker@example.test",
-    inviteeFirstName: "Ada",
-    inviteeLastName: "Lovelace",
-    inviteType: "speaker",
-    status: "sent",
-    declineReasonCode: null,
-    declineReasonNote: null,
-    unsubscribeFuture: 0,
-    reminderCount: 0,
-    sourceType: "staff",
-    expiresAt: "2026-09-01T12:00:00.000Z",
-    acceptedAt: null,
-    declinedAt: null,
-    createdAt: "2026-08-01T12:00:00.000Z",
-    inviterUserId: null,
-    inviterEmail: null,
-    inviterFirstName: null,
-    inviterLastName: null,
-    actions: { resend: true, revoke: true },
-    ...overrides,
-  };
-}
+import {
+  GROUP_ID,
+  EVENT_ID,
+  INVITE_ID,
+  EVENT,
+  json,
+  response,
+  invite,
+  speakerInvite,
+} from "./helpers/event-invitation-fixtures";
 
 function mount(node: ComponentChildren): HTMLElement {
   const container = document.createElement("div");
@@ -169,6 +93,70 @@ afterEach(() => {
 });
 
 describe("portal event invitations", () => {
+  it.each(["attendees", "speakers"] as const)(
+    "bulk revokes eligible %s and reports partial failures",
+    async (audience) => {
+      const otherId = "30000000-0000-4000-8000-000000000002";
+      const lockedId = "30000000-0000-4000-8000-000000000003";
+      const paths: string[] = [];
+      const builder = audience === "attendees" ? invite : speakerInvite;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+          const url = urlOf(input);
+          if ((init.method ?? "GET") === "GET")
+            return json(
+              response([
+                builder(),
+                builder({ id: otherId, inviteeEmail: "fails@example.test" }),
+                builder({
+                  id: lockedId,
+                  inviteeEmail: "accepted@example.test",
+                  actions: { resend: false, revoke: false },
+                }),
+              ]),
+            );
+          paths.push(url.pathname);
+          return url.pathname.includes(otherId)
+            ? json({ error: { code: "INVITE_CHANGED", message: "Invitation already accepted" } }, 409)
+            : json({ success: true });
+        }),
+      );
+      const container = mount(
+        <>
+          <ConfirmDialogHost />
+          <GroupEventInvitations
+            groupId={GROUP_ID}
+            event={EVENT}
+            inviteType={audience === "attendees" ? "attendee" : "speaker"}
+            listPath="/invitations"
+          />
+        </>,
+      );
+      await settle();
+      const selectAll = container.querySelector<HTMLInputElement>('thead input[type="checkbox"]')!;
+      await act(async () => selectAll.click());
+      await settle();
+      const revoke = [...container.querySelectorAll("button")].find(
+        (button) => button.textContent === "Revoke selected",
+      )!;
+      await act(async () => revoke.click());
+      await settle();
+      await act(async () => confirmDialogButton("Revoke invitations").click());
+      await settle();
+      await settle();
+      expect(paths).toEqual(
+        [INVITE_ID, otherId].map(
+          (id) =>
+            `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/invites${audience === "speakers" ? "/speakers" : ""}/${id}/revoke`,
+        ),
+      );
+      expect(container.textContent).toContain("1 of 2 invitations revoked.");
+      expect(container.textContent).toContain("fails@example.test: Invitation already accepted");
+      expect(container.querySelector('tbody input[type="checkbox"]:checked')).toBeNull();
+    },
+  );
+
   it("uses only canonical group endpoints for server-side search, status filters, sorting, pagination, resend, and revoke", async () => {
     const requests: Array<{ method: string; url: URL; body: string | null }> = [];
     vi.stubGlobal(
@@ -338,7 +326,7 @@ describe("portal event invitations", () => {
     )!;
     await act(async () => parse.click());
     await settle();
-    expect(composer.textContent).toContain("1 valid");
+    expect(composer.textContent).toContain("1 recipient");
     const preview = Array.from(composer.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Preview email",
     )!;

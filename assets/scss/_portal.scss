@@ -173,6 +173,11 @@ $portal-sidebar-width: 240px;
   }
 }
 
+summary.portal-sidebar-group {
+  display: list-item;
+  cursor: pointer;
+}
+
 .portal-sidebar-group-name {
   display: block;
   overflow: hidden;

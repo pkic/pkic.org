@@ -7,6 +7,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { submitMembershipApplication, uniqueSuffix } from "./helpers/membership";
 import { jsonResponse } from "./helpers/member-provisioning";
+import { extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
 /** @covers join.1.2.a */
 for (const staffReview of [false, true]) {
@@ -91,6 +92,14 @@ for (const staffReview of [false, true]) {
     await expect(pay).toBeVisible();
     const checkoutUrl = await pay.getAttribute("href");
     expect(checkoutUrl).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+    await jsonResponse(page.request, "POST", "/api/v1/email/outbox/process", {});
+    const paymentRequest = await waitForCapturedEmail(
+      application.email,
+      "Payment required for your membership application",
+    );
+    await page.goto(extractEmailUrl(paymentRequest, "/application-status/"));
+    await expect(page.locator("[data-status-result]")).toContainText("Required fee");
+    await expect(pay).toHaveAttribute("href", checkoutUrl!);
     const captureBase = readFileSync(process.env.E2E_STRIPE_URL_FILE ?? "test-results/e2e-stripe-url", "utf8").trim();
     const captured = (await (await fetch(`${captureBase}/sessions`)).json()) as Array<Record<string, unknown>>;
     const session = membershipPaymentSessionSchema.parse(captured.find((item) => item.url === checkoutUrl));

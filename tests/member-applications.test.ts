@@ -72,6 +72,54 @@ describe("POST /api/v1/members/applications", () => {
     await seedMembershipApplicationForm();
   });
 
+  it("accepts an individual application without required organization-only answers", async () => {
+    await env.DB.prepare(
+      "UPDATE form_fields SET required = 1 WHERE key IN ('organization_website', 'about_organization')",
+    ).run();
+    const payload = {
+      ...validPayload,
+      applicantEmail: "individual@gmail.com",
+      membershipCategory: "H6",
+      organizationName: undefined,
+    };
+    const response = await callApi(makeEnv(), "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(await verifiedMemberApplicationPayload(payload)),
+    });
+    expect(response.status, await response.clone().text()).toBe(201);
+    const rows = await queryAll<{ organization_name: string | null }>(
+      env.DB,
+      "SELECT organization_name FROM member_applications",
+    );
+    expect(rows).toEqual([{ organization_name: null }]);
+  });
+
+  it("excludes managed groups from public application choices and refuses forged selections", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO groups (id, type_key, slug, name, active, visibility, eligibility_mode, created_at, updated_at)
+      VALUES (?, 'working_group', 'managed-application-test', 'Managed test', 1, 'public', 'managed', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    )
+      .bind(id)
+      .run();
+    const formResponse = await callApi(makeEnv(), "/api/v1/members/applications/form");
+    const definition = memberApplicationFormResponseSchema.parse(await formResponse.json());
+    expect(definition.categories.every((category) => !category.eligibleWorkingGroupIds.includes(id))).toBe(true);
+    const response = await callApi(makeEnv(), "/api/v1/members/applications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        await verifiedMemberApplicationPayload({
+          ...validPayload,
+          answers: { ...validPayload.answers, working_groups: [id] },
+        }),
+      ),
+    });
+    expect(response.status).toBe(422);
+    expect(await queryAll(env.DB, "SELECT id FROM member_applications")).toHaveLength(0);
+  });
+
   it("creates a member_applications record with stage=submitted", async () => {
     const testEnv = makeEnv();
     const response = await callEndpoint(

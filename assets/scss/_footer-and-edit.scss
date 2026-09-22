@@ -18,7 +18,7 @@
     color: #fff;
     font-weight: 500;
     text-decoration: underline;
-    text-decoration-color: rgba(#fff, 0.25);
+    text-decoration-color: rgba(#fff, 0.65);
     text-underline-offset: 3px;
     transition: text-decoration-color 0.2s ease;
 
@@ -90,7 +90,7 @@
   font-size: 0.82rem;
   font-weight: 300;
   line-height: 1.6;
-  color: rgba(#fff, 0.4);
+  color: rgba(#fff, 0.65);
 }
 
 .footer-social {
@@ -102,7 +102,7 @@
     height: 32px;
     border-radius: 6px;
     background: rgba(#fff, 0.05);
-    color: rgba(#fff, 0.45);
+    color: rgba(#fff, 0.65);
     margin-right: 6px;
     transition:
       background 0.2s ease,
@@ -136,7 +136,7 @@
   background: rgba(#1a1a1a, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  color: rgba(#fff, 0.45);
+  color: rgba(#fff, 0.65);
   border: 1px solid rgba(#fff, 0.1);
   border-radius: 8px;
   padding: 7px 9px;
@@ -254,7 +254,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(#fff, 0.35);
+  color: rgba(#fff, 0.65);
   margin-bottom: 1.1rem;
 }
 
@@ -288,10 +288,10 @@
 .footer-disclaimer {
   font-size: 0.73rem;
   line-height: 1.6;
-  color: rgba(#fff, 0.22);
+  color: rgba(#fff, 0.65);
 
   a {
-    color: rgba(#fff, 0.3);
+    color: rgba(#fff, 0.65);
     text-decoration: underline;
     text-decoration-color: rgba(#fff, 0.15);
     text-underline-offset: 2px;
@@ -303,16 +303,16 @@
 }
 
 .footer-copy {
-  color: rgba(#fff, 0.25);
+  color: rgba(#fff, 0.65);
   font-size: 0.75rem;
 }
 
 .footer-legal {
   font-size: 0.75rem;
-  color: rgba(#fff, 0.25);
+  color: rgba(#fff, 0.65);
 
   a {
-    color: rgba(#fff, 0.25);
+    color: rgba(#fff, 0.65);
     text-decoration: none;
     transition: color 0.2s ease;
 
@@ -326,10 +326,16 @@
   margin: 5px 20px;
   height: 18px;
   max-width: 90px;
-  filter: grayscale(1) opacity(0.55) contrast(0.5);
+  filter: grayscale(1);
   transition:
     filter 0.2s ease,
     transform 0.2s ease;
+}
+
+// Preserve the artwork's light ground in either theme, as on the sponsor wall.
+.members a {
+  background: var(--pk-on-solid);
+  border-radius: var(--pk-radius-sm);
 }
 
 .member-logo-sponsor {

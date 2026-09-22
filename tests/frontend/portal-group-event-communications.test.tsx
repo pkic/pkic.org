@@ -82,7 +82,7 @@ describe("GroupEventCommunications", () => {
     const nav = root.querySelector('nav[aria-label="Campaign audience"]');
     expect(nav).not.toBeNull();
     const tabs = [...root.querySelectorAll("a.pk-tabs__link")].map((tab) => tab.textContent);
-    expect(tabs).toEqual(["Attendees", "Speakers"]);
+    expect(tabs).toEqual(["Attendees", "Speakers", "Invited attendees", "Invited speakers"]);
   });
 
   it("marks the current audience and gives each audience its own address", async () => {

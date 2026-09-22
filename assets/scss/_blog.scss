@@ -234,7 +234,7 @@
 
   .blog-card-summary {
     font-size: 0.875rem;
-    color: $gray-600;
+    color: var(--pk-ink-muted);
     line-height: 1.5;
     margin-bottom: 0.75rem;
     // Lock in exactly 3 lines — min-height reserves space when text is short,
@@ -249,7 +249,7 @@
   .blog-card-author {
     margin-top: auto;
     padding-top: 0.75rem;
-    border-top: 1px solid $gray-100;
+    border-top: 1px solid var(--pk-line-soft);
     font-size: 0.8rem;
   }
 
@@ -606,11 +606,11 @@
 
 .blog-author-avatars-names {
   font-size: 0.78rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   line-height: 1.3;
 
   a {
-    color: $gray-600;
+    color: inherit;
     text-decoration: none;
     &:hover {
       color: $green;

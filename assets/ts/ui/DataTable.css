@@ -344,10 +344,18 @@
     opacity: 1;
   }
 
+  .pk-table__head-content {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    width: max-content;
+    min-width: 100%;
+  }
+
   .pk-table__head-end {
     display: flex;
-    float: inline-end;
-    margin-inline-start: var(--pk-3);
+    margin-inline-start: auto;
+    padding-inline-start: var(--pk-2);
   }
 
   /*

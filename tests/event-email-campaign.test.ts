@@ -128,6 +128,64 @@ describe("event email campaign recipients", () => {
     await resetDb();
   });
 
+  it.each(["attendee", "speaker"] as const)(
+    "snapshots only open %s invitations and rechecks opt-outs before delivery",
+    async (type) => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+      await seedCampaignTemplates(admin.id);
+      await env.DB.prepare(
+        "UPDATE events SET starts_at = '2029-01-01T09:00:00.000Z', ends_at = '2029-01-01T17:00:00.000Z' WHERE id = ?",
+      )
+        .bind(eventId)
+        .run();
+      const token = await createAdminSession(env.DB, admin.id, `campaign-${type}-invitations`);
+      const recipients = [
+        { email: "open@example.test", status: "sent", type },
+        { email: "late-optout@example.test", status: "sent", type },
+        { email: "declined@example.test", status: "declined", type },
+        { email: "accepted@example.test", status: "accepted", type },
+        { email: "revoked@example.test", status: "revoked", type },
+        { email: "other@example.test", status: "sent", type: type === "attendee" ? "speaker" : "attendee" },
+      ];
+      for (const recipient of recipients) {
+        await env.DB.prepare(
+          `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'direct', '2026-01-01T00:00:00.000Z')`,
+        )
+          .bind(crypto.randomUUID(), eventId, recipient.email, recipient.type, crypto.randomUUID(), recipient.status)
+          .run();
+      }
+      const input = {
+        subjectOverride: "Invitation update",
+        bodyContent: "Hello {{firstName}}, the event starts soon.",
+        sendMode: "personal",
+        batchSize: 50,
+        filter: { audience: `${type}_invitations` },
+      };
+      const preview = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", input);
+      expect(preview.status).toBe(200);
+      const reviewed = (await preview.json()) as {
+        previewToken: string;
+        recipientCount: number;
+        sampleRecipients: string[];
+      };
+      expect(reviewed.recipientCount).toBe(2);
+      expect(reviewed.sampleRecipients).toEqual(["late-optout@example.test", "open@example.test"]);
+      const create = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
+        ...input,
+        previewToken: reviewed.previewToken,
+      });
+      expect(create.status).toBe(202);
+      await env.DB.prepare(
+        "UPDATE invites SET unsubscribe_future = 1 WHERE invitee_email = 'late-optout@example.test'",
+      ).run();
+      expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 2, queued: 1 });
+      const queued = await queryAll<{ recipient_email: string }>(env.DB, "SELECT recipient_email FROM email_outbox");
+      expect(queued).toEqual([{ recipient_email: "open@example.test" }]);
+    },
+  );
+
   it("loads attendee details for a large event without per-recipient query batches", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const users = Array.from({ length: 101 }, (_, index) => ({

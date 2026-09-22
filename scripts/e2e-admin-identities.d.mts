@@ -25,6 +25,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "portal-organizations-logo",
   "portal-user-record-self",
   "portal-users",
+  "portal-user-create",
   "portal-users-list",
   "portal-users-role-management",
   "portal-forms-management",

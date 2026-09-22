@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UsersList } from "../../assets/ts/member-flows/portal/sections/system-users/UsersList";
 import { rowActionControlNames } from "./helpers/row-actions";
 
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+
 const mounted: HTMLElement[] = [];
 
 function mount(canGrantAccess: boolean, headshotUrl: string | null = null): HTMLElement {

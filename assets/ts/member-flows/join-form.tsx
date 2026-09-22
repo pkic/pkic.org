@@ -16,7 +16,11 @@ import { SuccessPanel } from "../components/SuccessPanel";
 import { replaceFormWithSuccess } from "../shared/form/success-panel";
 import { isPersonalEmailAddress } from "../../shared/constants/email-domains";
 import { formatCurrencyAmount } from "../../shared/format-currency";
-import { isMembershipOrganizationFieldKey } from "../../shared/schemas/membership-application-form";
+import {
+  filterApplicationFieldsForApplicantKind,
+  membershipApplicationFields,
+} from "../../shared/schemas/membership-application-form";
+export { filterApplicationFieldsForApplicantKind } from "../../shared/schemas/membership-application-form";
 import {
   memberApplicationCreateResponseSchema,
   memberApplicationCreateSchemaForCategory,
@@ -100,15 +104,6 @@ export function filterCategoriesForApplicantKind(
 export function membershipCategoryFeeText(category: MembershipCategory): string | null {
   if (!category.fee) return null;
   return `Required fee: ${formatCurrencyAmount(category.fee.amount, category.fee.currency)}. Payment is due within ${category.fee.deadlineDays} days after the payment step opens.`;
-}
-
-export function filterApplicationFieldsForApplicantKind(
-  fields: MembershipApplicationField[],
-  applicantKind: JoinApplicantKind,
-): MembershipApplicationField[] {
-  return applicantKind === "individual"
-    ? fields.filter((field) => !isMembershipOrganizationFieldKey(field.key))
-    : fields;
 }
 
 function membershipLegalLabel(key: string, configuredLabel: string, applicantKind: JoinApplicantKind): string {
@@ -381,6 +376,7 @@ async function main(): Promise<void> {
 
   let applicationContext: JoinApplicationContext | null = null;
   let categories: MembershipCategory[] = [];
+  let applicationFields: MembershipApplicationField[] = [];
   let definitionPromise: Promise<MemberApplicationFormResponse> | null = null;
 
   const getApplicationDefinition = () => {
@@ -427,8 +423,9 @@ async function main(): Promise<void> {
       }
       renderMembershipCategories(categoryContainer, categories);
       const fields = definition.form?.fields ?? [];
-      const genericFields = configureMembershipLegalFields(applicationForm, fields, context.applicantKind);
-      if (customFieldsContainer) renderCustomFields(customFieldsContainer, genericFields);
+      applicationFields = configureMembershipLegalFields(applicationForm, fields, context.applicantKind);
+      if (customFieldsContainer)
+        renderCustomFields(customFieldsContainer, membershipApplicationFields(applicationFields, categories[0]));
       if (verifiedEmail) verifiedEmail.textContent = context.applicantEmail;
       if (verifiedKind) {
         verifiedKind.textContent =
@@ -508,6 +505,19 @@ async function main(): Promise<void> {
   applicationForm.addEventListener("change", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || target.name !== "category") return;
+    const selected = categories.find((category) => category.code === target.value);
+    if (selected && customFieldsContainer) {
+      const answers = readCustomFieldValues(applicationForm);
+      const fields = membershipApplicationFields(applicationFields, selected);
+      for (const field of fields) {
+        if (field.optionSource !== "active_working_groups") continue;
+        const eligible = new Set(field.options?.map((option) => option.value));
+        const answer = answers[field.key];
+        if (Array.isArray(answer)) answers[field.key] = answer.filter((value) => eligible.has(value));
+        else if (typeof answer === "string" && !eligible.has(answer)) delete answers[field.key];
+      }
+      renderCustomFields(customFieldsContainer, fields).setValues(answers);
+    }
     applyCategoryUI(
       applicationForm,
       categories.find((category) => category.code === target.value),

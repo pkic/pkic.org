@@ -364,8 +364,8 @@ $pkic-page-hero-themes: (
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: $gray-500;
-    background: #fff;
+    color: var(--pk-ink-muted);
+    background: var(--pk-canvas);
     padding: 0 1rem;
     position: relative;
     z-index: 1;
@@ -560,7 +560,7 @@ $pkic-page-hero-themes: (
       font-size: 1.1rem;
       font-weight: 700;
       margin-bottom: 0.5rem;
-      color: #1a1a1a;
+      color: var(--pk-ink);
 
       a {
         color: inherit;
@@ -574,7 +574,7 @@ $pkic-page-hero-themes: (
 
     p {
       font-size: 0.83rem;
-      color: #6c757d;
+      color: var(--pk-ink-muted);
       line-height: 1.6;
       margin: 0;
     }
@@ -610,28 +610,28 @@ $pkic-page-hero-themes: (
   }
 
   &-secondary {
-    background: rgba(26, 122, 74, 0.12);
-    color: #1a7a4a !important;
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
     &:hover {
-      background: rgba(26, 122, 74, 0.22);
+      background: color-mix(in srgb, var(--pk-accent) 22%, var(--pk-surface));
     }
   }
 
   &-warning {
-    background: #ffc107;
-    color: #1a1a1a !important;
+    background: var(--pk-warn-soft);
+    color: var(--pk-warn-ink);
     font-weight: 600;
     &:hover {
-      background: #e5ac00;
+      background: var(--pk-warn-soft);
     }
   }
 
   &-muted {
-    background: rgba(0, 0, 0, 0.055);
-    color: #495057 !important;
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink-muted);
     &:hover {
-      background: rgba(0, 0, 0, 0.11);
-      color: #1a1a1a !important;
+      background: var(--pk-line);
+      color: var(--pk-ink);
     }
   }
 }
@@ -995,7 +995,7 @@ $pkic-page-hero-themes: (
   // column flow — so the shortcode's markup needs no framework classes.
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--pk-surface);
   border-radius: 0.85rem;
   overflow: hidden;
   border: none;
@@ -1024,7 +1024,7 @@ $pkic-page-hero-themes: (
     font-weight: 700;
   }
   .pkic-card-text {
-    color: $gray-600;
+    color: var(--pk-ink-muted);
     font-size: 0.9rem;
 
     p:last-child {

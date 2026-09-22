@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import type { RequestDbContext } from "../../../_lib/db/context";
 import { createRequestScopedD1SessionMiddleware } from "../../../_lib/db/request-session-middleware";
-import { UsersList } from "./index";
+import { UsersList, UserCreate } from "./index";
 import currentUserRouter from "./current/router";
 import publicUserHeadshotsRouter from "./[userId]/headshots/router";
 import communityProfileRouter from "./[userId]/community-profile-router";
@@ -22,6 +22,7 @@ openapi.route("/:userId/headshots", publicUserHeadshotsRouter);
 openapi.route("/:userId", communityProfileRouter);
 app.use("*", createRequestScopedD1SessionMiddleware());
 openapi.get("/", UsersList);
+openapi.post("/", UserCreate);
 openapi.route("/:userId", userIdRouter);
 
 export default openapi;

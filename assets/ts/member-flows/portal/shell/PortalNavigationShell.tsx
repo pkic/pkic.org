@@ -16,8 +16,53 @@ import {
   portalNavigationItems,
   portalSectionChildren,
   portalSectionEnabled,
+  type PortalNavItem,
 } from "./portal-navigation";
 import { SidebarGroups } from "./SidebarGroups";
+
+function SettingsNavigation({
+  items,
+  location,
+  onNavigate,
+}: {
+  items: PortalNavItem[];
+  location: string;
+  onNavigate: () => void;
+}) {
+  const groups = [...new Set(items.map((item) => item.group))];
+  const links = (children: PortalNavItem[]) =>
+    children.map((child) => (
+      <li key={child.path}>
+        <Link
+          href={child.path}
+          class={`portal-sidebar-group${location === child.path ? " active" : ""}`}
+          aria-current={location === child.path ? "page" : undefined}
+          onClick={onNavigate}
+        >
+          <span class="portal-sidebar-group-name">{child.label}</span>
+        </Link>
+      </li>
+    ));
+  return (
+    <>
+      {groups.map((group) => {
+        const children = items.filter((item) => item.group === group);
+        return group ? (
+          <li key={group}>
+            <details open={children.some((child) => location.startsWith(child.path))}>
+              <summary class="portal-sidebar-group">{group}</summary>
+              <ul class="portal-sidebar-groups" aria-label={`${group} settings`}>
+                {links(children)}
+              </ul>
+            </details>
+          </li>
+        ) : (
+          links(children)
+        );
+      })}
+    </>
+  );
+}
 
 interface PortalNavigationShellProps {
   children: ComponentChildren;
@@ -136,18 +181,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
               {open && item.section === "groups" && <SidebarGroups session={session} onNavigate={closeNavigation} />}
               {children.length > 0 && (
                 <ul class="portal-sidebar-groups" aria-label={`${item.label} pages`}>
-                  {children.map((child) => (
-                    <li key={child.path}>
-                      <Link
-                        href={child.path}
-                        class={`portal-sidebar-group${location === child.path ? " active" : ""}`}
-                        aria-current={location === child.path ? "page" : undefined}
-                        onClick={closeNavigation}
-                      >
-                        <span class="portal-sidebar-group-name">{child.label}</span>
-                      </Link>
-                    </li>
-                  ))}
+                  <SettingsNavigation items={children} location={location} onNavigate={closeNavigation} />
                 </ul>
               )}
             </div>

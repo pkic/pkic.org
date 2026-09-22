@@ -90,11 +90,19 @@ test("an organization applicant submits in a category other than the default", a
     .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value));
   const chosen = offered.find((code) => code !== "F") ?? offered[0];
 
+  const reason = page.locator('[name="custom.reason"]');
+  await reason.fill("We want to contribute to the PKI community.");
   await page.locator(`#membership-category-${chosen.toLowerCase()}`).check();
+  await expect(reason).toHaveValue("We want to contribute to the PKI community.");
+  const applicationForm = page.locator("[data-join-application-form]");
+  const formWidth = (await applicationForm.boundingBox())!.width;
+  expect((await reason.boundingBox())!.width).toBeGreaterThan(formWidth * 0.9);
+  for (const document of await page.locator(".membership-legal-card").all()) {
+    expect((await document.boundingBox())!.width).toBeGreaterThan(formWidth * 0.9);
+  }
   await page.getByLabel("First name").fill("Alex");
   await page.getByLabel("Last name").fill("Applicant");
   await page.getByLabel("Organization name").fill(`Category ${chosen} Organization ${suffix}`);
-  await page.locator('[name="custom.reason"]').fill("We want to contribute to the PKI community.");
   for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all()) {
     await agreement.check();
   }

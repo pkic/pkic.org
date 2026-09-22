@@ -90,7 +90,19 @@ export function ApplicationWorkflow({
         columns={[
           {
             header: "Workflow",
-            cell: (version) => <strong>{version.definition.name}</strong>,
+            cell: (version) => (
+              <span class="pk-cluster">
+                <strong>{version.definition.name}</strong>
+                {version.archivedAt && <Badge status="archived" />}
+              </span>
+            ),
+            filter: {
+              param: "archived",
+              options: [
+                { value: "false", label: "Current workflows" },
+                { value: "true", label: "Archived workflows" },
+              ],
+            },
             sort: { asc: "name", desc: "-name" },
             width: "primary",
           },
@@ -102,7 +114,7 @@ export function ApplicationWorkflow({
           },
           {
             header: "Status",
-            cell: (version) => <Badge status={version.archivedAt ? "archived" : version.status} />,
+            cell: (version) => <Badge status={version.status} />,
             filter: {
               param: "status",
               options: [
@@ -118,23 +130,6 @@ export function ApplicationWorkflow({
           {
             header: "Required steps",
             cell: (version) => version.definition.steps.map((step) => step.label).join(" → "),
-          },
-          {
-            header: "Availability",
-            cell: (version) => (
-              <Badge
-                status={version.archivedAt ? "archived" : "active"}
-                label={version.archivedAt ? "Archived" : "Available"}
-              />
-            ),
-            filter: {
-              param: "archived",
-              options: [
-                { value: "false", label: "Available workflows" },
-                { value: "true", label: "Archived workflows" },
-              ],
-            },
-            width: "fit",
           },
         ]}
       />

@@ -4,6 +4,7 @@ import "./LinkList.css";
 
 export interface LinkListProps {
   links: readonly string[];
+  compact?: boolean;
   /**
    * Whose links these are, folded into each link's accessible name.
    *
@@ -26,7 +27,7 @@ export interface LinkListProps {
  */
 const NEW_TAB = "(opens in a new tab)";
 
-export function LinkList({ links, ownerName, label }: LinkListProps) {
+export function LinkList({ links, ownerName, label, compact = false }: LinkListProps) {
   if (links.length === 0) return null;
 
   return (
@@ -36,7 +37,7 @@ export function LinkList({ links, ownerName, label }: LinkListProps) {
         return (
           <li key={link}>
             <a
-              class={`pk-link-list__link${paths ? " pk-link-list__link--icon" : ""}`}
+              class={`pk-link-list__link${paths || compact ? " pk-link-list__link--icon" : ""}`}
               href={link}
               rel="noreferrer noopener"
               target="_blank"
@@ -58,7 +59,7 @@ export function LinkList({ links, ownerName, label }: LinkListProps) {
                   <path d="M9 2h5v5h-1V3.7L7.4 9.3l-.7-.7L12.3 3H9zM3 3h4v1H3v9h9V9h1v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
                 )}
               </svg>
-              <span class={`pk-link-list__label${paths ? " pk-sr-only" : ""}`}>{getLinkLabel(link)}</span>
+              <span class={`pk-link-list__label${paths || compact ? " pk-sr-only" : ""}`}>{getLinkLabel(link)}</span>
               {/* Dropped from the announcement when `ownerName` supplies the
                 whole accessible name, which is why that branch says it too. */}
               <span class="pk-sr-only"> {NEW_TAB}</span>

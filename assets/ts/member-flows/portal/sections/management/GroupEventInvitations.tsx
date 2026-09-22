@@ -1,3 +1,4 @@
+import { useInvitationSelection } from "../../../../components/event-invites/useInvitationSelection";
 /**
  * The invitations one event has sent to one audience — attendees or speakers.
  *
@@ -98,6 +99,7 @@ export function GroupEventInvitations({
   const [resendDeadline, setResendDeadline] = useState("");
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(event.id)}/invites`;
   const endpoint = inviteType === "attendee" ? base : `${base}/speakers`;
+  const selection = useInvitationSelection(endpoint, tableActions, setMessage);
   const label = inviteType === "attendee" ? "Attendee" : "Speaker";
   const audience = inviteType === "attendee" ? "attendees" : "speakers";
   const latestExpiry = event.endsAt ? instantToDateTimeLocal(event.endsAt, event.timezone) : undefined;
@@ -180,6 +182,7 @@ export function GroupEventInvitations({
       {message && <Alert tone="ok">{message}</Alert>}
       <ErrorAlert error={error} />
       <ApiDataTable
+        {...selection}
         caption={`${label} invitations`}
         actionsRef={tableActions}
         endpoint={endpoint}

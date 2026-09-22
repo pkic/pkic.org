@@ -52,6 +52,7 @@ function representation(user: UserListItem): string {
 }
 
 export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; canGrantAccess: boolean }) {
+  const [, navigate] = usePortalHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
 
   async function updateRole(user: UserListItem, newRole: "admin" | "user"): Promise<void> {
@@ -100,6 +101,7 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
       paginate
       actionsRef={tableRef}
       searchPlaceholder="email or name"
+      createAction={canWrite ? { label: "Create user", onSelect: () => navigate("/users/new") } : undefined}
       columns={[
         {
           header: "Person",

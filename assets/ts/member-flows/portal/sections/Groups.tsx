@@ -9,7 +9,6 @@ import { RowActions } from "../../../ui/RowActions";
 import type { MenuItem } from "../../../ui/Menu";
 import { Badge } from "../../../components/Badge";
 import { EmptyState } from "../../../components/EmptyState";
-import { Button } from "../../../ui/Button";
 import { PageHeader } from "../../../ui/PageHeader";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalSession } from "../state";
@@ -52,7 +51,7 @@ function GroupsRedirect({ navigate }: { navigate: (path: string) => void }) {
  * a command on the row. What the card asked with checkboxes standing open, the
  * command asks in its confirmation: on whose behalf.
  */
-function MemberGroupCatalog() {
+function MemberGroupCatalog({ onCreate }: { onCreate?: () => void }) {
   const tableRef = useRef<ApiTableActions | null>(null);
   const [, navigate] = usePortalHashLocation();
 
@@ -117,6 +116,7 @@ function MemberGroupCatalog() {
   return (
     <ApiDataTable
       caption="Groups you can join"
+      createAction={onCreate ? { label: "New group", onSelect: onCreate } : undefined}
       urlState="catalog"
       endpoint="/api/v1/users/current/groups"
       params={{ view: "catalog" }}
@@ -186,10 +186,11 @@ function MemberGroupCatalog() {
   );
 }
 
-function AllGroups({ canCreate }: { canCreate: boolean }) {
+function AllGroups({ canCreate, onCreate }: { canCreate: boolean; onCreate?: () => void }) {
   return (
     <ApiDataTable
       caption="All groups"
+      createAction={onCreate ? { label: "New group", onSelect: onCreate } : undefined}
       urlState="groups"
       endpoint="/api/v1/groups"
       responseSchema={groupsListResponseSchema}
@@ -303,18 +304,11 @@ export function Groups({
     // No width cap: a list page fills the measure it is given, and the slack
     // lands in the table's primary column rather than in page margins.
     <div class="pk pk-stack">
-      <PageHeader
-        title="Groups"
-        actions={
-          canCreateGroups ? (
-            <Button variant="primary" onClick={openCreatePage}>
-              New group
-            </Button>
-          ) : undefined
-        }
-      />
-      {session?.member && <MemberGroupCatalog />}
-      {session?.staff && !session.member && <AllGroups canCreate={canCreateGroups} />}
+      <PageHeader title="Groups" />
+      {session?.member && <MemberGroupCatalog onCreate={canCreateGroups ? openCreatePage : undefined} />}
+      {session?.staff && !session.member && (
+        <AllGroups canCreate={canCreateGroups} onCreate={canCreateGroups ? openCreatePage : undefined} />
+      )}
     </div>
   );
 }

@@ -118,8 +118,8 @@
 // Individual cards are rendered by PublicPersonCard (.person-card).
 
 .consortium-leaders {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(Min(100%, 20rem), 1fr));
   gap: 1.25rem;
   margin: 1.5rem 0 2rem;
 }
@@ -140,7 +140,7 @@
   border: 1px solid var(--pk-line);
   border-radius: 0.85rem;
   flex: 1 1 280px;
-  max-width: 440px;
+  min-width: 0;
   transition:
     box-shadow 0.18s,
     border-color 0.18s;
@@ -280,7 +280,10 @@
   font-size: 0.78rem;
   color: var(--pk-ink-muted);
   line-height: 1.4;
-  margin-top: 0.3rem;
+  margin-top: var(--pk-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .person-card-org {

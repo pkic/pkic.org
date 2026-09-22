@@ -297,11 +297,10 @@ export function DataTable<Row>({
                       trigger is the `…` a row carries, so the head reads as
                       the row's grammar applied to columns; its glyph is drawn
                       by the stylesheet so the cell's text stays the name. */}
-                  {headerEnd && last && <span class="pk-table__head-end">{headerEnd}</span>}
-                  {name}
-                  {column.menu && column.menu.length > 0 && (
-                    <span class="pk-table__head-tools">
-                      {column.menu && column.menu.length > 0 && (
+                  <div class="pk-table__head-content">
+                    {name}
+                    {column.menu && column.menu.length > 0 && (
+                      <span class="pk-table__head-tools">
                         <span
                           class={classList(
                             "pk-table__head-menu",
@@ -312,9 +311,10 @@ export function DataTable<Row>({
                             <span class="pk-table__head-glyph" aria-hidden="true" />
                           </Menu>
                         </span>
-                      )}
-                    </span>
-                  )}
+                      </span>
+                    )}
+                    {headerEnd && last && <span class="pk-table__head-end">{headerEnd}</span>}
+                  </div>
                   {column.filterSummary && <span class="pk-table__head-filter">{column.filterSummary}</span>}
                 </th>
               );

@@ -17,6 +17,7 @@ import {
 import { membershipWorkflowDefinitionSchema } from "../../../../assets/shared/schemas/membership-workflows";
 import { all } from "../../db/queries";
 import { listMembershipCategories } from "./categories";
+import { eligibleApplicationWorkingGroupIds } from "./application-groups";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
@@ -203,10 +204,13 @@ export async function getPublicMembershipApplicationForm(db: DatabaseLike): Prom
   );
   return memberApplicationFormResponseSchema.parse({
     form,
-    categories: categories.map((category) => ({
-      ...category,
-      fee: category.workflowVersionId ? (fees.get(category.workflowVersionId) ?? null) : null,
-    })),
+    categories: await Promise.all(
+      categories.map(async (category) => ({
+        ...category,
+        eligibleWorkingGroupIds: await eligibleApplicationWorkingGroupIds(db, category.code),
+        fee: category.workflowVersionId ? (fees.get(category.workflowVersionId) ?? null) : null,
+      })),
+    ),
   });
 }
 

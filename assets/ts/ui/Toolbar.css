@@ -19,6 +19,10 @@
     position: relative;
   }
 
+  .pk-toolbar .pk-btn--icon {
+    min-block-size: calc(1.35em + 2 * var(--pk-control-y) + 2px);
+  }
+
   .pk-toolbar__search-label {
     position: absolute;
     width: 1px;
@@ -38,6 +42,7 @@
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius);
     font-size: var(--pk-text-md);
+    line-height: 1.35;
     background: var(--pk-surface);
     color: var(--pk-ink);
     transition:

@@ -361,11 +361,12 @@ export function FormManagementCreate({
   );
 }
 
-export function FormManagementList() {
+export function FormManagementList({ onCreate }: { onCreate?: () => void } = {}) {
   return (
     <div class="pk">
       <ApiDataTable
         caption="Configured forms"
+        createAction={onCreate ? { label: "New form", onSelect: onCreate } : undefined}
         urlState="forms"
         endpoint="/api/v1/forms"
         responseSchema={formsListResponseSchema}

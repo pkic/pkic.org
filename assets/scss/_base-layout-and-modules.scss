@@ -535,6 +535,14 @@ blockquote::after {
 // `:not(#portal-app *)` carries the id's weight, and these element rules
 // then outranked every card and component title on the public site.
 // H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
+@mixin readable-dark-headings {
+  main h2:not(:where(#portal-app *)) {
+    background: none;
+    color: var(--pk-accent-ink);
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
 main h2:not(:where(#portal-app *)) {
   font-size: 1.5em;
   font-weight: 700 !important;
@@ -554,6 +562,16 @@ main h2:not(:where(#portal-app *)) {
   @supports not (-webkit-background-clip: text) {
     color: var(--page-accent, var(--wg-color, #{$green}));
     background: none;
+  }
+}
+
+:root[data-theme="dark"] {
+  @include readable-dark-headings;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include readable-dark-headings;
   }
 }
 

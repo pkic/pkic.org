@@ -203,6 +203,10 @@ describe("portal navigation shell", () => {
     expect(settingsPages).not.toBeNull();
     const reminders = settingsPages?.querySelector<HTMLAnchorElement>('a[href="#/settings/applicant-reminders"]');
     expect(reminders?.textContent).toContain("Applicant reminders");
+    const membership = reminders?.closest("details");
+    expect(membership?.open).toBe(true);
+    expect(membership?.querySelector("summary")?.textContent).toBe("Membership");
+    expect(membership?.querySelectorAll("a")).toHaveLength(4);
   });
 
   it("opens a section's own pages under it and folds them away when the reader leaves", async () => {

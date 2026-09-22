@@ -27,6 +27,21 @@ const base = (key: string, label: string) => ({
 });
 
 describe("frontend field rendering", () => {
+  it("keeps questions and answers mounted when the form definition changes", () => {
+    const host = document.createElement("form");
+    const reason = { ...base("reason", "Reason"), fieldType: "textarea" as const };
+    renderCustomFields(host, [reason, base("organization", "Organization")]);
+    host.querySelector<HTMLTextAreaElement>("textarea")!.value = "Contribute to standards";
+    const answers = readCustomFieldValues(host);
+    renderCustomFields(host, [reason]).setValues(answers);
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Contribute to standards");
+    expect(host.querySelector('[name="custom.organization"]')).toBeNull();
+    renderCustomFields(host, [reason, base("organization", "Organization")]).setValues(answers);
+    expect(host.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Contribute to standards");
+    expect(host.querySelector('[name="custom.organization"]')).not.toBeNull();
+    render(null, host);
+  });
+
   it("renders display text for terms and serializes accepted consent values", () => {
     const host = document.createElement("div");
     renderConsentInputs(host, [

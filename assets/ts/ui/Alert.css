@@ -28,6 +28,25 @@
     border-radius: var(--pk-radius-sm) 0 0 var(--pk-radius-sm);
   }
 
+  .pk-alert--callout {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--pk-3);
+    color: var(--pk-on-solid);
+    background: linear-gradient(110deg,
+      color-mix(in srgb, var(--tone) 30%, var(--pk-on-solid-ink)),
+      color-mix(in srgb, var(--tone) 50%, var(--pk-on-solid-ink)));
+  }
+
+  .pk-alert--callout .pk-alert__body,
+  .pk-alert--callout a {
+    color: inherit;
+  }
+
+  .pk-alert--callout .pk-alert__body > :first-child { margin-top: 0; }
+  .pk-alert--callout .pk-alert__body > :last-child { margin-bottom: 0; }
+
   .pk-alert__title {
     color: var(--tone-ink);
     font-weight: 500;

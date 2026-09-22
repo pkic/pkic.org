@@ -10,6 +10,7 @@ export const exampleMembershipCategories = MEMBERSHIP_CATEGORIES.map((code, disp
     code,
     label: `Example ${code}`,
     fee: null,
+    eligibleWorkingGroupIds: [],
     isIndividual: INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(code),
     displayOrder,
     description: null,

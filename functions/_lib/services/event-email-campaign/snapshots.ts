@@ -1,5 +1,7 @@
+import { invitationCampaignSelection } from "./invitation-audience";
 import {
   eventEmailCampaignPreviewInputSchema,
+  isInvitationCampaignAudience,
   type EventEmailCampaignPreviewInput,
 } from "../../../../assets/shared/schemas/event-email-campaigns";
 import { all, first } from "../../db/queries";
@@ -23,6 +25,8 @@ export interface CampaignSnapshot {
 
 export function campaignAudienceSelection(event: CampaignEvent, input: EventEmailCampaignPreviewInput) {
   // Unlimited selection is used only inside set-based SQL, never fetched into a Worker.
+  if (isInvitationCampaignAudience(input.filter.audience))
+    return invitationCampaignSelection(event, input.filter, null);
   return input.filter.audience === "attendees"
     ? attendeeCampaignSelection(event, input.filter, null)
     : speakerCampaignSelection(event, input.filter, null);

@@ -208,6 +208,10 @@ export interface CustomFieldsController {
  * hints, or pre-fill values — all via Preact re-renders.
  */
 export function renderCustomFields(container: HTMLElement, fields: FormField[]): CustomFieldsController {
+  // Dispose the previous Preact tree before replacing the form definition.
+  // Clearing its DOM alone leaves mounted nodes in Preact's reconciliation
+  // state, so unchanged questions disappear when the category changes.
+  render(null, container);
   // Clear any server-rendered placeholder (e.g. "Loading…") before Preact
   // takes over. CustomFieldList returns a Fragment, so Preact's first diff
   // may not remove pre-existing children reliably.

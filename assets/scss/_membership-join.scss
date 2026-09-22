@@ -37,14 +37,7 @@
 }
 
 @media (min-width: 48rem) {
-  .join-application-identity-grid,
-  .join-application-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 62rem) {
-  .membership-legal-agreements {
+  .join-application-identity-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

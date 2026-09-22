@@ -1,3 +1,4 @@
+import { isAttendeeCampaignAudience } from "../../../assets/shared/schemas/event-email-campaigns";
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import type { DatabaseLike, StatementLike } from "../types";
@@ -23,10 +24,9 @@ export async function prepareEventEmailCampaignPage(
   const templateKey = input.bodyContent
     ? input.templateKey || DIRECT_EMAIL_TEMPLATE_KEY
     : (input.templateKey as string);
-  const routeVars =
-    input.filter.audience === "attendees"
-      ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "event_email" }) }
-      : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "event_email" }) };
+  const routeVars = isAttendeeCampaignAudience(input.filter.audience)
+    ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "event_email" }) }
+    : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "event_email" }) };
   const sharedEventVars = buildEventEmailVariables(event, appBaseUrl);
   const usesManageUrl =
     input.filter.audience === "attendees" &&

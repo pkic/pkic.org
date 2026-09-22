@@ -73,7 +73,7 @@ export function PersonLinks({ person }: { person: PublicPerson }) {
   // Named after the person: a page of ten cards otherwise offers ten links
   // all carrying the same site label, which is nothing to choose between
   // when they are read out on their own.
-  return <LinkList links={[person.featuredLink]} ownerName={person.name} />;
+  return <LinkList compact links={[person.featuredLink]} ownerName={person.name} />;
 }
 
 function OrganizationBlock({ person }: { person: PublicPerson }) {
@@ -155,7 +155,11 @@ export function PublicPersonCard({
             naming it here as well said the company twice and the person's
             standing nowhere but an 8px badge on the ring (issue #19).
           */}
-          {(person.jobTitle || role) && <div class="person-card-jobtitle">{person.jobTitle ?? role}</div>}
+          {(person.jobTitle || role) && (
+            <div class="person-card-jobtitle" title={person.jobTitle ?? role}>
+              {person.jobTitle ?? role}
+            </div>
+          )}
           <OrganizationBlock person={person} />
         </div>
       </div>

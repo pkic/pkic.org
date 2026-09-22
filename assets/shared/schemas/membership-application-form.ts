@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { formDefinitionUpdateSchema, formFieldDefinitionSchema, formStatusSchema } from "./forms";
+import type { FormFieldDefinition } from "./forms";
 
 /** Stable key for the singleton, globally placed membership application form. */
 export const MEMBERSHIP_APPLICATION_FORM_KEY = "membership-application";
@@ -27,6 +28,29 @@ const membershipOrganizationFieldKeys = new Set<string>(MEMBERSHIP_ORGANIZATION_
 
 export function isMembershipOrganizationFieldKey(key: string): boolean {
   return membershipOrganizationFieldKeys.has(key);
+}
+
+export function filterApplicationFieldsForApplicantKind<T extends { key: string }>(
+  fields: T[],
+  applicantKind: "organization" | "individual",
+): T[] {
+  return applicantKind === "individual"
+    ? fields.filter((field) => !isMembershipOrganizationFieldKey(field.key))
+    : fields;
+}
+
+/** Project the canonical form for the selected application category. */
+export function membershipApplicationFields(
+  fields: FormFieldDefinition[],
+  category: { isIndividual: boolean; eligibleWorkingGroupIds: string[] },
+): FormFieldDefinition[] {
+  const eligible = new Set(category.eligibleWorkingGroupIds);
+  return filterApplicationFieldsForApplicantKind(fields, category.isIndividual ? "individual" : "organization").map(
+    (field) =>
+      field.optionSource === "active_working_groups"
+        ? { ...field, options: field.options?.filter((option) => eligible.has(option.value)) ?? [] }
+        : field,
+  );
 }
 
 export const membershipApplicationPolicyFieldSchema = formFieldDefinitionSchema.extend({

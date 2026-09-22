@@ -1,3 +1,5 @@
+import { isInvitationCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
+import { listInvitationCampaignRecipients } from "./invitation-audience";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -254,6 +256,8 @@ export async function listCampaignRecipients(
   options: { maxRecipients?: number; recipientEmails?: string[] } = {},
 ): Promise<CampaignRecipient[]> {
   const maxRecipients = Math.max(1, Math.floor(options.maxRecipients ?? 2_000));
+  if (isInvitationCampaignAudience(filter.audience))
+    return listInvitationCampaignRecipients(db, event, filter, maxRecipients, options.recipientEmails);
   return filter.audience === "attendees"
     ? listAttendeeRecipients(db, event, filter, maxRecipients, options.recipientEmails)
     : listSpeakerRecipients(db, event, filter, maxRecipients, options.recipientEmails);

@@ -21,7 +21,11 @@ import {
 import { randomToken, sha256Hex } from "../../../utils/crypto";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
-import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
+import {
+  MEMBERSHIP_APPLICATION_FORM_KEY,
+  membershipApplicationFields,
+} from "../../../../../assets/shared/schemas/membership-application-form";
+import { eligibleApplicationWorkingGroupIds } from "../application-groups";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
 import { getOrganizationDomainClaim, prepareClaimDomainForApplication } from "../organization-domain-claims";
 import { requireMembershipCategory } from "../categories";
@@ -135,6 +139,10 @@ export async function createMemberApplication(
   }
   requireMembershipApplicationPolicyFields(form.fields);
 
+  form.fields = membershipApplicationFields(form.fields, {
+    isIndividual,
+    eligibleWorkingGroupIds: await eligibleApplicationWorkingGroupIds(db, category.code),
+  });
   const answers = await validateCustomAnswersAgainstForm(form, {
     customAnswers: input.answers,
     errorStatus: 422,

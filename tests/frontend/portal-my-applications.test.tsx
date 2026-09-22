@@ -56,6 +56,7 @@ const categoryCatalog = {
       label: "PKI or cryptographic software and device providers",
       description: null,
       fee: null,
+      eligibleWorkingGroupIds: [],
       displayOrder: 60,
       isIndividual: false,
       isVoting: true,

@@ -164,6 +164,7 @@ export const membershipApplicationFeeSchema = membershipWorkflowStepSchema.optio
 
 export const membershipApplicationCategorySchema = membershipCategoryCatalogEntrySchema.extend({
   fee: membershipApplicationFeeSchema.nullable(),
+  eligibleWorkingGroupIds: z.array(databaseIdSchema),
 });
 
 export const memberApplicationFormResponseSchema = z.object({

@@ -45,6 +45,7 @@ const categories: Category[] = [
     isVoting: true,
     active: true,
     workflowVersionId: null,
+    eligibleWorkingGroupIds: [],
     fee: null,
     revision: 0,
     updatedAt: "2026-08-27T00:00:00.000Z",
@@ -59,6 +60,7 @@ const categories: Category[] = [
     isVoting: false,
     active: true,
     workflowVersionId: null,
+    eligibleWorkingGroupIds: [],
     fee: {
       label: "Membership fee",
       instructions: "Pay after review.",
