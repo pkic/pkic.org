@@ -9,6 +9,7 @@ organizationDomains:
   - us.ibm.com
   - uk.ibm.com
   - zurich.ibm.com
+  - in.ibm.com
 # Short description, longer content can be placed in `content/members/`
 description: For more than a century, IBM has been a global technology innovator, leading advances in AI, automation and hybrid cloud solutions that help businesses grow.
 
